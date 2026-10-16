@@ -67,6 +67,9 @@ impl ImageService for Runtime {
             .await
             .map_err(runtime_error)?;
         Ok(Response::new(InspectImageResponse {
+            config_digest: image.config_digest,
+            content_digest: image.content_digest,
+            variant: image.variant,
             id: image.id,
             size: image.size,
             created: image.created,
@@ -151,6 +154,30 @@ impl ImageService for Runtime {
         r: Request<DistributionInspectRequest>,
     ) -> Result<Response<DistributionInspectResponse>, Status> {
         let r = r.into_inner();
+        if let Some(target) = &r.target_platform {
+            let target = citadel_platforms::image_updates::ImagePlatform {
+                os: target.os.clone(),
+                architecture: target.architecture.clone(),
+                variant: target.variant.clone(),
+            };
+            let observed = citadel_adapters::connectors::registries::image_metadata::inspect(
+                &r.image_name,
+                r.auth.as_deref(),
+                &target,
+                &self.shutdown,
+            )
+            .await
+            .map_err(runtime_error)?;
+            return Ok(Response::new(DistributionInspectResponse {
+                config_digest: observed.config_digest,
+                manifest_digest: observed.manifest_digest,
+                descriptor: Some(OciDescriptorResponse {
+                    digest: observed.index_digest,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }));
+        }
         let v = self
             .docker
             .distribution_inspect_authenticated(&r.image_name, r.auth.as_deref())
@@ -158,6 +185,8 @@ impl ImageService for Runtime {
             .map_err(docker_error)?;
         let d = &v["Descriptor"];
         Ok(Response::new(DistributionInspectResponse {
+            config_digest: String::new(),
+            manifest_digest: String::new(),
             descriptor: (!d.is_null()).then(|| OciDescriptorResponse {
                 media_type: text(d, "mediaType"),
                 digest: text(d, "digest"),
@@ -256,6 +285,7 @@ pub(super) fn summary(v: citadel_docker_api::models::ImageSummary) -> ImageReply
 }
 fn platform(v: &serde_json::Value) -> OciPlatformResponse {
     OciPlatformResponse {
+        variant: text(v, "variant"),
         architecture: text(v, "architecture"),
         os: text(v, "os"),
         os_version: text(v, "os.version"),

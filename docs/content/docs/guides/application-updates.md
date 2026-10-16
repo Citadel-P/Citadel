@@ -26,8 +26,8 @@ Stack lists show detected changes, excluding unknown and failed checks.
    Git commit, or Stack release. Keep a recoverable backup of persistent data
    before changes that can migrate it.
 2. Run **Check for updates** on the saved resource. Review the result and its
-   timestamp. A tag check detects a changed digest under the same tag; it does
-   not select a newer version tag for you.
+   timestamp. A tag check looks for changed image content for the platforms running
+   the workload; it does not select a newer version tag for you.
 3. For a Git Stack, inspect changed source and watched paths. A pinned commit
    stays pinned. A manual Stack check does not run repository hooks or update
    sibling Stacks; repository **Sync** can do both through their configured policies.
@@ -40,6 +40,15 @@ Use [Git update and recovery instructions](/docs/resources/stacks/git#review-and
 or the [Build-to-deployment workflow](/docs/resources/builds#deploy-the-image)
 for those sources. To change a fixed image version, edit its tag explicitly;
 digest-pinned images do not follow a moving tag.
+
+Pulling an image downloads it to the host. Workload checks still compare against
+what each workload has applied, so its update remains available until it is deployed
+through its own update policy. Changes only to other architectures or image
+attestations do not trigger a workload update.
+
+Swarm checks use the nodes assigned to the Service's tasks. If a changed image
+cannot be compared—for example, a Service has no assigned tasks or the required
+registry metadata is unavailable—the check fails without automatically deploying.
 
 ## Enable automation after the manual path works
 

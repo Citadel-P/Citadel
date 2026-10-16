@@ -1,3 +1,4 @@
+import { ImageUpdateStatus } from '../update-status';
 import { ImageInspectionView } from '@/api/generated/api.types';
 import { DetailFacts } from '@/components/custom/resource-detail';
 import { RegistryDisplay } from '@/components/custom/registry-display';
@@ -14,6 +15,7 @@ export const ImageInfoTable = ({ image }: { image: ImageInspectionView | undefin
       items={[
         { label: 'Operating system', value: image.os },
         { label: 'Architecture', value: image.architecture },
+        { label: 'Update status', value: <ImageUpdateStatus updates={image.updates} compact /> },
         { label: 'Size', value: byteTransform(image.size, 2) },
         { label: 'Registry', value: image.registry ? <RegistryDisplay registry={image.registry} /> : 'Not linked' },
         { label: 'Created', value: <TimestampCell value={image.created} formatDateTime={formatDateTime} /> },

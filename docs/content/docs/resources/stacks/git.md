@@ -206,8 +206,8 @@ Add shared paths only when changes there should mark the Stack outdated; leave
 
 For branch-tracking Git stacks, Citadel stores the exact deployed commit in the stack release source metadata.
 
-- **Notify Only**: mark the stack outdated and emit an alert for relevant Git changes or newer service image digests.
-- **Auto Deploy Stack**: automatically reapply the stack when relevant Git paths change or a newer service image digest is detected.
+- **Notify Only**: mark the stack outdated and emit an alert for relevant Git changes or service image updates.
+- **Auto Deploy Stack**: automatically reapply the stack when relevant Git paths change or a service image update is detected.
 - **Auto Deploy Services**: unavailable for Git Stacks. A Git commit can affect networks, volumes, env files, and dependencies.
 - **Disabled**: disable periodic checks; manual checks remain available.
 
@@ -221,8 +221,13 @@ scanner and the Compose files at the applied Git commit. Configure a Registry on
 the Stack to check tagged service images. Digest-pinned images, unresolved image
 variables, and services supplied by Citadel Builds are excluded. Image-triggered
 automatic updates pull images while retaining the applied Git revision; they do
-not fetch the branch. Git synchronization remains controlled by the repository's
+not fetch the branch. Image checks ignore changes only to other architectures or
+image attestations. Git synchronization remains controlled by the repository's
 sync policy, including Manual mode.
+
+A Registry is optional for Git-only updates. If a Stack is pinned to a commit
+and has no Registry, **Check for updates** opens a Registry selection dialog.
+**Save Registry and check** saves the selection and checks its service images.
 
 Pinned stacks set `Commit` to a SHA. They do not track branch updates and webhook
 deploys are ignored, but their tagged images can still receive updates.
@@ -239,7 +244,7 @@ Stack definition with running containers. Container drift reconciliation is
 not available for Swarm Stacks.
 
 On the Stacks page, use **Updates available** to show only stacks with a newer
-relevant commit or detected service-image digest. The filter works with
+relevant commit or detected service image update. The filter works with
 search, tags, and the Platform filter.
 
 ## Build Images

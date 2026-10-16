@@ -126,6 +126,16 @@ impl Group {
                 && resource_matches
                 && event.affects_resource(self.id());
         }
+        // Saved references and Registry visibility are part of the actor-specific
+        // image snapshot, even when no Docker image changed.
+        if matches!(self.topic(), Topic::Images(..))
+            && matches!(
+                event.resource_type,
+                "Deployment" | "Stack" | "SwarmService" | "Registry"
+            )
+        {
+            return event.platform_id.is_none() || self.id() == event.platform_id;
+        }
         if let Some(platform) = event.platform_id {
             if event.event_kind == "updated"
                 && matches!(event.resource_type, "Deployment" | "Stack")
@@ -550,6 +560,43 @@ fn docker_tombstone(row: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn image_snapshots_follow_saved_references_and_registry_changes() {
+        let platform = Uuid::now_v7();
+        let group = Group::parse(&format!("images:{platform}")).unwrap();
+        let mut event = PublishedRuntimeEvent {
+            platform_id: Some(platform),
+            resource_type: "Deployment",
+            resource_id: Uuid::now_v7(),
+            event_kind: "updated",
+            resource_revision: 1,
+            reads: Default::default(),
+            containers: Default::default(),
+            payload: json!({}),
+        };
+        for kind in ["Deployment", "Stack", "SwarmService", "Registry"] {
+            event.resource_type = kind;
+            event.platform_id = Some(platform);
+            assert!(group.affected_by(&event));
+            event.platform_id = Some(Uuid::now_v7());
+            assert!(!group.affected_by(&event));
+            event.platform_id = None;
+            assert!(group.affected_by(&event));
+        }
+        event.platform_id = Some(platform);
+        event.resource_type = "Platform";
+        event.event_kind = "runtimeChanged";
+        for kind in ["image", "container"] {
+            event.payload = json!({"dockerResourceType":kind,"action":"create"});
+            assert!(group.affected_by(&event));
+            event.payload["action"] = json!("delete");
+            assert!(group.affected_by(&event));
+        }
+        event.payload = json!({"dockerResourceType":"containerStats"});
+        assert!(!group.affected_by(&event));
+        event.payload = json!({"dockerResourceType":"container","action":"start"});
+        assert!(!group.affected_by(&event));
+    }
     #[test]
     fn backup_changes_refresh_only_affected_platforms_and_resources() {
         let hub = crate::realtime::RealtimeHub::new(

@@ -409,7 +409,7 @@ pub(crate) async fn realtime_daemon_snapshot(
         ],
     })
 }
-async fn daemon_capabilities(
+pub(super) async fn daemon_capabilities(
     state: &ApplicationGroupReader,
     principal: &ActorPrincipal,
     id: Uuid,

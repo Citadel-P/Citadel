@@ -129,7 +129,8 @@ For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets)
 
 ## Auto Update
 
-Auto update checks external image tags for new digests.
+Auto update checks external image tags for changed content on the Deployment’s
+platform. Changes only to other architectures or image attestations are ignored.
 
 - `Disabled`: disable periodic checks; manual checks remain available.
 - `Notify Only`: record update availability and emit an alert.
@@ -138,19 +139,19 @@ Auto update checks external image tags for new digests.
 `Notify Only` remains available in Community. `Auto Deploy` requires Team's
 `Operational Guardrails` capability.
 
-Citadel checks periodically. When an updated digest is found:
+Citadel checks periodically. When an image update is found:
 
 - Notify mode marks the deployment as having an update available.
 - Auto Deploy mode recreates the container with the updated image.
 - Failures emit deployment auto-deploy failure alerts when alert rules are configured.
 
 Use **Check for updates** on a deployed external image to query its registry
-immediately. This manual check records whether a newer digest is available but
+immediately. This manual check records whether an image update is available but
 does not pull, redeploy, or alert. It remains available when periodic update
 behavior is disabled.
 
 On the Deployments page, use **Updates available** to show only deployments
-with a detected newer digest. This filter works with search, tags, and the
+with a detected image update. This filter works with search, tags, and the
 Platform filter. Deployments that have not been checked or whose last check
 failed are not shown as having an available update.
 

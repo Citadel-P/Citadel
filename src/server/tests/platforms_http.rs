@@ -595,6 +595,7 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
     projections: Arc::new(citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone())),
         statistics: Arc::new(citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())),
         services: Arc::new(citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(pool.clone())),
+        image_updates: { let runtime = citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone()); Arc::new(citadel_platforms::image_updates::ImageUpdateService::new(Arc::new(runtime.clone()), Arc::new(citadel_adapters::connectors::registries::image_updates::ImageUpdateAdapter { pool:pool.clone(), runtime, cache:Arc::new(Default::default()) }), Arc::new(citadel_adapters::persistence::postgres::platforms::image_updates::PostgresImageUpdateStore(pool.clone())), )) },
         runtime: Arc::new(citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, edge.clone())),
         tasks: citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         volume_activity: Arc::new(citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore::new(pool.clone())),
@@ -982,5 +983,15 @@ fn refresh_runtime(state: &mut PlatformsHttpState, fixture: &Fixture, docker: Do
             edge: edge.clone(),
         },
     );
+    state.image_updates = Arc::new(citadel_platforms::image_updates::ImageUpdateService::new(
+        Arc::new(runtime.clone()),
+        Arc::new(
+            citadel_adapters::connectors::registries::image_updates::ImageUpdateAdapter {
+                pool: pool.clone(),
+                runtime: runtime.clone(),
+                cache: Arc::new(Default::default()),
+            },
+        ),
+     Arc::new(citadel_adapters::persistence::postgres::platforms::image_updates::PostgresImageUpdateStore(pool.clone())), ));
     state.runtime = Arc::new(runtime);
 }

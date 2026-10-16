@@ -10,8 +10,55 @@ pub(super) async fn verify_automatic_apply(
     admin: &ActorPrincipal,
     id: Uuid,
     fail: &AtomicBool,
+    applied: &AtomicBool,
+    digests: &Digests,
 ) {
     let store = PostgresDeploymentRepository::new(pool.clone());
+    sqlx::query("UPDATE deployments SET spec=jsonb_set(jsonb_set(spec::jsonb,'{UpdateBehavior}','\"AutoDeploy\"'::jsonb),'{Image,ResolvedDigest}',to_jsonb($2::text))::json WHERE id=$1")
+        .bind(id).bind(format!("sha256:{}", "a".repeat(64))).execute(pool).await.unwrap();
+    applied.store(false, Ordering::Release);
+    digests.same_content.store(true, Ordering::Relaxed);
+    service
+        .run_scheduled_update_checks(&CancellationToken::new())
+        .await
+        .unwrap();
+    let current = store
+        .get_authorized(admin.actor_id, true, id)
+        .await
+        .unwrap();
+    let update = current.auto_update_state.as_ref().unwrap();
+    assert_eq!(
+        update.status,
+        citadel_primitives::AutoUpdateStatus::UpToDate
+    );
+    assert_ne!(update.current_digest, update.remote_digest);
+    assert_eq!(
+        update.current_digest.as_deref(),
+        Some(format!("sha256:{}", "a".repeat(64)).as_str())
+    );
+    assert!(
+        !applied.load(Ordering::Acquire),
+        "equivalent content must not trigger automatic Apply"
+    );
+    digests.same_content.store(false, Ordering::Relaxed);
+    digests.content_unavailable.store(true, Ordering::Relaxed);
+    service
+        .run_scheduled_update_checks(&CancellationToken::new())
+        .await
+        .unwrap();
+    let failed = store
+        .get_authorized(admin.actor_id, true, id)
+        .await
+        .unwrap();
+    assert_eq!(
+        failed.auto_update_state.as_ref().unwrap().status,
+        citadel_primitives::AutoUpdateStatus::Failed
+    );
+    assert!(
+        !applied.load(Ordering::Acquire),
+        "missing metadata must not trigger automatic Apply"
+    );
+    digests.content_unavailable.store(false, Ordering::Relaxed);
     for (should_fail, expected) in [
         (true, citadel_primitives::AutoUpdateStatus::Failed),
         (false, citadel_primitives::AutoUpdateStatus::UpToDate),
@@ -55,6 +102,8 @@ pub(super) async fn verify_automatic_apply(
 
 #[derive(Default)]
 pub(super) struct Digests {
+    pub(super) same_content: AtomicBool,
+    pub(super) content_unavailable: AtomicBool,
     mode: AtomicU8,
     calls: AtomicUsize,
     started: tokio::sync::Notify,
@@ -128,6 +177,22 @@ pub(super) async fn verify(
     assert_eq!(digests.calls.load(Ordering::Relaxed), 0);
     sqlx::query("UPDATE deployments SET spec=jsonb_set(spec::jsonb,'{Image,ResolvedDigest}',to_jsonb($2::text))::json WHERE id=$1")
         .bind(id).bind(format!("sha256:{}", "a".repeat(64))).execute(pool).await.unwrap();
+    // A new index with unchanged host content must preserve the applied
+    // baseline and must not report a workload update.
+    digests.mode.store(1, Ordering::Relaxed);
+    digests.same_content.store(true, Ordering::Relaxed);
+    let checked = service
+        .check_updates(admin.actor_id, true, id, &CancellationToken::new())
+        .await
+        .unwrap();
+    let state = checked.auto_update_state.as_ref().unwrap();
+    assert_eq!(state.status, citadel_primitives::AutoUpdateStatus::UpToDate);
+    assert_eq!(
+        state.current_digest.as_deref(),
+        Some(format!("sha256:{}", "a".repeat(64)).as_str())
+    );
+    assert_ne!(state.current_digest, state.remote_digest);
+    digests.same_content.store(false, Ordering::Relaxed);
     for (mode, expected) in [(0, "UpToDate"), (1, "UpdateAvailable"), (2, "Failed")] {
         digests.mode.store(mode, Ordering::Relaxed);
         let response = request(app, Method::POST, &url, Some(admin.clone()), None).await;

@@ -5,6 +5,19 @@ use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 pub trait DeploymentRuntime: Send + Sync {
+    fn image_content_changed<'a>(
+        &'a self,
+        deployment: &'a Deployment,
+        remote: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<bool, DeploymentError>> {
+        let _ = (deployment, remote, cancellation);
+        Box::pin(async {
+            Err(DeploymentError::Runtime(
+                "Image content comparison is unavailable.".into(),
+            ))
+        })
+    }
     fn cached_image_digest<'a>(
         &'a self,
         platform: Uuid,

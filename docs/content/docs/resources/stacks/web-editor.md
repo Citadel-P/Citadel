@@ -100,6 +100,10 @@ For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets)
 On Docker Standalone and Swarm, Web Editor Stacks can check service image tags
 for new digests when a registry is selected.
 
+Select a **Registry** before enabling notifications or automatic updates. It is
+optional when updates are disabled and your images can be deployed without
+Registry credentials.
+
 - `Disabled`: disable periodic checks; manual checks remain available.
 - `Notify Only`: record image update availability and emit an alert.
 - `Auto Deploy Services`: pull updated images and redeploy only changed services. Available for Docker Standalone only.
@@ -120,15 +124,20 @@ immediately. The check records service-image update state but does not pull or
 apply an image, emit an alert, or run an automatic deployment. It remains
 available when periodic update behavior is disabled.
 
-Citadel compares the registry digest with the deployed image digest, so the
-first check can detect an update. On Standalone, it reads the Stack's containers
-and local images; on Swarm, it reads the manager's Service image references.
+If no Registry is configured, the check opens a Registry selection dialog. Choose
+**Save Registry and check** to save it in the Stack configuration and run the
+check. If the check fails, the Registry stays saved and you can retry.
+
+Citadel compares registry image content against the deployed image, so the first
+check can detect an update. On Standalone, it uses the platforms of the Stack’s
+container images; on Swarm, it uses the nodes assigned to its Service tasks.
+Changes only to other architectures or image attestations are ignored.
 If the deployed digest is unavailable, deploy the Stack with registry access
 before checking again. Services whose images come from Citadel Builds are
 excluded because their artifact state is managed by the Build workflow.
 
 On the Stacks page, use **Updates available** to show only stacks with a
-detected newer image digest. The filter works with search, tags, and the
+detected image update. The filter works with search, tags, and the
 Platform filter.
 
 ## Build Images

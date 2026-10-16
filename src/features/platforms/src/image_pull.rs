@@ -8,9 +8,44 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PullImageInput {
+    pub source_image_id: Option<String>,
     pub platform_id: Uuid,
-    pub registry_id: Uuid,
+    pub registry_id: Option<Uuid>,
     pub image_tag: String,
+}
+
+/// Candidates must already be authorized for this actor and enabled.
+/// A registry association is a preference, never permission to use credentials.
+pub fn select_pull_registry<'a>(
+    reference: &str,
+    preferred: Option<Uuid>,
+    registries: impl IntoIterator<Item = (Uuid, &'a str)>,
+) -> Result<Option<Uuid>, RuntimeCapabilityError> {
+    let host = crate::image_updates::reference_host(reference.trim());
+    let matching: Vec<_> = registries
+        .into_iter()
+        .filter(|(_, registry)| {
+            let registry = registry
+                .trim()
+                .trim_start_matches("https://")
+                .trim_start_matches("http://");
+            crate::image_updates::registry_host(registry.split('/').next().unwrap_or_default())
+                == host
+        })
+        .map(|(id, _)| id)
+        .collect();
+    if let Some(id) = preferred.filter(|id| matching.contains(id)) {
+        return Ok(Some(id));
+    }
+    match matching.as_slice() {
+        [] => Ok(None),
+        [id] => Ok(Some(*id)),
+        _ => Err(RuntimeCapabilityError::new(
+            RuntimeErrorKind::Conflict,
+            "Multiple authorized Registries match this image. Select Registry credentials and retry.",
+            false,
+        )),
+    }
 }
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,6 +162,50 @@ fn same_image_reference(left: &str, right: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn automatic_registry_selection_is_host_scoped_and_never_guesses_credentials() {
+        let hub = Uuid::now_v7();
+        let private = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        let candidates = [
+            (hub, "https://index.docker.io/v1/"),
+            (private, "registry.example:5000"),
+        ];
+        assert_eq!(
+            select_pull_registry("nginx:ReleaseA", None, candidates).unwrap(),
+            Some(hub)
+        );
+        assert_eq!(
+            select_pull_registry("registry.example:5000/app:Tag", Some(hub), candidates).unwrap(),
+            Some(private)
+        );
+        assert_eq!(
+            select_pull_registry("ghcr.io/team/app:Tag", Some(private), candidates).unwrap(),
+            None
+        );
+        assert_eq!(
+            select_pull_registry("nginx:17", Some(hub), []).unwrap(),
+            None
+        );
+        let ambiguous = [(hub, "docker.io"), (other, "registry-1.docker.io")];
+        assert_eq!(
+            select_pull_registry("nginx:17", None, ambiguous)
+                .unwrap_err()
+                .kind,
+            RuntimeErrorKind::Conflict
+        );
+        assert_eq!(
+            select_pull_registry("nginx:17", Some(other), ambiguous).unwrap(),
+            Some(other)
+        );
+        assert_eq!(
+            select_pull_registry("nginx:17", Some(private), ambiguous)
+                .unwrap_err()
+                .kind,
+            RuntimeErrorKind::Conflict
+        );
+    }
+
     #[test]
     fn pulled_image_lookup_accepts_hub_aliases_without_changing_tags_or_private_registries() {
         assert!(same_image_reference(

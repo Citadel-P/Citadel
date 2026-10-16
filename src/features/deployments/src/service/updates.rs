@@ -79,15 +79,22 @@ impl DeploymentService {
             let _permit = permit;
             let claim = service.store.begin_update_check(actor, administrator, &snapshot).await?;
             service.notifier.changed(snapshot.id, "updated");
-            let scan = if let Some(digest) = cached_digest { Ok(digest) } else { tokio::select! {
+            let scan = tokio::select! {
                 biased;
                 () = cancel.cancelled() => Err(DeploymentError::Cancelled),
                 () = service.shutdown.cancelled() => Err(DeploymentError::Cancelled),
-                result = tokio::time::timeout(Duration::from_secs(30), service.runtime.remote_image_digest(snapshot.platform_id, registry, &reference, &cancel)) =>
-                    result.unwrap_or_else(|_| Err(DeploymentError::Runtime("Registry update check timed out.".into()))),
-            } };
+                result = tokio::time::timeout(Duration::from_secs(45), async {
+                    let remote = match cached_digest {
+                        Some(digest) => digest,
+                        None => service.runtime.remote_image_digest(snapshot.platform_id, registry, &reference, &cancel).await?,
+                    };
+                    let changed = !citadel_primitives::image_digests_equal(&current, &remote)
+                        && service.runtime.image_content_changed(&snapshot, &remote, &cancel).await?;
+                    Ok((remote, changed))
+                }) => result.unwrap_or_else(|_| Err(DeploymentError::Runtime("Registry update check timed out.".into()))),
+            };
             let update = match &scan {
-                Ok(remote) => Some(AutoUpdateState::checked(&current, remote, Utc::now())),
+                Ok((remote, changed)) => Some(AutoUpdateState::compared_content(&current, remote, *changed, Utc::now())),
                 Err(DeploymentError::Cancelled) => None,
                 Err(_) => Some(AutoUpdateState {
                     last_checked_at: Utc::now(), status: AutoUpdateStatus::Failed, current_digest: Some(current),

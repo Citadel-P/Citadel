@@ -370,9 +370,11 @@ SELECT image.id, image.tags::jsonb AS tags, image.name, image.dockerimageid,
        image.size, image.containers, image.platformid, image.createdat,
        image.controlstate, image.updatedat, image.registryid,
        NULL::text AS contentidentity, NULL::text AS dockernodeid,
-       NULL::text AS nodehostname, FALSE AS isstale, NULL::text AS stalereason,
+       NULL::text AS nodehostname, platform.status IS DISTINCT FROM 'Online' AS isstale,
+       CASE WHEN platform.status IS DISTINCT FROM 'Online' THEN 'Platform is offline or unavailable.' END AS stalereason,
        NULL::jsonb AS repodigests
 FROM images image
+JOIN platforms platform ON platform.id=image.platformid
 WHERE image.platformid = $1
 UNION ALL
 SELECT image.id, image.resource->'repo_tags',

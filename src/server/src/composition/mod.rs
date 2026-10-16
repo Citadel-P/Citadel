@@ -46,6 +46,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 pub(super) struct RuntimeContext {
+    pub image_cache: Arc<citadel_adapters::connectors::registries::digest_cache::ImageDigestCache>,
     pub pool: PgPool,
     pub docker: DockerClient,
     pub agent: Option<AgentClient>,
@@ -181,6 +182,7 @@ impl ServerComponents {
             container_runtime,
         } = connectors::build(config, &pool, &docker)?;
         let runtime = RuntimeContext {
+            image_cache: Arc::new(Default::default()),
             pool: pool.clone(),
             docker: docker.clone(),
             agent: agent.clone(),
@@ -253,6 +255,9 @@ impl ServerComponents {
             )
             .with_groups(Arc::new(
                 citadel_server::realtime_groups::ApplicationGroupReader {
+                    image_store: platform_state.image_store.clone(),
+                    image_updates: platform_state.image_updates.clone(),
+                    registries: platform_state.registries.clone(),
                     copy_eligibility: Some(copies.clone()),
                     backup_coverage: Some(Arc::new(
                         citadel_server::api::resources::backups::coverage::BackupCoverageService {

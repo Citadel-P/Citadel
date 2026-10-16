@@ -2,7 +2,7 @@ use super::*;
 use citadel_adapters::connectors::agent::client::AgentRequestSigner;
 use citadel_server::api::routes::platforms::AgentSetupContext;
 
-async fn daemon(
+pub(super) async fn daemon(
     handler: impl Fn(&str) -> (u16, String) + Send + Sync + 'static,
 ) -> (DockerClient, tokio::task::JoinHandle<()>, PathBuf) {
     let path = std::env::temp_dir().join(format!("platform-management-{}.sock", Uuid::now_v7()));
@@ -41,6 +41,163 @@ async fn daemon(
         server,
         path,
     )
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn contextual_pull_moves_only_the_selected_tag_and_preserves_workloads() {
+    contextual_pull_case(true, true).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn contextual_pull_automatically_resolves_a_matching_registry() {
+    contextual_pull_case(false, true).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn contextual_pull_without_any_registry_persists_an_anonymous_image() {
+    contextual_pull_case(false, false).await;
+}
+
+async fn contextual_pull_case(explicit_registry: bool, registered: bool) {
+    let mut f = fixture().await;
+    if !registered {
+        sqlx::query("UPDATE images SET registryid=NULL")
+            .execute(&f.pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM registries")
+            .execute(&f.pool)
+            .await
+            .unwrap();
+    }
+    let old = format!("sha256:{}", "a".repeat(64));
+    let new = format!("sha256:{}", "b".repeat(64));
+    let image_id = Uuid::now_v7();
+    let deployment = Uuid::now_v7();
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}' WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO images(id,dockerimageid,name,platformid,createdat,tags) VALUES($1,$2,'nginx:17',$3,now(),'[\"nginx:17\"]')").bind(image_id).bind(&old).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let spec = json!({"Image":{"$type":"Local","ImageId":image_id}});
+    sqlx::query("INSERT INTO deployments(id,name,platformid,createdbyactorid,spec,status,autoupdatestate_currentdigest) VALUES($1,'saved-workload',$2,$3,$4,'Running',$5)").bind(deployment).bind(f.platform_id).bind(f.administrator.actor_id.value()).bind(&spec).bind(&old).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,imageid,deploymentid,name,platformid,ports,state,updated) VALUES($1,0,'running-a',$2,$3,$4,'running-a',$5,'[]','Running',0)").bind(Uuid::now_v7()).bind(&old).bind(image_id).bind(deployment).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let source = old.clone();
+    let pulled = new.clone();
+    let moved = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let daemon_moved = moved.clone();
+    let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = calls.clone();
+    let (docker, server, socket) = daemon(move |line| {
+        seen.lock().unwrap().push(line.to_owned());
+        if line.starts_with("GET ") && line.contains("/images/") && !line.contains("/images/json") && line.contains("/json") {
+            (200, json!({"Id":source,"RepoTags":if daemon_moved.load(std::sync::atomic::Ordering::SeqCst) {Vec::<String>::new()} else {vec!["nginx:17".into()]},"Os":"linux","Architecture":"amd64","Config":{}}).to_string())
+        } else if line.starts_with("GET ") && (line.contains("/history") || line.contains("/containers/json")) {
+            (200, "[]".into())
+        } else if line.starts_with("POST /v1.49/images/create") {
+            assert!(line.contains("fromImage=docker.io%2Flibrary%2Fnginx%3A17"), "{line}");
+            daemon_moved.store(true, std::sync::atomic::Ordering::SeqCst);
+            (200,"{\"status\":\"Done\"}\n".into())
+        } else if line.starts_with("GET /v1.49/images/json") {
+            (200,json!([{"Id":pulled,"RepoTags":["nginx:17"],"RepoDigests":[],"Created":1700000000,"Size":2048,"Containers":0}]).to_string())
+        } else { panic!("A contextual pull must never mutate a workload: {line}") }
+    }).await;
+    let mut state = f.lookup_state.platforms.clone();
+    refresh_runtime(&mut state, &f, docker);
+    f.app = platforms_http::router(state);
+    let mut input = json!({"platformId":f.platform_id,"imageTag":"nginx:17","sourceImageId":old});
+    if explicit_registry {
+        input["registryId"] = json!(Uuid::from_u128(0x100));
+    }
+    let reader = super::lookup::subject(&f).await;
+    assert_eq!(
+        send_json(
+            &f,
+            Method::POST,
+            "/api/v1/images/pull",
+            reader,
+            input.clone()
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN,
+    );
+    let response = send_json(
+        &f,
+        Method::POST,
+        "/api/v1/images/pull",
+        f.administrator.clone(),
+        input.clone(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let progress = json_body(response).await;
+    assert_eq!(
+        progress.as_array().unwrap().last().unwrap()["dockerImageId"],
+        new,
+        "{progress}"
+    );
+    let registry: Option<Uuid> = sqlx::query_scalar(
+        "SELECT registryid FROM images WHERE platformid=$1 AND dockerimageid=$2",
+    )
+    .bind(f.platform_id)
+    .bind(&new)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(registry, registered.then(|| Uuid::from_u128(0x100)));
+    let saved: (Value, Option<String>) =
+        sqlx::query_as("SELECT spec,autoupdatestate_currentdigest FROM deployments WHERE id=$1")
+            .bind(deployment)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    assert_eq!(saved, (spec, Some(old.clone())));
+    let running: String =
+        sqlx::query_scalar("SELECT dockerimageid FROM containers WHERE deploymentid=$1")
+            .bind(deployment)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    assert_eq!(running, old);
+    let old_tags: Value = sqlx::query_scalar("SELECT tags::jsonb FROM images WHERE id=$1")
+        .bind(image_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(old_tags, json!([]));
+    // A stale browser selection cannot pull a tag that has moved away from its image.
+    let response = send_json(
+        &f,
+        Method::POST,
+        "/api/v1/images/pull",
+        f.administrator.clone(),
+        input,
+    )
+    .await;
+    let progress = json_body(response).await;
+    assert!(
+        progress.as_array().unwrap().last().unwrap()["errorMessage"]
+            .as_str()
+            .unwrap()
+            .contains("no longer belongs")
+    );
+    assert_eq!(
+        calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|c| c.starts_with("POST "))
+            .count(),
+        1
+    );
+    server.abort();
+    let _ = std::fs::remove_file(socket);
+    f.docker_server.abort();
 }
 
 // Ports PlatformEndpointTests rename/patch persistence, immutable orchestration/cluster,

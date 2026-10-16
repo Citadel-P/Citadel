@@ -1,33 +1,15 @@
-import { Trash } from 'lucide-react';
-import { useNavigate } from 'react-router';
-import { useAppContext } from '@/lib/context/app-context';
-import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { ImageView } from '@/api/generated/api.types';
+import { DeleteImageButton } from '../delete-image-dialog';
+import type { ImageDeleteTarget } from '../delete-image-action';
+import { ImageReferenceButton, type ImageReferenceTarget } from '../reference-actions';
 
-export const { info: ImageInfoActions } = createActionsBuilder<ImageView>()
-  .addAction({
-    key: 'delete',
-    type: 'command',
-    icon: Trash,
-    mutateKey: 'deleteImages',
-    confirm: true,
-    destructive: true,
-    resourceType: 'Image',
-    canExecute: () => true,
-    useVariables: (resource) => {
-      const { currentPlatform } = useAppContext();
-      return {
-        platformId: currentPlatform?.id ?? '',
-        ids: Array.isArray(resource) ? resource.map((r) => r.dockerImageId) : [resource.dockerImageId],
-        force: true,
-      };
-    },
-    useSuccessHandler: () => {
-      const navigate = useNavigate();
-      const { currentPlatform } = useAppContext();
-      return () => {
-        navigate(`/platforms/${currentPlatform?.id}/images`);
-      };
-    },
-  })
-  .build();
+export type ImageInfoActionTarget = ImageDeleteTarget & ImageReferenceTarget;
+
+export const ImageInfoActions = {
+  check: ({ resource }: { resource: ImageInfoActionTarget }) => (
+    <ImageReferenceButton resources={[resource]} kind="check" />
+  ),
+  pull: ({ resource }: { resource: ImageInfoActionTarget }) => (
+    <ImageReferenceButton resources={[resource]} kind="pull" />
+  ),
+  delete: ({ resource }: { resource: ImageDeleteTarget }) => <DeleteImageButton resources={[resource]} detail />,
+};

@@ -49,6 +49,7 @@ pub(crate) async fn inspect(
         }
         Some(agent) => {
             let request = DistributionInspectRequest {
+                target_platform: None,
                 image_name: image,
                 auth: auth.as_deref().cloned(),
             };

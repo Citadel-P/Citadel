@@ -64,9 +64,25 @@ pub struct AutoUpdateState {
 
 impl AutoUpdateState {
     pub fn checked(current: &str, remote: &str, checked_at: DateTime<Utc>) -> Self {
+        Self::compared_content(
+            current,
+            remote,
+            !image_digests_equal(current, remote),
+            checked_at,
+        )
+    }
+
+    /// Retain deployment identities even when different indexes contain the
+    /// same configuration for the workload's platforms.
+    pub fn compared_content(
+        current: &str,
+        remote: &str,
+        changed: bool,
+        checked_at: DateTime<Utc>,
+    ) -> Self {
         Self {
             last_checked_at: checked_at,
-            status: if image_digests_equal(current, remote) {
+            status: if !changed {
                 AutoUpdateStatus::UpToDate
             } else {
                 AutoUpdateStatus::UpdateAvailable
@@ -160,6 +176,15 @@ mod tests {
         assert_eq!(changed.status, AutoUpdateStatus::UpdateAvailable);
         assert_eq!(changed.current_digest.as_deref(), Some("sha256:old"));
         assert_eq!(changed.remote_digest.as_deref(), Some("sha256:new"));
+    }
+
+    #[test]
+    fn equivalent_platform_content_does_not_rewrite_the_applied_digest() {
+        let result =
+            AutoUpdateState::compared_content("repo@sha256:old", "sha256:new", false, Utc::now());
+        assert_eq!(result.status, AutoUpdateStatus::UpToDate);
+        assert_eq!(result.current_digest.as_deref(), Some("sha256:old"));
+        assert_eq!(result.remote_digest.as_deref(), Some("sha256:new"));
     }
 
     #[test]

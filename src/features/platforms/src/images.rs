@@ -11,12 +11,18 @@ use crate::RuntimeCapabilityError;
 #[serde(rename_all = "camelCase")]
 pub struct ImageInspection {
     pub id: String,
+    /// Explicit comparison identities; Docker's display ID may be an OCI index.
+    #[serde(skip)]
+    pub config_digest: Option<String>,
+    #[serde(skip)]
+    pub content_digest: Option<String>,
     pub name: String,
     pub tag: String,
     pub size: i64,
     pub os: String,
     pub created: String,
     pub architecture: String,
+    pub variant: Option<String>,
     pub user: Option<String>,
     pub working_dir: Option<String>,
     pub entry_point: Vec<String>,

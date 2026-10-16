@@ -19,6 +19,17 @@ version is **2**. Command number 0 and unknown command numbers are rejected.
 The Agent runs without PostgreSQL. It maps requests onto shared Docker and
 external-tool implementations; Core owns persisted resource and user state.
 
+## Image metadata comparisons
+
+`DistributionInspect` accepts an optional target OS/architecture/variant. With that
+field, current Agents read only the matching OCI manifest/config metadata and
+return its configuration and manifest digests. Requests without it retain the
+existing top-level distribution descriptor behavior. Image inspection identifies
+the digest type so Core compares images correctly across Docker image stores.
+Checks read metadata only. Missing comparison fields from older Agents yield an
+unavailable comparison in Core. No operation numbers or Swarm-node allowlists
+change; node-local registry checks remain unavailable.
+
 ## Deployment profiles
 
 All profiles use the same Agent image. Build Pools do not have a separate transport.

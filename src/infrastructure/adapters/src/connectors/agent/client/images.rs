@@ -188,7 +188,8 @@ impl ImageInspectionPort for crate::connectors::edge::EdgeRuntime {
 
 fn map_inspection(image: InspectImageResponse) -> ImageInspection {
     let mut value = ImageInspection {
-        id: image.id, size: image.size, os: image.os.unwrap_or_else(|| "unknown".into()),
+        config_digest: image.config_digest, content_digest: image.content_digest,
+        variant: image.variant, id: image.id, size: image.size, os: image.os.unwrap_or_else(|| "unknown".into()),
         created: image.created, architecture: image.architecture.unwrap_or_else(|| "unknown".into()),
         user: image.user, working_dir: image.working_dir, entry_point: image.entry_point, stop_signal: image.stop_signal,
         env: image.env, cmd: image.cmd, repo_tags: image.repo_tags, volumes: image.volumes,

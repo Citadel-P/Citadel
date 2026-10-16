@@ -1,5 +1,7 @@
 pub mod container_views;
 pub mod descriptor_views;
+pub(crate) mod image_management;
+pub(crate) mod image_views;
 pub mod inventory_views;
 pub mod operation_views;
 pub mod patch;

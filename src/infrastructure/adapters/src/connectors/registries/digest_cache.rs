@@ -14,11 +14,50 @@ pub struct ImageDigestEntry {
 }
 #[derive(Default)]
 pub struct ImageDigestCache {
+    metadata: Mutex<
+        BTreeMap<
+            super::image_updates::MetadataKey,
+            std::sync::Arc<tokio::sync::Mutex<super::image_updates::MetadataAttempt>>,
+        >,
+    >,
     ready: std::sync::atomic::AtomicBool,
     completed: tokio::sync::Notify,
     entries: Mutex<BTreeMap<(Uuid, String, String), ImageDigestEntry>>,
 }
 impl ImageDigestCache {
+    pub(crate) fn metadata_slot(
+        &self,
+        key: super::image_updates::MetadataKey,
+    ) -> Result<
+        std::sync::Arc<tokio::sync::Mutex<super::image_updates::MetadataAttempt>>,
+        citadel_platforms::RuntimeCapabilityError,
+    > {
+        let mut slots = self.metadata.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(slot) = slots.get(&key) {
+            return Ok(slot.clone());
+        }
+        if slots.len() >= MAX_ENTRIES {
+            if let Some(old) = slots
+                .iter()
+                .find(|(_, v)| std::sync::Arc::strong_count(v) == 1)
+                .map(|(k, _)| k.clone())
+            {
+                slots.remove(&old);
+            } else {
+                return Err(citadel_platforms::RuntimeCapabilityError::new(
+                    citadel_platforms::RuntimeErrorKind::Unavailable,
+                    "Registry metadata checks are busy.",
+                    false,
+                ));
+            }
+        }
+        let slot = std::sync::Arc::new(tokio::sync::Mutex::new(
+            super::image_updates::MetadataAttempt::default(),
+        ));
+        slots.insert(key, slot.clone());
+        Ok(slot)
+    }
+
     pub(crate) fn mark_ready(&self) {
         self.ready.store(true, std::sync::atomic::Ordering::Release);
         self.completed.notify_waiters();

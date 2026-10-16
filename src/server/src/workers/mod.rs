@@ -46,3 +46,5 @@ pub mod statistics;
 pub(crate) mod test_support;
 
 pub mod resource_copies;
+
+pub(crate) mod image_updates;

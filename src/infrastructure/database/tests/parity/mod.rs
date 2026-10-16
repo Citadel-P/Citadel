@@ -273,3 +273,53 @@ async fn initial_baseline_includes_appearance_defaults_and_restart_preserves_pre
     drop(connection);
     database.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
+async fn initial_baseline_includes_image_updates_and_restart_preserves_observations() {
+    let database = Database::create().await;
+    MigrationRunner::migrate(&database.url).await.unwrap();
+    let mut connection = PgConnection::connect(&database.url).await.unwrap();
+    let platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'unix:///fixture.sock','Local',0,1,0,'baseline-fixture',0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).execute(&mut connection).await.unwrap();
+    let image = Uuid::now_v7();
+    sqlx::query("INSERT INTO images(id,dockerimageid,name,platformid,createdat,tags) VALUES($1,'sha256:existing','app',$2,now(),'[\"app:latest\"]')").bind(image).bind(platform).execute(&mut connection).await.unwrap();
+    let checksum: String =
+        sqlx::query_scalar("SELECT checksum FROM citadel_schema_migrations WHERE id='0001'")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    sqlx::query("INSERT INTO imageupdateobservations(imageid,reference,registrykey,registryrevision,attemptedat,result) VALUES($1,'app:latest',$2,'anonymous',now(),'{\"status\":\"UpToDate\"}')")
+        .bind(image).bind(Uuid::nil()).execute(&mut connection).await.unwrap();
+    let restarted = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!((restarted.applied, restarted.already_applied), (0, 1));
+    let status: String = sqlx::query_scalar(
+        "SELECT result->>'status' FROM imageupdateobservations WHERE imageid=$1",
+    )
+    .bind(image)
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(status, "UpToDate");
+    let preserved: String = sqlx::query_scalar("SELECT tags->>0 FROM images WHERE id=$1")
+        .bind(image)
+        .fetch_one(&mut connection)
+        .await
+        .unwrap();
+    assert_eq!(preserved, "app:latest");
+    let current: String =
+        sqlx::query_scalar("SELECT checksum FROM citadel_schema_migrations WHERE id='0001'")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(current, checksum);
+    assert_eq!(
+        MigrationRunner::migrate(&database.url)
+            .await
+            .unwrap()
+            .already_applied,
+        1
+    );
+    connection.close().await.unwrap();
+    database.close().await;
+}

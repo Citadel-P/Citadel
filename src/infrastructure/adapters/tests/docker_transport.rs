@@ -235,6 +235,8 @@ async fn image_inspect_combines_generated_details_history_and_filtered_container
             .unwrap();
     assert_eq!(image.name, "registry:5000/app");
     assert_eq!(image.tag, "v1");
+    assert_eq!(image.config_digest.as_deref(), Some("sha256:abc"));
+    assert!(image.content_digest.is_none());
     assert_eq!(image.user.as_deref(), Some("1000"));
     assert_eq!(image.working_dir.as_deref(), Some("/work"));
     assert_eq!(image.entry_point, ["/entry"]);

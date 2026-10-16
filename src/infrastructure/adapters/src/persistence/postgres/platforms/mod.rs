@@ -59,6 +59,7 @@ pub(crate) mod connection;
 
 pub mod descriptor;
 
+mod image_usage;
 pub mod images;
 
 pub mod background;
@@ -66,3 +67,5 @@ pub mod background;
 pub(crate) mod image_scan;
 
 pub(crate) mod volume_helpers;
+
+pub mod image_updates;

@@ -52,9 +52,7 @@ pub(super) fn build(
         container_runtime,
         ..
     } = runtime;
-    let image_cache = Arc::new(
-        citadel_adapters::connectors::registries::digest_cache::ImageDigestCache::default(),
-    );
+    let image_cache = runtime.image_cache.clone();
     let swarm_runtime = SwarmServiceRuntimeRouter::new(pool.clone(), docker.clone(), agent.clone())
         .with_image_cache(image_cache.clone())
         .with_edge(edge_registry.clone())

@@ -496,6 +496,28 @@ export enum LicenseCapability {
   ElasticBuildExecution = "ElasticBuildExecution",
 }
 
+export enum ImageWorkloadKind {
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+}
+
+export enum ImageUpdateStatus {
+  UpToDate = "UpToDate",
+  UpdateAvailable = "UpdateAvailable",
+  NotChecked = "NotChecked",
+  CheckFailed = "CheckFailed",
+  NotApplicable = "NotApplicable",
+  Unknown = "Unknown",
+}
+
+export enum ImageRelationship {
+  Container = "Container",
+  SavedLocalImage = "SavedLocalImage",
+  SavedDigest = "SavedDigest",
+  SavedTag = "SavedTag",
+}
+
 export enum GlobalSearchResourceType {
   Platform = "Platform",
   Stack = "Stack",
@@ -2309,6 +2331,16 @@ export interface Channels {
   channels: AlertChannelView[];
 }
 
+export interface CheckImageUpdateInput {
+  dockerImageId: string;
+  dockerNodeId?: string | null;
+  /** @format uuid */
+  platformId: string;
+  reference: string;
+  /** @format uuid */
+  registryId: string;
+}
+
 export interface ComposeProjectImportDraftView {
   draft: ComposeProjectStackDraftView;
   importKind: StackImportKind;
@@ -2787,6 +2819,7 @@ export interface DeleteImagesInput {
   noPrune?: boolean;
   /** @format uuid */
   platformId: string;
+  reviews?: ImageDeletionReview[];
 }
 
 export interface DeleteImagesView {
@@ -3544,6 +3577,23 @@ export interface ImageContainer {
   volumes: string[];
 }
 
+export interface ImageDeletionPreviewItem {
+  blockers: string[];
+  canDelete: boolean;
+  /** @format date-time */
+  observedAt: string;
+  review: ImageDeletionReview;
+  usage: ImageUsage;
+  warnings: string[];
+}
+
+export interface ImageDeletionReview {
+  dockerImageId: string;
+  /** @format int64 */
+  rowVersion: number;
+  tags: string[];
+}
+
 export interface ImageInspection {
   architecture: string;
   cmd: string[];
@@ -3565,12 +3615,14 @@ export interface ImageInspection {
   stopSignal?: string | null;
   tag: string;
   user?: string | null;
+  variant?: string | null;
   volumes: string[];
   workingDir?: string | null;
 }
 
 export type ImageInspectionView = ImageInspection & {
   capabilities?: null | ImageCapabilitiesView;
+  updates: ImageTagUpdate[];
 };
 
 export interface ImageLayer {
@@ -3597,6 +3649,22 @@ export interface ImageRegistryView {
   type: RegistryKind;
 }
 
+export interface ImageTagUpdate {
+  isStale: boolean;
+  /** @format date-time */
+  lastAttemptAt?: string | null;
+  /** @format date-time */
+  lastSuccessAt?: string | null;
+  localConfigDigest?: string | null;
+  reason?: string | null;
+  reference: string;
+  /** @format uuid */
+  registryId?: string | null;
+  remoteConfigDigest?: string | null;
+  remoteManifestDigest?: string | null;
+  status: ImageUpdateStatus;
+}
+
 export interface ImageUpdateState {
   currentDigest: string;
   imageName: string;
@@ -3605,6 +3673,57 @@ export interface ImageUpdateState {
   remoteDigest?: string | null;
   serviceName: string;
   updateAvailable: boolean;
+}
+
+export interface ImageUsage {
+  coverageComplete: boolean;
+  entries: ImageUsageEntry[];
+  limitations: string[];
+  /**
+   * @format int32
+   * @min 0
+   */
+  nextOffset?: number | null;
+}
+
+export interface ImageUsageEntry {
+  containerId?: string | null;
+  containerName?: string | null;
+  containerState?: string | null;
+  isStale: boolean;
+  /** @format date-time */
+  observedAt?: string | null;
+  reference?: string | null;
+  relationship: ImageRelationship;
+  /** @format uuid */
+  workloadId?: string | null;
+  workloadKind?: null | ImageWorkloadKind;
+  workloadName?: string | null;
+  workloadStatus?: string | null;
+}
+
+export interface ImageUsageSummary {
+  /**
+   * @format int32
+   * @min 0
+   */
+  containers: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  deployments: number;
+  isPartial: boolean;
+  /**
+   * @format int32
+   * @min 0
+   */
+  stacks: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  swarmServices: number;
 }
 
 export interface ImageView {
@@ -3633,6 +3752,8 @@ export interface ImageView {
   tags: string[];
   /** @format date-time */
   updatedAt: string | null;
+  updates?: ImageTagUpdate[] | null;
+  usedBy?: null | ImageUsageSummary;
 }
 
 export interface ImagesResponse {
@@ -4484,6 +4605,12 @@ export interface Pools {
   pools: AuthorizedPool[];
 }
 
+export interface PreviewImageDeletionInput {
+  ids: string[];
+  /** @format uuid */
+  platformId: string;
+}
+
 export interface ProblemDetails {
   capability?: string | null;
   detail?: string | null;
@@ -5248,7 +5375,8 @@ export interface PullImageInput {
   /** @format uuid */
   platformId: string;
   /** @format uuid */
-  registryId: string;
+  registryId?: string | null;
+  sourceImageId?: string | null;
 }
 
 export interface PullImageStreamItem {
@@ -12859,6 +12987,70 @@ export class Api<
      * No description
      *
      * @tags Images
+     * @name CheckImageUpdate
+     * @request POST:/api/v1/images/check-update
+     * @secure
+     * @response `200` `ImageTagUpdate`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     * @response `default` `ProblemDetails` Request failed
+     */
+    checkImageUpdate: (
+      data: CheckImageUpdateInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ImageTagUpdate, ProblemDetails>({
+        path: `/api/v1/images/check-update`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name PreviewImageDeletion
+     * @request POST:/api/v1/images/deletion-preview
+     * @secure
+     * @response `200` `(ImageDeletionPreviewItem)[]`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     * @response `default` `ProblemDetails` Request failed
+     */
+    previewImageDeletion: (
+      data: PreviewImageDeletionInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ImageDeletionPreviewItem[], ProblemDetails>({
+        path: `/api/v1/images/deletion-preview`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
      * @name GetDockerHubRepositories
      * @summary List Docker Hub repositories
      * @request GET:/api/v1/images/dockerhub/{registryName}/repositories
@@ -13066,6 +13258,46 @@ export class Api<
       this.request<ExposedPortsView, ProblemDetails>({
         path: `/api/v1/images/${platformId}/${imageId}/_ports`,
         method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name GetImageUsage
+     * @request GET:/api/v1/images/{platformId}/{imageId}/usage
+     * @secure
+     * @response `200` `ImageUsage`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getImageUsage: (
+      platformId: string,
+      imageId: string,
+      query?: {
+        dockerNodeId?: string;
+        /**
+         * @format int32
+         * @min 0
+         */
+        offset?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ImageUsage, ProblemDetails>({
+        path: `/api/v1/images/${platformId}/${imageId}/usage`,
+        method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,

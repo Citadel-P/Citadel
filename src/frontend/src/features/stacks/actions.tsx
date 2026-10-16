@@ -172,60 +172,50 @@ export const syncAction: ActionConfig<StackView, any> = {
   },
 };
 
-export const checkUpdatesAction: ActionConfig<StackView, any> = {
-  key: 'checkUpdates',
-  title: 'Check for updates',
-  type: 'command',
-  icon: RefreshCw,
-  requiredCapabilities: ['canWrite'],
-  useHandler: ({ resources }) => {
-    const queryClient = useQueryClient();
-    const selected = Array.isArray(resources) ? resources[0] : resources;
-    const multiSelect = Array.isArray(resources) && resources.length > 1;
-    const { mutateAsync, isPending } = useMutate('checkStackUpdates');
-    const disabledReason = multiSelect
-      ? 'Select one stack to check for updates.'
-      : getStackUpdateCheckDisabledReason(selected);
-    const canExecute = disabledReason === undefined;
+export function useStackUpdateCheck(resources: StackView | StackView[]) {
+  const queryClient = useQueryClient();
+  const selected = Array.isArray(resources) ? resources[0] : resources;
+  const multiSelect = Array.isArray(resources) && resources.length > 1;
+  const { mutateAsync, isPending } = useMutate('checkStackUpdates');
+  const disabledReason = multiSelect
+    ? 'Select one stack to check for updates.'
+    : getStackUpdateCheckDisabledReason(selected);
+  const canExecute = disabledReason === undefined;
 
-    return {
-      canExecute,
-      disabledReason,
-      isPending,
-      run: async () => {
-        if (!selected || !canExecute) return;
+  return {
+    canExecute,
+    disabledReason,
+    isPending,
+    run: async () => {
+      if (!selected || !canExecute) return;
 
-        try {
-          const result = await mutateAsync({ stackId: selected.id });
-          const updated = result.data;
+      const result = await mutateAsync({ stackId: selected.id });
+      const updated = result.data;
 
-          const gitState = getStackGitUpdateState(updated);
-          if (gitState?.remoteCommitSha && gitState.remoteCommitSha !== gitState.currentCommitSha) {
-            toast.info('Git update available', {
-              description: getStackImageUpdateStates(updated).some((state) => state.updateAvailable)
-                ? 'A newer relevant commit and service images are available.'
-                : 'A newer relevant commit is available.',
-            });
-          } else if (updated.stackSource === StackSource.Git && getStackImageUpdateStates(updated).length === 0) {
-            toast.success('Stack source is up to date', {
-              description: 'No newer relevant commit was found. No supported service images were checked.',
-            });
-          } else {
-            const message = getStackImageUpdateCheckMessage(updated);
-            toast[message.kind](message.title, { description: message.description });
-          }
+      const gitState = getStackGitUpdateState(updated);
+      if (gitState?.remoteCommitSha && gitState.remoteCommitSha !== gitState.currentCommitSha) {
+        toast.info('Git update available', {
+          description: getStackImageUpdateStates(updated).some((state) => state.updateAvailable)
+            ? 'A newer relevant commit and service images are available.'
+            : 'A newer relevant commit is available.',
+        });
+      } else if (updated.stackSource === StackSource.Git && getStackImageUpdateStates(updated).length === 0) {
+        toast.success('Stack source is up to date', {
+          description: 'No newer relevant commit was found. No supported service images were checked.',
+        });
+      } else {
+        const message = getStackImageUpdateCheckMessage(updated);
+        toast[message.kind](message.title, { description: message.description });
+      }
 
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ['getStack'] }),
-            queryClient.invalidateQueries({ queryKey: ['listStacks'] }),
-          ]);
-        } catch {
-          // Nope
-        }
-      },
-    };
-  },
-};
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['getStack'] }),
+        queryClient.invalidateQueries({ queryKey: ['getStackConfig'] }),
+        queryClient.invalidateQueries({ queryKey: ['listStacks'] }),
+      ]);
+    },
+  };
+}
 
 export const stopAction: ActionConfig<StackView, 'stopStacks'> = {
   key: 'stop',

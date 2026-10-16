@@ -2,19 +2,11 @@ import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { StackView } from '@/api/generated/api.types';
-import {
-  checkUpdatesAction,
-  deployAction,
-  pauseAction,
-  startAction,
-  stopAction,
-  syncAction,
-  useVariables,
-} from '../actions';
+import { StackUpdateCheckButton } from '../check-updates';
+import { deployAction, pauseAction, startAction, stopAction, syncAction, useVariables } from '../actions';
 
-export const { info: StackActions } = createActionsBuilder<StackView>()
+const { info: actions } = createActionsBuilder<StackView>()
   .addAction(deployAction)
-  .addAction(checkUpdatesAction)
   .addAction(syncAction)
   .addAction(startAction)
   .addAction(stopAction)
@@ -36,3 +28,5 @@ export const { info: StackActions } = createActionsBuilder<StackView>()
     },
   })
   .build();
+
+export const StackActions = { ...actions, checkUpdates: StackUpdateCheckButton };

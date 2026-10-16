@@ -40,6 +40,7 @@ pub struct WorkerSettings {
 }
 
 pub struct WorkerDependencies {
+    pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
     pub targets: Arc<PlatformRuntimeRegistry>,
     pub volume_content:
         Arc<citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter>,
@@ -109,6 +110,7 @@ pub async fn register(
             .run(Box::new(target_listener), cancellation.child_token()),
     );
     let WorkerDependencies {
+        image_updates,
         targets,
         volume_content,
         containers,
@@ -127,6 +129,10 @@ pub async fn register(
         alerts,
         alert_deliveries,
     } = dependencies;
+    supervisor.spawn(
+        "inventory-image-updates",
+        crate::workers::image_updates::run(cancellation.child_token(), image_updates),
+    );
     supervisor.spawn(
         "alert-configuration-cache",
         alerts.clone().watch_configuration(

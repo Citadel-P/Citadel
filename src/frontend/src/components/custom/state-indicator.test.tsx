@@ -35,3 +35,22 @@ it('shows unavailable backup repositories as an error', () => {
   render(<StateIndicator variant="badge" value="Unavailable" />);
   expect(screen.getByText('Unavailable')).toHaveClass('text-red-700');
 });
+
+it.each([
+  ['Running', 'bg-green-500'],
+  ['Paused', 'bg-orange-500'],
+  ['Restarting', 'bg-yellow-500'],
+  ['Removing', 'bg-yellow-500'],
+  ['Exited', 'bg-gray-500'],
+  ['Dead', 'bg-red-500'],
+  ['Offline', 'bg-red-500'],
+  ['Created', 'bg-blue-400'],
+  ['Unknown', 'bg-gray-400'],
+])('uses the same container indicator for Docker and API state %s', (state, color) => {
+  const { container, rerender } = render(<StateIndicator value={state} kind="container" />);
+  expect(container.querySelector('.rounded-full')).toHaveClass(color);
+  rerender(<StateIndicator value={state.toLowerCase()} kind="container" />);
+  expect(container.querySelector('.rounded-full')).toHaveClass(color);
+  rerender(<StateIndicator value={state.toLowerCase()} kind="container" variant="badge" />);
+  expect(screen.getByText(state)).toBeVisible();
+});

@@ -10,19 +10,21 @@ export function DetailSection({
   icon: Icon,
   children,
   collapse,
+  actions,
 }: {
   title: string;
   description?: string;
   icon: ComponentType<{ className?: string }>;
   children: ReactNode;
   collapse?: { open: boolean; onOpenChange: (open: boolean) => void };
+  actions?: ReactNode;
 }) {
   if (collapse) {
     return (
       <Collapsible asChild open={collapse.open} onOpenChange={collapse.onOpenChange}>
         <section className="min-w-0 overflow-hidden rounded-lg border bg-card shadow-xs">
-          <h2>
-            <CollapsibleTrigger className="group flex w-full items-start gap-3 bg-muted/15 px-(--surface-padding) py-3 text-left hover:bg-muted/30 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+          <h2 className="flex items-start bg-muted/15">
+            <CollapsibleTrigger className="group flex min-w-0 flex-1 items-start gap-3 px-(--surface-padding) py-3 text-left hover:bg-muted/30 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
               <span aria-hidden="true" className="mt-0.5 text-muted-foreground">
                 <Icon className="size-4" />
               </span>
@@ -37,6 +39,7 @@ export function DetailSection({
                 className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90 motion-reduce:transition-none"
               />
             </CollapsibleTrigger>
+            {actions && <span className="shrink-0 py-3 pr-(--surface-padding)">{actions}</span>}
           </h2>
           <CollapsibleContent className="border-t">
             <div className="min-w-0 space-y-4 p-(--surface-padding)">{children}</div>
@@ -55,6 +58,7 @@ export function DetailSection({
           <h2 className="text-sm font-semibold">{title}</h2>
           {description && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>}
         </div>
+        {actions && <div className="ml-auto shrink-0">{actions}</div>}
       </div>
       <div className="min-w-0 space-y-4 p-(--surface-padding)">{children}</div>
     </section>

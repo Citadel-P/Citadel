@@ -59,7 +59,7 @@ function renderForm() {
   );
 }
 
-describe('Stack registry is optional', () => {
+describe('Stack Registry requirements', () => {
   beforeEach(() => {
     updateStack.mockReset().mockResolvedValue({ data: {} });
     fixture.config = {
@@ -80,34 +80,77 @@ describe('Stack registry is optional', () => {
     };
   });
 
-  it.each([StackSource.Git, StackSource.WebEditor])(
-    'saves update behavior without a registry for %s',
-    async (source) => {
-      if (source === StackSource.WebEditor) {
-        fixture.config.stackSource = source;
-        fixture.config.spec = {
-          $type: 'WebEditor',
-          composeFile: 'services:\n  web:\n    image: nginx:alpine',
-          updateBehavior: StackUpdateBehavior.Disabled,
-        };
-      }
-      const { user } = renderForm();
-      expect(saveButtons().every((button) => button.hasAttribute('disabled'))).toBe(true);
-      await user.click(screen.getByRole('combobox', { name: 'Auto Update' }));
-      await user.click(screen.getByRole('option', { name: /^Notify Only/ }));
-      await waitFor(() => expect(saveButtons()[0]).toBeEnabled());
-      await user.click(saveButtons()[0]);
-      await waitFor(() =>
-        expect(updateStack).toHaveBeenCalledWith({
-          id: 'stack',
-          data: expect.objectContaining({
-            spec: expect.objectContaining({ updateBehavior: StackUpdateBehavior.Notify }),
+  it('saves Git update behavior without a Registry', async () => {
+    const { user } = renderForm();
+    await user.click(screen.getByRole('combobox', { name: 'Auto Update' }));
+    await user.click(screen.getByRole('option', { name: /^Notify Only/ }));
+    await waitFor(() => expect(saveButtons()[0]).toBeEnabled());
+    await user.click(saveButtons()[0]);
+    await waitFor(() =>
+      expect(updateStack).toHaveBeenCalledWith({
+        id: 'stack',
+        data: expect.objectContaining({
+          spec: expect.objectContaining({ updateBehavior: StackUpdateBehavior.Notify }),
+        }),
+      }),
+    );
+    expect(updateStack.mock.calls[0][0].data.spec.registryId).toBeUndefined();
+  });
+
+  it('requires a Registry for Web Editor notifications', async () => {
+    fixture.config.stackSource = StackSource.WebEditor;
+    fixture.config.spec = {
+      $type: 'WebEditor',
+      composeFile: 'services:\n  web:\n    image: nginx:alpine',
+      updateBehavior: StackUpdateBehavior.Disabled,
+    };
+    const { user } = renderForm();
+    await user.click(screen.getByRole('combobox', { name: 'Auto Update' }));
+    await user.click(screen.getByRole('option', { name: /^Notify Only/ }));
+    expect(saveButtons().every((button) => button.hasAttribute('disabled'))).toBe(true);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Registry' }), 'registry');
+    await waitFor(() => expect(saveButtons()[0]).toBeEnabled());
+    await user.click(saveButtons()[0]);
+    await waitFor(() =>
+      expect(updateStack).toHaveBeenCalledWith({
+        id: 'stack',
+        data: expect.objectContaining({
+          spec: expect.objectContaining({
+            updateBehavior: StackUpdateBehavior.Notify,
+            registryId: 'registry',
           }),
         }),
-      );
-      expect(updateStack.mock.calls[0][0].data.spec.registryId).toBeUndefined();
-    },
-  );
+      }),
+    );
+  });
+
+  it('requires disabling Web Editor image updates before clearing the Registry', async () => {
+    fixture.config.stackSource = StackSource.WebEditor;
+    fixture.config.spec = {
+      $type: 'WebEditor',
+      composeFile: 'services:\n  web:\n    image: nginx:alpine',
+      updateBehavior: StackUpdateBehavior.Notify,
+      registryId: 'registry',
+    };
+    const { user } = renderForm();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Registry' }), '');
+    expect(saveButtons().every((button) => button.hasAttribute('disabled'))).toBe(true);
+    await user.click(screen.getByRole('combobox', { name: 'Auto Update' }));
+    await user.click(screen.getByRole('option', { name: /^Disabled/ }));
+    await waitFor(() => expect(saveButtons()[0]).toBeEnabled());
+    await user.click(saveButtons()[0]);
+    await waitFor(() =>
+      expect(updateStack).toHaveBeenCalledWith({
+        id: 'stack',
+        data: expect.objectContaining({
+          spec: expect.objectContaining({
+            updateBehavior: StackUpdateBehavior.Disabled,
+            registryId: null,
+          }),
+        }),
+      }),
+    );
+  });
 
   it('can clear existing registry credentials and save', async () => {
     fixture.config.spec.registryId = 'registry';

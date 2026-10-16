@@ -33,6 +33,19 @@ pub struct ServiceUpdateCheck {
 }
 
 pub trait ServiceImageDigestPort: Send + Sync {
+    fn content_changed<'a>(
+        &'a self,
+        service: &'a crate::SwarmService,
+        remote: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<bool, SwarmServiceError>> {
+        let _ = (service, remote, cancellation);
+        Box::pin(async {
+            Err(SwarmServiceError::Runtime(
+                "Image content comparison is unavailable.".into(),
+            ))
+        })
+    }
     fn cached_digest<'a>(
         &'a self,
         platform: Uuid,
@@ -265,19 +278,23 @@ impl SwarmServiceService {
                 .begin_update_check(actor, administrator, &snapshot)
                 .await?;
             service.notifier.changed(id, "update");
-            let scan = if let Some(digest) = cached_digest {
-                Ok(digest)
-            } else {
-                tokio::select! {
-                    biased;
-                    () = cancel.cancelled() => Err(SwarmServiceError::Cancelled),
-                    () = service.shutdown.cancelled() => Err(SwarmServiceError::Cancelled),
-                    result = tokio::time::timeout(Duration::from_secs(30), digests.digest(snapshot.platform_id, registry, &reference, &cancel)) =>
-                        result.unwrap_or_else(|_| Err(SwarmServiceError::Runtime("Registry update check timed out.".into()))),
-                }
+            let scan = tokio::select! {
+                biased;
+                () = cancel.cancelled() => Err(SwarmServiceError::Cancelled),
+                () = service.shutdown.cancelled() => Err(SwarmServiceError::Cancelled),
+                result = tokio::time::timeout(Duration::from_secs(45), async {
+                    let remote = match cached_digest {
+                        Some(digest) => digest,
+                        None => digests.digest(snapshot.platform_id, registry, &reference, &cancel).await?,
+                    };
+                    let current = snapshot.applied_image_digest.as_deref().unwrap();
+                    let changed = !citadel_primitives::image_digests_equal(current, &remote)
+                        && digests.content_changed(&snapshot, &remote, &cancel).await?;
+                    Ok((remote, changed))
+                }) => result.unwrap_or_else(|_| Err(SwarmServiceError::Runtime("Registry update check timed out.".into()))),
             };
             let update = match &scan {
-                Ok(remote) => Some(AutoUpdateState::checked(snapshot.applied_image_digest.as_deref().unwrap(), remote, Utc::now())),
+                Ok((remote, changed)) => Some(AutoUpdateState::compared_content(snapshot.applied_image_digest.as_deref().unwrap(), remote, *changed, Utc::now())),
                 Err(SwarmServiceError::Runtime(_)) => Some(AutoUpdateState {
                     last_checked_at: Utc::now(), status: AutoUpdateStatus::Failed, current_digest: snapshot.applied_image_digest.clone(),
                     remote_digest: snapshot.auto_update_state.remote_digest.clone(),

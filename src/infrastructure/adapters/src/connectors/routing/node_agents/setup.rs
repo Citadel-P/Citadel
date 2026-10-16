@@ -65,6 +65,7 @@ impl NodeAgentSetupRuntime for NodeAgentRuntimeRouter {
         Box::pin(async move {
             let target = self.checked_target(claim, cancel).await?;
             let request = DistributionInspectRequest {
+                target_platform: None,
                 image_name: image.into(),
                 auth: None,
             };

@@ -28,8 +28,18 @@ impl ServiceAutomationEntitlements for Entitlements {
 struct Digests {
     calls: AtomicUsize,
     changed: AtomicBool,
+    same_content: AtomicBool,
 }
 impl ServiceImageDigestPort for Digests {
+    fn content_changed<'a>(
+        &'a self,
+        _: &'a citadel_swarm_services::SwarmService,
+        _: &'a str,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<bool, SwarmServiceError>> {
+        Box::pin(async { Ok(!self.same_content.load(Ordering::Relaxed)) })
+    }
+
     fn digest<'a>(
         &'a self,
         _: Uuid,
@@ -177,6 +187,29 @@ pub(super) async fn verify(
         operation
     );
     entitlements.guardrails.store(true, Ordering::Relaxed);
+    digests.same_content.store(true, Ordering::Relaxed);
+    let snapshot = services.get(admin.actor_id, true, id).await.unwrap();
+    assert!(matches!(
+        services
+            .check_automated_updates(snapshot, &CancellationToken::new())
+            .await
+            .unwrap(),
+        citadel_swarm_services::ServiceUpdateOutcome::Noop(_)
+    ));
+    let equivalent = services.get(admin.actor_id, true, id).await.unwrap();
+    assert_eq!(
+        equivalent.auto_update_state.status,
+        citadel_primitives::AutoUpdateStatus::UpToDate
+    );
+    assert_ne!(
+        equivalent.auto_update_state.current_digest,
+        equivalent.auto_update_state.remote_digest
+    );
+    assert_eq!(
+        equivalent.resource.current_operation.as_ref().unwrap().id,
+        operation
+    );
+    digests.same_content.store(false, Ordering::Relaxed);
     let (_, body) = send(&app, id, "disposable-service-webhook").await;
     assert_eq!(body["status"], "queued");
     tokio::time::timeout(std::time::Duration::from_secs(5), async {

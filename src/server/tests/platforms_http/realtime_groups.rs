@@ -24,6 +24,9 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
+        image_store: f.lookup_state.platforms.image_store.clone(),
+        image_updates: f.lookup_state.platforms.image_updates.clone(),
+        registries: f.lookup_state.platforms.registries.clone(),
         copy_eligibility: None,
         backup_coverage: None,
         git_repositories: Arc::new(
@@ -1615,3 +1618,187 @@ async fn committed_resource_notifications_do_not_reopen_docker_or_cross_authoriz
 
 #[path = "realtime_review.rs"]
 mod review;
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn platform_realtime_capabilities_match_http_and_remain_actor_specific() {
+    use citadel_primitives::SpecificPermission;
+    let f = fixture().await;
+    let puller = super::lookup::subject(&f).await;
+    let viewer = super::lookup::subject(&f).await;
+    // The platforms catalog requires global Read; Pull remains a separate,
+    // resource-specific grant. Set up the role before caching either actor.
+    let role = Uuid::now_v7();
+    sqlx::query("INSERT INTO roles(id,name,roletype) VALUES($1,'platform-reader','Custom')")
+        .bind(role)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO permissions(id,permissionlevel,resourcetype,roleid,specificpermissions) VALUES($1,$2,$3,$4,0)")
+        .bind(Uuid::now_v7()).bind(citadel_primitives::PermissionLevel::Read as i32)
+        .bind(ResourceType::Platform as i32).bind(role).execute(&f.pool).await.unwrap();
+    for principal in [&puller, &viewer] {
+        sqlx::query("INSERT INTO actorroles(actorid,roleid) VALUES($1,$2)")
+            .bind(principal.actor_id.value())
+            .bind(role)
+            .execute(&f.pool)
+            .await
+            .unwrap();
+    }
+    grant(
+        &f,
+        puller.actor_id.value(),
+        ResourceType::Platform,
+        f.platform_id,
+        SpecificPermission::Pull as i32,
+    )
+    .await;
+    grant(
+        &f,
+        viewer.actor_id.value(),
+        ResourceType::Platform,
+        f.platform_id,
+        0,
+    )
+    .await;
+    let groups = reader(&f);
+    let group = Group::parse("platforms").unwrap();
+    let mut expected = Vec::new();
+    for (principal, can_pull) in [(&f.administrator, true), (&puller, true), (&viewer, false)] {
+        let response = f
+            .app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/platforms/{}", f.platform_id))
+                    .extension(principal.clone())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let http = json_body(response).await;
+        assert_eq!(http["capabilities"]["canPull"], can_pull);
+        let snapshot = groups.read(principal, &group, None).await.unwrap();
+        let row = snapshot.rows[0]
+            .rows
+            .iter()
+            .find(|row| row["id"] == f.platform_id.to_string())
+            .unwrap();
+        assert_eq!(row["capabilities"], http["capabilities"]);
+        expected.push(http["capabilities"].clone());
+    }
+    let cancellation = CancellationToken::new();
+    let _guard = cancellation.clone().drop_guard();
+    let service = RealtimeService::new(
+        &RealtimeConfig {
+            queue_capacity: 32,
+            max_connections: 4,
+            subscribe_timeout: StdDuration::from_secs(5),
+            send_timeout: StdDuration::from_secs(2),
+            authorization_recheck_interval: StdDuration::from_secs(3600),
+            snapshot_limit: 1000,
+        },
+        Arc::new(IdentityRealtimeReader::new(
+            f.lookup_state.platforms.identity.clone(),
+            f.lookup_state.platforms.platforms.clone(),
+        )),
+        Arc::new(Metrics::default()),
+        cancellation.clone(),
+    )
+    .with_groups(Arc::new(groups));
+    let hub = service.hub();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = cancellation.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, service.router())
+            .with_graceful_shutdown(shutdown.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let mut clients = Vec::new();
+    for (principal, capabilities) in [&f.administrator, &puller, &viewer]
+        .into_iter()
+        .zip(&expected)
+    {
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+                .await
+                .unwrap();
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, principal).await}).to_string().into())).await.unwrap();
+        assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+        assert!(invoke(&mut socket, "JoinGroup", "platforms").await["error"].is_null());
+        let initial = receive(&mut socket).await;
+        assert_eq!(initial["target"], "PlatformUpdated");
+        assert_eq!(initial["arguments"][0]["capabilities"], *capabilities);
+        clients.push(socket);
+    }
+    // All three actors receive the same shared observation with their own permissions.
+    sqlx::query("UPDATE platforms SET name='capabilities-live' WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    hub.publish_resource_change("Platform", f.platform_id, "updated");
+    for (client, capabilities) in clients.iter_mut().zip(&expected) {
+        let changed = receive(client).await;
+        assert_eq!(changed["target"], "PlatformUpdated");
+        assert_eq!(changed["arguments"][0]["name"], "capabilities-live");
+        assert_eq!(changed["arguments"][0]["capabilities"], *capabilities);
+    }
+    sqlx::query("UPDATE platforms SET name='capabilities-patch' WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "image", "pull", "image-1");
+    for (client, capabilities) in clients.iter_mut().zip(&expected) {
+        let changed = receive(client).await;
+        assert_eq!(changed["target"], "PlatformUpdated");
+        assert_eq!(changed["arguments"][0]["name"], "capabilities-patch");
+        assert_eq!(changed["arguments"][0]["capabilities"], *capabilities);
+    }
+    // Image snapshots use the same lease and carry the decorated list directly.
+    let images_group = format!("images:{}", f.platform_id);
+    for (client, capabilities) in clients.iter_mut().zip(&expected) {
+        assert!(invoke(client, "LeaveGroup", "platforms").await["error"].is_null());
+        assert!(invoke(client, "JoinGroup", &images_group).await["error"].is_null());
+        let snapshot = receive(client).await;
+        assert_eq!(snapshot["target"], "ImagesInfoUpdated");
+        let payload = &snapshot["arguments"][0];
+        assert_eq!(payload["platformId"], json!(f.platform_id));
+        assert_eq!(payload["capabilities"]["canPull"], capabilities["canPull"]);
+        assert_eq!(payload["images"][0]["updates"][0]["status"], "NotChecked");
+        assert!(payload["images"][0]["usedBy"].is_object());
+    }
+    sqlx::query("INSERT INTO imageupdateobservations(imageid,reference,registrykey,registryrevision,result,attemptedat) SELECT id,'nginx:latest',$2,'anonymous',$3,now() FROM images WHERE platformid=$1 AND dockerimageid='sha256:image-1'")
+        .bind(f.platform_id).bind(Uuid::nil())
+        .bind(json!({"reference":"nginx:latest","status":"UpToDate","isStale":false,"lastAttemptAt":Utc::now(),"lastSuccessAt":Utc::now()}))
+        .execute(&f.pool).await.unwrap();
+    hub.publish_runtime_change(f.platform_id, "image", "update", "sha256:image-1");
+    for (client, capabilities) in clients.iter_mut().zip(&expected) {
+        let snapshot = receive(client).await;
+        assert_eq!(snapshot["target"], "ImagesInfoUpdated");
+        let payload = &snapshot["arguments"][0];
+        assert_eq!(payload["images"][0]["updates"][0]["status"], "UpToDate");
+        assert_eq!(payload["capabilities"]["canPull"], capabilities["canPull"]);
+    }
+    replace_specific_permissions(&f, &puller, vec![]).await;
+    let next = tokio::time::timeout(StdDuration::from_secs(2), clients[1].next())
+        .await
+        .unwrap();
+    assert!(
+        matches!(next, Some(Ok(Message::Close(_))) | None),
+        "revoked lease must close: {next:?}"
+    );
+    let snapshot = reader(&f).read(&puller, &group, None).await.unwrap();
+    assert_eq!(snapshot.rows[0].rows[0]["capabilities"]["canPull"], false);
+    for client in &mut clients {
+        let _ = client.close(None).await;
+    }
+    cancellation.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
+}

@@ -95,6 +95,9 @@ pub(crate) struct DeleteImagesInput {
     pub(crate) force: bool,
     #[serde(default)]
     pub(crate) no_prune: bool,
+    #[serde(default)]
+    #[schema(value_type = Vec<crate::api::resources::schema_models::image_management::ImageDeletionReviewSchema>)]
+    pub(crate) reviews: Vec<citadel_platforms::image_usage::ImageDeletionReview>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -684,14 +687,16 @@ impl From<citadel_platforms::CreateRuntimeVolume> for CreateRuntimeVolume {
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PullImageInput {
+    pub source_image_id: Option<String>,
     pub platform_id: Uuid,
-    pub registry_id: Uuid,
+    pub registry_id: Option<Uuid>,
     pub image_tag: String,
 }
 
 impl From<PullImageInput> for citadel_platforms::image_pull::PullImageInput {
     fn from(value: PullImageInput) -> Self {
         Self {
+            source_image_id: value.source_image_id,
             platform_id: value.platform_id,
             registry_id: value.registry_id,
             image_tag: value.image_tag,
@@ -702,6 +707,7 @@ impl From<PullImageInput> for citadel_platforms::image_pull::PullImageInput {
 impl From<citadel_platforms::image_pull::PullImageInput> for PullImageInput {
     fn from(value: citadel_platforms::image_pull::PullImageInput) -> Self {
         Self {
+            source_image_id: value.source_image_id,
             platform_id: value.platform_id,
             registry_id: value.registry_id,
             image_tag: value.image_tag,

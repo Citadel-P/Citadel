@@ -36,7 +36,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "image_service.proto",
             include_str!("../proto/image_service.proto"),
-            "89d8485435a0e365d1d02e2a3bbf4a12b5eaf82dfb0e0939eaf61859794e2944",
+            "7bf4ebf9deab755fb6868d646e6539b38cd08ee2a11e2a9c8ec307081a253321",
         ),
         (
             "network_service.proto",
@@ -112,4 +112,117 @@ fn container_metadata_and_capture_time_are_additive_wire_fields() {
         ..Default::default()
     };
     assert_eq!(stats.encode_to_vec(), [0x10, 42]); // field 2, int64
+}
+
+#[test]
+fn image_comparison_fields_are_additive_and_old_peers_preserve_unknown_metadata() {
+    use citadel_contracts::citadel::images::v1::{
+        DistributionInspectRequest, DistributionInspectResponse, InspectImageResponse,
+        OciDescriptorResponse, OciPlatformResponse,
+    };
+    use prost::Message;
+
+    assert!(
+        DistributionInspectRequest::decode(&[][..])
+            .unwrap()
+            .target_platform
+            .is_none()
+    );
+    let old_response = DistributionInspectResponse::decode(&[][..]).unwrap();
+    assert!(old_response.config_digest.is_empty());
+    assert!(old_response.manifest_digest.is_empty());
+    assert!(
+        InspectImageResponse::decode(&[][..])
+            .unwrap()
+            .variant
+            .is_none()
+    );
+    assert!(
+        OciPlatformResponse::decode(&[][..])
+            .unwrap()
+            .variant
+            .is_empty()
+    );
+
+    let target = DistributionInspectRequest {
+        target_platform: Some(Default::default()),
+        ..Default::default()
+    };
+    assert_eq!(target.encode_to_vec(), [0x1a, 0]); // field 3, message
+    let metadata = DistributionInspectResponse {
+        config_digest: "c".into(),
+        manifest_digest: "m".into(),
+        ..Default::default()
+    };
+    assert_eq!(metadata.encode_to_vec(), [0x1a, 1, b'c', 0x22, 1, b'm']); // fields 3 and 4
+    let platform = OciPlatformResponse {
+        variant: "v".into(),
+        ..Default::default()
+    };
+    assert_eq!(platform.encode_to_vec(), [0x22, 1, b'v']); // field 4
+    let inspection = InspectImageResponse {
+        variant: Some("v".into()),
+        ..Default::default()
+    };
+    assert_eq!(inspection.encode_to_vec(), [0x92, 0x01, 3, 0x0a, 1, b'v']); // field 18, StringValue
+
+    #[derive(Clone, PartialEq, Message)]
+    struct OldDistributionResponse {
+        #[prost(message, optional, tag = "1")]
+        descriptor: Option<OciDescriptorResponse>,
+        #[prost(message, repeated, tag = "2")]
+        platforms: Vec<OciPlatformResponse>,
+    }
+    let response = DistributionInspectResponse {
+        descriptor: Some(OciDescriptorResponse {
+            digest: "top-level-digest".into(),
+            ..Default::default()
+        }),
+        platforms: vec![OciPlatformResponse {
+            architecture: "amd64".into(),
+            os: "linux".into(),
+            ..Default::default()
+        }],
+        ..metadata
+    };
+    let old = OldDistributionResponse::decode(response.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(old.descriptor.unwrap().digest, "top-level-digest");
+    assert_eq!(old.platforms[0].architecture, "amd64");
+}
+
+#[test]
+fn image_inspection_identity_fields_are_additive_and_absence_stays_unknown() {
+    use citadel_contracts::citadel::images::v1::InspectImageResponse;
+    use prost::Message;
+    #[derive(Clone, PartialEq, Message)]
+    struct OldInspection {
+        #[prost(string, tag = "11")]
+        id: String,
+    }
+    let old = OldInspection {
+        id: "display-id".into(),
+    };
+    let decoded = InspectImageResponse::decode(old.encode_to_vec().as_slice()).unwrap();
+    assert!(decoded.config_digest.is_none() && decoded.content_digest.is_none());
+    for (config_digest, content_digest, field) in [
+        (Some("c".into()), None, 0x9a),
+        (None, Some("c".into()), 0xa2),
+    ] {
+        let response = InspectImageResponse {
+            config_digest,
+            content_digest,
+            ..Default::default()
+        };
+        assert_eq!(response.encode_to_vec(), [field, 0x01, 3, 0x0a, 1, b'c']);
+        let response = InspectImageResponse {
+            id: old.id.clone(),
+            ..response
+        };
+        assert_eq!(
+            OldInspection::decode(response.encode_to_vec().as_slice())
+                .unwrap()
+                .id,
+            old.id
+        );
+    }
 }

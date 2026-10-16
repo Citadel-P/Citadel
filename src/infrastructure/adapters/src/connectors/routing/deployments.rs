@@ -265,6 +265,37 @@ impl DeploymentRuntimeRouter {
 }
 
 impl DeploymentRuntime for DeploymentRuntimeRouter {
+    fn image_content_changed<'a>(
+        &'a self,
+        deployment: &'a citadel_deployments::Deployment,
+        remote: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<bool, DeploymentError>> {
+        Box::pin(async move {
+            let (registry, reference, current) =
+                citadel_deployments::checkable_deployment_image(deployment)?;
+            let adapter = crate::connectors::registries::image_updates::ImageUpdateAdapter {
+                pool: self.pool.clone(),
+                runtime: self.runtime.clone(),
+                cache: self.image_cache.clone(),
+            };
+            let check = crate::connectors::registries::workload_updates::WorkloadImageCheck {
+                platform: deployment.platform_id,
+                registry,
+                reference,
+                current,
+                remote,
+            };
+            let target = adapter
+                .deployed_image_target(&check, deployment.docker_image_id.as_deref(), cancel)
+                .await
+                .map_err(agent_runtime)?;
+            adapter
+                .workload_content_changed(&check, &[target], cancel)
+                .await
+                .map_err(agent_runtime)
+        })
+    }
     fn cached_image_digest<'a>(
         &'a self,
         _platform: Uuid,

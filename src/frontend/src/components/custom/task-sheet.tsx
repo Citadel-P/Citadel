@@ -1,21 +1,25 @@
-import { memo, ReactNode, useCallback, useEffect, useMemo } from 'react';
+import { memo, ReactNode, useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import {
+  ArrowRight,
   Calendar,
   Check,
   CheckCheck,
   Clock,
   GitBranch,
   GitCommitHorizontal,
+  KeyRound,
   Link2,
   LoaderCircle,
   NotepadText,
+  RotateCw,
   Route,
 } from 'lucide-react';
 import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { useAppContext } from '@/lib/context/app-context';
-import { ActorCell, LogViewer, TargetCell } from '@/components/custom/common';
+import { ActorCell, LogViewer, TargetCell, ResourceSelectorField } from '@/components/custom/common';
 import { StateBadge, isFailedRunStatus } from '@/components/custom/state-badge';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
@@ -30,6 +34,7 @@ import {
   PullImageStreamItem,
   ResolveInput,
   AuthorizedRegistryView,
+  LookupResourceType,
   ActivityStatus,
   BuildProjectActivitySnapshot,
   ApplyStackInput,
@@ -56,6 +61,8 @@ import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
 import { MonacoDiff, MonacoEditor } from '@/lib/monaco';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { DetailSection } from './resource-detail';
 import { AlertMessage } from './alert-message';
 import { CitadelIcons } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -65,8 +72,10 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PullImageParams {
+  platformId?: string;
+  sourceImageId?: string;
   imageTag: string;
-  registryId: string;
+  registryId?: string;
 }
 
 type DeployParams = { name: string } & ApplyDeploymentInput;
@@ -1158,8 +1167,98 @@ function BackupRunActivityDetails({
 }
 
 function PullImageTaskRenderer({ payload, type }: { payload: PullImageParams; type: ResourceType }) {
+  return <PullImageRetries key={JSON.stringify(payload)} payload={payload} type={type} />;
+}
+
+function PullImageRetries({ payload, type }: { payload: PullImageParams; type: ResourceType }) {
+  const [attempt, setAttempt] = useState({ payload, number: 0 });
+  return (
+    <PullImageAttempt
+      key={attempt.number}
+      payload={attempt.payload}
+      type={type}
+      onRetry={(registryId) => setAttempt({ payload: { ...payload, registryId }, number: attempt.number + 1 })}
+    />
+  );
+}
+
+function PullImageAttempt({
+  payload,
+  type,
+  onRetry,
+}: {
+  payload: PullImageParams;
+  type: ResourceType;
+  onRetry: (registryId: string) => void;
+}) {
+  const { close } = useTaskSheet(type);
+  const registryInputId = useId();
+  const [registry, setRegistry] = useState<Pick<AuthorizedRegistryView, 'id' | 'name'>>();
   const state = useImagePullProgress(payload);
-  return <TaskStreamLayout title="Pull Image" refName={payload.imageTag} type={type} state={state as any} />;
+  const queryClient = useQueryClient();
+  const { currentPlatform } = useAppContext();
+  const platformId = payload.platformId ?? currentPlatform?.id;
+  useEffect(() => {
+    if (state.isSuccess && !state.error)
+      void queryClient.invalidateQueries({
+        predicate: (query) =>
+          ['listImages', 'inspectImage', 'getImageUsage'].includes(String(query.queryKey[0])) &&
+          (query.queryKey[1] as { platformId?: string } | undefined)?.platformId === platformId,
+      });
+  }, [state.isSuccess, state.error, queryClient, platformId]);
+  return (
+    <>
+      <TaskStreamLayout title="Pull Image" refName={payload.imageTag} type={type} state={state as any} />
+      {state.error && payload.sourceImageId && (
+        <div className="px-4 pb-4">
+          <DetailSection
+            title="Retry with Registry credentials"
+            description="Choose a Registry that matches this image’s host and has access to the repository."
+            icon={KeyRound}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Label htmlFor={registryInputId}>Registry</Label>
+                <ResourceSelectorField
+                  id={registryInputId}
+                  sourceType={LookupResourceType.Image}
+                  targetType={LookupResourceType.Registry}
+                  selected={registry}
+                  onSelect={setRegistry}
+                  placeholder="Select a Registry"
+                  className="max-w-none"
+                />
+              </div>
+              <Button
+                className="w-full shrink-0 sm:w-auto"
+                disabled={
+                  !registry ||
+                  currentPlatform?.id !== platformId ||
+                  !currentPlatform?.capabilities?.canRead ||
+                  !currentPlatform.capabilities.canPull
+                }
+                onClick={() => {
+                  if (registry) onRetry(registry.id);
+                }}>
+                <RotateCw className="size-4" aria-hidden="true" />
+                Retry pull
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Only images published to a Registry can be pulled.
+              </p>
+              <Button variant="link" size="sm" className="h-auto shrink-0 self-start p-0 text-xs" asChild>
+                <Link to="/registries" onClick={close}>
+                  Manage Registries
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </Link>
+              </Button>
+            </div>
+          </DetailSection>
+        </div>
+      )}
+    </>
+  );
 }
 
 function ApplyDeployTaskRenderer({ payload, type }: { payload: DeployParams; type: ResourceType }) {
@@ -1411,8 +1510,8 @@ function useImagePullProgress(params: PullImageParams) {
   const { currentPlatform } = useAppContext();
   const [registryFilter] = useResourceFilter<{ item: AuthorizedRegistryView }>('Registry');
 
-  const registryId = params.registryId ?? registryFilter?.item?.id ?? '';
-  const platformId = currentPlatform?.id ?? '';
+  const registryId = params.sourceImageId ? params.registryId : (params.registryId ?? registryFilter?.item?.id);
+  const platformId = params.platformId ?? currentPlatform?.id ?? '';
   const imageTag = params.imageTag;
 
   const request: PullImageInput = useMemo(
@@ -1420,14 +1519,15 @@ function useImagePullProgress(params: PullImageParams) {
       registryId,
       platformId,
       imageTag,
+      sourceImageId: params.sourceImageId,
     }),
-    [registryId, platformId, imageTag],
+    [registryId, platformId, imageTag, params.sourceImageId],
   );
 
   return useStreamProgress<PullImageInput, PullImageStreamItem>({
     endpoint: 'api/v1/images/pull',
     request,
-    successMessage: 'Image pulled successfully',
+    successMessage: 'Image downloaded. This operation did not redeploy workloads.',
     errorMessageDefault: 'Failed to pull',
     getError: (item) => item.errorMessage,
   });

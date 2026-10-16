@@ -3033,12 +3033,15 @@ async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
         ..Default::default()
     };
     store
-        .persist_pull(platform, registry, &image)
+        .persist_pull(platform, Some(registry), &image)
         .await
         .unwrap();
     let ids = vec![image.id.clone()];
     for cross_process in [false, true] {
-        let claim = store.claim_deletion(platform, &ids).await.unwrap();
+        let claim = store
+            .claim_deletion(platform, &ids, false, &[])
+            .await
+            .unwrap();
         let observation = ImageDeletionObservation {
             generation: SnapshotGeneration::capture(platform, None, ProjectionKind::Images).await,
             images: vec![],
@@ -3050,7 +3053,7 @@ async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
                 .bind(platform).execute(&pool).await.unwrap();
         } else {
             store
-                .persist_pull(platform, registry, &image)
+                .persist_pull(platform, Some(registry), &image)
                 .await
                 .unwrap();
         }
@@ -3068,7 +3071,10 @@ async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
         assert_eq!(row, (json!(["app:new"]), "Idle".into(), None));
     }
     // A fresh absence can still remove the row and repair the count.
-    let claim = store.claim_deletion(platform, &ids).await.unwrap();
+    let claim = store
+        .claim_deletion(platform, &ids, false, &[])
+        .await
+        .unwrap();
     let observation = ImageDeletionObservation {
         generation: SnapshotGeneration::capture(platform, None, ProjectionKind::Images).await,
         images: vec![],
@@ -3272,3 +3278,6 @@ async fn backup_coverage_uses_persisted_mounts_and_preserves_observation_fences(
     );
     pool.close().await;
 }
+
+#[path = "platform_inventory_persistence/image_safety.rs"]
+mod image_safety;

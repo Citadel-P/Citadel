@@ -130,7 +130,14 @@ pub(super) fn build(
             volume_content.with_core_container(config.execution.core_container_hostname.clone());
     }
     let volume_content = Arc::new(volume_content.with_runtime_router(container_runtime.clone()));
+    let image_update_hub = realtime_hub.clone();
     let platform_state = platforms_http::PlatformsHttpState {
+        image_updates: Arc::new(citadel_platforms::image_updates::ImageUpdateService::new(
+            Arc::new(container_runtime.runtime_router()),
+            Arc::new(citadel_adapters::connectors::registries::image_updates::ImageUpdateAdapter { pool: pool.clone(), runtime: container_runtime.runtime_router(), cache: runtime.image_cache.clone() }),
+         Arc::new(citadel_adapters::persistence::postgres::platforms::image_updates::PostgresImageUpdateStore(pool.clone())), ).with_change_handler(Arc::new(move |platform, image| {
+            if let Some(hub) = &image_update_hub { hub.publish_runtime_change(platform, "image", "update", image); }
+        }))),
         backup_coverage: None,
         node_agent_store: Arc::new(citadel_adapters::persistence::postgres::platforms::node_agents::store::PostgresNodeAgentLifecycleStore::new(pool.clone(), config.node_agent_policy.clone())),
     node_agent_runtime: Arc::new(citadel_adapters::connectors::routing::node_agents::NodeAgentRuntimeRouter{runtime:container_runtime.runtime_router(),edge:edge_registry.clone()}),

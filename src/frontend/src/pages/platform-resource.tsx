@@ -8,8 +8,18 @@ import { useParams } from 'react-router';
 import ResourceDockerInfoPage from './resource-docker-info';
 import ResourcePage from './resource';
 import ResourceSwarmPage from './resource-swarm';
+import TaskSheet from '@/components/custom/task-sheet';
 
 const PlatformResourcePage = () => {
+  return (
+    <>
+      <PlatformResourceContent />
+      <TaskSheet type="Image" />
+    </>
+  );
+};
+
+const PlatformResourceContent = () => {
   const { type = '', resourceId } = useParams<{ type: string; resourceId?: string }>();
   const { currentPlatform, isLoading, platformRead } = useAppContext();
 
@@ -22,7 +32,7 @@ const PlatformResourcePage = () => {
     return <ResourceSwarmPage />;
   }
 
-  return resourceId ? <ResourceDockerInfoPage /> : <ResourcePage />;
+  return resourceId ? <ResourceDockerInfoPage /> : <ResourcePage showTaskSheet={type !== 'images'} />;
 };
 
 export default PlatformResourcePage;

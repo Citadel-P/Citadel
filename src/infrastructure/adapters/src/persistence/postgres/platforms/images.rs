@@ -10,7 +10,7 @@ pub struct PostgresImageMutationStore(pub PgPool);
 impl ImageMutationStore for PostgresImageMutationStore {
     fn prepare_pull<'a>(
         &'a self,
-        registry: Uuid,
+        registry: Option<Uuid>,
         reference: &'a str,
     ) -> BoxFuture<'a, Result<PreparedImagePull, RuntimeCapabilityError>> {
         Box::pin(prepare(&self.0, registry, reference))
@@ -18,7 +18,7 @@ impl ImageMutationStore for PostgresImageMutationStore {
     fn persist_pull<'a>(
         &'a self,
         platform: Uuid,
-        registry: Uuid,
+        registry: Option<Uuid>,
         image: &'a RuntimeImageSummary,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
         Box::pin(persist(&self.0, platform, registry, image))
@@ -27,8 +27,10 @@ impl ImageMutationStore for PostgresImageMutationStore {
         &'a self,
         platform: Uuid,
         ids: &'a [String],
+        force: bool,
+        reviews: &'a [citadel_platforms::image_usage::ImageDeletionReview],
     ) -> BoxFuture<'a, Result<ImageDeletionClaim, RuntimeCapabilityError>> {
-        Box::pin(claim_deletion(&self.0, platform, ids))
+        Box::pin(claim_deletion(&self.0, platform, ids, force, reviews))
     }
     fn complete_deletion<'a>(
         &'a self,
@@ -43,6 +45,8 @@ async fn claim_deletion(
     pool: &PgPool,
     platform_id: Uuid,
     ids: &[String],
+    force: bool,
+    reviews: &[citadel_platforms::image_usage::ImageDeletionReview],
 ) -> Result<ImageDeletionClaim, RuntimeCapabilityError> {
     let mut tx = pool.begin().await.map_err(storage)?;
     sqlx::query("SET LOCAL lock_timeout = '5s'")
@@ -56,6 +60,32 @@ async fn claim_deletion(
             RuntimeErrorKind::NotFound,
             "One or more images were not found on this Platform.",
         ));
+    }
+    if !reviews.is_empty()
+        && (reviews.len() != ids.len()
+            || rows.iter().any(|row| {
+                !reviews.iter().any(|review| {
+                    review.docker_image_id == row.get::<String, _>("dockerimageid")
+                        && review.row_version == row.get::<i64, _>("rowversion")
+                })
+            }))
+    {
+        return Err(error(
+            RuntimeErrorKind::Conflict,
+            "Image inventory changed after review. Review deletion again.",
+        ));
+    }
+    if !force {
+        // Local-image configuration writes take a SHARE lock on the same image
+        // before saving. The row lock above closes both admission race orderings.
+        let dependency: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM deployments d JOIN images i ON i.platformid=d.platformid AND (COALESCE(d.spec->'Image'->>'ImageId',d.spec->'image'->>'imageId')=i.dockerimageid OR translate(replace(lower(COALESCE(d.spec->'Image'->>'ImageId',d.spec->'image'->>'imageId')),'urn:uuid:',''),'{}-','')=replace(i.id::text,'-','')) WHERE i.platformid=$1 AND i.dockerimageid=ANY($2) AND COALESCE(d.spec->'Image'->>'$type',d.spec->'image'->>'$type')='Local')")
+            .bind(platform_id).bind(ids).fetch_one(&mut *tx).await.map_err(storage)?;
+        if dependency {
+            return Err(error(
+                RuntimeErrorKind::Conflict,
+                "A saved Local image dependency prevents deletion.",
+            ));
+        }
     }
     let started = chrono::Utc::now().timestamp_millis();
     // A prior process can die mid-operation. Expired claims are released only
@@ -126,10 +156,13 @@ async fn complete_deletion(
 }
 pub async fn prepare(
     pool: &PgPool,
-    id: Uuid,
+    id: Option<Uuid>,
     reference: &str,
 ) -> Result<PreparedImagePull, RuntimeCapabilityError> {
     let mut reference = normalize_reference(reference)?;
+    let Some(id) = id else {
+        return Ok((reference, None));
+    };
     let row = sqlx::query("SELECT registryhost,configuration,status FROM registries WHERE id=$1")
         .bind(id)
         .fetch_optional(pool)
@@ -154,7 +187,13 @@ pub async fn prepare(
         .trim_end_matches('/')
         .to_ascii_lowercase();
     let default_registry = id == Uuid::from_u128(0x100);
-    if !default_registry && !reference.starts_with(&format!("{host}/")) {
+    let first = reference.split('/').next().unwrap_or_default();
+    let explicit_host = reference.contains('/')
+        && (first.contains('.') || first.contains(':') || first == "localhost");
+    let matching_host = explicit_host
+        && citadel_platforms::image_updates::reference_host(&reference)
+            == citadel_platforms::image_updates::registry_host(&host);
+    if !default_registry && !matching_host && !reference.starts_with(&format!("{host}/")) {
         let namespace = match kind {
             "DockerHub" => get(&["UserName", "userName", "username"]),
             "GitHub" => get(&["NameSpace", "nameSpace"]),
@@ -199,7 +238,7 @@ fn normalize_reference(reference: &str) -> Result<String, RuntimeCapabilityError
 pub async fn persist(
     pool: &PgPool,
     platform: Uuid,
-    registry: Uuid,
+    registry: Option<Uuid>,
     image: &RuntimeImageSummary,
 ) -> Result<(), RuntimeCapabilityError> {
     let write = citadel_platforms::jobs::ProjectionWrite::begin(
@@ -224,9 +263,18 @@ pub async fn persist(
                 "Platform was removed during image pull.",
             )
         })?;
+    // Docker moves tags on pull, but preserves the former image content. Update
+    // both projections atomically so list/detail do not show the tag twice.
+    sqlx::query("WITH moved AS (SELECT i.id,(SELECT COALESCE(jsonb_agg(tag), '[]'::jsonb) FROM jsonb_array_elements_text(i.tags::jsonb) tag WHERE NOT (tag=ANY($3))) tags FROM images i WHERE i.platformid=$1 AND i.dockerimageid<>$2 AND i.tags::jsonb ?| $3) UPDATE images i SET tags=moved.tags,name=COALESCE(moved.tags->>0,i.dockerimageid),updatedat=now(),rowversion=rowversion+1 FROM moved WHERE i.id=moved.id")
+        .bind(platform).bind(&image.id).bind(&image.repo_tags).execute(&mut *tx).await.map_err(db)?;
     sqlx::query("INSERT INTO images(id,containers,createdat,dockerimageid,name,platformid,registryid,size,tags,controlstate) VALUES($1,$2,to_timestamp($3),$4,$5,$6,$7,$8,$9,'Idle') ON CONFLICT(dockerimageid,platformid) DO UPDATE SET containers=EXCLUDED.containers,name=EXCLUDED.name,registryid=EXCLUDED.registryid,size=EXCLUDED.size,tags=EXCLUDED.tags,updatedat=now(),rowversion=images.rowversion+1")
         .bind(Uuid::now_v7()).bind(i32::try_from(image.containers).unwrap_or(i32::MAX)).bind(image.created as f64).bind(&image.id).bind(image.repo_tags.first().unwrap_or(&image.id)).bind(platform).bind(registry).bind(image.size as f64).bind(serde_json::json!(image.repo_tags)).execute(&mut *tx).await.map_err(db)?;
     sqlx::query("UPDATE platforms SET imagecount=(SELECT count(*) FROM images WHERE platformid=$1) WHERE id=$1").bind(platform).execute(&mut *tx).await.map_err(db)?;
+    // Even a pull that keeps the same image ID supersedes cached comparisons.
+    // Retain the attempt fence so a check started before this pull cannot restore
+    // the old result. A null lastAttemptAt makes the background check due now.
+    sqlx::query("UPDATE imageupdateobservations o SET attemptedat=clock_timestamp(),result=jsonb_build_object('reference',o.reference,'registryId',o.result->'registryId','status','NotChecked','reason','Image was pulled. A fresh update check is pending.','isStale',false) FROM images i WHERE o.imageid=i.id AND i.platformid=$1 AND i.dockerimageid=$2")
+        .bind(platform).bind(&image.id).execute(&mut *tx).await.map_err(db)?;
     tx.commit().await.map_err(db)?;
     write.committed();
     Ok(())
@@ -254,15 +302,23 @@ mod reference_tests {
             .connect_lazy("postgres://unused@localhost/unused")
             .unwrap();
         pool.close().await;
+        let (reference, auth) = prepare(&pool, None, "ghcr.io/team/app:ReleaseA")
+            .await
+            .unwrap();
+        assert_eq!(reference, "ghcr.io/team/app:ReleaseA");
+        assert!(
+            auth.is_none(),
+            "anonymous pulls must not load stored credentials"
+        );
         assert_eq!(
-            prepare(&pool, Uuid::now_v7(), "nginx bad")
+            prepare(&pool, Some(Uuid::now_v7()), "nginx bad")
                 .await
                 .unwrap_err()
                 .kind,
             RuntimeErrorKind::InvalidRequest
         );
         assert_eq!(
-            prepare(&pool, Uuid::now_v7(), "nginx")
+            prepare(&pool, Some(Uuid::now_v7()), "nginx")
                 .await
                 .unwrap_err()
                 .kind,

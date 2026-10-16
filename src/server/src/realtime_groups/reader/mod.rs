@@ -23,6 +23,9 @@ mod tests;
 // during delivery of one invalidation, after each reader checks authorization.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
+    pub image_store: Arc<dyn citadel_platforms::image_mutations::ImageMutationStore>,
+    pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
+    pub registries: Arc<dyn citadel_registries::RegistryRepository>,
     pub copy_eligibility: Option<Arc<citadel_resource_copies::CopyService>>,
     pub backup_coverage:
         Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
@@ -74,6 +77,51 @@ fn event(target: &'static str, value: impl Serialize) -> Result<GroupSnapshot, R
 }
 
 impl ApplicationGroupReader {
+    async fn platform_views(
+        &self,
+        principal: &ActorPrincipal,
+        platforms: Vec<citadel_platforms::PlatformDetails>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<Vec<crate::api::resources::platforms::views::PlatformView>, RealtimeReadError> {
+        use crate::api::resources::platforms::{
+            capabilities::{permission_for, platform_capabilities},
+            views::PlatformView,
+        };
+        let permissions = if lease.is_some() || principal.is_administrator() || platforms.is_empty()
+        {
+            Default::default()
+        } else {
+            let ids: Vec<_> = platforms.iter().map(|platform| platform.id).collect();
+            self.platforms
+                .permissions_for_platforms(principal.actor_id, &ids)
+                .await
+                .map_err(failure)?
+        };
+        let mut views = Vec::with_capacity(platforms.len());
+        for platform in platforms {
+            let mut view = PlatformView::try_from(platform).map_err(failure)?;
+            // Shared observations never contain actor-specific permissions.
+            let capabilities = match lease {
+                Some(lease) => {
+                    lease
+                        .platform_capabilities(&self.identity, principal, view.id)
+                        .await?
+                }
+                None => platform_capabilities(permission_for(
+                    &permissions,
+                    view.id,
+                    principal.is_administrator(),
+                )),
+            };
+            if !capabilities.can_read {
+                return Err(RealtimeReadError::Authorization);
+            }
+            view.capabilities = Some(capabilities);
+            views.push(view);
+        }
+        Ok(views)
+    }
+
     fn container_patch_snapshot(
         group: &Group,
         event: Option<&PublishedRuntimeEvent>,
@@ -482,25 +530,22 @@ impl ApplicationGroupReader {
                     };
                     return rows(
                         "PlatformUpdated",
-                        platform
-                            .into_iter()
-                            .map(crate::api::resources::platforms::views::PlatformView::try_from)
-                            .collect::<Result<Vec<_>, _>>().map_err(failure)?,
+                        self.platform_views(p, platform.into_iter().collect(), lease)
+                            .await?,
                         RowStyle::PlatformPatch(platform_id),
                     );
                 }
                 rows(
                     "PlatformUpdated",
-                    self.platforms
-                        .list_authorized(actor, admin, &[])
-                        .await
-                        .map(|value| {
-                            value
-                                .into_iter()
-                                .map(crate::api::resources::platforms::views::PlatformView::try_from)
-                                .collect::<Result<Vec<_>, _>>()
-                        })
-                        .map_err(failure)?.map_err(failure)?,
+                    self.platform_views(
+                        p,
+                        self.platforms
+                            .list_authorized(actor, admin, &[])
+                            .await
+                            .map_err(failure)?,
+                        lease,
+                    )
+                    .await?,
                     RowStyle::Platforms,
                 )
             }
@@ -542,10 +587,18 @@ impl ApplicationGroupReader {
                 if sample {
                     return Ok(GroupSnapshot::default());
                 }
-                event(
-                    "ImagesInfoUpdated",
-                    json!({"images":crate::realtime::shared_reads::images(&self.platforms, id.unwrap(), e).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::ImageView::from).collect::<Vec<_>>()).map_err(failure)?}),
-                )
+                let platform = id.unwrap();
+                let (capabilities, _) = match lease {
+                    Some(lease) => lease.daemon_capabilities(&self.identity, p, platform).await?,
+                    None => runtime::daemon_capabilities(self, p, platform).await?,
+                };
+                let inventory = crate::realtime::shared_reads::images(&self.platforms, platform, e).await?;
+                let response = crate::api::resources::platforms::image_views::image_list_view(
+                    p, platform, inventory,
+                    crate::api::resources::platforms::runtime_views::image_capabilities(capabilities),
+                    self.image_store.as_ref(), self.image_updates.as_ref(), self.registries.as_ref(),
+                ).await.map_err(failure)?;
+                event("ImagesInfoUpdated", json!({"platformId":platform,"images":response.images,"capabilities":response.capabilities}))
             }
             Topic::DockerDaemon(..) => {
                 if sample {

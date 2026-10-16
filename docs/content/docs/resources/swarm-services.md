@@ -129,8 +129,8 @@ Auto deploy requires the Operational Guardrails license capability.
 
 An external tagged Service can also expose a resource-owned webhook. GitHub,
 GitLab, and Generic / CI callers use the same listener infrastructure as other
-Citadel resources. A Service webhook runs the normal digest check: **Notify
-only** reports a changed digest, while **Auto deploy** starts the durable Apply
+Citadel resources. A Service webhook runs the normal image check: **Notify
+only** reports changed content for the Service’s task platforms, while **Auto deploy** starts the durable Apply
 path only when an update exists. Generic / CI callers must send the configured
 shared secret as an `Authorization: Bearer` header. Build-backed Services use
 their Build Project webhook instead. This resource-owned shared secret is not a

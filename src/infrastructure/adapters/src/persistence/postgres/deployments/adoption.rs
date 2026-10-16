@@ -401,7 +401,8 @@ impl ContainerAdoptionPort for PostgresContainerAdoption {
                 ));
             }
             validate_tags(&mut tx, &input.tag_ids).await?;
-            validate_image_references(&mut tx, &input.spec.image).await?;
+            validate_image_references(&mut tx, context.source.platform_id, &input.spec.image)
+                .await?;
             let globals: Vec<String> =
                 sqlx::query_scalar("SELECT name FROM resourcebindings WHERE scope='Global'")
                     .fetch_all(&mut *tx)
