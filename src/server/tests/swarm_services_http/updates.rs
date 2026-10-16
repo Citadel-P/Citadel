@@ -5,9 +5,19 @@ use std::sync::atomic::{AtomicU8, Ordering};
 #[derive(Default)]
 pub(super) struct DigestFixture {
     mode: AtomicU8,
+    same_content: std::sync::atomic::AtomicBool,
     started: tokio::sync::Notify,
 }
 impl ServiceImageDigestPort for DigestFixture {
+    fn content_changed<'a>(
+        &'a self,
+        _: &'a citadel_swarm_services::SwarmService,
+        _: &'a str,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<bool, SwarmServiceError>> {
+        Box::pin(async { Ok(!self.same_content.load(Ordering::Relaxed)) })
+    }
+
     fn digest<'a>(
         &'a self,
         _: Uuid,
@@ -109,6 +119,25 @@ pub(super) async fn exercise_update_checks(
         );
         assert_eq!(persisted.auto_update_state.last_error.is_some(), mode == 2);
     }
+    digests.mode.store(0, Ordering::Relaxed);
+    digests.same_content.store(true, Ordering::Relaxed);
+    let checked = services
+        .check_updates(admin.actor_id, true, id, &CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(
+        checked.auto_update_state.status,
+        citadel_primitives::AutoUpdateStatus::UpToDate
+    );
+    assert_eq!(
+        checked.applied_image_digest.as_deref(),
+        Some("sha256:fixture")
+    );
+    assert_ne!(
+        checked.auto_update_state.current_digest,
+        checked.auto_update_state.remote_digest
+    );
+    digests.same_content.store(false, Ordering::Relaxed);
     digests.mode.store(3, Ordering::Relaxed);
     let task = {
         let app = app.clone();

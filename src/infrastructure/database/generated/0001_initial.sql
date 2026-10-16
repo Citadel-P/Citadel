@@ -2194,3 +2194,13 @@ CREATE TABLE resourcecopyrestores (
     targetvolume text NOT NULL,
     UNIQUE(copyid,sourcevolume)
 );
+
+CREATE TABLE imageupdateobservations (
+    imageid uuid NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    reference text NOT NULL,
+    registrykey uuid NOT NULL,
+    registryrevision text NOT NULL,
+    attemptedat timestamp with time zone NOT NULL,
+    result jsonb NOT NULL,
+    PRIMARY KEY (imageid, reference, registrykey)
+);

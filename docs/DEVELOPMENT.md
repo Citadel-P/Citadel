@@ -193,23 +193,21 @@ commands are in [docs/README.md](README.md).
 
 ## Database schema changes
 
-Citadel currently uses one pre-release baseline. Edit
-`src/infrastructure/database/src/schema/schema.sql`, then regenerate it:
+During unreleased development, keep a single `0001_initial.sql` baseline. Add
+schema changes to `src/infrastructure/database/src/schema/schema.sql`, then
+regenerate the baseline and verify the catalog:
 
 ```bash
 cargo run --locked -p xtask -- database refresh-baseline
 cargo run --locked -p xtask -- database verify
 ```
 
-The generator updates `0001_initial.sql`, the manifest and the embedded catalog.
-The resource-copy tables are part of that initial baseline. Verify a fresh
-installation and restart against disposable databases.
-
-Refreshing the baseline does not upgrade a database initialized from an earlier
-baseline. Preserve any needed data before recreating such a development or demo
-database. Do not rewrite applied checksums or migration history to suppress an
-`AppliedChecksum` error. Once a release baseline is frozen, schema changes need
-separate upgrade migrations.
+This updates the baseline SQL, migration metadata and embedded catalog. Verify
+fresh installation and restart against disposable databases. Refreshing the
+baseline is not an upgrade path for existing databases: their recorded checksum
+will no longer match. Do not rewrite migration journals or checksums to suppress
+an `AppliedChecksum` error. Once released, preserve applied migrations and add
+numbered upgrade migrations for subsequent schema changes.
 
 ## Agent development
 

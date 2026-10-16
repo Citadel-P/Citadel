@@ -12,8 +12,7 @@ import { hasCapabilities } from '@/lib/resource-capabilities';
 
 export const PullButton = () => {
   const { open, toggle } = useInlineSubHeader('Image');
-  const { currentPlatform } = useAppContext();
-  const canPull = hasCapabilities(currentPlatform, ['canWrite', 'canPull']);
+  const canPull = useCanPullImage();
 
   return (
     <Button
@@ -27,15 +26,29 @@ export const PullButton = () => {
   );
 };
 
-export default function PullImageForm() {
+export default function PullImageForm({
+  embedded = false,
+  initialReference = '',
+  initialRegistry,
+  sourceImageId,
+  onSubmitted,
+}: {
+  embedded?: boolean;
+  initialReference?: string;
+  initialRegistry?: Pick<AuthorizedRegistryView, 'id' | 'name'>;
+  sourceImageId?: string;
+  onSubmitted?: () => void;
+} = {}) {
   const { open: openSheet } = useTaskSheet('Image');
   const { open } = useInlineSubHeader('Image');
+  const [image, setImage] = useState(initialReference);
+  const [registry, setRegistry] = useState<Pick<AuthorizedRegistryView, 'id' | 'name'> | undefined>(initialRegistry);
   const { currentPlatform } = useAppContext();
-  const [image, setImage] = useState('');
-  const [registry, setRegistry] = useState<AuthorizedRegistryView | undefined>();
-  const canPull = hasCapabilities(currentPlatform, ['canRead', 'canPull']);
+  const [initialPlatformId] = useState(currentPlatform?.id);
+  const platformId = currentPlatform?.id;
+  const canPull = useCanPullImage() && (!sourceImageId || initialPlatformId === platformId);
 
-  const handleRegistrySelect = (newRegistry: AuthorizedRegistryView | undefined) => {
+  const handleRegistrySelect = (newRegistry: Pick<AuthorizedRegistryView, 'id' | 'name'> | undefined) => {
     setRegistry(newRegistry);
   };
 
@@ -48,8 +61,11 @@ export default function PullImageForm() {
       payload: {
         imageTag: image,
         registryId: registry.id,
+        platformId,
+        sourceImageId,
       },
     });
+    onSubmitted?.();
   };
 
   return (
@@ -57,7 +73,7 @@ export default function PullImageForm() {
       <div
         className={cn(
           'grid transition-all duration-300 ease-in-out',
-          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 invisible',
+          embedded || open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 invisible',
         )}>
         <div className="overflow-hidden">
           <div className="rounded-sm border p-1 px-2 bg-background">
@@ -65,8 +81,7 @@ export default function PullImageForm() {
               <div className="flex flex-col items-baseline">
                 <div className="font-semibold text-sm">Pull Image</div>
                 <div className="text-sm text-muted-foreground">
-                  {' '}
-                  Pull an image from a connected registry to make it available on this platform.
+                  Downloads the image to this host. Does not redeploy workloads.
                 </div>
               </div>
 
@@ -87,6 +102,7 @@ export default function PullImageForm() {
                 <Input
                   placeholder="e.g. nginx:latest or my-app:1.0"
                   value={image}
+                  readOnly={!!sourceImageId}
                   onChange={(e) => setImage(e.target.value)}
                   className="text-sm w-full max-w-100"
                 />
@@ -119,4 +135,9 @@ export default function PullImageForm() {
       </div>
     </div>
   );
+}
+
+function useCanPullImage() {
+  const { currentPlatform } = useAppContext();
+  return currentPlatform?.capabilities?.canPull === true && hasCapabilities(currentPlatform, ['canRead']);
 }

@@ -1,24 +1,48 @@
+import { useMemo } from 'react';
+import { ImageUpdateStatus, type ImageView } from '@/api/generated/api.types';
+import { UpdatesAvailableFilter, useUpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
 import { HardDrive } from 'lucide-react';
 import { ImagesTable } from './table';
-import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
+import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { useImagesGroup } from './hooks/useImagesGroup';
 import { ActionBar } from '@/components/custom/action-bar';
 import { ImageDropdownActions, ImageGroupActions } from './actions';
 import PullImageForm, { PullButton } from './pull-image';
+import { ImageColumnsButton } from './table-columns';
 
 const EMPTY_IMAGES: never[] = [];
 
-export const ImageComponents: RequiredComponents = {
+export const ImageComponents: RegularResourceComponents<ImageView> = {
   Icon: HardDrive,
   Content: ImagesTable,
-  useData: function (platformId: string): ResourceDataHookResult<any> {
+  useData: function (platformId: string): ResourceDataHookResult<ImageView> {
     const { imagesInfo, capabilities, isLoading, error, refetch, isFetching } = useImagesGroup(platformId);
-    return { error, refetch, isFetching, items: imagesInfo?.images ?? EMPTY_IMAGES, isLoading, capabilities };
+    const { updatesAvailableOnly } = useUpdatesAvailableFilter();
+    const images = imagesInfo?.images ?? EMPTY_IMAGES;
+    const items = useMemo(
+      () =>
+        updatesAvailableOnly
+          ? images.filter(
+              (image) =>
+                !image.isStale &&
+                image.updates?.some((update) => update.status === ImageUpdateStatus.UpdateAvailable && !update.isStale),
+            )
+          : images,
+      [images, updatesAvailableOnly],
+    );
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   header: {
     showAdd: false,
     showSearch: true,
-    Extra: () => <PullButton />,
+    activeFilterParams: ['updates'],
+    Extra: () => (
+      <>
+        <ImageColumnsButton />
+        <UpdatesAvailableFilter />
+        <PullButton />
+      </>
+    ),
   },
   SubHeader: PullImageForm,
   DropdownActions: ImageDropdownActions,

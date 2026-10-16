@@ -5106,6 +5106,37 @@
         ],
         "type": "object"
       },
+      "CheckImageUpdateInput": {
+        "properties": {
+          "dockerImageId": {
+            "type": "string"
+          },
+          "dockerNodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "registryId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platformId",
+          "dockerImageId",
+          "registryId",
+          "reference"
+        ],
+        "type": "object"
+      },
       "ComposeProjectImportDraftView": {
         "properties": {
           "draft": {
@@ -7147,6 +7178,12 @@
           "platformId": {
             "format": "uuid",
             "type": "string"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ImageDeletionReview"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -10199,6 +10236,67 @@
         ],
         "type": "object"
       },
+      "ImageDeletionPreviewItem": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "canDelete": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "review": {
+            "$ref": "#/components/schemas/ImageDeletionReview"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/ImageUsage"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "review",
+          "canDelete",
+          "blockers",
+          "warnings",
+          "usage",
+          "observedAt"
+        ],
+        "type": "object"
+      },
+      "ImageDeletionReview": {
+        "properties": {
+          "dockerImageId": {
+            "type": "string"
+          },
+          "rowVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "dockerImageId",
+          "rowVersion",
+          "tags"
+        ],
+        "type": "object"
+      },
       "ImageInspection": {
         "properties": {
           "architecture": {
@@ -10293,6 +10391,12 @@
               "null"
             ]
           },
+          "variant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "volumes": {
             "items": {
               "type": "string"
@@ -10342,8 +10446,17 @@
                     "$ref": "#/components/schemas/ImageCapabilitiesView"
                   }
                 ]
+              },
+              "updates": {
+                "items": {
+                  "$ref": "#/components/schemas/ImageTagUpdate"
+                },
+                "type": "array"
               }
             },
+            "required": [
+              "updates"
+            ],
             "type": "object"
           }
         ]
@@ -10419,6 +10532,79 @@
         ],
         "type": "object"
       },
+      "ImageRelationship": {
+        "enum": [
+          "Container",
+          "SavedLocalImage",
+          "SavedDigest",
+          "SavedTag"
+        ],
+        "type": "string"
+      },
+      "ImageTagUpdate": {
+        "properties": {
+          "isStale": {
+            "type": "boolean"
+          },
+          "lastAttemptAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastSuccessAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "localConfigDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "registryId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remoteConfigDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remoteManifestDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ImageUpdateStatus"
+          }
+        },
+        "required": [
+          "reference",
+          "status",
+          "isStale"
+        ],
+        "type": "object"
+      },
       "ImageUpdateState": {
         "properties": {
           "currentDigest": {
@@ -10450,6 +10636,160 @@
           "currentDigest",
           "lastCheckedAt",
           "updateAvailable"
+        ],
+        "type": "object"
+      },
+      "ImageUpdateStatus": {
+        "enum": [
+          "UpToDate",
+          "UpdateAvailable",
+          "NotChecked",
+          "CheckFailed",
+          "NotApplicable",
+          "Unknown"
+        ],
+        "type": "string"
+      },
+      "ImageUsage": {
+        "properties": {
+          "coverageComplete": {
+            "type": "boolean"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ImageUsageEntry"
+            },
+            "type": "array"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "nextOffset": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "entries",
+          "coverageComplete",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "ImageUsageEntry": {
+        "properties": {
+          "containerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "containerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "containerState": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isStale": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/ImageRelationship"
+          },
+          "workloadId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workloadKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageWorkloadKind"
+              }
+            ]
+          },
+          "workloadName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workloadStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "relationship",
+          "isStale"
+        ],
+        "type": "object"
+      },
+      "ImageUsageSummary": {
+        "properties": {
+          "containers": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "deployments": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "isPartial": {
+            "type": "boolean"
+          },
+          "stacks": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "swarmServices": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "containers",
+          "deployments",
+          "stacks",
+          "swarmServices",
+          "isPartial"
         ],
         "type": "object"
       },
@@ -10558,6 +10898,25 @@
               "string",
               "null"
             ]
+          },
+          "updates": {
+            "items": {
+              "$ref": "#/components/schemas/ImageTagUpdate"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "usedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageUsageSummary"
+              }
+            ]
           }
         },
         "required": [
@@ -10581,6 +10940,14 @@
           "capabilities"
         ],
         "type": "object"
+      },
+      "ImageWorkloadKind": {
+        "enum": [
+          "Deployment",
+          "Stack",
+          "SwarmService"
+        ],
+        "type": "string"
       },
       "ImagesResponse": {
         "properties": {
@@ -14053,6 +14420,25 @@
         ],
         "type": "string"
       },
+      "PreviewImageDeletionInput": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platformId",
+          "ids"
+        ],
+        "type": "object"
+      },
       "ProblemDetails": {
         "properties": {
           "capability": {
@@ -17374,12 +17760,20 @@
           },
           "registryId": {
             "format": "uuid",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceImageId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "platformId",
-          "registryId",
           "imageTag"
         ],
         "type": "object"
@@ -46620,6 +47014,265 @@
         "x-citadel-setup-exempt": false
       }
     },
+    "/api/v1/images/check-update": {
+      "post": {
+        "operationId": "checkImageUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckImageUpdateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageTagUpdate"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "tags": [
+          "Images"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/images/deletion-preview": {
+      "post": {
+        "operationId": "previewImageDeletion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewImageDeletionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ImageDeletionPreviewItem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "tags": [
+          "Images"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
     "/api/v1/images/dockerhub/{registryName}/repositories": {
       "get": {
         "operationId": "getDockerHubRepositories",
@@ -47521,6 +48174,161 @@
           }
         ],
         "summary": "Read exposed ports using the Citadel Image ID",
+        "tags": [
+          "Images"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/images/{platformId}/{imageId}/usage": {
+      "get": {
+        "operationId": "getImageUsage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "platformId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "imageId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dockerNodeId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageUsage"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "tags": [
           "Images"
         ],

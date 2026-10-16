@@ -95,6 +95,7 @@ const MAX_DOCKER_RESOURCE_ID_BYTES: usize = 256;
 
 #[derive(Clone)]
 pub struct PlatformsHttpState {
+    pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
     pub backup_coverage:
         Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub node_agent_store: Arc<dyn citadel_platforms::node_agents::setup::NodeAgentSetupStore>,
@@ -128,6 +129,7 @@ pub fn router(state: PlatformsHttpState) -> Router {
 
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<PlatformsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
+        .merge(super::image_management::documented_routes())
         .normalized_routes(utoipa_axum::routes!(get))
         .normalized_routes(utoipa_axum::routes!(refresh_swarm_inventory))
         .normalized_routes(utoipa_axum::routes!(inspect_swarm_task))
@@ -662,63 +664,29 @@ async fn list_images(
     let platform_capabilities =
         authorize_platform(&state, &principal, platform_id, &headers).await?;
     let capabilities = image_capabilities(platform_capabilities);
-    let mut images = api_result(
+    let inventory = api_result(
         state
             .platforms
             .list_images(platform_id)
             .await
-            .map(|value| {
-                value
-                    .into_iter()
-                    .map(crate::api::resources::platforms::views::ImageView::from)
-                    .collect::<Vec<_>>()
-            })
             .map_err(platform_error),
         &headers,
     )?;
-    let registries = if images.iter().any(|image| image.registry_id.is_some()) {
-        api_result(
-            state
-                .registries
-                .list_registries(principal.actor_id, principal.is_administrator())
-                .await
-                .map_err(ApiError::internal),
-            &headers,
-        )?
-    } else {
-        Vec::new()
+    let response = match crate::api::resources::platforms::image_views::image_list_view(
+        &principal,
+        platform_id,
+        inventory,
+        capabilities,
+        state.image_store.as_ref(),
+        state.image_updates.as_ref(),
+        state.registries.as_ref(),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
-    let registries = api_result(
-        registries
-            .into_iter()
-            .map(|registry| {
-                Ok((
-                    registry.id,
-                    crate::api::resources::platforms::views::ImageRegistryView {
-                        id: registry.id,
-                        name: registry.name,
-                        registry_host: registry.registry_host,
-                        registry_type: serde_json::from_value(registry.registry_type.into())?,
-                    },
-                ))
-            })
-            .collect::<Result<std::collections::HashMap<_, _>, serde_json::Error>>()
-            .map_err(ApiError::internal),
-        &headers,
-    )?;
-    for image in &mut images {
-        image.registry = image
-            .registry_id
-            .and_then(|id| registries.get(&id).cloned());
-        image.capabilities = Some(capabilities);
-    }
-    Ok(no_store(
-        Json(ImagesResponse {
-            images,
-            capabilities,
-        })
-        .into_response(),
-    ))
+    Ok(no_store(Json(response).into_response()))
 }
 
 #[utoipa::path(
@@ -1729,7 +1697,7 @@ async fn authorize_platform_creation(
     }
 }
 
-async fn authorize_platform_level(
+pub(super) async fn authorize_platform_level(
     state: &PlatformsHttpState,
     principal: &ActorPrincipal,
     id: Uuid,
@@ -1997,7 +1965,7 @@ fn validate_resource_ids(
     Ok(())
 }
 
-async fn platform_is_swarm(
+pub(super) async fn platform_is_swarm(
     state: &PlatformsHttpState,
     platform_id: Uuid,
 ) -> Result<bool, ApiError> {
@@ -2028,7 +1996,9 @@ fn conflict_response(detail: String, headers: &HeaderMap) -> axum::response::Res
     )
 }
 
-fn require_actor(principal: Option<Extension<ActorPrincipal>>) -> Result<ActorPrincipal, ApiError> {
+pub(super) fn require_actor(
+    principal: Option<Extension<ActorPrincipal>>,
+) -> Result<ActorPrincipal, ApiError> {
     principal
         .map(|Extension(principal)| principal)
         .ok_or(ApiError::Unauthenticated)
@@ -3433,16 +3403,16 @@ async fn pull(
 ) -> HttpResult {
     let principal = api_result(require_actor(principal), &headers)?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
-    let input: citadel_platforms::image_pull::PullImageInput = input.into();
+    let mut input: citadel_platforms::image_pull::PullImageInput = input.into();
     if input.platform_id.is_nil()
-        || input.registry_id.is_nil()
+        || input.registry_id.is_some_and(|id| id.is_nil())
         || input.image_tag.trim().is_empty()
         || input.image_tag.len() > 2048
         || input.image_tag.chars().any(char::is_control)
     {
         return api_result(
             Err(ApiError::Validation(
-                "A Platform, Registry and valid image reference are required.".into(),
+                "A Platform and valid image reference are required.".into(),
             )),
             &headers,
         );
@@ -3458,33 +3428,114 @@ async fn pull(
     if !capabilities.can_pull {
         return api_result(Err(ApiError::Forbidden), &headers);
     }
-    api_result(
-        state
-            .identity
-            .authorize_resource(
-                &principal,
-                ResourceType::Registry,
-                input.registry_id,
-                PermissionLevel::Read,
-                None,
-            )
-            .await,
-        &headers,
-    )?;
+    if let Some(registry_id) = input.registry_id {
+        api_result(
+            state
+                .identity
+                .authorize_resource(
+                    &principal,
+                    ResourceType::Registry,
+                    registry_id,
+                    PermissionLevel::Read,
+                    None,
+                )
+                .await,
+            &headers,
+        )?;
+    }
+    if let Some(source) = &input.source_image_id {
+        api_result(
+            super::image_management::normalize_ids(vec![source.clone()]),
+            &headers,
+        )?;
+        if api_result(platform_is_swarm(&state, input.platform_id).await, &headers)? {
+            return api_result(
+                Err(ApiError::Conflict(
+                    "Contextual pulls are unavailable for node-local images.".into(),
+                )),
+                &headers,
+            );
+        }
+    }
+    let automatic_registry = input.registry_id.is_none();
+    if automatic_registry {
+        let registries = api_result(
+            state
+                .registries
+                .list_registries(principal.actor_id, principal.is_administrator())
+                .await
+                .map_err(ApiError::internal),
+            &headers,
+        )?;
+        let preferred = if let Some(source) = &input.source_image_id {
+            api_result(
+                state
+                    .platforms
+                    .image_registry_id(input.platform_id, source)
+                    .await
+                    .map_err(platform_error),
+                &headers,
+            )?
+        } else {
+            None
+        };
+        input.registry_id = match citadel_platforms::image_pull::select_pull_registry(
+            &input.image_tag,
+            preferred,
+            registries
+                .iter()
+                .filter(|r| r.status != citadel_registries::RegistryStatus::Disabled)
+                .map(|r| (r.id, r.registry_host.as_str())),
+        ) {
+            Ok(registry) => registry,
+            Err(error) => return Ok(runtime_error_response(error, &headers)),
+        };
+        if let Some(registry_id) = input.registry_id {
+            api_result(
+                state
+                    .identity
+                    .authorize_resource(
+                        &principal,
+                        ResourceType::Registry,
+                        registry_id,
+                        PermissionLevel::Read,
+                        None,
+                    )
+                    .await,
+                &headers,
+            )?;
+        }
+    }
     let permit = api_result(
         PULL_SLOTS
             .try_acquire()
             .map_err(|_| ApiError::Conflict("Image pull capacity is busy.".into())),
         &headers,
     )?;
+    let requested_reference = if input.source_image_id.is_some() || automatic_registry {
+        citadel_platforms::image_updates::canonical_reference(&input.image_tag)
+    } else {
+        input.image_tag.clone()
+    };
     let (image, auth) = match state
         .image_store
-        .prepare_pull(input.registry_id, &input.image_tag)
+        .prepare_pull(input.registry_id, &requested_reference)
         .await
     {
         Ok(value) => value,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
+    if automatic_registry
+        && citadel_platforms::image_updates::canonical_reference(&image) != requested_reference
+    {
+        return api_result(
+            Err(ApiError::Conflict(
+                "Registry configuration changed the image reference. Refresh before pulling."
+                    .into(),
+            )),
+            &headers,
+        );
+    }
     let Some(task) = state.tasks.reserve() else {
         return Ok(runtime_error_response(
             RuntimeCapabilityError::new(
@@ -3506,11 +3557,24 @@ async fn pull(
             citadel_platforms::image_mutations::pull_and_persist(
                 state.image_store.as_ref(), runtime.as_ref(), &input, &image, auth.as_deref().map(String::as_str), &sender, &cancel,
                 |kind, operation, id| publish_runtime_change(&state, input.platform_id, kind, operation, id),
-            ).await?;
-            Ok::<_,RuntimeCapabilityError>(())
+            ).await
         }).await;
         let error = match result {
-            Ok(Ok(())) => None,
+            Ok(Ok(observed)) => {
+                // Inventory and invalidation are committed before refreshing metadata.
+                // Give this best-effort check its own deadline: a completed pull must
+                // not become a failure if metadata exhausts the pull's time budget.
+                let refresh = state.image_updates.refresh_after_pull(
+                    principal.actor_id, principal.is_administrator(), input.platform_id,
+                    &observed, input.registry_id, &image, &cancel,
+                );
+                match tokio::time::timeout(std::time::Duration::from_secs(45), refresh).await {
+                    Ok(Ok(())) => {},
+                    Ok(Err(error)) => tracing::warn!(platform_id=%input.platform_id,kind=?error.kind,"Could not refresh image update status after pull"),
+                    Err(_) => tracing::warn!(platform_id=%input.platform_id,"Image update status refresh after pull timed out"),
+                }
+                None
+            },
             Ok(Err(e)) => Some(match e.kind {
                 RuntimeErrorKind::Remote | RuntimeErrorKind::Authentication => "Image pull failed. Check the image reference and Registry credentials.".into(),
                 RuntimeErrorKind::Unavailable => "Image pull could not complete or be persisted. Refresh inventory before retrying.".into(),
@@ -3664,8 +3728,28 @@ async fn delete_images(
                 &input.ids,
                 input.force,
                 input.no_prune,
+                &input.reviews,
                 runtime.as_ref(),
                 &cancel,
+                || async {
+                    state
+                        .identity
+                        .authorize_resource(
+                            &principal,
+                            ResourceType::Platform,
+                            input.platform_id,
+                            PermissionLevel::Execute,
+                            None,
+                        )
+                        .await
+                        .map_err(|_| {
+                            RuntimeCapabilityError::new(
+                                RuntimeErrorKind::PermissionDenied,
+                                "Image deletion is no longer authorized.",
+                                false,
+                            )
+                        })
+                },
             )
             .await;
             for id in &input.ids {
@@ -3869,22 +3953,55 @@ async fn inspect_image(
             &headers,
         )?;
         if let Some(id) = registry_id {
-            let registry = api_result(
+            let registries = api_result(
                 state
                     .registries
-                    .get_registry(id)
+                    .list_registries(principal.actor_id, principal.is_administrator())
                     .await
                     .map_err(ApiError::internal),
                 &headers,
             )?;
-            image.registry = Some(api_result(
-                serde_json::to_value(registry).map_err(ApiError::internal),
-                &headers,
-            )?);
+            if let Some(registry) = registries.into_iter().find(|registry| registry.id == id) {
+                image.registry = Some(api_result(
+                    serde_json::to_value(registry).map_err(ApiError::internal),
+                    &headers,
+                )?);
+            }
         }
     }
     image.docker_node_id = selector.docker_node_id;
+    let inventory = api_result(
+        state
+            .platforms
+            .list_images(platform_id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    let selected: Vec<_> = inventory
+        .into_iter()
+        .filter(|i| i.docker_image_id == image.id && i.docker_node_id == image.docker_node_id)
+        .map(|mut i| {
+            // Inspection is newer than the saved inventory during a tag move.
+            i.tags.clone_from(&image.repo_tags);
+            i
+        })
+        .collect();
+    let updates = match state
+        .image_updates
+        .summaries(
+            principal.actor_id,
+            principal.is_administrator(),
+            platform_id,
+            &selected,
+        )
+        .await
+    {
+        Ok(mut results) => results.pop().unwrap_or_default(),
+        Err(error) => return Ok(runtime_error_response(error, &headers)),
+    };
     let image = crate::api::resources::platforms::views::ImageInspectionView {
+        updates,
         image,
         capabilities: Some(capabilities),
     };

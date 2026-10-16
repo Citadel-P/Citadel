@@ -77,14 +77,6 @@ pub fn refresh_catalog() -> Result<(), Box<dyn std::error::Error>> {
     let schema_path = database_root.join("src/schema/schema.sql");
     let schema_hash = digest(&fs::read(&schema_path)?);
     let migration_files = migration_files(&generated_root)?;
-    if migration_files.len() != 1
-        || migration_files[0]
-            .file_name()
-            .and_then(|value| value.to_str())
-            != Some("0001_initial.sql")
-    {
-        return Err("the unreleased Rust database must contain only 0001_initial.sql".into());
-    }
     let mut migrations = Vec::with_capacity(migration_files.len());
     let mut owned = Vec::with_capacity(migration_files.len());
     for (expected, path) in migration_files.iter().enumerate() {
@@ -189,13 +181,19 @@ pub fn verify() -> Result<(), Box<dyn std::error::Error>> {
     let database_root = rust_root.join("src/infrastructure/database");
     let schema = fs::read(database_root.join("src/schema/schema.sql"))?;
     let migration = fs::read(database_root.join("generated/0001_initial.sql"))?;
-    if product_body(&schema)? != product_body(&migration)? {
-        return Err("Rust schema authority and unreleased baseline product SQL differ".into());
+    let migration_files = migration_files(&database_root.join("generated"))?;
+    let mut combined = std::str::from_utf8(product_body(&migration)?)?
+        .trim_end()
+        .to_owned();
+    for path in migration_files.iter().skip(1) {
+        combined.push_str("\n\n");
+        combined.push_str(fs::read_to_string(path)?.trim_end());
+    }
+    if std::str::from_utf8(product_body(&schema)?)?.trim_end() != combined {
+        return Err("Rust schema authority and ordered migration SQL differ".into());
     }
     let migration_sql = std::str::from_utf8(&migration)?;
-    let expected_tables = std::str::from_utf8(&schema)?
-        .matches("CREATE TABLE ")
-        .count();
+    let expected_tables = migration_sql.matches("CREATE TABLE ").count();
     validate_baseline(migration_sql, expected_tables)?;
     let migration_hash = digest(&migration);
     let schema_hash = digest(&schema);
@@ -205,13 +203,11 @@ pub fn verify() -> Result<(), Box<dyn std::error::Error>> {
         .get("migrations")
         .and_then(serde_json::Value::as_array)
         .ok_or("database manifest has no migration catalog")?;
-    let migration_files = migration_files(&database_root.join("generated"))?;
     if manifest
         .get("schemaVersion")
         .and_then(serde_json::Value::as_u64)
-        != Some(1)
-        || migrations.len() != 1
-        || migration_files.len() != 1
+        != Some(migrations.len() as u64)
+        || migration_files.len() != migrations.len()
         || manifest
             .get("schema")
             .and_then(|schema| schema.get("file"))

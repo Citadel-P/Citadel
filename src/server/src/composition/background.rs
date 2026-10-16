@@ -93,6 +93,7 @@ pub async fn spawn_all(
         &mut supervisor,
         cancellation,
         workers::WorkerDependencies {
+            image_updates: platform_state.image_updates.clone(),
             targets: runtime_targets.clone(),
             volume_content,
             containers: platform_state.containers.clone(),

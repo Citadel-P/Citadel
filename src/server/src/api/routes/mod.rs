@@ -9,6 +9,7 @@ pub mod builds;
 pub mod deployments;
 pub mod git_accounts;
 pub mod git_repositories;
+pub(crate) mod image_management;
 pub mod licensing;
 pub mod lookup;
 pub mod mfa;

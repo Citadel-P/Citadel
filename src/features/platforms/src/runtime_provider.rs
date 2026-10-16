@@ -18,11 +18,19 @@ impl<
 {
 }
 pub trait ImageMutationRuntimePort:
-    image_pull::ImagePullPort + images::ImageDeletionPort + ImageInventoryPort
+    image_pull::ImagePullPort
+    + images::ImageDeletionPort
+    + images::ImageInspectionPort
+    + ImageInventoryPort
 {
 }
-impl<T: image_pull::ImagePullPort + images::ImageDeletionPort + ImageInventoryPort + ?Sized>
-    ImageMutationRuntimePort for T
+impl<
+    T: image_pull::ImagePullPort
+        + images::ImageDeletionPort
+        + images::ImageInspectionPort
+        + ImageInventoryPort
+        + ?Sized,
+> ImageMutationRuntimePort for T
 {
 }
 pub trait NetworkRuntimePort:

@@ -853,6 +853,10 @@ export const StackForm = ({
   );
   const formUpdate = useMemo(() => normalizeDisabledWebhook(update), [update]);
   const currentStackSource = (update as Partial<CreateStackInput>).stackSource ?? original.stackSource;
+  const requiresImageRegistry =
+    currentStackSource === StackSource.WebEditor &&
+    (update.spec?.updateBehavior ?? original.spec?.updateBehavior ?? StackUpdateBehavior.Disabled) !==
+      StackUpdateBehavior.Disabled;
   const currentPlatformId = importedPlatformId ?? (update as Partial<StackInput>).platformId ?? original.platformId;
   const stackPlatforms = useMemo(
     () =>
@@ -1601,8 +1605,13 @@ export const StackForm = ({
                 defineField<StackInput, 'spec.registryId'>({
                   key: 'spec.registryId',
                   label: 'Registry',
+                  required: requiresImageRegistry,
+                  validate: (value) =>
+                    requiresImageRegistry && !value
+                      ? 'Select a Registry to enable image update notifications or automatic updates.'
+                      : null,
                   description:
-                    'Optional registry credentials for pulling private images. Public images do not require a registry.',
+                    'Used for private image pulls and image update checks. Optional when deploying public images without image update checks.',
                   render: (val, set) => {
                     return (
                       <ResourceSelectorField
@@ -2069,6 +2078,7 @@ export const StackForm = ({
       mode,
       id,
       currentStackSource,
+      requiresImageRegistry,
       currentGitRepoId,
       currentGitBranch,
       currentPinnedCommit,

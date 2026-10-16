@@ -11,6 +11,7 @@ pub mod agent_setup;
 pub mod containers;
 pub mod deletion;
 pub mod image_pull;
+pub mod image_usage;
 pub mod images;
 mod inventory;
 pub mod jobs;
@@ -81,3 +82,6 @@ pub mod edge_management;
 pub mod image_mutations;
 
 pub mod runtime_provider;
+
+pub mod image_update_store;
+pub mod image_updates;

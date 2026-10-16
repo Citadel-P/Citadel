@@ -1,4 +1,5 @@
 use super::*;
+use citadel_platforms::SwarmInventoryPort;
 use citadel_primitives::ActorId;
 use citadel_stacks::{
     StackSpec, StackUpdateScanner, StackUpdateState, build_stack_image_checks,
@@ -185,6 +186,7 @@ impl StackUpdateRuntime {
                     &BTreeMap::new(),
                     chrono::Utc::now(),
                     None,
+                    None,
                 )
                 .state);
             }
@@ -207,8 +209,9 @@ impl StackUpdateRuntime {
                 spec.common().project_name.clone().unwrap_or_else(|| {
                     citadel_stacks::normalize_project_name(&stack.name, stack.id)
                 });
+            let mut swarm_service_ids = BTreeMap::new();
+            let mut deployed_image_ids = BTreeMap::new();
             let deployed = if stack.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
-                use citadel_platforms::SwarmInventoryPort;
                 let manager = self
                     .runtime
                     .runtime
@@ -219,7 +222,14 @@ impl StackUpdateRuntime {
                     .list_swarm_services(cancel)
                     .await
                     .map_err(runtime_failure)?;
-                swarm_deployed_digests(stack.id, &project, &checks, &services)?
+                let deployed = swarm_deployed_digests(stack.id, &project, &checks, &services)?;
+                deployed
+                    .into_iter()
+                    .map(|(key, (digest, id))| {
+                        swarm_service_ids.insert(key.clone(), id);
+                        (key, digest)
+                    })
+                    .collect()
             } else {
                 let (containers, images) = match &peer {
                     Some(peer) => (
@@ -263,6 +273,7 @@ impl StackUpdateRuntime {
                 let mut deployed = BTreeMap::new();
                 for check in &checks {
                     let mut digests = BTreeSet::new();
+                    let mut image_ids = BTreeSet::new();
                     for container in &owned {
                         if container
                             .labels
@@ -271,15 +282,27 @@ impl StackUpdateRuntime {
                         {
                             continue;
                         }
-                        let Some(image) = images.get(container.image_id.as_str()) else {
-                            continue;
-                        };
+                        let image = images.get(container.image_id.as_str()).ok_or_else(|| {
+                            StackError::Conflict(format!(
+                                "The deployed image for service '{}' is unavailable.",
+                                check.service_name
+                            ))
+                        })?;
+                        let mut identified = false;
                         for digest in &image.repo_digests {
                             if repository(digest) == repository(&check.image_name)
                                 && let Some((_, digest)) = digest.rsplit_once('@')
                             {
                                 digests.insert(digest.to_owned());
+                                image_ids.insert(image.id.clone());
+                                identified = true;
                             }
+                        }
+                        if !identified {
+                            return Err(StackError::Conflict(format!(
+                                "A deployed image for service '{}' has no comparable repository digest.",
+                                check.service_name
+                            )));
                         }
                     }
                     if digests.len() != 1 {
@@ -288,6 +311,8 @@ impl StackUpdateRuntime {
                             check.service_name
                         )));
                     }
+                    deployed_image_ids
+                        .insert(state_key(&check.service_name, &check.image_name), image_ids);
                     deployed.insert(
                         state_key(&check.service_name, &check.image_name),
                         digests.into_iter().next().unwrap(),
@@ -331,12 +356,80 @@ impl StackUpdateRuntime {
                     remote.insert(check.key.clone(), digest);
                 }
             }
+            let adapter = crate::connectors::registries::image_updates::ImageUpdateAdapter {
+                pool: self.runtime.pool.clone(),
+                runtime: self.runtime.runtime.clone(),
+                cache: self.runtime.image_cache.clone(),
+            };
+            let platform = stack.platform_id.ok_or(StackError::NotFound)?;
+            let mut content_changes = BTreeMap::new();
+            let mut swarm_inventory = None;
+            for check in &checks {
+                let key = state_key(&check.service_name, &check.image_name);
+                let current = &deployed[&key];
+                let latest = &remote[&check.key];
+                if citadel_primitives::image_digests_equal(current, latest) {
+                    content_changes.insert(key, false);
+                    continue;
+                }
+                let comparison =
+                    crate::connectors::registries::workload_updates::WorkloadImageCheck {
+                        platform,
+                        registry: check.key.registry_id,
+                        reference: &check.image_name,
+                        current,
+                        remote: latest,
+                    };
+                let targets = if let Some(id) = swarm_service_ids.get(&key) {
+                    if swarm_inventory.is_none() {
+                        let manager = self
+                            .runtime
+                            .runtime
+                            .swarm(platform, cancel)
+                            .await
+                            .map_err(runtime_failure)?;
+                        swarm_inventory = Some(
+                            tokio::try_join!(
+                                manager.list_swarm_nodes(cancel),
+                                manager.list_swarm_tasks(cancel)
+                            )
+                            .map_err(runtime_failure)?,
+                        );
+                    }
+                    let (nodes, tasks) = swarm_inventory.as_ref().unwrap();
+                    crate::connectors::registries::workload_updates::swarm_targets(id, nodes, tasks)
+                        .map_err(runtime_failure)?
+                } else {
+                    let ids = &deployed_image_ids[&key];
+                    if ids.len() > 16 {
+                        return Err(StackError::Conflict(
+                            "Too many deployed image variants to compare.".into(),
+                        ));
+                    }
+                    let mut targets = BTreeSet::new();
+                    for id in ids {
+                        targets.insert(
+                            adapter
+                                .deployed_image_target(&comparison, Some(id), cancel)
+                                .await
+                                .map_err(runtime_failure)?,
+                        );
+                    }
+                    targets.into_iter().collect()
+                };
+                let changed = adapter
+                    .workload_content_changed(&comparison, &targets, cancel)
+                    .await
+                    .map_err(runtime_failure)?;
+                content_changes.insert(key, changed);
+            }
             Ok(evaluate_manual_stack_updates(
                 &stack.stack_update_state,
                 &checks,
                 &remote,
                 chrono::Utc::now(),
                 Some(&deployed),
+                Some(&content_changes),
             )
             .state)
         })
@@ -446,7 +539,7 @@ fn swarm_deployed_digests(
     project: &str,
     checks: &[citadel_stacks::ManualStackImageCheck],
     services: &[citadel_platforms::RuntimeSwarmService],
-) -> Result<BTreeMap<String, String>, StackError> {
+) -> Result<BTreeMap<String, (String, String)>, StackError> {
     let owner = stack_id.to_string();
     let mut deployed = BTreeMap::new();
     for check in checks {
@@ -484,7 +577,7 @@ fn swarm_deployed_digests(
         )))?;
         deployed.insert(
             state_key(&check.service_name, &check.image_name),
-            digest.to_owned(),
+            (digest.to_owned(), matching[0].id.clone()),
         );
     }
     Ok(deployed)
@@ -521,7 +614,11 @@ mod tests {
         let owner = Uuid::now_v7();
         let service = service(owner);
         let checks = vec![check()];
-        let deployed = swarm_deployed_digests(owner, "demo", &checks, &[service]).unwrap();
+        let deployed = swarm_deployed_digests(owner, "demo", &checks, &[service])
+            .unwrap()
+            .into_iter()
+            .map(|(key, (digest, _))| (key, digest))
+            .collect::<BTreeMap<_, _>>();
         assert_eq!(
             deployed[&state_key("web", "nginx:alpine")],
             format!("sha256:{}", "a".repeat(64))
@@ -536,6 +633,7 @@ mod tests {
             &remote,
             chrono::Utc::now(),
             Some(&deployed),
+            None,
         );
         assert_eq!(evaluation.baselines_created, 0);
         assert_eq!(evaluation.available_updates.len(), 1);

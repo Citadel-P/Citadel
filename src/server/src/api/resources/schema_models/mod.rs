@@ -52,6 +52,7 @@ pub mod builds;
 pub mod deployments;
 pub mod discovery;
 pub mod git;
+pub mod image_management;
 pub mod licensing;
 pub mod platforms;
 pub mod primitives;

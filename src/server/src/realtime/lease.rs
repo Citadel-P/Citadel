@@ -41,21 +41,14 @@ impl AuthorizationLease {
         }
         Ok(())
     }
-    pub(crate) async fn daemon_capabilities(
+    pub(crate) async fn platform_capabilities(
         &self,
         identity: &IdentityService,
         principal: &ActorPrincipal,
         id: Uuid,
-    ) -> Result<
-        (
-            crate::api::resources::platforms::views::PlatformCapabilitiesView,
-            crate::api::resources::platforms::views::VolumeCapabilitiesView,
-        ),
-        RealtimeReadError,
-    > {
-        use crate::api::resources::platforms::views::{
-            PlatformCapabilitiesView, VolumeCapabilitiesView,
-        };
+    ) -> Result<crate::api::resources::platforms::views::PlatformCapabilitiesView, RealtimeReadError>
+    {
+        use crate::api::resources::platforms::views::PlatformCapabilitiesView;
         use PermissionLevel::{Execute, Read, Write};
         use SpecificPermission::*;
         self.authorize(
@@ -95,13 +88,52 @@ impl AuthorizationLease {
             )
             .await?,
         };
+        Ok(platform)
+    }
+
+    pub(crate) async fn daemon_capabilities(
+        &self,
+        identity: &IdentityService,
+        principal: &ActorPrincipal,
+        id: Uuid,
+    ) -> Result<
+        (
+            crate::api::resources::platforms::views::PlatformCapabilitiesView,
+            crate::api::resources::platforms::views::VolumeCapabilitiesView,
+        ),
+        RealtimeReadError,
+    > {
+        use crate::api::resources::platforms::views::VolumeCapabilitiesView;
+        use PermissionLevel::Read;
+        use SpecificPermission::{Browse, Download};
+        let platform = self.platform_capabilities(identity, principal, id).await?;
+        let allowed = |specific| async move {
+            match self
+                .authorize(
+                    identity,
+                    principal,
+                    ResourceType::Volume,
+                    Some(id),
+                    Read,
+                    Some(specific),
+                )
+                .await
+            {
+                Ok(()) => Ok(true),
+                Err(RealtimeReadError::Authorization) => {
+                    self.current(principal)?;
+                    Ok(false)
+                }
+                Err(error) => Err(error),
+            }
+        };
         let volume = VolumeCapabilitiesView {
             can_read: platform.can_read,
             can_write: platform.can_write,
             can_execute: platform.can_execute,
             can_inspect: platform.can_inspect,
-            can_browse: allowed(ResourceType::Volume, Read, Some(Browse)).await?,
-            can_download: allowed(ResourceType::Volume, Read, Some(Download)).await?,
+            can_browse: allowed(Browse).await?,
+            can_download: allowed(Download).await?,
         };
         Ok((platform, volume))
     }

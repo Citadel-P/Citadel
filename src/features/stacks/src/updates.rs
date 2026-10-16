@@ -136,6 +136,7 @@ pub fn evaluate_manual_stack_updates(
     remote_digests: &BTreeMap<StackImageKey, String>,
     checked_at: DateTime<Utc>,
     deployed_digests: Option<&BTreeMap<String, String>>,
+    content_changes: Option<&BTreeMap<String, bool>>,
 ) -> ManualStackUpdateEvaluation {
     let prior = match previous {
         StackUpdateState::WebEditor {
@@ -175,7 +176,13 @@ pub fn evaluate_manual_stack_updates(
             baselines += 1;
             remote.clone()
         };
-        let update_available = !citadel_primitives::image_digests_equal(&current, remote);
+        let update_available = match content_changes {
+            Some(changes) => match changes.get(&key) {
+                Some(changed) => *changed,
+                None => continue,
+            },
+            None => !citadel_primitives::image_digests_equal(&current, remote),
+        };
         next.push(ImageUpdateState {
             service_name: check.service_name.clone(),
             image_name: check.image_name.clone(),
@@ -316,17 +323,24 @@ mod tests {
             &first,
             Utc::now(),
             None,
+            None,
         );
         assert_eq!(baseline.baselines_created, 1);
         assert!(baseline.available_updates.is_empty());
         let second = BTreeMap::from([(checks[0].key.clone(), "sha256:second".to_owned())]);
-        let changed =
-            evaluate_manual_stack_updates(&baseline.state, &checks, &second, Utc::now(), None);
+        let changed = evaluate_manual_stack_updates(
+            &baseline.state,
+            &checks,
+            &second,
+            Utc::now(),
+            None,
+            None,
+        );
         assert_eq!(changed.baselines_created, 0);
         assert_eq!(changed.available_updates.len(), 1);
         assert_eq!(changed.newly_detected_updates.len(), 1);
         let repeated =
-            evaluate_manual_stack_updates(&changed.state, &checks, &second, Utc::now(), None);
+            evaluate_manual_stack_updates(&changed.state, &checks, &second, Utc::now(), None, None);
         assert_eq!(repeated.available_updates.len(), 1);
         assert!(repeated.newly_detected_updates.is_empty());
     }
@@ -350,6 +364,7 @@ mod tests {
             &remote,
             Utc::now(),
             Some(&deployed),
+            None,
         );
         assert!(equal.available_updates.is_empty());
         assert!(equal.newly_detected_updates.is_empty());
@@ -363,6 +378,7 @@ mod tests {
             &changed_remote,
             Utc::now(),
             Some(&deployed),
+            None,
         );
         assert_eq!(changed.newly_detected_updates.len(), 1);
         let bare_remote = BTreeMap::from([(checks[0].key.clone(), "sha256:NEW".to_owned())]);
@@ -372,9 +388,44 @@ mod tests {
             &bare_remote,
             Utc::now(),
             Some(&deployed),
+            None,
         );
         assert_eq!(repeated.available_updates.len(), 1);
         assert!(repeated.newly_detected_updates.is_empty());
+    }
+
+    #[test]
+    fn equivalent_platform_content_preserves_real_digests_without_update_notifications() {
+        let stack = stack(
+            StackUpdateBehavior::Notify,
+            "services:\n  api:\n    image: nginx:latest\n",
+            false,
+        );
+        let checks = build_manual_stack_checks(&stack, false).unwrap();
+        let key = state_key(&checks[0].service_name, &checks[0].image_name);
+        let deployed = BTreeMap::from([(key.clone(), "sha256:old-index".into())]);
+        let remote = BTreeMap::from([(checks[0].key.clone(), "sha256:new-index".into())]);
+        let content = BTreeMap::from([(key, false)]);
+        let result = evaluate_manual_stack_updates(
+            &stack.stack_update_state,
+            &checks,
+            &remote,
+            Utc::now(),
+            Some(&deployed),
+            Some(&content),
+        );
+        assert!(result.available_updates.is_empty() && result.newly_detected_updates.is_empty());
+        assert_eq!(result.baselines_created, 0);
+        let StackUpdateState::WebEditor {
+            recreate_stack_on_new_image_state,
+        } = result.state
+        else {
+            unreachable!()
+        };
+        let image = &recreate_stack_on_new_image_state.auto_update_states[0];
+        assert_eq!(image.current_digest, "sha256:old-index");
+        assert_eq!(image.remote_digest.as_deref(), Some("sha256:new-index"));
+        assert!(!image.update_available);
     }
 
     #[test]
@@ -402,8 +453,14 @@ mod tests {
         assert_eq!(checks[0].image_name, "nginx:alpine");
         let remote = BTreeMap::from([(checks[0].key.clone(), "sha256:new".into())]);
         let deployed = BTreeMap::from([(state_key("web", "nginx:alpine"), "sha256:old".into())]);
-        let result =
-            evaluate_manual_stack_updates(&original, &checks, &remote, Utc::now(), Some(&deployed));
+        let result = evaluate_manual_stack_updates(
+            &original,
+            &checks,
+            &remote,
+            Utc::now(),
+            Some(&deployed),
+            None,
+        );
         let StackUpdateState::Git {
             recreate_stack_on_new_commit_state,
             recreate_stack_on_new_image_state,

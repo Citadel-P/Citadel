@@ -211,12 +211,32 @@ impl TryFrom<wire::ImageInspect> for ImageInspect {
     type Error = DockerError;
     fn try_from(v: wire::ImageInspect) -> Result<Self, Self::Error> {
         let c = v.config.unwrap_or_default();
+        // Classic Docker IDs hash the config. Containerd IDs can instead hash
+        // an index or manifest; never label those as configuration digests.
+        let (config_digest, content_digest) = match v.descriptor.as_deref() {
+            None => (v.id.clone(), None),
+            Some(descriptor)
+                if matches!(
+                    descriptor.media_type.as_deref().unwrap_or_default(),
+                    "application/vnd.oci.image.index.v1+json"
+                        | "application/vnd.docker.distribution.manifest.list.v2+json"
+                        | "application/vnd.oci.image.manifest.v1+json"
+                        | "application/vnd.docker.distribution.manifest.v2+json"
+                ) =>
+            {
+                (None, descriptor.digest.clone())
+            }
+            Some(_) => (None, None),
+        };
         Ok(Self {
             id: v.id.unwrap_or_default(),
+            config_digest,
+            content_digest,
             repo_tags: v.repo_tags.unwrap_or_default(),
             size: v.size.unwrap_or_default(),
             created: v.created.flatten().unwrap_or_default(),
             os: v.os.unwrap_or_default(),
+            variant: v.variant.flatten(),
             architecture: v.architecture.unwrap_or_default(),
             config: ImageConfig {
                 user: c.user,
@@ -469,5 +489,42 @@ impl TryFrom<wire::ContainerStatsResponse> for ContainerStats {
                 })
                 .collect(),
         })
+    }
+}
+
+#[cfg(test)]
+mod image_identity_tests {
+    use super::*;
+
+    #[test]
+    fn inspection_preserves_config_and_content_digest_semantics() {
+        let id = format!("sha256:{}", "a".repeat(64));
+        for media_type in [
+            None,
+            Some("application/vnd.oci.image.index.v1+json"),
+            Some("application/vnd.docker.distribution.manifest.list.v2+json"),
+            Some("application/vnd.oci.image.manifest.v1+json"),
+            Some("application/vnd.docker.distribution.manifest.v2+json"),
+            Some("unsupported"),
+        ] {
+            let mut document = serde_json::json!({"Id":id,"RepoTags":["app:latest"]});
+            if let Some(media_type) = media_type {
+                document["Descriptor"] =
+                    serde_json::json!({"digest":id,"mediaType":media_type,"size":856});
+            }
+            let image: wire::ImageInspect = serde_json::from_value(document).unwrap();
+            let image = ImageInspect::try_from(image).unwrap();
+            assert_eq!(image.id, id);
+            assert_eq!(
+                image.config_digest.as_deref(),
+                media_type.is_none().then_some(id.as_str())
+            );
+            assert_eq!(
+                image.content_digest.as_deref(),
+                media_type
+                    .filter(|m| *m != "unsupported")
+                    .map(|_| id.as_str())
+            );
+        }
     }
 }

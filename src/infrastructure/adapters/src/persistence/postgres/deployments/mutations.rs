@@ -47,7 +47,7 @@ impl PostgresDeploymentRepository {
             ensure_idle(&row)?;
             let platform_id: Uuid = row.try_get("platformid").map_err(storage)?;
             ensure_platform(&mut tx, actor_id, administrator, platform_id).await?;
-            validate_image_references(&mut tx, &spec.image).await?;
+            validate_image_references(&mut tx, platform_id, &spec.image).await?;
             let old_spec: Value = row.try_get("spec").map_err(storage)?;
             if row.try_get::<i64, _>("rowversion").map_err(storage)? != expected_row_version {
                 return Err(DeploymentError::Conflict(
@@ -248,6 +248,7 @@ pub(super) async fn ensure_platform(
 
 pub(super) async fn validate_image_references(
     tx: &mut Transaction<'_, Postgres>,
+    platform_id: Uuid,
     image: &DeploymentImageInfo,
 ) -> Result<(), DeploymentError> {
     let (table, id) = match image {
@@ -255,7 +256,17 @@ pub(super) async fn validate_image_references(
         DeploymentImageInfo::Build {
             build_project_id, ..
         } => ("buildprojects", *build_project_id),
-        DeploymentImageInfo::Local { .. } => return Ok(()),
+        DeploymentImageInfo::Local { image_id } => {
+            let state = sqlx::query_scalar::<_, Option<String>>(
+                "SELECT controlstate FROM images WHERE platformid=$1 AND (id=$3 OR dockerimageid=$2) FOR SHARE",
+            ).bind(platform_id).bind(image_id).bind(Uuid::parse_str(image_id).ok()).fetch_optional(&mut **tx).await.map_err(storage)?;
+            // Preserve existing unresolved-reference handling. When the image is
+            // present, its lock participates in deletion admission until commit.
+            if state.flatten().as_deref() == Some("Processing") {
+                return Err(DeploymentError::Conflict("The selected Local image is processing an operation. Refresh inventory before saving.".into()));
+            }
+            return Ok(());
+        }
     };
     let query = format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE id=$1)");
     let exists = sqlx::query_scalar::<_, bool>(AssertSqlSafe(query.as_str()))
@@ -338,7 +349,7 @@ pub(crate) async fn create_in_transaction(
     input: &CreateDeployment,
 ) -> Result<(), DeploymentError> {
     ensure_platform(tx, actor_id, administrator, input.platform_id).await?;
-    validate_image_references(tx, &input.spec.image).await?;
+    validate_image_references(tx, input.platform_id, &input.spec.image).await?;
     validate_tags(tx, &input.tag_ids).await?;
 
     let duplicate = if let Some(source) = &input.duplicate_source {

@@ -20,10 +20,13 @@ service ImageService {
 	rpc Push (PushImageRequest) returns (stream ImageBuildResponse);
 }
 message DistributionInspectRequest {
+	OCIPlatformResponse targetPlatform = 3;
 	string imageName = 1;
 	google.protobuf.StringValue auth = 2;
 }
 message DistributionInspectResponse {
+	string configDigest = 3;
+	string manifestDigest = 4;
 	OCIDescriptorResponse descriptor = 1;
 	repeated OCIPlatformResponse platforms = 2;
 }
@@ -35,6 +38,7 @@ message OCIDescriptorResponse {
 	string artifactType = 5;
 }
 message OCIPlatformResponse {
+	string variant = 4;
 	string architecture = 1;
 	string os = 2;
 	string osVersion = 3;
@@ -160,6 +164,9 @@ message InspectImageRequest {
 }
 
 message InspectImageResponse {
+	google.protobuf.StringValue configDigest = 19;
+	google.protobuf.StringValue contentDigest = 20;
+	google.protobuf.StringValue variant = 18;
 	int64 size = 1;
     string created = 2;
     repeated string env = 3;

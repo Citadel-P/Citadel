@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(
             manifest.len(),
             1,
-            "the unreleased database has one baseline"
+            "the unreleased catalog contains only the initial baseline"
         );
         assert_eq!(manifest.len(), MIGRATIONS.len());
         assert_eq!(MIGRATIONS[0].id, "0001");
@@ -372,7 +372,11 @@ mod tests {
                 .map(str::to_owned)
                 .collect::<BTreeSet<_>>()
         };
-        assert_eq!(tables(MIGRATIONS[0].sql), tables(super::super::SCHEMA_SQL));
+        let migrated_tables: BTreeSet<_> = MIGRATIONS
+            .iter()
+            .flat_map(|migration| tables(migration.sql))
+            .collect();
+        assert_eq!(migrated_tables, tables(super::super::SCHEMA_SQL));
         assert_eq!(
             MIGRATIONS[0].sql.matches("INSERT INTO ").count(),
             super::super::SCHEMA_SQL.matches("INSERT INTO ").count()

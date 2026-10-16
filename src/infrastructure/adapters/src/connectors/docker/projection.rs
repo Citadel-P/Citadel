@@ -368,6 +368,10 @@ pub struct ImageSummary {
 pub struct ImageInspect {
     #[serde(rename = "Id", default)]
     pub id: String,
+    #[serde(skip)]
+    pub config_digest: Option<String>,
+    #[serde(skip)]
+    pub content_digest: Option<String>,
     #[serde(
         rename = "RepoTags",
         default,
@@ -382,6 +386,8 @@ pub struct ImageInspect {
     pub os: String,
     #[serde(rename = "Architecture", default)]
     pub architecture: String,
+    #[serde(rename = "Variant", default)]
+    pub variant: Option<String>,
     #[serde(
         rename = "Config",
         default,

@@ -60,10 +60,13 @@ impl ImageInspectionPort for DockerClient {
             };
             let mut value = ImageInspection {
                 id: image.id,
+                config_digest: image.config_digest,
+                content_digest: image.content_digest,
                 size: image.size,
                 os: image.os,
                 created: image.created,
                 architecture: image.architecture,
+                variant: image.variant,
                 user: image.config.user,
                 working_dir: image.config.working_dir,
                 entry_point: image.config.entry_point,

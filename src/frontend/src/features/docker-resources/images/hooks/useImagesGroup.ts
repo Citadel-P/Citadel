@@ -1,145 +1,44 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { ImagesResponse } from '@/api/generated/api.types';
+import type { ResourceResponse } from '@/api/types';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { ImagesResponse, ImageView } from '@/api/generated/api.types';
-import {
-  useDockerDaemonGroup,
-  ImageEvent,
-  SwarmNodeLocalResourcesUpdate,
-} from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useImagesGroup = (platformId?: string) => {
+  const queryClient = useQueryClient();
   const { data, isLoading, error, refetch, isFetching } = useRead('listImages', { platformId });
-  const [realtimeImagesInfo, setRealtimeImagesInfo] = useState<ImagesResponse>();
-  const [nodeSnapshot, setNodeSnapshot] = useState<SwarmNodeLocalResourcesUpdate>();
-  const capabilities = data?.data.capabilities;
-
-  const imagesInfo = useMemo<ImagesResponse | undefined>(() => {
-    const source = realtimeImagesInfo ?? data?.data;
-    return source && nodeSnapshot && nodeSnapshot.platformId === platformId && nodeSnapshot.images
-      ? { ...source, images: nodeSnapshot.images }
-      : source;
-  }, [data, nodeSnapshot, platformId, realtimeImagesInfo]);
-
-  const onImageEvent = useCallback(
-    (event: ImageEvent) => {
-      setRealtimeImagesInfo((currentInfo) => {
-        const source = currentInfo ?? data?.data;
-
-        if (!source?.images) {
-          return source;
-        }
-
-        const { image, eventType } = event;
-
-        const existingIndex = source.images.findIndex((i) => i.dockerImageId === image.dockerImageId);
-
-        if (eventType === 'delete' || eventType === 'untag') {
-          if (existingIndex !== -1) {
-            return {
-              ...source,
-              images: source.images.filter((i) => i.dockerImageId !== image.dockerImageId),
-            };
-          }
-
-          return source;
-        }
-
-        if (existingIndex !== -1) {
-          const updatedImages = [...source.images];
-
-          updatedImages[existingIndex] = {
-            ...updatedImages[existingIndex],
-            controlState: image.controlState,
-          };
-
-          return {
-            ...source,
-            images: updatedImages,
-          };
-        }
-
-        return source;
-      });
+  const onImagesUpdated = useCallback(
+    (snapshot: ImagesResponse & { platformId: string }) => {
+      if (!platformId || snapshot.platformId !== platformId) return;
+      const queryKey = ['listImages', { platformId }] as const;
+      // As with other resource subscriptions, a slow HTTP response must not
+      // overwrite a newer, actor-authorized realtime snapshot.
+      void queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData<ResourceResponse<'listImages'>>(
+        queryKey,
+        (current) =>
+          ({
+            ...current,
+            data: { images: snapshot.images, capabilities: snapshot.capabilities },
+          }) as ResourceResponse<'listImages'>,
+      );
     },
-    [data],
+    [platformId, queryClient],
   );
-
-  const onSwarmNodeLocalResourcesUpdated = useCallback(
-    (snapshot: SwarmNodeLocalResourcesUpdate) => {
-      if (snapshot.platformId !== platformId || !snapshot.images) return;
-      const images = snapshot.images;
-      setNodeSnapshot(snapshot);
-      setRealtimeImagesInfo((currentInfo) => {
-        const source = currentInfo ?? data?.data;
-        return source ? { ...source, images } : source;
-      });
-    },
-    [data, platformId],
-  );
-
-  useDockerDaemonGroup(platformId, { onImageEvent, onSwarmNodeLocalResourcesUpdated });
-
-  const handleImageInfoUpdated = useCallback(
-    (image: ImageView) => {
-      setRealtimeImagesInfo((currentInfo) => {
-        const source = currentInfo ?? data?.data;
-
-        if (!source) {
-          return source;
-        }
-
-        const updatedImages = [...(source.images ?? [])];
-
-        const existingIndex = updatedImages.findIndex((i) => i.dockerImageId === image.dockerImageId);
-
-        if (existingIndex === -1) {
-          return {
-            ...source,
-            images: [image, ...updatedImages],
-          };
-        }
-
-        updatedImages[existingIndex] = image;
-
-        return {
-          ...source,
-          images: updatedImages,
-        };
-      });
-    },
-    [data],
-  );
-
-  const handleImagesInfoUpdated = useCallback((images: ImagesResponse) => {
-    setRealtimeImagesInfo(images);
-  }, []);
-
   const setupEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.on('ImageInfoUpdated', handleImageInfoUpdated);
-
-      hubConnection.on('ImagesInfoUpdated', handleImagesInfoUpdated);
+    (connection: RealtimeConnection) => {
+      connection.on('ImagesInfoUpdated', onImagesUpdated);
     },
-    [handleImagesInfoUpdated, handleImageInfoUpdated],
+    [onImagesUpdated],
   );
-
   const removeEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.off('ImagesInfoUpdated', handleImagesInfoUpdated);
-
-      hubConnection.off('ImageInfoUpdated', handleImageInfoUpdated);
+    (connection: RealtimeConnection) => {
+      connection.off('ImagesInfoUpdated', onImagesUpdated);
     },
-    [handleImagesInfoUpdated, handleImageInfoUpdated],
+    [onImagesUpdated],
   );
-
-  useRealtimeGroup({
-    groupName: `images:${platformId}`,
-    setupEventListeners,
-    removeEventListeners,
-    skip: !platformId,
-  });
-
-  return { error, refetch, isFetching, imagesInfo, isLoading, capabilities };
+  useRealtimeGroup({ groupName: `images:${platformId}`, setupEventListeners, removeEventListeners, skip: !platformId });
+  return { error, refetch, isFetching, imagesInfo: data?.data, isLoading, capabilities: data?.data.capabilities };
 };

@@ -51,6 +51,21 @@ struct RecordingRuntime {
 }
 
 impl DeploymentRuntime for RecordingRuntime {
+    fn image_content_changed<'a>(
+        &'a self,
+        _: &'a citadel_deployments::Deployment,
+        _: &'a str,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<bool, DeploymentError>> {
+        Box::pin(async {
+            if self.digests.content_unavailable.load(Ordering::Relaxed) {
+                Err(DeploymentError::Runtime("metadata unavailable".into()))
+            } else {
+                Ok(!self.digests.same_content.load(Ordering::Relaxed))
+            }
+        })
+    }
+
     fn remote_image_digest<'a>(
         &'a self,
         _: Uuid,
@@ -946,7 +961,16 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .await
         .unwrap();
 
-    updates::verify_automatic_apply(&service, &pool, &admin, defaulted_id, &fail_runtime).await;
+    updates::verify_automatic_apply(
+        &service,
+        &pool,
+        &admin,
+        defaulted_id,
+        &fail_runtime,
+        &applied,
+        &digests,
+    )
+    .await;
     {
         let observations = alerts.0.lock().unwrap();
         for kind in ["DeploymentAutoUpdated", "DeploymentAutoDeployFailed"] {

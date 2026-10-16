@@ -1,11 +1,13 @@
 import { ImageView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { formatId } from '@/lib/utils';
-import { SearchCode, Trash } from 'lucide-react';
+import { SearchCode } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
+import { ImageReferenceButton, ImageReferenceDropdown } from './reference-actions';
+import { DeleteImageButton, DeleteImageDropdown } from './delete-image-dialog';
 
-export const { dropdown: ImageDropdownActions, group: ImageGroupActions } = createActionsBuilder<ImageView>()
+const { dropdown, group } = createActionsBuilder<ImageView>()
   .addAction({
     key: 'inspect',
     type: 'command',
@@ -24,35 +26,23 @@ export const { dropdown: ImageDropdownActions, group: ImageGroupActions } = crea
         isPending: false,
         run: () => {
           if (!canExecute || !selected) return;
-          const nodeQuery = selected.dockerNodeId
-            ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}`
-            : '';
+          const nodeQuery = selected.dockerNodeId ? `?dockerNodeId=${encodeURIComponent(selected.dockerNodeId)}` : '';
           navigate(`/platforms/${currentPlatform?.id}/images/${formatId(selected.dockerImageId)}/${nodeQuery}`);
         },
       };
     },
   })
-  .addAction({
-    key: 'delete',
-    type: 'command',
-    icon: Trash,
-    mutateKey: 'deleteImages',
-    canExecute: (resources) => {
-      const selected = Array.isArray(resources) ? resources : [resources];
-      return selected.every((resource) => !resource.dockerNodeId && resource.capabilities?.canExecute === true);
-    },
-    separatorBefore: true,
-    confirm: true,
-    destructive: true,
-    resourceType: 'Image',
-    useVariables: (resources) => {
-      const { currentPlatform } = useAppContext();
-      const selected = Array.isArray(resources) ? resources : [resources];
-      return {
-        platformId: currentPlatform?.id ?? '',
-        ids: selected.map((x) => x.dockerImageId!),
-        force: true,
-      };
-    },
-  })
   .build();
+
+export const ImageDropdownActions: typeof dropdown = {
+  ...dropdown,
+  check: (props) => <ImageReferenceDropdown {...props} kind="check" />,
+  pull: (props) => <ImageReferenceDropdown {...props} kind="pull" />,
+  delete: DeleteImageDropdown,
+};
+export const ImageGroupActions: typeof group = {
+  ...group,
+  check: ({ resources }) => <ImageReferenceButton resources={resources} kind="check" />,
+  pull: ({ resources }) => <ImageReferenceButton resources={resources} kind="pull" />,
+  delete: ({ resources }: { resources: ImageView[] }) => <DeleteImageButton resources={resources} />,
+};

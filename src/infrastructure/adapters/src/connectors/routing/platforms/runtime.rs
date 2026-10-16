@@ -58,6 +58,7 @@ impl PlatformRuntimeRouter {
     ) -> Result<
         impl citadel_platforms::image_pull::ImagePullPort
         + citadel_platforms::images::ImageDeletionPort
+        + citadel_platforms::images::ImageInspectionPort
         + citadel_platforms::ImageInventoryPort
         + '_,
         RuntimeCapabilityError,

@@ -330,6 +330,10 @@ pub struct ImageRegistryView {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageView {
+    #[schema(value_type=Option<crate::api::resources::schema_models::image_management::ImageUsageSummarySchema>)]
+    pub used_by: Option<citadel_platforms::image_usage::ImageUsageSummary>,
+    #[schema(value_type=Option<Vec<crate::api::resources::schema_models::image_management::ImageTagUpdateSchema>>)]
+    pub updates: Option<Vec<citadel_platforms::image_updates::ImageTagUpdate>>,
     pub registry: Option<ImageRegistryView>,
     pub id: Uuid,
     pub tags: Vec<String>,
@@ -363,6 +367,8 @@ pub struct ImageView {
 impl From<citadel_platforms::ImageDetails> for ImageView {
     fn from(value: citadel_platforms::ImageDetails) -> Self {
         Self {
+            used_by: None,
+            updates: None,
             registry: None,
             id: value.id,
             tags: value.tags,
@@ -862,6 +868,8 @@ impl From<citadel_platforms::SwarmSecretSummary> for SwarmSecretView {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageInspectionView {
+    #[schema(value_type=Vec<crate::api::resources::schema_models::image_management::ImageTagUpdateSchema>)]
+    pub updates: Vec<citadel_platforms::image_updates::ImageTagUpdate>,
     #[serde(flatten)]
     #[schema(value_type = crate::api::resources::schema_models::platforms::ImageInspectionSchema)]
     pub image: citadel_platforms::images::ImageInspection,

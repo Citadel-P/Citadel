@@ -161,23 +161,26 @@ const getBuildAgentPoolValidationStatusStyle = (value: StateValue): StatusStyle 
 };
 
 const getContainerStatusStyle = (value: StateValue): StatusStyle | undefined => {
-  switch (value) {
-    case ContainerStateStatus.Unknown:
+  // Docker inspection uses lowercase states; inventory uses the API enum names.
+  switch (String(value).toLowerCase()) {
+    case 'unknown':
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
-    case ContainerStateStatus.Created:
+    case 'created':
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };
-    case ContainerStateStatus.Running:
+    case 'running':
       return { colorClass: 'bg-green-500', tooltip: 'Running' };
-    case ContainerStateStatus.Paused:
+    case 'paused':
       return { colorClass: 'bg-orange-500', tooltip: 'Paused' };
-    case ContainerStateStatus.Restarting:
-    case ContainerStateStatus.Removing:
-      return { colorClass: 'bg-yellow-500', tooltip: String(value) };
-    case ContainerStateStatus.Exited:
+    case 'restarting':
+      return { colorClass: 'bg-yellow-500', tooltip: 'Restarting' };
+    case 'removing':
+      return { colorClass: 'bg-yellow-500', tooltip: 'Removing' };
+    case 'exited':
       return { colorClass: 'bg-gray-500', tooltip: 'Exited' };
-    case ContainerStateStatus.Dead:
-    case ContainerStateStatus.Offline:
-      return { colorClass: 'bg-red-500', tooltip: String(value) };
+    case 'dead':
+      return { colorClass: 'bg-red-500', tooltip: 'Dead' };
+    case 'offline':
+      return { colorClass: 'bg-red-500', tooltip: 'Offline' };
     default:
       return undefined;
   }

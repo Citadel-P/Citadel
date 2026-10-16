@@ -18,22 +18,24 @@ pub struct ImageDeletionObservation {
 }
 pub type PreparedImagePull = (String, Option<zeroize::Zeroizing<String>>);
 
-pub trait ImageMutationStore: Send + Sync {
+pub trait ImageMutationStore: crate::image_usage::ImageUsageStore {
     fn prepare_pull<'a>(
         &'a self,
-        registry: Uuid,
+        registry: Option<Uuid>,
         reference: &'a str,
     ) -> BoxFuture<'a, Result<PreparedImagePull, RuntimeCapabilityError>>;
     fn persist_pull<'a>(
         &'a self,
         platform: Uuid,
-        registry: Uuid,
+        registry: Option<Uuid>,
         image: &'a RuntimeImageSummary,
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
     fn claim_deletion<'a>(
         &'a self,
         platform: Uuid,
         ids: &'a [String],
+        force: bool,
+        reviews: &'a [crate::image_usage::ImageDeletionReview],
     ) -> BoxFuture<'a, Result<ImageDeletionClaim, RuntimeCapabilityError>>;
     fn complete_deletion<'a>(
         &'a self,
@@ -43,15 +45,23 @@ pub trait ImageMutationStore: Send + Sync {
     ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
 }
 #[allow(clippy::too_many_arguments)]
-pub async fn delete_images(
+pub async fn delete_images<F, Fut>(
     store: &dyn ImageMutationStore,
     platform_id: Uuid,
     ids: &[String],
     force: bool,
     no_prune: bool,
-    runtime: &(impl ImageDeletionPort + ImageInventoryPort + ?Sized),
+    reviews: &[crate::image_usage::ImageDeletionReview],
+    runtime: &(
+         impl ImageDeletionPort + crate::images::ImageInspectionPort + ImageInventoryPort + ?Sized
+     ),
     shutdown: &CancellationToken,
-) -> Result<Vec<BTreeMap<String, String>>, RuntimeCapabilityError> {
+    authorize: F,
+) -> Result<Vec<BTreeMap<String, String>>, RuntimeCapabilityError>
+where
+    F: Fn() -> Fut + Send + Sync,
+    Fut: std::future::Future<Output = Result<(), RuntimeCapabilityError>> + Send,
+{
     let cancelled = || {
         error(
             RuntimeErrorKind::Cancelled,
@@ -61,7 +71,7 @@ pub async fn delete_images(
     let claim = tokio::select! {
         biased;
         () = shutdown.cancelled() => return Err(cancelled()),
-        claim = store.claim_deletion(platform_id, ids) => claim?,
+        claim = store.claim_deletion(platform_id, ids, force, reviews) => claim?,
     };
     let cancel = shutdown.child_token();
     let _guard = cancel.clone().drop_guard();
@@ -72,6 +82,22 @@ pub async fn delete_images(
             let mut results = Vec::new();
             for id in ids {
                 if cancel.is_cancelled() { return Err(cancelled()); }
+                if !force {
+                    let image = runtime.inspect_image(id, &cancel).await?;
+                    if image.id != *id || !image.containers.is_empty() {
+                        return Err(error(RuntimeErrorKind::Conflict,
+                            "The image identity changed or a container references it. Refresh inventory and review deletion again."));
+                    }
+                    if let Some(review) = reviews.iter().find(|review| review.docker_image_id == *id) {
+                        let mut tags = image.repo_tags;
+                        tags.sort();
+                        if tags != review.tags {
+                            return Err(error(RuntimeErrorKind::Conflict,
+                                "Image tags changed after review. Review deletion again."));
+                        }
+                    }
+                }
+                authorize().await?;
                 results.extend(runtime.delete_image(id, force, no_prune, &cancel).await?);
             }
             Ok(results)
@@ -113,20 +139,51 @@ fn error(kind: RuntimeErrorKind, message: &str) -> RuntimeCapabilityError {
 #[allow(clippy::too_many_arguments)]
 pub async fn pull_and_persist(
     store: &dyn ImageMutationStore,
-    runtime: &(impl crate::image_pull::ImagePullPort + crate::ImageInventoryPort + ?Sized),
+    runtime: &(
+         impl crate::image_pull::ImagePullPort
+         + crate::ImageInventoryPort
+         + crate::images::ImageInspectionPort
+         + ?Sized
+     ),
     input: &crate::image_pull::PullImageInput,
     image: &str,
     auth: Option<&str>,
     sender: &tokio::sync::mpsc::Sender<crate::image_pull::PullImageStreamItem>,
     cancel: &tokio_util::sync::CancellationToken,
     changed: impl Fn(&str, &str, &str),
-) -> Result<(), crate::RuntimeCapabilityError> {
+) -> Result<RuntimeImageSummary, crate::RuntimeCapabilityError> {
+    if let Some(source) = &input.source_image_id {
+        let reference = crate::image_updates::canonical_reference(&input.image_tag);
+        if !crate::image_updates::eligible(&input.image_tag)
+            || crate::image_updates::canonical_reference(image) != reference
+        {
+            return Err(error(
+                RuntimeErrorKind::InvalidRequest,
+                "The selected Registry would change the requested image reference. Choose a matching Registry.",
+            ));
+        }
+        let local = runtime.inspect_image(source, cancel).await?;
+        if local.id != *source
+            || !local
+                .repo_tags
+                .iter()
+                .any(|tag| crate::image_updates::canonical_reference(tag) == reference)
+        {
+            return Err(error(
+                RuntimeErrorKind::Conflict,
+                "The selected tag no longer belongs to this image. Refresh inventory before pulling.",
+            ));
+        }
+    }
     let observed =
         crate::image_pull::pull_and_observe(runtime, image, auth, sender, cancel).await?;
     store
         .persist_pull(input.platform_id, input.registry_id, &observed)
         .await?;
     changed("image", "create", &observed.id);
+    if let Some(source) = &input.source_image_id {
+        changed("image", "update", source);
+    }
     changed("platform", "update", &input.platform_id.to_string());
     let digest = observed
         .repo_digests
@@ -135,12 +192,12 @@ pub async fn pull_and_persist(
         .map(|(_, d)| d.to_owned());
     let _ = sender
         .send(crate::image_pull::PullImageStreamItem {
-            docker_image_id: Some(observed.id),
+            docker_image_id: Some(observed.id.clone()),
             digest,
             ..Default::default()
         })
         .await;
-    Ok(())
+    Ok(observed)
 }
 
 #[cfg(test)]
@@ -150,16 +207,68 @@ mod tests {
         Mutex,
         atomic::{AtomicUsize, Ordering},
     };
+    #[derive(Default)]
     struct Fake {
+        image: Option<crate::images::ImageInspection>,
+        repair: bool,
         dispatched: tokio::sync::Notify,
         calls: AtomicUsize,
         completed: AtomicUsize,
         token: Mutex<Option<CancellationToken>>,
     }
+    impl crate::image_usage::ImageUsageStore for Fake {
+        fn summaries<'a>(
+            &'a self,
+            _: citadel_primitives::ActorId,
+            _: bool,
+            _: uuid::Uuid,
+            _: &'a [crate::ImageDetails],
+        ) -> BoxFuture<'a, Result<Vec<crate::image_usage::ImageUsageSummary>, RuntimeCapabilityError>>
+        {
+            unreachable!()
+        }
+
+        fn deletion_snapshots<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a [String],
+        ) -> BoxFuture<
+            'a,
+            Result<Vec<crate::image_usage::ImageDeletionSnapshot>, RuntimeCapabilityError>,
+        > {
+            unimplemented!()
+        }
+        fn usage<'a>(
+            &'a self,
+            _: citadel_primitives::ActorId,
+            _: bool,
+            _: Uuid,
+            _: &'a crate::image_usage::ImageLocation,
+            _: u32,
+        ) -> BoxFuture<'a, Result<crate::image_usage::ImageUsage, RuntimeCapabilityError>> {
+            unimplemented!()
+        }
+    }
+    impl crate::images::ImageInspectionPort for Fake {
+        fn exposed_ports<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
+            unimplemented!()
+        }
+        fn inspect_image<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<crate::images::ImageInspection, RuntimeCapabilityError>> {
+            Box::pin(async { Ok(self.image.clone().expect("unexpected image inspection")) })
+        }
+    }
     impl ImageMutationStore for Fake {
         fn prepare_pull<'a>(
             &'a self,
-            _: Uuid,
+            _: Option<Uuid>,
             _: &'a str,
         ) -> BoxFuture<'a, Result<PreparedImagePull, RuntimeCapabilityError>> {
             unreachable!()
@@ -167,7 +276,7 @@ mod tests {
         fn persist_pull<'a>(
             &'a self,
             _: Uuid,
-            _: Uuid,
+            _: Option<Uuid>,
             _: &'a RuntimeImageSummary,
         ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
             unreachable!()
@@ -176,6 +285,8 @@ mod tests {
             &'a self,
             _: Uuid,
             _: &'a [String],
+            _: bool,
+            _: &'a [crate::image_usage::ImageDeletionReview],
         ) -> BoxFuture<'a, Result<ImageDeletionClaim, RuntimeCapabilityError>> {
             Box::pin(async {
                 Ok(ImageDeletionClaim {
@@ -192,10 +303,12 @@ mod tests {
             observed: Option<&'a ImageDeletionObservation>,
         ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
             Box::pin(async move {
-                assert!(
-                    observed.is_none(),
-                    "shutdown must not perform network repair"
-                );
+                if !self.repair {
+                    assert!(
+                        observed.is_none(),
+                        "shutdown must not perform network repair"
+                    );
+                }
                 self.completed.fetch_add(1, Ordering::SeqCst);
                 Ok(())
             })
@@ -222,12 +335,15 @@ mod tests {
             &'a self,
             _: &'a CancellationToken,
         ) -> BoxFuture<'a, Result<Vec<RuntimeImageSummary>, RuntimeCapabilityError>> {
-            panic!("network repair after shutdown")
+            assert!(self.repair, "network repair after shutdown");
+            Box::pin(async { Ok(vec![]) })
         }
     }
     #[tokio::test]
     async fn shutdown_interrupts_blocked_dispatch_releases_claim_and_never_replays() {
         let fake = Fake {
+            image: None,
+            repair: false,
             dispatched: Default::default(),
             calls: AtomicUsize::new(0),
             completed: AtomicUsize::new(0),
@@ -235,7 +351,17 @@ mod tests {
         };
         let shutdown = CancellationToken::new();
         let ids = vec!["first".into(), "second".into()];
-        let operation = delete_images(&fake, Uuid::now_v7(), &ids, false, false, &fake, &shutdown);
+        let operation = delete_images(
+            &fake,
+            Uuid::now_v7(),
+            &ids,
+            true,
+            false,
+            &[],
+            &fake,
+            &shutdown,
+            || async { Ok(()) },
+        );
         let stop = async {
             fake.dispatched.notified().await;
             shutdown.cancel();
@@ -249,5 +375,69 @@ mod tests {
         assert_eq!(fake.calls.load(Ordering::SeqCst), 1);
         assert_eq!(fake.completed.load(Ordering::SeqCst), 1);
         assert!(fake.token.lock().unwrap().as_ref().unwrap().is_cancelled());
+    }
+    #[tokio::test]
+    async fn live_stopped_usage_changed_tags_and_revoked_authorization_block_dispatch() {
+        use crate::images::{ImageContainer, ImageInspection};
+        for case in ["stopped", "tags", "permission"] {
+            let mut image = ImageInspection {
+                id: "image".into(),
+                repo_tags: vec!["app:latest".into()],
+                ..Default::default()
+            };
+            if case == "stopped" {
+                image.containers.push(ImageContainer {
+                    id: "container".into(),
+                    name: "stopped".into(),
+                    state: "exited".into(),
+                    volumes: vec![],
+                    networks: Default::default(),
+                    ports: serde_json::Value::Null,
+                });
+            }
+            let fake = Fake {
+                image: Some(image),
+                repair: true,
+                ..Default::default()
+            };
+            let review = crate::image_usage::ImageDeletionReview {
+                docker_image_id: "image".into(),
+                row_version: 1,
+                tags: vec![
+                    if case == "tags" {
+                        "app:old"
+                    } else {
+                        "app:latest"
+                    }
+                    .into(),
+                ],
+            };
+            let result = tokio::time::timeout(
+                Duration::from_secs(1),
+                delete_images(
+                    &fake,
+                    Uuid::now_v7(),
+                    &["image".into()],
+                    false,
+                    true,
+                    &[review],
+                    &fake,
+                    &CancellationToken::new(),
+                    || async { Err(error(RuntimeErrorKind::PermissionDenied, "revoked")) },
+                ),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                result.unwrap_err().kind,
+                if case == "permission" {
+                    RuntimeErrorKind::PermissionDenied
+                } else {
+                    RuntimeErrorKind::Conflict
+                }
+            );
+            assert_eq!(fake.calls.load(Ordering::SeqCst), 0);
+            assert_eq!(fake.completed.load(Ordering::SeqCst), 1);
+        }
     }
 }

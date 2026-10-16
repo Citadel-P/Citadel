@@ -551,13 +551,30 @@ WITH incoming AS (
     WHERE (images.containers,images.name,images.size,images.tags::jsonb)
         IS DISTINCT FROM (EXCLUDED.containers,EXCLUDED.name,EXCLUDED.size,EXCLUDED.tags::jsonb)
     RETURNING dockerimageid
+), moved_tags AS (
+    -- A pull/tag event may only observe the new image. Remove those tags from
+    -- sibling images in the same transaction, as the explicit pull path does.
+    SELECT image.id, COALESCE(jsonb_agg(tag) FILTER (WHERE NOT EXISTS (
+        SELECT 1 FROM incoming WHERE incoming.repo_tags ? tag
+    )), '[]'::jsonb) tags
+    FROM images image CROSS JOIN LATERAL jsonb_array_elements_text(image.tags::jsonb) tag
+    WHERE NOT $3::boolean AND image.platformid=$1
+      AND NOT EXISTS (SELECT 1 FROM incoming WHERE incoming.id=image.dockerimageid)
+      AND EXISTS (SELECT 1 FROM incoming, jsonb_array_elements_text(incoming.repo_tags) claimed WHERE image.tags::jsonb ? claimed)
+    GROUP BY image.id
+), retagged AS (
+    UPDATE images image SET tags=moved_tags.tags,
+        name=COALESCE(moved_tags.tags->>0,image.dockerimageid),
+        updatedat=now(),rowversion=image.rowversion+1
+    FROM moved_tags WHERE image.id=moved_tags.id AND image.tags::jsonb IS DISTINCT FROM moved_tags.tags
+    RETURNING image.id
 ), deleted AS (
 DELETE FROM images image
 WHERE $3::boolean AND image.platformid = $1
   AND NOT EXISTS (SELECT 1 FROM incoming WHERE incoming.id = image.dockerimageid)
 RETURNING dockerimageid
 )
-SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
+SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted) OR EXISTS(SELECT 1 FROM retagged)
 "#,
     )
     .bind(platform_id)

@@ -379,7 +379,18 @@ impl StackSpec {
             ));
         }
         match self {
-            Self::WebEditor { compose_file, .. } => {
+            Self::WebEditor {
+                compose_file,
+                update_behavior,
+                common,
+            } => {
+                if *update_behavior != StackUpdateBehavior::Disabled
+                    && common.registry_id.is_none_or(|id| id.is_nil())
+                {
+                    return Err(validation(
+                        "Select a Registry to enable image update notifications or automatic updates.",
+                    ));
+                }
                 if compose_file.trim().is_empty() || compose_file.len() > 2 * 1024 * 1024 {
                     return Err(validation(
                         "The Compose file is required and must not exceed 2 MiB.",
@@ -848,6 +859,32 @@ pub(crate) fn normalize_tags(values: &[Uuid]) -> Vec<Uuid> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn image_update_behaviors_require_registry_but_git_updates_do_not() {
+        for kind in ["WebEditor", "Git"] {
+            for behavior in ["Disabled", "Notify", "ServiceAutoDeploy", "StackAutoDeploy"] {
+                for registry in [None, Some(Uuid::nil()), Some(Uuid::from_u128(123))] {
+                    let spec: StackSpec = serde_json::from_value(serde_json::json!({
+                        "$type": kind,
+                        "composeFile": "services:\n  web:\n    image: nginx:alpine",
+                        "gitRepoId": Uuid::from_u128(456),
+                        "branch": "main",
+                        "composePaths": ["compose.yml"],
+                        "updateBehavior": behavior,
+                        "registryId": registry,
+                    }))
+                    .unwrap();
+                    let requires_registry = kind == "WebEditor" && behavior != "Disabled";
+                    assert_eq!(
+                        spec.validate().is_ok(),
+                        !requires_registry || registry.is_some_and(|id| !id.is_nil()),
+                        "{kind} {behavior} {registry:?}",
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn duplicate_disables_all_activation_and_preserves_source() {
