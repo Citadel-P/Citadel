@@ -1,3 +1,4 @@
+import { healthOrder } from '@/components/custom/health-status';
 import type { ContainerGroupHealth, ContainerHealthItem } from './group-health';
 import { ContainerGroupHealthCell } from './group-health-cell';
 import { currentHealth } from './health';
@@ -190,6 +191,7 @@ const columns = (
     },
     {
       id: 'health',
+      sortingFn: (a, b) => healthOrder.indexOf(a.getValue('health')) - healthOrder.indexOf(b.getValue('health')),
       accessorFn: (row) => (isContainerStackGroup(row) ? (row.healthSummary?.status ?? 'Unknown') : currentHealth(row)),
       header: ({ column }) => <SortableCell cellName="Health" column={column} />,
       cell: ({ row }) =>

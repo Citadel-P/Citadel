@@ -1,5 +1,8 @@
-import { createSwarmTask } from '@/test/factories/resources';
+import { createSwarmTask, createWorkloadHealth } from '@/test/factories/resources';
 import {
+  CheckConfiguration,
+  HealthStatus,
+  PlatformStatus,
   ContainerRuntimeView,
   ContainerStateStatus,
   SwarmServiceOwnership,
@@ -63,18 +66,42 @@ describe('ServicesTable', () => {
         selectable={false}
         showActions={false}
         taskContainers={[container]}
+        healthResource={{
+          id: 'stack',
+          name: 'demo',
+          platformStatus: PlatformStatus.Online,
+          probeHealth: createWorkloadHealth({
+            evaluatedAt: Date.now(),
+            members: [
+              {
+                platformId: 'platform-1',
+                service: 'service-1',
+                taskId: 'task-1',
+                nodeId: 'node-1',
+                name: 'web.1',
+                available: true,
+                state: 'Running',
+                status: HealthStatus.Healthy,
+                observation: { observedAt: Date.now(), configuration: CheckConfiguration.Enabled },
+              },
+            ],
+          }),
+        }}
       />,
     );
 
+    expect(screen.getByRole('columnheader', { name: 'Health' })).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'CPU' })).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'Memory' })).toBeVisible();
     const serviceRow = screen.getByRole('link', { name: 'web' }).closest('tr');
     expect(serviceRow).not.toBeNull();
+    expect(within(serviceRow!).getByRole('button', { name: 'Health: Healthy' })).toBeVisible();
     expect(within(serviceRow!).getByText(/12.*50/)).toBeVisible();
     expect(within(serviceRow!).getByText(/128.*512/)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Expand service web' }));
     const taskRow = screen.getByRole('link', { name: 'web.1' }).closest('tr');
     expect(taskRow).not.toBeNull();
+    expect(within(taskRow!).getByRole('button', { name: 'Health: Healthy' })).toBeVisible();
     expect(within(taskRow!).getByText(/12.*50/)).toBeVisible();
     expect(within(taskRow!).getByText(/128.*512/)).toBeVisible();
   });

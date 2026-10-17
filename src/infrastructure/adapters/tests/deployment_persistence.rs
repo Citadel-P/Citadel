@@ -617,3 +617,154 @@ fn local_spec(volume: Option<&str>) -> DeploymentSpec {
         environment_variables: None,
     }
 }
+
+mod workload_health_fixture;
+#[tokio::test]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
+async fn deployment_health_uses_current_owned_observations_and_authorized_reads() {
+    use citadel_primitives::health::WorkloadHealthStatus as Health;
+    let pool = workload_health_fixture::pool().await;
+    let platform = workload_health_fixture::platform(&pool, false).await;
+    let store = PostgresDeploymentRepository::new(pool.clone());
+    let actor = ActorId::new(SYSTEM_ACTOR_ID);
+    let deployment = store
+        .create(
+            actor,
+            true,
+            &CreateDeployment {
+                name: format!("health-{}", Uuid::now_v7()),
+                platform_id: platform,
+                description: None,
+                spec: local_spec(None),
+                tag_ids: vec![],
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(deployment.probe_health.status, Health::NotRunning);
+    sqlx::query("UPDATE deployments SET status='Healthy' WHERE id=$1")
+        .bind(deployment.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let id = workload_health_fixture::container(
+        &pool,
+        platform,
+        "current",
+        None,
+        Some(deployment.id),
+        None,
+        None,
+        "Healthy",
+    )
+    .await;
+    let read = store
+        .get_authorized(actor, true, deployment.id)
+        .await
+        .unwrap();
+    assert_eq!(read.probe_health.status, Health::Healthy);
+    assert_eq!(read.probe_health.members[0].container_id, Some(id));
+    assert!(
+        store
+            .get_authorized(ActorId::new(Uuid::nil()), false, deployment.id)
+            .await
+            .is_err()
+    );
+    sqlx::query(
+        "UPDATE containers SET health=jsonb_set(health,'{result}','\"Unhealthy\"') WHERE id=$1",
+    )
+    .bind(id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, deployment.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unhealthy
+    );
+    use citadel_adapters::persistence::postgres::platforms::containers::repository::PostgresContainerRepository;
+    use citadel_platforms::containers::{
+        ContainerAction, ContainerRepository, ContainerSelectionKind,
+    };
+    use citadel_primitives::health::HealthAttention;
+    let containers = PostgresContainerRepository::new(pool.clone());
+    // An actual crash reconciles to Stopped without any stop intent.
+    sqlx::query("UPDATE deployments SET status='Stopped' WHERE id=$1")
+        .bind(deployment.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE containers SET state='Exited', health=health || '{\"exitCode\":1,\"startedAt\":\"2020-01-01T00:00:00Z\"}'::jsonb WHERE id=$1")
+        .bind(id).execute(&pool).await.unwrap();
+    assert!(
+        store
+            .get_authorized(actor, true, deployment.id)
+            .await
+            .unwrap()
+            .probe_health
+            .attention
+            .contains(&HealthAttention::UnexpectedExit)
+    );
+    let stop = containers
+        .claim_selection(
+            actor,
+            true,
+            &[id],
+            ContainerAction::Stop,
+            ContainerSelectionKind::Containers,
+        )
+        .await
+        .unwrap();
+    containers
+        .finish_committed(stop.operation_id)
+        .await
+        .unwrap();
+    assert!(
+        !store
+            .get_authorized(actor, true, deployment.id)
+            .await
+            .unwrap()
+            .probe_health
+            .attention
+            .contains(&HealthAttention::UnexpectedExit)
+    );
+    let start = containers
+        .claim_selection(
+            actor,
+            true,
+            &[id],
+            ContainerAction::Start,
+            ContainerSelectionKind::Containers,
+        )
+        .await
+        .unwrap();
+    containers
+        .finish_committed(start.operation_id)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .get_authorized(actor, true, deployment.id)
+            .await
+            .unwrap()
+            .probe_health
+            .attention
+            .contains(&HealthAttention::UnexpectedExit)
+    );
+    sqlx::query("DELETE FROM containers WHERE id=$1")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let read = store
+        .get_authorized(actor, true, deployment.id)
+        .await
+        .unwrap();
+    assert_eq!(read.probe_health.missing, Some(1));
+    assert_ne!(read.probe_health.status, Health::Healthy);
+}

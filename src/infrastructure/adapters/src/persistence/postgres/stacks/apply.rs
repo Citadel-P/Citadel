@@ -173,7 +173,7 @@ impl PostgresStackRepository {
                 options.service_names.dedup();
             }
             let now = Utc::now().timestamp();
-            sqlx::query("UPDATE stacks SET controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,applyservices=$4,rowversion=rowversion+1 WHERE id=$1")
+            sqlx::query("UPDATE stacks SET healthappliedspec=NULL,healthappliedplatformid=NULL,controlstate='Processing',controlstartedat=$2,controltriggeredby=$3,applyservices=$4,rowversion=rowversion+1 WHERE id=$1")
                 .bind(id).bind(now).bind(actor.value()).bind(&options.service_names).execute(&mut *tx).await.map_err(storage)?;
             let claim = StackOperationClaim {
                 stack_id: id,
@@ -285,6 +285,19 @@ impl PostgresStackRepository {
             }
             sqlx::query("UPDATE stacks SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,applyservices='{}',stackupdatestate=COALESCE($3::json,stackupdatestate),rowversion=rowversion+1 WHERE id=$1 AND currentstackreleaseid=$2 AND controlstate='Processing'")
                 .bind(claim.stack_id).bind(claim.release_id).bind(update_state).execute(&mut *tx).await.map_err(storage)?;
+            // Only an acknowledged full Apply establishes effective membership. A
+            // failed, interrupted or service-scoped Apply can leave mixed topology.
+            if claim.service_names.is_empty() && result.status == StackReleaseStatus::Healthy {
+                sqlx::query(
+                    "UPDATE stacks SET healthappliedspec=$2,healthappliedplatformid=$3 WHERE id=$1",
+                )
+                .bind(claim.stack_id)
+                .bind(claim.spec.to_storage_value()?)
+                .bind(claim.platform_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
+            }
             let snapshot = stack_snapshot(
                 claim.stack_id,
                 row.try_get("name").map_err(storage)?,

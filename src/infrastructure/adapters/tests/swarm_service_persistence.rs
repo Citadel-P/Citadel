@@ -674,3 +674,97 @@ impl citadel_swarm_services::SwarmServiceTaskSpawner for TestServiceTasks {
         true
     }
 }
+
+mod workload_health_fixture;
+#[tokio::test]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
+async fn service_health_joins_exact_node_and_excludes_superseded_tasks() {
+    use citadel_primitives::health::WorkloadHealthStatus as Health;
+    let pool = workload_health_fixture::pool().await;
+    let platform = workload_health_fixture::platform(&pool, true).await;
+    let actor = ActorId::new(SYSTEM_ACTOR_ID);
+    let registry = Uuid::now_v7();
+    sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}',$2,$1::text,'docker.io','Enabled')").bind(registry).bind(SYSTEM_ACTOR_ID).execute(&pool).await.unwrap();
+    let store = PostgresSwarmServiceRepository::new(pool.clone());
+    let service = store
+        .create(
+            actor,
+            true,
+            &CreateSwarmService {
+                name: format!("health-{}", Uuid::now_v7()),
+                platform_id: platform,
+                description: None,
+                spec: spec(registry, 1),
+                tag_ids: vec![],
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query("UPDATE swarmservices SET dockerserviceid='service', synchronizationstate='InSync', health='Healthy' WHERE id=$1").bind(service.id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmserviceprojections(platformid,dockerserviceid,configids,desiredtaskcount,image,labels,mode,name,networkids,observedat,ports,runningtaskcount,secretids,swarmserviceid,updatestate,versionindex) VALUES($1,'service','[]',1,'nginx','{}','replicated','web','[]',now(),'[]',1,'[]',$2,'',1)").bind(platform).bind(service.id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmnoderuntimeprojectionstates(platformid,dockernodeid,isstale) VALUES($1,'node-a',FALSE),($1,'node-b',FALSE)").bind(platform).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex,dockercreatedat) VALUES($1,'old','shutdown','old-container','node-a','service','nginx','old','a',now(),'[]','web',1,'failed',1,now()-interval '1 hour'),($1,'current','running','same-id','node-a','service','nginx','current','a',now(),'[]','web',1,'running',2,now())").bind(platform).execute(&pool).await.unwrap();
+    workload_health_fixture::container(
+        &pool,
+        platform,
+        "old-container",
+        Some("node-a"),
+        None,
+        None,
+        None,
+        "Unhealthy",
+    )
+    .await;
+    workload_health_fixture::container(
+        &pool,
+        platform,
+        "same-id",
+        Some("node-b"),
+        None,
+        None,
+        None,
+        "Healthy",
+    )
+    .await;
+    assert_eq!(
+        store
+            .get_authorized(actor, true, service.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown,
+        "same Docker ID on a different node is not evidence"
+    );
+    workload_health_fixture::container(
+        &pool,
+        platform,
+        "same-id",
+        Some("node-a"),
+        None,
+        None,
+        None,
+        "Healthy",
+    )
+    .await;
+    let read = store.get_authorized(actor, true, service.id).await.unwrap();
+    assert_eq!(read.probe_health.status, Health::Healthy);
+    assert_eq!(read.probe_health.observed, 1);
+    sqlx::query("UPDATE swarmnoderuntimeprojectionstates SET isstale=TRUE WHERE platformid=$1 AND dockernodeid='node-a'").bind(platform).execute(&pool).await.unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, service.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
+    assert!(
+        store
+            .get_authorized(ActorId::new(Uuid::nil()), false, service.id)
+            .await
+            .is_err()
+    );
+}

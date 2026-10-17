@@ -5,6 +5,7 @@ impl PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         ids: &'a [Uuid],
+        action: citadel_stacks::StackAction,
     ) -> BoxFuture<'a, Result<Vec<StackStateClaim>, StackError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
@@ -88,6 +89,12 @@ impl PostgresStackRepository {
                     .execute(&mut *tx)
                     .await
                     .map_err(storage)?;
+            }
+            for claim in &claims {
+                sqlx::query("UPDATE containers SET healthstoprequestedat=$3 WHERE stackid=$1 AND platformid=$2 AND NOT isswarmtask")
+                    .bind(claim.stack_id).bind(claim.platform_id)
+                    .bind((action == citadel_stacks::StackAction::Stop).then(|| Utc::now().timestamp_millis()))
+                    .execute(&mut *tx).await.map_err(storage)?;
             }
             tx.commit().await.map_err(storage)?;
             Ok(claims)

@@ -120,8 +120,10 @@ Stopping or pausing a container makes its current health **Not running**, shown 
 **—** in the overview and a neutral icon in the table. Open the health popup for
 an explanation.
 
-Citadel saves an unchanged observation at most once per minute and records state
-changes as they arrive. History retains up to 10,080 periodic samples and 200
+For enabled health checks, Citadel saves an unchanged observation at most once
+per minute. Containers with no check or a disabled check show an explanation and
+a grayed-out history chart, without loading history. Their current configuration
+still updates automatically; configuration and state changes remain recorded. History retains up to 10,080 periodic samples and 200
 changes per container for seven days, subject to a shared limit of 100,000 records
 across the installation. Busy installations can therefore retain less than seven
 days. Collection outages and retention can leave gaps. Periodic history starts

@@ -262,3 +262,49 @@ async fn periodic_health_samples_preserve_failures_and_use_actual_inspection_tim
         .unwrap();
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn compose_service_identity_uses_inventory_labels_and_clears_removed_labels() {
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let mut inventory = snapshot(platform, false);
+    inventory.containers[0]
+        .labels
+        .insert("com.docker.compose.service".into(), "api".into());
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    store.persist(&inventory).await.unwrap();
+    let value: Option<String> = sqlx::query_scalar(
+        "SELECT composeservicename FROM containers WHERE platformid=$1 AND dockercontainerid=$2",
+    )
+    .bind(platform)
+    .bind(&inventory.containers[0].id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(value.as_deref(), Some("api"));
+    inventory.observed_at += chrono::Duration::seconds(2);
+    inventory.containers[0]
+        .labels
+        .remove("com.docker.compose.service");
+    store.persist(&inventory).await.unwrap();
+    let value: Option<String> = sqlx::query_scalar(
+        "SELECT composeservicename FROM containers WHERE platformid=$1 AND dockercontainerid=$2",
+    )
+    .bind(platform)
+    .bind(&inventory.containers[0].id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        value, None,
+        "do not retain or guess a removed Compose identity"
+    );
+}

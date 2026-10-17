@@ -9,6 +9,30 @@ pub(super) fn map_stack(
     let specific: i32 = row.try_get("permission_specific").map_err(storage)?;
     Ok(AuthorizedResource {
         resource: citadel_stacks::Stack {
+            probe_health: citadel_stacks::health::assess(
+                serde_json::from_value(row.try_get("health_members").map_err(storage)?)
+                    .map_err(storage)?,
+                row.try_get::<Option<Value>, _>("health_applied_spec")
+                    .map_err(storage)?
+                    .map(StackSpec::from_storage_value)
+                    .transpose()?
+                    .as_ref(),
+                if descriptor.get("$type").and_then(Value::as_str) == Some("DockerSwarm") {
+                    Some(
+                        serde_json::from_value(row.try_get("health_services").map_err(storage)?)
+                            .map_err(storage)?,
+                    )
+                } else {
+                    None
+                },
+                row.try_get::<&str, _>("release_status")
+                    .map_err(storage)?
+                    .parse()
+                    .map_err(storage)?,
+                row.try_get::<&str, _>("platform_status").map_err(storage)? == "Online",
+                row.try_get::<&str, _>("controlstate").map_err(storage)? == "Processing",
+                Utc::now().timestamp_millis(),
+            ),
             id: row.try_get("id").map_err(storage)?,
             name: row.try_get("name").map_err(storage)?,
             description: row.try_get("description").map_err(storage)?,

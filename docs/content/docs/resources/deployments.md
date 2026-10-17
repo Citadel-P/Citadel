@@ -11,6 +11,26 @@ To bring an existing standalone Docker container under Citadel management
 without recreating it first, see
 [Adopt existing workloads](/docs/guides/adopting-existing-workloads).
 
+## Health
+
+The **Health** icon appears in the Deployments table, in the **Container** tab,
+and before **Backup** in the main tabs.
+Hover or select it for a summary; **View details** opens the current container's
+health history and diagnostics. History requires access to the Platform, and
+probe details use the existing Inspect permission.
+
+Health updates automatically from container observations. It is separate from
+whether the container is running, image updates, and deployment operations.
+Missing or stale observations show **Unknown**, never a passing check. A stopped
+Deployment is **Not running**; a missing container is called out in the summary.
+An observed exit alone does not mean the Deployment was intentionally stopped.
+Citadel uses recorded stop requests to distinguish intentional inactivity from
+unexpected exits; restarting the container supersedes the previous stop intent.
+
+Use **Health Filter** to find failures or missing coverage. Hiding **Health** in
+**Columns** also hides and pauses its filter, preserving your selection.
+
+
 ## Run one container
 
 You need an online Docker Standalone Platform and an image name.

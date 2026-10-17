@@ -128,6 +128,7 @@ SELECT d.id, d.name, d.description, d.platformid, d.createdat, d.createdbyactori
        d.autoupdatestate_currentdigest, d.autoupdatestate_remotedigest,
        d.autoupdatestate_lasterror,
        p.status AS platform_status, p.name AS platform_name,
+       CASE WHEN c.id IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(jsonb_build_object('containerId',c.id,'dockerContainerId',c.dockercontainerid,'platformId',c.platformid,'nodeId',c.dockernodeid,'name',c.name,'service','','state',c.state,'available',(c.id IS NOT NULL AND c.projectionstalesince IS NULL AND (c.dockernodeid IS NULL OR EXISTS(SELECT 1 FROM swarmnoderuntimeprojectionstates ns WHERE ns.platformid=c.platformid AND ns.dockernodeid=c.dockernodeid AND NOT ns.isstale))),'stopRequestedAt',c.healthstoprequestedat,'observation',c.health)) END health_members,
        c.id AS container_id, c.dockercontainerid, c.dockerimageid,
        i.id AS image_id, i.name AS image_name,
        COALESCE(tags.value, '[]'::jsonb) AS tags,
@@ -140,9 +141,9 @@ JOIN platforms p ON p.id = d.platformid
 LEFT JOIN global_permission g ON TRUE
 LEFT JOIN resource_permissions r ON r.resourceid = d.id
 LEFT JOIN LATERAL (
-    SELECT container.id, container.dockercontainerid, container.dockerimageid, container.imageid
+    SELECT container.*
     FROM containers container
-    WHERE container.deploymentid = d.id
+    WHERE container.deploymentid = d.id AND container.platformid = d.platformid
     ORDER BY container.updated DESC, container.id DESC
     LIMIT 1
 ) c ON TRUE

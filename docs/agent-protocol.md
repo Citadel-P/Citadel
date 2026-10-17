@@ -334,8 +334,11 @@ Committed container invalidations refresh the snapshot; statistics do not.
 Neither stream performs Docker inspection or includes probe commands/output.
 Explicit probe details remain an Inspect-authorized HTTP read on user request.
 
-Core stores actual periodic health observations at most once per UTC minute,
-in addition to immediate transitions. Statistics, unchanged replay timestamps,
+Core stores actual periodic health observations for enabled checks at most once
+per UTC minute, in addition to immediate transitions. NoCheck, Disabled, and
+Unknown configurations do not generate periodic samples; current observations
+and configuration/lifecycle transitions remain persisted. The browser skips the
+history group for a currently confirmed NoCheck or Disabled status. Statistics, unchanged replay timestamps,
 and stale or future observations cannot generate periodic samples. Retention is
 seven days, up to 10,080 samples and 200 transitions per container, with the
 existing shared 100,000-record installation cap. This uses an additive Core

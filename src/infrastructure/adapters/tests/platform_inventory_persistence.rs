@@ -1652,6 +1652,7 @@ async fn maintenance_releases_each_orphan_resource_kind() {
         "INSERT INTO backuppolicies(id,name,normalizedname,createdbyactorid,runasactorid,backuprepositoryid,source) VALUES($1,$2,$2,$3,$3,$1,'{}')",
         "INSERT INTO deployments(id,name,createdbyactorid,platformid,spec,status) VALUES($1,$2,$3,$4,'{}','Healthy')",
         "INSERT INTO containers(id,name,platformid,dockercontainerid,dockerimageid,state,created,updated,ports) VALUES($1,$2,$4,$2,'image','Running',0,0,'{}')",
+        "INSERT INTO images(id,name,platformid,dockerimageid,createdat,tags) VALUES($1,$2,$4,$2,CURRENT_TIMESTAMP,'[]')",
         "INSERT INTO stacks(id,name,createdbyactorid,driftpolicy,stacksource,stackupdatestate) VALUES($1,$2,$3,'{}','WebEditor','{}')",
         "INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES($1,$1,$4,$3,'{}','Healthy','1')",
     ];
@@ -1673,10 +1674,47 @@ async fn maintenance_releases_each_orphan_resource_kind() {
         .execute(&pool)
         .await
         .unwrap();
+    // Timeouts must leave recent, future, and missing timestamps alone for every
+    // epoch-based recovery predicate, before exercising expired orphans below.
+    let timed_kinds = [
+        "deployments",
+        "containers",
+        "stacks",
+        "images",
+        "gitrepositories",
+        "buildagentpools",
+    ];
+    let now = chrono::Utc::now().timestamp();
+    for started_at in [Some(now), Some(now + 600), None] {
+        for table in timed_kinds {
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "UPDATE {table} SET controlstate='Processing',controlstartedat=$2 WHERE id=$1"
+            )))
+            .bind(id)
+            .bind(started_at)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
+            .await
+            .unwrap();
+        for table in timed_kinds {
+            let actual: (String, Option<i64>) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+                "SELECT controlstate,controlstartedat FROM {table} WHERE id=$1"
+            )))
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(actual, ("Processing".into(), started_at), "{table}");
+        }
+    }
     let kinds = [
         "deployments",
         "containers",
         "stacks",
+        "images",
         "gitrepositories",
         "buildagentpools",
         "buildprojects",

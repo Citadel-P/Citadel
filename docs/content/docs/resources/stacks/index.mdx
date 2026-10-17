@@ -7,6 +7,40 @@ A Stack manages an application described by one or more Compose files. On a
 Docker Standalone Platform it runs as a Compose project; on a Swarm Platform
 it runs as a native Docker Stack.
 
+## Health
+
+The **Health** icon in the table and beside **Backup** summarizes current
+containers. Hover or select it for counts and coverage; **View details** lets you
+choose a container from a dropdown with health status icons and view its history.
+The dialog keeps coverage warnings brief; aggregate counts remain in the hover card. History requires access
+to its Platform; probe details retain the Inspect permission.
+
+The **Services** table also shows health for each container or Swarm service.
+Swarm service summaries use current task observations; missing observations remain
+**Unknown**. Expand a service to see health for its tasks.
+
+A Stack is **Healthy** only when all required active containers have fresh passing
+checks. Failures remain visible alongside unchecked, missing or stale members.
+For Standalone Stacks, the summary retains membership from a successful full
+Apply, even if the Stack later stops or becomes degraded. Saving an edit does
+not change it. Intentional stops, inactive profiles and proven completed one-shot
+jobs are handled separately from failures.
+
+Existing Standalone Stacks without a retained definition need a successful full Apply to
+establish expected membership. A failed, interrupted, or service-scoped Apply can
+leave mixed membership, so expected coverage remains unknown until a full Apply succeeds.
+
+For Git Compose projects, unresolved Compose definitions, or incomplete Swarm
+membership, expected coverage may be unknown. The summary explains this instead
+of claiming everything is healthy. Swarm observations come from each task's own
+node and exclude superseded tasks.
+
+Health updates automatically. **Health Filter** can match several categories in
+a mixed Stack. Hiding **Health** in **Columns** pauses its filter without clearing
+your selection. Large detail lists show up to 200 containers, prioritizing
+failures; summary counts include all current members.
+
+
 ## Choose the source
 
 | Source | Use it when |

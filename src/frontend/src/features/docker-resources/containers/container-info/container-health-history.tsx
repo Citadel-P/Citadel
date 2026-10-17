@@ -10,11 +10,13 @@ export function ContainerHealthHistory({
   now,
   isConnected = true,
   isLoading = false,
+  disabledReason,
 }: {
   entries: ContainerHealthTransitionView[];
   now: number;
   isConnected?: boolean;
   isLoading?: boolean;
+  disabledReason?: string;
 }) {
   const captionId = useId();
   const titleId = useId();
@@ -24,6 +26,34 @@ export function ContainerHealthHistory({
     .filter((entry) => entry.observedAt >= bounds.from && entry.observedAt <= bounds.to)
     .sort((a, b) => b.observedAt - a.observedAt);
   const count = records.reduce((sum, entry) => sum + (entry.sampleCount ?? 1), 0);
+
+  if (disabledReason) {
+    return (
+      <figure
+        aria-labelledby={titleId}
+        aria-describedby={captionId}
+        aria-disabled="true"
+        className="overflow-hidden rounded-lg border bg-muted/20 text-muted-foreground">
+        <div className="border-b px-4 py-3">
+          <h2 id={titleId} className="text-sm font-semibold">
+            Health history
+          </h2>
+        </div>
+        <figcaption id={captionId} className="relative flex min-h-44 items-center justify-center px-4 py-8">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-6 inset-y-8 flex flex-col justify-between opacity-40">
+            {[0, 1, 2].map((line) => (
+              <div key={line} className="border-t border-dashed border-muted-foreground/30" />
+            ))}
+          </div>
+          <span className="relative rounded-md border bg-background px-4 py-3 text-center text-sm">
+            {disabledReason}
+          </span>
+        </figcaption>
+      </figure>
+    );
+  }
 
   return (
     <figure

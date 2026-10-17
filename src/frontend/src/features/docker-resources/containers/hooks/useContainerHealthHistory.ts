@@ -6,7 +6,7 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import type { RealtimeConnection } from '@/lib/realtime-connection';
 
-export function useContainerHealthHistory(resourceId: string) {
+export function useContainerHealthHistory(resourceId: string, enabled = true) {
   const queryClient = useQueryClient();
   // The group supplies the initial snapshot and resynchronizes after reconnect.
   // Keep the standard query cache, but never start an HTTP read or polling timer.
@@ -43,7 +43,7 @@ export function useContainerHealthHistory(resourceId: string) {
     groupName: `container-health:${resourceId}`,
     setupEventListeners,
     removeEventListeners,
-    skip: !resourceId,
+    skip: !resourceId || !enabled,
   });
   return { entries: query.data?.data, isConnected, isLoading: !query.data && (isLoading || isConnected) };
 }

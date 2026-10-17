@@ -8,13 +8,13 @@ import {
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
-import { ColumnDef } from '@tanstack/react-table';
+import { CellContext, ColumnDef } from '@tanstack/react-table';
 import { Clock, Server, Info } from 'lucide-react';
 import { DetailFacts, DetailSection } from '@/components/custom/resource-detail';
 import Loader from '@/components/ui/loader';
 import { Link, useLocation } from 'react-router';
 import { useLocalStorage, useRead } from '@/lib/hooks';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerDetailsView } from '../hooks/useContainerInfoGroup';
 import { ContainerOverviewHealth } from './container-overview-health';
@@ -29,6 +29,7 @@ import {
 } from '@/components/custom/common';
 
 type ContainerInfoRow = ContainerSummaryView & {
+  health?: ReactNode;
   containerStat: Partial<ContainerStatView>;
   state: ContainerStateStatus;
   id: string;
@@ -75,7 +76,10 @@ const StatusCell = ({
   );
 };
 
-const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>[] => {
+// A module-level cell preserves popover/dialog state when realtime data changes.
+const ContainerHealthCell = ({ row }: CellContext<ContainerInfoRow, unknown>) => row.original.health;
+
+const getColumns = (displayOptions: DisplayOptions, showHealth: boolean): ColumnDef<ContainerInfoRow>[] => {
   const cols: ColumnDef<ContainerInfoRow>[] = [];
 
   if (displayOptions.DisplayContainerName) {
@@ -126,6 +130,7 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
       header: () => <span>Ports</span>,
       cell: ({ row }) => <PortsDisplay ports={row.original.ports ?? {}} compact maxVisible={1} />,
     },
+    ...(showHealth ? [{ id: 'health', header: 'Health', cell: ContainerHealthCell, enableSorting: false }] : []),
     {
       accessorKey: 'cpu',
       header: () => <span>Cpu</span>,
@@ -296,7 +301,9 @@ export const DeploymentContainerInfoTable = ({
   deploymentId,
   container,
   displayOptions,
+  health,
 }: {
+  health?: ReactNode;
   deploymentId: string;
   summary?: ContainerSummaryView;
   container?: ContainerRuntimeView | undefined;
@@ -310,6 +317,7 @@ export const DeploymentContainerInfoTable = ({
       containerInfo={containerInfo}
       container={container}
       displayOptions={displayOptions}
+      health={health}
       isLoading={isLoading}
     />
   );
@@ -319,19 +327,23 @@ const ContainerInfoTableRenderer = ({
   containerInfo,
   container,
   displayOptions,
+  health,
   isLoading,
 }: {
+  health?: ReactNode;
   containerInfo?: ContainerSummaryView | undefined;
   container?: ContainerRuntimeView | undefined;
   displayOptions: DisplayOptions;
   isLoading?: boolean;
 }) => {
-  const columns = useMemo(() => getColumns(displayOptions), [displayOptions]);
+  const showHealth = Boolean(health);
+  const columns = useMemo(() => getColumns(displayOptions, showHealth), [displayOptions, showHealth]);
 
   const tableData: ContainerInfoRow[] = containerInfo
     ? [
         {
           ...containerInfo,
+          health,
           name: container?.name ?? containerInfo.name,
           id: containerInfo.containerId,
           containerStat: container?.containerStat ?? {},

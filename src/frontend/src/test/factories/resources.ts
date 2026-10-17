@@ -1,3 +1,4 @@
+import { WorkloadHealthStatus, type WorkloadHealth } from '@/api/generated/api.types';
 import {
   ResourceCapabilitiesView,
   PlatformView,
@@ -17,7 +18,25 @@ import {
   StackView,
 } from '@/api/generated/api.types';
 
-export const createResourceCapabilities = (overrides: Partial<ResourceCapabilitiesView> = {}): ResourceCapabilitiesView => ({
+export const createWorkloadHealth = (overrides: Partial<WorkloadHealth> = {}): WorkloadHealth => ({
+  status: WorkloadHealthStatus.Unknown,
+  counts: { healthy: 0, unhealthy: 0, starting: 0, noCheck: 0, disabled: 0, notRunning: 0, unknown: 0, completed: 0 },
+  expected: null,
+  missing: null,
+  observed: 0,
+  membersTruncated: false,
+  coverageComplete: false,
+  observedAt: null,
+  evaluatedAt: Date.now(),
+  reason: 'Health has not been observed.',
+  attention: [],
+  members: [],
+  ...overrides,
+});
+
+export const createResourceCapabilities = (
+  overrides: Partial<ResourceCapabilitiesView> = {},
+): ResourceCapabilitiesView => ({
   canRead: true,
   canWrite: true,
   canExecute: true,
@@ -25,6 +44,7 @@ export const createResourceCapabilities = (overrides: Partial<ResourceCapabiliti
 });
 
 export const createStack = (overrides: Partial<StackView> = {}): StackView => ({
+  probeHealth: createWorkloadHealth(),
   capabilities: null,
   hasCopiedStorage: false,
   id: '00000000-0000-0000-0000-000000000001',
@@ -112,6 +132,7 @@ export const createPlatform = (overrides: Partial<PlatformView> = {}): PlatformV
 export const createManagedSwarmService = (
   overrides: Partial<ManagedSwarmServiceView> = {},
 ): ManagedSwarmServiceView => ({
+  probeHealth: createWorkloadHealth(),
   capabilities: null,
   id: 'service-1',
   platformId: 'platform-1',

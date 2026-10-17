@@ -70,6 +70,8 @@ impl TryFrom<citadel_swarm_services::SwarmServiceOperation> for SwarmServiceOper
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ManagedSwarmServiceView {
+    #[schema(value_type = crate::api::resources::platforms::workload_health_views::WorkloadHealth)]
+    pub probe_health: citadel_primitives::health::WorkloadHealth,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<crate::api::resources::resource_copies::ResourceCopyEligibility>)]
     pub copy_eligibility: Option<citadel_resource_copies::CopyEligibility>,
@@ -130,6 +132,7 @@ impl TryFrom<AuthorizedResource<citadel_swarm_services::SwarmService>> for Manag
         let permission = value.effective_permission;
         let value = value.resource;
         Ok(Self {
+            probe_health: value.probe_health,
             copy_eligibility: None,
             backup_coverage: None,
             id: value.id,

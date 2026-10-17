@@ -1,5 +1,6 @@
 import { ContainerHealthStatus as Status, type ContainerView } from '@/api/generated/api.types';
 import { currentHealth } from './health';
+import type { HealthContainer } from '@/components/custom/health-status';
 
 export type ContainerGroupHealthStatus = Status | 'Partial';
 export type ContainerGroupHealth = {
@@ -9,10 +10,15 @@ export type ContainerGroupHealth = {
 };
 export type ContainerHealthItem = ContainerView & { stackHealth?: ContainerGroupHealth };
 
-export function groupHealth(containers: ContainerView[], now: number): ContainerGroupHealth {
+export function groupHealth(
+  containers: HealthContainer[],
+  now: number,
+  expected = containers.length,
+): ContainerGroupHealth {
   const counts = Object.fromEntries(Object.values(Status).map((status) => [status, 0])) as Record<Status, number>;
   for (const container of containers) counts[currentHealth(container, now)]++;
-  const total = containers.length;
+  counts.Unknown += Math.max(0, expected - containers.length);
+  const total = Math.max(containers.length, expected);
   let status: ContainerGroupHealthStatus;
   if (counts.Unhealthy) status = Status.Unhealthy;
   else if (counts.Starting) status = Status.Starting;

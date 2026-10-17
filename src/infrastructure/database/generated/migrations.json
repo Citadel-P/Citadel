@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 6,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "bd28c75d231c26f6680665a2313c6037d923b3ac8a07b47b395f9e54dcd8995e"
+    "sha256": "d6bd3cad266ff65b3624847c35741b26bcb7bada68ab30862332eb6fd78ec266"
   },
   "migrations": [
     {
@@ -26,6 +26,30 @@
       "name": "container_health_samples",
       "file": "0003_container_health_samples.sql",
       "sha256": "93f9e4457e65656a4aef8ece96bce2bff43f94a85a04d87fda7caae801a13d04",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0004",
+      "name": "workload_health_identity",
+      "file": "0004_workload_health_identity.sql",
+      "sha256": "9c335202ec2dac0a10079ad30604c984ffd8b1e88650679d6159ac3b26f92165",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0005",
+      "name": "workload_health_evidence",
+      "file": "0005_workload_health_evidence.sql",
+      "sha256": "0807a51a90c07de195e68e7e82d434eeebf63a15f15dab5b5daa1718ac8cbe51",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0006",
+      "name": "container_health_sampling_eligibility",
+      "file": "0006_container_health_sampling_eligibility.sql",
+      "sha256": "8f1bcee83a223a02ac38441fbb888ded482365c26766d1e675f519eed70aeeb3",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

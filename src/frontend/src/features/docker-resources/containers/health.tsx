@@ -1,58 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { Activity } from 'lucide-react';
-import {
-  ContainerHealthStatus as Status,
-  type ContainerHealthView,
-  type ContainerView,
-} from '@/api/generated/api.types';
+import { ContainerHealthStatus as Status, type ContainerView } from '@/api/generated/api.types';
 import { ResourceFilterChip, ResourceFilterDropdown } from '@/components/custom/resource-filter';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
-import { StateBadge } from '@/components/custom/state-badge';
 import { cn } from '@/lib/utils';
 
-export const healthLabels: Record<Status, string> = {
-  Healthy: 'Healthy',
-  Unhealthy: 'Unhealthy',
-  Starting: 'Starting',
-  NoCheck: 'No check',
-  Disabled: 'Disabled',
-  NotRunning: 'Not running',
-  Unknown: 'Unknown',
-};
-type HealthContainer = { health?: ContainerHealthView | null; state?: string; projectionStaleSince?: number | null };
-export function currentHealth(container: HealthContainer, now = Date.now()): Status {
-  if (container.projectionStaleSince || container.state === 'Offline') return Status.Unknown;
-  if (['Created', 'Exited', 'Dead', 'Paused', 'Restarting', 'Removing'].includes(container.state ?? ''))
-    return Status.NotRunning;
-  const health = container.health;
-  if (!health?.observedAt || now - health.observedAt > 180_000 || now < health.observedAt) return Status.Unknown;
-  return health.status;
-}
-export function useHealthClock() {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
-export function healthTone(status: Status) {
-  return status === Status.Healthy
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : status === Status.Unhealthy
-      ? 'text-destructive'
-      : status === Status.Starting
-        ? 'text-amber-700 dark:text-amber-400'
-        : 'text-muted-foreground';
-}
-export function HealthLabel({ status }: { status: Status }) {
-  return (
-    <StateBadge value={status} kind="health" label={healthLabels[status]} indicator={<Activity aria-hidden="true" />} />
-  );
-}
-export const healthTime = (value?: string | number | null) =>
-  value ? new Date(value).toLocaleString() : 'Not observed';
+export {
+  currentHealth,
+  HealthLabel,
+  healthLabels,
+  healthTone,
+  healthTime,
+  useHealthClock,
+} from '@/components/custom/health-status';
+import {
+  currentHealth,
+  healthLabels,
+  healthTone,
+  healthTime,
+  useHealthClock,
+  type HealthContainer,
+  inactiveHealthCheckMessage,
+} from '@/components/custom/health-status';
 export function ContainerHealthSummary({
   container,
   layout = 'compact',
@@ -61,6 +31,8 @@ export function ContainerHealthSummary({
   layout?: 'compact' | 'metrics';
 }) {
   const status = currentHealth(container, useHealthClock());
+  const inactiveMessage = inactiveHealthCheckMessage(status);
+  if (inactiveMessage) return <p className="text-sm text-muted-foreground">{inactiveMessage}</p>;
   return (
     <div className="space-y-3 text-sm">
       <p className="text-muted-foreground">

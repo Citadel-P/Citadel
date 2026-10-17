@@ -3,4 +3,7 @@ const MIGRATIONS: &[EmbeddedMigration] = &[
     EmbeddedMigration { id: "0001", name: "initial", file: "0001_initial.sql", sql: include_str!("0001_initial.sql"), transactional: true },
     EmbeddedMigration { id: "0002", name: "container_health", file: "0002_container_health.sql", sql: include_str!("0002_container_health.sql"), transactional: true },
     EmbeddedMigration { id: "0003", name: "container_health_samples", file: "0003_container_health_samples.sql", sql: include_str!("0003_container_health_samples.sql"), transactional: true },
+    EmbeddedMigration { id: "0004", name: "workload_health_identity", file: "0004_workload_health_identity.sql", sql: include_str!("0004_workload_health_identity.sql"), transactional: true },
+    EmbeddedMigration { id: "0005", name: "workload_health_evidence", file: "0005_workload_health_evidence.sql", sql: include_str!("0005_workload_health_evidence.sql"), transactional: true },
+    EmbeddedMigration { id: "0006", name: "container_health_sampling_eligibility", file: "0006_container_health_sampling_eligibility.sql", sql: include_str!("0006_container_health_sampling_eligibility.sql"), transactional: true },
 ];

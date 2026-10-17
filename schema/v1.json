@@ -5106,6 +5106,15 @@
         ],
         "type": "object"
       },
+      "CheckConfiguration": {
+        "enum": [
+          "Enabled",
+          "Disabled",
+          "NoCheck",
+          "Unknown"
+        ],
+        "type": "string"
+      },
       "CheckImageUpdateInput": {
         "properties": {
           "dockerImageId": {
@@ -5469,6 +5478,78 @@
           "controlState",
           "platformStatus",
           "autoUpdateState"
+        ],
+        "type": "object"
+      },
+      "ContainerHealthObservation": {
+        "properties": {
+          "configuration": {
+            "$ref": "#/components/schemas/CheckConfiguration"
+          },
+          "exitCode": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "failingStreak": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastCheckAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "description": "Time of an actual inspection, never a heartbeat or statistics timestamp.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "oomKilled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "restartCount": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HealthStatus"
+              }
+            ]
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "configuration",
+          "observedAt"
         ],
         "type": "object"
       },
@@ -8043,6 +8124,9 @@
           "platformStatus": {
             "$ref": "#/components/schemas/PlatformStatus"
           },
+          "probeHealth": {
+            "$ref": "#/components/schemas/WorkloadHealth"
+          },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
           },
@@ -8057,6 +8141,7 @@
           }
         },
         "required": [
+          "probeHealth",
           "id",
           "name",
           "platformId",
@@ -10102,6 +10187,135 @@
         ],
         "type": "object"
       },
+      "HealthAttention": {
+        "enum": [
+          "Unhealthy",
+          "RuntimeMissing",
+          "UnexpectedExit",
+          "RuntimeUnavailable",
+          "ObservationStale",
+          "OperationFailed",
+          "OwnershipConflict"
+        ],
+        "type": "string"
+      },
+      "HealthCounts": {
+        "properties": {
+          "completed": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "disabled": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "healthy": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "noCheck": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "notRunning": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "starting": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unhealthy": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unknown": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "healthy",
+          "unhealthy",
+          "starting",
+          "noCheck",
+          "disabled",
+          "notRunning",
+          "unknown",
+          "completed"
+        ],
+        "type": "object"
+      },
+      "HealthMember": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "completedJob": {
+            "type": "boolean"
+          },
+          "containerId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerContainerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerHealthObservation"
+              }
+            ]
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus"
+          },
+          "taskId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "platformId",
+          "name",
+          "service",
+          "state",
+          "available"
+        ],
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -10112,6 +10326,18 @@
           "status"
         ],
         "type": "object"
+      },
+      "HealthStatus": {
+        "enum": [
+          "Healthy",
+          "Unhealthy",
+          "Starting",
+          "NoCheck",
+          "Disabled",
+          "NotRunning",
+          "Unknown"
+        ],
+        "type": "string"
       },
       "History_ContainerStatSnapshot": {
         "properties": {
@@ -11779,6 +12005,9 @@
           "platformStatus": {
             "$ref": "#/components/schemas/PlatformStatus"
           },
+          "probeHealth": {
+            "$ref": "#/components/schemas/WorkloadHealth"
+          },
           "rowVersion": {
             "format": "int64",
             "type": "integer"
@@ -11827,6 +12056,7 @@
           }
         },
         "required": [
+          "probeHealth",
           "id",
           "platformId",
           "name",
@@ -22414,6 +22644,9 @@
           "platformType": {
             "$ref": "#/components/schemas/PlatformType"
           },
+          "probeHealth": {
+            "$ref": "#/components/schemas/WorkloadHealth"
+          },
           "resourceBindings": {
             "items": {
               "$ref": "#/components/schemas/ResourceBindingSnapshot"
@@ -22470,6 +22703,7 @@
           }
         },
         "required": [
+          "probeHealth",
           "id",
           "name",
           "description",
@@ -26859,6 +27093,112 @@
           "reason"
         ],
         "type": "object"
+      },
+      "WorkloadHealth": {
+        "properties": {
+          "attention": {
+            "items": {
+              "$ref": "#/components/schemas/HealthAttention"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/HealthCounts"
+          },
+          "coverageComplete": {
+            "type": "boolean"
+          },
+          "evaluatedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "expected": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/HealthMember"
+            },
+            "type": "array"
+          },
+          "membersTruncated": {
+            "type": "boolean"
+          },
+          "missing": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "observed": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "observedAt": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "startingUntil": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkloadHealthStatus"
+          },
+          "unhealthyUntil": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "validUntil": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "counts",
+          "observed",
+          "membersTruncated",
+          "coverageComplete",
+          "evaluatedAt",
+          "reason",
+          "attention",
+          "members"
+        ],
+        "type": "object"
+      },
+      "WorkloadHealthStatus": {
+        "enum": [
+          "Healthy",
+          "Unhealthy",
+          "Starting",
+          "NoCheck",
+          "Disabled",
+          "NotRunning",
+          "Partial",
+          "Unknown"
+        ],
+        "type": "string"
       },
       "WorkloadStatusCounts": {
         "properties": {

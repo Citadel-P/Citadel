@@ -19,8 +19,8 @@ vi.mock('@/hooks/useRealtimeGroup', () => ({
 beforeEach(() => {
   realtime.connected = true;
 });
-function Probe({ id = 'one' }: { id?: string }) {
-  const history = useContainerHealthHistory(id);
+function Probe({ id = 'one', enabled = true }: { id?: string; enabled?: boolean }) {
+  const history = useContainerHealthHistory(id, enabled);
   return <pre data-testid="history">{JSON.stringify(history)}</pre>;
 }
 function subscribe() {
@@ -36,6 +36,15 @@ const snapshot = (resourceId = 'one', status = 'Healthy') => ({
   entries: [
     { observedAt: 1234, state: 'Running', origin: 'Inspection', health: { status, reason: 'Recorded change' } },
   ],
+});
+
+it('skips the realtime history group while disabled and resumes when enabled', () => {
+  const { rerender } = renderCitadel(<Probe enabled={false} />);
+  expect(realtime.options?.skip).toBe(true);
+  rerender(<Probe />);
+  expect(realtime.options?.skip).toBe(false);
+  rerender(<Probe enabled={false} />);
+  expect(realtime.options?.skip).toBe(true);
 });
 
 it('receives initial history, updates and reconnect snapshots without HTTP requests', async () => {

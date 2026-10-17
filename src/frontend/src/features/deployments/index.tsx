@@ -1,3 +1,4 @@
+import { WorkloadHealthFilter, WorkloadHealthColumns, useWorkloadHealthFilter } from '@/features/workload-health/table';
 import { useMemo } from 'react';
 import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { type DeploymentView } from '@/api/generated/api.types';
@@ -24,9 +25,11 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
       <>
         <UpdatesAvailableFilter />
         <BackupStatusFilter />
+        <WorkloadHealthFilter kind="Deployment" />
+        <WorkloadHealthColumns kind="Deployment" />
       </>
     ),
-    activeFilterParams: ['updates', 'backupStatus'],
+    activeFilterParams: ['updates', 'backupStatus', 'health'],
   },
 
   Content: ({ items, actions, isLoading, isFiltered }) => (
@@ -52,7 +55,8 @@ export const DeploymentComponents: RegularResourceComponents<DeploymentView> = {
   useData: function (): ResourceDataHookResult<any> {
     const { deployments, capabilities, isLoading, error, refetch, isFetching } = useDeploymentsGroup();
     const { updatesAvailableOnly } = useUpdatesAvailableFilter();
-    const coveredItems = useBackupStatusFilter(deployments ?? EMPTY_DEPLOYMENTS);
+    const backupItems = useBackupStatusFilter(deployments ?? EMPTY_DEPLOYMENTS);
+    const coveredItems = useWorkloadHealthFilter(backupItems, 'Deployment');
     const items = useMemo(
       () => (updatesAvailableOnly ? coveredItems.filter(hasDeploymentUpdateAvailable) : coveredItems),
       [coveredItems, updatesAvailableOnly],

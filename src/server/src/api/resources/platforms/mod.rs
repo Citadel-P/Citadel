@@ -16,3 +16,5 @@ pub(crate) mod runtime_views;
 pub(crate) mod capabilities;
 
 pub mod edge;
+
+pub mod workload_health_views;

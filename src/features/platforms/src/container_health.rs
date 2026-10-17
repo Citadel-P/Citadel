@@ -1,5 +1,7 @@
 //! Read-only evidence from the owning daemon. No probe commands or output belong here.
-use serde::{Deserialize, Serialize};
+pub use citadel_primitives::health::{
+    CheckConfiguration, ContainerHealthObservation, HealthStatus,
+};
 
 #[derive(Debug, Clone)]
 pub struct ContainerHealthTransition {
@@ -9,67 +11,6 @@ pub struct ContainerHealthTransition {
     pub state: String,
     pub health: Option<ContainerHealthObservation>,
     pub origin: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CheckConfiguration {
-    Enabled,
-    Disabled,
-    NoCheck,
-    Unknown,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HealthStatus {
-    Healthy,
-    Unhealthy,
-    Starting,
-    NoCheck,
-    Disabled,
-    NotRunning,
-    Unknown,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ContainerHealthObservation {
-    pub configuration: CheckConfiguration,
-    pub result: Option<HealthStatus>,
-    /// Time of an actual inspection, never a heartbeat or statistics timestamp.
-    pub observed_at: i64,
-    pub last_check_at: Option<String>,
-    pub failing_streak: Option<i64>,
-    pub exit_code: Option<i64>,
-    pub oom_killed: Option<bool>,
-    pub restart_count: Option<i64>,
-    pub started_at: Option<String>,
-    pub finished_at: Option<String>,
-}
-
-impl ContainerHealthObservation {
-    pub fn status(&self, state: &str, available: bool) -> HealthStatus {
-        if !available {
-            return HealthStatus::Unknown;
-        }
-        match state.to_ascii_lowercase().as_str() {
-            "created" | "exited" | "dead" | "paused" | "restarting" | "removing" => {
-                return HealthStatus::NotRunning;
-            }
-            "running" => {}
-            _ => return HealthStatus::Unknown,
-        }
-        match self.configuration {
-            CheckConfiguration::NoCheck => HealthStatus::NoCheck,
-            CheckConfiguration::Disabled => HealthStatus::Disabled,
-            CheckConfiguration::Unknown => HealthStatus::Unknown,
-            CheckConfiguration::Enabled => match self.result {
-                Some(HealthStatus::Healthy | HealthStatus::Unhealthy | HealthStatus::Starting) => {
-                    self.result.unwrap()
-                }
-                _ => HealthStatus::Unknown,
-            },
-        }
-    }
 }
 
 #[cfg(test)]

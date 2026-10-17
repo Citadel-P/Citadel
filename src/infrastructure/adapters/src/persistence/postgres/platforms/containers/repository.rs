@@ -331,6 +331,19 @@ impl ContainerRepository for PostgresContainerRepository {
                     .await
                     .map_err(storage)?;
             }
+            // Persist requested stop intent with the claim, scoped to exact inventory
+            // identities. A subsequent start/restart request supersedes it.
+            sqlx::query(
+                "UPDATE containers SET healthstoprequestedat=$2 WHERE containeroperationid=$1",
+            )
+            .bind(operation_id)
+            .bind(
+                matches!(action, ContainerAction::Stop)
+                    .then(|| chrono::Utc::now().timestamp_millis()),
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
             let targets = rows.into_iter().map(target).collect();
             sqlx::query("SELECT pg_notify($1, '')")
                 .bind(citadel_runtime::RuntimeSignal::ContainerRecovery.channel())

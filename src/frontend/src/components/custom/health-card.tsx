@@ -9,6 +9,7 @@ type HealthCardProps = {
   title: string;
   resourceName: string;
   triggerLabel: string;
+  triggerVariant?: 'inline' | 'icon';
   triggerClassName?: string;
   trigger: ReactNode;
   status: ReactNode;
@@ -22,6 +23,7 @@ export function HealthCard({
   title,
   resourceName,
   triggerLabel,
+  triggerVariant = 'inline',
   triggerClassName,
   trigger: triggerContent,
   status,
@@ -68,9 +70,11 @@ export function HealthCard({
             ref={trigger}
             type="button"
             variant="ghost"
-            size="sm"
+            size={triggerVariant === 'icon' ? 'icon' : 'sm'}
             className={cn(
-              'h-auto gap-1.5 rounded-sm p-0 hover:bg-transparent dark:hover:bg-transparent',
+              triggerVariant === 'icon'
+                ? 'size-8'
+                : 'h-auto gap-1.5 rounded-sm p-0 hover:bg-transparent dark:hover:bg-transparent',
               triggerClassName,
             )}
             aria-label={triggerLabel}

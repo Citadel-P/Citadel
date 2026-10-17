@@ -1,3 +1,4 @@
+import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
@@ -83,10 +84,13 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       return <DeploymentSubHeader latestActivity={resource.latestActivityView ?? null} deployment={resource} />;
     },
     TabActions: ({ resource }: { resource: DeploymentView }) => (
-      <ResourceBackupIndicator
-        source={{ $type: 'Deployment', deploymentId: resource.id }}
-        coverage={resource.backupCoverage}
-      />
+      <div className="flex items-center gap-3">
+        <WorkloadHealthCard resource={resource} kind="Deployment" triggerVariant="icon" />
+        <ResourceBackupIndicator
+          source={{ $type: 'Deployment', deploymentId: resource.id }}
+          coverage={resource.backupCoverage}
+        />
+      </div>
     ),
     Tabs: [
       {
@@ -369,6 +373,17 @@ const RuntimeView = ({
         <DeploymentContainerInfoTable
           summary={summary}
           deploymentId={deploymentId}
+          health={
+            <WorkloadContainerHealthCard
+              resource={deployment}
+              container={{
+                id: summary.containerId,
+                platformId: summary.platformId,
+                name: summary.name,
+                dockerNodeId: containerInfo?.dockerNodeId ?? null,
+              }}
+            />
+          }
           container={containerInfo}
           displayOptions={{
             DisplayContainerName: true,

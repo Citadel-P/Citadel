@@ -525,6 +525,7 @@ mod tests {
             },
         };
         crate::Stack {
+            probe_health: Default::default(),
             id,
             name: "stack".to_owned(),
             description: None,

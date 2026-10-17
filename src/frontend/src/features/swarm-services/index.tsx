@@ -1,3 +1,4 @@
+import { WorkloadHealthFilter, WorkloadHealthColumns, useWorkloadHealthFilter } from '@/features/workload-health/table';
 import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { type ManagedSwarmServiceView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -19,8 +20,14 @@ export const SwarmServiceComponents: RegularResourceComponents<ManagedSwarmServi
     showAdd: true,
     showTagFilter: true,
     showPlatformFilter: true,
-    Extra: BackupStatusFilter,
-    activeFilterParams: ['backupStatus'],
+    Extra: () => (
+      <>
+        <BackupStatusFilter />
+        <WorkloadHealthFilter kind="SwarmService" />
+        <WorkloadHealthColumns kind="SwarmService" />
+      </>
+    ),
+    activeFilterParams: ['backupStatus', 'health'],
   },
 
   Content: SwarmServicesTable,
@@ -35,7 +42,8 @@ export const SwarmServiceComponents: RegularResourceComponents<ManagedSwarmServi
   ),
   useData: (): ResourceDataHookResult<any> => {
     const { services, capabilities, isLoading, error, refetch, isFetching } = useSwarmServicesGroup();
-    const items = useBackupStatusFilter(services ?? EMPTY);
+    const coveredItems = useBackupStatusFilter(services ?? EMPTY);
+    const items = useWorkloadHealthFilter(coveredItems, 'SwarmService');
     return { error, refetch, isFetching, items, capabilities, isLoading };
   },
   filterItems: (items, search) => {

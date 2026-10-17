@@ -294,6 +294,8 @@ pub struct GroupRows {
 #[derive(Clone)]
 pub enum RowStyle {
     Update,
+    // Upserts only; omitted owners are not deletions.
+    UpdatePatch,
     Daemon,
     DockerResource,
     // Complete state for one Docker ID, not the entire Platform inventory.
@@ -475,6 +477,21 @@ impl GroupSubscription {
                 }
                 continue;
             }
+            if matches!(batch.style, RowStyle::UpdatePatch) {
+                let known = self.known.entry(batch.target).or_default();
+                for row in batch.rows {
+                    if let Some(id) = row["id"].as_str() {
+                        if !known.contains(id) && known.len() >= limit {
+                            return Err(RealtimeReadError::Storage(
+                                "Realtime snapshot limit exceeded".into(),
+                            ));
+                        }
+                        known.insert(id.to_owned());
+                        events.push(ClientEvent::new(batch.target, vec![row, json!("update")]));
+                    }
+                }
+                continue;
+            }
             let ids: BTreeSet<_> = batch
                 .rows
                 .iter()
@@ -511,7 +528,7 @@ impl GroupSubscription {
                         batch.target,
                         vec![Value::Null, json!("destroy"), json!(removed)],
                     )),
-                    RowStyle::Update => events.push(ClientEvent::new(
+                    RowStyle::Update | RowStyle::UpdatePatch => events.push(ClientEvent::new(
                         batch.target,
                         vec![json!({"id":removed}), json!("delete")],
                     )),
@@ -552,7 +569,7 @@ impl GroupSubscription {
                     | RowStyle::PlatformPatch(_) => unreachable!(),
                     // "update" upserts in the existing hooks and avoids duplicate
                     // creates when the initial REST read and group join overlap.
-                    RowStyle::Update => vec![row, json!("update")],
+                    RowStyle::Update | RowStyle::UpdatePatch => vec![row, json!("update")],
                 };
                 events.push(ClientEvent::new(batch.target, args));
             }
@@ -736,6 +753,49 @@ mod tests {
                     .affected_by(&receiver.try_recv().unwrap())
             );
         }
+    }
+
+    #[test]
+    fn owner_patches_preserve_siblings_and_enforce_the_subscription_bound() {
+        let mut subscription = GroupSubscription::new(Group::parse("deployments").unwrap());
+        let snapshot = |rows, style| GroupSnapshot {
+            rows: vec![GroupRows {
+                target: "DeploymentInfoUpdated",
+                rows,
+                style,
+            }],
+            events: vec![],
+        };
+        subscription
+            .apply(
+                snapshot(vec![json!({"id":"a"}), json!({"id":"b"})], RowStyle::Update),
+                2,
+            )
+            .unwrap();
+        let patch = subscription
+            .apply(
+                snapshot(
+                    vec![json!({"id":"a","probeHealth":{"status":"Unhealthy"}})],
+                    RowStyle::UpdatePatch,
+                ),
+                2,
+            )
+            .unwrap();
+        assert_eq!(patch.len(), 1);
+        assert_eq!(patch[0].arguments[1], "update");
+        assert!(
+            subscription
+                .apply(snapshot(vec![json!({"id":"c"})], RowStyle::UpdatePatch), 2)
+                .is_err()
+        );
+        let deleted = subscription
+            .apply(snapshot(vec![], RowStyle::Update), 2)
+            .unwrap();
+        assert_eq!(
+            deleted.len(),
+            2,
+            "a patch must retain its sibling in the full-snapshot deletion set"
+        );
     }
 
     #[test]

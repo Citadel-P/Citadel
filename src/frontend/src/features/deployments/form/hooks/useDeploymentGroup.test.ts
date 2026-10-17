@@ -1,3 +1,4 @@
+import { createWorkloadHealth } from '@/test/factories/resources';
 import { ResourceCopyEligibilityStatus } from '@/api/generated/api.types';
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
@@ -196,6 +197,7 @@ describe('mergeDeploymentInfo', () => {
 
 const createExternalDeployment = (resolvedDigest: string | null): DeploymentView =>
   ({
+    probeHealth: createWorkloadHealth(),
     id: deploymentId,
     name: 'nginx',
     description: null,

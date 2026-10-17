@@ -1,3 +1,6 @@
+import { HealthCard } from '@/components/custom/health-card';
+import { WorkloadContainerHealthCard } from '@/features/workload-health/card';
+import { PlatformStatus } from '@/api/generated/api.types';
 import { screen, waitFor } from '@testing-library/react';
 import { renderCitadel } from '@/test/render-citadel';
 import { ContainerOverview, DeploymentContainerInfoTable } from './container-info-table';
@@ -50,6 +53,12 @@ describe('Container overview visibility', () => {
     renderCitadel(
       <DeploymentContainerInfoTable
         deploymentId="deployment-1"
+        health={
+          <WorkloadContainerHealthCard
+            resource={{ id: 'deployment-1', name: 'app', platformStatus: PlatformStatus.Online }}
+            container={{ id: 'abcdef123456', platformId: 'platform-1', name: 'app', dockerNodeId: null }}
+          />
+        }
         displayOptions={{ DisplayContainerName: true }}
         summary={
           {
@@ -71,6 +80,51 @@ describe('Container overview visibility', () => {
       />,
     );
     expect(screen.getByRole('link', { name: /workload-only/ })).toBeVisible();
+    expect(screen.getByRole('columnheader', { name: 'Health' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Health: Unknown' })).toBeVisible();
+    expect(read.mock.calls.every(([operation]) => operation === 'getDeploymentContainerInfo')).toBe(true);
+  });
+
+  it('keeps health details open while runtime updates replace row props', async () => {
+    const table = (revision: number) => (
+      <DeploymentContainerInfoTable
+        deploymentId="deployment-1"
+        displayOptions={{ DisplayContainerName: true }}
+        summary={{
+          containerId: 'docker-id',
+          name: 'app',
+          platformId: 'platform',
+          platformName: 'Host',
+          state: ContainerStateStatus.Running,
+          startedAt: '',
+          finishedAt: '',
+          networks: {},
+          ports: {},
+          volumes: [],
+          imageView: null,
+          deploymentView: null,
+          capabilities: null,
+        }}
+        health={
+          <HealthCard
+            title="Container health"
+            resourceName="app"
+            triggerLabel="Health: Healthy"
+            trigger={<span>Health</span>}
+            status={<span>Healthy</span>}
+            summary={<span>Current health</span>}
+            renderDetails={() => <span>Observation {revision}</span>}
+          />
+        }
+      />
+    );
+    const view = renderCitadel(table(1));
+    await view.user.hover(screen.getByRole('button', { name: 'Health: Healthy' }));
+    await view.user.click(screen.getByRole('button', { name: 'View details' }));
+    expect(screen.getByRole('dialog', { name: 'Health details' })).toBeVisible();
+    view.rerender(table(2));
+    expect(screen.getByRole('dialog', { name: 'Health details' })).toBeVisible();
+    expect(screen.getByText('Observation 2')).toBeVisible();
   });
 
   it('starts expanded and remembers collapse and expansion across remounts', async () => {

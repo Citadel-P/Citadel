@@ -1,3 +1,4 @@
+import { WorkloadHealthFilter, WorkloadHealthColumns, useWorkloadHealthFilter } from '@/features/workload-health/table';
 import { useMemo } from 'react';
 import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
@@ -24,9 +25,11 @@ export const StackComponents: RegularResourceComponents<StackView> = {
       <>
         <UpdatesAvailableFilter />
         <BackupStatusFilter />
+        <WorkloadHealthFilter kind="Stack" />
+        <WorkloadHealthColumns kind="Stack" />
       </>
     ),
-    activeFilterParams: ['updates', 'backupStatus'],
+    activeFilterParams: ['updates', 'backupStatus', 'health'],
   },
 
   Content: ({ items, actions, isLoading, isFiltered }) => (
@@ -52,7 +55,8 @@ export const StackComponents: RegularResourceComponents<StackView> = {
   useData: function (): ResourceDataHookResult<any> {
     const { stacks, capabilities, isLoading, error, refetch, isFetching } = useStacksGroup();
     const { updatesAvailableOnly } = useUpdatesAvailableFilter();
-    const coveredItems = useBackupStatusFilter(stacks ?? EMPTY_STACKS);
+    const backupItems = useBackupStatusFilter(stacks ?? EMPTY_STACKS);
+    const coveredItems = useWorkloadHealthFilter(backupItems, 'Stack');
     const items = useMemo(
       () => (updatesAvailableOnly ? coveredItems.filter(hasStackUpdateAvailable) : coveredItems),
       [coveredItems, updatesAvailableOnly],

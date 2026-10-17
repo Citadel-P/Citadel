@@ -42,23 +42,12 @@ impl ContainerHealthView {
         state: &str,
         available: bool,
     ) -> Self {
-        let available = available
-            && value.is_none_or(|v| {
-                let age = chrono::Utc::now()
-                    .timestamp_millis()
-                    .saturating_sub(v.observed_at);
-                (0..=180_000).contains(&age)
-            });
-        let status = if !available {
-            HealthStatus::Unknown
-        } else if matches!(
-            state.to_ascii_lowercase().as_str(),
-            "created" | "exited" | "dead" | "paused" | "restarting" | "removing"
-        ) {
-            HealthStatus::NotRunning
-        } else {
-            value.map_or(HealthStatus::Unknown, |v| v.status(state, available))
-        };
+        let status = citadel_primitives::health::observed_status(
+            value,
+            state,
+            available,
+            chrono::Utc::now().timestamp_millis(),
+        );
         let reason = match status {
             HealthStatus::Healthy => "Docker reports a passing health check.",
             HealthStatus::Unhealthy => {

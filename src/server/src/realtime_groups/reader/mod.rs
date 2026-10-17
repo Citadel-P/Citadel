@@ -66,6 +66,60 @@ fn rows<T: Serialize>(
         events: vec![],
     })
 }
+// Health/state observations carry exact committed Docker identities. Keep list delivery
+// scoped to their owners without treating omitted owners as deleted. Runtime
+// reconciliation refreshes owners on that Platform; parent CRUD retains full snapshots.
+fn workload_rows<T: Serialize>(
+    target: &'static str,
+    values: Vec<T>,
+    event: Option<&PublishedRuntimeEvent>,
+) -> Result<GroupSnapshot, RealtimeReadError> {
+    let mut snapshot = rows(target, values, RowStyle::Update)?;
+    let Some(change) = event else {
+        return Ok(snapshot);
+    };
+    if change.resource_type != "Platform" {
+        return Ok(snapshot);
+    }
+    let Some(platform) = change.platform_id.map(|id| id.to_string()) else {
+        return Ok(snapshot);
+    };
+    let batch = &mut snapshot.rows[0];
+    batch
+        .rows
+        .retain(|row| row["platformId"].as_str() == Some(platform.as_str()));
+    batch.style = RowStyle::UpdatePatch;
+    let action = change.payload["action"].as_str().unwrap_or("");
+    if !action.starts_with("health")
+        && !matches!(
+            action,
+            "oom" | "start" | "stop" | "die" | "kill" | "pause" | "unpause"
+        )
+    {
+        return Ok(snapshot);
+    }
+    let Some(references) = change.container_ids() else {
+        return Ok(snapshot);
+    };
+    let batch = &mut snapshot.rows[0];
+    // Bounded payloads may omit the changed member; refresh those owners conservatively.
+    batch.rows.retain(|row| {
+        row["platformId"].as_str() == Some(platform.as_str())
+            && (row["probeHealth"]["membersTruncated"] == true
+                || row["probeHealth"]["members"]
+                    .as_array()
+                    .is_some_and(|members| {
+                        members.iter().any(|member| {
+                            member["dockerContainerId"].as_str().is_some_and(|id| {
+                                references.iter().any(|reference| reference == id)
+                            })
+                        })
+                    }))
+    });
+    batch.style = RowStyle::UpdatePatch;
+    Ok(snapshot)
+}
+
 fn event(target: &'static str, value: impl Serialize) -> Result<GroupSnapshot, RealtimeReadError> {
     Ok(GroupSnapshot {
         rows: vec![],
@@ -741,7 +795,7 @@ impl ApplicationGroupReader {
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
                 if let Some(service) = &self.backup_coverage { views = service.enrich_deployments(p, views).await; }
-                rows("DeploymentInfoUpdated", views, RowStyle::Update)
+                workload_rows("DeploymentInfoUpdated", views, e)
             },
             Topic::Deployment(..) => {
                 let mut view = crate::api::resources::deployments::views::DeploymentView::try_from(self.deployments.get_authorized(actor, admin, id.unwrap()).await.map_err(failure)?).map_err(failure)?;
@@ -755,7 +809,7 @@ impl ApplicationGroupReader {
                         service, actor, citadel_resource_copies::CopyKind::Deployment, id.unwrap(),
                     ).await);
                 }
-                rows("DeploymentInfoUpdated", vec![view], RowStyle::Update)
+                workload_rows("DeploymentInfoUpdated", vec![view], e)
             },
             Topic::Stacks => {
                 let mut views = self.stacks
@@ -767,7 +821,7 @@ impl ApplicationGroupReader {
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
                 if let Some(service) = &self.backup_coverage { views = service.enrich_stacks(p, views).await; }
-                rows("StackInfoUpdated", views, RowStyle::Update)
+                workload_rows("StackInfoUpdated", views, e)
             },
             Topic::Stack(..) => {
                 let mut view = crate::api::resources::stacks::views::StackView::try_from(self.stacks.get_authorized(actor, admin, id.unwrap()).await.map_err(failure)?).map_err(failure)?;
@@ -780,7 +834,7 @@ impl ApplicationGroupReader {
                         service, actor, citadel_resource_copies::CopyKind::Stack, id.unwrap(),
                     ).await);
                 }
-                rows("StackInfoUpdated", vec![view], RowStyle::Update)
+                workload_rows("StackInfoUpdated", vec![view], e)
             },
             Topic::StackInfo(..) => {
                 let stack = self
@@ -823,7 +877,7 @@ impl ApplicationGroupReader {
                         service, actor, citadel_resource_copies::CopyKind::SwarmService, id.unwrap(),
                     ).await);
                 }
-                rows("SwarmServiceInfoUpdated", vec![view], RowStyle::Update)
+                workload_rows("SwarmServiceInfoUpdated", vec![view], e)
             },
             Topic::SwarmServices(..) => {
                 let mut views = self.services
@@ -843,7 +897,7 @@ impl ApplicationGroupReader {
                     )
                     .collect::<Result<Vec<_>, _>>().map_err(failure)?;
                 if let Some(service) = &self.backup_coverage { views = service.enrich_services(p, views).await; }
-                rows("SwarmServiceInfoUpdated", views, RowStyle::Update)
+                workload_rows("SwarmServiceInfoUpdated", views, e)
             },
             Topic::GitRepositories => rows(
                 "GitRepositoryInfoUpdated",

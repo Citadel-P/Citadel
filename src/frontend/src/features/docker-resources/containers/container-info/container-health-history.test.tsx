@@ -26,6 +26,23 @@ const transition = (timestamp: number, status: Status): ContainerHealthTransitio
   origin: 'Inspection',
 });
 
+it('shows a disabled chart without stale cached points or reconnect messages', () => {
+  render(
+    <ContainerHealthHistory
+      entries={[transition(now, Status.Healthy)]}
+      now={now}
+      isConnected={false}
+      isLoading
+      disabledReason="No health check configured for this container."
+    />,
+  );
+  expect(screen.getByRole('figure', { name: 'Health history' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByText('No health check configured for this container.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: /^Healthy at/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Reconnecting|Loading|Connection interrupted/)).not.toBeInTheDocument();
+});
+
 it('shows brief changes separately with exact timestamps and no duplicate list', () => {
   const entries = [transition(now - 1000, Status.Unhealthy), transition(now, Status.Healthy)];
   render(<ContainerHealthHistory entries={entries} now={now} />);

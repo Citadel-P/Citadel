@@ -244,8 +244,9 @@ impl StackRepository for PostgresStackRepository {
         actor: ActorId,
         administrator: bool,
         ids: &'a [Uuid],
+        action: citadel_stacks::StackAction,
     ) -> BoxFuture<'a, Result<Vec<StackStateClaim>, StackError>> {
-        self.claim_state_impl(actor, administrator, ids)
+        self.claim_state_impl(actor, administrator, ids, action)
     }
 
     fn complete_state<'a>(

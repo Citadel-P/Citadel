@@ -9,6 +9,25 @@ Docker Swarm. Use **Swarm Services** for independently managed Services; use a
 application. Connect a [Swarm Platform](/docs/resources/platforms/docker-swarm)
 before creating a Service.
 
+## Health
+
+The **Health** icon in the table and beside **Backup** shows the current tasks'
+container health. Hover or select it for counts, missing replicas and coverage;
+**View details** opens a container's existing history and diagnostics. History
+requires Platform access, and probe details retain the Inspect permission.
+
+Only current tasks contribute, using observations from each task's exact node.
+Historical failed tasks do not keep a recovered Service unhealthy. Missing or
+stale observations cannot produce **Healthy**. Intentionally scaling a replicated
+Service to zero shows **Not running**; a global Service with no observed capacity
+has unknown coverage. Pending edits do not change the applied replica baseline.
+
+Updates arrive automatically. **Health Filter** can match multiple categories in
+a mixed Service. Hiding **Health** in **Columns** also hides and pauses its filter.
+Large detail lists show up to 200 containers, with failures first; counts still
+cover all current tasks. Health does not change Apply completion or rollout rules.
+
+
 ## Manage A Swarm Service
 
 Open Citadel's **Swarm Services** page, create a Service, and choose a Docker

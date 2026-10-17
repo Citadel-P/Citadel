@@ -52,6 +52,7 @@ fn runtime_output_is_redacted_before_progress_and_failure_persistence() {
 fn stack(status: StackReleaseStatus, policy: StackDriftPolicy) -> crate::Stack {
     let id = Uuid::now_v7();
     crate::Stack {
+        probe_health: Default::default(),
         id,
         name: "demo".to_owned(),
         description: None,
