@@ -27,16 +27,22 @@ pub(super) const PROJECTION: &str = r#"
 SELECT s.*,
        COALESCE((SELECT jsonb_agg(jsonb_build_object(
  'containerId', c.id, 'dockerContainerId', t.dockercontainerid, 'platformId', t.platformid,
- 'taskId', t.dockertaskid, 'nodeId', t.dockernodeid, 'name', t.name, 'service', t.dockerserviceid,
+ 'taskId', t.dockertaskid, 'nodeId', t.dockernodeid, 'name', COALESCE(NULLIF(t.name,''),c.name,t.dockertaskid), 'service', t.dockerserviceid,
  'state', COALESCE(c.state, initcap(t.state)), 'observation', c.health,
  'available', (NOT t.isstale AND c.id IS NOT NULL AND c.projectionstalesince IS NULL
- AND EXISTS(SELECT 1 FROM swarmnoderuntimeprojectionstates ns WHERE ns.platformid=t.platformid AND ns.dockernodeid=t.dockernodeid AND NOT ns.isstale))
+ AND (CASE WHEN c.dockernodeid IS NULL THEN p.status='Online'
+ ELSE EXISTS(SELECT 1 FROM swarmnoderuntimeprojectionstates ns WHERE ns.platformid=t.platformid AND ns.dockernodeid=t.dockernodeid AND NOT ns.isstale) END))
  ) ORDER BY t.dockerserviceid,t.slot,t.dockertaskid)
  FROM (SELECT DISTINCT ON (task.dockerserviceid, COALESCE(task.slot::text,task.dockernodeid)) task.*
  FROM swarmtaskprojections task WHERE task.platformid=s.platformid AND task.dockerserviceid=s.dockerserviceid AND lower(task.desiredstate)='running'
  AND EXISTS(SELECT 1 FROM swarmserviceprojections owned WHERE owned.platformid=task.platformid AND owned.dockerserviceid=task.dockerserviceid AND owned.swarmserviceid=s.id AND owned.ownership<>'OwnershipConflict')
  ORDER BY task.dockerserviceid,COALESCE(task.slot::text,task.dockernodeid),task.dockercreatedat DESC NULLS LAST,task.versionindex DESC,task.dockertaskid DESC) t
- LEFT JOIN containers c ON c.platformid=t.platformid AND c.dockernodeid=t.dockernodeid AND c.dockercontainerid=t.dockercontainerid), '[]'::jsonb) health_members,
+ -- The connected manager uses the platform daemon scope; workers use explicit node scopes.
+ -- Resolve only the pinned manager identity, never an arbitrary NULL-node container.
+ LEFT JOIN containers c ON c.platformid=t.platformid AND NULLIF(t.dockernodeid,'') IS NOT NULL
+ AND c.dockernodeid IS NOT DISTINCT FROM (CASE
+ WHEN t.dockernodeid=NULLIF(COALESCE(p.platformdescriptor->>'nodeID',p.platformdescriptor->>'NodeID'),'') THEN NULL
+ ELSE t.dockernodeid END) AND c.dockercontainerid=t.dockercontainerid), '[]'::jsonb) health_members,
        projection.ownership projection_ownership, projection.mode health_mode, COALESCE(projection.isstale,TRUE) health_stale,
        p.name platform_name, p.status platform_status,
        projection.runningtaskcount, projection.desiredtaskcount,

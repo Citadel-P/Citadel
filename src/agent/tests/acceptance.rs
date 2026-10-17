@@ -4,6 +4,8 @@ use serde_json::{Value, json};
 use std::{process::Command, time::Duration};
 use uuid::Uuid;
 
+#[path = "acceptance/health.rs"]
+mod health;
 #[path = "acceptance/swarm.rs"]
 mod swarm;
 
@@ -599,6 +601,7 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
     assert!(!platform["agentVersion"].as_str().unwrap().is_empty());
     f.route(&direct_id).await;
     let direct_stack = f.workload(&direct_id, "direct").await;
+    health::exercise(f, &direct_id, "direct-daemon", "direct").await;
     docker(&["stop", "-t", "12", &f.container("direct")]).await;
     f.wait(&format!("/api/v1/platforms/{direct_id}"), |v| {
         v["status"] == "Offline"
@@ -669,6 +672,7 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
     .await;
     f.route(&edge_id).await;
     let edge_stack = f.workload(&edge_id, "edge").await;
+    health::exercise(f, &edge_id, "edge-daemon", "edge").await;
     docker(&["stop", "-t", "12", &f.container("edge")]).await;
     f.wait(&status_path, |v| v["connectionStatus"] == "Offline")
         .await;

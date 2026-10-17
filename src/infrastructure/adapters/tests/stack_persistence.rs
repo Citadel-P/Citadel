@@ -1317,3 +1317,70 @@ async fn stack_health_uses_applied_definition_not_pending_edits_and_detects_miss
             .is_err()
     );
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
+async fn stack_health_resolves_only_the_pinned_manager_daemon_scope() {
+    use citadel_primitives::health::WorkloadHealthStatus as Health;
+    let pool = workload_health_fixture::pool().await;
+    let platform = workload_health_fixture::platform(&pool, true).await;
+    let store = PostgresStackRepository::new(pool.clone());
+    let actor = ActorId::new(SYSTEM_ACTOR_ID);
+    let stack = store
+        .create(
+            actor,
+            true,
+            &CreateStack {
+                name: format!("manager-health-{}", Uuid::now_v7()),
+                platform_id: platform,
+                description: None,
+                stack_source: StackSource::WebEditor,
+                spec: spec("nginx:alpine", None),
+                drift_policy: None,
+                tag_ids: vec![],
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query("UPDATE stackreleases SET status='Healthy' WHERE id=(SELECT currentstackreleaseid FROM stacks WHERE id=$1)")
+        .bind(stack.id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmserviceprojections(platformid,dockerserviceid,configids,desiredtaskcount,image,labels,mode,name,networkids,observedat,ports,runningtaskcount,secretids,stackid,updatestate,versionindex) VALUES($1,'service','[]',1,'nginx','{\"com.citadel.stack-service-count\":\"1\",\"com.citadel.release-id\":\"release\"}','replicated','web','[]',now(),'[]',1,'[]',$2,'',1)")
+        .bind(platform).bind(stack.id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex,dockercreatedat) VALUES($1,'current','running','same-id','manager','service','nginx','','manager',now(),'[]','web',1,'running',2,now())")
+        .bind(platform).execute(&pool).await.unwrap();
+    let container = workload_health_fixture::container(
+        &pool, platform, "same-id", None, None, None, None, "Healthy",
+    )
+    .await;
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
+    sqlx::query("UPDATE platforms SET platformdescriptor=(platformdescriptor::jsonb || '{\"nodeID\":\"manager\"}'::jsonb)::json WHERE id=$1")
+        .bind(platform).execute(&pool).await.unwrap();
+    let read = store.get_authorized(actor, true, stack.id).await.unwrap();
+    assert_eq!(read.probe_health.status, Health::Healthy);
+    assert_eq!(read.probe_health.members[0].container_id, Some(container));
+    assert_eq!(read.probe_health.members[0].name, "same-id");
+    assert_eq!(
+        read.probe_health.members[0].node_id.as_deref(),
+        Some("manager")
+    );
+    sqlx::query("UPDATE platforms SET platformdescriptor=(platformdescriptor::jsonb || '{\"nodeID\":\"other-manager\"}'::jsonb)::json WHERE id=$1")
+        .bind(platform).execute(&pool).await.unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
+}

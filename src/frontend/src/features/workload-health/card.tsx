@@ -247,7 +247,9 @@ function MemberDetails({ member, unavailable }: { member: HealthMember; unavaila
     !containerInfo ||
     containerInfo.id !== member.dockerContainerId ||
     containerInfo.platformId !== member.platformId ||
-    (containerInfo.dockerNodeId ?? null) !== (member.nodeId ?? null)
+    // Persisted UUID identifies the exact runtime scope, including the manager's
+    // platform-scoped containers whose Docker node ID is intentionally absent.
+    containerInfo.resourceId !== member.containerId
   )
     return (
       <p className="text-sm text-muted-foreground">

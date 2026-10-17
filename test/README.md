@@ -21,6 +21,12 @@ and revocation. It also exercises Core's three-node Swarm installer and worker
 routing through Direct and Edge managers, including outage recovery, repair,
 upgrade and removal. It needs Rust, creates its own database and Docker daemons,
 and removes only its own containers, volumes and network.
+With current Core and Agent images, it also checks real health transitions and
+unchecked members over Direct/Edge, retained history, intentional stops, and
+three-node Swarm health coverage (including the connected manager) during worker
+loss and recovery. Observing
+Standalone health must not restart the container. Cross-version baseline runs
+retain their existing transport checks without requiring the newer health contract.
 The Swarm image-transfer regression also checks digest-pinned inputs in a clean
 Docker daemon, verifying that save/load preserves the selected image identity.
 Run it independently with:

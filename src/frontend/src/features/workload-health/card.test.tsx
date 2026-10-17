@@ -11,7 +11,13 @@ import {
 } from '@/api/generated/api.types';
 import { createWorkloadHealth } from '@/test/factories/resources';
 import { WorkloadHealthCard, WorkloadHealthMembers } from './card';
-const containerRead = vi.fn(() => ({ isLoading: false, containerInfo: undefined, error: undefined }));
+const containerRead = vi.fn<
+  (...args: unknown[]) => {
+    isLoading: boolean;
+    containerInfo?: { id: string; resourceId: string; platformId: string; dockerNodeId?: string };
+    error?: unknown;
+  }
+>(() => ({ isLoading: false }));
 vi.mock('@/features/docker-resources/containers/hooks/useContainerInfoGroup', () => ({
   useContainerInfoGroup: (...args: unknown[]) => containerRead(...(args as [])),
 }));
@@ -35,7 +41,36 @@ const resource = {
   }),
 };
 describe('shared workload card', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    containerRead.mockReturnValue({ isLoading: false });
+  });
+
+  it('opens manager diagnostics by persisted identity and rejects a different container scope', () => {
+    const member: HealthMember = {
+      containerId: 'manager-resource',
+      dockerContainerId: 'docker-id',
+      platformId: 'platform',
+      nodeId: 'manager-node',
+      taskId: 'task',
+      name: 'web.1',
+      service: 'web',
+      state: 'Running',
+      available: true,
+      status: HealthStatus.Healthy,
+    };
+    const containerInfo = { id: 'docker-id', resourceId: 'manager-resource', platformId: 'platform' };
+    containerRead.mockReturnValue({ isLoading: false, containerInfo });
+    const view = render(<WorkloadHealthMembers members={[member]} unavailable={false} />);
+    expect(screen.getByText('Shared container diagnostics')).toBeVisible();
+    containerRead.mockReturnValue({
+      isLoading: false,
+      containerInfo: { ...containerInfo, resourceId: 'other-node-resource' },
+    });
+    view.rerender(<WorkloadHealthMembers members={[member]} unavailable={false} />);
+    expect(screen.queryByText('Shared container diagnostics')).not.toBeInTheDocument();
+    expect(screen.getByText(/This container is no longer available/)).toBeVisible();
+  });
 
   it('selects exact containers with current status icons and preserves selection across updates', async () => {
     const member: HealthMember = {

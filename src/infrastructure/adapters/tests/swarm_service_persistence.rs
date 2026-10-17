@@ -761,6 +761,71 @@ async fn service_health_joins_exact_node_and_excludes_superseded_tasks() {
             .status,
         Health::Unknown
     );
+    // The connected manager is persisted in the daemon scope (NULL node), but
+    // only its pinned node identity may resolve that observation.
+    sqlx::query("DELETE FROM containers WHERE platformid=$1 AND dockernodeid='node-a'")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let manager_container = workload_health_fixture::container(
+        &pool, platform, "same-id", None, None, None, None, "Healthy",
+    )
+    .await;
+    assert_eq!(
+        store
+            .get_authorized(actor, true, service.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
+    sqlx::query("UPDATE platforms SET platformdescriptor=(platformdescriptor::jsonb || '{\"nodeID\":\"node-a\"}'::jsonb)::json WHERE id=$1")
+        .bind(platform).execute(&pool).await.unwrap();
+    let read = store.get_authorized(actor, true, service.id).await.unwrap();
+    assert_eq!(read.probe_health.status, Health::Healthy);
+    assert_eq!(
+        read.probe_health.members[0].container_id,
+        Some(manager_container)
+    );
+    assert_eq!(
+        read.probe_health.members[0].node_id.as_deref(),
+        Some("node-a")
+    );
+    sqlx::query("UPDATE containers SET projectionstalesince=1 WHERE id=$1")
+        .bind(manager_container)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, service.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
+    sqlx::query("UPDATE containers SET projectionstalesince=NULL WHERE id=$1")
+        .bind(manager_container)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE platforms SET status='Offline' WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, service.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
     assert!(
         store
             .get_authorized(ActorId::new(Uuid::nil()), false, service.id)

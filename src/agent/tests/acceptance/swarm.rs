@@ -8,6 +8,25 @@ async fn nested(f: &Fixture, role: &str, args: &[&str]) -> String {
     docker(&command).await
 }
 
+fn native_manifest_reference(manifest: &Value, image: &Value) -> String {
+    let native = "registry:5000/citadel-agent:acceptance-native";
+    let Some(entries) = manifest["manifests"].as_array() else {
+        return native.to_owned();
+    };
+    let matching: Vec<_> = entries
+        .iter()
+        .filter(|entry| {
+            entry["platform"]["os"] == image["Os"]
+                && entry["platform"]["architecture"] == image["Architecture"]
+                && entry["platform"]["variant"].as_str().unwrap_or_default()
+                    == image["Variant"].as_str().unwrap_or_default()
+        })
+        .collect();
+    assert_eq!(matching.len(), 1, "expected exactly the candidate platform");
+    let digest = matching[0]["digest"].as_str().unwrap();
+    format!("registry:5000/citadel-agent@{digest}")
+}
+
 async fn stage_agent_image(f: &Fixture, image: &str) {
     // Image IDs can identify a manifest/index in the containerd store and a config in
     // the classic store. Registry digest references also do not survive load.
@@ -152,6 +171,36 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
     .await;
     // Docker's distribution endpoint omits platforms for a single OCI manifest.
     // Use the release index format, with only this candidate's actual platform.
+    // Containerd can preserve an index (including build attestations) on save/load;
+    // Docker manifest create requires its platform manifest, not the nested index.
+    let manifest: Value = serde_json::from_str(
+        &nested(
+            f,
+            "swarm-manager",
+            &[
+                "manifest",
+                "inspect",
+                "--insecure",
+                "registry:5000/citadel-agent:acceptance-native",
+            ],
+        )
+        .await,
+    )
+    .unwrap();
+    let candidate: Value = serde_json::from_str(
+        &nested(
+            f,
+            "swarm-manager",
+            &[
+                "image",
+                "inspect",
+                "registry:5000/citadel-agent:acceptance-native",
+            ],
+        )
+        .await,
+    )
+    .unwrap();
+    let native = native_manifest_reference(&manifest, &candidate[0]);
     nested(
         f,
         "swarm-manager",
@@ -160,7 +209,7 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
             "create",
             "--insecure",
             "registry:5000/citadel-agent:acceptance",
-            "registry:5000/citadel-agent:acceptance-native",
+            &native,
         ],
     )
     .await;
@@ -248,6 +297,7 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
         println!("Swarm {connector}: installation and complete three-node coverage passed");
         assert_eq!(coverage["isInstalled"], true, "{coverage}");
         assert_eq!(coverage["missingNodes"], 0, "{coverage}");
+        let health_stack = health::swarm_stack(f, id, role).await;
         let service_name = format!("citadel-node-agent-{}", id.replace('-', ""));
         let spec: Value = serde_json::from_str(
             &nested(f, "swarm-manager", &["service", "inspect", &service_name]).await,
@@ -348,6 +398,14 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
         covered(f, id).await;
 
         docker(&["stop", "-t", "30", &f.container("swarm-worker-two")]).await;
+        if let Some(stack) = &health_stack {
+            f.wait(&format!("/api/v1/stacks/{stack}"), |v| {
+                v["probeHealth"]["status"] != "Healthy"
+                    && (v["probeHealth"]["counts"]["unknown"].as_u64().unwrap_or(0) > 0
+                        || v["probeHealth"]["missing"].as_u64().unwrap_or(0) > 0)
+            })
+            .await;
+        }
         f.wait(
             &format!("/api/v1/platforms/{id}/node-agent-coverage"),
             |v| v["state"] == "Partial" && v["coveredNodes"] == 2,
@@ -388,6 +446,19 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
         covered(f, id).await;
         operation(f, id, "upgrade").await;
         covered(f, id).await;
+        if let Some(stack) = &health_stack {
+            f.wait(&format!("/api/v1/stacks/{stack}"), |v| {
+                v["probeHealth"]["status"] == "Healthy"
+            })
+            .await;
+            f.api(Method::DELETE, "/api/v1/stacks", Some(json!([stack])))
+                .await;
+        }
+        if health_stack.is_some() {
+            println!(
+                "Health {connector}: worker loss clears all-green coverage; recovery restores it"
+            );
+        }
         operation(f, id, "remove").await;
         f.wait(
             &format!("/api/v1/platforms/{id}/node-agent-coverage"),
@@ -425,6 +496,28 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
             "Swarm {connector}: Core install, pinned image, worker routing, volume browsing, manager/worker recovery, repair, upgrade and removal passed"
         );
     }
+}
+
+#[test]
+fn native_manifest_selects_exact_platform_and_ignores_attestations() {
+    let image = json!({"Os":"linux", "Architecture":"arm64", "Variant":"v8"});
+    let manifest = json!({"manifests":[
+        {"digest":"sha256:amd64", "platform":{"os":"linux", "architecture":"amd64"}},
+        {"digest":"sha256:attestation", "platform":{"os":"unknown", "architecture":"unknown"}},
+        {"digest":"sha256:arm64", "platform":{"os":"linux", "architecture":"arm64", "variant":"v8"}}
+    ]});
+    assert_eq!(
+        native_manifest_reference(&manifest, &image),
+        "registry:5000/citadel-agent@sha256:arm64"
+    );
+    assert_eq!(
+        native_manifest_reference(&json!({"config":{}}), &image),
+        "registry:5000/citadel-agent:acceptance-native"
+    );
+    let absent = json!({"Os":"linux", "Architecture":"arm64", "Variant":"v7"});
+    assert!(std::panic::catch_unwind(|| native_manifest_reference(&manifest, &absent)).is_err());
+    let duplicate = json!({"manifests":[manifest["manifests"][2], manifest["manifests"][2]]});
+    assert!(std::panic::catch_unwind(|| native_manifest_reference(&duplicate, &image)).is_err());
 }
 
 fn assert_volume_browsing(
