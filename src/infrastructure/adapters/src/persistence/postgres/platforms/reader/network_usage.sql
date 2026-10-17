@@ -26,7 +26,8 @@
         w.kind,w.id ownerid,w.name ownername,'[]'::jsonb refs,NULL::text compose,
         NULL::text dockerserviceid,NULL::text servicename,NULL::bigint observedat,a.projectionstalesince IS NOT NULL isstale,a.state containerstate,w.status ownerstatus,COALESCE(w.controlstate='Processing',false) ownerprocessing
     FROM actual a LEFT JOIN authorized w ON w.kind=a.kind AND w.id=a.ownerid
-    WHERE (a.ownerid IS NULL AND NOT a.hascitadelownershiplabels) OR w.id IS NOT NULL
+    -- Match container-map visibility, including unresolved ownership for administrators.
+    WHERE $2 OR (a.ownerid IS NULL AND NOT a.hascitadelownershiplabels) OR w.id IS NOT NULL
     UNION ALL
     SELECT NULL,NULL,NULL,NULL,NULL,w.kind,w.id,w.name,w.refs,
         CASE WHEN sum(COALESCE(octet_length(w.compose),0)) OVER (ORDER BY w.kind,w.id)<=4194304 THEN w.compose END, NULL,NULL,NULL,false,NULL::text,w.status,COALESCE(w.controlstate='Processing',false)

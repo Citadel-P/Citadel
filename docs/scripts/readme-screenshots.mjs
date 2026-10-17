@@ -1,5 +1,5 @@
 // Demonstration data rendered by the real frontend, never a live installation.
-export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
+export function prepareReadme({ routes, lookups, fixture, id, caps, version, capturedAt }) {
   routes["/application/info"].version = version;
   routes["/application/info"].realtimeTransport = "WebSocketV1";
   routes["/license/entitlements"].effectiveEdition = "Team";
@@ -63,13 +63,28 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
           diskUsage: 31.4,
           diskTotalBytes: 512 * 1024 ** 3,
           diskUsedBytes: 161 * 1024 ** 3,
-          created: 1791892800000,
+          created: capturedAt / 1000,
         }),
       ],
     }),
   );
   routes["/platforms"] = { platforms, capabilities: caps };
-  for (const p of platforms) routes[`/platforms/${p.id}`] = p;
+  for (const p of platforms) {
+    routes[`/platforms/${p.id}`] = p;
+    const stats = Array.from({ length: 361 }, (_, step) =>
+      fixture("PlatformStatView", {
+        created: capturedAt / 1000 - (360 - step) * 10,
+        cpuUsage: 12 + 4 * Math.sin(step / 30) + 2 * Math.cos(step / 18),
+        memoryUsage: 23 + step / 300 + Math.sin(step / 54),
+        diskUsage: 31.4,
+        diskTotalBytes: 512 * 1024 ** 3,
+        diskUsedBytes: 161 * 1024 ** 3,
+        rxBytes: 250_000 + 80_000 * Math.sin(step / 24),
+        txBytes: 130_000 + 40_000 * Math.cos(step / 36),
+      }),
+    );
+    routes[`/platforms/${p.id}/stats`] = { stats };
+  }
   lookups.Platform = platforms;
   routes[`/platforms/${id(2)}/swarm`] = fixture("SwarmOverviewView", {
     platformId: id(2),
@@ -114,10 +129,17 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
       deploymentId: i === 2 ? id(70) : null,
       hasCitadelOwnershipLabels: i < 3,
       state: "Running",
+      health: fixture("ContainerHealthView", {
+        status: i < 3 ? "Healthy" : "NoCheck",
+        observedAt: capturedAt,
+        lastCheckAt: i < 3 ? new Date(capturedAt).toISOString() : null,
+        failingStreak: i < 3 ? 0 : null,
+        reason: i < 3 ? "The configured health check is passing." : "No health check configured.",
+      }),
       platformId: id(1),
       controlState: "Idle",
       created: 1791705600000,
-      updated: 1791892800000,
+      updated: capturedAt,
       capabilities: caps,
       imageView: fixture("ImageView", {
         name: [
@@ -127,7 +149,7 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
           "prom/prometheus",
           "ghcr.io/example/worker",
         ][i],
-        tags: ["latest"],
+        tags: [i < 2 ? "alpine" : "latest"],
         id: id(50 + i),
       }),
       ports:
@@ -170,6 +192,13 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
       dockerName: name,
       dockerServiceId: `service-${i}`,
       health: "Healthy",
+      probeHealth: fixture("WorkloadHealth", {
+        status: "Healthy", coverageComplete: true,
+        counts: fixture("HealthCounts", { healthy: [3, 1, 2][i] }),
+        observed: [3, 1, 2][i], expected: [3, 1, 2][i], missing: 0,
+        observedAt: capturedAt, evaluatedAt: capturedAt,
+        reason: "All configured checks are passing.",
+      }),
       platformId: id(2),
       platformName: platforms[1].name,
       platformStatus: "Online",
@@ -188,7 +217,7 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
         image: {
           $type: "External",
           registryId: id(4),
-          imageTag: ["nginx:stable", "redis:alpine", "example/worker:latest"][
+          imageTag: ["nginx:alpine", "redis:alpine", "example/worker:latest"][
             i
           ],
         },
@@ -211,6 +240,25 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
     name: "Storefront",
     description: "Web application and persistent session cache",
     status: "Healthy",
+    probeHealth: fixture("WorkloadHealth", {
+      status: "Healthy", coverageComplete: true,
+      counts: fixture("HealthCounts", { healthy: 2 }),
+      observed: 2, expected: 2, missing: 0,
+      observedAt: capturedAt, evaluatedAt: capturedAt,
+      reason: "All configured checks are passing.",
+      members: containers.slice(0, 2).map((container) => fixture("HealthMember", {
+        status: "Healthy", available: true,
+        containerId: container.id, dockerContainerId: container.containerId,
+        platformId: container.platformId, name: container.name,
+        service: container.name === "storefront-web" ? "web" : "cache",
+        state: container.state,
+        observation: fixture("ContainerHealthObservation", {
+          configuration: "Enabled", result: "Healthy",
+          observedAt: capturedAt, lastCheckAt: new Date(capturedAt).toISOString(),
+          failingStreak: 0,
+        }),
+      })),
+    }),
     controlState: "Idle",
     platformId: id(1),
     platformName: platforms[0].name,
@@ -229,7 +277,7 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
     spec: {
       $type: "WebEditor",
       composeFile:
-        'services:\n  web:\n    image: nginx:stable\n    ports:\n      - "8080:80"\n    restart: unless-stopped\n\n  cache:\n    image: redis:alpine\n    volumes:\n      - cache_data:/data\n    restart: unless-stopped\n\nvolumes:\n  cache_data:\n',
+        'services:\n  web:\n    image: nginx:alpine\n    healthcheck:\n      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]\n    ports:\n      - "8080:80"\n    restart: unless-stopped\n\n  cache:\n    image: redis:alpine\n    healthcheck:\n      test: ["CMD", "redis-cli", "ping"]\n    volumes:\n      - cache_data:/data\n    restart: unless-stopped\n\nvolumes:\n  cache_data:\n',
       updateBehavior: "Notify",
       environmentVariables: [],
       registryId: null,
@@ -240,7 +288,7 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
       fixture("ContainerRuntimeView", {
         ...container,
         id: container.containerId,
-        image: container.imageView.name + ":latest",
+        image: container.imageView.name + ":" + container.imageView.tags[0],
         imageId: container.imageView.id,
         stack: stack.name,
         stackId: stack.id,
@@ -252,14 +300,7 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version }) {
   return { platforms, services, stack, preferences };
 }
 
-export async function captureReadme({
-  page,
-  context,
-  origin,
-  root,
-  expect,
-  data,
-}) {
+export async function mockScreenshotRealtime(context, snapshots = {}) {
   // Fulfil the current realtime protocol locally; never connect to the live Core.
   await context.routeWebSocket("**/api/v1/realtime", (socket) => {
     const send = (message) =>
@@ -273,6 +314,8 @@ export async function captureReadme({
           invocationId: message.invocationId,
           result: null,
         });
+        if (message.target === "JoinGroup" && snapshots[message.arguments?.[0]])
+          send({ kind: "event", ...snapshots[message.arguments[0]] });
         if (message.target === "StartStackLogs") {
           const logs = [
             "2026-10-13T12:00:00Z [storefront-cache] Ready to accept connections tcp",
@@ -291,6 +334,15 @@ export async function captureReadme({
       }
     });
   });
+}
+
+export async function captureReadme({
+  page,
+  origin,
+  root,
+  expect,
+  data,
+}) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   for (const [name, path, ready] of [
     ["platforms", "/platforms", "Production Docker"],
@@ -307,25 +359,38 @@ export async function captureReadme({
     ],
     ["stacks", `/stacks/edit/${data.stack.id}/`, "Storefront"],
     ["platforms-dark", "/platforms", "Production Docker"],
+    ["platform-stats", `/platforms/edit/${data.platforms[0].id}/#stats`, "Production Docker"],
+    ["platform-stats-dark", `/platforms/edit/${data.platforms[0].id}/#stats`, "Production Docker"],
   ]) {
     if (page.url() !== "about:blank")
       await page.evaluate(() => localStorage.removeItem("sidebar-platform-id"));
-    data.preferences.theme = name === "platforms-dark" ? "Dark" : "Light";
-    await page.goto(origin + path, { waitUntil: "networkidle" });
-    await expect(page.getByText(ready, { exact: true }).first()).toBeVisible();
+    data.preferences.theme = name.endsWith("-dark") ? "Dark" : "Light";
+    if (page.url() === origin + path)
+      await page.reload({ waitUntil: "networkidle" });
+    else
+      await page.goto(origin + path, { waitUntil: "networkidle" });
+    await expect(page.getByText(ready, { exact: true }).first()).toBeVisible({ timeout: 15000 });
     if (name === "stacks") {
       await page.getByRole("tab", { name: "Services", exact: true }).click();
       await expect(
         page.getByText("Ready to accept connections tcp", { exact: false }),
       ).toBeVisible();
     }
+    if (name.startsWith("platform-stats")) {
+      await expect(page.locator(".recharts-area-curve").first()).toBeVisible();
+      await page.getByRole("tablist").scrollIntoViewIfNeeded();
+      await page.getByRole("tablist").evaluate((element) =>
+        element.scrollIntoView({ block: "start", behavior: "instant" }),
+      );
+    }
     await expect(
       page.getByText("Live updates unavailable", { exact: false }),
     ).toHaveCount(0);
     await expect(page.locator("html")).toHaveClass(
-      name === "platforms-dark" ? /dark/ : /light/,
+      name.endsWith("-dark") ? /dark/ : /light/,
     );
     await page.evaluate(() => document.fonts.ready);
+    await expect(page.locator('div[style*="position: fixed"][style*="height: 2px"] > div').first()).toHaveCSS("width", "0px");
     await page.screenshot({
       path: `${root}/docs/public/screenshots/${name}.png`,
       animations: "disabled",

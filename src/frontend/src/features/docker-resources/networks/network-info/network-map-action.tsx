@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useParams } from 'react-router';
-import { Waypoints } from 'lucide-react';
+import { Network } from 'lucide-react';
 import type { NetworkView } from '@/api/generated/api.types';
 import { TabActions } from '@/components/custom/tab-actions';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ export function NetworkMapAction({ network }: { network: NetworkView }) {
               aria-haspopup="dialog"
               aria-expanded={open}
               onClick={() => setOpen(true)}>
-              <Waypoints className="size-4" aria-hidden="true" />
+              <Network className="size-4" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>View connections</TooltipContent>

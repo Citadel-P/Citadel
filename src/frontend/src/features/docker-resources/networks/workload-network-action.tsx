@@ -1,5 +1,5 @@
 import { lazy, Suspense, useRef, useState } from 'react';
-import { Waypoints } from 'lucide-react';
+import { Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CitadelIcons } from '@/lib/icons';
@@ -29,7 +29,7 @@ export function WorkloadNetworkAction({ resource, kind }: { resource: Workload; 
             aria-haspopup="dialog"
             aria-expanded={open}
             onClick={() => setOpen(true)}>
-            <Waypoints className="size-4" aria-hidden="true" />
+            <Network className="size-4" aria-hidden="true" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>View connections</TooltipContent>

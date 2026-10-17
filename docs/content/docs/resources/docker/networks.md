@@ -67,6 +67,11 @@ members. Use **Open network details** at the bottom to open the selected network
 Configured use is optional; it does not imply an active connection.
 Swarm task coverage can be incomplete, and limited results are marked.
 
+[![Storefront stack connected to frontend and backend networks, with network details alongside the map](/screenshots/network-map.png)](/screenshots/network-map.png)
+
+The expanded stack shows which containers share each network. Select a network
+to see its subnet, gateway, and connected containers.
+
 Stack members are grouped; use the chevron to expand or collapse them. Selecting
 a resource shows its details and configuration links. The searchable **Map
 selection** control also provides keyboard access to every displayed resource.
@@ -93,6 +98,8 @@ The diagram follows realtime updates without polling and loads only when a sheet
 opens. Maximizing does not start another inspection. It displays at most 50
 relationship records; workload search lists up to 500 accessible containers.
 Opening a container’s connections directly is independent of that search limit.
+Administrators can also inspect connections for containers whose saved Citadel
+owner no longer exists.
 Limited or stale coverage is marked. Swarm observations may cover only one node,
 and service configuration does not prove that its tasks are running.
 

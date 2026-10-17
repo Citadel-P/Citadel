@@ -90,8 +90,9 @@ and keep all essential instructions in the text. Link images to their original
 files so readers can enlarge them.
 
 To refresh the Git Stack, Swarm coverage, backup policy, automation, and Role
-screenshots, including restore selection, resource access, and deployment failures,
-start the frontend development server and run from the repository root:
+screenshots, including restore selection, resource access, deployment failures,
+Email/Discord notification dialogs, network map, container health details,
+and volume browser, start the frontend development server and run from the repository root:
 
 ```bash
 npm ci --prefix test/e2e
@@ -101,16 +102,33 @@ cd ../..
 node docs/scripts/capture-guide-screenshots.mjs
 ```
 
+Refresh the README and homepage images, including light/dark platform views,
+statistics, and the network map, with:
+
+```bash
+node docs/scripts/capture-guide-screenshots.mjs readme
+```
+
 To capture only the restore, resource-access, and failure examples:
 
 ```bash
 node docs/scripts/capture-guide-screenshots.mjs restore access failure
 ```
 
+To capture only the network map, health details, and volume browser:
+
+```bash
+node docs/scripts/capture-guide-screenshots.mjs network health volume
+```
+
 Set `CITADEL_SCREENSHOT_BASE_URL` if the frontend uses a different address.
 The script uses a fresh browser context and intercepted API fixtures; no login,
 running backend, or real resources are needed. Writes and unknown API requests
-are blocked. The permission matrix fixture contains public capability metadata,
+are blocked, and realtime messages are handled locally. A fixed browser clock
+keeps example health observations fresh and timestamps reproducible.
+On Linux, install Chromium's system dependencies with
+`npx playwright install --with-deps chromium` from `test/e2e` if needed.
+The permission matrix fixture contains public capability metadata,
 not user assignments. Refresh it when the supported permissions change.
 
 After capture, inspect the PNGs in `docs/public/screenshots`, check the surrounding

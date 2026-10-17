@@ -19,5 +19,6 @@
 )
 SELECT a.id,a.dockercontainerid,a.dockernodeid,a.name,a.state,a.projectionstalesince IS NOT NULL isstale,w.kind,w.id ownerid,w.name ownername,w.status ownerstatus,COALESCE(w.controlstate='Processing',false) ownerprocessing
 FROM actual a LEFT JOIN authorized w ON w.kind=a.kind AND w.id=a.ownerid
-WHERE (a.ownerid IS NULL AND NOT a.hascitadelownershiplabels) OR w.id IS NOT NULL
+-- Administrators can inspect containers whose ownership labels no longer resolve.
+WHERE $2 OR (a.ownerid IS NULL AND NOT a.hascitadelownershiplabels) OR w.id IS NOT NULL
 ORDER BY a.name,a.id LIMIT 501

@@ -166,6 +166,70 @@ async fn network_usage_filters_owners_and_saved_references_by_actor_and_node() {
             .iter()
             .all(|usage| usage.entries.is_empty())
     );
+    // A container can outlive its Citadel owner and retain its Docker labels.
+    // Administrators may inspect it, but unresolved ownership must not grant
+    // ordinary actors access through either the map or the attachment list.
+    let orphan = Uuid::now_v7();
+    sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,platformid,ports,name,state,updated,hascitadelownershiplabels) VALUES($1,0,'orphan-runtime-id','image',$2,'{}','orphan','Running',0,true)")
+        .bind(orphan).bind(platform).execute(&pool).await.unwrap();
+    let orphan_network = [NetworkUsageQuery {
+        id: "orphan-network".into(),
+        name: "orphan-network".into(),
+        scope: "local".into(),
+        docker_node_id: None,
+        container_ids: vec!["orphan-runtime-id".into()],
+    }];
+    for administrator in [false, true] {
+        let selected = reader
+            .network_containers(ActorId::new(actor), administrator, platform, Some(orphan))
+            .await
+            .unwrap();
+        assert_eq!(selected.len(), usize::from(administrator));
+        if administrator {
+            assert_eq!(selected[0].container_id, orphan);
+            assert!(selected[0].workload_id.is_none());
+        }
+        let catalog = reader
+            .network_containers(ActorId::new(actor), administrator, platform, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            catalog.iter().any(|entry| entry.container_id == orphan),
+            administrator
+        );
+        let usage = reader
+            .network_usage(
+                ActorId::new(actor),
+                administrator,
+                platform,
+                &orphan_network,
+            )
+            .await
+            .unwrap();
+        assert_eq!(usage[0].entries.len(), usize::from(administrator));
+        if administrator {
+            assert_eq!(usage[0].entries[0].container_id, Some(orphan));
+            assert!(usage[0].entries[0].workload_id.is_none());
+        }
+    }
+    // Administrator visibility must still be scoped to the requested platform.
+    let other_platform = Uuid::now_v7();
+    assert!(
+        reader
+            .network_containers(ActorId::new(actor), true, other_platform, Some(orphan))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        reader
+            .network_usage(ActorId::new(actor), true, other_platform, &orphan_network)
+            .await
+            .unwrap()[0]
+            .entries
+            .is_empty()
+    );
+
     sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,platformid,ports,name,state,updated) SELECT gen_random_uuid(),0,'public-'||n,'image',$1,'{}','public-'||n,'Running',0 FROM generate_series(1,51) n")
         .bind(platform).execute(&pool).await.unwrap();
     let many = [NetworkUsageQuery {

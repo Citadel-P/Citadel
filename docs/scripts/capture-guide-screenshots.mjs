@@ -14,6 +14,8 @@ const origin =
 const schemas = JSON.parse(await fs.readFile(`${root}/schema/v1.json`, "utf8"))
   .components.schemas;
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const capturedAt = Date.parse("2026-10-18T12:00:00Z");
+const version = JSON.parse(await fs.readFile(`${root}/version.json`, "utf8")).version;
 const caps = { canRead: true, canWrite: true, canExecute: true };
 function sample(s) {
   if (s.$ref) return sample(schemas[s.$ref.split("/").at(-1)]);
@@ -47,7 +49,7 @@ const platform = fixture("PlatformView", {
   id: id(1),
   name: "Production Swarm",
   type: "DockerSwarm",
-  status: "Running",
+  status: "Online",
   connectorType: "Agent",
   address: "https://manager.example.com:7443",
   clusterId: "demo-cluster",
@@ -61,7 +63,7 @@ const stack = fixture("StackView", {
   platformId: id(1),
   platformName: platform.name,
   platformType: "DockerSwarm",
-  platformStatus: "Running",
+  platformStatus: "Online",
   capabilities: caps,
   spec: {
     $type: "Git",
@@ -181,7 +183,7 @@ const routes = {
     passwordMinimumLength: 15,
     passwordMaximumLength: 128,
   },
-  "/profile/preferences": { theme: "light" },
+  "/profile/preferences": { theme: "Light", themeColor: "Violet" },
   "/profile": {
     id: id(10),
     displayName: "Demo Administrator",
@@ -198,9 +200,9 @@ const routes = {
   },
   "/application/info": {
     name: "Citadel",
-    version: "1.0.0",
-    informationalVersion: "1.0.0",
-    realtimeTransport: "Disabled",
+    version,
+    informationalVersion: version,
+    realtimeTransport: "WebSocketV1",
   },
   "/platforms": { platforms: [platform], capabilities: caps },
   [`/platforms/${id(1)}`]: platform,
@@ -213,6 +215,8 @@ const routes = {
   "/alertEvents": { pagedResult: { items: [], totalCount: 0 } },
   "/tags": { tags: [], capabilities: caps },
   "/license/entitlements": {
+    effectiveEdition: "Team",
+    status: "Valid",
     capabilities: [
       "AdvancedAlerting",
       "AutomatedOperations",
@@ -256,6 +260,9 @@ const routes = {
     warnings: [],
   },
   [`/automation/actions/${id(7)}`]: action,
+  "/automation/actions": { actions: [action], capabilities: caps },
+  "/alertRules": { alertRules: [], capabilities: caps },
+  "/alertRules/channels": { channels: [], capabilities: caps },
   "/roles": { roles: [role], capabilities: caps },
 };
 routes["/roles/permissions/matrix"] = JSON.parse(
@@ -279,7 +286,7 @@ const recoveryPlatform = fixture("PlatformView", {
   id: id(20),
   name: "Production Docker",
   type: "Docker",
-  status: "Running",
+  status: "Online",
   connectorType: "Agent",
   address: "https://docker.example.com:7443",
   capabilities: caps,
@@ -340,7 +347,7 @@ const failedActivity = fixture("ActivityView", {
   resourceName: "Storefront web",
   platformId: recoveryPlatform.id,
   platformName: recoveryPlatform.name,
-  platformStatus: "Running",
+  platformStatus: "Online",
   status: "Failure",
   actorId: id(10),
   actorName: "Demo Administrator",
@@ -391,13 +398,16 @@ routes["/activities"] = {
 };
 routes[`/activities/${failedActivity.id}`] = failedActivity;
 const readmeMode = process.argv.includes("readme");
-const { prepareReadme, captureReadme } = await import("./readme-screenshots.mjs");
+const { prepareReadme, captureReadme, mockScreenshotRealtime } = await import("./readme-screenshots.mjs");
 const readmeData = readmeMode
   ? prepareReadme({
       routes, lookups, fixture, id, caps,
-      version: JSON.parse(await fs.readFile(`${root}/version.json`, "utf8")).version,
+      version, capturedAt,
     })
   : undefined;
+const snapshots = {};
+const featureModes = ["network", "health", "volume"].filter(name =>
+  process.argv.length === 2 || process.argv.includes(name) || (readmeMode && name === "network"));
 const browser = await chromium.launch();
 const context = await browser.newContext({
   viewport: { width: 1360, height: 2000 },
@@ -418,7 +428,7 @@ await context.route("**/api/v1/**", async (route) => {
   const req = route.request();
   const url = new URL(req.url());
   const path = url.pathname.replace("/api/v1", "");
-  let data = routes[path];
+  let data = typeof routes[path] === "function" ? routes[path](url) : routes[path];
   if (req.method() !== "GET") {
     unknown.add(`${req.method()} ${path}`);
     return route.abort();
@@ -441,7 +451,9 @@ await context.route("**/api/v1/**", async (route) => {
     body: JSON.stringify(data),
   });
 });
+await mockScreenshotRealtime(context, snapshots);
 const page = await context.newPage();
+await page.clock.setFixedTime(new Date(capturedAt));
 page.on("pageerror", (e) => errors.push(e.message));
 page.setDefaultTimeout(15000);
 async function capture(name, start, end = start) {
@@ -483,6 +495,7 @@ try {
     ["restore", `backup-policies/edit/${recoveryPolicy.id}#runs`],
     ["access", `access/users/edit/${demoUser.id}#config`],
     ["failure", "activities"],
+    ["notifications", "alert-rules"],
   ]) {
     if (process.argv.length > 2 && !process.argv.slice(2).includes(name))
       continue;
@@ -536,7 +549,7 @@ try {
       await capture("role-permissions", detail, detail.getByRole("row").nth(4));
     }
     if (name === "restore") {
-      await page.getByTitle("Restore volume", { exact: true }).click();
+      await page.getByTitle("Restore backup", { exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Restore Volume" });
       await dialog.getByLabel("Snapshot Volume").click();
       await page
@@ -579,7 +592,30 @@ try {
         dialog.locator(".p-2").first(),
       );
     }
+    if (name === "notifications") {
+      for (const [type, label, url] of [
+        ["Email", "Operations email", "smtp://demo:password@smtp.example.com:587/?from=alerts@example.com&to=ops@example.com&requirestarttls=yes"],
+        ["Discord", "Operations Discord", "discord://example-webhook-token@123456789012345678"],
+      ]) {
+        await page.getByRole("button", { name: "Add Channel", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: "Add Notification Channel" });
+        await dialog.getByPlaceholder("e.g. Engineering Team Channel").fill(label);
+        await dialog.getByRole("combobox").click();
+        await page.getByRole("option", { name: type, exact: true }).click();
+        await dialog.getByLabel("Channel URL").fill(url);
+        await dialog.getByLabel("Channel URL").press("Home");
+        await dialog.getByRole("heading").click();
+        await capture(`notification-channel-${type.toLowerCase()}`, dialog);
+        await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      }
+    }
     console.log(`Captured ${name}`);
+  }
+  if (featureModes.length) {
+    const { prepareFeatures, captureFeatures } = await import("./feature-screenshots.mjs");
+    const data = prepareReadme({ routes, lookups, fixture, id, caps, version, capturedAt });
+    const features = prepareFeatures({ routes, fixture, id, caps, capturedAt, snapshots, data });
+    await captureFeatures({ page, origin, root, expect, data: features, modes: featureModes });
   }
   expect([...unknown]).toEqual([]);
   expect(errors).toEqual([]);

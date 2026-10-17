@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { ChevronDown, Waypoints } from 'lucide-react';
+import { ChevronDown, Network } from 'lucide-react';
 import type { NetworkView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -102,7 +102,7 @@ export function NetworkDetailsBody({
                           size="sm"
                           className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
                           onClick={() => onExplore(entry.containerId!)}>
-                          <Waypoints className="size-3.5" aria-hidden="true" />
+                          <Network className="size-3.5" aria-hidden="true" />
                           Explore connections
                         </Button>
                       )}

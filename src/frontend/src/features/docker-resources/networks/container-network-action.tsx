@@ -1,5 +1,5 @@
 import { lazy, Suspense, useRef, useState } from 'react';
-import { Waypoints } from 'lucide-react';
+import { Network } from 'lucide-react';
 import type { NetworkContainer } from '@/api/generated/api.types';
 import { CitadelIcons } from '@/lib/icons';
 import { ConnectionsSheet } from './connections-sheet';
@@ -39,7 +39,7 @@ export function ContainerNetworkAction({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}>
-        <Waypoints className="size-3.5 shrink-0" aria-hidden="true" />
+        <Network className="size-3.5 shrink-0" aria-hidden="true" />
         <span className="truncate">{label}</span>
       </button>
       {open && (
