@@ -391,11 +391,9 @@ mod tests {
         ]);
         let paths = Arc::new(Mutex::new(Vec::new()));
         let state = (Arc::new(documents), paths.clone());
+        type FixtureState = (Arc<BTreeMap<String, String>>, Arc<Mutex<Vec<String>>>);
         async fn handle(
-            State((documents, paths)): State<(
-                Arc<BTreeMap<String, String>>,
-                Arc<Mutex<Vec<String>>>,
-            )>,
+            State((documents, paths)): State<FixtureState>,
             request: Request<Body>,
         ) -> Response<Body> {
             let path = request.uri().path().to_owned();

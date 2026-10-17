@@ -13300,6 +13300,7 @@ export class Api<
      *
      * @tags Images
      * @name CheckImageUpdate
+     * @summary Check an image tag for updates
      * @request POST:/api/v1/images/check-update
      * @secure
      * @response `200` `ImageTagUpdate`
@@ -13332,6 +13333,7 @@ export class Api<
      *
      * @tags Images
      * @name PreviewImageDeletion
+     * @summary Preview image deletion
      * @request POST:/api/v1/images/deletion-preview
      * @secure
      * @response `200` `(ImageDeletionPreviewItem)[]`
@@ -13580,6 +13582,7 @@ export class Api<
      *
      * @tags Images
      * @name GetImageUsage
+     * @summary List image usage
      * @request GET:/api/v1/images/{platformId}/{imageId}/usage
      * @secure
      * @response `200` `ImageUsage`
@@ -16848,12 +16851,20 @@ export class Api<
      * @request POST:/api/v1/resource-copies/preview
      * @secure
      * @response `200` `ResourceCopyPreview`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
      */
     previewResourceCopy: (
       data: ResourceCopyRequest,
       params: RequestParams = {},
     ) =>
-      this.request<ResourceCopyPreview, any>({
+      this.request<ResourceCopyPreview, ProblemDetails>({
         path: `/api/v1/resource-copies/preview`,
         method: "POST",
         body: data,
@@ -16871,6 +16882,14 @@ export class Api<
      * @request GET:/api/v1/resource-copies/targets
      * @secure
      * @response `200` `ResourceCopyTargets`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
      */
     getResourceCopyTargets: (
       query: {
@@ -16880,7 +16899,7 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<ResourceCopyTargets, any>({
+      this.request<ResourceCopyTargets, ProblemDetails>({
         path: `/api/v1/resource-copies/targets`,
         method: "GET",
         query: query,
@@ -16897,9 +16916,17 @@ export class Api<
      * @request GET:/api/v1/resource-copies/{id}
      * @secure
      * @response `200` `ResourceCopyProgress`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
      */
     getResourceCopy: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceCopyProgress, any>({
+      this.request<ResourceCopyProgress, ProblemDetails>({
         path: `/api/v1/resource-copies/${id}`,
         method: "GET",
         secure: true,
@@ -16915,9 +16942,17 @@ export class Api<
      * @request POST:/api/v1/resource-copies/{id}/cancel
      * @secure
      * @response `200` `ResourceCopyProgress`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
      */
     cancelResourceCopy: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceCopyProgress, any>({
+      this.request<ResourceCopyProgress, ProblemDetails>({
         path: `/api/v1/resource-copies/${id}/cancel`,
         method: "POST",
         secure: true,
@@ -16933,9 +16968,17 @@ export class Api<
      * @request POST:/api/v1/resource-copies/{id}/cleanup
      * @secure
      * @response `200` `ResourceCopyProgress`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
      */
     cleanupResourceCopy: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceCopyProgress, any>({
+      this.request<ResourceCopyProgress, ProblemDetails>({
         path: `/api/v1/resource-copies/${id}/cleanup`,
         method: "POST",
         secure: true,
@@ -16951,9 +16994,17 @@ export class Api<
      * @request POST:/api/v1/resource-copies/{id}/start
      * @secure
      * @response `200` `ResourceCopyProgress`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
      */
     startResourceCopy: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceCopyProgress, any>({
+      this.request<ResourceCopyProgress, ProblemDetails>({
         path: `/api/v1/resource-copies/${id}/start`,
         method: "POST",
         secure: true,

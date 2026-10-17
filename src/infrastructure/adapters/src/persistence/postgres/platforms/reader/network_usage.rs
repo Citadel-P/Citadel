@@ -86,10 +86,9 @@ pub(super) async fn read(
             if let Some(compose) = row
                 .try_get::<Option<String>, _>("compose")
                 .map_err(storage)?
+                && let Ok(model) = citadel_stacks::parse_compose(&[compose])
             {
-                if let Ok(model) = citadel_stacks::parse_compose(&[compose]) {
-                    references.extend(model.network_names.into_values());
-                }
+                references.extend(model.network_names.into_values());
             }
             references.sort();
             references.dedup();

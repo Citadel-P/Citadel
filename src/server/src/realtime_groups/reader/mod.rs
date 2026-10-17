@@ -361,17 +361,17 @@ impl ApplicationGroupReader {
                 lease,
             )
             .await?;
-            if let Some(change) = e {
-                if change
+            if let Some(change) = e
+                && (change
                     .platform_id
                     .is_some_and(|platform| platform != container.platform_id)
-                    || (change.platform_id.is_none() && change.resource_id != container.platform_id)
+                    || (change.platform_id.is_none()
+                        && change.resource_id != container.platform_id)
                     || change
                         .container_ids()
-                        .is_some_and(|ids| !ids.iter().any(|id| id == &container.container_id))
-                {
-                    return Ok(GroupSnapshot::default());
-                }
+                        .is_some_and(|ids| !ids.iter().any(|id| id == &container.container_id)))
+            {
+                return Ok(GroupSnapshot::default());
             }
             let entries = self.platforms.container_health_history(*id).await.map_err(failure)?
                 .into_iter().map(crate::api::resources::platforms::health_views::ContainerHealthTransitionView::from)

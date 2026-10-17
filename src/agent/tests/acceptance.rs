@@ -564,7 +564,7 @@ async fn start_core(f: &mut Fixture, core: &str) -> (String, String) {
             "JobConfiguration__SwarmReconciliationIntervalSeconds=5",
             "-e",
             "JobConfiguration__FlashInterval=1",
-            &core,
+            core,
         ],
     )
     .await;

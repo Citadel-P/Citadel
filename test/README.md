@@ -131,6 +131,26 @@ Run `bash test/scripts/check-source-ownership.sh` to verify source ownership and
 inventory. Database generation uses the Rust declarative schema; see
 [database development](../docs/DEVELOPMENT.md#database-schema-changes).
 
+## API metadata, wire compatibility, and login cleanup
+
+These focused regressions run in the existing Rust workspace test job:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib openapi::
+SQLX_OFFLINE=true cargo test --locked -p citadel-contracts --test protocol_sources
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test local_runtime
+```
+
+The OpenAPI tests inspect the live handler definitions, so missing public-operation
+summaries fail even when generated JSON has not been refreshed. Protocol tests pin
+field numbers and verify old-peer decoding as well as the reviewed source baseline.
+The Unix login fixtures use temporary shell scripts, not Docker or a Registry;
+they verify redaction, credential-directory isolation, and cleanup after failure
+or cancellation. No database or live resources are required.
+
+Run `SQLX_OFFLINE=true cargo clippy --locked --workspace --all-targets -- -D warnings`
+as well: ordinary tests do not run Clippy, and `--all-targets` includes test fixtures.
+
 ## Test fixture settings
 
 Test names and fixture variables describe the subsystem they exercise:

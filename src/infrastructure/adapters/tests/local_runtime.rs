@@ -10,7 +10,7 @@ use citadel_stacks::{
     StackApplySource, StackOrchestrationMode, StackReleaseStatus, StackSourceFile,
 };
 use futures_util::future::BoxFuture;
-use std::{os::unix::fs::PermissionsExt, path::PathBuf, sync::Mutex, time::Duration};
+use std::{path::PathBuf, sync::Mutex, time::Duration};
 use tokio_util::sync::CancellationToken;
 use zeroize::Zeroizing;
 
@@ -20,9 +20,17 @@ impl Fixture {
         let root =
             std::env::temp_dir().join(format!("citadel-runtime-test-{}", uuid::Uuid::now_v7()));
         std::fs::create_dir(&root).unwrap();
-        let executable = root.join("docker");
-        std::fs::write(&executable, format!("#!/bin/sh\nset -eu\n{script}")).unwrap();
-        std::fs::set_permissions(executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(root.join("script"), script).unwrap();
+        // Execute a stable launcher: freshly written executables can intermittently
+        // fail with ETXTBSY when these fixtures run concurrently.
+        std::os::unix::fs::symlink(
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/local-runtime-docker.sh"
+            ),
+            root.join("docker"),
+        )
+        .unwrap();
         Self(root)
     }
     fn docker(&self) -> String {
@@ -203,12 +211,12 @@ exit 7
     }
 }
 
-#[tokio::test]
-async fn failed_login_cleans_credentials_and_redacts_failure() {
+async fn failed_login() -> PathBuf {
     let fixture = Fixture::new(
         r#"
+cat > "$DOCKER_CONFIG/config.json"
 printf '%s' "$DOCKER_CONFIG" > "$(dirname "$0")/config-path"
-cat >&2
+cat "$DOCKER_CONFIG/config.json" >&2
 exit 1
 "#,
     );
@@ -225,9 +233,96 @@ exit 1
         &CancellationToken::new(),
     )
     .await;
-    let error = result.err().unwrap().to_string();
+    let error = result.err().expect("fixture login must fail");
+    assert!(matches!(error, BuildRuntimeError::Command(_)), "{error:?}");
+    let error = error.to_string();
+    assert!(
+        error.contains("[redacted]"),
+        "login must return its redacted diagnostic: {error}"
+    );
     assert!(!error.contains("private-password"));
-    assert!(!PathBuf::from(fixture.read("config-path")).exists());
+    let config = PathBuf::from(fixture.read("config-path"));
+    assert!(
+        !config.exists(),
+        "failed login left credentials at {}",
+        config.display()
+    );
+    config
+}
+
+#[tokio::test]
+async fn failed_login_cleans_credentials_and_redacts_failure() {
+    failed_login().await;
+}
+
+#[tokio::test]
+async fn concurrent_failed_logins_use_distinct_private_directories_and_clean_them() {
+    let paths = futures_util::future::join_all((0..8).map(|_| failed_login())).await;
+    let unique: std::collections::HashSet<_> = paths.iter().collect();
+    assert_eq!(
+        unique.len(),
+        paths.len(),
+        "login sessions shared credentials"
+    );
+}
+
+#[tokio::test]
+async fn cancelling_login_removes_written_credentials() {
+    let fixture = Fixture::new(
+        r#"
+cat > "$DOCKER_CONFIG/config.json"
+printf '%s' "$DOCKER_CONFIG" > "$(dirname "$0")/config-path"
+exec sleep 30
+"#,
+    );
+    let credentials = BuildRegistryCredentials {
+        username: "builder".into(),
+        password: Zeroizing::new("private-password".into()),
+    };
+    let cancel = CancellationToken::new();
+    let login = DockerBuildSession::open(
+        fixture.docker(),
+        endpoint(),
+        Some(("registry.example", &credentials)),
+        Duration::from_secs(3),
+        4096,
+        &cancel,
+    );
+    let stop = async {
+        let path = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if let Ok(path) = std::fs::read_to_string(fixture.0.join("config-path"))
+                    && !path.is_empty()
+                {
+                    break PathBuf::from(path);
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("login did not write its credential marker");
+        assert_eq!(
+            std::fs::read_to_string(path.join("config.json")).unwrap(),
+            "private-password"
+        );
+        cancel.cancel();
+        path
+    };
+    let (result, config) =
+        tokio::time::timeout(Duration::from_secs(5), async { tokio::join!(login, stop) })
+            .await
+            .expect("cancelled login did not finish");
+    assert!(matches!(
+        result,
+        Err(BuildRuntimeError::Process(
+            citadel_execution::ProcessError::Cancelled
+        ))
+    ));
+    assert!(
+        !config.exists(),
+        "cancelled login left credentials at {}",
+        config.display()
+    );
 }
 
 #[tokio::test]

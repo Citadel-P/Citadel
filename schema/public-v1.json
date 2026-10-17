@@ -42317,6 +42317,7 @@
             "Bearer": []
           }
         ],
+        "summary": "Check an image tag for updates",
         "tags": [
           "Images"
         ],
@@ -42448,6 +42449,7 @@
             "Bearer": []
           }
         ],
+        "summary": "Preview image deletion",
         "tags": [
           "Images"
         ],
@@ -43512,6 +43514,7 @@
             "Bearer": []
           }
         ],
+        "summary": "List image usage",
         "tags": [
           "Images"
         ],

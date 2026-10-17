@@ -20,17 +20,26 @@ pub async fn platform(pool: &PgPool, swarm: bool) -> Uuid {
         .bind(id).bind(json!({"$type":if swarm {"DockerSwarm"} else {"Docker"}})).execute(pool).await.unwrap();
     id
 }
+pub struct Container<'a> {
+    pub platform: Uuid,
+    pub docker_id: &'a str,
+    pub node: Option<&'a str>,
+    pub owner: Option<Uuid>,
+    pub stack: Option<Uuid>,
+    pub service: Option<&'a str>,
+    pub result: &'a str,
+}
 #[allow(dead_code)]
-pub async fn container(
-    pool: &PgPool,
-    platform: Uuid,
-    docker_id: &str,
-    node: Option<&str>,
-    owner: Option<Uuid>,
-    stack: Option<Uuid>,
-    service: Option<&str>,
-    result: &str,
-) -> Uuid {
+pub async fn container(pool: &PgPool, container: Container<'_>) -> Uuid {
+    let Container {
+        platform,
+        docker_id,
+        node,
+        owner,
+        stack,
+        service,
+        result,
+    } = container;
     let id = Uuid::now_v7();
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports,dockernodeid,deploymentid,stackid,composeservicename,health,isswarmtask) VALUES($1,$2,$3,'image',$3,1,$4,'Running','[]',$5,$6,$7,$8,$9,$10)")

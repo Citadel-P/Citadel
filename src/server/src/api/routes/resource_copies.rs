@@ -44,7 +44,7 @@ fn result<T>(r: Result<T, CopyError>, h: &HeaderMap) -> HttpResult<T> {
     )
 }
 
-#[utoipa::path(post,path="/api/v1/resource-copies/preview",tag="ResourceCopies",security(("Bearer" = [])),operation_id="previewResourceCopy",request_body=ResourceCopyRequest,responses((status=200,body=ResourceCopyPreview)))]
+#[utoipa::path(post,path="/api/v1/resource-copies/preview",tag="ResourceCopies",security(("Bearer" = [])),operation_id="previewResourceCopy",request_body=ResourceCopyRequest,responses((status=200,body=ResourceCopyPreview),crate::openapi::errors::ResourceMutationErrors))]
 async fn preview_resource_copy(
     State(s): State<ResourceCopiesHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -59,7 +59,7 @@ async fn preview_resource_copy(
     let preview = result(s.copies.preview(p.actor_id, input).await, &h)?;
     Ok(no_store(Json(preview).into_response()))
 }
-#[utoipa::path(post,path="/api/v1/resource-copies/{id}/start",tag="ResourceCopies",security(("Bearer" = [])),operation_id="startResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress)))]
+#[utoipa::path(post,path="/api/v1/resource-copies/{id}/start",tag="ResourceCopies",security(("Bearer" = [])),operation_id="startResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress),crate::openapi::errors::ResourceMutationErrors))]
 async fn start_resource_copy(
     State(s): State<ResourceCopiesHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -71,7 +71,7 @@ async fn start_resource_copy(
         Json(result(s.copies.start(p.actor_id, id).await, &h)?).into_response(),
     ))
 }
-#[utoipa::path(get,path="/api/v1/resource-copies/{id}",tag="ResourceCopies",security(("Bearer" = [])),operation_id="getResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress)))]
+#[utoipa::path(get,path="/api/v1/resource-copies/{id}",tag="ResourceCopies",security(("Bearer" = [])),operation_id="getResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress),crate::openapi::errors::ResourceMutationErrors))]
 async fn get_resource_copy(
     State(s): State<ResourceCopiesHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -83,7 +83,7 @@ async fn get_resource_copy(
         Json(result(s.copies.get(p.actor_id, id).await, &h)?).into_response(),
     ))
 }
-#[utoipa::path(post,path="/api/v1/resource-copies/{id}/cancel",tag="ResourceCopies",security(("Bearer" = [])),operation_id="cancelResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress)))]
+#[utoipa::path(post,path="/api/v1/resource-copies/{id}/cancel",tag="ResourceCopies",security(("Bearer" = [])),operation_id="cancelResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress),crate::openapi::errors::ResourceMutationErrors))]
 async fn cancel_resource_copy(
     State(s): State<ResourceCopiesHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -96,7 +96,7 @@ async fn cancel_resource_copy(
     ))
 }
 
-#[utoipa::path(post,path="/api/v1/resource-copies/{id}/cleanup",tag="ResourceCopies",security(("Bearer" = [])),operation_id="cleanupResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress)))]
+#[utoipa::path(post,path="/api/v1/resource-copies/{id}/cleanup",tag="ResourceCopies",security(("Bearer" = [])),operation_id="cleanupResourceCopy",params(("id"=Uuid,Path)),responses((status=200,body=ResourceCopyProgress),crate::openapi::errors::ResourceMutationErrors))]
 async fn cleanup_resource_copy(
     State(s): State<ResourceCopiesHttpState>,
     p: Option<Extension<ActorPrincipal>>,
@@ -109,7 +109,7 @@ async fn cleanup_resource_copy(
     ))
 }
 
-#[utoipa::path(get,path="/api/v1/resource-copies/targets",tag="ResourceCopies",security(("Bearer" = [])),operation_id="getResourceCopyTargets",params(("kind"=ResourceCopyKind,Query),("sourceId"=Uuid,Query)),responses((status=200,body=ResourceCopyTargets)))]
+#[utoipa::path(get,path="/api/v1/resource-copies/targets",tag="ResourceCopies",security(("Bearer" = [])),operation_id="getResourceCopyTargets",params(("kind"=ResourceCopyKind,Query),("sourceId"=Uuid,Query)),responses((status=200,body=ResourceCopyTargets),crate::openapi::errors::ResourceMutationErrors))]
 async fn resource_copy_targets(
     State(s): State<ResourceCopiesHttpState>,
     p: Option<Extension<ActorPrincipal>>,
