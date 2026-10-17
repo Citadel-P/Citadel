@@ -128,6 +128,7 @@ async fn covered(f: &Fixture, platform: &str) -> Value {
 }
 
 pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, core_url: &str) {
+    f.renew_session().await;
     for role in ["swarm-manager", "swarm-worker-one", "swarm-worker-two"] {
         f.daemon(role).await;
         // Avoid Docker's default inner gateway overlapping the outer fixture network.

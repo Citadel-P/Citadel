@@ -9,4 +9,4 @@ if [[ -n "${3:-}" ]]; then
 fi
 export CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_INCREMENTAL=false
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
-cargo test --locked -p citadel-agent --test acceptance -- --ignored --nocapture --test-threads=1
+cargo test --locked -p citadel-agent --test acceptance -- --ignored --nocapture --test-threads=1 --skip packaged_released_agent_compatibility

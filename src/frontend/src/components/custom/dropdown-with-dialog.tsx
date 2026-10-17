@@ -103,9 +103,13 @@ export const RowActionDropdown = <T,>({
   onActionSelect: (action: { key: string; data?: ActionData }) => void;
 }) => {
   const entries = Object.entries(actions);
+  const openingConfirmation = useRef(false);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) openingConfirmation.current = false;
+      }}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-8 w-8 p-0">
           <span className="sr-only">Open menu</span>
@@ -113,12 +117,21 @@ export const RowActionDropdown = <T,>({
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-38 bg-background py-2">
+      <DropdownMenuContent
+        align="end"
+        className="w-38 bg-background py-2"
+        onCloseAutoFocus={(event) => {
+          // The confirmation owns focus; the closing menu must not reclaim it.
+          if (openingConfirmation.current) event.preventDefault();
+        }}>
         {entries.map(([key, Action]) => (
           <Action
             key={key}
             resource={resource}
-            onAction={(actionKey, data) => onActionSelect({ key: actionKey, data })}
+            onAction={(actionKey, data) => {
+              openingConfirmation.current = actionKey === 'confirm';
+              onActionSelect({ key: actionKey, data });
+            }}
           />
         ))}
       </DropdownMenuContent>
@@ -192,7 +205,13 @@ const ActionDialog = ({
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
           </p>
-          <Input value={input} onChange={(e) => setInput(e.target.value)} className="focus-visible:ring-1" autoFocus />
+          <Input
+            aria-label={`Enter ${name} to confirm`}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="focus-visible:ring-1"
+            autoFocus
+          />
         </div>
         <DialogFooter>
           <ConfirmButton

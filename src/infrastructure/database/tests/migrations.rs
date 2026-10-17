@@ -23,7 +23,7 @@ async fn clean_install_restart_and_checksum_enforcement() {
             .iter()
             .map(|outcome| outcome.applied)
             .sum::<usize>(),
-        6,
+        1,
         "the advisory lock must serialize concurrent startup"
     );
 
@@ -31,7 +31,7 @@ async fn clean_install_restart_and_checksum_enforcement() {
         .await
         .expect("restart migration should be idempotent");
     assert_eq!(second.applied, 0);
-    assert_eq!(second.already_applied, 6);
+    assert_eq!(second.already_applied, 1);
 
     let mut connection = PgConnection::connect(&database_url).await.unwrap();
     let tables: std::collections::BTreeSet<String> = sqlx::query_scalar::<_, String>(

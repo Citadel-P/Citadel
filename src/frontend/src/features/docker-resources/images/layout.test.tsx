@@ -306,3 +306,70 @@ it('filters fresh image updates from the URL, composes with search, and follows 
   expect(link('ready-update')).toBeVisible();
   expect(requests).toHaveBeenCalledTimes(1);
 });
+
+it.each(['pointer', 'keyboard'])(
+  'uses the single-image confirmation without reopening the menu (%s)',
+  async (interaction) => {
+    const { ImageDropdownActions } = await import('./actions');
+    const row = {
+      ...image,
+      isInUse: false,
+      capabilities: { canRead: true, canWrite: true, canExecute: true, canPull: true, canInspect: true },
+    };
+    const deleted = vi.fn();
+    server.use(
+      http.delete('http://localhost/api/v1/images', async ({ request }) => {
+        deleted(await request.json());
+        return HttpResponse.json({ deletedImages: [] });
+      }),
+    );
+    const { user } = renderCitadel(<ImagesTable items={[row]} isLoading={false} actions={ImageDropdownActions} />);
+    const copy = vi.spyOn(navigator.clipboard, 'writeText');
+    const trigger = screen.getByRole('button', { name: 'Open menu' });
+    await user.click(trigger);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await user.click(trigger);
+    const menuStates: (string | null)[] = [];
+    const observer = new MutationObserver((records) => {
+      menuStates.push(...records.map((record) => record.oldValue));
+    });
+    observer.observe(trigger, { attributes: true, attributeFilter: ['aria-expanded'], attributeOldValue: true });
+    try {
+      const deleteItem = screen.getByRole('menuitem', { name: 'Delete' });
+      if (interaction === 'keyboard') {
+        act(() => deleteItem.focus());
+        await user.keyboard('{Enter}');
+      } else {
+        await user.click(deleteItem);
+      }
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(menuStates).toEqual(['true']);
+    } finally {
+      observer.disconnect();
+    }
+    const dialog = within(await screen.findByRole('dialog'));
+    const name = row.name;
+    expect(dialog.queryByRole('list')).not.toBeInTheDocument();
+    await user.click(dialog.getByText(name, { selector: 'b' }));
+    expect(copy).toHaveBeenCalledWith(name);
+    const input = dialog.getByRole('textbox', { name: `Enter ${name} to confirm` });
+    await user.type(input, 'Delete');
+    expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    await user.clear(input);
+    await user.type(input, name);
+    await waitFor(() => expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled());
+    await user.click(dialog.getByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(deleted).toHaveBeenCalledExactlyOnceWith({
+        platformId: 'platform-1',
+        ids: [row.dockerImageId],
+        force: false,
+        noPrune: true,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+);

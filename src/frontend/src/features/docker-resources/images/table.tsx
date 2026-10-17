@@ -1,7 +1,6 @@
 import { ImageReferenceDialog, type ImageReferenceAction } from './reference-actions';
 import { ImageUpdateStatus } from './update-status';
 import { ImageUsedBy } from './used-by';
-import { DeleteImageDialog } from './delete-image-dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { ImageView, PlatformType, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -46,7 +45,6 @@ export const ImagesTable = ({
   const [_, setSelectedResources] = useSelectedResources<ImageView>('Image');
   const { currentPlatform } = useAppContext();
   const formatDateTime = useProfileDateTimeFormatter();
-  const [deleting, setDeleting] = useState<ImageView | null>(null);
   const [referenceAction, setReferenceAction] = useState<{ image: ImageView; kind: ImageReferenceAction } | null>(null);
   const showRegistry = useAtomValue(imageShowRegistryAtom);
   const showCreated = useAtomValue(imageShowCreatedAtom);
@@ -54,10 +52,7 @@ export const ImagesTable = ({
   const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
   // Visibility changes must retain cell component identities and their mounted query observers.
   const allColumns = useMemo(
-    () =>
-      columns(actions ?? {}, formatDateTime, showNode, setDeleting, (image, kind) =>
-        setReferenceAction({ image, kind }),
-      ),
+    () => columns(actions ?? {}, formatDateTime, showNode, (image, kind) => setReferenceAction({ image, kind })),
     [actions, formatDateTime, showNode],
   );
   const cols = useMemo(
@@ -94,7 +89,6 @@ export const ImagesTable = ({
           onClose={() => setReferenceAction(null)}
         />
       )}
-      {deleting && <DeleteImageDialog resources={[deleting]} onClose={() => setDeleting(null)} />}
     </>
   );
 };
@@ -110,7 +104,6 @@ const columns = (
   >,
   formatDateTime: DateTimeFormatter,
   showNode: boolean,
-  onDelete: (image: ImageView) => void,
   onReference: (image: ImageView, kind: ImageReferenceAction) => void,
 ): ColumnDef<ImageView>[] => [
   {
@@ -192,7 +185,6 @@ const columns = (
         onAction={(action) => {
           if (action.key === 'checkImage') onReference(row.original, 'check');
           if (action.key === 'pullImage') onReference(row.original, 'pull');
-          if (action.key === 'deleteImage') onDelete(row.original);
         }}
       />
     ),

@@ -146,8 +146,8 @@ with reference and observation details in the remaining columns. Use the reload
 icon at the right of the **Workloads using this image** heading to refresh
 references.
 
-Use **More references** to continue through large inventories, including in the
-deletion review. A page without matches can still offer more references to check;
+Use **More references** in image details to continue through large inventories.
+A page without matches can still offer more references to check;
 it does not mean the remaining inventory has no references.
 
 Saved tag references describe configuration; they do not prove which image a
@@ -158,12 +158,14 @@ No known references is not a guarantee that deleting an image is safe.
 
 ## Remove an image
 
-Select the image, choose **Delete**, and review its tags, dependencies, and
-warnings. Keep images needed by an offline recovery procedure. Removing a
-local image does not remove it from its Registry.
-When reference coverage is incomplete, the deletion review includes a short
-reminder to confirm the image is no longer needed. Technical coverage limitations
-are documented above rather than displayed in the workloads card.
+Select the image, choose **Delete**, and type the requested confirmation.
+For a single image, enter its name (or its ID if no name is available).
+For bulk deletion, the dialog lists the selected images and asks you to enter
+**Delete**. Click the bold confirmation text to copy it.
+Delete is disabled for images used by containers. Opening the confirmation
+dialog does not make an additional usage-check request.
+Keep images needed by an offline recovery procedure. Removing a local image does
+not remove it from its Registry.
 
 Deletion from the list and image details is non-forced and does not prune untagged
 parent images. Known container references, including stopped containers, block
@@ -171,14 +173,14 @@ the action. Refresh stale inventory before deleting. Docker can still reject
 removal if usage changes or the image has multiple tags; Citadel does not retry
 with force or automatically remove all tags.
 
-The backend checks live container usage during review and again before deletion.
+The backend checks live container usage when deletion is submitted.
 Saved Local image Deployment dependencies also block non-forced deletion, even
 when you cannot read the owning Deployment; hidden workload names are not exposed.
 Configuration saves and deletion claims coordinate on the same image so a new
 Local image dependency cannot be saved while deletion is processing.
 
-If tags, inventory, or permissions change after review, deletion can be rejected.
-Refresh the review before retrying. Pulling a newer image moves its tags in the
+Deletion can still be rejected if image usage or permissions have changed.
+Resolve the reported error before retrying. Pulling a newer image moves its tags in the
 inventory while preserving the old local image and its saved dependencies.
 
 If a pull fails, read the operation error and check the image name, tag, Registry

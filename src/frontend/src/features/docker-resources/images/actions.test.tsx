@@ -64,23 +64,17 @@ const CurrentLocation = () => {
   return <output data-testid="location">{location.pathname}</output>;
 };
 
-const review = { dockerImageId: image.dockerImageId, rowVersion: 1, tags: ['app:latest'] };
+const previewRequests = vi.fn();
 beforeEach(() => {
+  previewRequests.mockClear();
   server.use(
-    http.post('http://localhost/api/v1/images/deletion-preview', () =>
-      HttpResponse.json([
-        {
-          review,
-          canDelete: true,
-          blockers: [],
-          warnings: [],
-          usage: { entries: [], nextOffset: null, coverageComplete: false, limitations: [] },
-          observedAt: '2026-10-15T12:00:00Z',
-        },
-      ]),
-    ),
+    http.post('http://localhost/api/v1/images/deletion-preview', () => {
+      previewRequests();
+      return HttpResponse.json({}, { status: 500 });
+    }),
   );
 });
+afterEach(() => expect(previewRequests).not.toHaveBeenCalled());
 
 describe('Image capabilities', () => {
   it.each([null, false, true])('requires an explicit inspect capability (%s)', (allowed) => {
@@ -160,7 +154,6 @@ describe.each(['list', 'detail'] as const)('Image deletion from %s', (surface) =
         ids: [image.dockerImageId],
         force: false,
         noPrune: true,
-        reviews: [review],
       }),
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -190,11 +183,12 @@ describe.each(['list', 'detail'] as const)('Image deletion from %s', (surface) =
     await user.click(dialog.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(deleted).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled());
-    expect(dialog.getByText(/review could not be completed/)).toBeVisible();
+    expect(await dialog.findByText('Image has multiple tags')).toBeVisible();
     expect(deleted.mock.calls[0][0]).toMatchObject({ force: false, noPrune: true });
     expect(screen.getByRole('dialog')).toBeVisible();
     expect(screen.getByTestId('location').textContent).toBe(route);
+
+    expect(deleted).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -231,7 +225,6 @@ describe('Image deletion selection and inspection', () => {
         ids: [image.dockerImageId],
         force: false,
         noPrune: true,
-        reviews: [review],
       }),
     );
   });
@@ -253,36 +246,28 @@ describe('Image deletion selection and inspection', () => {
   });
 });
 
-it('shows the backend dependency blocker and never submits deletion', async () => {
+it('shows a dependency conflict from deletion and keeps the dialog open', async () => {
   const deleted = vi.fn();
   server.use(
-    http.post('http://localhost/api/v1/images/deletion-preview', () =>
-      HttpResponse.json([
-        {
-          review,
-          canDelete: false,
-          blockers: ['A saved Local image dependency prevents deletion.'],
-          warnings: [],
-          usage: { entries: [], limitations: [], coverageComplete: false, nextOffset: null },
-          observedAt: '2026-10-15T00:00:00Z',
-        },
-      ]),
-    ),
     http.delete('http://localhost/api/v1/images', () => {
       deleted();
-      return HttpResponse.json({ items: [] });
+      return HttpResponse.json(
+        { title: 'A saved Local image dependency prevents deletion.', status: 409 },
+        { status: 409 },
+      );
     }),
   );
   const { user } = renderCitadel(<ImageGroupActions.delete resources={[deletableImage]} />);
   await user.click(screen.getByRole('button', { name: 'Delete' }));
-  expect(await screen.findByText('A saved Local image dependency prevents deletion.')).toBeVisible();
   const dialog = within(screen.getByRole('dialog'));
   await user.type(dialog.getByRole('textbox'), 'Delete');
-  expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled();
-  expect(deleted).not.toHaveBeenCalled();
+  await user.click(dialog.getByRole('button', { name: 'Delete' }));
+  expect(await dialog.findByText('A saved Local image dependency prevents deletion.')).toBeVisible();
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(deleted).toHaveBeenCalledTimes(1);
 });
 
-it('requires a new review when the selection changes while the dialog is open', async () => {
+it('blocks deletion when the selection changes while the dialog is open', async () => {
   const { user, rerender } = renderCitadel(<ImageGroupActions.delete resources={[deletableImage]} />);
   await user.click(screen.getByRole('button', { name: 'Delete' }));
   const dialog = within(screen.getByRole('dialog'));
@@ -293,42 +278,40 @@ it('requires a new review when the selection changes while the dialog is open', 
   expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled();
 });
 
-it('shows additional usage pages inside deletion review', async () => {
+it('keeps the confirmation compact without fetching usage pages', async () => {
+  const usageRequests = vi.fn();
   server.use(
-    http.post('http://localhost/api/v1/images/deletion-preview', () =>
-      HttpResponse.json([
-        {
-          review,
-          canDelete: true,
-          blockers: [],
-          warnings: [],
-          usage: { entries: [], nextOffset: 500, coverageComplete: false, limitations: [] },
-          observedAt: '2026-10-15T12:00:00Z',
-        },
-      ]),
-    ),
-    http.get(`http://localhost/api/v1/images/platform-1/${image.dockerImageId}/usage`, ({ request }) => {
-      expect(new URL(request.url).searchParams.get('offset')).toBe('500');
-      return HttpResponse.json({
-        entries: [
-          {
-            relationship: 'SavedTag',
-            workloadKind: 'Stack',
-            workloadId: 'stack-1',
-            workloadName: 'Referenced stack',
-            reference: 'app:latest',
-            isStale: false,
-          },
-        ],
-        nextOffset: null,
-        coverageComplete: false,
-        limitations: [],
-      });
+    http.get(`http://localhost/api/v1/images/platform-1/${image.dockerImageId}/usage`, () => {
+      usageRequests();
+      return HttpResponse.json({ entries: [], nextOffset: null, coverageComplete: false, limitations: [] });
     }),
   );
   const { user } = renderCitadel(<ImageGroupActions.delete resources={[deletableImage]} />);
   await user.click(screen.getByRole('button', { name: 'Delete' }));
   const dialog = within(screen.getByRole('dialog'));
-  await user.click(await dialog.findByRole('button', { name: 'More references' }));
-  expect(await dialog.findByRole('link', { name: 'Referenced stack' })).toBeVisible();
+  await user.type(dialog.getByRole('textbox'), 'Delete');
+  await waitFor(() => expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled());
+  expect(dialog.getByText(image.name)).toBeVisible();
+  expect(dialog.queryByText(image.dockerImageId)).not.toBeInTheDocument();
+  expect(
+    dialog.queryByText(/Reviewed|registry artifact|No known references|Some image references/),
+  ).not.toBeInTheDocument();
+  expect(dialog.queryByRole('button', { name: /More references|Check again/ })).not.toBeInTheDocument();
+  expect(usageRequests).not.toHaveBeenCalled();
+});
+
+it('uses the shared multi-delete list and click-to-copy confirmation', async () => {
+  const otherImage = { ...deletableImage, name: 'redis:latest', dockerImageId: `sha256:${'b'.repeat(64)}` };
+  const { user } = renderCitadel(<ImageGroupActions.delete resources={[deletableImage, otherImage]} />);
+  const copy = vi.spyOn(navigator.clipboard, 'writeText');
+  await user.click(screen.getByRole('button', { name: 'Delete' }));
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.getByRole('heading', { name: 'Confirm Delete' })).toBeVisible();
+  expect(dialog.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['app:latest', 'redis:latest']);
+  expect(dialog.getByText('You may click the name in bold to copy it')).toBeVisible();
+  await user.click(dialog.getByText('Delete', { selector: 'b' }));
+  expect(copy).toHaveBeenCalledWith('Delete');
+  expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled();
+  await user.type(dialog.getByRole('textbox', { name: 'Enter Delete to confirm' }), 'Delete');
+  await waitFor(() => expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled());
 });

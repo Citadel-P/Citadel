@@ -193,6 +193,12 @@ commands are in [docs/README.md](README.md).
 
 ## Database schema changes
 
+The current checkout consolidates migrations `0001`–`0006` into a single
+`0001_initial.sql` for fresh databases. Its checksum differs from earlier
+catalogs, including published v0.1.x releases, so it cannot upgrade those
+databases. Existing storage must be preserved; this consolidation does not
+authorize resetting databases or rewriting their migration journals.
+
 Preserve published migrations, including `0001_initial.sql`. Add each schema
 change as the next numbered SQL migration under `src/infrastructure/database/generated/`.
 Append the same upgrade SQL to `src/infrastructure/database/src/schema/schema.sql`;
