@@ -64,7 +64,7 @@ export function ProductPreview() {
           src={docsAssetUrl(`/screenshots/${view.file}.png`)}
           alt={view.alt}
           width={1440}
-          height={900}
+          height={1000}
           sizes="(max-width: 1200px) 94vw, 1120px"
           priority={selected === 0}
         />
@@ -74,7 +74,7 @@ export function ProductPreview() {
             src={docsAssetUrl("/screenshots/platforms-dark.png")}
             alt={view.alt}
             width={1440}
-            height={900}
+            height={1000}
             sizes="(max-width: 1200px) 94vw, 1120px"
             priority
           />

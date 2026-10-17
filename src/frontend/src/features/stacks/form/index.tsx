@@ -1,3 +1,4 @@
+import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
@@ -126,6 +127,7 @@ export const StackFormComponents: RequiredFormComponents = {
     },
     TabActions: ({ resource }: { resource: StackView }) => (
       <div className="flex items-center gap-3">
+        <WorkloadNetworkAction resource={resource} kind="Stack" />
         <WorkloadHealthCard resource={resource} kind="Stack" triggerVariant="icon" />
         <ResourceBackupIndicator source={{ $type: 'Stack', stackId: resource.id }} coverage={resource.backupCoverage} />
       </div>

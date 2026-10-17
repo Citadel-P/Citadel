@@ -1,3 +1,4 @@
+import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
@@ -79,11 +80,12 @@ export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServ
     ),
     TabActions: ({ resource }: { resource: ManagedSwarmServiceView }) => (
       <div className="flex items-center gap-3">
+        <WorkloadNetworkAction resource={resource} kind="SwarmService" />
+        <WorkloadHealthCard resource={resource} kind="SwarmService" triggerVariant="icon" />
         <ResourceBackupIndicator
           source={{ $type: 'SwarmService', swarmServiceId: resource.id }}
           coverage={resource.backupCoverage}
         />
-        <WorkloadHealthCard resource={resource} kind="SwarmService" />
       </div>
     ),
     Tabs: [

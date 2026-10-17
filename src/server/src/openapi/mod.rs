@@ -211,8 +211,8 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 405);
-        assert_eq!(operations(&public), 306);
+        assert_eq!(operations(&full), 419);
+        assert_eq!(operations(&public), 314);
         for doc in [&full, &public] {
             let refresh = &doc["paths"]["/api/v1/platforms/{platformId}/swarm/refresh"]["post"];
             assert_eq!(refresh["operationId"], "refreshSwarmInventory");
@@ -341,6 +341,49 @@ mod metadata_tests {
     use serde_json::{Value, json};
 
     #[test]
+    fn every_public_operation_has_a_nonblank_summary() {
+        // Inspect the handler-derived document, not checked-in JSON: missing
+        // annotations must fail Rust tests even before schemas are regenerated.
+        let doc = serde_json::to_value(document(true)).unwrap();
+        for (path, method, id) in [
+            ("/api/v1/images/check-update", "post", "checkImageUpdate"),
+            (
+                "/api/v1/images/deletion-preview",
+                "post",
+                "previewImageDeletion",
+            ),
+            (
+                "/api/v1/images/{platformId}/{imageId}/usage",
+                "get",
+                "getImageUsage",
+            ),
+        ] {
+            assert_eq!(doc["paths"][path][method]["operationId"], id);
+        }
+        let mut missing = Vec::new();
+        for (path, item) in doc["paths"].as_object().unwrap() {
+            for method in [
+                "get", "post", "put", "patch", "delete", "head", "options", "trace",
+            ] {
+                let Some(operation) = item.get(method) else {
+                    continue;
+                };
+                if !operation["summary"]
+                    .as_str()
+                    .is_some_and(|value| !value.trim().is_empty())
+                {
+                    missing.push(format!("{} {path}", method.to_uppercase()));
+                }
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "Public operations missing summaries: {}",
+            missing.join(", ")
+        );
+    }
+
+    #[test]
     fn documents_authentication_cookies_security_and_rate_limits() {
         let doc = serde_json::to_value(document(false)).unwrap();
         let bearer = &doc["components"]["securitySchemes"]["Bearer"];
@@ -393,7 +436,11 @@ mod metadata_tests {
                 .values()
                 .filter(|v| v.get("operationId").is_some())
             {
-                assert!(op["responses"]["429"]["content"]["application/problem+json"].is_object());
+                assert!(
+                    op["responses"]["429"]["content"]["application/problem+json"].is_object(),
+                    "{} must document its rate-limit Problem Details response",
+                    op["operationId"]
+                );
             }
         }
     }

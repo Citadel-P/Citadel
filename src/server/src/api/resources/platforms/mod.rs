@@ -18,3 +18,6 @@ pub(crate) mod capabilities;
 pub mod edge;
 
 pub mod workload_health_views;
+
+pub(crate) mod network_views;
+pub mod networking_views;

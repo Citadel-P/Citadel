@@ -37,7 +37,7 @@ describe('network details', () => {
     expect(screen.getByRole('heading', { name: 'Driver options' })).toBeVisible();
     expect(screen.getByText('com.docker.network.driver.mtu')).toBeVisible();
     expect(screen.getByText('1450')).toBeVisible();
-    expect(screen.getByText('No containers are connected to this network.')).toBeVisible();
+    expect(screen.getByText('No visible attachments were returned.')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'IP address management' })).not.toBeInTheDocument();
   });
 });

@@ -76,6 +76,13 @@ pub struct ImageUpdateBatch {
     pub checked: usize,
     pub failed: usize,
 }
+/// The local image and exact tag whose registry content is being compared.
+pub struct ImageUpdateTarget<'a> {
+    pub platform: Uuid,
+    pub location: &'a ImageLocation,
+    pub reference: &'a str,
+}
+
 type ChangeHandler = Arc<dyn Fn(Uuid, &str) + Send + Sync>;
 pub struct ImageUpdateService {
     runtime: Arc<dyn PlatformRuntimeProvider>,
@@ -183,13 +190,15 @@ impl ImageUpdateService {
             self.check_resolved(
                 ActorId::new(Uuid::from_u128(1)),
                 true,
-                candidate.platform,
-                &ImageLocation {
-                    docker_image_id: candidate.image.clone(),
-                    docker_node_id: None,
+                ImageUpdateTarget {
+                    platform: candidate.platform,
+                    location: &ImageLocation {
+                        docker_image_id: candidate.image.clone(),
+                        docker_node_id: None,
+                    },
+                    reference,
                 },
                 &registry,
-                reference,
                 cancel,
             )
             .await?;
@@ -248,10 +257,8 @@ impl ImageUpdateService {
         &self,
         actor: ActorId,
         admin: bool,
-        platform: Uuid,
-        location: &ImageLocation,
+        target: ImageUpdateTarget<'_>,
         registry_id: Uuid,
-        reference: &str,
         cancel: &CancellationToken,
     ) -> Result<ImageTagUpdate, RuntimeCapabilityError> {
         let registry = self
@@ -266,10 +273,8 @@ impl ImageUpdateService {
                     "The selected Registry is not available.",
                 )
             })?;
-        self.check_resolved(
-            actor, admin, platform, location, &registry, reference, cancel,
-        )
-        .await
+        self.check_resolved(actor, admin, target, &registry, cancel)
+            .await
     }
 
     /// Refresh an existing comparison invalidated by a successful pull. New
@@ -325,13 +330,15 @@ impl ImageUpdateService {
         self.check_resolved(
             actor,
             admin,
-            platform,
-            &ImageLocation {
-                docker_image_id: image.id.clone(),
-                docker_node_id: None,
+            ImageUpdateTarget {
+                platform,
+                location: &ImageLocation {
+                    docker_image_id: image.id.clone(),
+                    docker_node_id: None,
+                },
+                reference,
             },
             &registry,
-            reference,
             cancel,
         )
         .await?;
@@ -342,12 +349,15 @@ impl ImageUpdateService {
         &self,
         actor: ActorId,
         admin: bool,
-        platform: Uuid,
-        location: &ImageLocation,
+        target: ImageUpdateTarget<'_>,
         registry: &ImageUpdateRegistry,
-        reference: &str,
         cancel: &CancellationToken,
     ) -> Result<ImageTagUpdate, RuntimeCapabilityError> {
+        let ImageUpdateTarget {
+            platform,
+            location,
+            reference,
+        } = target;
         if location.docker_node_id.is_some() {
             return Err(failure(
                 RuntimeErrorKind::Unavailable,
@@ -431,7 +441,7 @@ impl ImageUpdateService {
                 .observe(
                     platform,
                     location.docker_node_id.as_deref(),
-                    &registry,
+                    registry,
                     reference,
                     &target,
                     cancel,
@@ -529,10 +539,9 @@ impl ImageUpdateService {
             .store
             .save(platform, &location.docker_image_id, registry, &result)
             .await?
+            && let Some(on_change) = &self.on_change
         {
-            if let Some(on_change) = &self.on_change {
-                on_change(platform, &location.docker_image_id);
-            }
+            on_change(platform, &location.docker_image_id);
         }
         Ok(result)
     }
@@ -740,8 +749,13 @@ mod tests {
                 .id,
             a.id
         );
-        let anonymous =
-            scheduled_registry(None, "ghcr.io/team/app:latest", &[a.clone()], &[]).unwrap();
+        let anonymous = scheduled_registry(
+            None,
+            "ghcr.io/team/app:latest",
+            std::slice::from_ref(&a),
+            &[],
+        )
+        .unwrap();
         assert!(anonymous.id.is_nil());
         assert_eq!(anonymous.host, "ghcr.io");
         let previous = StoredImageUpdate {
@@ -755,7 +769,7 @@ mod tests {
                 None,
                 "nginx:17",
                 &[a.clone(), b.clone()],
-                &[previous.clone()]
+                std::slice::from_ref(&previous)
             )
             .unwrap()
             .id,

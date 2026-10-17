@@ -30,6 +30,17 @@ Checks read metadata only. Missing comparison fields from older Agents yield an
 unavailable comparison in Core. No operation numbers or Swarm-node allowlists
 change; node-local registry checks remain unavailable.
 
+## Network inventory
+
+Network list responses include attached endpoints in the additive shared
+`Network.containers` field (17). Local and Agent runtimes derive these from the
+container inventory already fetched for usage counts; configured networks without
+an endpoint are not reported as attachments. Core still filters relationships and
+endpoint details by actor permissions. Direct and Edge share this mapping and the
+existing operation numbers, cancellation bounds, and Swarm-node allowlists.
+Older Agents omit these endpoints, so workload maps can show incomplete evidence
+until the Agent is updated; network inspection remains available.
+
 ## Deployment profiles
 
 All profiles use the same Agent image. Build Pools do not have a separate transport.

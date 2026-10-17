@@ -12,6 +12,30 @@ pub struct PlatformReadService {
 }
 
 impl PlatformReadService {
+    pub async fn network_containers(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        container: Option<Uuid>,
+    ) -> Result<Vec<crate::network_usage::NetworkContainer>, AuthorizedReadError> {
+        self.store
+            .network_containers(actor, administrator, platform, container)
+            .await
+    }
+
+    pub async fn network_usage(
+        &self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        networks: &[crate::network_usage::NetworkUsageQuery],
+    ) -> Result<Vec<crate::network_usage::NetworkUsage>, AuthorizedReadError> {
+        self.store
+            .network_usage(actor, administrator, platform, networks)
+            .await
+    }
+
     pub async fn container_health_history(
         &self,
         container: Uuid,

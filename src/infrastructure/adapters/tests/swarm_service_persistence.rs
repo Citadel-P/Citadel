@@ -707,24 +707,28 @@ async fn service_health_joins_exact_node_and_excludes_superseded_tasks() {
     sqlx::query("INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex,dockercreatedat) VALUES($1,'old','shutdown','old-container','node-a','service','nginx','old','a',now(),'[]','web',1,'failed',1,now()-interval '1 hour'),($1,'current','running','same-id','node-a','service','nginx','current','a',now(),'[]','web',1,'running',2,now())").bind(platform).execute(&pool).await.unwrap();
     workload_health_fixture::container(
         &pool,
-        platform,
-        "old-container",
-        Some("node-a"),
-        None,
-        None,
-        None,
-        "Unhealthy",
+        workload_health_fixture::Container {
+            platform,
+            docker_id: "old-container",
+            node: Some("node-a"),
+            owner: None,
+            stack: None,
+            service: None,
+            result: "Unhealthy",
+        },
     )
     .await;
     workload_health_fixture::container(
         &pool,
-        platform,
-        "same-id",
-        Some("node-b"),
-        None,
-        None,
-        None,
-        "Healthy",
+        workload_health_fixture::Container {
+            platform,
+            docker_id: "same-id",
+            node: Some("node-b"),
+            owner: None,
+            stack: None,
+            service: None,
+            result: "Healthy",
+        },
     )
     .await;
     assert_eq!(
@@ -739,13 +743,15 @@ async fn service_health_joins_exact_node_and_excludes_superseded_tasks() {
     );
     workload_health_fixture::container(
         &pool,
-        platform,
-        "same-id",
-        Some("node-a"),
-        None,
-        None,
-        None,
-        "Healthy",
+        workload_health_fixture::Container {
+            platform,
+            docker_id: "same-id",
+            node: Some("node-a"),
+            owner: None,
+            stack: None,
+            service: None,
+            result: "Healthy",
+        },
     )
     .await;
     let read = store.get_authorized(actor, true, service.id).await.unwrap();
@@ -769,7 +775,16 @@ async fn service_health_joins_exact_node_and_excludes_superseded_tasks() {
         .await
         .unwrap();
     let manager_container = workload_health_fixture::container(
-        &pool, platform, "same-id", None, None, None, None, "Healthy",
+        &pool,
+        workload_health_fixture::Container {
+            platform,
+            docker_id: "same-id",
+            node: None,
+            owner: None,
+            stack: None,
+            service: None,
+            result: "Healthy",
+        },
     )
     .await;
     assert_eq!(
