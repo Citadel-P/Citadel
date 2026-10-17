@@ -208,10 +208,17 @@ describe('SwarmServiceFormComponents', () => {
         <Route path="/swarm-services/edit/:id" element={<Tags resource={resource} />} />
         <Route path="/platforms/:platformId/services/add" element={<span>Duplicate Service form</span>} />
       </Routes>,
-      { route: `/swarm-services/edit/${resource.id}` },
+      {
+        route: `/swarm-services/edit/${resource.id}`,
+        groups: {
+          connectionFactory: () => new FakeRealtimeConnection().asRealtimeConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
     );
 
-    await user.click(screen.getByRole('button', { name: 'Duplicate Config' }));
+    await user.click(screen.getByRole('button', { name: 'Duplicate' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Configuration only/ }));
 
     expect(await screen.findByText('Duplicate Service form')).toBeVisible();
   });

@@ -115,6 +115,17 @@ type BackupCellTarget = {
   returnTo: string;
 };
 
+export function ResourceBackupCell(value: BackupCellTarget) {
+  if (backupSummaryStatus(value.coverage) === BackupCoverageStatus.NotApplicable) {
+    return (
+      <span className="text-muted-foreground" title="No eligible storage">
+        —
+      </span>
+    );
+  }
+  return <ResourceBackupIndicator compact {...value} />;
+}
+
 export function backupColumn<T>(target: (row: T) => BackupCellTarget | undefined): ColumnDef<T> {
   return {
     id: 'backup',
@@ -122,15 +133,7 @@ export function backupColumn<T>(target: (row: T) => BackupCellTarget | undefined
     accessorFn: (row) => backupSummaryStatus(target(row)?.coverage),
     cell: ({ row }) => {
       const value = target(row.original);
-      if (!value) return null;
-      if (backupSummaryStatus(value.coverage) === BackupCoverageStatus.NotApplicable) {
-        return (
-          <span className="text-muted-foreground" title="No eligible storage">
-            —
-          </span>
-        );
-      }
-      return <ResourceBackupIndicator compact {...value} />;
+      return value ? <ResourceBackupCell {...value} /> : null;
     },
   };
 }

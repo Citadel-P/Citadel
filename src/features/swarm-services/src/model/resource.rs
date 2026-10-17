@@ -19,6 +19,7 @@ pub struct SwarmServiceOperation {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SwarmService {
+    pub probe_health: citadel_primitives::health::WorkloadHealth,
     pub id: Uuid,
     pub platform_id: Uuid,
     pub name: String,

@@ -64,6 +64,7 @@ impl container_service_server::ContainerService for Runtime {
     ) -> Result<Response<ListContainersResponse>, Status> {
         let r = request.into_inner();
         let metadata_only = r.metadata_only;
+        let observe_health = r.observe_health;
         let filter = serde_json::to_string(
             &r.filters
                 .into_iter()
@@ -83,6 +84,17 @@ impl container_service_server::ContainerService for Runtime {
         };
         let values = futures_util::stream::iter(models.into_iter().map(|model| async {
             let mut c = summary(model)?;
+            if observe_health {
+                let document = tokio::select! {
+                    biased; () = self.shutdown.cancelled() => return Err(Status::cancelled("Agent shutting down")),
+                    result = self.docker.inspect_container_document(&c.id) => result.ok()
+                        .filter(|doc| doc["Id"].as_str() == Some(c.id.as_str())),
+                };
+                if let Some(doc) = document {
+                    c.state = super::container_mapping::state(doc["State"]["Status"].as_str().unwrap_or("unknown"));
+                    c.health_observation = Some(citadel_adapters::connectors::agent::container_health::to_wire(citadel_adapters::connectors::docker::container_health::observation(&doc)));
+                }
+            }
             if metadata_only {
                 c.container_stat_message = None;
             }
@@ -366,6 +378,7 @@ pub(super) fn summary(
     let size_root_fs = model.size_root_fs.flatten().unwrap_or_default();
     let c = container_summary(model.try_into().map_err(docker_error)?);
     Ok(ContainerMessage {
+        health_observation: None,
         mounts_observed: c.mounts.is_some(),
         mounts: c
             .mounts

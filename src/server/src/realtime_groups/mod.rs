@@ -36,6 +36,21 @@ impl Group {
         self.topic.reference()
     }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if let Topic::ContainerHealth(id) = self.topic() {
+            // Persisted history only: telemetry and unrelated resource changes
+            // must not reload it. The reader checks the owning platform/runtime ID.
+            if let Some(patches) = event.payload["containerPatches"].as_array() {
+                return patches.iter().any(|patch| {
+                    patch["id"]
+                        .as_str()
+                        .and_then(|value| Uuid::parse_str(value).ok())
+                        == Some(*id)
+                        && (patch.get("state").is_some() || patch.get("health").is_some())
+                });
+            }
+            return event.payload["dockerResourceType"] == "container"
+                || (event.resource_type == "Platform" && event.event_kind == "connectionChanged");
+        }
         if matches!(self.topic(), Topic::ResourceCopy(..)) {
             return event.resource_type == "ResourceCopy" && event.affects_resource(self.id());
         }
@@ -133,6 +148,12 @@ impl Group {
                 event.resource_type,
                 "Deployment" | "Stack" | "SwarmService" | "Registry"
             )
+        {
+            return event.platform_id.is_none() || self.id() == event.platform_id;
+        }
+        // Searchable owner names change independently of Docker inventory.
+        if matches!(self.topic(), Topic::Containers(..))
+            && matches!(event.resource_type, "Deployment" | "Stack" | "SwarmService")
         {
             return event.platform_id.is_none() || self.id() == event.platform_id;
         }
@@ -273,6 +294,8 @@ pub struct GroupRows {
 #[derive(Clone)]
 pub enum RowStyle {
     Update,
+    // Upserts only; omitted owners are not deletions.
+    UpdatePatch,
     Daemon,
     DockerResource,
     // Complete state for one Docker ID, not the entire Platform inventory.
@@ -454,6 +477,21 @@ impl GroupSubscription {
                 }
                 continue;
             }
+            if matches!(batch.style, RowStyle::UpdatePatch) {
+                let known = self.known.entry(batch.target).or_default();
+                for row in batch.rows {
+                    if let Some(id) = row["id"].as_str() {
+                        if !known.contains(id) && known.len() >= limit {
+                            return Err(RealtimeReadError::Storage(
+                                "Realtime snapshot limit exceeded".into(),
+                            ));
+                        }
+                        known.insert(id.to_owned());
+                        events.push(ClientEvent::new(batch.target, vec![row, json!("update")]));
+                    }
+                }
+                continue;
+            }
             let ids: BTreeSet<_> = batch
                 .rows
                 .iter()
@@ -490,7 +528,7 @@ impl GroupSubscription {
                         batch.target,
                         vec![Value::Null, json!("destroy"), json!(removed)],
                     )),
-                    RowStyle::Update => events.push(ClientEvent::new(
+                    RowStyle::Update | RowStyle::UpdatePatch => events.push(ClientEvent::new(
                         batch.target,
                         vec![json!({"id":removed}), json!("delete")],
                     )),
@@ -531,7 +569,7 @@ impl GroupSubscription {
                     | RowStyle::PlatformPatch(_) => unreachable!(),
                     // "update" upserts in the existing hooks and avoids duplicate
                     // creates when the initial REST read and group join overlap.
-                    RowStyle::Update => vec![row, json!("update")],
+                    RowStyle::Update | RowStyle::UpdatePatch => vec![row, json!("update")],
                 };
                 events.push(ClientEvent::new(batch.target, args));
             }
@@ -560,6 +598,30 @@ fn docker_tombstone(row: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn container_search_follows_owner_changes_on_the_affected_platform() {
+        let platform = Uuid::now_v7();
+        let group = Group::parse(&format!("containers:{platform}")).unwrap();
+        let mut event = PublishedRuntimeEvent {
+            platform_id: Some(platform),
+            resource_type: "Deployment",
+            resource_id: Uuid::now_v7(),
+            event_kind: "updated",
+            resource_revision: 1,
+            reads: Default::default(),
+            containers: Default::default(),
+            payload: json!({}),
+        };
+        for kind in ["Deployment", "Stack", "SwarmService"] {
+            event.resource_type = kind;
+            event.platform_id = Some(platform);
+            assert!(group.affected_by(&event));
+            event.platform_id = Some(Uuid::now_v7());
+            assert!(!group.affected_by(&event));
+            event.platform_id = None;
+            assert!(group.affected_by(&event));
+        }
+    }
     #[test]
     fn image_snapshots_follow_saved_references_and_registry_changes() {
         let platform = Uuid::now_v7();
@@ -691,6 +753,49 @@ mod tests {
                     .affected_by(&receiver.try_recv().unwrap())
             );
         }
+    }
+
+    #[test]
+    fn owner_patches_preserve_siblings_and_enforce_the_subscription_bound() {
+        let mut subscription = GroupSubscription::new(Group::parse("deployments").unwrap());
+        let snapshot = |rows, style| GroupSnapshot {
+            rows: vec![GroupRows {
+                target: "DeploymentInfoUpdated",
+                rows,
+                style,
+            }],
+            events: vec![],
+        };
+        subscription
+            .apply(
+                snapshot(vec![json!({"id":"a"}), json!({"id":"b"})], RowStyle::Update),
+                2,
+            )
+            .unwrap();
+        let patch = subscription
+            .apply(
+                snapshot(
+                    vec![json!({"id":"a","probeHealth":{"status":"Unhealthy"}})],
+                    RowStyle::UpdatePatch,
+                ),
+                2,
+            )
+            .unwrap();
+        assert_eq!(patch.len(), 1);
+        assert_eq!(patch[0].arguments[1], "update");
+        assert!(
+            subscription
+                .apply(snapshot(vec![json!({"id":"c"})], RowStyle::UpdatePatch), 2)
+                .is_err()
+        );
+        let deleted = subscription
+            .apply(snapshot(vec![], RowStyle::Update), 2)
+            .unwrap();
+        assert_eq!(
+            deleted.len(),
+            2,
+            "a patch must retain its sibling in the full-snapshot deletion set"
+        );
     }
 
     #[test]

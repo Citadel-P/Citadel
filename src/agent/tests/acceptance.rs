@@ -4,6 +4,8 @@ use serde_json::{Value, json};
 use std::{process::Command, time::Duration};
 use uuid::Uuid;
 
+#[path = "acceptance/health.rs"]
+mod health;
 #[path = "acceptance/swarm.rs"]
 mod swarm;
 
@@ -108,6 +110,24 @@ impl Fixture {
             base: String::new(),
             token: String::new(),
         }
+    }
+    async fn renew_session(&mut self) {
+        // Long acceptance runs can exceed the normal access-token lifetime.
+        // Log in between scenarios; never weaken expiry or replay a failed mutation.
+        let response = self
+            .client
+            .post(format!("{}/api/v1/authentication/login", self.base))
+            .json(&json!({"emailOrName":"acceptance@example.test", "password":PASSWORD}))
+            .send()
+            .await
+            .unwrap();
+        assert!(
+            response.status().is_success(),
+            "fixture login failed: {}",
+            response.status()
+        );
+        let session: Value = response.json().await.unwrap();
+        self.token = session["accessToken"].as_str().unwrap().to_owned();
     }
     fn container(&self, role: &str) -> String {
         format!("{}-{role}", self.name)
@@ -434,7 +454,7 @@ async fn packaged_core_routes_direct_and_edge_resources_and_recovers_connections
         .expect("Core/Agent acceptance exceeded its time budget");
 }
 
-async fn exercise(f: &mut Fixture, core: String, agent: String) {
+async fn start_core(f: &mut Fixture, core: &str) -> (String, String) {
     // Let Docker choose a free subnet and gateway, then explicitly configure
     // both so the static Core address used by nested Swarm tasks is supported.
     docker(&["network", "create", &f.name]).await;
@@ -561,6 +581,26 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
         .to_owned();
     assert!(!public_key.is_empty());
 
+    (public_key, core_url)
+}
+
+#[tokio::test]
+#[ignore = "requires candidate Core and digest-pinned released Agent images; creates isolated containers"]
+async fn packaged_released_agent_compatibility() {
+    let core = std::env::var("CITADEL_ACCEPTANCE_CORE_IMAGE").unwrap();
+    std::env::var("CITADEL_ACCEPTANCE_BASELINE_AGENT_IMAGE")
+        .expect("released Agent digest required");
+    let mut f = Fixture::new();
+    tokio::time::timeout(Duration::from_secs(600), async {
+        let (public_key, _) = start_core(&mut f, &core).await;
+        released_agent_baseline(&mut f, &public_key).await;
+    })
+    .await
+    .expect("released Agent acceptance exceeded its time budget");
+}
+
+async fn exercise(f: &mut Fixture, core: String, agent: String) {
+    let (public_key, core_url) = start_core(f, &core).await;
     f.daemon("direct-daemon").await;
     let wrong_key =
         citadel_adapters::connectors::agent::client::AgentRequestSigner::from_bytes(&[9; 32])
@@ -599,6 +639,7 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
     assert!(!platform["agentVersion"].as_str().unwrap().is_empty());
     f.route(&direct_id).await;
     let direct_stack = f.workload(&direct_id, "direct").await;
+    health::exercise(f, &direct_id, "direct-daemon", "direct").await;
     docker(&["stop", "-t", "12", &f.container("direct")]).await;
     f.wait(&format!("/api/v1/platforms/{direct_id}"), |v| {
         v["status"] == "Offline"
@@ -669,6 +710,7 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
     .await;
     f.route(&edge_id).await;
     let edge_stack = f.workload(&edge_id, "edge").await;
+    health::exercise(f, &edge_id, "edge-daemon", "edge").await;
     docker(&["stop", "-t", "12", &f.container("edge")]).await;
     f.wait(&status_path, |v| v["connectionStatus"] == "Offline")
         .await;
@@ -765,7 +807,12 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
         "Edge: HTTP enrollment, stacks, token-free reconnect, revocation and Core restart persistence passed"
     );
     swarm::exercise(f, &agent, &public_key, &core_url).await;
+    released_agent_baseline(f, &public_key).await;
+}
+
+async fn released_agent_baseline(f: &mut Fixture, public_key: &str) {
     if let Ok(baseline) = std::env::var("CITADEL_ACCEPTANCE_BASELINE_AGENT_IMAGE") {
+        f.renew_session().await;
         assert!(
             baseline
                 .rsplit_once("@sha256:")
@@ -795,14 +842,78 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
         f.agent_ready("baseline").await;
         f.route(id).await;
         f.running(&stack, "Running").await;
+        health::released_agent(f, id, "baseline-daemon", "direct").await;
         f.api(Method::DELETE, "/api/v1/stacks", Some(json!([stack])))
             .await;
+        // Exercise the same released binary through Edge enrollment and a token-free reconnect.
+        f.daemon("baseline-edge-daemon").await;
+        let platform = f.api(Method::POST, "/api/v1/platforms", Some(json!({
+            "name":"released-edge-agent", "type":"Docker", "connectorType":"EdgeAgent", "tagIds":[]
+        }))).await;
+        let edge_id = platform["id"].as_str().unwrap();
+        let enrollment = f
+            .api(
+                Method::POST,
+                &format!("/api/v1/platforms/{edge_id}/edge/enrollments"),
+                None,
+            )
+            .await;
+        let credential = format!(
+            "CITADEL_EDGE_ENROLLMENT_TOKEN={}",
+            enrollment["token"].as_str().unwrap()
+        );
+        let data = f.volume("baseline-edge-data");
+        let args = [
+            "-e",
+            "CITADEL_AGENT_MODE=edge",
+            "-e",
+            "CITADEL_CORE_URL=http://core:8001",
+            "-e",
+            "DOCKER_HOST=tcp://baseline-edge-daemon:2375",
+            "-v",
+            &data,
+        ];
+        let mut initial = args.to_vec();
+        initial.extend(["-e", &credential, &baseline]);
+        f.run("baseline-edge", &initial).await;
+        let status_path = format!("/api/v1/platforms/{edge_id}/edge/status");
+        let connected = f
+            .wait(&status_path, |v| v["connectionStatus"] == "Connected")
+            .await;
+        f.wait(&format!("/api/v1/platforms/{edge_id}"), |v| {
+            v["status"] == "Online"
+        })
+        .await;
+        f.route(edge_id).await;
+        let edge_stack = f.workload(edge_id, "baseline-edge").await;
+        docker(&["stop", "-t", "12", &f.container("baseline-edge")]).await;
+        f.wait(&status_path, |v| v["connectionStatus"] == "Offline")
+            .await;
+        docker(&["rm", "-fv", &f.container("baseline-edge")]).await;
+        let mut reconnect = args.to_vec();
+        reconnect.push(&baseline);
+        f.run("baseline-edge", &reconnect).await;
+        let reconnected = f
+            .wait(&status_path, |v| v["connectionStatus"] == "Connected")
+            .await;
+        assert_eq!(
+            reconnected["agentFingerprint"],
+            connected["agentFingerprint"]
+        );
+        f.wait(&format!("/api/v1/platforms/{edge_id}"), |v| {
+            v["status"] == "Online"
+        })
+        .await;
+        f.running(&edge_stack, "Running").await;
+        health::released_agent(f, edge_id, "baseline-edge-daemon", "edge").await;
+        f.api(Method::DELETE, "/api/v1/stacks", Some(json!([edge_stack])))
+            .await;
         println!(
-            "Released Agent baseline {baseline}: candidate Core registration, resource operations, stacks and restart passed"
+            "Released Agent baseline {baseline}: Direct/Edge registration, resource operations, stacks and restart/reconnect passed"
         );
     } else {
         println!(
-            "Mixed-version compatibility was not run: no released Agent digest was configured."
+            "Optional released-Agent baseline was not run: no released Agent digest was configured."
         );
     }
 }

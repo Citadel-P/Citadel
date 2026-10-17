@@ -1,5 +1,4 @@
-import { PlatformStatus, type PlatformView } from '@/api/generated/api.types';
-import { Server, CircleCheck, Unplug } from 'lucide-react';
+import { type PlatformView } from '@/api/generated/api.types';
 import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { usePlatformsGroup } from './hooks/usePlatformsGroup';
 import { Platforms } from './platforms';
@@ -17,28 +16,7 @@ export const PlatformComponents: RegularResourceComponents<PlatformView> = {
     showTagFilter: true,
     addButtonUrl: '/platforms/add',
   },
-  overview: {
-    label: 'Platform overview',
-    filters: [
-      { id: 'all', label: 'All platforms', description: 'All matching platforms', icon: Server },
-      {
-        id: 'online',
-        label: 'Online',
-        description: 'Connected and available',
-        icon: CircleCheck,
-        tone: 'success',
-        matches: (item) => item.status === PlatformStatus.Online,
-      },
-      {
-        id: 'offline',
-        label: 'Offline',
-        description: 'Connection unavailable',
-        icon: Unplug,
-        tone: 'warning',
-        matches: (item) => item.status === PlatformStatus.Offline,
-      },
-    ],
-  },
+
   Content: ({ items, actions, isLoading, isFiltered }) => {
     return <Platforms items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />;
   },

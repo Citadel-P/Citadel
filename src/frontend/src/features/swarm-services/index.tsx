@@ -1,6 +1,6 @@
+import { WorkloadHealthFilter, WorkloadHealthColumns, useWorkloadHealthFilter } from '@/features/workload-health/table';
 import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
-import { SwarmServiceHealth, type ManagedSwarmServiceView } from '@/api/generated/api.types';
-import { Boxes, CircleCheck, TriangleAlert, RefreshCw, CircleStop } from 'lucide-react';
+import { type ManagedSwarmServiceView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { CitadelIcons } from '@/lib/icons';
@@ -20,48 +20,16 @@ export const SwarmServiceComponents: RegularResourceComponents<ManagedSwarmServi
     showAdd: true,
     showTagFilter: true,
     showPlatformFilter: true,
-    Extra: BackupStatusFilter,
-    activeFilterParams: ['backupStatus'],
+    Extra: () => (
+      <>
+        <BackupStatusFilter />
+        <WorkloadHealthFilter kind="SwarmService" />
+        <WorkloadHealthColumns kind="SwarmService" />
+      </>
+    ),
+    activeFilterParams: ['backupStatus', 'health'],
   },
-  overview: {
-    label: 'Swarm service overview',
-    filters: [
-      { id: 'all', label: 'All services', description: 'All matching managed services', icon: Boxes },
-      {
-        id: 'healthy',
-        label: 'Healthy',
-        description: 'Services running normally',
-        icon: CircleCheck,
-        tone: 'success',
-        matches: (item) => item.health === SwarmServiceHealth.Healthy,
-      },
-      {
-        id: 'attention',
-        label: 'Needs attention',
-        description: 'Degraded or failed services',
-        icon: TriangleAlert,
-        tone: 'warning',
-        matches: (item) => [SwarmServiceHealth.Degraded, SwarmServiceHealth.Failed].includes(item.health),
-      },
-      {
-        id: 'updating',
-        label: 'Updating',
-        description: 'Deploying, reconciling or rolling back',
-        icon: RefreshCw,
-        matches: (item) =>
-          item.health === SwarmServiceHealth.Progressing ||
-          ['updating', 'rollback_started'].includes(item.updateState ?? ''),
-      },
-      {
-        id: 'zero',
-        label: 'Scaled to zero',
-        description: 'Replicated services with zero desired replicas',
-        icon: CircleStop,
-        matches: (item) =>
-          item.spec?.schedulingMode === 'Replicated' && item.spec.replicas != null && Number(item.spec.replicas) === 0,
-      },
-    ],
-  },
+
   Content: SwarmServicesTable,
   DropdownActions: SwarmServiceDropdownActions,
   GroupActions: ({ items }) => (
@@ -74,7 +42,8 @@ export const SwarmServiceComponents: RegularResourceComponents<ManagedSwarmServi
   ),
   useData: (): ResourceDataHookResult<any> => {
     const { services, capabilities, isLoading, error, refetch, isFetching } = useSwarmServicesGroup();
-    const items = useBackupStatusFilter(services ?? EMPTY);
+    const coveredItems = useBackupStatusFilter(services ?? EMPTY);
+    const items = useWorkloadHealthFilter(coveredItems, 'SwarmService');
     return { error, refetch, isFetching, items, capabilities, isLoading };
   },
   filterItems: (items, search) => {

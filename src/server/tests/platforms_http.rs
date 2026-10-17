@@ -814,6 +814,7 @@ fn snapshot(platform_id: Uuid) -> RuntimeInventorySnapshot {
             }),
         },
         containers: vec![RuntimeContainerSummary {
+            health: None,
             mounts: None,
             id: "container-1".into(),
             name: "web".into(),

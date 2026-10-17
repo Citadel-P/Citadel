@@ -21,6 +21,34 @@ and revocation. It also exercises Core's three-node Swarm installer and worker
 routing through Direct and Edge managers, including outage recovery, repair,
 upgrade and removal. It needs Rust, creates its own database and Docker daemons,
 and removes only its own containers, volumes and network.
+With current Core and Agent images, it also checks real health transitions and
+unchecked members over Direct/Edge, retained history, intentional stops, and
+three-node Swarm health coverage (including the connected manager) during worker
+loss and recovery. Observing
+Standalone health must not restart the container. Cross-version baseline runs
+retain their existing transport checks without requiring the newer health contract.
+The optional released-Agent baseline covers both Direct and Edge, including
+Edge reconnection without the enrollment token. For a release known to predate
+health observations (such as v0.1.2), set
+`CITADEL_ACCEPTANCE_BASELINE_HEALTH=unknown` when invoking the acceptance runner.
+This additionally verifies that checked and unchecked containers both remain
+Unknown, inspection does not claim observed health metadata, and history does
+not invent periodic health samples. Do not set this flag for released Agents
+that support the health contract.
+The same released-Agent section can be rerun independently with already-pulled
+images, without repeating current-pair Swarm acceptance:
+
+```bash
+CITADEL_ACCEPTANCE_CORE_IMAGE=citadel-core:acceptance \
+CITADEL_ACCEPTANCE_BASELINE_AGENT_IMAGE="$RELEASED_AGENT_IMAGE" \
+CITADEL_ACCEPTANCE_BASELINE_HEALTH=unknown \
+cargo test --locked -p citadel-agent --test acceptance packaged_released_agent_compatibility -- --ignored --nocapture --test-threads=1
+```
+
+The full runner still invokes this section when its third argument is supplied;
+it skips the independent test to avoid running the same section twice. Long
+scenarios renew the fixture administrator's session through normal login at
+scenario boundaries; production token expiration and authorization remain intact.
 The Swarm image-transfer regression also checks digest-pinned inputs in a clean
 Docker daemon, verifying that save/load preserves the selected image identity.
 Run it independently with:
@@ -168,6 +196,13 @@ database and verify the generated database, Docker, OpenAPI, and frontend
 artifacts. The script tests concurrent startup, restart idempotence, seed data,
 and checksum refusal. It removes its uniquely named container and network when
 the run finishes.
+
+Release upgrade verification must also initialize a disposable database with the
+previous **published Core image**, then start the candidate against that same
+database and verify retained data and migration history. Tests constructed from
+the current repository baseline do not establish published-version upgrade
+compatibility. Preserve checksum enforcement and never repair a test failure by
+rewriting an installed migration journal.
 
 ## identity and access
 

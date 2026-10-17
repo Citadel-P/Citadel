@@ -6,6 +6,21 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 pub trait PlatformReader: Send + Sync {
+    fn container_health_history(
+        &self,
+        container: Uuid,
+    ) -> BoxFuture<
+        '_,
+        Result<Vec<crate::container_health::ContainerHealthTransition>, AuthorizedReadError>,
+    >;
+    /// Actor-filtered owner names for a bounded batch of persisted container identities.
+    fn container_owner_names<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        containers: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<BTreeMap<Uuid, Vec<String>>, AuthorizedReadError>>;
+
     fn platform_kind(
         &self,
         id: Uuid,

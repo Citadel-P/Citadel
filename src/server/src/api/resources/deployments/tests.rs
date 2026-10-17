@@ -9,6 +9,7 @@ use uuid::Uuid;
 fn details() -> AuthorizedResource<citadel_deployments::Deployment> {
     AuthorizedResource {
         resource: citadel_deployments::Deployment {
+            probe_health: Default::default(),
             id: Uuid::now_v7(),
             name: "web".into(),
             description: None,

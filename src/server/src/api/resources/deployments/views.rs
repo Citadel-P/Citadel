@@ -31,6 +31,8 @@ pub struct DeploymentCapabilities {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentView {
+    #[schema(value_type = crate::api::resources::platforms::workload_health_views::WorkloadHealth)]
+    pub probe_health: citadel_primitives::health::WorkloadHealth,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<crate::api::resources::resource_copies::ResourceCopyEligibility>)]
     pub copy_eligibility: Option<citadel_resource_copies::CopyEligibility>,
@@ -162,6 +164,7 @@ impl TryFrom<AuthorizedResource<citadel_deployments::Deployment>> for Deployment
         let permission = value.effective_permission;
         let value = value.resource;
         Ok(Self {
+            probe_health: value.probe_health,
             copy_eligibility: None,
             backup_coverage: None,
             id: value.id,
@@ -272,6 +275,7 @@ mod tests {
     #[test]
     fn api_serialization_omits_null_properties_like_the_dotnet_contract() {
         let view = DeploymentView {
+            probe_health: Default::default(),
             copy_eligibility: None,
             backup_coverage: None,
             id: Uuid::now_v7(),

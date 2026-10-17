@@ -168,6 +168,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Platform
         .normalized_routes(utoipa_axum::routes!(update_platform_metadata))
         .normalized_routes(utoipa_axum::routes!(list_containers))
         .normalized_routes(utoipa_axum::routes!(get_container))
+        .normalized_routes(utoipa_axum::routes!(container_health_history))
         .normalized_routes(utoipa_axum::routes!(start))
         .normalized_routes(utoipa_axum::routes!(stop))
         .normalized_routes(utoipa_axum::routes!(restart))
@@ -566,6 +567,16 @@ async fn list_containers(
     if let Some(service) = &state.backup_coverage {
         containers = service.enrich_containers(&principal, containers).await;
     }
+    api_result(
+        crate::api::resources::platforms::container_views::enrich_container_owner_names(
+            &state.platforms,
+            &principal,
+            &mut containers,
+        )
+        .await
+        .map_err(platform_error),
+        &headers,
+    )?;
     for container in &mut containers {
         container.capabilities = Some(capabilities);
     }
@@ -628,6 +639,41 @@ async fn get_container(
     container.capabilities =
         Some(authorize_platform(&state, &principal, container.platform_id, &headers).await?);
     Ok(no_store(Json(container).into_response()))
+}
+
+#[utoipa::path(
+    get, path = "/api/v1/containers/{id}/health-history", operation_id = "getContainerHealthHistory",
+    tag = "Containers", summary = "Get bounded Container health and lifecycle transitions",
+    responses((status = 200, description = "Up to 200 transitions within seven days; history may have gaps", body = Vec<crate::api::resources::platforms::health_views::ContainerHealthTransitionView>), crate::openapi::errors::ResourceErrors),
+    params(("id" = Uuid, Path)), security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn container_health_history(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> HttpResult {
+    let principal = api_result(require_actor(principal), &headers)?;
+    let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
+    let container = required(
+        state
+            .platforms
+            .get_container(id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    authorize_platform(&state, &principal, container.platform_id, &headers).await?;
+    let history = api_result(
+        state
+            .platforms
+            .container_health_history(id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    Ok(no_store(Json(history.into_iter().map(crate::api::resources::platforms::health_views::ContainerHealthTransitionView::from).collect::<Vec<_>>()).into_response()))
 }
 
 fn valid_container_reference(reference: &str) -> bool {
@@ -2450,7 +2496,21 @@ async fn read_deployment(
             .map_err(platform_error),
         &headers,
     )?;
-    inspect_target(&state, &principal, container, &headers, kind, None).await
+    // Deployment access is sufficient for diagnostics. Include optional host
+    // capabilities only when the actor may also read that Platform.
+    let capabilities = if matches!(kind, ReadKind::Info) {
+        let permissions =
+            effective_permissions(&state, &principal, &[container.platform_id], &headers).await?;
+        let capabilities = platform_capabilities(permission_for(
+            &permissions,
+            container.platform_id,
+            principal.is_administrator(),
+        ));
+        capabilities.can_read.then_some(capabilities)
+    } else {
+        None
+    };
+    inspect_target(&state, &principal, container, &headers, kind, capabilities).await
 }
 
 #[utoipa::path(

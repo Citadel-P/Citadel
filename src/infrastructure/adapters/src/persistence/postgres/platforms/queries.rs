@@ -95,7 +95,7 @@ LEFT JOIN LATERAL (
 "#;
 
 pub(super) const CONTAINER_SELECT: &str = r#"
-SELECT container.id, container.platformid, container.dockercontainerid, container.name,
+SELECT container.id, container.health, container.platformid, container.dockercontainerid, container.name,
        container.dockerimageid, container.created, container.state,
        COALESCE(container.controlstate, 'Idle') AS controlstate, container.updated,
        container.stack, container.issystem, container.systemrole,

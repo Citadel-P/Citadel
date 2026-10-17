@@ -404,6 +404,8 @@ describe('Stack tabs', () => {
 
     expect(screen.getByText('Awaiting first Swarm Apply')).toBeInTheDocument();
     expect(screen.getByText('demo-app')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Health' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Health: Unknown' })).toBeVisible();
   });
 
   it('does not present Swarm task containers as a pending Compose project', () => {

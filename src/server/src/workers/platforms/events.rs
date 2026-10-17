@@ -133,6 +133,30 @@ pub(crate) async fn event_source(
                 }
             }
         }
+        if sender
+            .send(
+                InventoryEvent {
+                    resource: None,
+                    stream_recovered: true,
+                    swarm_scope: false,
+                    kind: RuntimeEventKind::Unknown,
+                    source: ReconciliationTrigger::LocalEvent,
+                    platform_id: None,
+                    container_id: None,
+                    container_state: None,
+                    container_name: None,
+                    container: None,
+                    action: "streamGap".into(),
+                    event_time_millis: None,
+                },
+                &cancellation,
+            )
+            .await
+            .is_err()
+        {
+            return Ok(());
+        }
+        metrics.event_enqueued();
         // Opening an HTTP stream is not evidence of a healthy connection.
         // EOF and decode failures must back off too, even after HTTP 200.
         if connected_at.elapsed() >= Duration::from_secs(30) {
@@ -253,6 +277,30 @@ pub(crate) async fn agent_event_source(
                 }
             }
         }
+        if sender
+            .send(
+                InventoryEvent {
+                    resource: None,
+                    stream_recovered: true,
+                    swarm_scope: false,
+                    kind: RuntimeEventKind::Unknown,
+                    source: ReconciliationTrigger::AgentEvent,
+                    platform_id: Some(platform_id),
+                    container_id: None,
+                    container_state: None,
+                    container_name: None,
+                    container: None,
+                    action: "streamGap".into(),
+                    event_time_millis: None,
+                },
+                &cancellation,
+            )
+            .await
+            .is_err()
+        {
+            return Ok(());
+        }
+        metrics.event_enqueued();
         if wait_to_reconnect(&cancellation, reconnect_delay).await {
             return Ok(());
         }
@@ -335,6 +383,29 @@ pub(crate) async fn event_consumer(
         }
         record_consumed(&metrics, &event);
         if event.stream_recovered {
+            for target in targets.snapshot().await.iter() {
+                let matches = event.platform_id.map_or_else(
+                    || target.connector_type == citadel_platforms::ConnectorKind::Local,
+                    |id| {
+                        target.id == id
+                            && target.connector_type == citadel_platforms::ConnectorKind::Agent
+                    },
+                );
+                if matches {
+                    match store.invalidate_container_health(target.id, None).await {
+                        Ok(ids) => {
+                            if let Some(hub) = &realtime {
+                                for id in ids {
+                                    hub.publish_container_observation(target.id, "healthGap", id);
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "Failed to invalidate health after event stream gap")
+                        }
+                    }
+                }
+            }
             queue_stream_recovery(&event, &local_reconciliation, &agent_reconciliation);
             continue;
         }
@@ -481,7 +552,10 @@ pub(crate) async fn apply_container_event(
     } else if matches!(event.source, ReconciliationTrigger::LocalEvent) {
         let observed = tokio::select! {
             () = cancellation.cancelled() => return Ok(true),
-            result = docker.container_event_observation(id) => result?,
+            result = async {
+                if change == ContainerChange::HealthObserved { docker.container_health_event_observation(id).await }
+                else { docker.container_event_observation(id).await }
+            } => result?,
         };
         let Some(mut container) = observed else {
             return Ok(false);

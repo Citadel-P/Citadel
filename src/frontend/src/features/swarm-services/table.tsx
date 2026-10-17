@@ -1,3 +1,6 @@
+import { useHealthColumn } from '@/features/workload-health/table';
+import { WorkloadHealthCard, WorkloadMemberHealthCard } from '@/features/workload-health/card';
+import { healthOrder, workloadHealthStatus } from '@/features/workload-health/health';
 import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
@@ -33,6 +36,7 @@ type ManagedServiceRow = {
 type ManagedTaskRow = {
   id: string;
   kind: 'task';
+  service: ManagedSwarmServiceView;
   platformId: string;
   task: SwarmTaskView;
 };
@@ -62,13 +66,18 @@ export const SwarmServicesTable = ({
         tasks: (service.tasks ?? []).map((task) => ({
           id: `task:${service.platformId}:${task.id}`,
           kind: 'task',
+          service,
           platformId: service.platformId,
           task,
         })),
       })),
     [items],
   );
-  const columns = useMemo(() => createColumns(actions), [actions]);
+  const showHealth = useHealthColumn('SwarmService');
+  const columns = useMemo(
+    () => createColumns(actions).filter((column) => showHealth || column.id !== 'probeHealth'),
+    [actions, showHealth],
+  );
   const getSubRows = useCallback((row: ManagedServiceTableRow) => (isServiceRow(row) ? row.tasks : undefined), []);
   const onSelectionChange = useCallback(
     (selectedRows: ManagedServiceTableRow[]) =>
@@ -89,7 +98,7 @@ export const SwarmServicesTable = ({
         isFiltered
           ? {
               title: 'No services match the current filters.',
-              description: 'Select another overview card or adjust the search and filters.',
+              description: 'Adjust the search and filters.',
             }
           : { title: 'No managed Services found.' }
       }
@@ -188,6 +197,20 @@ const createColumns = (actions: SwarmServiceActions): ColumnDef<ManagedServiceTa
     cell: ({ row }) => (isServiceRow(row.original) ? <TagChips tags={row.original.service.tags} /> : null),
     enableSorting: false,
   },
+  {
+    id: 'probeHealth',
+    accessorFn: (row) => (isServiceRow(row) ? workloadHealthStatus(row.service) : undefined),
+    header: ({ column }) => <SortableCell cellName="Health" column={column} />,
+    cell: ({ row }) =>
+      isServiceRow(row.original) ? (
+        <WorkloadHealthCard resource={row.original.service} kind="SwarmService" />
+      ) : (
+        <TaskHealth row={row.original} />
+      ),
+    sortingFn: (a, b) =>
+      (isServiceRow(a.original) ? healthOrder.indexOf(workloadHealthStatus(a.original.service)) : 99) -
+      (isServiceRow(b.original) ? healthOrder.indexOf(workloadHealthStatus(b.original.service)) : 99),
+  },
   backupColumn<ManagedServiceTableRow>((row) =>
     isServiceRow(row)
       ? {
@@ -246,3 +269,16 @@ const ServiceNameCell = ({ row }: { row: Row<ManagedServiceTableRow> }) => {
 
 const getServiceImage = (service: ManagedSwarmServiceView) =>
   service.spec.image.$type === 'External' ? service.spec.image.imageTag : service.spec.image.resolvedImageReference;
+
+function TaskHealth({ row }: { row: ManagedTaskRow }) {
+  const member = row.service.probeHealth?.members.find(
+    (member) => member.taskId === row.task.id && member.nodeId === row.task.nodeId,
+  );
+  return member ? (
+    <WorkloadMemberHealthCard member={member} platformStatus={row.service.platformStatus} />
+  ) : (
+    <span className="text-muted-foreground" title="No current container health observation">
+      —
+    </span>
+  );
+}

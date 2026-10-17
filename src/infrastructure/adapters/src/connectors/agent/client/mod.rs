@@ -1754,11 +1754,27 @@ impl citadel_platforms::ContainerInventoryPort for AgentClient {
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
+        self.list_containers_with_health(cancellation, false)
+    }
+    fn observe_containers<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
+        self.list_containers_with_health(cancellation, true)
+    }
+}
+impl AgentClient {
+    fn list_containers_with_health<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+        observe_health: bool,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
         async move {
             let response = self
                 .retry_unary(cancellation, || async {
                     let request = self.signer.sign(
                         ListContainersRequest {
+                            observe_health,
                             metadata_only: true,
                             all: Some(true),
                             limit: None,
@@ -2488,6 +2504,7 @@ pub(crate) fn map_container(value: ContainerMessage) -> RuntimeContainerSummary 
         value.image_id.clone()
     };
     RuntimeContainerSummary {
+        health: value.health_observation.map(crate::connectors::agent::container_health::from_wire),
         mounts: value.mounts_observed.then(|| serde_json::json!(value.mounts.iter().map(|m| serde_json::json!({"type":m.r#type,"name":m.name,"source":m.source,"destination":m.destination})).collect::<Vec<_>>())),
         id: value.id,
         name: value.name.trim_start_matches('/').to_owned(),

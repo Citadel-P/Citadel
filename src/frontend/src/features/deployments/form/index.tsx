@@ -1,3 +1,4 @@
+import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
@@ -14,6 +15,8 @@ import {
   DeploymentStatus,
   DeploymentView,
   ContainerRuntimeView,
+  ContainerSummaryView,
+  ContainerStateStatus,
   ResourceBindingScope,
   LatestActivityView,
   PlatformStatus,
@@ -35,6 +38,10 @@ import { DeploymentLogs } from '@/features/docker-resources/containers/container
 import { hasCapability } from '@/lib/resource-capabilities';
 import { UpdateAvailableNotice } from '@/components/custom/common';
 import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
+import { useState } from 'react';
+import { useRead } from '@/lib/hooks';
+import { canShowCachedResource, requestErrorMessage, requestErrorStatus } from '@/lib/request-error';
+import Loader from '@/components/ui/loader';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
@@ -77,10 +84,13 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       return <DeploymentSubHeader latestActivity={resource.latestActivityView ?? null} deployment={resource} />;
     },
     TabActions: ({ resource }: { resource: DeploymentView }) => (
-      <ResourceBackupIndicator
-        source={{ $type: 'Deployment', deploymentId: resource.id }}
-        coverage={resource.backupCoverage}
-      />
+      <div className="flex items-center gap-3">
+        <WorkloadHealthCard resource={resource} kind="Deployment" triggerVariant="icon" />
+        <ResourceBackupIndicator
+          source={{ $type: 'Deployment', deploymentId: resource.id }}
+          coverage={resource.backupCoverage}
+        />
+      </div>
     ),
     Tabs: [
       {
@@ -97,10 +107,13 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Container',
-        disabled: (resource: DeploymentView): boolean =>
-          resource.status === DeploymentStatus.Degraded || resource.status === DeploymentStatus.Created,
         Content: ({ resource }: { resource: DeploymentView }) => {
-          return <DeploymentRuntime key={resource.id} deployment={resource} />;
+          return (
+            <DeploymentRuntime
+              key={`${resource.id}:${resource.platformId}:${resource.dockerContainerId ?? 'none'}`}
+              deployment={resource}
+            />
+          );
         },
       },
       {
@@ -248,35 +261,92 @@ const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) 
 };
 
 const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {
-  const { containerInfo, isLoading, error } = useContainerInfoGroup(
-    deployment.dockerContainerId ?? undefined,
-    deployment.platformId,
+  const online = deployment.platformStatus === PlatformStatus.Online;
+  const canRead = hasCapability(deployment, 'canRead');
+  const { data, dataUpdatedAt, isLoading, isFetching, error } = useRead(
+    'getDeploymentContainerInfo',
+    { id: deployment.id },
+    { enabled: canRead && online && !!deployment.dockerContainerId },
   );
+  const summary =
+    canRead &&
+    canShowCachedResource(error) &&
+    data &&
+    data.data.containerId === deployment.dockerContainerId &&
+    data.data.platformId === deployment.platformId
+      ? data.data
+      : undefined;
+  // Host access is optional; workload diagnostics use Deployment authorization.
+  // Use the persisted identity for optional live metadata, never a global short-ID lookup.
+  const canReadHost = online && summary?.capabilities?.canRead === true;
+  const { containerInfo: live, error: liveError } = useContainerInfoGroup(
+    canReadHost ? (deployment.containerId ?? undefined) : undefined,
+    canReadHost ? deployment.platformId : undefined,
+  );
+  const containerInfo =
+    live?.id === deployment.dockerContainerId && live?.platformId === deployment.platformId ? live : undefined;
+  const terminalDisabled =
+    !online ||
+    !!error ||
+    (canReadHost && !!liveError) ||
+    isFetching ||
+    !summary ||
+    !!containerInfo?.projectionStaleSince ||
+    (containerInfo?.state ?? summary?.state) !== ContainerStateStatus.Running ||
+    deployment.controlState === ResourceControlState.Processing ||
+    containerInfo?.controlState === ResourceControlState.Processing;
 
-  if (deployment.status === DeploymentStatus.Degraded) return null;
-  const disabled = deployment.status !== DeploymentStatus.Healthy;
-
-  if (!deployment.dockerContainerId)
-    return <div className="text-sm text-muted-foreground mb-2">No container assigned</div>;
-
-  if (error)
+  if (!canRead) return <AlertMessage type="warning">You do not have permission to view this Deployment.</AlertMessage>;
+  if (!deployment.dockerContainerId) {
     return (
-      <div className="mb-2">
-        <AlertMessage type="warning">
-          <div className="truncate">{(error as any)?.error?.detail ?? 'Platform unavailable'}</div>
-        </AlertMessage>
-      </div>
+      <AlertMessage
+        type="info"
+        title={deployment.status === DeploymentStatus.Created ? 'Not deployed' : 'Container unavailable'}>
+        {deployment.status === DeploymentStatus.Created
+          ? 'Apply this Deployment to create its container. Configuration and Activities are still available.'
+          : 'No container is currently linked. Review Activities for previous operations. Logs and inspection of a deleted container may no longer be available.'}
+      </AlertMessage>
     );
+  }
+  if (error && [401, 403].includes(requestErrorStatus(error) ?? 0)) {
+    return (
+      <AlertMessage type="warning">
+        {requestErrorMessage(error)} Review Activities for previous operations.
+      </AlertMessage>
+    );
+  }
 
   return (
-    <RuntimeView
-      containerInfo={containerInfo}
-      containerId={deployment.dockerContainerId}
-      deploymentId={deployment.id}
-      deployment={deployment}
-      containerLoading={isLoading}
-      disabled={disabled}
-    />
+    <div className="flex w-full flex-col gap-4">
+      {(!online || error) && (
+        <AlertMessage
+          type="warning"
+          title={
+            !online || requestErrorStatus(error) === 404
+              ? 'Live diagnostics unavailable'
+              : 'Container details unavailable'
+          }>
+          {!online ? 'The Platform is offline.' : requestErrorMessage(error)} Container: {deployment.dockerContainerId}.
+          Retained statistics and Activities remain available. Any displayed container metadata is last known.
+          {summary && dataUpdatedAt > 0 && (
+            <span className="block mt-1">
+              Details last loaded:{' '}
+              <time dateTime={new Date(dataUpdatedAt).toISOString()}>{new Date(dataUpdatedAt).toLocaleString()}</time>.
+            </span>
+          )}
+        </AlertMessage>
+      )}
+      {isLoading && <Loader />}
+      <RuntimeView
+        containerInfo={containerInfo}
+        summary={summary}
+        containerId={deployment.dockerContainerId}
+        deploymentId={deployment.id}
+        deployment={deployment}
+        liveAvailable={online && requestErrorStatus(error) !== 404}
+        disabled={terminalDisabled}
+      />
+    </div>
   );
 };
 
@@ -286,29 +356,47 @@ const RuntimeView = ({
   deploymentId,
   deployment,
   disabled,
+  summary,
+  liveAvailable,
 }: {
+  summary?: ContainerSummaryView;
+  liveAvailable: boolean;
   containerInfo?: ContainerRuntimeView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
   deployment: DeploymentView;
-  containerLoading?: boolean;
   disabled?: boolean;
 }) => {
   return (
     <div className="flex flex-col gap-4 w-full">
-      <DeploymentContainerInfoTable
-        deploymentId={deploymentId}
-        container={containerInfo}
-        displayOptions={{
-          DisplayContainerName: true,
-          DisplayStatus: false,
-        }}
-      />
+      {summary && (
+        <DeploymentContainerInfoTable
+          summary={summary}
+          deploymentId={deploymentId}
+          health={
+            <WorkloadContainerHealthCard
+              resource={deployment}
+              container={{
+                id: summary.containerId,
+                platformId: summary.platformId,
+                name: summary.name,
+                dockerNodeId: containerInfo?.dockerNodeId ?? null,
+              }}
+            />
+          }
+          container={containerInfo}
+          displayOptions={{
+            DisplayContainerName: true,
+            DisplayStatus: false,
+          }}
+        />
+      )}
       <RuntimeTabs
         containerInfo={containerInfo}
         containerId={containerId}
         deploymentId={deploymentId}
         deployment={deployment}
+        liveAvailable={liveAvailable}
         disabled={disabled}
       />
     </div>
@@ -321,7 +409,9 @@ const RuntimeTabs = ({
   deploymentId,
   deployment,
   disabled,
+  liveAvailable,
 }: {
+  liveAvailable: boolean;
   containerInfo?: ContainerRuntimeView | undefined;
   containerId?: string | undefined;
   deploymentId: string;
@@ -329,13 +419,16 @@ const RuntimeTabs = ({
   disabled?: boolean;
 }) => {
   const nid = normalizeDockerId(containerInfo?.id ?? containerId);
-  const canViewLogs = hasCapability(deployment, 'canViewLogs');
-  const canInspect = hasCapability(deployment, 'canInspect');
+  const canViewLogs = liveAvailable && hasCapability(deployment, 'canViewLogs');
+  const canInspect = liveAvailable && hasCapability(deployment, 'canInspect');
   const terminalDisabled = disabled || !hasCapability(deployment, 'canOpenTerminal');
   const defaultValue = canViewLogs ? 'logs' : canInspect ? 'inspect' : terminalDisabled ? 'stats' : 'terminal';
+  const [selected, setSelected] = useState(defaultValue);
+  const allowed = { logs: canViewLogs, inspect: canInspect, terminal: !terminalDisabled, stats: true };
+  const activeTab = allowed[selected as keyof typeof allowed] ? selected : defaultValue;
 
   return (
-    <Tabs defaultValue={defaultValue} className="w-full">
+    <Tabs value={activeTab} onValueChange={setSelected} className="w-full">
       <div className="flex min-w-0 items-center gap-2 border-b">
         <TabsList className="min-w-0 flex-1 overflow-x-auto border-0">
           <TabsTrigger value="logs" disabled={!canViewLogs}>
@@ -353,7 +446,7 @@ const RuntimeTabs = ({
       </div>
       {canViewLogs && (
         <TabsContent value="logs" className="mt-2 w-full">
-          <DeploymentLogs key={deploymentId} containerId={nid} deploymentId={deploymentId} />
+          <DeploymentLogs key={`${deploymentId}:${nid}`} containerId={nid} deploymentId={deploymentId} />
         </TabsContent>
       )}
       {canInspect && (
@@ -363,7 +456,12 @@ const RuntimeTabs = ({
       )}
       {!terminalDisabled && (
         <TabsContent value="terminal" className="mt-2 w-full">
-          <DeploymentExec key={deploymentId} containerId={nid} deploymentId={deploymentId} disabled={disabled} />
+          <DeploymentExec
+            key={`${deploymentId}:${nid}`}
+            containerId={nid}
+            deploymentId={deploymentId}
+            disabled={disabled}
+          />
         </TabsContent>
       )}
       <TabsContent value="stats" className="mt-2 w-full">

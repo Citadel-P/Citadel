@@ -97,11 +97,27 @@ impl citadel_platforms::ContainerInventoryPort for EdgeRuntime {
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
+        self.list_containers_with_health(cancellation, false)
+    }
+    fn observe_containers<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
+        self.list_containers_with_health(cancellation, true)
+    }
+}
+impl EdgeRuntime {
+    fn list_containers_with_health<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+        observe_health: bool,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
         Box::pin(async move {
             let response: ListContainersResponse = unary(
                 &self.session,
                 EdgeCommandKind::ContainerList,
                 ListContainersRequest {
+                    observe_health,
                     metadata_only: true,
                     all: Some(true),
                     size: Some(false),

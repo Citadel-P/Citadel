@@ -47,6 +47,50 @@ pub(super) fn map_service(
     };
     Ok(AuthorizedResource {
         resource: citadel_swarm_services::SwarmService {
+            probe_health: citadel_swarm_services::health::assess(
+                json(row.try_get("health_members").map_err(storage)?)?,
+                row.try_get::<Option<String>, _>("health_mode")
+                    .map_err(storage)?
+                    .map(|mode| {
+                        Ok::<_, SwarmServiceError>(
+                            citadel_primitives::health::AppliedServiceHealth {
+                                stack_service_count: None,
+                                release_id: None,
+                                service: row
+                                    .try_get::<Option<String>, _>("dockerserviceid")
+                                    .map_err(storage)?
+                                    .unwrap_or_default(),
+                                mode,
+                                desired: row
+                                    .try_get::<Option<i32>, _>("desiredtaskcount")
+                                    .map_err(storage)?
+                                    .unwrap_or(0)
+                                    .max(0) as usize,
+                                running: row
+                                    .try_get::<Option<i32>, _>("runningtaskcount")
+                                    .map_err(storage)?
+                                    .unwrap_or(0)
+                                    .max(0) as usize,
+                                stale: row.try_get("health_stale").map_err(storage)?,
+                                update_state: row
+                                    .try_get::<Option<String>, _>("projection_update_state")
+                                    .map_err(storage)?
+                                    .unwrap_or_default(),
+                                ownership: row
+                                    .try_get::<Option<String>, _>("projection_ownership")
+                                    .map_err(storage)?
+                                    .unwrap_or_default(),
+                            },
+                        )
+                    })
+                    .transpose()?,
+                row.try_get::<&str, _>("platform_status").map_err(storage)? == "Online",
+                row.try_get::<&str, _>("synchronizationstate")
+                    .map_err(storage)?
+                    == "NeverApplied",
+                current_operation.as_ref().map(|operation| operation.state),
+                Utc::now().timestamp_millis(),
+            ),
             id: row.try_get("id").map_err(storage)?,
             platform_id: row.try_get("platformid").map_err(storage)?,
             name: row.try_get("name").map_err(storage)?,

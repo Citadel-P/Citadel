@@ -10,6 +10,17 @@
  * ---------------------------------------------------------------
  */
 
+export enum WorkloadHealthStatus {
+  Healthy = "Healthy",
+  Unhealthy = "Unhealthy",
+  Starting = "Starting",
+  NoCheck = "NoCheck",
+  Disabled = "Disabled",
+  NotRunning = "NotRunning",
+  Partial = "Partial",
+  Unknown = "Unknown",
+}
+
 export enum WebhookProvider {
   GitHub = "GitHub",
   GitLab = "GitLab",
@@ -518,6 +529,26 @@ export enum ImageRelationship {
   SavedTag = "SavedTag",
 }
 
+export enum HealthStatus {
+  Healthy = "Healthy",
+  Unhealthy = "Unhealthy",
+  Starting = "Starting",
+  NoCheck = "NoCheck",
+  Disabled = "Disabled",
+  NotRunning = "NotRunning",
+  Unknown = "Unknown",
+}
+
+export enum HealthAttention {
+  Unhealthy = "Unhealthy",
+  RuntimeMissing = "RuntimeMissing",
+  UnexpectedExit = "UnexpectedExit",
+  RuntimeUnavailable = "RuntimeUnavailable",
+  ObservationStale = "ObservationStale",
+  OperationFailed = "OperationFailed",
+  OwnershipConflict = "OwnershipConflict",
+}
+
 export enum GlobalSearchResourceType {
   Platform = "Platform",
   Stack = "Stack",
@@ -647,6 +678,23 @@ export enum ContainerRestartPolicy {
   Always = "Always",
   OnFailure = "OnFailure",
   UnlessStopped = "UnlessStopped",
+}
+
+export enum ContainerHealthStatus {
+  Healthy = "Healthy",
+  Unhealthy = "Unhealthy",
+  Starting = "Starting",
+  NoCheck = "NoCheck",
+  Disabled = "Disabled",
+  NotRunning = "NotRunning",
+  Unknown = "Unknown",
+}
+
+export enum CheckConfiguration {
+  Enabled = "Enabled",
+  Disabled = "Disabled",
+  NoCheck = "NoCheck",
+  Unknown = "Unknown",
 }
 
 export enum BuildRunTrigger {
@@ -2439,6 +2487,60 @@ export interface ContainerDeploymentView {
   status: DeploymentStatus;
 }
 
+export interface ContainerHealthObservation {
+  configuration: CheckConfiguration;
+  /** @format int64 */
+  exitCode?: number | null;
+  /** @format int64 */
+  failingStreak?: number | null;
+  finishedAt?: string | null;
+  lastCheckAt?: string | null;
+  /**
+   * Time of an actual inspection, never a heartbeat or statistics timestamp.
+   * @format int64
+   */
+  observedAt: number;
+  oomKilled?: boolean | null;
+  /** @format int64 */
+  restartCount?: number | null;
+  result?: null | HealthStatus;
+  startedAt?: string | null;
+}
+
+export interface ContainerHealthTransitionView {
+  /** @format int64 */
+  exitCode?: number | null;
+  /**
+   * First actual observation in this group, in Unix seconds. Not a coverage start.
+   * @format int64
+   */
+  firstObservedAt: number;
+  health: ContainerHealthView;
+  /** @format int64 */
+  observedAt: number;
+  oomKilled?: boolean | null;
+  origin: string;
+  /**
+   * Number of retained observations represented; transitions always have one.
+   * @format int64
+   */
+  sampleCount: number;
+  state: string;
+}
+
+export interface ContainerHealthView {
+  /** @format int64 */
+  failingStreak?: number | null;
+  lastCheckAt?: string | null;
+  /**
+   * Unix milliseconds of inspection, not the last lifecycle event or heartbeat.
+   * @format int64
+   */
+  observedAt?: number | null;
+  reason: string;
+  status: ContainerHealthStatus;
+}
+
 export interface ContainerHistory {
   containerId: string;
   containerName: string;
@@ -2492,6 +2594,7 @@ export interface ContainerRuntimeView {
   deploymentId: string | null;
   dockerNodeId: string | null;
   hasCitadelOwnershipLabels: boolean;
+  health?: null | ContainerHealthView;
   /** Docker container ID; the statistics containerId is Citadel's database UUID. */
   id: string;
   image: string;
@@ -2578,6 +2681,7 @@ export interface ContainerView {
   dockerImageId: string;
   dockerNodeId: string | null;
   hasCitadelOwnershipLabels: boolean;
+  health?: null | ContainerHealthView;
   /** @format uuid */
   id: string;
   imageView?: null | ImageView;
@@ -2586,6 +2690,8 @@ export interface ContainerView {
   lastStats: null | ContainerStatView;
   name: string;
   nodeHostname: string | null;
+  /** Names of owning workloads this actor may read. Never derived from Docker labels. */
+  ownerNames?: string[];
   /** @format uuid */
   platformId: string;
   ports: Record<string, HostPortBinding[]>;
@@ -2995,6 +3101,7 @@ export interface DeploymentView {
   platformId: string;
   platformName?: string | null;
   platformStatus: PlatformStatus;
+  probeHealth: WorkloadHealth;
   spec: DeploymentSpec;
   status: DeploymentStatus;
   tags: ResourcesTagsTagSummary[];
@@ -3496,6 +3603,42 @@ export interface GlobalSearchStatus {
   tone: SearchStatusTone;
 }
 
+export interface HealthCounts {
+  /** @min 0 */
+  completed: number;
+  /** @min 0 */
+  disabled: number;
+  /** @min 0 */
+  healthy: number;
+  /** @min 0 */
+  noCheck: number;
+  /** @min 0 */
+  notRunning: number;
+  /** @min 0 */
+  starting: number;
+  /** @min 0 */
+  unhealthy: number;
+  /** @min 0 */
+  unknown: number;
+}
+
+export interface HealthMember {
+  available: boolean;
+  completedJob?: boolean;
+  /** @format uuid */
+  containerId?: string | null;
+  dockerContainerId?: string | null;
+  name: string;
+  nodeId?: string | null;
+  observation?: null | ContainerHealthObservation;
+  /** @format uuid */
+  platformId: string;
+  service: string;
+  state: string;
+  status: HealthStatus;
+  taskId?: string | null;
+}
+
 export interface HealthResponse {
   status: string;
 }
@@ -3929,6 +4072,7 @@ export interface ManagedSwarmServiceView {
   platformId: string;
   platformName: string | null;
   platformStatus: PlatformStatus;
+  probeHealth: WorkloadHealth;
   /** @format int64 */
   rowVersion: number;
   /** @format int32 */
@@ -6515,6 +6659,7 @@ export interface StackView {
   platformName: string | null;
   platformStatus: PlatformStatus;
   platformType: PlatformType;
+  probeHealth: WorkloadHealth;
   resourceBindings: ResourceBindingSnapshot[] | null;
   /** @format int64 */
   rowVersion: number;
@@ -7596,6 +7741,32 @@ export interface WebhookResponse {
   /** @format uuid */
   requestId: string;
   status: string;
+}
+
+export interface WorkloadHealth {
+  attention: HealthAttention[];
+  counts: HealthCounts;
+  coverageComplete: boolean;
+  /** @format int64 */
+  evaluatedAt: number;
+  /** @min 0 */
+  expected?: number | null;
+  members: HealthMember[];
+  membersTruncated: boolean;
+  /** @min 0 */
+  missing?: number | null;
+  /** @min 0 */
+  observed: number;
+  /** @format int64 */
+  observedAt?: number | null;
+  reason: string;
+  /** @format int64 */
+  startingUntil?: number | null;
+  status: WorkloadHealthStatus;
+  /** @format int64 */
+  unhealthyUntil?: number | null;
+  /** @format int64 */
+  validUntil?: number | null;
 }
 
 export interface WorkloadStatusCounts {
@@ -11465,6 +11636,32 @@ export class Api<
     getContainerData: (id: string, params: RequestParams = {}) =>
       this.request<ContainerRuntimeView, ProblemDetails>({
         path: `/api/v1/containers/${id}/data`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name GetContainerHealthHistory
+     * @summary Get bounded Container health and lifecycle transitions
+     * @request GET:/api/v1/containers/{id}/health-history
+     * @secure
+     * @response `200` `(ContainerHealthTransitionView)[]` Up to 200 transitions within seven days; history may have gaps
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getContainerHealthHistory: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerHealthTransitionView[], ProblemDetails>({
+        path: `/api/v1/containers/${id}/health-history`,
         method: "GET",
         secure: true,
         format: "json",

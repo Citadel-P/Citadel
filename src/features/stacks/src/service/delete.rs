@@ -75,7 +75,10 @@ impl StackService {
         let Ok(_permit) = self.operations.clone().acquire_owned().await else {
             return Err(StackError::Cancelled);
         };
-        let claims = self.store.claim_state(actor, administrator, &ids).await?;
+        let claims = self
+            .store
+            .claim_state(actor, administrator, &ids, action)
+            .await?;
         let cancellation = self.shutdown.child_token();
         for (index, claim) in claims.iter().enumerate() {
             let outcome = tokio::time::timeout(

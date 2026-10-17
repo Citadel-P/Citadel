@@ -28,6 +28,21 @@ message ContainerMessage {
     map<string, string> labels = 19;
     repeated MountPoint mounts = 20;
     bool mountsObserved = 21;
+    // Missing on older Agents. Summary only; commands/output require Inspect.
+    ContainerHealthObservation healthObservation = 22;
+}
+
+message ContainerHealthObservation {
+    string configuration = 1;
+    google.protobuf.StringValue result = 2;
+    int64 observedAt = 3;
+    google.protobuf.StringValue lastCheckAt = 4;
+    google.protobuf.Int64Value failingStreak = 5;
+    google.protobuf.Int64Value exitCode = 6;
+    google.protobuf.BoolValue oomKilled = 7;
+    google.protobuf.Int64Value restartCount = 8;
+    google.protobuf.StringValue startedAt = 9;
+    google.protobuf.StringValue finishedAt = 10;
 }
 
 message HostPortBindingList {
@@ -73,6 +88,7 @@ message InspectContainerResponse {
     repeated MountPoint mounts = 23;
     ContainerConfig config = 24;
     NetworkSettings networkSettings = 25;
+    bool healthMetadataObserved = 26;
 }
 
 message NetworkSettings {
@@ -149,6 +165,16 @@ message ContainerConfig {
     map<string, string> labels = 21;
     google.protobuf.StringValue stopSignal = 22;
     google.protobuf.Int32Value stopTimeout = 23;
+    ContainerHealthcheck healthcheck = 24;
+}
+
+message ContainerHealthcheck {
+    repeated string test = 1;
+    google.protobuf.Int64Value interval = 2;
+    google.protobuf.Int64Value timeout = 3;
+    google.protobuf.Int64Value retries = 4;
+    google.protobuf.Int64Value startPeriod = 5;
+    google.protobuf.Int64Value startInterval = 6;
 }
 message MountPoint {
     google.protobuf.StringValue type = 1;
@@ -274,6 +300,13 @@ message LogConfig {
 message Health {
     google.protobuf.StringValue status = 1;
     google.protobuf.Int32Value failingStreak = 2;
+    repeated HealthLog log = 3;
+}
+message HealthLog {
+    google.protobuf.StringValue start = 1;
+    google.protobuf.StringValue end = 2;
+    google.protobuf.Int64Value exitCode = 3;
+    google.protobuf.StringValue output = 4;
 }
 enum ContainerStateType {
     Unknown = 0;

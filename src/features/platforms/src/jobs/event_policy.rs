@@ -6,6 +6,7 @@ pub enum ContainerChange {
     Paused,
     Exited,
     Observe,
+    HealthObserved,
     Tombstone,
 }
 
@@ -27,7 +28,7 @@ impl ContainerChange {
             Self::Running => Some("running"),
             Self::Paused => Some("paused"),
             Self::Exited => Some("exited"),
-            Self::Observe | Self::Tombstone => None,
+            Self::Observe | Self::HealthObserved | Self::Tombstone => None,
         }
     }
 }
@@ -100,6 +101,9 @@ pub fn event_decision(
             }
         }
         Event::Network(_) if swarm_target && swarm_scope => Decision::SwarmDirty,
+        Event::Container(ContainerChange::HealthObserved) if delta == DeltaOutcome::Applied => {
+            Decision::None
+        }
         Event::Container(_) if delta == DeltaOutcome::Applied && swarm_target => {
             Decision::SwarmDirty
         }
@@ -192,6 +196,27 @@ mod tests {
                 DeltaOutcome::Unavailable
             ),
             ReconciliationDecision::None
+        );
+    }
+}
+
+#[cfg(test)]
+mod health_event_tests {
+    use super::*;
+    #[test]
+    fn a_committed_health_observation_does_not_refresh_swarm_inventory() {
+        assert_eq!(
+            event_decision(
+                RuntimeEventKind::Container(ContainerChange::HealthObserved),
+                true,
+                false,
+                DeltaOutcome::Applied
+            ),
+            ReconciliationDecision::None
+        );
+        assert_eq!(
+            ContainerChange::Running.state_delta(),
+            Some(super::super::ContainerLifecycleState::Running)
         );
     }
 }

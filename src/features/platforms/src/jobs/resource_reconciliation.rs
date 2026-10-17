@@ -18,7 +18,7 @@ impl ContainerReconciler {
         runtime: &T,
         cancel: &CancellationToken,
     ) -> Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError> {
-        runtime.list_containers(cancel).await
+        runtime.observe_containers(cancel).await
     }
 }
 

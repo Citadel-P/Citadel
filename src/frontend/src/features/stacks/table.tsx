@@ -1,3 +1,4 @@
+import { workloadHealthColumn, useHealthColumn } from '@/features/workload-health/table';
 import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { StateBadge } from '@/components/custom/state-badge';
@@ -47,7 +48,11 @@ export const StacksTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<StackView>('Stack');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const showHealth = useHealthColumn('Stack');
+  const cols = useMemo(
+    () => columns(actions ?? {}).filter((column) => showHealth || column.id !== 'probeHealth'),
+    [actions, showHealth],
+  );
 
   return (
     <DataTable
@@ -135,6 +140,7 @@ const columns = (
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),
   },
+  workloadHealthColumn('Stack'),
   backupColumn<StackView>((row) => ({
     coverage: row.backupCoverage,
     source: { $type: 'Stack', stackId: row.id },

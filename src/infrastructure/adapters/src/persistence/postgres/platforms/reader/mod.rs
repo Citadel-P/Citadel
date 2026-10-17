@@ -14,6 +14,70 @@ impl PostgresPlatformReader {
 }
 
 impl PlatformReader for PostgresPlatformReader {
+    fn container_health_history(
+        &self,
+        container: Uuid,
+    ) -> BoxFuture<
+        '_,
+        Result<
+            Vec<citadel_platforms::container_health::ContainerHealthTransition>,
+            AuthorizedReadError,
+        >,
+    > {
+        Box::pin(async move {
+            sqlx::query(include_str!("container_health_history.sql"))
+                .bind(container)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?
+                .into_iter()
+                .map(|row| {
+                    Ok(
+                        citadel_platforms::container_health::ContainerHealthTransition {
+                            observed_at: row.try_get("observedat").map_err(storage)?,
+                            first_observed_at: row.try_get("firstobservedat").map_err(storage)?,
+                            sample_count: row.try_get("samplecount").map_err(storage)?,
+                            state: row.try_get("state").map_err(storage)?,
+                            origin: row.try_get("origin").map_err(storage)?,
+                            health: row
+                                .try_get::<Option<serde_json::Value>, _>("health")
+                                .map_err(storage)?
+                                .map(serde_json::from_value)
+                                .transpose()
+                                .map_err(storage)?,
+                        },
+                    )
+                })
+                .collect()
+        })
+    }
+    fn container_owner_names<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        containers: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<BTreeMap<Uuid, Vec<String>>, AuthorizedReadError>> {
+        Box::pin(async move {
+            let mut names = BTreeMap::new();
+            for batch in containers.chunks(500) {
+                let rows = sqlx::query(include_str!("container_owner_names.sql"))
+                    .bind(actor.value())
+                    .bind(administrator)
+                    .bind(batch)
+                    .fetch_all(&self.pool)
+                    .await
+                    .map_err(storage)?;
+                for row in rows {
+                    names.insert(
+                        row.try_get("id").map_err(storage)?,
+                        row.try_get("names").map_err(storage)?,
+                    );
+                }
+            }
+            Ok(names)
+        })
+    }
+
     fn platform_kind<'a>(
         &'a self,
         id: Uuid,

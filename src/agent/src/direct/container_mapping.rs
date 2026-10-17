@@ -28,7 +28,8 @@ pub(super) fn state(value: &str) -> i32 {
 }
 
 pub(super) fn inspect_container_response(v: &Value) -> InspectContainerResponse {
-    InspectContainerResponse {
+    let mut response = InspectContainerResponse {
+        health_metadata_observed: field(v, "config").is_object(),
         id: field(v, "id").as_str().unwrap_or_default().to_owned(),
         created: field(v, "created").as_str().unwrap_or_default().to_owned(),
         path: field(v, "path").as_str().map(str::to_owned),
@@ -76,7 +77,24 @@ pub(super) fn inspect_container_response(v: &Value) -> InspectContainerResponse 
         config: (!field(v, "config").is_null()).then(|| container_config(field(v, "config"))),
         network_settings: (!field(v, "networkSettings").is_null())
             .then(|| network_settings(field(v, "networkSettings"))),
+    };
+    let environment = response
+        .config
+        .as_ref()
+        .map(|c| c.env.as_slice())
+        .unwrap_or_default();
+    if let Some(health) = response.state.as_mut().and_then(|s| s.health.as_mut()) {
+        for log in &mut health.log {
+            if let Some(output) = &mut log.output {
+                *output =
+                    citadel_adapters::connectors::docker::container_health::bounded_probe_output(
+                        output,
+                        environment,
+                    );
+            }
+        }
     }
+    response
 }
 
 pub(super) fn host_port_binding_list(v: &Value) -> HostPortBindingList {
@@ -209,6 +227,23 @@ pub(super) fn address(v: &Value) -> Address {
 
 pub(super) fn container_config(v: &Value) -> ContainerConfig {
     ContainerConfig {
+        healthcheck: (!field(v, "healthcheck").is_null()).then(|| {
+            let h = field(v, "healthcheck");
+            ContainerHealthcheck {
+                test: field(h, "test")
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect(),
+                interval: field(h, "interval").as_i64(),
+                timeout: field(h, "timeout").as_i64(),
+                retries: field(h, "retries").as_i64(),
+                start_period: field(h, "startPeriod").as_i64(),
+                start_interval: field(h, "startInterval").as_i64(),
+            }
+        }),
         hostname: field(v, "hostname").as_str().unwrap_or_default().to_owned(),
         domainname: field(v, "domainname").as_str().map(str::to_owned),
         user: field(v, "user").as_str().map(str::to_owned),
@@ -535,9 +570,68 @@ pub(super) fn log_config(v: &Value) -> LogConfig {
 
 pub(super) fn health(v: &Value) -> Health {
     Health {
+        log: field(v, "log")
+            .as_array()
+            .into_iter()
+            .flatten()
+            .rev()
+            .take(5)
+            .map(|v| HealthLog {
+                start: field(v, "start").as_str().map(str::to_owned),
+                end: field(v, "end").as_str().map(str::to_owned),
+                exit_code: field(v, "exitCode").as_i64(),
+                output: field(v, "output").as_str().map(str::to_owned),
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect(),
         status: field(v, "status").as_str().map(str::to_owned),
         failing_streak: field(v, "failingStreak")
             .as_i64()
             .and_then(|v| v.try_into().ok()),
+    }
+}
+
+#[cfg(test)]
+mod health_tests {
+    use super::*;
+    #[test]
+    fn inspection_preserves_check_settings_and_bounds_redacted_probe_output() {
+        let output = format!("{}private-value", "x".repeat(4090));
+        let document = serde_json::json!({"Id":"exact-id", "Config":{"Env":["API_TOKEN=private-value"],"Healthcheck":{
+            "Test":["CMD-SHELL","check"],"Interval":1000000000_i64,"Timeout":2000000000_i64,"Retries":3,"StartPeriod":4000000000_i64,"StartInterval":500000000_i64}},
+            "State":{"Health":{"Status":"unhealthy","FailingStreak":3,"Log":(0..8).map(|_| serde_json::json!({"Output":output,"ExitCode":1,"End":"2026-10-16T12:00:00Z"})).collect::<Vec<_>>()}}});
+        let response = inspect_container_response(&document);
+        assert!(response.health_metadata_observed);
+        let check = response
+            .config
+            .as_ref()
+            .unwrap()
+            .healthcheck
+            .as_ref()
+            .unwrap();
+        assert_eq!(check.start_interval, Some(500000000));
+        assert_eq!(check.test, vec!["CMD-SHELL", "check"]);
+        let health = response.state.as_ref().unwrap().health.as_ref().unwrap();
+        assert_eq!(health.log.len(), 5);
+        assert!(
+            health
+                .log
+                .iter()
+                .all(|log| log.output.as_ref().unwrap().len() <= 4096)
+        );
+        assert!(!health.log[0].output.as_ref().unwrap().contains("private"));
+        let normalized = citadel_adapters::connectors::containers::inspection::map_inspection(
+            serde_json::to_value(response).unwrap(),
+            "exact-id",
+        )
+        .unwrap();
+        assert_eq!(normalized["healthMetadataObserved"], true);
+        assert_eq!(
+            normalized["config"]["healthcheck"]["startInterval"],
+            500000000
+        );
+        assert!(!normalized.to_string().contains("private-value"));
     }
 }

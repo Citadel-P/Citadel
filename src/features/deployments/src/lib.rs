@@ -37,3 +37,5 @@ pub use service::{
 
 mod status;
 pub use status::DeploymentStatus;
+
+pub mod health;

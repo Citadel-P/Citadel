@@ -140,6 +140,7 @@ export const foundationOperations = {
   getContainer: { method: 'GET', path: '/api/v1/containers/{id}' },
   getContainerAdoptionDraft: { method: 'GET', path: '/api/v1/containers/{id}/adoption-draft' },
   getContainerData: { method: 'GET', path: '/api/v1/containers/{id}/data' },
+  getContainerHealthHistory: { method: 'GET', path: '/api/v1/containers/{id}/health-history' },
   getContainerInfo: { method: 'GET', path: '/api/v1/containers/{id}/info' },
   getContainerStats: { method: 'GET', path: '/api/v1/containers/{id}/stats' },
   getContainersData: { method: 'GET', path: '/api/v1/stacks/{stackId}/data' },

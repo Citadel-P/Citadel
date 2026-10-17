@@ -196,6 +196,7 @@ async fn targeted_container_discovery_preserves_siblings_identity_fencing_and_no
         .await
         .unwrap();
     let mut container = citadel_platforms::RuntimeContainerSummary {
+        health: None,
         mounts: None,
         id: "observed-new".into(),
         name: "first".into(),

@@ -3,14 +3,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { STATS_PRESETS } from '@/lib/stats-range';
 import type { StatsRangeState } from '@/hooks/useStatsRange';
 
-export function StatsRangePicker({ range }: { range: StatsRangeState }) {
+export function StatsRangePicker({
+  range,
+  showLabel = true,
+}: {
+  range: Pick<StatsRangeState, 'selection' | 'setSelection'>;
+  showLabel?: boolean;
+}) {
   const value = range.selection.kind === 'relative' ? String(range.selection.minutes) : range.selection.kind;
   return (
     <div className="flex items-center gap-2">
-      <div className="hidden items-center gap-1.5 text-xs font-medium sm:flex">
-        <ChartNoAxesCombined className="size-3.5 text-muted-foreground" />
-        History
-      </div>
+      {showLabel && (
+        <div className="hidden items-center gap-1.5 text-xs font-medium sm:flex">
+          <ChartNoAxesCombined className="size-3.5 text-muted-foreground" />
+          History
+        </div>
+      )}
       <Select
         value={value}
         onValueChange={(next) =>

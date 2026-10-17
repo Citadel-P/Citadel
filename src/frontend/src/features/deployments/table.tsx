@@ -1,3 +1,4 @@
+import { workloadHealthColumn, useHealthColumn } from '@/features/workload-health/table';
 import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
 import { AutoUpdateStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
@@ -33,7 +34,11 @@ export const DeploymentsTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<DeploymentView>('Deployment');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const showHealth = useHealthColumn('Deployment');
+  const cols = useMemo(
+    () => columns(actions ?? {}).filter((column) => showHealth || column.id !== 'probeHealth'),
+    [actions, showHealth],
+  );
 
   return (
     <DataTable
@@ -127,6 +132,7 @@ const columns = (
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),
   },
+  workloadHealthColumn('Deployment'),
   backupColumn<DeploymentView>((row) => ({
     coverage: row.backupCoverage,
     source: { $type: 'Deployment', deploymentId: row.id },

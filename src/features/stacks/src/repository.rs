@@ -171,6 +171,7 @@ pub trait StackRepository: Send + Sync {
         actor: ActorId,
         administrator: bool,
         ids: &'a [Uuid],
+        action: crate::StackAction,
     ) -> BoxFuture<'a, Result<Vec<StackStateClaim>, StackError>>;
     fn complete_state<'a>(
         &'a self,

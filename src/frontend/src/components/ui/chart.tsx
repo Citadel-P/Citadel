@@ -34,9 +34,11 @@ function ChartContainer({
   className,
   children,
   config,
+  onChartResize,
   ...props
 }: React.ComponentProps<'div'> & {
   config: ChartConfig;
+  onChartResize?: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>['onResize'];
   children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>['children'];
 }) {
   const uniqueId = React.useId();
@@ -53,7 +55,9 @@ function ChartContainer({
         )}
         {...props}>
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
+        <RechartsPrimitive.ResponsiveContainer onResize={onChartResize}>
+          {children}
+        </RechartsPrimitive.ResponsiveContainer>
       </div>
     </ChartContext.Provider>
   );

@@ -301,3 +301,55 @@ Container inventory observations include mount points and an explicit
 owner-node identity and freshness fence for backup coverage reads. An observed
 empty mount list is distinct from missing inventory; coverage reads do not issue
 additional Container inspection commands.
+
+### Container health observations
+
+Container collection can request health metadata with the additive
+`ListContainersRequest.observe_health` flag. Local, Direct and Edge collection
+use bounded read-only inspection of the exact container on its owning daemon.
+`ContainerMessage.healthObservation` contains typed summary evidence, never probe
+commands or output. Older Agents omit it, which Core presents as Unknown.
+
+Health/OOM notifications trigger a targeted observation; ordinary lifecycle
+notifications keep their state-only fast path. Background container observations
+run through the existing bounded resource lanes every minute; evidence expires
+after three minutes. Core preserves the inspection timestamp, fences stream gaps, and
+retains existing generation and Edge-session checks. Expired or future-dated
+health evidence is Unknown; Agent and Core clocks should remain synchronized. Statistics and heartbeats
+cannot renew health evidence. No new Agent command or Swarm-worker allowlist entry
+is needed.
+
+Explicit inspection adds effective health-check settings and at most five recent
+probe results (4,096 characters per output). Core applies Inspect authorization
+and redaction; list, realtime summary, and retained health history omit this
+sensitive detail. `healthMetadataObserved` distinguishes absent metadata from a
+confirmed absent check on older Agents.
+
+The browser uses the existing `container-info` stream for current health. The
+on-demand `container-health:<container UUID>` group sends bounded persisted history
+as `ReceiveContainerHealthHistory` (`resourceId`, `entries`), including on join and
+reconnect. It requires the owning Platform's Read permission, matching the HTTP
+history endpoint; workload-only access to container-info does not grant this read.
+Committed container invalidations refresh the snapshot; statistics do not.
+Neither stream performs Docker inspection or includes probe commands/output.
+Explicit probe details remain an Inspect-authorized HTTP read on user request.
+
+Core stores actual periodic health observations for enabled checks at most once
+per UTC minute, in addition to immediate transitions. NoCheck, Disabled, and
+Unknown configurations do not generate periodic samples; current observations
+and configuration/lifecycle transitions remain persisted. The browser skips the
+history group for a currently confirmed NoCheck or Disabled status. Statistics, unchanged replay timestamps,
+and stale or future observations cannot generate periodic samples. Retention is
+seven days, up to 10,080 samples and 200 transitions per container, with the
+existing shared 100,000-record installation cap. This uses an additive Core
+migration and requires no Agent wire change. Earlier transitions are preserved;
+no periodic samples are backfilled.
+
+History snapshots keep the latest hour and retained transitions exact. Older
+samples are grouped into five-minute buckets for the latest day and thirty-minute
+buckets before that, partitioned by state, check configuration, health result,
+OOM and exit evidence. Each entry includes `sampleCount` and `firstObservedAt`
+(Unix seconds); `observedAt` is the latest actual observation in the group. These
+bounds describe observations, not continuous coverage. No healthy grouping can
+absorb an unhealthy sample. Grouping occurs in the persistence reader before HTTP
+or realtime serialization; range changes in the browser need no additional reads.

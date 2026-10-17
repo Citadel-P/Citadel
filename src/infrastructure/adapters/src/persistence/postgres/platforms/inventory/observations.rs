@@ -11,6 +11,22 @@ use uuid::Uuid;
 
 use futures_util::FutureExt;
 impl RuntimeProjectionStore for PostgresInventoryProjectionStore {
+    fn invalidate_container_health<'a>(
+        &'a self,
+        platform: Uuid,
+        node: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
+        async move {
+            let write = citadel_platforms::jobs::ProjectionWrite::begin(
+                platform, node, citadel_platforms::jobs::ProjectionKind::Containers).await;
+            let ids: Vec<String> = sqlx::query_scalar("UPDATE containers SET health=NULL, rowversion=rowversion+1, updated=floor(extract(epoch from now()))::bigint, projectionobservedat=GREATEST(COALESCE(projectionobservedat,0),floor(extract(epoch from now()))::bigint) WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND health IS NOT NULL RETURNING dockercontainerid")
+                .bind(platform).bind(node).fetch_all(&self.pool).await.map_err(storage)?;
+            write.committed();
+            citadel_runtime::runtime_metrics::RuntimeWork::ContainerHealthGap.units(ids.len() as u64);
+            Ok(ids)
+        }.boxed()
+    }
+
     fn mark_swarm_stale<'a>(
         &'a self,
         platform: Uuid,

@@ -1,3 +1,4 @@
+import { WorkloadHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
@@ -77,10 +78,13 @@ export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServ
       </>
     ),
     TabActions: ({ resource }: { resource: ManagedSwarmServiceView }) => (
-      <ResourceBackupIndicator
-        source={{ $type: 'SwarmService', swarmServiceId: resource.id }}
-        coverage={resource.backupCoverage}
-      />
+      <div className="flex items-center gap-3">
+        <ResourceBackupIndicator
+          source={{ $type: 'SwarmService', swarmServiceId: resource.id }}
+          coverage={resource.backupCoverage}
+        />
+        <WorkloadHealthCard resource={resource} kind="SwarmService" />
+      </div>
     ),
     Tabs: [
       {

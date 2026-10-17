@@ -11,7 +11,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "b833d575fdb2dd1396052d697d6947add72c9a2012f9e319cc553674bed63ab7",
+            "62f88fd480eded70d918f80c46781cf30f2ea2be065b63bf898b964164abbc7d",
         ),
         (
             "platform_service.proto",
@@ -21,7 +21,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "container_service.proto",
             include_str!("../proto/container_service.proto"),
-            "e318e05cd105ce7fa83d10473e65df7d0be896a53680a7b630b3def5f881fb66",
+            "5b408a811393f13cc2257c32888c8228dbc923efb6860a23ab792776530a97a9",
         ),
         (
             "deployment_service.proto",
@@ -69,6 +69,139 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
 }
 
 // The accepted additions use new field numbers and preserve old-peer defaults.
+#[test]
+fn health_collection_is_opt_in_and_old_inventory_preserves_unknown_evidence() {
+    use citadel_contracts::citadel::containers::v1::ListContainersRequest;
+    use citadel_contracts::citadel::shared_models::v1::{
+        ContainerHealthObservation, ContainerMessage,
+    };
+    use prost::Message;
+
+    #[derive(Clone, PartialEq, Message)]
+    struct OldContainer {
+        #[prost(string, tag = "1")]
+        id: String,
+    }
+
+    assert!(
+        !ListContainersRequest::decode(&[][..])
+            .unwrap()
+            .observe_health
+    );
+    let request = ListContainersRequest {
+        observe_health: true,
+        ..Default::default()
+    };
+    assert_eq!(request.encode_to_vec(), [0x30, 1]); // field 6, bool
+
+    let old = OldContainer {
+        id: "exact-container-id".into(),
+    };
+    let decoded = ContainerMessage::decode(old.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded.id, old.id);
+    assert!(decoded.health_observation.is_none());
+    let mut current = ContainerMessage {
+        health_observation: Some(Default::default()),
+        ..Default::default()
+    };
+    assert_eq!(current.encode_to_vec(), [0xb2, 0x01, 0]); // field 22, message
+    current.id = old.id.clone();
+    current.health_observation = Some(ContainerHealthObservation {
+        configuration: "Enabled".into(),
+        result: Some("Healthy".into()),
+        observed_at: 42,
+        exit_code: Some(0),
+        oom_killed: Some(false),
+        ..Default::default()
+    });
+    let encoded = current.encode_to_vec();
+    assert_eq!(OldContainer::decode(encoded.as_slice()).unwrap().id, old.id);
+    assert_eq!(
+        ContainerMessage::decode(encoded.as_slice()).unwrap(),
+        current
+    );
+    let missing = ContainerHealthObservation::decode(&[][..]).unwrap();
+    assert!(missing.result.is_none());
+    assert!(missing.exit_code.is_none());
+    assert!(missing.oom_killed.is_none());
+}
+
+#[test]
+fn health_inspection_additions_preserve_old_status_and_unknown_configuration() {
+    use citadel_contracts::citadel::shared_models::v1::{
+        ContainerConfig, ContainerHealthcheck, Health, HealthLog, InspectContainerResponse,
+    };
+    use prost::Message;
+
+    assert!(
+        !InspectContainerResponse::decode(&[][..])
+            .unwrap()
+            .health_metadata_observed
+    );
+    assert!(
+        ContainerConfig::decode(&[][..])
+            .unwrap()
+            .healthcheck
+            .is_none()
+    );
+    let inspected = InspectContainerResponse {
+        health_metadata_observed: true,
+        ..Default::default()
+    };
+    assert_eq!(inspected.encode_to_vec(), [0xd0, 0x01, 1]); // field 26, bool
+    let mut config = ContainerConfig {
+        healthcheck: Some(Default::default()),
+        ..Default::default()
+    };
+    assert_eq!(config.encode_to_vec(), [0xc2, 0x01, 0]); // field 24, message
+    config.healthcheck = Some(ContainerHealthcheck {
+        test: vec!["CMD".into(), "check".into()],
+        interval: Some(30),
+        timeout: Some(5),
+        retries: Some(3),
+        start_period: Some(10),
+        start_interval: Some(2),
+    });
+    assert_eq!(
+        ContainerConfig::decode(config.encode_to_vec().as_slice()).unwrap(),
+        config
+    );
+
+    #[derive(Clone, PartialEq, Message)]
+    struct OldHealth {
+        #[prost(message, optional, tag = "1")]
+        status: Option<String>,
+        #[prost(message, optional, tag = "2")]
+        failing_streak: Option<i32>,
+    }
+    let old = OldHealth {
+        status: Some("healthy".into()),
+        failing_streak: Some(0),
+    };
+    assert!(
+        Health::decode(old.encode_to_vec().as_slice())
+            .unwrap()
+            .log
+            .is_empty()
+    );
+    let mut current = Health {
+        log: vec![Default::default()],
+        ..Default::default()
+    };
+    assert_eq!(current.encode_to_vec(), [0x1a, 0]); // field 3, message
+    current.status = old.status.clone();
+    current.failing_streak = old.failing_streak;
+    current.log = vec![HealthLog {
+        start: Some("start".into()),
+        end: Some("end".into()),
+        exit_code: Some(0),
+        output: Some("ok".into()),
+    }];
+    let encoded = current.encode_to_vec();
+    assert_eq!(OldHealth::decode(encoded.as_slice()).unwrap(), old);
+    assert_eq!(Health::decode(encoded.as_slice()).unwrap(), current);
+}
+
 #[test]
 fn container_mount_inventory_uses_additive_fields_and_preserves_unknown_state() {
     use citadel_contracts::citadel::shared_models::v1::ContainerMessage;

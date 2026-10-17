@@ -16,6 +16,8 @@ pub(crate) async fn inventory_reconciliation(
     let safety = Duration::from_secs(6 * 3600);
     let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + safety, safety);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut health_tick = tokio::time::interval(Duration::from_secs(60));
+    health_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut changes = worker.targets.changes();
     let mut reason = RecoveryReason::Bootstrap;
     let mut scope = None;
@@ -80,24 +82,33 @@ pub(crate) async fn inventory_reconciliation(
                 }
             }
         }
-        tokio::select! {
-            biased;
-            () = cancellation.cancelled() => return Ok(()),
-            trigger = worker.local_triggers.recv(&cancellation) => {
-                if trigger.is_none() { return Ok(()); }
-                scope = Some(ReconciliationTrigger::LocalEvent);
-                reason = RecoveryReason::Reconnect;
+        loop {
+            tokio::select! {
+              biased;
+              () = cancellation.cancelled() => return Ok(()),
+              trigger = worker.local_triggers.recv(&cancellation) => {
+                  if trigger.is_none() { return Ok(()); }
+                  scope = Some(ReconciliationTrigger::LocalEvent);
+                  reason = RecoveryReason::Reconnect;
+                  break;
+              }
+              trigger = worker.agent_triggers.recv(&cancellation) => {
+                  let Some(id) = trigger else { return Ok(()); };
+                  agent_ids.clear();
+                  all_agents = id.is_none();
+                  agent_ids.extend(id);
+                  scope = Some(ReconciliationTrigger::AgentEvent);
+                  reason = RecoveryReason::Online;
+                  break;
+              }
+              _ = health_tick.tick() => {
+                  for target in worker.targets.snapshot().await.iter().filter(|t| matches!(t.connector_type, citadel_platforms::ConnectorKind::Local | citadel_platforms::ConnectorKind::Agent)) {
+                      if worker.refreshes.send(ScopedEventRequest {platform_id: target.id, refresh: EventRefresh::Resource(citadel_platforms::jobs::ReconciliationScope::Containers)}, &cancellation).await.is_err() { return Ok(()); }
+                  }
+              }
+              _ = ticker.tick() => { scope = None; reason = RecoveryReason::Safety; break; }
+              _ = changes.changed() => { scope = None; reason = RecoveryReason::Bootstrap; break; }
             }
-            trigger = worker.agent_triggers.recv(&cancellation) => {
-                let Some(id) = trigger else { return Ok(()); };
-                agent_ids.clear();
-                all_agents = id.is_none();
-                agent_ids.extend(id);
-                scope = Some(ReconciliationTrigger::AgentEvent);
-                reason = RecoveryReason::Online;
-            }
-            _ = ticker.tick() => { scope = None; reason = RecoveryReason::Safety; }
-            _ = changes.changed() => { scope = None; reason = RecoveryReason::Bootstrap; }
         }
     }
 }

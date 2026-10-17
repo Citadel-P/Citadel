@@ -271,10 +271,25 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         json!(["rollback-container"])
     );
 
-    let state_claims = store.claim_state(actor, true, &[created.id]).await.unwrap();
+    let state_claims = store
+        .claim_state(
+            actor,
+            true,
+            &[created.id],
+            citadel_stacks::StackAction::Stop,
+        )
+        .await
+        .unwrap();
     assert_eq!(state_claims[0].previous_status, StackReleaseStatus::Healthy);
     assert!(matches!(
-        store.claim_state(actor, true, &[created.id]).await,
+        store
+            .claim_state(
+                actor,
+                true,
+                &[created.id],
+                citadel_stacks::StackAction::Stop
+            )
+            .await,
         Err(citadel_stacks::StackError::Conflict(_))
     ));
     assert_eq!(
@@ -295,7 +310,15 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
         StackReleaseStatus::Healthy
     );
 
-    let state_claims = store.claim_state(actor, true, &[created.id]).await.unwrap();
+    let state_claims = store
+        .claim_state(
+            actor,
+            true,
+            &[created.id],
+            citadel_stacks::StackAction::Stop,
+        )
+        .await
+        .unwrap();
     sqlx::query("INSERT INTO containers(id,created,dockercontainerid,dockerimageid,name,platformid,ports,stackid,state,updated) VALUES($1,0,'container-one','image','web',$2,'[]',$3,'Running',0)")
         .bind(Uuid::now_v7()).bind(platform_id).bind(created.id).execute(&pool).await.unwrap();
     // A stop event can arrive before the Agent sends the RPC response.
@@ -1057,4 +1080,307 @@ async fn container_completion_locks_stack_before_release() {
         assert_eq!(state, "Idle");
     }
     pool.close().await;
+}
+
+mod workload_health_fixture;
+#[tokio::test]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
+async fn stack_health_uses_applied_definition_not_pending_edits_and_detects_missing_services() {
+    use citadel_primitives::health::WorkloadHealthStatus as Health;
+    let pool = workload_health_fixture::pool().await;
+    let platform = workload_health_fixture::platform(&pool, false).await;
+    let store = PostgresStackRepository::new(pool.clone());
+    let actor = ActorId::new(SYSTEM_ACTOR_ID);
+    let stack = store
+        .create(
+            actor,
+            true,
+            &CreateStack {
+                name: format!("health-{}", Uuid::now_v7()),
+                platform_id: platform,
+                description: None,
+                stack_source: StackSource::WebEditor,
+                spec: spec("nginx:alpine", None),
+                drift_policy: None,
+                tag_ids: vec![],
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    let first = store
+        .claim_apply(actor, true, stack.id, None, None)
+        .await
+        .unwrap();
+    let success = StackRuntimeResult {
+        status: StackReleaseStatus::Healthy,
+        messages: vec![],
+    };
+    store
+        .complete_apply(actor, &first, &success, &[], None, None)
+        .await
+        .unwrap();
+    let container = workload_health_fixture::container(
+        &pool,
+        platform,
+        "web",
+        None,
+        None,
+        Some(stack.id),
+        Some("web"),
+        "Healthy",
+    )
+    .await;
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Healthy
+    );
+    // Retain the applied snapshot exactly as an edit does, then change the draft topology.
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,status,version,spec,createdat,createdbyactorid) SELECT $2,stackid,platformid,status,version,spec,createdat,createdbyactorid FROM stackreleases WHERE id=$1")
+        .bind(stack.current_stack_release_id).bind(Uuid::now_v7()).execute(&pool).await.unwrap();
+    let mut pending = spec("nginx:alpine", None);
+    if let StackSpec::WebEditor { compose_file, .. } = &mut pending {
+        *compose_file = "services:\n  web: {image: nginx}\n  pending: {image: nginx}\n".into();
+    }
+    sqlx::query("UPDATE stackreleases SET spec=$2 WHERE id=$1")
+        .bind(stack.current_stack_release_id)
+        .bind(pending.to_storage_value().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let read = store.get_authorized(actor, true, stack.id).await.unwrap();
+    assert_eq!(read.probe_health.expected, Some(1));
+    assert_eq!(read.probe_health.status, Health::Healthy);
+    let second = store
+        .claim_apply(actor, true, stack.id, None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .expected,
+        None
+    );
+    store
+        .complete_apply(actor, &second, &success, &[], None, None)
+        .await
+        .unwrap();
+    // Reconciliation marks the current release Degraded while a required service is missing.
+    // An older Healthy snapshot must not become the health baseline again.
+    sqlx::query("UPDATE stackreleases SET status='Degraded' WHERE id=$1")
+        .bind(second.release_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let read = store.get_authorized(actor, true, stack.id).await.unwrap();
+    assert_eq!(read.probe_health.expected, Some(2));
+    assert_eq!(read.probe_health.missing, Some(1));
+    assert_eq!(read.probe_health.status, Health::Partial);
+    // Editing a degraded release also cannot overwrite the retained definition.
+    sqlx::query("UPDATE stackreleases SET spec=$2 WHERE id=$1")
+        .bind(second.release_id)
+        .bind(spec("nginx:alpine", None).to_storage_value().unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .expected,
+        Some(2)
+    );
+    use citadel_primitives::health::HealthAttention;
+    sqlx::query("UPDATE containers SET state='Exited',health=health || '{\"exitCode\":1,\"startedAt\":\"2020-01-01T00:00:00Z\"}'::jsonb WHERE id=$1")
+        .bind(container).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE stackreleases SET status='Stopped' WHERE id=$1")
+        .bind(second.release_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .attention
+            .contains(&HealthAttention::UnexpectedExit)
+    );
+    let stops = store
+        .claim_state(actor, true, &[stack.id], citadel_stacks::StackAction::Stop)
+        .await
+        .unwrap();
+    store
+        .complete_state(
+            actor,
+            &stops[0],
+            StackReleaseStatus::Stopped,
+            &["web".into()],
+        )
+        .await
+        .unwrap();
+    let stopped = store.get_authorized(actor, true, stack.id).await.unwrap();
+    assert!(
+        !stopped
+            .probe_health
+            .attention
+            .contains(&HealthAttention::UnexpectedExit)
+    );
+    assert_eq!(stopped.probe_health.expected, Some(2));
+    assert_eq!(
+        stopped.probe_health.missing,
+        Some(1),
+        "stopping the surviving container cannot hide a missing sibling"
+    );
+    sqlx::query("DELETE FROM containers WHERE id=$1")
+        .bind(container)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .missing,
+        Some(2)
+    );
+    let failed = store
+        .claim_apply(actor, true, stack.id, None, None)
+        .await
+        .unwrap();
+    store
+        .fail_apply(actor, &failed, "fixture failure", false)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .expected,
+        None
+    );
+    let recovered = store
+        .claim_apply(actor, true, stack.id, None, None)
+        .await
+        .unwrap();
+    store
+        .complete_apply(actor, &recovered, &success, &[], None, None)
+        .await
+        .unwrap();
+    let partial = store
+        .claim_apply_versioned(
+            actor,
+            true,
+            stack.id,
+            None,
+            None,
+            citadel_stacks::StackApplyOptions {
+                expected_version: None,
+                service_names: vec!["web".into()],
+            },
+        )
+        .await
+        .unwrap();
+    store
+        .complete_apply(actor, &partial, &success, &[], None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .expected,
+        None,
+        "service-scoped completion cannot establish the full applied definition"
+    );
+    assert!(
+        store
+            .get_authorized(ActorId::new(Uuid::nil()), false, stack.id)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
+async fn stack_health_resolves_only_the_pinned_manager_daemon_scope() {
+    use citadel_primitives::health::WorkloadHealthStatus as Health;
+    let pool = workload_health_fixture::pool().await;
+    let platform = workload_health_fixture::platform(&pool, true).await;
+    let store = PostgresStackRepository::new(pool.clone());
+    let actor = ActorId::new(SYSTEM_ACTOR_ID);
+    let stack = store
+        .create(
+            actor,
+            true,
+            &CreateStack {
+                name: format!("manager-health-{}", Uuid::now_v7()),
+                platform_id: platform,
+                description: None,
+                stack_source: StackSource::WebEditor,
+                spec: spec("nginx:alpine", None),
+                drift_policy: None,
+                tag_ids: vec![],
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query("UPDATE stackreleases SET status='Healthy' WHERE id=(SELECT currentstackreleaseid FROM stacks WHERE id=$1)")
+        .bind(stack.id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmserviceprojections(platformid,dockerserviceid,configids,desiredtaskcount,image,labels,mode,name,networkids,observedat,ports,runningtaskcount,secretids,stackid,updatestate,versionindex) VALUES($1,'service','[]',1,'nginx','{\"com.citadel.stack-service-count\":\"1\",\"com.citadel.release-id\":\"release\"}','replicated','web','[]',now(),'[]',1,'[]',$2,'',1)")
+        .bind(platform).bind(stack.id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex,dockercreatedat) VALUES($1,'current','running','same-id','manager','service','nginx','','manager',now(),'[]','web',1,'running',2,now())")
+        .bind(platform).execute(&pool).await.unwrap();
+    let container = workload_health_fixture::container(
+        &pool, platform, "same-id", None, None, None, None, "Healthy",
+    )
+    .await;
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
+    sqlx::query("UPDATE platforms SET platformdescriptor=(platformdescriptor::jsonb || '{\"nodeID\":\"manager\"}'::jsonb)::json WHERE id=$1")
+        .bind(platform).execute(&pool).await.unwrap();
+    let read = store.get_authorized(actor, true, stack.id).await.unwrap();
+    assert_eq!(read.probe_health.status, Health::Healthy);
+    assert_eq!(read.probe_health.members[0].container_id, Some(container));
+    assert_eq!(read.probe_health.members[0].name, "same-id");
+    assert_eq!(
+        read.probe_health.members[0].node_id.as_deref(),
+        Some("manager")
+    );
+    sqlx::query("UPDATE platforms SET platformdescriptor=(platformdescriptor::jsonb || '{\"nodeID\":\"other-manager\"}'::jsonb)::json WHERE id=$1")
+        .bind(platform).execute(&pool).await.unwrap();
+    assert_eq!(
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .probe_health
+            .status,
+        Health::Unknown
+    );
 }

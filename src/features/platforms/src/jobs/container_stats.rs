@@ -80,6 +80,7 @@ mod tests {
             Box::pin(async {
                 Ok(vec![
                     RuntimeContainerSummary {
+                        health: None,
                         mounts: None,
                         id: "running".into(),
                         state: "running".into(),
@@ -97,6 +98,7 @@ mod tests {
                         is_swarm_task: false,
                     },
                     RuntimeContainerSummary {
+                        health: None,
                         mounts: None,
                         id: "stopped".into(),
                         state: "exited".into(),

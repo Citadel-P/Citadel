@@ -14,7 +14,10 @@ vi.mock('@/lib/context/app-context', () => ({
 }));
 vi.mock('@/hooks/useRealtimeGroup', () => ({ useRealtimeGroup: () => {} }));
 vi.mock('@/features/platforms/hooks/useDockerDaemonGroup', () => ({ useDockerDaemonGroup: () => {} }));
-beforeEach(() => server.use(http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({}))));
+beforeEach(() => {
+  for (const key of ['images-show-id', 'images-show-registry', 'images-show-created']) localStorage.removeItem(key);
+  server.use(http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({})));
+});
 const image = {
   id: 'image-1',
   platformId: 'platform-1',
@@ -55,6 +58,8 @@ it('shows additional tags on demand and remembers optional columns', async () =>
   expect(toolbar.getByRole('button', { name: 'Pull Image' })).toBeVisible();
   expect(screen.getAllByRole('button', { name: 'Columns' })).toHaveLength(1);
   expect(screen.getAllByRole('columnheader')).toHaveLength(6);
+  expect(screen.queryByRole('columnheader', { name: 'ID' })).not.toBeInTheDocument();
+  expect(screen.queryByTitle(taggedImage.dockerImageId)).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Show image details: localhost:5000/team/nginx' })).toBeVisible();
   expect(screen.getByText('17')).toBeVisible();
   expect(screen.queryByText('team/nginx:stable')).not.toBeInTheDocument();
@@ -63,7 +68,11 @@ it('shows additional tags on demand and remembers optional columns', async () =>
   await user.keyboard('{Escape}');
   await user.click(screen.getByRole('button', { name: 'Columns' }));
   await user.click(screen.getByRole('menuitemcheckbox', { name: 'Created' }));
+  await user.click(screen.getByRole('menuitemcheckbox', { name: 'ID' }));
+  await user.keyboard('{Escape}');
   expect(screen.getByRole('columnheader', { name: 'Created' })).toBeVisible();
+  expect(screen.getByRole('columnheader', { name: 'ID' })).toBeVisible();
+  expect(screen.getByTitle(taggedImage.dockerImageId)).toBeVisible();
   unmount();
   renderCitadel(
     <Provider>
@@ -72,9 +81,46 @@ it('shows additional tags on demand and remembers optional columns', async () =>
   );
   expect(screen.getByRole('columnheader', { name: 'Created' })).toBeVisible();
   expect(screen.queryByRole('columnheader', { name: 'Registry' })).not.toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'ID' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Copy to clipboard' })).toBeInTheDocument();
+  localStorage.removeItem('images-show-id');
   localStorage.removeItem('images-show-created');
   localStorage.removeItem('images-show-registry');
 });
+it('does not refetch profile preferences when toggling image columns', async () => {
+  localStorage.removeItem('images-show-registry');
+  localStorage.removeItem('images-show-created');
+  const preferences = vi.fn(() => HttpResponse.json({ timeZone: 'UTC', dateTimeFormat: 'System' }));
+  server.use(http.get('http://localhost/api/v1/profile/preferences', preferences));
+  const HeaderActions = ImageComponents.header!.Extra!;
+  const { user, queryClient } = renderCitadel(
+    <Provider>
+      <HeaderActions />
+      <ImagesTable items={[image]} isLoading={false} actions={{}} />
+    </Provider>,
+  );
+  await waitFor(() => expect(preferences).toHaveBeenCalled());
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  const before = preferences.mock.calls.length;
+  for (const column of ['Registry', 'Created', 'ID']) {
+    for (const visible of [true, false]) {
+      await user.click(screen.getByRole('button', { name: 'Columns' }));
+      await user.click(screen.getByRole('menuitemcheckbox', { name: column }));
+      expect(screen.getByRole('menuitemcheckbox', { name: column })).toHaveAttribute('aria-checked', String(visible));
+      await user.keyboard('{Escape}');
+      if (visible) expect(screen.getByRole('columnheader', { name: column })).toBeVisible();
+      else expect(screen.queryByRole('columnheader', { name: column })).not.toBeInTheDocument();
+      await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+      expect(preferences).toHaveBeenCalledTimes(before);
+    }
+  }
+  // Profile changes still update date formatting through the existing query cache.
+  await act(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['getProfilePreferences'] });
+  });
+  expect(preferences).toHaveBeenCalledTimes(before + 1);
+});
+
 it('extends the existing details section with saved workloads instead of adding a Used by tab', async () => {
   const requests = vi.fn();
   expect(ImageInfoComponents.Tabs.map((tab) => tab.label)).toEqual(['Inspect']);
@@ -231,6 +277,9 @@ it('filters fresh image updates from the URL, composes with search, and follows 
   const filter = toolbar.getByRole('button', { name: 'Updates available' });
   expect(filter).toHaveAttribute('aria-pressed', 'true');
   expect(filter.nextElementSibling).toBe(toolbar.getByRole('button', { name: 'Pull Image' }));
+  expect(toolbar.getByRole('button', { name: 'Pull Image' }).nextElementSibling).toBe(
+    toolbar.getByRole('button', { name: 'Columns' }),
+  );
   await user.click(filter);
   expect(link('current')).toBeVisible();
   expect(screen.getByLabelText('Location')).toHaveTextContent('?view=compact');
@@ -257,3 +306,70 @@ it('filters fresh image updates from the URL, composes with search, and follows 
   expect(link('ready-update')).toBeVisible();
   expect(requests).toHaveBeenCalledTimes(1);
 });
+
+it.each(['pointer', 'keyboard'])(
+  'uses the single-image confirmation without reopening the menu (%s)',
+  async (interaction) => {
+    const { ImageDropdownActions } = await import('./actions');
+    const row = {
+      ...image,
+      isInUse: false,
+      capabilities: { canRead: true, canWrite: true, canExecute: true, canPull: true, canInspect: true },
+    };
+    const deleted = vi.fn();
+    server.use(
+      http.delete('http://localhost/api/v1/images', async ({ request }) => {
+        deleted(await request.json());
+        return HttpResponse.json({ deletedImages: [] });
+      }),
+    );
+    const { user } = renderCitadel(<ImagesTable items={[row]} isLoading={false} actions={ImageDropdownActions} />);
+    const copy = vi.spyOn(navigator.clipboard, 'writeText');
+    const trigger = screen.getByRole('button', { name: 'Open menu' });
+    await user.click(trigger);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await user.click(trigger);
+    const menuStates: (string | null)[] = [];
+    const observer = new MutationObserver((records) => {
+      menuStates.push(...records.map((record) => record.oldValue));
+    });
+    observer.observe(trigger, { attributes: true, attributeFilter: ['aria-expanded'], attributeOldValue: true });
+    try {
+      const deleteItem = screen.getByRole('menuitem', { name: 'Delete' });
+      if (interaction === 'keyboard') {
+        act(() => deleteItem.focus());
+        await user.keyboard('{Enter}');
+      } else {
+        await user.click(deleteItem);
+      }
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(menuStates).toEqual(['true']);
+    } finally {
+      observer.disconnect();
+    }
+    const dialog = within(await screen.findByRole('dialog'));
+    const name = row.name;
+    expect(dialog.queryByRole('list')).not.toBeInTheDocument();
+    await user.click(dialog.getByText(name, { selector: 'b' }));
+    expect(copy).toHaveBeenCalledWith(name);
+    const input = dialog.getByRole('textbox', { name: `Enter ${name} to confirm` });
+    await user.type(input, 'Delete');
+    expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    await user.clear(input);
+    await user.type(input, name);
+    await waitFor(() => expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled());
+    await user.click(dialog.getByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(deleted).toHaveBeenCalledExactlyOnceWith({
+        platformId: 'platform-1',
+        ids: [row.dockerImageId],
+        force: false,
+        noPrune: true,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+);

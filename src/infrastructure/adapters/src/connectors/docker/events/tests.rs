@@ -10,11 +10,17 @@ fn container_actions_have_one_shared_semantic_mapping() {
         ("die", Some(ContainerChange::Exited)),
         ("destroy", Some(ContainerChange::Tombstone)),
         ("rename", Some(ContainerChange::Observe)),
-        ("health_status: healthy", None),
-        ("health_status: unhealthy", None),
-        ("oom", None),
+        (
+            "health_status: healthy",
+            Some(ContainerChange::HealthObserved),
+        ),
+        (
+            "health_status: unhealthy",
+            Some(ContainerChange::HealthObserved),
+        ),
+        ("oom", Some(ContainerChange::HealthObserved)),
         ("resize", None),
-        ("update", None),
+        ("update", Some(ContainerChange::Observe)),
         // Checkpoint/restore can change runtime state; retain targeted observation.
         ("checkpoint", Some(ContainerChange::Observe)),
         ("restore", Some(ContainerChange::Observe)),

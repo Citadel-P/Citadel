@@ -11,7 +11,8 @@ const emptyStorageMessage = 'No supported volumes or bind mounts were resolved f
 
 export type ResourceBackupSource =
   | Exclude<BackupSourceSpec, { $type: 'CitadelSystem' }>
-  | { $type: 'Container'; platformId: string; containerId: string };
+  | { $type: 'Container'; platformId: string; containerId: string }
+  | { $type: 'ContainerGroup'; platformId: string };
 
 export function ResourceBackupSummary({
   source,
@@ -65,6 +66,9 @@ export function BackupSummaryDetails({
     .at(-1);
   return (
     <div className="space-y-4">
+      {source.$type === 'ContainerGroup' && (
+        <p className="text-xs text-muted-foreground">Storage used by the containers shown in this group.</p>
+      )}
       <div
         className={cn(
           'flex flex-wrap items-start justify-between gap-3',
@@ -229,7 +233,7 @@ export function BackupSummaryDetails({
           />
         </summary>
         <p className="pt-2 leading-relaxed">
-          {source.$type === 'Container'
+          {source.$type === 'Container' || source.$type === 'ContainerGroup'
             ? 'Back up each eligible Docker volume or bind mount through a storage or workload policy. Tmpfs and container writable layers are excluded.'
             : source.$type === 'DockerVolume'
               ? 'This policy backs up the selected Docker volume, including volumes with Docker-generated names.'

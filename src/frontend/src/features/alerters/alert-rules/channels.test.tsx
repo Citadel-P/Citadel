@@ -36,7 +36,8 @@ it('tests an Email channel without saving, then persists it with SMTP settings',
   await waitFor(() => expect(add).toBeEnabled());
   await user.click(add);
   const dialog = within(screen.getByRole('dialog'));
-  await user.type(dialog.getByPlaceholderText('e.g. Engineering Team Channel'), 'Operations email');
+  await user.click(dialog.getByPlaceholderText('e.g. Engineering Team Channel'));
+  await user.paste('Operations email');
   await user.click(dialog.getByRole('combobox'));
   await user.click(screen.getByRole('option', { name: 'Email' }));
   expect(dialog.getByPlaceholderText('smtp://...')).toBeVisible();

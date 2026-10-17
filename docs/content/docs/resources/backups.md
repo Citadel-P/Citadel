@@ -415,7 +415,7 @@ backups are paused.
 Deployment, stack, Swarm Service, and container tables display a **Backup** column
 and a **Backup Filter** dropdown at the right of the resource header. Select multiple
 statuses to show resources matching any selected status. These combine with the
-platform, tag, search, and overview filters. Remove individual status chips or
+platform, tag, search, and update filters. Remove individual status chips or
 clear the selection to show all backup statuses.
 The column uses the same shield and card as the resource page. Resources without
 eligible storage show a dash. **Edit schedule** in the card opens the policy's

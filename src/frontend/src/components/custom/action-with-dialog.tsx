@@ -116,6 +116,16 @@ export const ConfirmButton = forwardRef<
   );
 });
 
+const ActionSelectionList = ({ items }: { items: { id: string; name: string }[] }) => (
+  <ul className="p-4 bg-accent text-sm list-disc list-inside max-h-75 overflow-y-auto">
+    {items.map((item) => (
+      <li key={item.id} className="break-all">
+        {item.name}
+      </li>
+    ))}
+  </ul>
+);
+
 export const ActionWithDialog = ({
   name,
   title,
@@ -131,6 +141,7 @@ export const ActionWithDialog = ({
   onOpenChange,
   renderTrigger = true,
   description,
+  items,
 }: {
   name: string;
   title: string;
@@ -146,6 +157,7 @@ export const ActionWithDialog = ({
   onOpenChange?: (open: boolean) => void;
   renderTrigger?: boolean;
   description?: ReactNode;
+  items?: { id: string; name: string }[];
 }) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -199,6 +211,7 @@ export const ActionWithDialog = ({
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4">
+          {items && <ActionSelectionList items={items} />}
           <p
             onClick={() => {
               navigator.clipboard.writeText(name);
@@ -325,11 +338,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4 whitespace-nowrap overflow-x-auto">
-          <ul className="p-4 bg-accent text-sm list-disc list-inside max-h-75 overflow-y-auto">
-            {selected.map((resource, i) => (
-              <li key={i}>{resource.name}</li>
-            ))}
-          </ul>
+          <ActionSelectionList items={selected} />
           <p
             onClick={() => {
               navigator.clipboard.writeText(name);

@@ -54,6 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "ContainerState",
         "LogConfig",
         "Health",
+        "HealthLog",
+        "ContainerHealthcheck",
     ] {
         builder = builder.type_attribute(
             format!(".citadel.shared_models.v1.{name}"),

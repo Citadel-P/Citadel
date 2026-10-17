@@ -128,3 +128,41 @@ async fn generated_finite_calls_and_handwritten_streams_work_with_a_real_daemon(
     let _ = proxy.await;
     std::fs::remove_file(path).unwrap();
 }
+
+/// The fixture is explicitly created by the test operator; this test only reads that exact ID.
+#[tokio::test]
+#[ignore = "requires CITADEL_HEALTH_FIXTURE_ID and CITADEL_HEALTH_EXPECTED for a disposable container"]
+async fn reads_real_health_without_executing_or_mutating_container() {
+    use citadel_adapters::connectors::agent::container_health::{from_wire, to_wire};
+    use citadel_platforms::container_health::HealthStatus;
+    let id = std::env::var("CITADEL_HEALTH_FIXTURE_ID").unwrap();
+    assert_eq!(id.len(), 64, "use the full disposable container identity");
+    let expected = std::env::var("CITADEL_HEALTH_EXPECTED").unwrap();
+    let socket = std::env::var("CITADEL_HEALTH_FIXTURE_SOCKET")
+        .unwrap_or_else(|_| "/var/run/docker.sock".into());
+    let client = citadel_adapters::connectors::docker::DockerClient::new(
+        std::path::Path::new(&socket),
+        std::time::Duration::from_secs(10),
+    )
+    .unwrap();
+    let observed = client
+        .container_health_event_observation(&id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(observed.id, id);
+    let health = observed.health.unwrap();
+    assert_eq!(
+        format!("{:?}", health.status(&observed.state, true)),
+        expected
+    );
+    let wire = from_wire(to_wire(health.clone()));
+    assert_eq!(
+        wire.status(&observed.state, true),
+        health.status(&observed.state, true)
+    );
+    assert_eq!(wire.configuration, health.configuration);
+    assert_eq!(wire.last_check_at, health.last_check_at);
+    assert_eq!(health.status(&observed.state, false), HealthStatus::Unknown);
+    assert!(!serde_json::to_string(&health).unwrap().contains("output"));
+}

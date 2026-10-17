@@ -85,6 +85,7 @@ pub struct ContainerStatSnapshot {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerDetails {
+    pub health: Option<crate::container_health::ContainerHealthObservation>,
     pub id: Uuid,
     pub platform_id: Uuid,
     pub container_id: String,

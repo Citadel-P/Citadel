@@ -1,3 +1,4 @@
+import { createWorkloadHealth } from '@/test/factories/resources';
 import { ResourceCopyEligibilityStatus } from '@/api/generated/api.types';
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
@@ -26,6 +27,26 @@ const DeploymentUpdateCheckProbe = () => {
 };
 
 describe('useDeploymentGroup', () => {
+  it('invalidates diagnostic metadata when the runtime changes, but not for unrelated updates', async () => {
+    const fake = new FakeRealtimeConnection();
+    const current = createExternalDeployment('sha256:applied');
+    server.use(http.get(`http://localhost/api/v1/deployments/${deploymentId}`, () => HttpResponse.json(current)));
+    const { queryClient } = renderCitadel(createElement(DeploymentUpdateCheckProbe), {
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
+    });
+    await screen.findByRole('button', { name: /check for updates/i });
+    await waitFor(() => expect(fake.listenerCount('DeploymentInfoUpdated')).toBe(1));
+    const key = ['getDeploymentContainerInfo', { id: deploymentId }];
+    queryClient.setQueryData(key, { data: { containerId: 'previous' } });
+    act(() => fake.emit('DeploymentInfoUpdated', { ...current, name: 'Renamed' }, 'update'));
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+    act(() => fake.emit('DeploymentInfoUpdated', { ...current, dockerContainerId: 'replacement' }, 'update'));
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
   it('enables update checks from the successful redeploy notification without refetching', async () => {
     const fake = new FakeRealtimeConnection();
     const beforeRedeploy = createExternalDeployment(null);
@@ -176,6 +197,7 @@ describe('mergeDeploymentInfo', () => {
 
 const createExternalDeployment = (resolvedDigest: string | null): DeploymentView =>
   ({
+    probeHealth: createWorkloadHealth(),
     id: deploymentId,
     name: 'nginx',
     description: null,

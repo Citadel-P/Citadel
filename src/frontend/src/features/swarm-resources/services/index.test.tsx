@@ -1,3 +1,4 @@
+import { createWorkloadHealth } from '@/test/factories/resources';
 import {
   ManagedSwarmServiceView,
   AutoUpdateStatus,
@@ -274,6 +275,7 @@ const LocationProbe = () => {
 };
 
 const managedService = (overrides: Partial<ManagedSwarmServiceView> = {}): ManagedSwarmServiceView => ({
+  probeHealth: createWorkloadHealth(),
   id: 'managed-service-1',
   platformId,
   name: 'draft-web',

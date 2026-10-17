@@ -66,6 +66,60 @@ fn rows<T: Serialize>(
         events: vec![],
     })
 }
+// Health/state observations carry exact committed Docker identities. Keep list delivery
+// scoped to their owners without treating omitted owners as deleted. Runtime
+// reconciliation refreshes owners on that Platform; parent CRUD retains full snapshots.
+fn workload_rows<T: Serialize>(
+    target: &'static str,
+    values: Vec<T>,
+    event: Option<&PublishedRuntimeEvent>,
+) -> Result<GroupSnapshot, RealtimeReadError> {
+    let mut snapshot = rows(target, values, RowStyle::Update)?;
+    let Some(change) = event else {
+        return Ok(snapshot);
+    };
+    if change.resource_type != "Platform" {
+        return Ok(snapshot);
+    }
+    let Some(platform) = change.platform_id.map(|id| id.to_string()) else {
+        return Ok(snapshot);
+    };
+    let batch = &mut snapshot.rows[0];
+    batch
+        .rows
+        .retain(|row| row["platformId"].as_str() == Some(platform.as_str()));
+    batch.style = RowStyle::UpdatePatch;
+    let action = change.payload["action"].as_str().unwrap_or("");
+    if !action.starts_with("health")
+        && !matches!(
+            action,
+            "oom" | "start" | "stop" | "die" | "kill" | "pause" | "unpause"
+        )
+    {
+        return Ok(snapshot);
+    }
+    let Some(references) = change.container_ids() else {
+        return Ok(snapshot);
+    };
+    let batch = &mut snapshot.rows[0];
+    // Bounded payloads may omit the changed member; refresh those owners conservatively.
+    batch.rows.retain(|row| {
+        row["platformId"].as_str() == Some(platform.as_str())
+            && (row["probeHealth"]["membersTruncated"] == true
+                || row["probeHealth"]["members"]
+                    .as_array()
+                    .is_some_and(|members| {
+                        members.iter().any(|member| {
+                            member["dockerContainerId"].as_str().is_some_and(|id| {
+                                references.iter().any(|reference| reference == id)
+                            })
+                        })
+                    }))
+    });
+    batch.style = RowStyle::UpdatePatch;
+    Ok(snapshot)
+}
+
 fn event(target: &'static str, value: impl Serialize) -> Result<GroupSnapshot, RealtimeReadError> {
     Ok(GroupSnapshot {
         rows: vec![],
@@ -289,6 +343,43 @@ impl ApplicationGroupReader {
         if matches!(g.topic(), Topic::ContainerLog(..) | Topic::StackLog(..)) {
             self.log_targets(p, g).await?;
             return Ok(GroupSnapshot::default());
+        }
+        if let Topic::ContainerHealth(id) = g.topic() {
+            let container = self
+                .platforms
+                .get_container(*id)
+                .await
+                .map_err(failure)?
+                .ok_or(RealtimeReadError::Authorization)?;
+            // Match the HTTP history permission; workload-only access to
+            // container-info must not grant Platform history access.
+            self.permission_with_lease(
+                p,
+                ResourceType::Platform,
+                Some(container.platform_id),
+                None,
+                lease,
+            )
+            .await?;
+            if let Some(change) = e {
+                if change
+                    .platform_id
+                    .is_some_and(|platform| platform != container.platform_id)
+                    || (change.platform_id.is_none() && change.resource_id != container.platform_id)
+                    || change
+                        .container_ids()
+                        .is_some_and(|ids| !ids.iter().any(|id| id == &container.container_id))
+                {
+                    return Ok(GroupSnapshot::default());
+                }
+            }
+            let entries = self.platforms.container_health_history(*id).await.map_err(failure)?
+                .into_iter().map(crate::api::resources::platforms::health_views::ContainerHealthTransitionView::from)
+                .collect::<Vec<_>>();
+            return event(
+                "ReceiveContainerHealthHistory",
+                json!({"resourceId": id, "entries": entries}),
+            );
         }
         use ResourceType::*;
         let id = g.id();
@@ -561,6 +652,7 @@ impl ApplicationGroupReader {
                         .changed_containers(e.unwrap(), id.unwrap(), &references)
                         .await?;
                     if let Some(service) = &self.backup_coverage { containers = service.enrich_containers(p, containers).await; }
+                    crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                     let mut result = GroupSnapshot::default();
                     for reference in references {
                         result.events.extend(event(
@@ -580,7 +672,8 @@ impl ApplicationGroupReader {
                                 .collect::<Vec<_>>()
                         })
                         .map_err(failure)?;
-                let containers = if let Some(service) = &self.backup_coverage { service.enrich_containers(p, containers).await } else { containers };
+                let mut containers = if let Some(service) = &self.backup_coverage { service.enrich_containers(p, containers).await } else { containers };
+                crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                 event("ContainersInfoUpdated", json!({"containers":containers}))
             }
             Topic::Images(..) => {
@@ -605,9 +698,10 @@ impl ApplicationGroupReader {
                     return Ok(GroupSnapshot::default());
                 }
                 if let Some(references) = e.and_then(PublishedRuntimeEvent::container_ids) {
-                    let containers = self
+                    let mut containers = self
                         .changed_containers(e.unwrap(), id.unwrap(), &references)
                         .await?;
+                    crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                     let mut result = GroupSnapshot::default();
                     for reference in references {
                         result.rows.extend(
@@ -644,18 +738,14 @@ impl ApplicationGroupReader {
                     lease,
                 )
                 .await?;
+                let mut containers = crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
+                    .await.map_err(failure)?.into_iter()
+                    .map(crate::api::resources::platforms::views::ContainerView::from).collect::<Vec<_>>();
+                crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                 result.rows.extend(
                     rows(
                         "ContainerEventReceived",
-                        crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
-                            .await
-                            .map(|value| {
-                                value
-                                    .into_iter()
-                                    .map(crate::api::resources::platforms::views::ContainerView::from)
-                                    .collect::<Vec<_>>()
-                            })
-                            .map_err(failure)?,
+                        containers,
                         RowStyle::DockerResource,
                     )?
                     .rows,
@@ -705,7 +795,7 @@ impl ApplicationGroupReader {
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
                 if let Some(service) = &self.backup_coverage { views = service.enrich_deployments(p, views).await; }
-                rows("DeploymentInfoUpdated", views, RowStyle::Update)
+                workload_rows("DeploymentInfoUpdated", views, e)
             },
             Topic::Deployment(..) => {
                 let mut view = crate::api::resources::deployments::views::DeploymentView::try_from(self.deployments.get_authorized(actor, admin, id.unwrap()).await.map_err(failure)?).map_err(failure)?;
@@ -719,7 +809,7 @@ impl ApplicationGroupReader {
                         service, actor, citadel_resource_copies::CopyKind::Deployment, id.unwrap(),
                     ).await);
                 }
-                rows("DeploymentInfoUpdated", vec![view], RowStyle::Update)
+                workload_rows("DeploymentInfoUpdated", vec![view], e)
             },
             Topic::Stacks => {
                 let mut views = self.stacks
@@ -731,7 +821,7 @@ impl ApplicationGroupReader {
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
                 if let Some(service) = &self.backup_coverage { views = service.enrich_stacks(p, views).await; }
-                rows("StackInfoUpdated", views, RowStyle::Update)
+                workload_rows("StackInfoUpdated", views, e)
             },
             Topic::Stack(..) => {
                 let mut view = crate::api::resources::stacks::views::StackView::try_from(self.stacks.get_authorized(actor, admin, id.unwrap()).await.map_err(failure)?).map_err(failure)?;
@@ -744,7 +834,7 @@ impl ApplicationGroupReader {
                         service, actor, citadel_resource_copies::CopyKind::Stack, id.unwrap(),
                     ).await);
                 }
-                rows("StackInfoUpdated", vec![view], RowStyle::Update)
+                workload_rows("StackInfoUpdated", vec![view], e)
             },
             Topic::StackInfo(..) => {
                 let stack = self
@@ -787,7 +877,7 @@ impl ApplicationGroupReader {
                         service, actor, citadel_resource_copies::CopyKind::SwarmService, id.unwrap(),
                     ).await);
                 }
-                rows("SwarmServiceInfoUpdated", vec![view], RowStyle::Update)
+                workload_rows("SwarmServiceInfoUpdated", vec![view], e)
             },
             Topic::SwarmServices(..) => {
                 let mut views = self.services
@@ -807,7 +897,7 @@ impl ApplicationGroupReader {
                     )
                     .collect::<Result<Vec<_>, _>>().map_err(failure)?;
                 if let Some(service) = &self.backup_coverage { views = service.enrich_services(p, views).await; }
-                rows("SwarmServiceInfoUpdated", views, RowStyle::Update)
+                workload_rows("SwarmServiceInfoUpdated", views, e)
             },
             Topic::GitRepositories => rows(
                 "GitRepositoryInfoUpdated",

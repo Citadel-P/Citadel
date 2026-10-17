@@ -252,14 +252,14 @@ WITH incoming AS (
            c.containeroperationid,c.controlstate,i.state AS next_state,i.observed,
            COALESCE(c.projectionobservedat,0) AS previous_observed,
            COALESCE(c.projectionobservedat,0) <= i.observed AS fresh,
-           (lower(c.state) IS DISTINCT FROM i.state OR c.projectionstalesince IS NOT NULL
+           (c.health IS NOT NULL OR lower(c.state) IS DISTINCT FROM i.state OR c.projectionstalesince IS NOT NULL
                OR c.projectionstalereason IS NOT NULL) AS semantic_change
     FROM incoming i JOIN containers c ON c.platformid=$1
         AND c.dockernodeid IS NOT DISTINCT FROM $2 AND c.dockercontainerid=i.docker_id
         AND (i.hint IS NULL OR c.id=i.hint)
     ORDER BY c.id FOR UPDATE OF c
 ), updated AS (
-    UPDATE containers c SET state=initcap(r.next_state),
+    UPDATE containers c SET state=initcap(r.next_state), health=NULL,
         updated=CASE WHEN r.semantic_change THEN r.observed ELSE c.updated END,
         projectionobservedat=GREATEST(COALESCE(c.projectionobservedat,0),r.observed),
         projectionstalesince=NULL, projectionstalereason=NULL,

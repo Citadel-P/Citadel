@@ -12,6 +12,22 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
+/// Per-actor presentation enrichment shared by HTTP and realtime; no raw shared-read cache contains these names.
+pub async fn enrich_container_owner_names(
+    service: &citadel_platforms::PlatformReadService,
+    principal: &citadel_identity::ActorPrincipal,
+    containers: &mut [ContainerView],
+) -> Result<(), citadel_platforms::AuthorizedReadError> {
+    let ids = containers.iter().map(|c| c.id).collect::<Vec<_>>();
+    let mut names = service
+        .container_owner_names(principal.actor_id, principal.is_administrator(), &ids)
+        .await?;
+    for container in containers {
+        container.owner_names = names.remove(&container.id).unwrap_or_default();
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 pub enum ContainerSystemRole {
     Core,
@@ -36,6 +52,8 @@ impl ContainerSystemRole {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerRuntimeView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health: Option<super::health_views::ContainerHealthView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_coverage:
         Option<crate::api::resources::backups::coverage::ResourceBackupSummaryView>,
@@ -73,6 +91,7 @@ pub struct ContainerRuntimeView {
 impl ContainerView {
     pub fn runtime_data(&self) -> Result<ContainerRuntimeView, serde_json::Error> {
         Ok(ContainerRuntimeView {
+            health: self.health.clone(),
             backup_coverage: self.backup_coverage.clone(),
             id: self.container_id.clone(),
             name: self.name.clone(),
@@ -211,6 +230,8 @@ mod tests {
 
     fn container() -> ContainerView {
         ContainerView {
+            health: None,
+            owner_names: Vec::new(),
             id: Uuid::now_v7(),
             platform_id: Uuid::now_v7(),
             container_id: "docker-container-id".into(),

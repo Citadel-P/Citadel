@@ -43,7 +43,7 @@ pub fn refresh_baseline() -> Result<(), Box<dyn std::error::Error>> {
     if migrations.len() != 1
         || migrations[0].file_name().and_then(|value| value.to_str()) != Some("0001_initial.sql")
     {
-        return Err("the unreleased Rust database must contain only 0001_initial.sql".into());
+        return Err("baseline refresh requires a catalog containing only 0001_initial.sql".into());
     }
 
     let schema = fs::read(database_root.join("src/schema/schema.sql"))?;
@@ -51,7 +51,7 @@ pub fn refresh_baseline() -> Result<(), Box<dyn std::error::Error>> {
     let table_count = product_sql.matches("CREATE TABLE ").count();
     validate_baseline(product_sql, table_count)?;
     let migration = format!(
-        "-- @generated pre-release baseline; do not edit.\n\
+        "-- @generated fresh-install baseline; do not edit.\n\
          -- Generated from: src/infrastructure/database/src/schema/schema.sql\n\n{product_sql}"
     );
     write_generated(
@@ -61,7 +61,7 @@ pub fn refresh_baseline() -> Result<(), Box<dyn std::error::Error>> {
     refresh_catalog()?;
 
     println!(
-        "refreshed unreleased database baseline ({table_count} tables, SHA-256 {})",
+        "refreshed fresh-install database baseline ({table_count} tables, SHA-256 {})",
         digest(migration.as_bytes())
     );
     Ok(())
@@ -299,7 +299,11 @@ fn validate_baseline(sql: &str, expected_tables: usize) -> Result<(), Box<dyn st
         return Err("Rust baseline retained EF or outer transaction metadata".into());
     }
     let tables = sql.matches("CREATE TABLE ").count();
-    let inserts = sql.matches("INSERT INTO ").count();
+    // Trigger bodies also contain INSERTs; only top-level statements seed the database.
+    let inserts = sql
+        .lines()
+        .filter(|line| line.starts_with("INSERT INTO "))
+        .count();
     if tables != expected_tables || inserts != EXPECTED_SEED_INSERTS {
         return Err(format!(
             "Rust baseline has {tables} tables and {inserts} seed inserts; expected {expected_tables} and {EXPECTED_SEED_INSERTS}"
@@ -327,6 +331,20 @@ fn digest(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn baseline_validation_excludes_function_body_inserts_from_seed_count() {
+        let mut sql = "CREATE TABLE fixture (id integer);\n".to_owned();
+        for _ in 0..EXPECTED_SEED_INSERTS {
+            sql.push_str("INSERT INTO fixture VALUES (1);\n");
+        }
+        sql.push_str("CREATE FUNCTION fixture_writer() RETURNS void AS $$\nBEGIN\n    INSERT INTO fixture VALUES (2);\nEND;\n$$ LANGUAGE plpgsql;\n");
+        validate_baseline(&sql, 1).unwrap();
+        assert!(
+            validate_baseline(&sql.replacen("INSERT INTO fixture VALUES (1);\n", "", 1), 1)
+                .is_err()
+        );
+    }
 
     #[test]
     fn generates_a_static_embedded_catalog_without_runtime_discovery() {

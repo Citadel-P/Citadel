@@ -29,6 +29,29 @@ SELECT s.id,s.name,s.description,s.stacksource,s.stackupdatestate,s.driftpolicy,
        EXISTS(SELECT 1 FROM resourcecopies c WHERE c.destinationid=s.id AND c.status='Succeeded') has_copied_storage,
        r.platformid,r.status release_status,r.version,r.spec,r.source,r.resourcebindings,
        p.status platform_status,p.name platform_name,p.platformdescriptor,
+       CASE WHEN s.healthappliedplatformid=r.platformid THEN s.healthappliedspec END health_applied_spec,
+       COALESCE((SELECT jsonb_agg(jsonb_build_object('service',sp.dockerserviceid,'mode',sp.mode,'desired',sp.desiredtaskcount,'running',sp.runningtaskcount,'stale',sp.isstale,'updateState',sp.updatestate,'ownership',sp.ownership,'stackServiceCount',sp.labels->>'com.citadel.stack-service-count','releaseId',sp.labels->>'com.citadel.release-id'))
+        FROM swarmserviceprojections sp WHERE sp.platformid=r.platformid AND sp.stackid=s.id), '[]'::jsonb) health_services,
+       CASE WHEN p.platformdescriptor->>'$type'='DockerSwarm' THEN COALESCE((SELECT jsonb_agg(jsonb_build_object(
+ 'containerId', c.id, 'dockerContainerId', t.dockercontainerid, 'platformId', t.platformid,
+ 'taskId', t.dockertaskid, 'nodeId', t.dockernodeid, 'name', COALESCE(NULLIF(t.name,''),c.name,t.dockertaskid), 'service', t.dockerserviceid,
+ 'state', COALESCE(c.state, initcap(t.state)), 'observation', c.health,
+ 'available', (NOT t.isstale AND c.id IS NOT NULL AND c.projectionstalesince IS NULL
+ AND (CASE WHEN c.dockernodeid IS NULL THEN p.status='Online'
+ ELSE EXISTS(SELECT 1 FROM swarmnoderuntimeprojectionstates ns WHERE ns.platformid=t.platformid AND ns.dockernodeid=t.dockernodeid AND NOT ns.isstale) END))
+ ) ORDER BY t.dockerserviceid,t.slot,t.dockertaskid)
+ FROM (SELECT DISTINCT ON (task.dockerserviceid, COALESCE(task.slot::text,task.dockernodeid)) task.*
+ FROM swarmtaskprojections task WHERE task.platformid=r.platformid AND EXISTS(SELECT 1 FROM swarmserviceprojections sp WHERE sp.platformid=task.platformid AND sp.dockerserviceid=task.dockerserviceid AND sp.stackid=s.id AND sp.ownership<>'OwnershipConflict') AND lower(task.desiredstate)='running'
+ ORDER BY task.dockerserviceid,COALESCE(task.slot::text,task.dockernodeid),task.dockercreatedat DESC NULLS LAST,task.versionindex DESC,task.dockertaskid DESC) t
+ -- The connected manager uses the platform daemon scope; workers use explicit node scopes.
+ -- Resolve only the pinned manager identity, never an arbitrary NULL-node container.
+ LEFT JOIN containers c ON c.platformid=t.platformid AND NULLIF(t.dockernodeid,'') IS NOT NULL
+ AND c.dockernodeid IS NOT DISTINCT FROM (CASE
+ WHEN t.dockernodeid=NULLIF(COALESCE(p.platformdescriptor->>'nodeID',p.platformdescriptor->>'NodeID'),'') THEN NULL
+ ELSE t.dockernodeid END) AND c.dockercontainerid=t.dockercontainerid), '[]'::jsonb)
+        ELSE COALESCE((SELECT jsonb_agg(jsonb_build_object('containerId',c.id,'dockerContainerId',c.dockercontainerid,'platformId',c.platformid,'nodeId',c.dockernodeid,'name',c.name,'service',COALESCE(c.composeservicename,''),'state',c.state,'available',(c.id IS NOT NULL AND c.projectionstalesince IS NULL AND (c.dockernodeid IS NULL OR EXISTS(SELECT 1 FROM swarmnoderuntimeprojectionstates ns WHERE ns.platformid=c.platformid AND ns.dockernodeid=c.dockernodeid AND NOT ns.isstale))),'stopRequestedAt',c.healthstoprequestedat,'observation',c.health) ORDER BY c.id) FROM containers c
+        WHERE c.platformid=r.platformid AND c.stackid=s.id AND NOT c.isswarmtask), '[]'::jsonb) END health_members,
+
        COALESCE(tags.value,'[]'::jsonb) tags,
        activity.value latest_activity,
        $2::boolean permission_administrator, GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) permission_level,

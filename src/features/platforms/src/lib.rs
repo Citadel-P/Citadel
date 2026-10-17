@@ -8,6 +8,7 @@ pub use capabilities::{
 pub mod model;
 pub use model::{ConnectorKind, PlatformKind};
 pub mod agent_setup;
+pub mod container_health;
 pub mod containers;
 pub mod deletion;
 pub mod image_pull;

@@ -1,4 +1,11 @@
-import { ContainerRuntimeView, ContainerStateStatus, ContainerStatView, SwarmTaskView } from '@/api/generated/api.types';
+import { WorkloadServiceHealthCard, WorkloadTaskHealthCard } from '@/features/workload-health/service-card';
+import type { HealthResource } from '@/features/workload-health/health';
+import {
+  ContainerRuntimeView,
+  ContainerStateStatus,
+  ContainerStatView,
+  SwarmTaskView,
+} from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateBadge } from '@/components/custom/state-badge';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -9,7 +16,7 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { getSwarmTaskIdFromContainerName, getTaskName } from '@/lib/utils';
 import { useSelectedResources } from '@/lib/atoms';
 import { DropdownActionComponent } from '@/pages/types';
-import { ColumnDef, Row } from '@tanstack/react-table';
+import { CellContext, ColumnDef, Row } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router';
@@ -18,14 +25,16 @@ import { SwarmServiceListView } from './hooks/useServicesGroup';
 import { CPUCell, MemoryUsageCell, UnmanagedResourceIcon } from '@/components/custom/common';
 import { getServiceViewRoute } from './actions';
 
-type ServiceRow = {
+type HealthRowContext = { healthResource?: HealthResource; platformId: string };
+
+type ServiceRow = HealthRowContext & {
   id: string;
   kind: 'service';
   service: SwarmServiceListView;
   tasks: TaskRow[];
 };
 
-type TaskRow = {
+type TaskRow = HealthRowContext & {
   id: string;
   kind: 'task';
   task: SwarmTaskView;
@@ -34,6 +43,16 @@ type TaskRow = {
 type ServiceTableRow = ServiceRow | TaskRow;
 
 const isServiceRow = (row: ServiceTableRow): row is ServiceRow => row.kind === 'service';
+
+const ServiceHealthCell = ({ row }: CellContext<ServiceTableRow, unknown>) => {
+  const { healthResource, platformId } = row.original;
+  if (!healthResource) return null;
+  return isServiceRow(row.original) ? (
+    <WorkloadServiceHealthCard resource={healthResource} service={row.original.service} platformId={platformId} />
+  ) : (
+    <WorkloadTaskHealthCard resource={healthResource} task={row.original.task} platformId={platformId} />
+  );
+};
 
 export const ServicesTable = ({
   items,
@@ -44,6 +63,7 @@ export const ServicesTable = ({
   showActions = true,
   emptyState,
   taskContainers,
+  healthResource,
 }: {
   items: SwarmServiceListView[];
   isLoading: boolean;
@@ -53,6 +73,7 @@ export const ServicesTable = ({
   showActions?: boolean;
   emptyState?: { title: string; description: string };
   taskContainers?: ContainerRuntimeView[];
+  healthResource?: HealthResource;
 }) => {
   const { platformId: routePlatformId = '' } = useParams<{ platformId: string }>();
   const platformId = platformIdProp ?? routePlatformId;
@@ -63,9 +84,11 @@ export const ServicesTable = ({
         id: `service:${service.id}`,
         kind: 'service',
         service,
-        tasks: service.tasks.map((task) => ({ id: `task:${task.id}`, kind: 'task', task })),
+        healthResource,
+        platformId,
+        tasks: service.tasks.map((task) => ({ id: `task:${task.id}`, kind: 'task', task, healthResource, platformId })),
       })),
-    [items],
+    [items, healthResource, platformId],
   );
   const getSubRows = useCallback((row: ServiceTableRow) => (isServiceRow(row) ? row.tasks : undefined), []);
   const taskContainersById = useMemo(() => mapTaskContainers(items, taskContainers), [items, taskContainers]);
@@ -150,6 +173,12 @@ export const ServicesTable = ({
         },
       },
       {
+        id: 'health',
+        header: 'Health',
+        enableSorting: false,
+        cell: ServiceHealthCell,
+      },
+      {
         id: 'cpu',
         header: 'CPU',
         cell: ({ row }) => {
@@ -197,12 +226,22 @@ export const ServicesTable = ({
     ];
 
     return allColumns.filter((column) => {
+      if (column.id === 'health') return healthResource !== undefined;
       if (column.id === 'select') return selectable;
       if (column.id === 'actions') return showActions;
       if (column.id === 'cpu' || column.id === 'memory') return taskContainers !== undefined;
       return true;
     });
-  }, [actions, platformId, selectable, serviceStatsById, showActions, taskContainers, taskContainersById]);
+  }, [
+    actions,
+    healthResource,
+    platformId,
+    selectable,
+    serviceStatsById,
+    showActions,
+    taskContainers,
+    taskContainersById,
+  ]);
 
   return (
     <DataTable

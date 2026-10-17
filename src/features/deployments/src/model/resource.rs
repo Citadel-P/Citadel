@@ -5,6 +5,7 @@ use uuid::Uuid;
 /// Deployment state and related data, independent of HTTP and caller permissions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Deployment {
+    pub probe_health: citadel_primitives::health::WorkloadHealth,
     pub id: Uuid,
     pub name: String,
     pub description: Option<String>,

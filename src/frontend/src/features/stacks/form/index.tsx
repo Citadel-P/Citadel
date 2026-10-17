@@ -1,3 +1,4 @@
+import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
@@ -33,7 +34,7 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { useStackInfoGroup } from './hooks/useStackInfoGroup';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
+import { CellContext, ColumnDef } from '@tanstack/react-table';
 import { ReactNode, useMemo, useState } from 'react';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
@@ -124,7 +125,10 @@ export const StackFormComponents: RequiredFormComponents = {
       return <StackSubHeader latestActivity={resource.latestActivityView ?? null} stack={resource} />;
     },
     TabActions: ({ resource }: { resource: StackView }) => (
-      <ResourceBackupIndicator source={{ $type: 'Stack', stackId: resource.id }} coverage={resource.backupCoverage} />
+      <div className="flex items-center gap-3">
+        <WorkloadHealthCard resource={resource} kind="Stack" triggerVariant="icon" />
+        <ResourceBackupIndicator source={{ $type: 'Stack', stackId: resource.id }} coverage={resource.backupCoverage} />
+      </div>
     ),
     Tabs: [
       {
@@ -359,6 +363,7 @@ const SwarmStackRuntime = ({ stack }: { stack: StackView }) => {
         selectable={false}
         showActions={false}
         taskContainers={containers}
+        healthResource={stack}
         emptyState={{
           title: 'No Stack services found.',
           description: 'No Services owned by this Stack are present in the latest Swarm inventory.',
@@ -447,6 +452,7 @@ const ImportedComposeStackRuntime = ({ stack }: { stack: StackView }) => {
         isLoading={false}
         actions={{}}
         platformId={stack.platformId ?? ''}
+        healthResource={stack}
         selectable={false}
         showActions={false}
         emptyState={{
@@ -502,6 +508,7 @@ const StackContainersRuntime = ({
   return (
     <div className="flex w-full flex-col gap-4">
       <StackContainersTable
+        stack={stack}
         containers={containersInfo}
         isLoading={isLoading}
         platformId={stack.platformId ?? undefined}
@@ -1109,7 +1116,14 @@ const getStackContainerLabel = (container: ContainerRuntimeView) => {
   return container.id?.slice(0, 12) ?? 'Container';
 };
 
+type StackContainerRow = ContainerRuntimeView & { healthResource: StackView };
+
+const StackContainerHealthCell = ({ row }: CellContext<StackContainerRow, unknown>) => (
+  <WorkloadContainerHealthCard resource={row.original.healthResource} container={row.original} />
+);
+
 const StackContainersTable = ({
+  stack,
   containers,
   isLoading,
   platformId,
@@ -1117,13 +1131,18 @@ const StackContainersTable = ({
   containers: ContainerRuntimeView[];
   isLoading: boolean;
   platformId?: string;
+  stack: StackView;
 }) => {
   const columns = useMemo(() => getStackContainerColumns(platformId), [platformId]);
+  const rows = useMemo(
+    () => containers.map((container) => ({ ...container, healthResource: stack })),
+    [containers, stack],
+  );
 
-  return <DataTable columns={columns} data={containers} isLoading={isLoading} />;
+  return <DataTable columns={columns} data={rows} isLoading={isLoading} />;
 };
 
-const getStackContainerColumns = (platformId?: string): ColumnDef<ContainerRuntimeView>[] => [
+const getStackContainerColumns = (platformId?: string): ColumnDef<StackContainerRow>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,
@@ -1163,6 +1182,12 @@ const getStackContainerColumns = (platformId?: string): ColumnDef<ContainerRunti
     accessorKey: 'ports',
     header: () => <span>Ports</span>,
     cell: ({ row }) => <PortsDisplay ports={row.original.ports ?? {}} compact maxVisible={1} />,
+  },
+  {
+    id: 'health',
+    header: 'Health',
+    cell: StackContainerHealthCell,
+    enableSorting: false,
   },
   {
     accessorKey: 'cpu',

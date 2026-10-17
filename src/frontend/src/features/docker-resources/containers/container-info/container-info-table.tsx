@@ -8,14 +8,16 @@ import {
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
-import { ColumnDef } from '@tanstack/react-table';
+import { CellContext, ColumnDef } from '@tanstack/react-table';
 import { Clock, Server, Info } from 'lucide-react';
 import { DetailFacts, DetailSection } from '@/components/custom/resource-detail';
 import Loader from '@/components/ui/loader';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { useLocalStorage, useRead } from '@/lib/hooks';
-import { useMemo } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
+import { ContainerDetailsView } from '../hooks/useContainerInfoGroup';
+import { ContainerOverviewHealth } from './container-overview-health';
 import { ImageName } from '.';
 import {
   CPUCell,
@@ -27,6 +29,7 @@ import {
 } from '@/components/custom/common';
 
 type ContainerInfoRow = ContainerSummaryView & {
+  health?: ReactNode;
   containerStat: Partial<ContainerStatView>;
   state: ContainerStateStatus;
   id: string;
@@ -73,7 +76,10 @@ const StatusCell = ({
   );
 };
 
-const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>[] => {
+// A module-level cell preserves popover/dialog state when realtime data changes.
+const ContainerHealthCell = ({ row }: CellContext<ContainerInfoRow, unknown>) => row.original.health;
+
+const getColumns = (displayOptions: DisplayOptions, showHealth: boolean): ColumnDef<ContainerInfoRow>[] => {
   const cols: ColumnDef<ContainerInfoRow>[] = [];
 
   if (displayOptions.DisplayContainerName) {
@@ -124,6 +130,7 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
       header: () => <span>Ports</span>,
       cell: ({ row }) => <PortsDisplay ports={row.original.ports ?? {}} compact maxVisible={1} />,
     },
+    ...(showHealth ? [{ id: 'health', header: 'Health', cell: ContainerHealthCell, enableSorting: false }] : []),
     {
       accessorKey: 'cpu',
       header: () => <span>Cpu</span>,
@@ -153,8 +160,12 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
   return [...cols, ...coreCols];
 };
 
-export const ContainerOverview = ({ container }: { container?: ContainerRuntimeView | undefined }) => {
+export const ContainerOverview = ({ container }: { container?: ContainerDetailsView }) => {
   const [overviewOpen, setOverviewOpen] = useLocalStorage('container-overview-open', true);
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === '#health') setOverviewOpen(true);
+  }, [hash, setOverviewOpen]);
   const { data, isLoading } = useRead('getContainerInfo', { id: container?.id });
   const containerInfo = data?.data;
   const backupCoverage = container?.backupCoverage ?? containerInfo?.backupCoverage;
@@ -268,6 +279,15 @@ export const ContainerOverview = ({ container }: { container?: ContainerRuntimeV
               ...(backupCoverage?.volumes.some((volume) => volume.hostPath)
                 ? [{ label: 'Bind mounts', value: <BindMountBackupLinks coverage={backupCoverage} /> }]
                 : []),
+
+              ...(container
+                ? [
+                    {
+                      label: 'Health',
+                      value: <ContainerOverviewHealth key={container.resourceId} resource={container} />,
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>
@@ -277,22 +297,27 @@ export const ContainerOverview = ({ container }: { container?: ContainerRuntimeV
 };
 
 export const DeploymentContainerInfoTable = ({
+  summary,
   deploymentId,
   container,
   displayOptions,
+  health,
 }: {
+  health?: ReactNode;
   deploymentId: string;
+  summary?: ContainerSummaryView;
   container?: ContainerRuntimeView | undefined;
   displayOptions: DisplayOptions;
 }) => {
-  const { data, isLoading } = useRead('getDeploymentContainerInfo', { id: deploymentId });
-  const containerInfo = data?.data;
+  const { data, isLoading } = useRead('getDeploymentContainerInfo', { id: deploymentId }, { enabled: !summary });
+  const containerInfo = summary ?? data?.data;
 
   return (
     <ContainerInfoTableRenderer
       containerInfo={containerInfo}
       container={container}
       displayOptions={displayOptions}
+      health={health}
       isLoading={isLoading}
     />
   );
@@ -302,19 +327,23 @@ const ContainerInfoTableRenderer = ({
   containerInfo,
   container,
   displayOptions,
+  health,
   isLoading,
 }: {
+  health?: ReactNode;
   containerInfo?: ContainerSummaryView | undefined;
   container?: ContainerRuntimeView | undefined;
   displayOptions: DisplayOptions;
   isLoading?: boolean;
 }) => {
-  const columns = useMemo(() => getColumns(displayOptions), [displayOptions]);
+  const showHealth = Boolean(health);
+  const columns = useMemo(() => getColumns(displayOptions, showHealth), [displayOptions, showHealth]);
 
   const tableData: ContainerInfoRow[] = containerInfo
     ? [
         {
           ...containerInfo,
+          health,
           name: container?.name ?? containerInfo.name,
           id: containerInfo.containerId,
           containerStat: container?.containerStat ?? {},
@@ -323,7 +352,7 @@ const ContainerInfoTableRenderer = ({
       ]
     : [];
 
-  const finalIsLoading = !container?.id || Boolean(isLoading);
+  const finalIsLoading = !containerInfo && Boolean(isLoading);
 
   return <DataTable columns={columns} data={tableData} isLoading={finalIsLoading} />;
 };

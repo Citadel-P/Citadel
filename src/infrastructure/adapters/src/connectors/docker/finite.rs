@@ -171,6 +171,30 @@ impl DockerClient {
         }
         Ok(Some(super::runtime::map_container(container.try_into()?)))
     }
+    pub async fn container_health_event_observation(
+        &self,
+        id: &str,
+    ) -> Result<Option<citadel_platforms::RuntimeContainerSummary>, DockerError> {
+        let Some(mut value) = self.container_event_observation(id).await? else {
+            return Ok(None);
+        };
+        if value.id != id {
+            return Ok(None);
+        }
+        if value.health.is_some() {
+            return Ok(Some(value));
+        }
+        let document = self
+            .inspect_container_document(id)
+            .await
+            .ok()
+            .filter(|doc| doc["Id"].as_str() == Some(id));
+        if let Some(doc) = document {
+            value.state = doc["State"]["Status"].as_str().unwrap_or("unknown").into();
+            value.health = Some(super::container_health::observation(&doc));
+        }
+        Ok(Some(value))
+    }
     pub async fn delete_container(
         &self,
         id: &str,

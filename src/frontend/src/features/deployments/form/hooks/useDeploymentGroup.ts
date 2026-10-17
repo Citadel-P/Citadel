@@ -14,6 +14,20 @@ export const useDeploymentGroup = (deploymentId: string) => {
     (deployment: DeploymentView) => {
       if (deployment.id !== deploymentId) return;
 
+      const previous = queryClient.getQueryData<ResourceResponse<'getDeployment'>>([
+        'getDeployment',
+        { deploymentId },
+      ])?.data;
+      if (
+        previous &&
+        (previous.dockerContainerId !== deployment.dockerContainerId ||
+          previous.platformId !== deployment.platformId ||
+          previous.status !== deployment.status ||
+          previous.controlState !== deployment.controlState ||
+          previous.platformStatus !== deployment.platformStatus)
+      ) {
+        void queryClient.invalidateQueries({ queryKey: ['getDeploymentContainerInfo', { id: deploymentId }] });
+      }
       queryClient.setQueryData<ResourceResponse<'getDeployment'>>(['getDeployment', { deploymentId }], (current) =>
         current?.data
           ? {

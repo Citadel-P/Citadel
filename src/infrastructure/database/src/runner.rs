@@ -357,9 +357,12 @@ mod tests {
     fn embedded_manifest_and_baseline_are_consistent() {
         let manifest = validate_manifest().expect("embedded catalog should be valid");
         assert_eq!(
-            manifest.len(),
-            1,
-            "the unreleased catalog contains only the initial baseline"
+            MIGRATIONS
+                .iter()
+                .map(|migration| migration.id)
+                .collect::<Vec<_>>(),
+            ["0001"],
+            "the catalog must contain the consolidated initial migration"
         );
         assert_eq!(manifest.len(), MIGRATIONS.len());
         assert_eq!(MIGRATIONS[0].id, "0001");
@@ -377,10 +380,13 @@ mod tests {
             .flat_map(|migration| tables(migration.sql))
             .collect();
         assert_eq!(migrated_tables, tables(super::super::SCHEMA_SQL));
-        assert_eq!(
-            MIGRATIONS[0].sql.matches("INSERT INTO ").count(),
-            super::super::SCHEMA_SQL.matches("INSERT INTO ").count()
-        );
+        // Count top-level seed statements, not INSERTs inside trigger/function bodies.
+        let seeds = |sql: &str| {
+            sql.lines()
+                .filter(|line| line.starts_with("INSERT INTO "))
+                .count()
+        };
+        assert_eq!(seeds(MIGRATIONS[0].sql), seeds(super::super::SCHEMA_SQL));
     }
 
     #[test]

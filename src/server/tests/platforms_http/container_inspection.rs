@@ -120,6 +120,34 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         StatusCode::FORBIDDEN
     );
     assert!(requests.lock().await.is_empty());
+    let history_url = format!("/api/v1/containers/{id}/health-history");
+    assert_eq!(
+        send(&f, &history_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let history = send(&f, &history_url, Some(reader.clone())).await;
+    assert_eq!(history.status(), StatusCode::OK);
+    let history = json_body(history).await;
+    assert!(history.is_array());
+    assert!(!history.to_string().contains("not-for-browser"));
+    let health_group = Group::parse(&format!("container-health:{id}")).unwrap();
+    let history_snapshot = super::realtime_groups::reader(&f)
+        .read(&reader, &health_group, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        history_snapshot.events[0].target,
+        "ReceiveContainerHealthHistory"
+    );
+    assert_eq!(
+        history_snapshot.events[0].arguments[0]["resourceId"],
+        json!(id)
+    );
+    assert_eq!(history_snapshot.events[0].arguments[0]["entries"], history);
+    assert!(
+        requests.lock().await.is_empty(),
+        "history never inspects the daemon"
+    );
     set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, true).await;
     for reference in [&docker_id, &docker_id[..12].to_string(), &id.to_string()] {
         let response = send(
@@ -221,7 +249,13 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
     );
     let info = send(&f, &deployment_info, Some(deployment_reader.clone())).await;
     assert_eq!(info.status(), StatusCode::OK);
-    assert_eq!(json_body(info).await["containerId"], docker_id);
+    let info = json_body(info).await;
+    assert_eq!(info["containerId"], docker_id);
+    assert!(info["capabilities"].is_null());
+    assert_eq!(info["platformName"], "");
+    let host_info = send(&f, &deployment_info, Some(f.administrator.clone())).await;
+    assert_eq!(host_info.status(), StatusCode::OK);
+    assert_eq!(json_body(host_info).await["capabilities"]["canRead"], true);
     assert_eq!(
         send(&f, &deployment_inspect, Some(deployment_reader.clone()))
             .await
@@ -367,6 +401,10 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         .await
         .unwrap();
     assert_eq!(container_snapshot.events[0].target, "ReceiveContainerInfo");
+    assert!(matches!(
+        realtime.read(&scoped_reader, &health_group, None).await,
+        Err(citadel_server::realtime::RealtimeReadError::Authorization)
+    ));
     assert_eq!(
         container_snapshot.events[0].arguments[0],
         data["containers"][0]

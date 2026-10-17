@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ContainerRuntimeView,
+  ContainerHealthStatus,
   ContainerStateStatus,
   ContainerSystemRole,
   ContainerView,
@@ -65,6 +66,21 @@ describe('mergeContainerRuntimeUpdate', () => {
     expect(result).not.toHaveProperty('stackId');
     expect(result.state).toBe(ContainerStateStatus.Running);
     expect(result.containerStat).toBe(runtimeUpdate.containerStat);
+  });
+
+  it('clears initial stale flags only when realtime supplies an authoritative health projection', () => {
+    const current = {
+      state: ContainerStateStatus.Running,
+      projectionStaleSince: 123,
+      projectionStaleReason: 'Disconnected',
+    };
+    expect(mergeContainerRuntimeUpdate(current, runtimeUpdate).projectionStaleSince).toBe(123);
+    const health = { status: ContainerHealthStatus.Healthy, observedAt: Date.now(), reason: 'Passing' };
+    expect(mergeContainerRuntimeUpdate(current, { ...runtimeUpdate, health })).toMatchObject({
+      health,
+      projectionStaleSince: null,
+      projectionStaleReason: null,
+    });
   });
 
   it('preserves system classification and operation state', () => {
@@ -157,6 +173,7 @@ it('merges detail patches without clearing metadata or accepting another resourc
         platformId: 'platform',
         name: 'nginx',
         state: ContainerStateStatus.Running,
+        health: { status: 'Healthy', observedAt: Date.now(), reason: 'Passing' },
         ports: { '80': '8080' },
         controlState: ResourceControlState.Processing,
       },
@@ -169,6 +186,9 @@ it('merges detail patches without clearing metadata or accepting another resourc
   useRealtimeGroupMock.mock.lastCall![0].setupEventListeners(hub);
   act(() => handlers.get('ReceiveContainerInfoPatch')!({ resourceId: 'other', state: ContainerStateStatus.Exited }));
   expect(result.current.containerInfo?.state).toBe(ContainerStateStatus.Running);
+  expect(result.current.containerInfo?.health?.status).toBe('Healthy');
+  act(() => handlers.get('ReceiveContainerInfoPatch')!({ resourceId, state: ContainerStateStatus.Running }));
+  expect(result.current.containerInfo?.health).toBeNull();
   act(() =>
     handlers.get('ReceiveContainerInfoPatch')!({
       resourceId,
@@ -179,6 +199,7 @@ it('merges detail patches without clearing metadata or accepting another resourc
   expect(result.current.containerInfo).toMatchObject({
     name: 'nginx',
     state: ContainerStateStatus.Exited,
+    health: null,
     controlState: ResourceControlState.Idle,
     ports: { '80': '8080' },
   });

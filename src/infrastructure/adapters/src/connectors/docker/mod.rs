@@ -19,6 +19,7 @@ pub use transport::{
 };
 
 pub use runtime::{container_observation, map_container as container_summary};
+pub mod container_health;
 
 mod local_sampler;
 pub use local_sampler::{LocalDockerSample, LocalDockerSampler};

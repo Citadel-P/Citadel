@@ -211,3 +211,21 @@ async fn cancelled_inspection_does_not_connect_to_docker() {
         citadel_platforms::RuntimeErrorKind::Cancelled
     );
 }
+
+#[test]
+fn health_detail_redacts_commands_and_truncates_only_after_redaction() {
+    let result = map_inspection(json!({"Id":"container", "Config":{"Env":["API_TOKEN=private-value"],"Healthcheck":{"Test":["CMD-SHELL","probe private-value"]}}, "State":{"Health":{"Log":(0..8).map(|_| json!({"Output":format!("{}private-value", "x".repeat(4090))})).collect::<Vec<_>>()}}}), "container").unwrap();
+    assert!(!result.to_string().contains("private"));
+    assert_eq!(
+        result["state"]["health"]["log"].as_array().unwrap().len(),
+        5
+    );
+    assert_eq!(result["config"]["healthcheck"]["test"][1], "probe ********");
+    assert!(
+        result["state"]["health"]["log"][0]["output"]
+            .as_str()
+            .unwrap()
+            .len()
+            <= 4096
+    );
+}

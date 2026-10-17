@@ -2,6 +2,35 @@ use super::*;
 use crate::api::resources::platforms::views::ContainerView;
 
 #[test]
+fn health_history_ignores_statistics_and_unrelated_state_patches() {
+    let id = Uuid::now_v7();
+    let platform = Uuid::now_v7();
+    let group = Group::parse(&format!("container-health:{id}")).unwrap();
+    let mut event = PublishedRuntimeEvent {
+        platform_id: Some(platform),
+        resource_type: "Platform",
+        resource_id: platform,
+        event_kind: "runtimeChanged",
+        resource_revision: 1,
+        reads: Default::default(),
+        containers: Default::default(),
+        payload: json!({"dockerResourceType":"containerStats"}),
+    };
+    assert!(!group.affected_by(&event));
+    event.payload = json!({"dockerResourceType":"container", "containerPatches":[{"id":Uuid::now_v7(),"state":"Exited"}]});
+    assert!(!group.affected_by(&event));
+    event.payload = json!({"dockerResourceType":"container", "containerPatches":[{"id":id,"controlState":"Processing"}]});
+    assert!(!group.affected_by(&event));
+    event.payload =
+        json!({"dockerResourceType":"container", "containerPatches":[{"id":id,"state":"Exited"}]});
+    assert!(group.affected_by(&event));
+    event.payload = json!({"dockerResourceType":"container", "action":"health_status"});
+    assert!(group.affected_by(&event));
+    event.payload = json!({"dockerResourceType":"image"});
+    assert!(!group.affected_by(&event));
+}
+
+#[test]
 fn build_log_events_only_target_the_matching_run_group() {
     let run = Uuid::now_v7();
     let event = PublishedRuntimeEvent {
@@ -34,6 +63,8 @@ fn build_log_events_only_target_the_matching_run_group() {
 
 fn container(node: Option<&str>) -> ContainerView {
     ContainerView {
+        health: None,
+        owner_names: Vec::new(),
         image_view: None,
         deployment_view: None,
         id: Uuid::now_v7(),
@@ -264,4 +295,38 @@ fn copy_progress_only_invalidates_its_operation_and_resynchronizes_on_reconnect(
     assert!(group.affected_by(&event));
     event.resource_type = "BackupPolicy";
     assert!(!group.affected_by(&event));
+}
+
+#[test]
+fn workload_health_updates_only_matching_platform_and_owner_without_deletions() {
+    let platform = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let mut change = PublishedRuntimeEvent {
+        platform_id: Some(platform),
+        resource_type: "Platform",
+        resource_id: platform,
+        event_kind: "runtimeChanged",
+        resource_revision: 1,
+        reads: Default::default(),
+        containers: Default::default(),
+        payload: json!({"dockerResourceType":"container", "action":"health_status: unhealthy", "runtimeResourceId":"same-docker-id"}),
+    };
+    let values = vec![
+        json!({"id":"affected","platformId":platform,"probeHealth":{"members":[{"dockerContainerId":"same-docker-id"}]}}),
+        json!({"id":"other-platform","platformId":other,"probeHealth":{"members":[{"dockerContainerId":"same-docker-id"}]}}),
+        json!({"id":"other-owner","platformId":platform,"probeHealth":{"members":[{"dockerContainerId":"other"}]}}),
+    ];
+    let result = workload_rows("StackInfoUpdated", values.clone(), Some(&change)).unwrap();
+    assert_eq!(result.rows[0].rows.len(), 1);
+    assert_eq!(result.rows[0].rows[0]["id"], "affected");
+    assert!(matches!(result.rows[0].style, RowStyle::UpdatePatch));
+    change.payload["action"] = json!("destroy");
+    assert_eq!(
+        workload_rows("StackInfoUpdated", values.clone(), Some(&change))
+            .unwrap()
+            .rows[0]
+            .rows
+            .len(),
+        2
+    );
 }

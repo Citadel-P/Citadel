@@ -30,6 +30,8 @@ message ListContainersRequest {
     map<string, OptionChain> filters = 4;
     // Default false preserves legacy list-with-statistics behavior.
     bool metadata_only = 5;
+    // Background reconciliation opts in to bounded health inspection.
+    bool observe_health = 6;
 }
 
 message ContainerLogRequest {

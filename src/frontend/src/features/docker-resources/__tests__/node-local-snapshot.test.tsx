@@ -1,10 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import {
-  ImageView,
-  NetworkView,
-  VolumeView,
-} from '@/api/generated/api.types';
+import { ImageView, NetworkView, VolumeView } from '@/api/generated/api.types';
 import { SwarmNodeLocalResourcesUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { renderCitadel } from '@/test/render-citadel';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
@@ -44,7 +40,10 @@ describe('node-local Docker resource snapshots', () => {
       },
     });
 
-    await waitFor(() => expect(fake.listenerCount('SwarmNodeLocalResourcesUpdated')).toBe(3));
+    // Images use their actor-authorized snapshot group; volumes/networks use daemon events.
+    await waitFor(() => expect(fake.listenerCount('SwarmNodeLocalResourcesUpdated')).toBe(2));
+    await waitFor(() => expect(fake.listenerCount('ImagesInfoUpdated')).toBe(1));
+    act(() => fake.emit('ImagesInfoUpdated', { platformId, images: [image('worker')], capabilities: {} }));
     act(() =>
       fake.emit('SwarmNodeLocalResourcesUpdated', {
         platformId,
