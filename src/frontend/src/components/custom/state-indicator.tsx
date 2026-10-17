@@ -383,6 +383,25 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
   }
 };
 
+const iconColors: Record<string, string> = {
+  'bg-blue-400': 'text-blue-400',
+  'bg-blue-500': 'text-blue-500',
+  'bg-gray-400': 'text-gray-400',
+  'bg-gray-500': 'text-gray-500',
+  'bg-green-500': 'text-green-500',
+  'bg-orange-400': 'text-orange-400',
+  'bg-orange-500': 'text-orange-500',
+  'bg-red-500': 'text-red-500',
+  'bg-violet-400': 'text-violet-400',
+  'bg-yellow-500': 'text-yellow-500',
+};
+
+/** Use the same status semantics for resource icons and status dots. */
+export function getStateIconAppearance(value: StateValue, kind?: StateIndicatorKind) {
+  const { colorClass, tooltip } = getStatusStyle(value, false, kind);
+  return { className: iconColors[colorClass] ?? 'text-muted-foreground', label: tooltip };
+}
+
 export const StateIndicator = memo(
   ({
     value,

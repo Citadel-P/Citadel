@@ -5853,6 +5853,44 @@
         ],
         "type": "object"
       },
+      "ContainerNetworkingView": {
+        "properties": {
+          "container": {
+            "$ref": "#/components/schemas/NetworkContainer"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkEndpointView"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "publishedPorts": {
+            "items": {
+              "$ref": "#/components/schemas/PublishedPortView"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "container",
+          "mode",
+          "endpoints",
+          "publishedPorts",
+          "observedAt",
+          "truncated"
+        ],
+        "type": "object"
+      },
       "ContainerRestartPolicy": {
         "enum": [
           "No",
@@ -12253,6 +12291,129 @@
         ],
         "type": "object"
       },
+      "NetworkContainer": {
+        "properties": {
+          "containerId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "containerName": {
+            "type": "string"
+          },
+          "containerState": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerContainerId": {
+            "type": "string"
+          },
+          "dockerNodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isStale": {
+            "type": "boolean"
+          },
+          "workloadId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workloadKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkWorkloadKind"
+              }
+            ]
+          },
+          "workloadName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workloadProcessing": {
+            "type": "boolean"
+          },
+          "workloadStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "containerId",
+          "dockerContainerId",
+          "containerName",
+          "isStale",
+          "workloadProcessing"
+        ],
+        "type": "object"
+      },
+      "NetworkContainersView": {
+        "properties": {
+          "containers": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkContainer"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "containers",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "NetworkEndpointView": {
+        "properties": {
+          "addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attached": {
+            "description": "None means the runtime did not provide endpoint evidence.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "networkId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "networkId",
+          "name",
+          "addresses",
+          "aliases"
+        ],
+        "type": "object"
+      },
       "NetworkIpamView": {
         "properties": {
           "config": {
@@ -12302,6 +12463,140 @@
         "required": [
           "name",
           "ip"
+        ],
+        "type": "object"
+      },
+      "NetworkRelationship": {
+        "enum": [
+          "Attachment",
+          "ServiceNetwork",
+          "SavedReference"
+        ],
+        "type": "string"
+      },
+      "NetworkUsage": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkUsageEntry"
+            },
+            "type": "array"
+          },
+          "isPartial": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entries",
+          "isPartial",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "NetworkUsageEntry": {
+        "properties": {
+          "containerId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "containerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "containerState": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerContainerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerNodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerServiceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isStale": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/NetworkRelationship"
+          },
+          "serviceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workloadId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workloadKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkWorkloadKind"
+              }
+            ]
+          },
+          "workloadName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workloadProcessing": {
+            "type": "boolean"
+          },
+          "workloadStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "relationship",
+          "isStale",
+          "workloadProcessing"
         ],
         "type": "object"
       },
@@ -12425,6 +12720,16 @@
               "string",
               "null"
             ]
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkUsage"
+              }
+            ]
           }
         },
         "required": [
@@ -12454,6 +12759,14 @@
           "capabilities"
         ],
         "type": "object"
+      },
+      "NetworkWorkloadKind": {
+        "enum": [
+          "Deployment",
+          "Stack",
+          "SwarmService"
+        ],
+        "type": "string"
       },
       "NetworksResponse": {
         "properties": {
@@ -18102,6 +18415,25 @@
             "type": "object"
           }
         ]
+      },
+      "PublishedPortView": {
+        "properties": {
+          "containerPort": {
+            "type": "string"
+          },
+          "hostIp": {
+            "type": "string"
+          },
+          "hostPort": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "containerPort",
+          "hostIp",
+          "hostPort"
+        ],
+        "type": "object"
       },
       "PullImageInput": {
         "properties": {
@@ -41767,6 +42099,135 @@
         "x-citadel-setup-exempt": false
       }
     },
+    "/api/v1/containers/{id}/networking": {
+      "get": {
+        "operationId": "getContainerNetworking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerNetworkingView"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Read observed Container networking without its configuration",
+        "tags": [
+          "Containers"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
     "/api/v1/containers/{id}/stats": {
       "get": {
         "operationId": "getContainerStats",
@@ -52584,6 +53045,116 @@
           }
         ],
         "summary": "Get Edge Agent connection status",
+        "tags": [
+          "Platforms"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/platforms/{id}/network-containers": {
+      "get": {
+        "operationId": "listNetworkContainers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkContainersView"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List authorized workload identities for the network explorer",
         "tags": [
           "Platforms"
         ],

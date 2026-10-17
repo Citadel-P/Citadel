@@ -36,6 +36,11 @@ Open the container's detail page and choose the information you need:
 For memory accounting and host capacity, see
 [Platform monitoring](/docs/operations/platform-monitoring).
 
+In **Container overview**, select the name or count in **Networks** to open the
+container’s connections map. Select a network for details, or maximize the sheet
+for more space. Host, none, and shared-container networking show their mode
+instead of a graph.
+
 In **Container overview**, each Docker-managed volume has a backup coverage indicator,
 including anonymous volumes with generated names. Hover or
 keyboard-focus the icon to see whether it is protected, unprotected, needs

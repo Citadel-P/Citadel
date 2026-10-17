@@ -694,6 +694,9 @@ impl ApplicationGroupReader {
                 event("ImagesInfoUpdated", json!({"platformId":platform,"images":response.images,"capabilities":response.capabilities}))
             }
             Topic::DockerDaemon(..) => {
+                if e.is_some_and(|event| matches!(event.resource_type, "Deployment" | "Stack" | "SwarmService") && event.event_kind != "runtimeChanged") {
+                    return runtime::network_reference_snapshot(self, p, id.unwrap(), lease, e.unwrap()).await;
+                }
                 if sample {
                     return Ok(GroupSnapshot::default());
                 }

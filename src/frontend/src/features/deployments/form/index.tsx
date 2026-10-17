@@ -1,3 +1,4 @@
+import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
@@ -85,6 +86,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
     },
     TabActions: ({ resource }: { resource: DeploymentView }) => (
       <div className="flex items-center gap-3">
+        <WorkloadNetworkAction resource={resource} kind="Deployment" />
         <WorkloadHealthCard resource={resource} kind="Deployment" triggerVariant="icon" />
         <ResourceBackupIndicator
           source={{ $type: 'Deployment', deploymentId: resource.id }}

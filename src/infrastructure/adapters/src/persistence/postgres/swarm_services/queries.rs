@@ -23,7 +23,8 @@ WITH actor_scope AS (
 )
 "#;
 
-pub(super) const PROJECTION: &str = r#"
+pub(super) const PROJECTION: &str = concat!(
+    r#"
 SELECT s.*,
        COALESCE((SELECT jsonb_agg(jsonb_build_object(
  'containerId', c.id, 'dockerContainerId', t.dockercontainerid, 'platformId', t.platformid,
@@ -54,16 +55,9 @@ SELECT s.*,
             THEN TIMESTAMPTZ '0001-01-01 00:00:00+00'
             ELSE s.autoupdatestate_lastcheckedat
        END effective_last_checked_at,
-       CASE
-         WHEN s.dockerserviceid IS NULL THEN s.health
-         WHEN projection.dockerserviceid IS NULL OR projection.isstale THEN 'Unknown'
-         WHEN lower(COALESCE(projection.updatestate,'')) IN ('paused','rollback_paused','rollback_completed') THEN 'Failed'
-         WHEN lower(COALESCE(projection.updatestate,'')) NOT IN ('','none','completed') THEN 'Progressing'
-         WHEN projection.desiredtaskcount=0 THEN 'Stopped'
-         WHEN projection.runningtaskcount>=projection.desiredtaskcount THEN 'Healthy'
-         WHEN projection.runningtaskcount>0 THEN 'Degraded'
-         ELSE 'Progressing'
-       END effective_health,
+"#,
+    include_str!("effective_health.sql"),
+    r#" effective_health,
        CASE
          WHEN s.dockerserviceid IS NULL THEN s.synchronizationstate
          WHEN projection.dockerserviceid IS NULL OR projection.isstale THEN 'RuntimeMissing'
@@ -111,7 +105,8 @@ LEFT JOIN LATERAL (
       AND task.dockerserviceid=s.dockerserviceid
       AND NOT task.isstale
 ) tasks ON TRUE
-"#;
+"#
+);
 impl PostgresSwarmServiceRepository {
     pub(super) fn duplicate_draft_impl(
         &self,

@@ -1,3 +1,4 @@
+import { ContainerNetworkAction } from '@/features/docker-resources/networks/container-network-action';
 import { BindMountBackupLinks, VolumeBackupLinks } from '@/features/backup-policies/volume-backup-links';
 import {
   ContainerSummaryView,
@@ -244,10 +245,19 @@ export const ContainerOverview = ({ container }: { container?: ContainerDetailsV
               },
               {
                 label: 'Networks',
-                value: Object.keys(containerInfo.networks ?? {}).length ? (
-                  <DockerNetworksCell networks={containerInfo.networks} platformId={containerInfo.platformId} />
+                value: container?.resourceId ? (
+                  <ContainerNetworkAction
+                    container={{
+                      containerId: container.resourceId,
+                      containerName: container.name,
+                      dockerContainerId: container.id,
+                      dockerNodeId: container.dockerNodeId,
+                    }}
+                    platformId={container.platformId}
+                    networks={containerInfo.networks ?? {}}
+                  />
                 ) : (
-                  'None'
+                  'Unavailable'
                 ),
               },
               {

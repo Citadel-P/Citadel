@@ -21,6 +21,10 @@ and revocation. It also exercises Core's three-node Swarm installer and worker
 routing through Direct and Edge managers, including outage recovery, repair,
 upgrade and removal. It needs Rust, creates its own database and Docker daemons,
 and removes only its own containers, volumes and network.
+The current-pair run also exercises network explorer metadata over Direct and Edge:
+a two-network application, backend-only container, aliases, host/none/shared
+namespace modes, sanitized networking responses and detach. Swarm-node routing
+checks include the narrow networking inspection.
 With current Core and Agent images, it also checks real health transitions and
 unchecked members over Direct/Edge, retained history, intentional stops, and
 three-node Swarm health coverage (including the connected manager) during worker

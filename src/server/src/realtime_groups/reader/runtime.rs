@@ -96,15 +96,22 @@ pub(crate) async fn realtime_resource_snapshot(
                 manager_count + payload["volumes"].as_array().map_or(0, Vec::len)
             );
         } else {
-            payload["networks"] = serde_json::to_value(
+            let mut networks =
                 crate::realtime::shared_reads::node_networks(&state.platforms, id, Some(event))
                     .await?
                     .into_iter()
                     .map(|v| map_node_network(v, network_capabilities(platform)))
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(failure)?,
+                    .map_err(failure)?;
+            crate::api::resources::platforms::network_views::enrich_networks(
+                &state.platforms,
+                principal,
+                id,
+                &mut networks,
             )
-            .map_err(failure)?;
+            .await
+            .map_err(super::failure)?;
+            payload["networks"] = serde_json::to_value(networks).map_err(failure)?;
         }
         return Ok(Some(GroupSnapshot {
             rows: vec![],
@@ -234,13 +241,14 @@ pub(crate) async fn realtime_resource_snapshot(
     let (target, rows) = if kind == "network" {
         (
             "NetworkEventReceived",
-            networks
-                .into_iter()
-                .map(|v| {
-                    map_network(v, network_capabilities(platform)).and_then(serde_json::to_value)
-                })
-                .collect::<Result<_, _>>()
-                .map_err(failure)?,
+            network_rows(
+                state,
+                principal,
+                id,
+                networks,
+                network_capabilities(platform),
+            )
+            .await?,
         )
     } else {
         (
@@ -369,7 +377,7 @@ pub(crate) async fn realtime_daemon_snapshot(
             .collect::<Result<Vec<_>, _>>()
             .map_err(serialize)?;
         all_volumes.extend(enrich_volumes(state, principal, id, node_volumes).await?);
-        let node_networks: Vec<_> = state
+        let mut node_networks: Vec<_> = state
             .platforms
             .list_node_networks(id)
             .await
@@ -378,6 +386,14 @@ pub(crate) async fn realtime_daemon_snapshot(
             .map(|network| map_node_network(network, network_capabilities(platform)))
             .collect::<Result<_, _>>()
             .map_err(serialize)?;
+        crate::api::resources::platforms::network_views::enrich_networks(
+            &state.platforms,
+            principal,
+            id,
+            &mut node_networks,
+        )
+        .await
+        .map_err(super::failure)?;
         events.push(crate::realtime_groups::ClientEvent::new("SwarmNodeLocalResourcesUpdated", vec![serde_json::json!({
             "platformId": id, "images": images, "volumes": all_volumes, "networks": node_networks,
         })]));
@@ -388,14 +404,14 @@ pub(crate) async fn realtime_daemon_snapshot(
             GroupRows {
                 target: "NetworkEventReceived",
                 style: RowStyle::Daemon,
-                rows: networks
-                    .into_iter()
-                    .map(|n| {
-                        map_network(n, network_capabilities(platform))
-                            .and_then(serde_json::to_value)
-                    })
-                    .collect::<Result<_, _>>()
-                    .map_err(serialize)?,
+                rows: network_rows(
+                    state,
+                    principal,
+                    id,
+                    networks,
+                    network_capabilities(platform),
+                )
+                .await?,
             },
             GroupRows {
                 target: "VolumeEventReceived",
@@ -492,4 +508,103 @@ async fn enrich_volumes(
         .map_err(failure)?;
     }
     Ok(volumes)
+}
+
+async fn network_rows(
+    state: &ApplicationGroupReader,
+    principal: &ActorPrincipal,
+    platform: Uuid,
+    networks: Vec<citadel_platforms::RuntimeNetworkSummary>,
+    capabilities: crate::api::resources::platforms::views::NetworkCapabilitiesView,
+) -> Result<Vec<Value>, RealtimeReadError> {
+    let mut networks = networks
+        .into_iter()
+        .map(|n| map_network(n, capabilities))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(super::failure)?;
+    crate::api::resources::platforms::network_views::enrich_networks(
+        &state.platforms,
+        principal,
+        platform,
+        &mut networks,
+    )
+    .await
+    .map_err(super::failure)?;
+    networks
+        .into_iter()
+        .map(serde_json::to_value)
+        .collect::<Result<_, _>>()
+        .map_err(super::failure)
+}
+
+/// Saved-reference changes refresh only networks, never unrelated volumes or containers.
+pub(super) async fn network_reference_snapshot(
+    state: &ApplicationGroupReader,
+    principal: &ActorPrincipal,
+    platform: Uuid,
+    lease: Option<&crate::realtime::AuthorizationLease>,
+    event: &crate::realtime::PublishedRuntimeEvent,
+) -> Result<GroupSnapshot, RealtimeReadError> {
+    let (capabilities, _) = match lease {
+        Some(lease) => {
+            lease
+                .daemon_capabilities(&state.identity, principal, platform)
+                .await?
+        }
+        None => daemon_capabilities(state, principal, platform).await?,
+    };
+    let read = || async {
+        let cancel = CancellationToken::new();
+        let _guard = cancel.clone().drop_guard();
+        state
+            .runtime
+            .inventory(platform, &cancel)
+            .await?
+            .list_networks(&cancel)
+            .await
+    };
+    let networks = if event.platform_id == Some(platform) {
+        event.reads.networks.get_or_try_init(read).await.cloned()
+    } else {
+        read().await
+    }
+    .map_err(super::failure)?;
+    let mut nodes = state
+        .platforms
+        .list_node_networks(platform)
+        .await
+        .map_err(super::failure)?
+        .into_iter()
+        .map(|n| map_node_network(n, network_capabilities(capabilities)))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(super::failure)?;
+    crate::api::resources::platforms::network_views::enrich_networks(
+        &state.platforms,
+        principal,
+        platform,
+        &mut nodes,
+    )
+    .await
+    .map_err(super::failure)?;
+    Ok(GroupSnapshot {
+        rows: vec![GroupRows {
+            target: "NetworkEventReceived",
+            style: RowStyle::Daemon,
+            rows: network_rows(
+                state,
+                principal,
+                platform,
+                networks,
+                network_capabilities(capabilities),
+            )
+            .await?,
+        }],
+        events: vec![
+            ClientEvent::new(
+                "SwarmNodeLocalResourcesUpdated",
+                vec![json!({"platformId":platform,"nodeOnly":true,"networks":nodes})],
+            ),
+            ClientEvent::new("NetworkUsageChanged", vec![json!(platform)]),
+        ],
+    })
 }

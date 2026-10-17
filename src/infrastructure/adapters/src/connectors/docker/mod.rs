@@ -1,6 +1,8 @@
 mod endpoint;
 pub mod events;
 mod images;
+mod network_attachments;
+pub use network_attachments::populate_network_attachments;
 pub(crate) mod inventory;
 mod mutations;
 pub(crate) mod runtime;

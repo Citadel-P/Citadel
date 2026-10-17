@@ -407,6 +407,8 @@ impl From<citadel_platforms::ImageDetails> for ImageView {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkView {
+    #[schema(value_type=Option<crate::api::resources::schema_models::network_usage::NetworkUsageSchema>)]
+    pub usage: Option<citadel_platforms::network_usage::NetworkUsage>,
     pub name: String,
     pub id: String,
     pub created: String,
@@ -446,6 +448,7 @@ impl TryFrom<citadel_platforms::NetworkDetails> for NetworkView {
     fn try_from(value: citadel_platforms::NetworkDetails) -> Result<Self, Self::Error> {
         let is_system = runtime_mapping::system_network(&value.name, value.ingress);
         Ok(Self {
+            usage: None,
             name: value.name,
             id: value.id,
             created: value.created,

@@ -19,6 +19,7 @@ pub mod jobs;
 pub mod logs;
 pub mod management;
 mod mutations;
+pub mod network_usage;
 pub mod node_agents;
 pub mod prune;
 pub mod read_models;

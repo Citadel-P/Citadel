@@ -1,3 +1,4 @@
+import { networkUsageLabel } from '../network-presentation';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Network } from 'lucide-react';
 import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
@@ -14,15 +15,16 @@ import { NetworkInfoActions } from './actions';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { SystemBadge } from '@/components/custom/system-badge';
 import { useSearchParams } from 'react-router';
+import { NetworkMapAction } from './network-map-action';
 
 export const NetworkInfoComponents: RequiredDockerInfoComponents<NetworkView> = {
   Header: {
     Icon: Network,
     Status: ({ resource }) => (
       <StateBadge
-        indicator={<StateIndicator value={Object.keys(resource.containers ?? {}).length > 0} className="mr-0" />}
-        value={Object.keys(resource.containers ?? {}).length > 0}
-        label={`${Object.keys(resource.containers ?? {}).length} connected containers`}
+        indicator={<StateIndicator value={resource.inUse} className="mr-0" />}
+        value={resource.inUse}
+        label={networkUsageLabel(resource)}
       />
     ),
     NameSuffix: ({ resource }) => (resource.isSystem ? <SystemBadge description="Docker system network" /> : null),
@@ -53,14 +55,15 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<NetworkView> = 
 const InspectNetworkWrapper = ({ resource }: { resource: NetworkView }) => {
   return (
     <div className="flex flex-col gap-(--section-gap)">
+      <NetworkMapAction key={`${resource.dockerNodeId ?? ''}:${resource.id}`} network={resource} />
       <DetailSection title="Network configuration" description="Driver, scope, and connection settings." icon={Info}>
         <NetworkInfoTable network={resource} />
       </DetailSection>
-      <DetailSection title={`Connected containers (${Object.keys(resource.containers ?? {}).length})`} icon={Box}>
+      <DetailSection title={`Visible attachments (${Object.keys(resource.containers ?? {}).length})`} icon={Box}>
         {Object.keys(resource.containers ?? {}).length ? (
           <ContainerInfoTable network={resource} />
         ) : (
-          <p className="text-sm text-muted-foreground">No containers are connected to this network.</p>
+          <p className="text-sm text-muted-foreground">No visible attachments were returned.</p>
         )}
       </DetailSection>
       <DetailMetadata title="Driver options" items={resource.options} />

@@ -440,6 +440,18 @@ export enum PermissionLevel {
   Execute = "Execute",
 }
 
+export enum NetworkWorkloadKind {
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+}
+
+export enum NetworkRelationship {
+  Attachment = "Attachment",
+  ServiceNetwork = "ServiceNetwork",
+  SavedReference = "SavedReference",
+}
+
 export enum MountKind {
   Volume = "Volume",
   Bind = "Bind",
@@ -2579,6 +2591,16 @@ export interface ContainerInspectionView {
   [key: string]: any;
 }
 
+export interface ContainerNetworkingView {
+  container: NetworkContainer;
+  endpoints: NetworkEndpointView[];
+  mode: string;
+  /** @format int64 */
+  observedAt: number;
+  publishedPorts: PublishedPortView[];
+  truncated: boolean;
+}
+
 export interface ContainerRuntimeListView {
   containers: ContainerRuntimeView[];
 }
@@ -4128,6 +4150,36 @@ export interface NetworkCapabilitiesView {
   canWrite: boolean;
 }
 
+export interface NetworkContainer {
+  /** @format uuid */
+  containerId: string;
+  containerName: string;
+  containerState?: string | null;
+  dockerContainerId: string;
+  dockerNodeId?: string | null;
+  isStale: boolean;
+  /** @format uuid */
+  workloadId?: string | null;
+  workloadKind?: null | NetworkWorkloadKind;
+  workloadName?: string | null;
+  workloadProcessing: boolean;
+  workloadStatus?: string | null;
+}
+
+export interface NetworkContainersView {
+  containers: NetworkContainer[];
+  truncated: boolean;
+}
+
+export interface NetworkEndpointView {
+  addresses: string[];
+  aliases: string[];
+  /** None means the runtime did not provide endpoint evidence. */
+  attached?: boolean | null;
+  name: string;
+  networkId: string;
+}
+
 export interface NetworkIpamView {
   config: RuntimeIpamConfig[];
   driver: string | null;
@@ -4137,6 +4189,34 @@ export interface NetworkIpamView {
 export interface NetworkPeerView {
   ip: string | null;
   name: string | null;
+}
+
+export interface NetworkUsage {
+  entries: NetworkUsageEntry[];
+  isPartial: boolean;
+  truncated: boolean;
+}
+
+export interface NetworkUsageEntry {
+  /** @format uuid */
+  containerId?: string | null;
+  containerName?: string | null;
+  containerState?: string | null;
+  dockerContainerId?: string | null;
+  dockerNodeId?: string | null;
+  dockerServiceId?: string | null;
+  isStale: boolean;
+  /** @format int64 */
+  observedAt?: number | null;
+  reference?: string | null;
+  relationship: NetworkRelationship;
+  serviceName?: string | null;
+  /** @format uuid */
+  workloadId?: string | null;
+  workloadKind?: null | NetworkWorkloadKind;
+  workloadName?: string | null;
+  workloadProcessing: boolean;
+  workloadStatus?: string | null;
 }
 
 export interface NetworkView {
@@ -4164,6 +4244,7 @@ export interface NetworkView {
   peers: NetworkPeerView[];
   scope: string;
   staleReason: string | null;
+  usage?: null | NetworkUsage;
 }
 
 export interface NetworksResponse {
@@ -5513,6 +5594,12 @@ export type PublicActivityEventInfo =
       pool: BuildAgentPoolActivitySnapshot;
       status: string;
     };
+
+export interface PublishedPortView {
+  containerPort: string;
+  hostIp: string;
+  hostPort: string;
+}
 
 export interface PullImageInput {
   imageTag: string;
@@ -11728,6 +11815,34 @@ export class Api<
      * No description
      *
      * @tags Containers
+     * @name GetContainerNetworking
+     * @summary Read observed Container networking without its configuration
+     * @request GET:/api/v1/containers/{id}/networking
+     * @secure
+     * @response `200` `ContainerNetworkingView`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getContainerNetworking: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerNetworkingView, ProblemDetails>({
+        path: `/api/v1/containers/${id}/networking`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
      * @name GetContainerStats
      * @summary Get Container statistics
      * @request GET:/api/v1/containers/{id}/stats
@@ -14441,6 +14556,32 @@ export class Api<
     getEdgeAgentStatus: (id: string, params: RequestParams = {}) =>
       this.request<EdgeStatusView, ProblemDetails>({
         path: `/api/v1/platforms/${id}/edge/status`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name ListNetworkContainers
+     * @summary List authorized workload identities for the network explorer
+     * @request GET:/api/v1/platforms/{id}/network-containers
+     * @secure
+     * @response `200` `NetworkContainersView`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listNetworkContainers: (id: string, params: RequestParams = {}) =>
+      this.request<NetworkContainersView, ProblemDetails>({
+        path: `/api/v1/platforms/${id}/network-containers`,
         method: "GET",
         secure: true,
         format: "json",

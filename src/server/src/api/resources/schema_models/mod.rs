@@ -54,6 +54,7 @@ pub mod discovery;
 pub mod git;
 pub mod image_management;
 pub mod licensing;
+pub mod network_usage;
 pub mod platforms;
 pub mod primitives;
 pub mod registries;

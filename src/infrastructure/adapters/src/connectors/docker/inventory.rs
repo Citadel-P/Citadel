@@ -57,11 +57,12 @@ impl citadel_platforms::NetworkInventoryPort for DockerClient {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeNetworkSummary>, RuntimeCapabilityError>> {
         async move {
-            let (values, containers) = tokio::select! {
+            let (mut values, containers) = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(cancelled_error()),
                 result = async {tokio::try_join!(DockerClient::list_networks(self),self.list_container_models(Some(true),None,None,None))} => result.map_err(normalize_docker_error)?,
             };
+            super::populate_network_attachments(&mut values, &containers);
             let mut usage=std::collections::HashMap::<String,usize>::new();
             for container in containers {
                 for (name,endpoint) in container.network_settings.into_iter().flat_map(|n|n.networks.unwrap_or_default()) {
