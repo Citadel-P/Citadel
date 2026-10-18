@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+mod child;
+pub use child::OwnedChild;
 use citadel_execution::{
     OutputLimitPolicy, ProcessChunk, ProcessError, ProcessLimits, ProcessOutput, ProcessRequest,
     ProcessRunner,
@@ -41,8 +43,6 @@ pub async fn run(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    #[cfg(unix)]
-    command.process_group(0);
     if request.stdin.is_some() {
         command.stdin(Stdio::piped());
     } else {
@@ -55,15 +55,9 @@ pub async fn run(
         command.env(key, value);
     }
 
-    let mut child = command.spawn().map_err(ProcessError::Spawn)?;
-    #[cfg(unix)]
-    let mut group = ProcessGroup(child.id().and_then(|id| {
-        i32::try_from(id)
-            .ok()
-            .and_then(rustix::process::Pid::from_raw)
-    }));
-    let stdout = child.stdout.take().expect("piped stdout is available");
-    let stderr = child.stderr.take().expect("piped stderr is available");
+    let mut child = OwnedChild::spawn(&mut command).map_err(ProcessError::Spawn)?;
+    let stdout = child.take_stdout().expect("piped stdout is available");
+    let stderr = child.take_stderr().expect("piped stderr is available");
     let (limit_sender, mut limit_receiver) = mpsc::channel(1);
     let output_cancellation = cancellation.child_token();
     let stdout_reader = tokio::spawn(read_bounded(
@@ -85,7 +79,7 @@ pub async fn run(
         output_cancellation.clone(),
     ));
     let stdin_writer = request.stdin.map(|input| {
-        let mut stdin = child.stdin.take().expect("piped stdin is available");
+        let mut stdin = child.child.stdin.take().expect("piped stdin is available");
         tokio::spawn(async move {
             stdin.write_all(&input).await?;
             stdin.shutdown().await
@@ -123,10 +117,6 @@ pub async fn run(
             // Keep the leader unreaped while inherited pipes are open. Its PID
             // cannot be reused as an unrelated process group during cleanup.
             let status = child.wait().await.map_err(ProcessError::Io)?;
-            #[cfg(unix)]
-            {
-                group.0 = None;
-            }
             Ok(ProcessOutput {
                 exit_code: status.code(),
                 stdout,
@@ -139,34 +129,10 @@ pub async fn run(
 
     if result.is_err() {
         output_cancellation.cancel();
-        #[cfg(unix)]
-        group.kill();
-        let _ = child.start_kill();
-        child.wait().await.map_err(ProcessError::Io)?;
+        child.terminate().await.map_err(ProcessError::Io)?;
     }
     // PipeTasks aborts any readers/writer still blocked on inherited pipes.
     result
-}
-
-#[cfg(unix)]
-struct ProcessGroup(Option<rustix::process::Pid>);
-
-#[cfg(unix)]
-impl ProcessGroup {
-    fn kill(&mut self) {
-        if let Some(pid) = self.0.take() {
-            let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::KILL);
-        }
-    }
-}
-
-#[cfg(unix)]
-impl Drop for ProcessGroup {
-    fn drop(&mut self) {
-        // This guard is dropped before Child, so the leader still owns its PID
-        // when the caller aborts/drops the run future.
-        self.kill();
-    }
 }
 
 fn validate_limits(limits: ProcessLimits) -> Result<(), ProcessError> {

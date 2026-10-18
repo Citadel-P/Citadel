@@ -157,6 +157,7 @@ impl ApplicationGroupReader {
                 };
                 yield ClientEvent::new("SendContainerExec",vec![json!(bytes)]);
             }
+            yield ClientEvent::new("ContainerExecClosed", vec![json!(group.name)]);
         });
         Ok(GroupTerminal { input, output })
     }

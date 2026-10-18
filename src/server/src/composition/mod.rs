@@ -127,6 +127,7 @@ impl ServerComponents {
         let cancellation = CancellationToken::new();
         let readiness = Arc::new(Readiness::default());
         let dynamic_tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
+        let docker = docker.with_terminal_tasks(dynamic_tasks.clone());
         let metrics = Arc::new(Metrics::default().with_dynamic_tasks(dynamic_tasks.clone()));
         let realtime_hub = config
             .realtime

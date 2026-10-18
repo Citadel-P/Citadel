@@ -41,6 +41,15 @@ your selection. Large detail lists show up to 200 containers, prioritizing
 failures; summary counts include all current members.
 
 
+## Interrupted commands
+
+On Unix, cancelling or interrupting a Stack command stops its CLI or hook process
+and children in the same process group. Commands that deliberately create a new
+process group or session are outside this cleanup. This does not roll back Docker
+changes already accepted by the daemon or stop the deployed application containers.
+Closing the browser does not cancel a claimed Stack operation; check its operation
+history before retrying.
+
 ## Choose the source
 
 | Source | Use it when |

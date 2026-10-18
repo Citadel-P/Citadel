@@ -191,3 +191,97 @@ async fn dropped_recipient_releases_capacity_and_cannot_retarget_replacement() {
     assert_eq!(message.to_text().unwrap(), "fresh");
     assert!(receiver.try_recv().is_err());
 }
+
+#[tokio::test(start_paused = true)]
+async fn heartbeat_releases_a_silent_peer_and_rejects_unmatched_pongs() {
+    for reply in [None, Some(vec![0; 8])] {
+        let (sender, mut receiver) = queue(4, 100);
+        let (pong, replies) = watch::channel(Vec::new());
+        let owner = sender.clone();
+        let task = tokio::spawn(async move { heartbeat(&owner, replies).await });
+        tokio::time::advance(HEARTBEAT_INTERVAL).await;
+        let ping = receiver.recv().await.unwrap();
+        assert!(matches!(
+            ping.message,
+            OutboundMessage::Frame(Message::Ping(_))
+        ));
+        if let Some(reply) = reply {
+            pong.send_replace(reply);
+        }
+        tokio::time::advance(PONG_TIMEOUT).await;
+        task.await.unwrap();
+        assert!(sender.cancellation.is_cancelled());
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn heartbeat_keeps_a_responsive_idle_peer_and_rejects_replayed_pongs() {
+    let (sender, mut receiver) = queue(4, 100);
+    let (pong, replies) = watch::channel(Vec::new());
+    let owner = sender.clone();
+    let task = tokio::spawn(async move { heartbeat(&owner, replies).await });
+    let OutboundMessage::Frame(Message::Ping(first)) = receiver.recv().await.unwrap().message
+    else {
+        panic!("expected ping");
+    };
+    pong.send_replace(first.to_vec());
+    tokio::task::yield_now().await;
+    let OutboundMessage::Frame(Message::Ping(second)) = receiver.recv().await.unwrap().message
+    else {
+        panic!("expected ping");
+    };
+    assert_ne!(first, second);
+    assert!(!sender.cancellation.is_cancelled());
+    pong.send_replace(first.to_vec());
+    tokio::time::advance(PONG_TIMEOUT).await;
+    task.await.unwrap();
+    assert!(sender.cancellation.is_cancelled());
+}
+
+#[tokio::test]
+async fn control_frames_are_read_while_application_messages_are_pending() {
+    let (outbound, mut output) = queue(4, 100);
+    let (input, messages) = mpsc::channel(4);
+    let (incoming, mut pending) = mpsc::channel(1);
+    let (pong, mut replies) = watch::channel(Vec::new());
+    let owner = outbound.clone();
+    let task = tokio::spawn(async move {
+        read_connection(
+            tokio_stream::wrappers::ReceiverStream::new(messages),
+            incoming,
+            &owner,
+            pong,
+        )
+        .await;
+    });
+    input
+        .send(Ok(Message::Text("busy invocation".into())))
+        .await
+        .unwrap();
+    input.send(Ok(Message::Ping(vec![1].into()))).await.unwrap();
+    input.send(Ok(Message::Pong(vec![2].into()))).await.unwrap();
+    replies.changed().await.unwrap();
+    assert_eq!(*replies.borrow(), [2]);
+    assert!(matches!(
+        output.recv().await.unwrap().message,
+        OutboundMessage::Flush
+    ));
+    assert!(!outbound.cancellation.is_cancelled());
+    assert!(pending.try_recv().is_ok());
+    input.send(Ok(Message::Close(None))).await.unwrap();
+    task.await.unwrap();
+    assert!(outbound.cancellation.is_cancelled());
+}
+
+#[tokio::test]
+async fn inbound_overflow_cancels_its_connection_without_unbounded_buffering() {
+    let (outbound, _output) = queue(4, 100);
+    let (incoming, _pending) = mpsc::channel(1);
+    let (pong, _replies) = watch::channel(Vec::new());
+    let messages = futures_util::stream::iter([
+        Ok(Message::Text("first".into())),
+        Ok(Message::Text("overflow".into())),
+    ]);
+    read_connection(messages, incoming, &outbound, pong).await;
+    assert!(outbound.cancellation.is_cancelled());
+}

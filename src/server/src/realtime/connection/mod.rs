@@ -29,9 +29,12 @@ pub(super) async fn receive_initial_subscription(
     }
 }
 
-use futures_util::{SinkExt, stream::SplitStream};
-use tokio::sync::mpsc;
+use futures_util::SinkExt;
+use tokio::sync::{mpsc, watch};
 use tokio_util::task::AbortOnDropHandle;
+
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const PONG_TIMEOUT: Duration = Duration::from_secs(15);
 
 // Four maximum-size group payloads, including the message currently being written.
 // This also bounds resource-mode snapshots; it does not retain a second payload copy.
@@ -50,10 +53,11 @@ struct Outbound {
 
 pub(super) struct ConnectionIo {
     pub(super) id: Uuid,
-    reader: SplitStream<WebSocket>,
+    reader: mpsc::Receiver<Result<Message, axum::Error>>,
     outbound: OutboundSender,
 }
 
+#[derive(Clone)]
 struct OutboundSender {
     sender: mpsc::Sender<Outbound>,
     bytes: Arc<Semaphore>,
@@ -94,13 +98,7 @@ impl OutboundSender {
 
 impl ConnectionIo {
     pub(super) async fn next(&mut self) -> Option<Result<Message, axum::Error>> {
-        // Reading queues automatic control responses inside Tungstenite. Wake the
-        // sole writer even when there is no application traffic to flush them.
-        let message = self.reader.next().await;
-        if let Some(Ok(Message::Ping(_))) = &message {
-            let _ = self.outbound.enqueue_outbound(OutboundMessage::Flush, 1);
-        }
-        message
+        self.reader.recv().await
     }
 
     pub(super) fn enqueue(&self, text: String) -> Result<(), RealtimeError> {
@@ -121,9 +119,12 @@ pub(super) async fn handle_connection(
     tracing::debug!(connection_id = %id, "realtime connection opened");
     let (sink, reader) = socket.split();
     let (sender, receiver) = mpsc::channel(service.inner.outbound_capacity);
+    let (pong, received_pong) = watch::channel(Vec::new());
+    // Client messages are capped at 16 KiB by the upgrade route.
+    let (incoming, messages) = mpsc::channel(64);
     let mut io = ConnectionIo {
         id,
-        reader,
+        reader: messages,
         outbound: OutboundSender {
             sender,
             bytes: Arc::new(Semaphore::new(OUTBOUND_BYTES)),
@@ -140,9 +141,12 @@ pub(super) async fn handle_connection(
     )
     .instrument(tracing::debug_span!("realtime_writer", connection_id = %id));
     let mut writer = AbortOnDropHandle::new(tokio::spawn(writer_task));
+    let heartbeat_sender = io.outbound.clone();
     let result = tokio::select! {
         biased;
         () = cancellation.cancelled() => Ok(()),
+        () = heartbeat(&heartbeat_sender, received_pong) => Ok(()),
+        () = read_connection(reader, incoming, &heartbeat_sender, pong) => Ok(()),
         result = super::subscription::run_connection(&mut io, &service, &cancellation) => result,
     };
     // All subscription-local guards have now dropped. Cancel before awaiting the
@@ -160,6 +164,79 @@ pub(super) async fn handle_connection(
         tracing::debug!(connection_id = %id, %error, "realtime reader closed");
     }
     tracing::debug!(connection_id = %id, "realtime connection closed");
+}
+
+// Control frames must be read even while authorization or a group invocation is
+// awaiting I/O; otherwise a healthy browser's Pong could miss the deadline.
+async fn read_connection<R>(
+    mut reader: R,
+    incoming: mpsc::Sender<Result<Message, axum::Error>>,
+    outbound: &OutboundSender,
+    pong: watch::Sender<Vec<u8>>,
+) where
+    R: futures_util::Stream<Item = Result<Message, axum::Error>> + Unpin,
+{
+    let _cancel = outbound.cancellation.clone().drop_guard();
+    loop {
+        let message = tokio::select! {
+            biased;
+            () = outbound.cancellation.cancelled() => return,
+            message = reader.next() => message,
+        };
+        match message {
+            Some(Ok(Message::Ping(_))) => {
+                // Tungstenite has queued the automatic Pong; wake the sole writer.
+                if outbound
+                    .enqueue_outbound(OutboundMessage::Flush, 1)
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            Some(Ok(Message::Pong(payload))) => {
+                pong.send_replace(payload.to_vec());
+            }
+            Some(Ok(Message::Close(_))) | None | Some(Err(_)) => return,
+            Some(message) => {
+                if incoming.try_send(message).is_err() {
+                    let _ = outbound.overloaded();
+                    return;
+                }
+            }
+        }
+    }
+}
+
+// Runs alongside subscription work, so stalled reads cannot hide a dead peer.
+// Browsers answer WebSocket control Ping frames without application JavaScript.
+async fn heartbeat(sender: &OutboundSender, mut pong: watch::Receiver<Vec<u8>>) {
+    let _cancel = sender.cancellation.clone().drop_guard();
+    let mut sequence = 0u64;
+    loop {
+        tokio::time::sleep(HEARTBEAT_INTERVAL).await;
+        sequence = sequence.wrapping_add(1);
+        let challenge = sequence.to_be_bytes().to_vec();
+        if sender
+            .enqueue(Message::Ping(challenge.clone().into()), challenge.len())
+            .is_err()
+        {
+            return;
+        }
+        let response = async {
+            loop {
+                pong.changed().await.map_err(|_| ())?;
+                if *pong.borrow_and_update() == challenge {
+                    return Ok::<_, ()>(());
+                }
+            }
+        };
+        if !matches!(
+            tokio::time::timeout(PONG_TIMEOUT, response).await,
+            Ok(Ok(()))
+        ) {
+            return;
+        }
+    }
 }
 
 async fn write_connection<S>(

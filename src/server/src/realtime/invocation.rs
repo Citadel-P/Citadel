@@ -28,6 +28,16 @@ impl GroupConnection {
             stream_guards,
             terminal_inputs,
         } = self;
+        // StreamMap removes completed streams, but their input/guard entries
+        // must also be released so a finished or expired terminal can reconnect.
+        terminal_inputs.retain(|name, input| {
+            if input.is_closed() {
+                stream_guards.remove(name);
+                false
+            } else {
+                true
+            }
+        });
         let request = super::protocol::parse_invocation(text)?;
         let invocation = request.id;
         subscription.recheck(service).await?;

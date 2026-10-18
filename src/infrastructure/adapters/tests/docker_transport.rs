@@ -845,7 +845,9 @@ async fn exercise_terminal_resize(resize_status: &'static str) {
             } else {
                 assert!(request.starts_with("POST /v1.49/containers/container-1/exec "));
                 let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-                assert_eq!(body["Cmd"], serde_json::json!(["/bin/sh"]));
+                assert_eq!(body["Cmd"][0], "/bin/sh");
+                assert_eq!(body["Cmd"][1], "-c");
+                assert_eq!(body["Cmd"][4], "/bin/sh");
                 assert_eq!(body["Tty"], true);
                 assert_eq!(body["AttachStdin"], true);
                 r#"{"Id":"exec-1"}"#
@@ -864,6 +866,40 @@ async fn exercise_terminal_resize(resize_status: &'static str) {
             .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
             .await
             .unwrap();
+        terminal
+            .write_all(b"CITADEL_TERMINAL 42 1234\r\n")
+            .await
+            .unwrap();
+        for (route, response) in [
+            (
+                "POST /v1.49/containers/container-1/exec ",
+                r#"{"Id":"approval"}"#,
+            ),
+            ("POST /v1.49/exec/approval/start ", ""),
+            (
+                "GET /v1.49/exec/approval/json ",
+                r#"{"Running":false,"ExitCode":0}"#,
+            ),
+        ] {
+            let (mut control, _) = listener.accept().await.unwrap();
+            let (request, body) = read_terminal_request(&mut control).await;
+            assert!(request.starts_with(route));
+            if route.contains("/containers/") {
+                let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+                assert_eq!(body["Cmd"][6], "approve");
+            }
+            if response.is_empty() {
+                control
+                    .write_all(
+                        b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n",
+                    )
+                    .await
+                    .unwrap();
+                control.shutdown().await.unwrap();
+            } else {
+                control.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}", response.len()).as_bytes()).await.unwrap();
+            }
+        }
         let mut input = [0; 3];
         terminal.read_exact(&mut input).await.unwrap();
         assert_eq!(&input, b"ls\n");
@@ -881,6 +917,20 @@ async fn exercise_terminal_resize(resize_status: &'static str) {
             .await
             .unwrap();
         terminal.write_all(b"resized").await.unwrap();
+        let (mut inspect, _) = listener.accept().await.unwrap();
+        let (request, _) = read_terminal_request(&mut inspect).await;
+        assert!(request.starts_with("GET /v1.49/exec/exec-1/json "));
+        let body = r#"{"Running":false,"ExitCode":0}"#;
+        inspect
+            .write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
         assert_eq!(terminal.read(&mut input).await.unwrap(), 0);
     });
     let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
@@ -906,7 +956,13 @@ async fn exercise_terminal_resize(resize_status: &'static str) {
         matches!(terminal.output.next().await.unwrap().unwrap(),TerminalOutput::Data(bytes) if bytes==b"resized")
     );
     drop(terminal.output);
-    assert!(terminal.input.is_closed());
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !terminal.input.is_closed() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
     tokio::time::timeout(Duration::from_secs(2), server)
         .await
         .unwrap()

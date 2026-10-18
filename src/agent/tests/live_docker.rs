@@ -260,6 +260,52 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     );
     assert_eq!(exits, 1);
     let cancel = CancellationToken::new();
+    // Both gRPC exec streams must clean up Docker processes when their output
+    // is dropped, including output that was never polled.
+    for binary in [false, true] {
+        if binary {
+            let stream = containers
+                .exec_binary(sign(
+                    ExecBinaryRequest {
+                        container_id: id.clone(),
+                        cmd: vec!["sleep".into(), "300".into()],
+                        attach_stdout: Some(true),
+                        ..Default::default()
+                    },
+                    "/citadel.containers.v1.ContainerService/ExecBinary",
+                ))
+                .await
+                .unwrap()
+                .into_inner();
+            drop(stream);
+        } else {
+            let terminal = citadel_platforms::terminal::ContainerTerminalPort::container_terminal(
+                &core,
+                &id,
+                citadel_platforms::terminal::TerminalShell::Sh,
+                &cancel,
+            )
+            .await
+            .unwrap();
+            drop(terminal.output);
+        }
+        tokio::time::timeout(Duration::from_secs(8), async {
+            loop {
+                let result = std::process::Command::new("docker")
+                    .args(["inspect", &id, "--format", "{{json .ExecIDs}}"])
+                    .output()
+                    .unwrap();
+                assert!(result.status.success());
+                let execs: Option<Vec<String>> = serde_json::from_slice(&result.stdout).unwrap();
+                if execs.is_none_or(|ids| ids.is_empty()) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("Direct exec survived disconnect");
+    }
     let listed = core.list_containers(&cancel).await.unwrap();
     assert!(listed.iter().any(|v| v.id == id));
     let mut stats = core

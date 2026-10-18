@@ -9,6 +9,8 @@ use crate::config::{AgentConfig, AgentMode};
 
 pub struct Components {
     pub docker: DockerClient,
+    pub terminal_tasks: citadel_runtime::DynamicTasks,
+    pub terminal_shutdown: tokio_util::sync::CancellationToken,
     pub tls: Option<RustlsConfig>,
     pub edge: Option<crate::edge::EdgeAgent>,
 }
@@ -28,11 +30,14 @@ pub async fn build(config: &AgentConfig) -> Result<Components, super::app::Agent
         },
         AgentMode::Edge(_) => None,
     };
+    let terminal_shutdown = tokio_util::sync::CancellationToken::new();
+    let terminal_tasks = citadel_runtime::DynamicTasks::new(terminal_shutdown.clone());
     let docker = DockerClient::with_endpoint(
         config.docker_endpoint.clone(),
         Duration::from_secs(30),
         &config.host_root,
-    )?;
+    )?
+    .with_terminal_tasks(terminal_tasks.clone());
     let edge = match &config.mode {
         AgentMode::Edge(edge) => Some(
             crate::edge::EdgeAgent::new(edge.clone(), docker.clone())
@@ -41,5 +46,11 @@ pub async fn build(config: &AgentConfig) -> Result<Components, super::app::Agent
         ),
         AgentMode::Direct(_) => None,
     };
-    Ok(Components { docker, tls, edge })
+    Ok(Components {
+        docker,
+        terminal_tasks,
+        terminal_shutdown,
+        tls,
+        edge,
+    })
 }
