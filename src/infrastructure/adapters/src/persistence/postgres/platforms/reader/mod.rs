@@ -1,3 +1,4 @@
+mod network_usage;
 mod targets;
 use super::*;
 
@@ -14,6 +15,44 @@ impl PostgresPlatformReader {
 }
 
 impl PlatformReader for PostgresPlatformReader {
+    fn network_containers<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        container: Option<Uuid>,
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<citadel_platforms::network_usage::NetworkContainer>, AuthorizedReadError>,
+    > {
+        Box::pin(network_usage::containers(
+            &self.pool,
+            actor,
+            administrator,
+            platform,
+            container,
+        ))
+    }
+
+    fn network_usage<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        networks: &'a [citadel_platforms::network_usage::NetworkUsageQuery],
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<citadel_platforms::network_usage::NetworkUsage>, AuthorizedReadError>,
+    > {
+        Box::pin(network_usage::read(
+            &self.pool,
+            actor,
+            administrator,
+            platform,
+            networks,
+        ))
+    }
+
     fn container_health_history(
         &self,
         container: Uuid,

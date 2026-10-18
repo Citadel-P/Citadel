@@ -20,6 +20,7 @@ async fn get_container_ports_the_complete_dotnet_summary_snapshot_without_deploy
         "id":id,"platformId":f.platform_id,"containerId":docker_id,"name":"deployment-01",
         "dockerImageId":"container-01-id","created":1768686293,"state":"Created","controlState":"Idle","updated":0,
         "isSystem":false,"hasCitadelOwnershipLabels":false,"isSwarmTask":false,"deploymentId":deployment,
+        "health":{"status":"NotRunning","reason":"The container is not currently running health checks. Earlier results are history."},
         "imageView":{"id":image,"tags":["sha256:abcd1234"],"name":"image-01","dockerImageId":"image0123",
             "size":1000.0,"isInUse":true,"platformId":f.platform_id,"createdAt":"0001-01-01T00:00:00Z","controlState":"Idle","isStale":false},
         "deploymentView":{"id":deployment,"name":"deployment-01","platformId":f.platform_id,"createdAt":"0001-01-01T00:00:00Z",

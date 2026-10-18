@@ -6,6 +6,23 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 pub trait PlatformReader: Send + Sync {
+    fn network_containers<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        container: Option<Uuid>,
+    ) -> BoxFuture<'a, Result<Vec<crate::network_usage::NetworkContainer>, AuthorizedReadError>>;
+
+    /// Bounded actor-filtered relationships, aligned with the supplied network identities.
+    fn network_usage<'a>(
+        &'a self,
+        actor: ActorId,
+        administrator: bool,
+        platform: Uuid,
+        networks: &'a [crate::network_usage::NetworkUsageQuery],
+    ) -> BoxFuture<'a, Result<Vec<crate::network_usage::NetworkUsage>, AuthorizedReadError>>;
+
     fn container_health_history(
         &self,
         container: Uuid,

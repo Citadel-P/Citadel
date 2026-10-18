@@ -151,6 +151,12 @@ impl Group {
         {
             return event.platform_id.is_none() || self.id() == event.platform_id;
         }
+        if matches!(self.topic(), Topic::DockerDaemon(..))
+            && matches!(event.resource_type, "Deployment" | "Stack" | "SwarmService")
+            && event.event_kind != "runtimeChanged"
+        {
+            return event.platform_id.is_none() || self.id() == event.platform_id;
+        }
         // Searchable owner names change independently of Docker inventory.
         if matches!(self.topic(), Topic::Containers(..))
             && matches!(event.resource_type, "Deployment" | "Stack" | "SwarmService")
@@ -622,6 +628,31 @@ mod tests {
             assert!(group.affected_by(&event));
         }
     }
+    #[test]
+    fn network_usage_follows_saved_references_on_the_affected_platform() {
+        let platform = Uuid::now_v7();
+        let group = Group::parse(&format!("docker-daemon:{platform}")).unwrap();
+        let mut event = PublishedRuntimeEvent {
+            platform_id: Some(platform),
+            resource_type: "Deployment",
+            resource_id: Uuid::now_v7(),
+            event_kind: "updated",
+            resource_revision: 1,
+            reads: Default::default(),
+            containers: Default::default(),
+            payload: json!({}),
+        };
+        for kind in ["Deployment", "Stack", "SwarmService"] {
+            event.resource_type = kind;
+            event.platform_id = Some(platform);
+            assert!(group.affected_by(&event));
+            event.platform_id = Some(Uuid::now_v7());
+            assert!(!group.affected_by(&event));
+            event.platform_id = None;
+            assert!(group.affected_by(&event));
+        }
+    }
+
     #[test]
     fn image_snapshots_follow_saved_references_and_registry_changes() {
         let platform = Uuid::now_v7();

@@ -362,6 +362,20 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
                 )
                 .await;
             assert_eq!(inspected["config"]["image"], "alpine:3.24", "{inspected}");
+            if std::env::var("CITADEL_ACCEPTANCE_BASELINE_COMPONENT").is_err() {
+                let networking = f
+                    .api(
+                        Method::GET,
+                        &format!(
+                            "/api/v1/containers/{}/networking",
+                            tracked["id"].as_str().unwrap()
+                        ),
+                        None,
+                    )
+                    .await;
+                assert_eq!(networking["mode"], "networks");
+                assert!(networking["endpoints"].is_array());
+            }
             let volume = f
                 .api(
                     Method::GET,

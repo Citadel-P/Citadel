@@ -33,19 +33,17 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
     listenersRef.current?.onImageEvent?.({ image, eventType });
   }, []);
 
-  const handleVolumeEventReceived = useCallback(
-    (volume: VolumeView, eventType: string, actorId: string) => {
-      listenersRef.current?.onVolumeEvent?.({ volume, eventType, actorId });
-    },
-    [],
-  );
+  const handleVolumeEventReceived = useCallback((volume: VolumeView, eventType: string, actorId: string) => {
+    listenersRef.current?.onVolumeEvent?.({ volume, eventType, actorId });
+  }, []);
 
-  const handleNetworkEventReceived = useCallback(
-    (network: NetworkView, eventType: string, actorId: string) => {
-      listenersRef.current?.onNetworkEvent?.({ network, eventType, actorId });
-    },
-    [],
-  );
+  const handleNetworkEventReceived = useCallback((network: NetworkView, eventType: string, actorId: string) => {
+    listenersRef.current?.onNetworkEvent?.({ network, eventType, actorId });
+  }, []);
+
+  const handleNetworkUsageChanged = useCallback((platformId: string) => {
+    listenersRef.current?.onNetworkUsageChanged?.(platformId);
+  }, []);
 
   const handleSwarmInventoryUpdated = useCallback((inventory: SwarmInventoryUpdate) => {
     listenersRef.current?.onSwarmInventoryUpdated?.(inventory);
@@ -64,6 +62,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.on('ImageEventReceived', handleImageEventReceived);
       hub.on('VolumeEventReceived', handleVolumeEventReceived);
       hub.on('NetworkEventReceived', handleNetworkEventReceived);
+      hub.on('NetworkUsageChanged', handleNetworkUsageChanged);
       hub.on('ContainerEventReceived', handleContainerEventReceived);
       hub.on('ContainerStateChanged', handleContainerStateChanged);
       hub.on('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
@@ -76,6 +75,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       handleImageEventReceived,
       handleVolumeEventReceived,
       handleNetworkEventReceived,
+      handleNetworkUsageChanged,
       handleSwarmNodeAgentCoverageChanged,
       handleSwarmNodeLocalResourcesUpdated,
       handleSwarmInventoryUpdated,
@@ -87,6 +87,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       hub.off('ImageEventReceived', handleImageEventReceived);
       hub.off('VolumeEventReceived', handleVolumeEventReceived);
       hub.off('NetworkEventReceived', handleNetworkEventReceived);
+      hub.off('NetworkUsageChanged', handleNetworkUsageChanged);
       hub.off('ContainerEventReceived', handleContainerEventReceived);
       hub.off('ContainerStateChanged', handleContainerStateChanged);
       hub.off('SwarmInventoryUpdated', handleSwarmInventoryUpdated);
@@ -99,6 +100,7 @@ export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaem
       handleImageEventReceived,
       handleVolumeEventReceived,
       handleNetworkEventReceived,
+      handleNetworkUsageChanged,
       handleSwarmNodeAgentCoverageChanged,
       handleSwarmNodeLocalResourcesUpdated,
       handleSwarmInventoryUpdated,
@@ -141,6 +143,7 @@ export type DockerDaemonListeners = {
   onImageEvent?: (event: ImageEvent) => void;
   onVolumeEvent?: (event: VolumeEvent) => void;
   onNetworkEvent?: (event: NetworkEvent) => void;
+  onNetworkUsageChanged?: (platformId: string) => void;
   onSwarmInventoryUpdated?: (inventory: SwarmInventoryUpdate) => void;
   onSwarmNodeAgentCoverageChanged?: (platformId: string) => void;
   onSwarmNodeLocalResourcesUpdated?: (snapshot: SwarmNodeLocalResourcesUpdate) => void;

@@ -461,7 +461,18 @@ message Network {
 	IPAMMessage ipam = 14;
 	map<string, string> options = 15;
 	map<string, string> labels = 16;
+	map<string, NetworkAttachment> containers = 17;
 }
+
+// Attached endpoints observed in the container inventory, not saved configuration.
+message NetworkAttachment {
+    string name = 1;
+    string endpoint_id = 2;
+    string mac_address = 3;
+    string ipv4_address = 4;
+    string ipv6_address = 5;
+}
+
 
 
 message IPAMMessage {

@@ -36,7 +36,7 @@ import { ActionButton, ActionWithDialog } from '@/components/custom/action-with-
 import { StateBadge } from '@/components/custom/state-badge';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownDescriptionEditor } from '@/components/custom/markdown-description';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResourceOverridesField } from '@/features/access/overrides/resource-overrides-field';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
@@ -260,7 +260,8 @@ export const ServiceAccountForm = ({
                 key: 'description',
                 label: 'Description',
                 render: (value, set) => (
-                  <Textarea
+                  <MarkdownDescriptionEditor
+                    aria-label="Description"
                     value={value ?? ''}
                     onChange={(event) => set({ description: event.target.value || null })}
                     placeholder="What this integration is allowed to do"

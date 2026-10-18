@@ -145,6 +145,7 @@ export const GitRepoForm = ({
                       description: 'Optional notes about this repository.',
                       render: (val, set) => (
                         <FieldTextArea
+                          markdown
                           value={val}
                           onChange={(v) => set({ description: v || null })}
                           placeholder="Repository description..."

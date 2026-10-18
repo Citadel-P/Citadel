@@ -138,3 +138,10 @@ base URL before starting the environment:
 $env:CITADEL_E2E_PORT = "18001"
 $env:CITADEL_E2E_BASE_URL = "http://127.0.0.1:18001"
 ```
+
+The nightly `network-map.spec.ts` fixture verifies table-only lazy loading, the inline connection sheet, Stack
+ownership/group expansion, workload focus across two networks, endpoint aliases,
+maximize/restore selection preservation, keyboard focus restoration, readonly
+behavior and realtime detach. It captures light/dark/mobile
+screenshots from the actual application. Run it with the disposable Compose
+project described above; never point its cleanup helpers at a personal platform.

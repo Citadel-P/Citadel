@@ -11,7 +11,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "62f88fd480eded70d918f80c46781cf30f2ea2be065b63bf898b964164abbc7d",
+            "1724f857da584bad61bd67048aeb56606c3d72c7ce4e3e29d4b947ec3a34072c",
         ),
         (
             "platform_service.proto",
@@ -358,4 +358,75 @@ fn image_inspection_identity_fields_are_additive_and_absence_stays_unknown() {
             old.id
         );
     }
+}
+
+#[test]
+fn network_attachments_are_additive_and_old_peers_preserve_network_identity() {
+    use citadel_contracts::citadel::shared_models::v1::{Network, NetworkAttachment};
+    use prost::Message;
+
+    #[derive(Clone, PartialEq, Message)]
+    struct OldNetwork {
+        #[prost(string, tag = "1")]
+        name: String,
+        #[prost(string, tag = "2")]
+        id: String,
+    }
+    let old = OldNetwork {
+        name: "application_backend".into(),
+        id: "network-id".into(),
+    };
+    let mut current = Network::decode(old.encode_to_vec().as_slice()).unwrap();
+    assert!(current.containers.is_empty());
+    let attachment = NetworkAttachment {
+        name: "web".into(),
+        endpoint_id: "endpoint-id".into(),
+        mac_address: "02:42:ac:14:00:02".into(),
+        ipv4_address: "172.20.0.2/24".into(),
+        ipv6_address: "fd00::2/64".into(),
+    };
+    let map_only = Network {
+        containers: [(
+            "c".into(),
+            NetworkAttachment {
+                name: "n".into(),
+                ..Default::default()
+            },
+        )]
+        .into(),
+        ..Default::default()
+    };
+    // Field 17, map entry: string key (field 1), message value (field 2).
+    assert_eq!(
+        map_only.encode_to_vec(),
+        [0x8a, 0x01, 8, 0x0a, 1, b'c', 0x12, 3, 0x0a, 1, b'n']
+    );
+    current.containers.insert("container-id".into(), attachment);
+    let encoded = current.encode_to_vec();
+    assert_eq!(OldNetwork::decode(encoded.as_slice()).unwrap(), old);
+    assert_eq!(Network::decode(encoded.as_slice()).unwrap(), current);
+}
+
+#[test]
+fn network_attachment_fields_keep_their_wire_numbers() {
+    use citadel_contracts::citadel::shared_models::v1::NetworkAttachment;
+    use prost::Message;
+
+    let attachment = NetworkAttachment {
+        name: "n".into(),
+        endpoint_id: "e".into(),
+        mac_address: "m".into(),
+        ipv4_address: "4".into(),
+        ipv6_address: "6".into(),
+    };
+    // Pin each field independently of generated types. A self-round-trip alone
+    // would still pass if a field were accidentally renumbered.
+    let bytes = [
+        0x0a, 1, b'n', 0x12, 1, b'e', 0x1a, 1, b'm', 0x22, 1, b'4', 0x2a, 1, b'6',
+    ];
+    assert_eq!(attachment.encode_to_vec(), bytes);
+    assert_eq!(
+        NetworkAttachment::decode(bytes.as_slice()).unwrap(),
+        attachment
+    );
 }

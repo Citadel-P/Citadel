@@ -203,7 +203,9 @@ export const RegistryForm = ({
                       label: 'Description',
                       required: false,
                       description: 'Optional notes to describe the registry’s purpose or usage.',
-                      render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                      render: (val, set) => (
+                        <FieldTextArea markdown value={val} onChange={(v) => set({ description: v })} />
+                      ),
                     }),
                     defineField({
                       key: 'tagIds',

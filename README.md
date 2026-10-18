@@ -32,6 +32,8 @@ Capabilities vary by edition; see the [Community and Team comparison](docs/conte
 
 ![Citadel Docker platform with five running containers, resource usage, and backup coverage](docs/public/screenshots/platform-containers.png)
 
+![Citadel network map showing a stack connected to frontend and backend networks](docs/public/screenshots/network-map.png)
+
 ![Citadel Swarm Services table with replica counts, backup coverage, and filters](docs/public/screenshots/swarm-services.png)
 
 ![Citadel Swarm service configuration showing replica settings and deployment controls](docs/public/screenshots/swarm-service-config.png)

@@ -2,13 +2,12 @@ import { NetworkView, NetworkAttachmentView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { useAppContext } from '@/lib/context/app-context';
 import { truncate } from '@/lib/truncate';
-import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Box } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
-const columns = (platformId: string | undefined): ColumnDef<NetworkAttachmentRow>[] => [
+const columns = (platformId: string | undefined, dockerNodeId?: string | null): ColumnDef<NetworkAttachmentRow>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,
@@ -16,7 +15,7 @@ const columns = (platformId: string | undefined): ColumnDef<NetworkAttachmentRow
       <div className="flex flex-wrap gap-2 text-sm items-center">
         <Box width={13} height={13} className="text-primary" />
         <Link
-          to={`/platforms/${platformId}/containers/${formatId(row.original.id)}`}
+          to={`/platforms/${platformId}/containers/${encodeURIComponent(row.original.id)}${dockerNodeId ? `?dockerNodeId=${encodeURIComponent(dockerNodeId)}` : ''}`}
           title={row.original.name ?? row.original.id}
           className="table-link">
           {truncate(row.original.name ?? row.original.id, 24)}
@@ -69,7 +68,7 @@ export const ContainerInfoTable = ({ network }: { network: NetworkView | undefin
   if (!network) return <></>;
   return (
     <div className="min-w-0">
-      <DataTable columns={columns(currentPlatform?.id)} data={containers} isLoading={false} />
+      <DataTable columns={columns(currentPlatform?.id, network.dockerNodeId)} data={containers} isLoading={false} />
     </div>
   );
 };

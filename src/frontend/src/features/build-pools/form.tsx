@@ -304,7 +304,7 @@ function BuildPoolForm({
                       label: 'Description',
                       description: 'Optional notes about where these builders run.',
                       render: (value, set) => (
-                        <FieldTextArea value={value ?? ''} onChange={(description) => set({ description })} />
+                        <FieldTextArea markdown value={value ?? ''} onChange={(description) => set({ description })} />
                       ),
                     }),
                     defineField({

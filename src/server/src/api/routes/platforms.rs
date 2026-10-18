@@ -135,6 +135,8 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Platform
         .normalized_routes(utoipa_axum::routes!(inspect_swarm_task))
         .normalized_routes(utoipa_axum::routes!(terminal))
         .normalized_routes(utoipa_axum::routes!(inspect_container))
+        .normalized_routes(utoipa_axum::routes!(container_networking))
+        .normalized_routes(utoipa_axum::routes!(network_containers))
         .normalized_routes(utoipa_axum::routes!(info))
         .normalized_routes(utoipa_axum::routes!(data))
         .normalized_routes(utoipa_axum::routes!(deployment_info))
@@ -811,6 +813,17 @@ async fn list_networks(
             .map_err(ApiError::internal),
         &headers,
     )?);
+    api_result(
+        crate::api::resources::platforms::network_views::enrich_networks(
+            &state.platforms,
+            &principal,
+            platform_id,
+            &mut networks,
+        )
+        .await
+        .map_err(platform_error),
+        &headers,
+    )?;
     Ok(no_store(
         Json(NetworksResponse {
             networks,
@@ -918,6 +931,17 @@ async fn get_network(
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     network.docker_node_id = selector.docker_node_id;
+    api_result(
+        crate::api::resources::platforms::network_views::enrich_networks(
+            &state.platforms,
+            &principal,
+            platform_id,
+            std::slice::from_mut(&mut network),
+        )
+        .await
+        .map_err(platform_error),
+        &headers,
+    )?;
     Ok(no_store(Json(network).into_response()))
 }
 
@@ -2261,6 +2285,7 @@ async fn stack_data(
 #[derive(Clone, Copy)]
 enum ReadKind {
     Inspect,
+    Networking,
     Info,
     Data,
 }
@@ -2357,7 +2382,7 @@ async fn read_container(
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     let capabilities = authorize_platform(&state, &principal, target.platform_id, &headers).await?;
-    if matches!(kind, ReadKind::Inspect) && !capabilities.can_inspect {
+    if matches!(kind, ReadKind::Inspect | ReadKind::Networking) && !capabilities.can_inspect {
         return api_result(Err(ApiError::Forbidden), &headers);
     }
     let container = required(
@@ -2578,6 +2603,27 @@ async fn inspect_target(
     kind: ReadKind,
     capabilities: Option<PlatformCapabilitiesView>,
 ) -> HttpResult {
+    let network_container = if matches!(kind, ReadKind::Networking) {
+        let visible = api_result(
+            state
+                .platforms
+                .network_containers(
+                    principal.actor_id,
+                    principal.is_administrator(),
+                    container.platform_id,
+                    Some(container.id),
+                )
+                .await
+                .map_err(platform_error),
+            headers,
+        )?;
+        let Some(visible) = visible.into_iter().next() else {
+            return api_result(Err(ApiError::Forbidden), headers);
+        };
+        Some(visible)
+    } else {
+        None
+    };
     if container.projection_stale_since.is_some() {
         return Ok(conflict_response(
             "Container inventory is stale. Refresh before inspecting.".into(),
@@ -2628,6 +2674,9 @@ async fn inspect_target(
     });
     match result {
         Ok(inspection) => {
+            if let Some(network_container) = network_container {
+                return Ok(no_store(Json(crate::api::resources::platforms::networking_views::ContainerNetworkingView::from_inspection(&inspection, network_container)).into_response()));
+            }
             if matches!(kind, ReadKind::Info) {
                 let mut view = api_result(
                     ContainerSummaryView::from_inspection(
@@ -6815,4 +6864,49 @@ async fn attach_volume_coverage(
         .map_err(ApiError::internal),
         headers,
     )
+}
+
+container_reader!(
+    #[utoipa::path(get, path="/api/v1/containers/{id}/networking", operation_id="getContainerNetworking", tag="Containers",
+    summary="Read observed Container networking without its configuration",
+    responses((status=200, body=crate::api::resources::platforms::networking_views::ContainerNetworkingView), crate::openapi::errors::ExternalResourceErrors),
+    params(("id"=String, Path)), security(("Bearer"=[])),
+    extensions(("x-citadel-principal"=json!("actor")), ("x-citadel-public"=json!(true)), ("x-citadel-setup-exempt"=json!(false))))]
+    container_networking,
+    Networking
+);
+
+#[utoipa::path(get, path="/api/v1/platforms/{id}/network-containers", operation_id="listNetworkContainers", tag="Platforms",
+    summary="List authorized workload identities for the network explorer",
+    responses((status=200, body=crate::api::resources::platforms::networking_views::NetworkContainersView), crate::openapi::errors::ResourceErrors),
+    params(("id"=Uuid, Path)), security(("Bearer"=[])),
+    extensions(("x-citadel-principal"=json!("actor")), ("x-citadel-public"=json!(true)), ("x-citadel-setup-exempt"=json!(false))))]
+async fn network_containers(
+    State(state): State<PlatformsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+) -> HttpResult {
+    let principal = api_result(require_actor(principal), &headers)?;
+    let Path(id) = api_result(path.map_err(invalid_path), &headers)?;
+    authorize_platform(&state, &principal, id, &headers).await?;
+    let mut containers = api_result(
+        state
+            .platforms
+            .network_containers(principal.actor_id, principal.is_administrator(), id, None)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    let truncated = containers.len() > 500;
+    containers.truncate(500);
+    Ok(no_store(
+        Json(
+            crate::api::resources::platforms::networking_views::NetworkContainersView {
+                containers,
+                truncated,
+            },
+        )
+        .into_response(),
+    ))
 }

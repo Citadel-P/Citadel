@@ -650,13 +650,15 @@ async fn deployment_health_uses_current_owned_observations_and_authorized_reads(
         .unwrap();
     let id = workload_health_fixture::container(
         &pool,
-        platform,
-        "current",
-        None,
-        Some(deployment.id),
-        None,
-        None,
-        "Healthy",
+        workload_health_fixture::Container {
+            platform,
+            docker_id: "current",
+            node: None,
+            owner: Some(deployment.id),
+            stack: None,
+            service: None,
+            result: "Healthy",
+        },
     )
     .await;
     let read = store

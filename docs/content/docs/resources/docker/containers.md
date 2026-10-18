@@ -36,6 +36,11 @@ Open the container's detail page and choose the information you need:
 For memory accounting and host capacity, see
 [Platform monitoring](/docs/operations/platform-monitoring).
 
+In **Container overview**, select the name or count in **Networks** to open the
+container’s connections map. Select a network for details, or maximize the sheet
+for more space. Host, none, and shared-container networking show their mode
+instead of a graph.
+
 In **Container overview**, each Docker-managed volume has a backup coverage indicator,
 including anonymous volumes with generated names. Hover or
 keyboard-focus the icon to see whether it is protected, unprotected, needs
@@ -105,6 +110,11 @@ navigate markers. Changing the range uses the existing realtime snapshot without
 extra HTTP requests.
 Chart and detail timestamps use local time. Gaps and grouped results do not
 establish continuous health or uptime.
+
+[![Container health details showing a healthy current result and a recent failure followed by recovery](/screenshots/container-health-details.png)](/screenshots/container-health-details.png)
+
+This example shows a recovered container: the current check is healthy, while
+the history preserves the earlier unhealthy observations.
 
 Current health and saved history update automatically through Citadel's realtime
 connection while the details are open. Expand **Probe details** to fetch Docker's

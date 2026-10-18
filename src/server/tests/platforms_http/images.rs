@@ -6,6 +6,7 @@ use citadel_contracts::citadel::{
         GetExposedPortsRequest, GetExposedPortsResponse, InspectImageRequest, InspectImageResponse,
     },
 };
+use citadel_platforms::image_updates::ImageUpdateTarget;
 use prost::Message;
 use tokio_util::sync::CancellationToken;
 
@@ -881,13 +882,15 @@ async fn no_op_pull_refreshes_cached_status_and_metadata_failure_does_not_fail_t
                             .check(
                                 f.administrator.actor_id,
                                 true,
-                                f.platform_id,
-                                &ImageLocation {
-                                    docker_image_id: image.clone(),
-                                    docker_node_id: None,
+                                ImageUpdateTarget {
+                                    platform: f.platform_id,
+                                    location: &ImageLocation {
+                                        docker_image_id: image.clone(),
+                                        docker_node_id: None,
+                                    },
+                                    reference: "nginx:17",
                                 },
                                 Uuid::from_u128(0x100),
-                                "nginx:17",
                                 &cancel,
                             )
                             .await
@@ -1048,10 +1051,12 @@ async fn containerd_image_checks_compare_platform_content_and_fence_missing_iden
             service.check(
                 f.administrator.actor_id,
                 true,
-                f.platform_id,
-                &location,
+                ImageUpdateTarget {
+                    platform: f.platform_id,
+                    location: &location,
+                    reference: "nginx:17",
+                },
                 Uuid::from_u128(0x100),
-                "nginx:17",
                 &cancel,
             ),
             async {

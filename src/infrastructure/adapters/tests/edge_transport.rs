@@ -1548,7 +1548,6 @@ async fn health_collection_stays_on_the_exact_edge_node_and_rejects_replaced_ses
                     },
                 )]
                 .into(),
-                ..Default::default()
             }
             .encode_to_vec(),
         );

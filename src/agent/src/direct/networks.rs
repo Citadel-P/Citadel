@@ -17,7 +17,7 @@ impl network_service_server::NetworkService for Runtime {
             ("id", request.id),
             ("name", request.name),
         ]);
-        let networks = self
+        let mut networks = self
             .docker
             .list_networks_filtered(filter.as_deref())
             .await
@@ -28,6 +28,10 @@ impl network_service_server::NetworkService for Runtime {
             .list_container_models(Some(true), None, None, None)
             .await
             .map_err(docker_error)?;
+        citadel_adapters::connectors::docker::populate_network_attachments(
+            &mut networks,
+            &containers,
+        );
         let used: std::collections::HashSet<_> = containers
             .iter()
             .flat_map(|c| {
@@ -169,6 +173,22 @@ pub(super) fn network(v: DockerNetwork, in_use: bool) -> Network {
         ipam: v.ipam.as_ref().map(ipam),
         options: v.options,
         labels: v.labels,
+        containers: v
+            .containers
+            .into_iter()
+            .map(|(id, c)| {
+                (
+                    id,
+                    NetworkAttachment {
+                        name: text(&c, "Name"),
+                        endpoint_id: text(&c, "EndpointID"),
+                        mac_address: text(&c, "MacAddress"),
+                        ipv4_address: text(&c, "IPv4Address"),
+                        ipv6_address: text(&c, "IPv6Address"),
+                    },
+                )
+            })
+            .collect(),
     }
 }
 fn ipam(v: &Value) -> IpamMessage {
@@ -185,5 +205,30 @@ fn ipam(v: &Value) -> IpamMessage {
                 gateway: c["Gateway"].as_str().map(str::to_owned),
             })
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prost::Message;
+
+    #[test]
+    fn network_list_preserves_endpoint_evidence_on_the_wire() {
+        let input: DockerNetwork = serde_json::from_value(json!({
+            "Id":"network", "Name":"backend", "Containers": {
+                "container": { "Name":"app", "EndpointID":"endpoint", "IPv4Address":"172.20.0.2/16", "IPv6Address":"fd00::2/64" }
+            }
+        })).unwrap();
+        let encoded = network(input, true).encode_to_vec();
+        let decoded = Network::decode(encoded.as_slice()).unwrap();
+        assert!(decoded.in_use);
+        assert_eq!(decoded.containers["container"].name, "app");
+        assert_eq!(decoded.containers["container"].endpoint_id, "endpoint");
+        assert_eq!(
+            decoded.containers["container"].ipv4_address,
+            "172.20.0.2/16"
+        );
+        assert_eq!(decoded.containers["container"].ipv6_address, "fd00::2/64");
     }
 }

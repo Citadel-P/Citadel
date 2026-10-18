@@ -1,3 +1,4 @@
+import { canDeleteNetwork } from '../network-presentation';
 import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
@@ -14,9 +15,7 @@ export const { info: NetworkInfoActions } = createActionsBuilder<NetworkView>()
     destructive: true,
     resourceType: 'Network',
     canExecute: (r) => {
-      const canDelete = (network: NetworkView) =>
-        !network.isSystem && Object.keys(network.containers ?? {}).length === 0;
-      return Array.isArray(r) ? r.every(canDelete) : canDelete(r);
+      return Array.isArray(r) ? r.every(canDeleteNetwork) : canDeleteNetwork(r);
     },
     useVariables: (resource) => {
       const { currentPlatform } = useAppContext();

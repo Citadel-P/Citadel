@@ -43,6 +43,8 @@ pub struct ComposeService {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComposeModel {
     pub services: Vec<ComposeService>,
+    /// Explicit Docker names only; project-generated and interpolated names stay unresolved.
+    pub network_names: BTreeMap<String, String>,
     pub named_volumes: BTreeSet<String>,
     pub volume_names: BTreeMap<String, String>,
     pub external_volumes: BTreeSet<String>,
@@ -233,6 +235,7 @@ pub fn parse_compose(files: &[String]) -> Result<ComposeModel, StackError> {
     validate_input_limits(files)?;
     let mut model = ComposeModel {
         services: Vec::new(),
+        network_names: BTreeMap::new(),
         named_volumes: BTreeSet::new(),
         volume_names: BTreeMap::new(),
         external_volumes: BTreeSet::new(),
@@ -267,6 +270,27 @@ pub fn parse_compose(files: &[String]) -> Result<ComposeModel, StackError> {
                         }
                     })
                     .or_insert(image);
+            }
+        }
+        if let Some(networks) = mapping_at(&document, "networks") {
+            for (key, definition) in networks {
+                let Some(key) = key.as_str() else { continue };
+                let Some(definition) = definition.as_mapping() else {
+                    continue;
+                };
+                let external = definition.get(Value::String("external".into()));
+                let name = scalar_at(definition, "name")
+                    .or_else(|| {
+                        external
+                            .and_then(Value::as_mapping)
+                            .and_then(|v| scalar_at(v, "name"))
+                    })
+                    .or_else(|| matches!(external, Some(Value::Bool(true))).then_some(key));
+                if let Some(name) = name.filter(|name| !name.is_empty() && !name.contains('$')) {
+                    model.network_names.insert(key.to_owned(), name.to_owned());
+                } else {
+                    model.network_names.remove(key);
+                }
             }
         }
         collect_named_resources(&document, "volumes", &mut model.named_volumes);
@@ -1245,6 +1269,19 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.to_string().contains("reserved com.citadel"));
+    }
+
+    #[test]
+    fn network_names_resolve_only_explicit_literal_identities() {
+        let model = parse_compose(&["services:\n  web:\n    image: nginx\nnetworks:\n  implicit: {}\n  shared:\n    external: true\n  renamed:\n    name: proxy\n  variable:\n    name: ${NETWORK}\n  legacy:\n    external:\n      name: shared-legacy\n".into()]).unwrap();
+        assert_eq!(
+            model.network_names,
+            BTreeMap::from([
+                ("shared".into(), "shared".into()),
+                ("renamed".into(), "proxy".into()),
+                ("legacy".into(), "shared-legacy".into()),
+            ])
+        );
     }
 
     #[test]

@@ -1122,13 +1122,15 @@ async fn stack_health_uses_applied_definition_not_pending_edits_and_detects_miss
         .unwrap();
     let container = workload_health_fixture::container(
         &pool,
-        platform,
-        "web",
-        None,
-        None,
-        Some(stack.id),
-        Some("web"),
-        "Healthy",
+        workload_health_fixture::Container {
+            platform,
+            docker_id: "web",
+            node: None,
+            owner: None,
+            stack: Some(stack.id),
+            service: Some("web"),
+            result: "Healthy",
+        },
     )
     .await;
     assert_eq!(
@@ -1350,7 +1352,16 @@ async fn stack_health_resolves_only_the_pinned_manager_daemon_scope() {
     sqlx::query("INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex,dockercreatedat) VALUES($1,'current','running','same-id','manager','service','nginx','','manager',now(),'[]','web',1,'running',2,now())")
         .bind(platform).execute(&pool).await.unwrap();
     let container = workload_health_fixture::container(
-        &pool, platform, "same-id", None, None, None, None, "Healthy",
+        &pool,
+        workload_health_fixture::Container {
+            platform,
+            docker_id: "same-id",
+            node: None,
+            owner: None,
+            stack: None,
+            service: None,
+            result: "Healthy",
+        },
     )
     .await;
     assert_eq!(

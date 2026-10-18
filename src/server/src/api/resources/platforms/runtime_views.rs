@@ -7,6 +7,7 @@ pub(crate) fn map_network(
 ) -> Result<NetworkView, serde_json::Error> {
     let is_system = runtime_mapping::system_network(&network.name, network.ingress);
     Ok(NetworkView {
+        usage: None,
         name: network.name,
         id: network.id,
         created: network.created,

@@ -293,6 +293,7 @@ async fn exercise_adoption(external: bool) {
     assert!(!activity.to_string().contains("keep-me-private"));
     // HTTP and realtime must expose the same enriched public representation,
     // including capabilities and camelCase activity, without persistence metadata.
+    let http_read_started = Utc::now().timestamp_millis();
     let response = send(
         &f,
         &format!("/api/v1/deployments/{deployment_id}"),
@@ -301,6 +302,10 @@ async fn exercise_adoption(external: bool) {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let http = json_body(response).await;
+    let http_evaluated_at = http["probeHealth"]["evaluatedAt"]
+        .as_i64()
+        .expect("HTTP health evaluation timestamp");
+    assert!((http_read_started..=Utc::now().timestamp_millis()).contains(&http_evaluated_at));
     assert!(http.get("rowVersion").is_none());
     assert!(http.get("effectivePermission").is_none());
     assert_eq!(http["capabilities"]["canWrite"], true);
@@ -311,6 +316,7 @@ async fn exercise_adoption(external: bool) {
         "deployments".to_owned(),
     ] {
         use citadel_server::realtime_groups::{Group, GroupReadPort};
+        let realtime_read_started = Utc::now().timestamp_millis();
         let snapshot = groups
             .read(&f.administrator, &Group::parse(&name).unwrap(), None)
             .await
@@ -321,7 +327,18 @@ async fn exercise_adoption(external: bool) {
             .flat_map(|group| &group.rows)
             .find(|row| row["id"] == http["id"])
             .expect("Deployment realtime row");
-        assert_eq!(realtime, &http);
+        let realtime_evaluated_at = realtime["probeHealth"]["evaluatedAt"]
+            .as_i64()
+            .expect("Realtime health evaluation timestamp");
+        assert!(
+            (realtime_read_started..=Utc::now().timestamp_millis())
+                .contains(&realtime_evaluated_at)
+        );
+        // Each read evaluates health at its own current time. Compare every
+        // other field, including health evidence and authorization, exactly.
+        let mut expected = http.clone();
+        expected["probeHealth"]["evaluatedAt"] = json!(realtime_evaluated_at);
+        assert_eq!(realtime, &expected);
     }
     assert_eq!(
         send(&f, &draft_url, Some(f.administrator.clone()))

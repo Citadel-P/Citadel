@@ -155,7 +155,9 @@ export const PlatformForm = ({
                       label: 'Description',
                       required: false,
                       description: 'Optional description.',
-                      render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                      render: (val, set) => (
+                        <FieldTextArea markdown value={val} onChange={(v) => set({ description: v })} />
+                      ),
                     }),
                     defineField({
                       key: 'tagIds',

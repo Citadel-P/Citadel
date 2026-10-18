@@ -16,6 +16,41 @@ vi.mock('.', () => ({ ImageName: () => null }));
 beforeEach(() => read.mockReset().mockReturnValue({ data: undefined, isLoading: false }));
 
 describe('Container overview visibility', () => {
+  it('places the connections action in the existing Networks row without loading the map', () => {
+    localStorage.setItem('container-overview-open', 'true');
+    read.mockReturnValue({
+      data: {
+        data: {
+          containerId: 'docker-id',
+          name: 'app',
+          platformId: 'platform',
+          platformName: 'Host',
+          networks: { backend: 'network-id' },
+          volumes: [],
+        },
+      },
+      isLoading: false,
+    });
+    renderCitadel(
+      <ContainerOverview
+        container={
+          {
+            id: 'docker-id',
+            resourceId: 'persisted-id',
+            name: 'app',
+            platformId: 'platform',
+            state: ContainerStateStatus.Running,
+          } as ContainerDetailsView
+        }
+      />,
+    );
+    const action = screen.getByRole('button', { name: 'View connections: backend' });
+    expect(screen.getByText('Networks').parentElement).toContainElement(action);
+    expect(screen.queryByRole('link', { name: 'backend' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(read.mock.calls.every(([operation]) => operation === 'getContainerInfo')).toBe(true);
+  });
+
   it('opens linked health in the overview body, even if previously collapsed', async () => {
     localStorage.setItem('container-overview-open', 'false');
     read.mockReturnValue({

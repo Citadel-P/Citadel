@@ -114,6 +114,7 @@ export function OidcProviderForm({ mode, resource }: { mode: 'add' | 'edit'; res
                       description: 'Optional note shown in the provider header.',
                       render: (value, set) => (
                         <FieldTextArea
+                          markdown
                           value={value ?? ''}
                           placeholder="Company single sign-on"
                           onChange={(description) => set({ description })}

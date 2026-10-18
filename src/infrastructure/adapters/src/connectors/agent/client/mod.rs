@@ -2182,8 +2182,23 @@ pub(crate) fn map_network(
         ipam,
         options: network.options.into_iter().collect(),
         labels: network.labels.into_iter().collect(),
-        container_count: usize::from(network.in_use),
-        containers: Default::default(),
+        container_count: network.containers.len().max(usize::from(network.in_use)),
+        containers: network
+            .containers
+            .into_iter()
+            .map(|(id, endpoint)| {
+                (
+                    id,
+                    serde_json::json!({
+                        "Name": endpoint.name,
+                        "EndpointID": endpoint.endpoint_id,
+                        "MacAddress": endpoint.mac_address,
+                        "IPv4Address": endpoint.ipv4_address,
+                        "IPv6Address": endpoint.ipv6_address,
+                    }),
+                )
+            })
+            .collect(),
         peers: Vec::new(),
     }
 }
@@ -2958,6 +2973,16 @@ mod tests {
             id: "network-1".to_owned(),
             name: "frontend".to_owned(),
             in_use: true,
+            containers: [(
+                "container-1".to_owned(),
+                citadel_contracts::citadel::shared_models::v1::NetworkAttachment {
+                    name: "app".to_owned(),
+                    endpoint_id: "endpoint".to_owned(),
+                    ipv4_address: "10.0.0.2/24".to_owned(),
+                    ..Default::default()
+                },
+            )]
+            .into(),
             ipam: Some(IpamMessage {
                 driver: Some("default".to_owned()),
                 config: vec![IpamConfigMessage {
@@ -2971,6 +2996,11 @@ mod tests {
         });
 
         assert_eq!(mapped.container_count, 1);
+        assert_eq!(mapped.containers["container-1"]["Name"], "app");
+        assert_eq!(
+            mapped.containers["container-1"]["IPv4Address"],
+            "10.0.0.2/24"
+        );
         assert_eq!(mapped.ipam.as_ref().unwrap()["Driver"], "default");
         assert_eq!(
             mapped.ipam.as_ref().unwrap()["Config"][0]["Subnet"],
