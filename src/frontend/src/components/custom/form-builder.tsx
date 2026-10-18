@@ -12,6 +12,7 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
+import { MarkdownDescriptionEditor } from './markdown-description';
 import { Slider } from '../ui/slider';
 import {
   Select,
@@ -312,17 +313,20 @@ export const FieldTextArea = ({
   onChange,
   placeholder,
   disabled,
+  markdown = false,
 }: {
   value?: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
   disabled?: boolean;
+  markdown?: boolean;
 }) => {
   const accessibility = useFormFieldAccessibility();
+  const Editor = markdown ? MarkdownDescriptionEditor : Textarea;
 
   return (
-    <Textarea
+    <Editor
       disabled={disabled}
       value={value ?? ''}
       aria-label={accessibility?.label}

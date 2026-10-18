@@ -367,7 +367,7 @@ export const SwarmServiceForm = ({
                       label: 'Description',
                       description: 'Optional description of this Service.',
                       render: (value, set) => (
-                        <FieldTextArea value={value ?? ''} onChange={(description) => set({ description })} />
+                        <FieldTextArea markdown value={value ?? ''} onChange={(description) => set({ description })} />
                       ),
                     }),
                     defineField<FormValue, 'tagIds'>({

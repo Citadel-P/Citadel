@@ -603,7 +603,7 @@ export const BuildForm = ({
                       label: 'Description',
                       description: 'Optional description of this workload.',
                       render: (value, set) => (
-                        <FieldTextArea value={value ?? ''} onChange={(v) => set({ description: v })} />
+                        <FieldTextArea markdown value={value ?? ''} onChange={(v) => set({ description: v })} />
                       ),
                     }),
                     defineField({

@@ -14,7 +14,7 @@ import { PageHeader } from '@/components/custom/page-header';
 
 import { FieldInput } from '@/components/custom/form-builder';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownDescription, MarkdownDescriptionEditor } from '@/components/custom/markdown-description';
 
 import NotFound from './not-found';
 import { RequiredFormFields, RequiredFormComponents } from './types';
@@ -404,7 +404,7 @@ const EditableTitle = ({
   );
 };
 
-const EditableDescription = ({
+export const EditableDescription = ({
   value = '',
   readOnly,
   onSave,
@@ -420,15 +420,27 @@ const EditableDescription = ({
       <div className="group flex items-center gap-2 w-full min-w-0">
         <div
           className={`text-sm text-muted-foreground leading-relaxed [overflow-wrap:anywhere] focus:outline-none min-w-0 ${readOnly ? '' : 'cursor-text'}`}
-          onClick={readOnly ? undefined : edit.start}
+          onClick={
+            readOnly
+              ? undefined
+              : (e) => {
+                  if (!(e.target instanceof Element && e.target.closest('a'))) edit.start();
+                }
+          }
           onKeyDown={(e) => {
-            if (readOnly) return;
+            if (readOnly || e.target !== e.currentTarget) return;
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               edit.start();
             }
           }}>
-          {value || (readOnly ? 'No description' : 'Add a description…')}
+          {value ? (
+            <MarkdownDescription>{value}</MarkdownDescription>
+          ) : readOnly ? (
+            'No description'
+          ) : (
+            'Add a description…'
+          )}
         </div>
         {!readOnly && (
           <GhostIconButton aria-label="Edit description" onClick={edit.start}>
@@ -440,7 +452,8 @@ const EditableDescription = ({
 
   return (
     <InlineEditActions dirty={edit.isDirty} onSave={() => edit.commit(onSave)} onCancel={edit.cancel}>
-      <Textarea
+      <MarkdownDescriptionEditor
+        aria-label="Description"
         value={edit.value}
         onChange={(e) => edit.setValue(e.target.value)}
         placeholder="Add a description…"

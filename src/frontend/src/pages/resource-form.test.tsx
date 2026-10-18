@@ -4,8 +4,50 @@ import { Link, Route, Routes } from 'react-router';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen, waitFor } from '@testing-library/react';
+import { EditableDescription } from './resource-form-view';
 
 const accountId = '019ffb55-f35e-7178-91f2-281696860dc7';
+
+describe('Resource Markdown descriptions', () => {
+  it('keeps links navigable without starting an edit', async () => {
+    const { user } = renderCitadel(<EditableDescription value="[Runbook](https://example.com)" readOnly={false} />);
+    await user.click(screen.getByRole('link', { name: 'Runbook' }));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('keeps the draft when closing help and saves the original Markdown text', async () => {
+    const onSave = vi.fn();
+    const { user } = renderCitadel(<EditableDescription value="Original" readOnly={false} onSave={onSave} />);
+    await user.click(screen.getByRole('button', { name: 'Edit description' }));
+    const input = screen.getByRole('textbox', { name: 'Description' });
+    await user.clear(input);
+    await user.type(input, '**Changed**\n- First item');
+    await user.click(screen.getByRole('button', { name: 'Markdown formatting help' }));
+    await user.keyboard('{Escape}');
+    expect(input).toHaveValue('**Changed**\n- First item');
+    expect(onSave).not.toHaveBeenCalled();
+    await user.click(input);
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    expect(onSave).toHaveBeenCalledExactlyOnceWith('**Changed**\n- First item');
+  });
+
+  it('discards edits with Escape and respects read-only descriptions', async () => {
+    const onSave = vi.fn();
+    const { user, rerender } = renderCitadel(
+      <EditableDescription value="**Original**" readOnly={false} onSave={onSave} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit description' }));
+    await user.type(screen.getByRole('textbox'), ' changed{Escape}');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+    rerender(<EditableDescription value="**Original**" readOnly onSave={onSave} />);
+    await user.click(screen.getByText('Original'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit description' })).not.toBeInTheDocument();
+  });
+});
 
 vi.hoisted(() => {
   document.queryCommandSupported = () => false;

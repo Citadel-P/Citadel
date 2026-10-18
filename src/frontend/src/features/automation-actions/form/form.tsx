@@ -200,6 +200,7 @@ export function AutomationActionForm({
                       description: 'Optional note shown in the action header.',
                       render: (value, set) => (
                         <FieldTextArea
+                          markdown
                           value={value ?? ''}
                           placeholder="Restart stale services after maintenance"
                           onChange={(description) => set({ description })}

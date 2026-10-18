@@ -290,6 +290,7 @@ export function BackupPolicyForm({
                       description: 'Optional notes for operators.',
                       render: (value, set) => (
                         <FieldTextArea
+                          markdown
                           value={value ?? ''}
                           disabled={disabled}
                           onChange={(description) => set({ description })}
