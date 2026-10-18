@@ -3,6 +3,12 @@ use super::*;
 /// Network explorer evidence travels through the same signed Direct/Edge inspect
 /// capability as ordinary container details. All Docker writes target fixture DIND.
 pub(super) async fn exercise(f: &Fixture, platform: &str, daemon: &str, profile: &str) {
+    let baseline = std::env::var("CITADEL_ACCEPTANCE_BASELINE_COMPONENT").ok();
+    if baseline.as_deref() == Some("core") {
+        // Released v0.1.2 Core has no network explorer HTTP routes. The surrounding
+        // acceptance scenario still exercises its existing network operations.
+        return;
+    }
     let daemon = f.container(daemon);
     let proxy = docker(&[
         "exec",
@@ -113,14 +119,7 @@ pub(super) async fn exercise(f: &Fixture, platform: &str, daemon: &str, profile:
             .iter()
             .find(|network| network["id"] == *id)
             .unwrap();
-        assert!(
-            network["usage"]["entries"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|entry| entry["containerId"] == app && entry["relationship"] == "Attachment"),
-            "network list lost endpoint evidence over {profile}: {network}"
-        );
+        assert_list_evidence(network, &app, baseline.as_deref() == Some("agent"));
     }
     let path = format!("/api/v1/containers/{app}/networking");
     let details = f.api(Method::GET, &path, None).await;
@@ -200,4 +199,40 @@ pub(super) async fn exercise(f: &Fixture, platform: &str, daemon: &str, profile:
     println!(
         "Networks {profile}: aliases, two-network app, backend-only database, host/none/shared modes, sanitized details and detach passed"
     );
+}
+
+fn assert_list_evidence(network: &Value, app: &str, baseline_agent: bool) {
+    let entries = network["usage"]["entries"].as_array().unwrap();
+    if baseline_agent && network["containers"].as_object().unwrap().is_empty() {
+        // Older Agents preserve InUse but omit the additive list endpoint map.
+        // Core must expose uncertainty; inspection below must still find endpoints.
+        assert_eq!(network["inUse"], true, "{network}");
+        assert_eq!(network["usage"]["isPartial"], true, "{network}");
+        assert!(entries.is_empty(), "{network}");
+    } else {
+        assert!(
+            entries.iter().any(|entry| {
+                entry["containerId"] == app && entry["relationship"] == "Attachment"
+            }),
+            "network list lost endpoint evidence: {network}"
+        );
+    }
+}
+
+#[test]
+fn list_evidence_requires_endpoints_or_explicit_legacy_uncertainty() {
+    let legacy = json!({"containers":{}, "inUse":true,
+        "usage":{"entries":[], "isPartial":true}});
+    assert_list_evidence(&legacy, "app", true);
+    assert!(std::panic::catch_unwind(|| assert_list_evidence(&legacy, "app", false)).is_err());
+    let mut falsely_complete = legacy.clone();
+    falsely_complete["usage"]["isPartial"] = json!(false);
+    assert!(
+        std::panic::catch_unwind(|| assert_list_evidence(&falsely_complete, "app", true)).is_err()
+    );
+    let current = json!({"containers":{"app":{}}, "inUse":true,
+        "usage":{"entries":[{"containerId":"app", "relationship":"Attachment"}], "isPartial":false}});
+    assert_list_evidence(&current, "app", false);
+    assert_list_evidence(&current, "app", true);
+    assert!(std::panic::catch_unwind(|| assert_list_evidence(&current, "other", true)).is_err());
 }

@@ -127,6 +127,24 @@ async fn covered(f: &Fixture, platform: &str) -> Value {
     .await
 }
 
+async fn worker_rejoined(f: &Fixture, node: &str) {
+    // `docker info` only proves that the restarted daemon serves requests. Wait
+    // for Swarm membership separately before measuring Core's reconciliation.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
+    loop {
+        let observed = nested(f, "swarm-manager", &["node", "inspect", node]).await;
+        let nodes: Value = serde_json::from_str(&observed).unwrap();
+        if nodes[0]["Status"]["State"] == "ready" {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "Fixture Docker worker did not rejoin Swarm after restart: {observed}"
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
 pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, core_url: &str) {
     f.renew_session().await;
     for role in ["swarm-manager", "swarm-worker-one", "swarm-worker-two"] {
@@ -448,6 +466,7 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
         assert_eq!(status, StatusCode::CONFLICT, "{problem}");
         docker(&["start", &f.container("swarm-worker-two")]).await;
         f.daemon_ready("swarm-worker-two").await;
+        worker_rejoined(f, &nodes[1]).await;
         covered(f, id).await;
         f.wait(&volume_path, |v| {
             v["volumes"].as_array().is_some_and(|items| {
