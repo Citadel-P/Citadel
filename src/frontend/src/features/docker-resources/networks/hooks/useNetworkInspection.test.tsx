@@ -16,6 +16,37 @@ vi.mock('@/features/platforms/hooks/useDockerDaemonGroup', () => ({
   },
 }));
 
+it.each([true, false])('enables graph detail reads only with Read permission (%s)', (canRead) => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+  const network = {
+    id: 'network-a',
+    capabilities: { canRead, canInspect: false, canWrite: false, canExecute: false },
+  } as NetworkView;
+  vi.useFakeTimers();
+  try {
+    const { unmount } = renderHook(() => useNetworkInspection(network, 'platform-a'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    expect(read).toHaveBeenLastCalledWith(
+      'inspectNetwork',
+      { platformId: 'platform-a', networkId: 'network-a', query: { dockerNodeId: undefined } },
+      { enabled: canRead, staleTime: 30_000 },
+    );
+    act(() => {
+      state.listeners?.onNetworkUsageChanged?.('platform-a');
+      vi.advanceTimersByTime(300);
+    });
+    expect(invalidate).toHaveBeenCalledTimes(canRead ? 1 : 0);
+    unmount();
+  } finally {
+    vi.useRealTimers();
+    client.clear();
+  }
+});
+
 it('coalesces relevant realtime updates and cancels pending refresh on close', () => {
   vi.useFakeTimers();
   try {

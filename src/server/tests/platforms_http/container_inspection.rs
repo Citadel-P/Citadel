@@ -107,6 +107,17 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         StatusCode::UNAUTHORIZED
     );
     let reader = super::lookup::subject(&f).await;
+    let networking_url = format!("/api/v1/containers/{id}/networking");
+    assert_eq!(
+        send(&f, &networking_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        send(&f, &networking_url, Some(reader.clone()))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
     super::lookup::grant(
         &f,
         reader.actor_id.value(),
@@ -148,6 +159,26 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         requests.lock().await.is_empty(),
         "history never inspects the daemon"
     );
+    // The graph exposes only networking, so Platform Read is sufficient for an
+    // unmanaged container. Full inspection remains forbidden without Inspect.
+    let response = send(&f, &networking_url, Some(reader.clone())).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let networking = json_body(response).await;
+    assert_eq!(networking["container"]["containerId"], json!(id));
+    assert_eq!(networking["endpoints"].as_array().unwrap().len(), 2);
+    assert!(networking.get("config").is_none());
+    assert!(networking.get("hostConfig").is_none());
+    assert!(networking.get("mounts").is_none());
+    assert!(!networking.to_string().contains("API_TOKEN"));
+    assert!(!networking.to_string().contains("LOG_LEVEL"));
+    assert!(!networking.to_string().contains("/host"));
+    let before = requests.lock().await.len();
+    assert_eq!(
+        send(&f, &url, Some(reader.clone())).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(requests.lock().await.len(), before);
     set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, true).await;
     for reference in [&docker_id, &docker_id[..12].to_string(), &id.to_string()] {
         let response = send(
@@ -226,6 +257,47 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         .execute(&f.pool)
         .await
         .unwrap();
+    // Platform Read alone must not reveal a managed workload's connections.
+    let before = requests.lock().await.len();
+    assert_eq!(
+        send(&f, &networking_url, Some(info_reader.clone()))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(requests.lock().await.len(), before);
+    super::lookup::grant(
+        &f,
+        info_reader.actor_id.value(),
+        ResourceType::Deployment,
+        deployment,
+        0,
+    )
+    .await;
+    let response = send(&f, &networking_url, Some(info_reader.clone())).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await["container"]["workloadId"],
+        json!(deployment)
+    );
+    // Revoke workload access through the repository: cached access must not
+    // survive, even though the actor retains Platform Read.
+    set_inspect_access(
+        &f,
+        &info_reader,
+        ResourceType::Platform,
+        f.platform_id,
+        false,
+    )
+    .await;
+    let before = requests.lock().await.len();
+    assert_eq!(
+        send(&f, &networking_url, Some(info_reader.clone()))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(requests.lock().await.len(), before);
     let deployment_reader = super::lookup::subject(&f).await;
     super::lookup::grant(
         &f,

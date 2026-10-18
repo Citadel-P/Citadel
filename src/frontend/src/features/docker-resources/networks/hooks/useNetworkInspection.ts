@@ -10,7 +10,7 @@ import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemon
 export function useNetworkInspection(network: NetworkView, platformId?: string) {
   const client = useQueryClient();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const canInspect = !!platformId && hasCapability(network, 'canInspect');
+  const canRead = !!platformId && hasCapability(network, 'canRead');
   const query = useRead(
     'inspectNetwork',
     {
@@ -18,10 +18,10 @@ export function useNetworkInspection(network: NetworkView, platformId?: string) 
       networkId: network.id,
       query: { dockerNodeId: network.dockerNodeId ?? undefined },
     },
-    { enabled: canInspect, staleTime: 30_000 },
+    { enabled: canRead, staleTime: 30_000 },
   );
   const invalidate = useCallback(() => {
-    if (timer.current || !canInspect) return;
+    if (timer.current || !canRead) return;
     timer.current = setTimeout(() => {
       timer.current = undefined;
       void client.invalidateQueries({
@@ -36,7 +36,7 @@ export function useNetworkInspection(network: NetworkView, platformId?: string) 
         exact: true,
       });
     }, 250);
-  }, [client, platformId, network.id, network.dockerNodeId, canInspect]);
+  }, [client, platformId, network.id, network.dockerNodeId, canRead]);
   useEffect(
     () => () => {
       clearTimeout(timer.current);
@@ -44,7 +44,7 @@ export function useNetworkInspection(network: NetworkView, platformId?: string) 
     },
     [invalidate],
   );
-  useDockerDaemonGroup(canInspect ? platformId : undefined, {
+  useDockerDaemonGroup(canRead ? platformId : undefined, {
     onContainerStateChange: (patches) => {
       const entries = query.data?.data?.usage?.entries ?? network.usage?.entries ?? [];
       if (patches.some((patch) => patch.state !== undefined && entries.some((entry) => entry.containerId === patch.id)))

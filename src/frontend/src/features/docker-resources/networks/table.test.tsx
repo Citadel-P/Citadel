@@ -209,11 +209,11 @@ describe('network list', () => {
     expect(before.get('dockerNodeId')).toBe('old-node');
   });
 
-  it('does not present a link to inspection when that capability is denied', async () => {
+  it('shows the map for readers while keeping inspection links restricted', async () => {
     renderTable([network({ capabilities: { canRead: true, canWrite: false, canExecute: false, canInspect: false } })]);
     await userEvent.click(screen.getByRole('button', { name: 'Show network details for application' }));
     expect(screen.queryByRole('link', { name: 'Open network details' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'View on map' })).not.toBeInTheDocument();
+    expect(await screen.findByTestId('canvas')).toBeVisible();
   });
 
   it('separates live attachments from saved references and uses authorized resource links', async () => {

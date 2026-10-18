@@ -49,6 +49,11 @@ marks partial or limited results; deletion is still checked separately on the ho
 
 ## Explore connections
 
+Read access to the Platform lets you view the connection graph. Workload connections
+are limited to workloads you can read. Container networking shows addresses, aliases,
+and published ports without exposing container configuration. Full container
+inspection still requires the separate **Inspect** permission.
+
 Select a network name to open its right-hand sheet. The connection diagram appears
 above the details, so you can explore without leaving the list. Use **Maximize
 network sheet** for a full-window view with details alongside the diagram. Restore

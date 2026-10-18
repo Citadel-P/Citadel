@@ -12,7 +12,7 @@ export function NetworkMapAction({ network }: { network: NetworkView }) {
   const { platformId } = useParams<{ platformId: string }>();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  if (!platformId || !hasCapability(network, 'canInspect')) return null;
+  if (!platformId || !hasCapability(network, 'canRead')) return null;
 
   return (
     <>

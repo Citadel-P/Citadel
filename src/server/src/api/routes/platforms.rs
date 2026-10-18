@@ -2382,7 +2382,8 @@ async fn read_container(
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     let capabilities = authorize_platform(&state, &principal, target.platform_id, &headers).await?;
-    if matches!(kind, ReadKind::Inspect | ReadKind::Networking) && !capabilities.can_inspect {
+    // Networking is a sanitized read; inspect_target also checks workload visibility.
+    if matches!(kind, ReadKind::Inspect) && !capabilities.can_inspect {
         return api_result(Err(ApiError::Forbidden), &headers);
     }
     let container = required(
