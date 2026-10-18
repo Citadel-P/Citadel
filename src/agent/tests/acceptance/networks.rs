@@ -104,11 +104,7 @@ pub(super) async fn exercise(f: &Fixture, platform: &str, daemon: &str, profile:
     };
     let app = find("explorer-app");
     let listed = f
-        .api(
-            Method::GET,
-            &format!("/api/v1/platforms/{platform}/networks"),
-            None,
-        )
+        .api(Method::GET, &format!("/api/v1/networks/{platform}"), None)
         .await;
     for id in [&proxy, &backend] {
         let network = listed["networks"]

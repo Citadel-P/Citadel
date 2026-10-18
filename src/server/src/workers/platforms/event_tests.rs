@@ -103,11 +103,18 @@ async fn successful_empty_or_broken_streams_back_off_and_shutdown_interrupts_wai
         tokio::time::sleep(Duration::from_millis(650)).await;
         let count = attempts.load(std::sync::atomic::Ordering::SeqCst);
         assert!((1..=3).contains(&count), "unbounded retries: {count}");
-        let mut recoveries = 0;
-        while receiver.try_recv().is_some() {
-            recoveries += 1;
+        let mut gaps = 0;
+        let mut reconnects = 0;
+        while let Some(event) = receiver.try_recv() {
+            assert!(event.stream_recovered);
+            match event.action.as_str() {
+                "streamGap" => gaps += 1,
+                "reconnect" => reconnects += 1,
+                action => panic!("unexpected event from empty or broken stream: {action}"),
+            }
         }
-        assert_eq!(recoveries, count - 1);
+        assert_eq!(gaps, count, "each terminated stream must report a gap");
+        assert_eq!(reconnects, count - 1);
         cancel.cancel();
         tokio::time::timeout(Duration::from_millis(100), source)
             .await
