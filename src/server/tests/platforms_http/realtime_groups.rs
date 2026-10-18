@@ -276,6 +276,49 @@ async fn local_terminal_fixture(listener: UnixListener, docker_id: &str) {
             .write_all(b"CITADEL_TERMINAL 42 1234\r\n")
             .await
             .unwrap();
+        // Opening now waits for an identity-checked approval helper before
+        // accepting browser resize/input. Model that separate Docker exec.
+        let (mut approval, _) = listener.accept().await.unwrap();
+        let (headers, body) = read_terminal_request(&mut approval).await;
+        assert!(headers.starts_with(&format!("POST /v1.49/containers/{docker_id}/exec ")));
+        assert_eq!(body["Cmd"][0], "/bin/sh");
+        assert_eq!(body["Cmd"][3], "citadel-exec-control");
+        assert_eq!(body["Cmd"][4], "42");
+        assert_eq!(body["Cmd"][5], "1234");
+        assert_eq!(body["Cmd"][6], "approve");
+        let body = r#"{"Id":"approval-1"}"#;
+        approval
+            .write_all(
+                format!(
+                    "HTTP/1.1 201 Created\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let (mut approval_start, _) = listener.accept().await.unwrap();
+        let (headers, _) = read_terminal_request(&mut approval_start).await;
+        assert!(headers.starts_with("POST /v1.49/exec/approval-1/start "));
+        approval_start
+            .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
+            .await
+            .unwrap();
+        drop(approval_start);
+        let (mut approval_inspect, _) = listener.accept().await.unwrap();
+        let (headers, _) = read_terminal_request(&mut approval_inspect).await;
+        assert!(headers.starts_with("GET /v1.49/exec/approval-1/json "));
+        let body = r#"{"Running":false,"ExitCode":0}"#;
+        approval_inspect
+            .write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
         let (mut resize, _) = listener.accept().await.unwrap();
         let (headers, _) = read_terminal_request(&mut resize).await;
         assert!(headers.starts_with("POST /v1.49/exec/exec-1/resize?h=30&w=100 "));
