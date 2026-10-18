@@ -66,7 +66,14 @@ it('opens the scoped sheet from the tab action and restores focus on close', asy
   await waitFor(() => expect(trigger).toHaveFocus());
 });
 
-it('does not offer the map without inspection permission', () => {
+it('opens the map with Read permission without granting Inspect', async () => {
   renderAction({ ...network, capabilities: { ...network.capabilities!, canInspect: false } });
+  await userEvent.click(screen.getByRole('button', { name: 'View connections' }));
+  expect(await screen.findByText('Network diagram')).toBeVisible();
+  expect(screen.queryByRole('link', { name: 'Open network details' })).not.toBeInTheDocument();
+});
+
+it('does not offer the map without Read permission', () => {
+  renderAction({ ...network, capabilities: { ...network.capabilities!, canRead: false, canInspect: false } });
   expect(screen.queryByRole('button', { name: 'View connections' })).not.toBeInTheDocument();
 });

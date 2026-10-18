@@ -55,7 +55,7 @@ export function NetworkDetailsSheet({
                 <ResourceReadError {...inspection} stale />
               </div>
             )}
-            {hasCapability(summary, 'canInspect') ? (
+            {hasCapability(summary, 'canRead') ? (
               <Suspense
                 fallback={
                   <p role="status" className="p-5 text-sm text-muted-foreground">
