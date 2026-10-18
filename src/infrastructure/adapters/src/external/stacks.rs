@@ -638,15 +638,12 @@ pub(crate) async fn collect_process(
     if cancellation.is_cancelled() {
         return Err(StackError::Cancelled);
     }
-    command.kill_on_drop(true);
-    let mut child = command.spawn().map_err(runtime_io)?;
+    let mut child = citadel_processes::OwnedChild::spawn(&mut command).map_err(runtime_io)?;
     let stdout = child
-        .stdout
-        .take()
+        .take_stdout()
         .ok_or_else(|| StackError::Runtime("Process stdout was not captured.".into()))?;
     let stderr = child
-        .stderr
-        .take()
+        .take_stderr()
         .ok_or_else(|| StackError::Runtime("Process stderr was not captured.".into()))?;
     // Poll both pipes and process completion together. Dropping this future also
     // drops the readers and kills the child; there are no detached reader tasks.
@@ -654,11 +651,13 @@ pub(crate) async fn collect_process(
         biased;
         () = cancellation.cancelled() => Err(StackError::Cancelled),
         result = async {
-            tokio::try_join!(
+            let (stdout, stderr) = tokio::try_join!(
                 read_process_output(stdout, StackApplyEventType::StdOut, progress),
                 read_process_output(stderr, StackApplyEventType::StdErr, progress),
-                async { child.wait().await.map_err(runtime_io) },
-            )
+            )?;
+            // Keep the leader unreaped while descendants can hold inherited pipes.
+            let status = child.wait().await.map_err(runtime_io)?;
+            Ok((stdout, stderr, status))
         } => result,
     };
     let (stdout, stderr, status) = match result {
@@ -666,8 +665,7 @@ pub(crate) async fn collect_process(
         Err(error) => {
             // Cooperative cancellation and pipe failures must reap the direct
             // child before returning, without waiting for Tokio's orphan queue.
-            let _ = child.start_kill();
-            child.wait().await.map_err(runtime_io)?;
+            child.terminate().await.map_err(runtime_io)?;
             return Err(error);
         }
     };
@@ -773,3 +771,6 @@ fn resolve_source_path(root: &Path, path: &str) -> Result<PathBuf, StackError> {
         resolve_staged_path(root, path)
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+mod process_tests;

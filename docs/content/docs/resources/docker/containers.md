@@ -162,7 +162,24 @@ updating, check the [browser connection](/docs/operations/troubleshooting#live-u
 
 The selected shell must exist in the image. If `bash` fails, disconnect and try
 `sh`. Minimal images may contain neither shell. A terminal opens inside the
-container, so its files and commands are those supplied by that image.
+container, so its files and commands are those supplied by that image. Terminal
+process cleanup requires `/bin/sh`, `sleep`, and readable Linux `/proc` process metadata.
+
+Disconnecting, closing the terminal view, or losing the browser connection ends
+the terminal's shell and processes in its session. The application container keeps
+running. Sessions also disconnect after **15 minutes without terminal input or
+output**; resizing the terminal does not reset this timeout. A silent command can
+therefore reach the timeout. Use a managed workload for work that must continue
+after disconnecting. Processes deliberately detached into another session are
+outside terminal cleanup.
+
+A command starts only after Citadel has confirmed ownership of its process.
+If startup confirmation is lost, the waiting launcher terminates itself after
+10 seconds without running the command. Temporary output backpressure pauses
+reading rather than terminating a healthy terminal.
+
+Cleanup of an approved command requires a reachable Docker daemon. Core and Agent shutdown allow bounded
+cleanup time; a daemon outage or abrupt process/host failure can prevent cleanup.
 
 Terminal changes to a container's writable layer can be lost when it is
 recreated. Put lasting configuration changes in the Deployment, Compose file,

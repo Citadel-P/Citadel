@@ -204,6 +204,24 @@ the command's process group and reaps the direct child; the packaged init proces
 reaps orphaned descendants. Helpers that deliberately create another session or
 process group are outside that group cleanup.
 
+Interactive and binary Docker exec cleanup have a disposable-container suite
+(local Docker and an existing `redis:latest` image):
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib connectors::docker::transport::terminal -- --include-ignored --test-threads=1
+```
+
+It checks shell/job exit after disconnect, idle expiry and shutdown, isolation
+between sessions, stale process-identity rejection, binary bytes/options/exit status,
+unpolled output, lossless output backpressure, cancellation during startup,
+descendant cleanup after parent exit, and lost startup/approval responses. Stack hook descendant
+cleanup and realtime heartbeat regressions run without Docker:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::stacks::process_tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib realtime::connection
+```
+
 Dependency updates must preserve login/refresh and signed OIDC token verification.
 The DOMPurify override keeps Monaco and API-generation tooling on the patched
 sanitizer until their upstream dependency pins catch up. JWTs use the AWS-LC

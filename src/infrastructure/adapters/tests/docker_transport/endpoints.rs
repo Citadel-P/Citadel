@@ -394,6 +394,11 @@ async fn tcp_upgraded_terminal_uses_the_same_endpoint_and_resize_connection() {
             .await
             .unwrap();
         let mut input = [0; 3];
+        stream
+            .write_all(b"CITADEL_TERMINAL 42 1234\r\n")
+            .await
+            .unwrap();
+        approve_exec(&listener).await;
         stream.read_exact(&mut input).await.unwrap();
         assert_eq!(&input, b"ls\n");
         stream.write_all(b"hello").await.unwrap();
@@ -405,6 +410,13 @@ async fn tcp_upgraded_terminal_uses_the_same_endpoint_and_resize_connection() {
         );
         respond(&mut resize, "").await;
         stream.write_all(b"resized").await.unwrap();
+        let (mut inspect, _) = listener.accept().await.unwrap();
+        assert!(
+            request(&mut inspect)
+                .await
+                .contains("/v1.49/exec/exec-1/json")
+        );
+        respond(&mut inspect, r#"{"Running":false,"ExitCode":0}"#).await;
         assert_eq!(stream.read(&mut input).await.unwrap(), 0);
     });
     let docker = DockerClient::with_endpoint(endpoint, Duration::from_secs(2), "/host").unwrap();
@@ -508,10 +520,16 @@ async fn binary_exec_preserves_options_bytes_stream_identity_and_exit_code() {
                     1 => {
                         assert!(headers.contains("/containers/test/exec"));
                         let config: serde_json::Value = serde_json::from_slice(&body).unwrap();
-                        assert_eq!(config["Cmd"], serde_json::json!(["cat", "/data/archive"]));
+                        assert_eq!(config["Cmd"][0], "/bin/sh");
+                        assert_eq!(
+                            &config["Cmd"].as_array().unwrap()[4..],
+                            &serde_json::json!(["cat", "/data/archive"])
+                                .as_array()
+                                .unwrap()[..]
+                        );
                         assert_eq!(config["Env"], serde_json::json!(["MODE=binary"]));
                         assert_eq!(config["AttachStdin"], false);
-                        assert_eq!(config["AttachStdout"], false);
+                        assert_eq!(config["AttachStdout"], true);
                         assert_eq!(config["AttachStderr"], true);
                         assert_eq!(config["Tty"], tty);
                         respond(&mut socket, r#"{"Id":"exec-1"}"#).await;
@@ -523,12 +541,25 @@ async fn binary_exec_preserves_options_bytes_stream_identity_and_exit_code() {
                             tty
                         );
                         socket.write_all(b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n").await.unwrap();
-                        if !tty {
-                            for byte in [2, 0, 0, 0, 0, 0, 0, 3] {
-                                socket.write_u8(byte).await.unwrap();
-                            }
+                        if tty {
+                            binary_identity(&mut socket, true).await;
+                            approve_exec(&listener).await;
+                            socket.write_all(&[0, 255, 42]).await.unwrap();
+                        } else {
+                            // Docker may drain command stderr before the startup
+                            // record on stdout. Preserve it without exposing the record.
+                            socket
+                                .write_all(&[2, 0, 0, 0, 0, 0, 0, 3, 0, 255, 42])
+                                .await
+                                .unwrap();
+                            binary_identity(&mut socket, false).await;
+                            approve_exec(&listener).await;
+                            // Stdout was disabled by the caller, despite the internal handshake.
+                            socket
+                                .write_all(&[1, 0, 0, 0, 0, 0, 0, 1, 99])
+                                .await
+                                .unwrap();
                         }
-                        socket.write_all(&[0, 255, 42]).await.unwrap();
                     }
                     3 => {
                         assert!(headers.contains("/exec/exec-1/json"));
@@ -595,7 +626,18 @@ async fn cancelling_exec_interrupts_a_partial_multiplex_header() {
         }
         let (mut socket, _) = listener.accept().await.unwrap();
         request(&mut socket).await;
-        socket.write_all(b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n\x01").await.unwrap();
+        socket
+            .write_all(
+                b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        binary_identity(&mut socket, false).await;
+        approve_exec(&listener).await;
+        socket.write_all(&[1]).await.unwrap();
+        let (mut inspect, _) = listener.accept().await.unwrap();
+        assert!(request(&mut inspect).await.contains("/exec/exec-1/json"));
+        respond(&mut inspect, r#"{"Running":false,"ExitCode":0}"#).await;
         let mut byte = [0];
         assert_eq!(socket.read(&mut byte).await.unwrap(), 0);
     });
@@ -656,10 +698,11 @@ async fn terminal_input_half_close_drains_output_and_emits_one_exit() {
         request(&mut socket).await;
         socket
             .write_all(
-                b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n",
+                b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\nCITADEL_TERMINAL 42 1234\r\n",
             )
             .await
             .unwrap();
+        approve_exec(&listener).await;
         let mut input = [0; 6];
         socket.read_exact(&mut input).await.unwrap();
         assert_eq!(&input, b"hello\x04");
@@ -702,4 +745,40 @@ async fn terminal_input_half_close_drains_output_and_emits_one_exit() {
     assert_eq!(output, b"last output");
     assert_eq!(exits, 1);
     server.await.unwrap();
+}
+
+async fn binary_identity(socket: &mut tokio::net::TcpStream, tty: bool) {
+    let identity = b"CITADEL_TERMINAL 42 1234\n";
+    if !tty {
+        socket.write_all(&[1, 0, 0, 0]).await.unwrap();
+        socket
+            .write_all(&(identity.len() as u32).to_be_bytes())
+            .await
+            .unwrap();
+    }
+    socket.write_all(identity).await.unwrap();
+}
+
+async fn approve_exec(listener: &TcpListener) {
+    let (mut socket, _) = listener.accept().await.unwrap();
+    let (headers, body) = request_details(&mut socket).await;
+    assert!(headers.contains("/containers/test/exec"));
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["Cmd"][4], "42");
+    assert_eq!(body["Cmd"][5], "1234");
+    assert_eq!(body["Cmd"][6], "approve");
+    assert!(body.get("Privileged").is_none());
+    respond(&mut socket, r#"{"Id":"approval"}"#).await;
+    let (mut socket, _) = listener.accept().await.unwrap();
+    assert!(request(&mut socket).await.contains("/exec/approval/start"));
+    socket
+        .write_all(
+            b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n",
+        )
+        .await
+        .unwrap();
+    socket.shutdown().await.unwrap();
+    let (mut socket, _) = listener.accept().await.unwrap();
+    assert!(request(&mut socket).await.contains("/exec/approval/json"));
+    respond(&mut socket, r#"{"Running":false,"ExitCode":0}"#).await;
 }

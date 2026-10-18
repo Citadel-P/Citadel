@@ -80,6 +80,12 @@ Citadel keeps a local cache for each repository under:
 ```
 
 Repository sync updates that cache and records branch refs that Git stacks can select.
+Every scheduled sync still fetches the remote. If the fetched commit and checked-out
+branch already match and the working tree is clean, Citadel skips checkout and reset.
+Changed commits, branch changes, and dirty tracked files use the normal checkout/reset
+path. Successful unchanged syncs still update their timestamp and notify waiting consumers.
+Citadel also uses the normal path when Git index flags can hide file changes or the
+bounded cleanliness checks cannot inspect the complete output.
 
 Available sync modes:
 

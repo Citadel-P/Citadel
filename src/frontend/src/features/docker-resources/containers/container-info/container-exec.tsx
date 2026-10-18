@@ -256,20 +256,31 @@ export const useContainerExecTerminal = (options: UseContainerExecOptions) => {
     termRef.current?.write(new Uint8Array(data));
   }, []);
 
+  const handleExecClosed = useCallback(
+    (closedGroup: string) => {
+      if (closedGroup !== groupId) return;
+      execStartedRef.current = false;
+      setIsActive(false);
+    },
+    [groupId],
+  );
+
   const setupEventListeners = useCallback(
     (hub: RealtimeConnection) => {
       hubRef.current = hub;
       hub.on('SendContainerExec', handleExecOutput);
+      hub.on('ContainerExecClosed', handleExecClosed);
     },
-    [handleExecOutput],
+    [handleExecOutput, handleExecClosed],
   );
 
   const removeEventListeners = useCallback(
     (hub: RealtimeConnection) => {
       hub.off('SendContainerExec', handleExecOutput);
+      hub.off('ContainerExecClosed', handleExecClosed);
       hubRef.current = null;
     },
-    [handleExecOutput],
+    [handleExecOutput, handleExecClosed],
   );
 
   const onJoinedGroup = useCallback(

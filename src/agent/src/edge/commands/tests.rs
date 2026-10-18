@@ -535,6 +535,11 @@ async fn interactive_and_binary_exec_preserve_input_resize_output_bytes_and_exit
             assert!(request(&mut stream).await.0.contains("/exec/exec-1/start"));
             stream.write_all(b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n").await.unwrap();
             if interactive {
+                stream
+                    .write_all(b"CITADEL_TERMINAL 42 1234\r\n")
+                    .await
+                    .unwrap();
+                approve_exec(&listener).await;
                 let mut input = [0; 3];
                 stream.read_exact(&mut input).await.unwrap();
                 assert_eq!(&input, b"ls\n");
@@ -547,6 +552,14 @@ async fn interactive_and_binary_exec_preserve_input_resize_output_bytes_and_exit
                 );
                 respond(&mut resize, "").await;
             } else {
+                let identity = b"CITADEL_TERMINAL 42 1234\n";
+                stream.write_all(&[1, 0, 0, 0]).await.unwrap();
+                stream
+                    .write_all(&(identity.len() as u32).to_be_bytes())
+                    .await
+                    .unwrap();
+                stream.write_all(identity).await.unwrap();
+                approve_exec(&listener).await;
                 stream.write_all(&[2, 0, 0, 0, 0, 0, 0, 3]).await.unwrap();
             }
             stream.write_all(&[0, 255, 42]).await.unwrap();
@@ -965,4 +978,31 @@ async fn swarm_volume_browsing_runs_packaged_rust_helper_and_cleans_up() {
         take(&mut receiver).last().unwrap().body,
         Some(AgentBody::CommandCompleted(_))
     ));
+}
+
+async fn approve_exec(listener: &tokio::net::TcpListener) {
+    use tokio::io::AsyncWriteExt;
+    let (mut socket, _) = listener.accept().await.unwrap();
+    let (headers, body) = request(&mut socket).await;
+    assert!(headers.contains("/containers/fixture/exec"));
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["Cmd"][6], "approve");
+    respond(&mut socket, r#"{"Id":"approval"}"#).await;
+    let (mut socket, _) = listener.accept().await.unwrap();
+    assert!(
+        request(&mut socket)
+            .await
+            .0
+            .contains("/exec/approval/start")
+    );
+    socket
+        .write_all(
+            b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n",
+        )
+        .await
+        .unwrap();
+    socket.shutdown().await.unwrap();
+    let (mut socket, _) = listener.accept().await.unwrap();
+    assert!(request(&mut socket).await.0.contains("/exec/approval/json"));
+    respond(&mut socket, r#"{"Running":false,"ExitCode":0}"#).await;
 }

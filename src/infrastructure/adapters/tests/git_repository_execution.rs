@@ -30,6 +30,118 @@ mod submodules;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_EXECUTION_DATABASE_URL and Git"]
+async fn unchanged_sync_commits_fresh_observation_and_wakes_explicit_waiters() {
+    let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&database_url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&database_url)
+        .await
+        .unwrap();
+    let actor = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,TRUE,'System')")
+        .bind(actor)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let root = std::env::temp_dir().join(format!("citadel-unchanged-sync-{}", Uuid::now_v7()));
+    let remote = root.join("remote");
+    std::fs::create_dir_all(&remote).unwrap();
+    git(&remote, &["init", "-b", "main"]);
+    git(&remote, &["config", "user.name", "Citadel Tests"]);
+    git(
+        &remote,
+        &["config", "user.email", "citadel-tests@example.invalid"],
+    );
+    std::fs::write(remote.join("tracked.txt"), "original\n").unwrap();
+    git(&remote, &["add", "."]);
+    git(&remote, &["commit", "-m", "initial"]);
+    let expected = command_output(&remote, &["rev-parse", "HEAD"]);
+    let repository = Uuid::now_v7();
+    insert_repository(
+        &pool,
+        actor,
+        repository,
+        url::Url::from_file_path(&remote).unwrap().as_str(),
+        "unchanged",
+    )
+    .await;
+    let service = GitRepositoryExecutionService::new(
+        Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
+        Arc::new(GitAccountService::new(
+            Arc::new(PostgresGitAccountRepository::new(pool.clone())),
+            Arc::new(AesGcmSecretProtector::new(&[91_u8; 32]).unwrap()),
+        )),
+        Arc::new(GitCli::new(
+            Arc::new(citadel_processes::SystemProcess),
+            Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(CancellationToken::new()),
+                ),
+            ),
+            Duration::from_secs(10),
+        )),
+        root.join("cache"),
+        Duration::from_secs(60),
+    );
+    let cancel = CancellationToken::new();
+    assert!(service.process_one(&cancel).await.unwrap());
+    let before = service.synchronized_ref(repository, "main").await.unwrap();
+    let log = service.cache_path(repository).join(".git/logs/HEAD");
+    let before_log = std::fs::read(&log).unwrap();
+    let mut completion = service.subscribe_completion();
+    let wait = service.synchronize_commit(ActorId::new(actor), repository, "main", &cancel);
+    let worker = async {
+        while !service.process_one(&cancel).await.unwrap() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    };
+    let (resolved, ()) = tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::join!(wait, worker)
+    })
+    .await
+    .unwrap();
+    assert_eq!(resolved.unwrap(), expected.trim());
+    assert!(completion.has_changed().unwrap());
+    completion.borrow_and_update();
+    let after = service.synchronized_ref(repository, "main").await.unwrap();
+    assert_eq!(after.resolved_commit_sha, before.resolved_commit_sha);
+    assert!(after.last_synced_at > before.last_synced_at);
+    assert_eq!(
+        std::fs::read(&log).unwrap(),
+        before_log,
+        "unchanged sync must take the fast path"
+    );
+    assert!(!completion.has_changed().unwrap());
+    assert!(!service.process_one(&cancel).await.unwrap());
+    let control: String =
+        sqlx::query_scalar("SELECT controlstate FROM gitrepositories WHERE id=$1")
+            .bind(repository)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(control, "Idle");
+    sqlx::query("DELETE FROM gitrepositories WHERE id=$1")
+        .bind(repository)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM activityevents WHERE resourceid=$1")
+        .bind(repository)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM actors WHERE id=$1")
+        .bind(actor)
+        .execute(&pool)
+        .await
+        .unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL and Git"]
 async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     let database_url = std::env::var("CITADEL_EXECUTION_DATABASE_URL")
         .expect("CITADEL_EXECUTION_DATABASE_URL is required");

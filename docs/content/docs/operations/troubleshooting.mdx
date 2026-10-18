@@ -45,6 +45,12 @@ This connection is separate from a Platform's Agent connection. An interruption
 does not by itself mean that Docker workloads stopped. Once connected, check the
 workload and its operation history before repeating a command.
 
+Core checks the main live-update connection with a WebSocket Ping every 30
+seconds and closes it if the matching Pong does not arrive within 15 seconds.
+Browsers respond automatically, including while you are not typing. A detected
+connection loss releases its live subscriptions and interactive terminal; claimed
+deployments and other durable operations continue independently.
+
 If the problem persists behind a reverse proxy, check WebSocket upgrades and
 long-lived connection timeouts. See [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport)
 or the [Caddy example](/docs/operations/reverse-proxy-caddy).

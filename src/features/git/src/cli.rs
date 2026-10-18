@@ -277,22 +277,27 @@ impl GitCli {
         validate_remote(url)?;
         validate_branch(branch)?;
         let git_directory = target.join(".git");
-        let cloned = if self.workspace.exists(&git_directory).await? {
-            self.fetch_and_reset(url, target, branch, environment, cancellation)
+        if self.workspace.exists(&git_directory).await? {
+            let commit = self
+                .fetch_and_reset(url, target, branch, environment, cancellation)
                 .await?;
-            false
-        } else {
-            if self.workspace.exists(target).await? {
-                return Err(GitError::Validation(
-                    "Repository cache exists but is not a Git worktree.".to_owned(),
-                ));
-            }
-            self.clone_atomically(url, target, branch, environment, cancellation)
-                .await?;
-            true
-        };
+            return Ok(SyncResult {
+                commit,
+                cloned: false,
+            });
+        }
+        if self.workspace.exists(target).await? {
+            return Err(GitError::Validation(
+                "Repository cache exists but is not a Git worktree.".to_owned(),
+            ));
+        }
+        self.clone_atomically(url, target, branch, environment, cancellation)
+            .await?;
         let commit = self.resolve_commit(target, cancellation).await?;
-        Ok(SyncResult { commit, cloned })
+        Ok(SyncResult {
+            commit,
+            cloned: true,
+        })
     }
 
     pub async fn resolve_commit(
@@ -543,13 +548,12 @@ impl GitCli {
         branch: &str,
         environment: &[(OsString, OsString)],
         cancellation: &CancellationToken,
-    ) -> Result<(), GitError> {
-        let target = target.as_os_str();
+    ) -> Result<String, GitError> {
         self.success(
             self.remote_request_os(
                 [
                     OsStr::new("-C"),
-                    target,
+                    target.as_os_str(),
                     OsStr::new("remote"),
                     OsStr::new("set-url"),
                     OsStr::new("origin"),
@@ -566,7 +570,7 @@ impl GitCli {
             self.remote_request_os(
                 [
                     OsStr::new("-C"),
-                    target,
+                    target.as_os_str(),
                     OsStr::new("fetch"),
                     OsStr::new("--prune"),
                     OsStr::new("origin"),
@@ -578,11 +582,72 @@ impl GitCli {
         )
         .await?;
         let remote = format!("refs/remotes/origin/{branch}");
+        // The branch was already validated; adding a ref prefix must not apply
+        // the public branch-length limit a second time to the constructed ref.
+        let fetched = self
+            .success(
+                self.request_os([
+                    OsStr::new("-C"),
+                    target.as_os_str(),
+                    OsStr::new("rev-parse"),
+                    OsStr::new("--verify"),
+                    OsStr::new(&format!("{remote}^{{commit}}")),
+                ]),
+                cancellation,
+            )
+            .await?;
+        let fetched = parse_commit(&fetched.stdout)?;
+        // A matching commit alone is insufficient: the cache may have staged edits,
+        // deleted files, or a different/detached branch. Keep the repair path for
+        // those cases. Truncated status output can never prove a clean worktree.
+        let status = self
+            .success(
+                self.request_os_with_output_limit(
+                    [
+                        OsStr::new("-C"),
+                        target.as_os_str(),
+                        OsStr::new("status"),
+                        OsStr::new("--porcelain=v2"),
+                        OsStr::new("-z"),
+                        OsStr::new("--branch"),
+                        OsStr::new("--no-ahead-behind"),
+                        OsStr::new("--untracked-files=normal"),
+                        OsStr::new("--ignore-submodules=none"),
+                    ],
+                    GIT_STDOUT_LIMIT,
+                ),
+                cancellation,
+            )
+            .await?;
+        if !status.stdout_truncated && clean_branch_at(&status.stdout, branch, &fetched) {
+            // Status trusts assume-unchanged/skip-worktree index bits. In
+            // particular, core.ignorestat can set assume-unchanged automatically.
+            // Only ordinary cached entries prove that status checked every file.
+            let index = self
+                .success(
+                    self.request_os_with_output_limit(
+                        [
+                            OsStr::new("-C"),
+                            target.as_os_str(),
+                            OsStr::new("ls-files"),
+                            OsStr::new("--cached"),
+                            OsStr::new("-v"),
+                            OsStr::new("-z"),
+                        ],
+                        GIT_STDOUT_LIMIT,
+                    ),
+                    cancellation,
+                )
+                .await?;
+            if !index.stdout_truncated && index_checks_all_files(&index.stdout) {
+                return Ok(fetched);
+            }
+        }
         self.success(
             self.remote_request_os(
                 [
                     OsStr::new("-C"),
-                    target,
+                    target.as_os_str(),
                     OsStr::new("checkout"),
                     OsStr::new("-B"),
                     OsStr::new(branch),
@@ -597,7 +662,7 @@ impl GitCli {
             self.remote_request_os(
                 [
                     OsStr::new("-C"),
-                    target,
+                    target.as_os_str(),
                     OsStr::new("reset"),
                     OsStr::new("--hard"),
                     OsStr::new(&remote),
@@ -607,7 +672,7 @@ impl GitCli {
             cancellation,
         )
         .await?;
-        Ok(())
+        self.resolve_commit(target, cancellation).await
     }
 
     async fn clone_atomically(
@@ -756,6 +821,46 @@ impl GitCli {
             message
         }))
     }
+}
+
+fn index_checks_all_files(index: &[u8]) -> bool {
+    if index.is_empty() {
+        return true;
+    }
+    let Some(records) = index.strip_suffix(b"\0") else {
+        return false;
+    };
+    records
+        .split(|byte| *byte == 0)
+        .all(|record| record.starts_with(b"H ") && record.len() > 2)
+}
+
+fn clean_branch_at(status: &[u8], branch: &str, commit: &str) -> bool {
+    if !status.ends_with(b"\0") {
+        return false;
+    }
+    let mut matching_head = false;
+    let mut matching_commit = false;
+    for record in status
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        if let Some(value) = record.strip_prefix(b"# branch.oid ") {
+            if matching_commit || value != commit.as_bytes() {
+                return false;
+            }
+            matching_commit = true;
+        } else if let Some(value) = record.strip_prefix(b"# branch.head ") {
+            if matching_head || value == b"(detached)" || value != branch.as_bytes() {
+                return false;
+            }
+            matching_head = true;
+        } else if !record.starts_with(b"# branch.upstream ") && !record.starts_with(b"# branch.ab ")
+        {
+            return false;
+        }
+    }
+    matching_head && matching_commit
 }
 
 fn validate_remote(url: &str) -> Result<(), GitError> {
@@ -1182,6 +1287,11 @@ mod tests {
         let process = Arc::new(FakeProcess::with_outputs(vec![
             output(""),
             output(""),
+            output(commit),
+            output(&format!(
+                "# branch.oid {}\0# branch.head main\0",
+                "b".repeat(40)
+            )),
             output(""),
             output(""),
             output(commit),
@@ -1207,7 +1317,7 @@ mod tests {
         assert_eq!(result.commit, commit);
         {
             let calls = process.arguments.lock().unwrap();
-            assert_eq!(calls.len(), 5);
+            assert_eq!(calls.len(), 7);
             for call in calls.iter() {
                 assert_eq!(
                     &call[..4],
@@ -1221,8 +1331,142 @@ mod tests {
             }
             assert!(calls[0].iter().any(|value| value == "set-url"));
             assert!(calls[1].iter().any(|value| value == "fetch"));
-            assert!(calls[3].iter().any(|value| value == "reset"));
+            assert!(calls[5].iter().any(|value| value == "reset"));
         }
+        tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
+    #[test]
+    fn clean_status_requires_complete_matching_branch_and_commit() {
+        let commit = "a".repeat(40);
+        let clean = format!("# branch.oid {commit}\0# branch.head main\0");
+        assert!(clean_branch_at(clean.as_bytes(), "main", &commit));
+        assert!(!clean_branch_at(clean.as_bytes(), "other", &commit));
+        assert!(!clean_branch_at(clean.as_bytes(), "main", &"b".repeat(40)));
+        assert!(!clean_branch_at(
+            format!("# branch.oid {commit}\0# branch.head (detached)\0").as_bytes(),
+            "(detached)",
+            &commit,
+        ));
+        for status in [
+            String::new(),
+            "# branch.head main\0".to_owned(),
+            clean.trim_end_matches('\0').to_owned(),
+            format!("{clean}? untracked.txt\0"),
+            format!("{clean}1 .M N... 100644 100644 100644 {commit} {commit} dirty.txt\0"),
+            format!("{clean}u UU N... conflict\0"),
+            format!("# branch.oid {commit}\0# branch.head (detached)\0"),
+            "# branch.oid (initial)\0# branch.head main\0".to_owned(),
+        ] {
+            assert!(
+                !clean_branch_at(status.as_bytes(), "main", &commit),
+                "{status:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_index_still_uses_the_repair_path() {
+        let root = std::env::temp_dir().join(format!("citadel-git-test-{}", Uuid::now_v7()));
+        tokio::fs::create_dir_all(root.join(".git")).await.unwrap();
+        let commit = "a".repeat(40);
+        let mut index = output("H tracked.txt\0").unwrap();
+        index.stdout_truncated = true;
+        let process = Arc::new(FakeProcess::with_outputs(vec![
+            output(""),
+            output(""),
+            output(&commit),
+            output(&format!("# branch.oid {commit}\0# branch.head main\0")),
+            Ok(index),
+            output(""),
+            output(""),
+            output(&commit),
+        ]));
+        let cli = GitCli::new(
+            process.clone(),
+            Arc::new(TestWorkspace),
+            Duration::from_secs(1),
+        );
+        let result = cli
+            .synchronize(
+                "https://example.test/repo.git",
+                &root,
+                "main",
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.commit, commit);
+        assert!(
+            process
+                .arguments
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|args| args.iter().any(|a| a == "reset"))
+        );
+        tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
+    #[test]
+    fn index_requires_complete_ordinary_entries() {
+        assert!(index_checks_all_files(b""));
+        assert!(index_checks_all_files(
+            b"H tracked.txt\0H space and\nnewline\0H non-utf8-\xff\0"
+        ));
+        for index in [
+            b"h assumed.txt\0".as_slice(),
+            b"S skipped.txt\0",
+            b"s assumed-and-skipped.txt\0",
+            b"M unmerged.txt\0",
+            b"H tracked.txt\0h assumed.txt\0",
+            b"H truncated.txt",
+            b"H \0",
+            b"H tracked.txt\0\0",
+        ] {
+            assert!(!index_checks_all_files(index), "{index:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_clean_prefix_still_uses_the_repair_path() {
+        let root = std::env::temp_dir().join(format!("citadel-git-test-{}", Uuid::now_v7()));
+        tokio::fs::create_dir_all(root.join(".git")).await.unwrap();
+        let commit = "a".repeat(40);
+        let mut status = output(&format!("# branch.oid {commit}\0# branch.head main\0")).unwrap();
+        status.stdout_truncated = true;
+        let process = Arc::new(FakeProcess::with_outputs(vec![
+            output(""),
+            output(""),
+            output(&commit),
+            Ok(status),
+            output(""),
+            output(""),
+            output(&commit),
+        ]));
+        let cli = GitCli::new(
+            process.clone(),
+            Arc::new(TestWorkspace),
+            Duration::from_secs(1),
+        );
+        let result = cli
+            .synchronize(
+                "https://example.test/repo.git",
+                &root,
+                "main",
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.commit, commit);
+        assert!(
+            process
+                .arguments
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|args| args.iter().any(|a| a == "reset"))
+        );
         tokio::fs::remove_dir_all(root).await.unwrap();
     }
 

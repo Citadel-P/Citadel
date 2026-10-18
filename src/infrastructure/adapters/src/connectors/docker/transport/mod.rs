@@ -14,6 +14,8 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, RwLock};
 
 mod binary_exec;
+mod owned_exec;
+mod terminal;
 pub use binary_exec::{DockerExecError, DockerExecEvent, DockerExecStream};
 
 use super::projection::{ContainerStats, DockerEvent, DockerVersion};
@@ -149,6 +151,7 @@ type NegotiatedConfiguration = (
 
 #[derive(Clone)]
 pub struct DockerClient {
+    terminal_tasks: std::sync::Arc<citadel_runtime::DynamicTasks>,
     pub(crate) host_disk:
         std::sync::Arc<crate::filesystem::host::disk_usage::HostDiskUsageProvider>,
     pub(super) client: Client,
@@ -208,6 +211,9 @@ impl DockerClient {
         let client = builder.build()?;
         let base_url = endpoint.http_origin();
         Ok(Self {
+            terminal_tasks: std::sync::Arc::new(citadel_runtime::DynamicTasks::new(
+                tokio_util::sync::CancellationToken::new(),
+            )),
             host_disk: std::sync::Arc::new(
                 crate::filesystem::host::disk_usage::HostDiskUsageProvider::new(host_root.into()),
             ),
@@ -223,6 +229,13 @@ impl DockerClient {
             storage_usage: Default::default(),
             configuration: Default::default(),
         })
+    }
+
+    /// Use the host's task owner so terminal and binary exec cleanup drain during shutdown.
+    #[must_use]
+    pub fn with_terminal_tasks(mut self, tasks: citadel_runtime::DynamicTasks) -> Self {
+        self.terminal_tasks = std::sync::Arc::new(tasks);
+        self
     }
 
     #[must_use]
@@ -330,41 +343,6 @@ impl DockerClient {
     ) -> Result<citadel_platforms::terminal::TerminalSession, DockerError> {
         self.execute_terminal(id, &[shell.command().to_owned()], cancel)
             .await
-    }
-
-    pub async fn execute_terminal(
-        &self,
-        id: &str,
-        command: &[String],
-        cancel: &tokio_util::sync::CancellationToken,
-    ) -> Result<citadel_platforms::terminal::TerminalSession, DockerError> {
-        validate_identifier(id)?;
-        let created = self.create_exec(id, serde_json::json!({"AttachStdin":true,"AttachStdout":true,"AttachStderr":true,"Tty":true,"Cmd":command})).await?;
-        validate_identifier(&created)?;
-        let version = self.negotiated_version().await?;
-        let start = format!("/exec/{}/start", urlencoding::encode(&created));
-        let response = self
-            .client
-            .post(format!("{}/v{version}{start}", self.base_url))
-            .header("Connection", "Upgrade")
-            .header("Upgrade", "tcp")
-            .json(&serde_json::json!({"Detach":false,"Tty":true}))
-            .send()
-            .await?;
-        if response.status() != StatusCode::SWITCHING_PROTOCOLS {
-            return Err(DockerError::Api {
-                status: response.status(),
-                message: "Docker did not upgrade the terminal connection.".into(),
-            });
-        }
-        let socket = response.upgrade().await?;
-        Ok(crate::connectors::containers::terminal::local_session(
-            socket,
-            self.clone(),
-            created,
-            self.request_timeout,
-            cancel.clone(),
-        ))
     }
 
     #[must_use]

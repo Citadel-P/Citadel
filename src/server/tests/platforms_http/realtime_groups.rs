@@ -107,10 +107,14 @@ async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
     let id: Uuid = sqlx::query_scalar("UPDATE containers SET dockernodeid=NULL,dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
         .bind(f.platform_id).bind(&docker_id).fetch_one(&f.pool).await.unwrap();
     let mut reader = reader(&f);
+    let terminal_tasks = citadel_runtime::DynamicTasks::new(CancellationToken::new());
+    let docker = DockerClient::new(&docker_socket, StdDuration::from_secs(5))
+        .unwrap()
+        .with_terminal_tasks(terminal_tasks.clone());
     reader.runtime = Arc::new(
         citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(
             f.pool.clone(),
-            DockerClient::new(&docker_socket, StdDuration::from_secs(5)).unwrap(),
+            docker.clone(),
             f.agent.clone(),
             f.edge.clone(),
         ),
@@ -196,6 +200,23 @@ async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
                 break;
             }
         }
+        // Disconnect must release the Docker exec, not just acknowledge LeaveGroup.
+        tokio::time::timeout(StdDuration::from_secs(5), async {
+            while terminal_tasks.active() != 0 {
+                tokio::time::sleep(StdDuration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        if fixture_server.is_none() {
+            let state = docker.inspect_container_document(&docker_id).await.unwrap();
+            assert!(
+                state["ExecIDs"].as_array().is_none_or(Vec::is_empty),
+                "terminal survived Disconnect: {}",
+                state["ExecIDs"]
+            );
+            assert_eq!(state["State"]["Running"], true);
+        }
     }
     socket.close(None).await.unwrap();
     cancellation.cancel();
@@ -231,7 +252,8 @@ async fn local_terminal_fixture(listener: UnixListener, docker_id: &str) {
         let (mut create, _) = listener.accept().await.unwrap();
         let (headers, body) = read_terminal_request(&mut create).await;
         assert!(headers.starts_with(&format!("POST /v1.49/containers/{docker_id}/exec ")));
-        assert_eq!(body["Cmd"], json!([shell]));
+        assert_eq!(body["Cmd"][0], "/bin/sh");
+        assert_eq!(body["Cmd"][4], shell);
         let body = r#"{"Id":"exec-1"}"#;
         create
             .write_all(
@@ -250,6 +272,10 @@ async fn local_terminal_fixture(listener: UnixListener, docker_id: &str) {
             .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
             .await
             .unwrap();
+        terminal
+            .write_all(b"CITADEL_TERMINAL 42 1234\r\n")
+            .await
+            .unwrap();
         let (mut resize, _) = listener.accept().await.unwrap();
         let (headers, _) = read_terminal_request(&mut resize).await;
         assert!(headers.starts_with("POST /v1.49/exec/exec-1/resize?h=30&w=100 "));
@@ -262,6 +288,20 @@ async fn local_terminal_fixture(listener: UnixListener, docker_id: &str) {
         assert_eq!(input, b"printf 'citadel-%s\\n' terminal-ok\n");
         terminal
             .write_all(b"citadel-terminal-ok\r\n")
+            .await
+            .unwrap();
+        let (mut inspect, _) = listener.accept().await.unwrap();
+        let (headers, _) = read_terminal_request(&mut inspect).await;
+        assert!(headers.starts_with("GET /v1.49/exec/exec-1/json "));
+        let body = r#"{"Running":false,"ExitCode":0}"#;
+        inspect
+            .write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
             .await
             .unwrap();
         assert_eq!(terminal.read(&mut input).await.unwrap(), 0);

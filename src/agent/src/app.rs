@@ -44,6 +44,9 @@ impl Agent {
     pub async fn serve(self, cancellation: CancellationToken) -> io::Result<()> {
         let cancellation = cancellation.child_token();
         let _guard = cancellation.clone().drop_guard();
+        let terminal_tasks = self.components.terminal_tasks;
+        let terminal_stop = self.components.terminal_shutdown;
+        let _terminal_guard = terminal_stop.clone().drop_guard();
         let edge_stop = cancellation.clone();
         let mut edge = Box::pin(async move {
             if let Some(edge) = self.components.edge {
@@ -90,7 +93,10 @@ impl Agent {
         let edge_result = tokio::select! {
             result = &mut server => {
                 cancellation.cancel();
-                edge.await?;
+                terminal_stop.cancel();
+                let (edge_result, cleanup_result) = tokio::join!(tokio::time::timeout(SHUTDOWN_TIMEOUT, edge), terminal_tasks.drain(SHUTDOWN_TIMEOUT));
+                cleanup_result.map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "Terminal cleanup timed out"))?;
+                edge_result.map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "Agent shutdown timed out"))??;
                 return result;
             },
             result = &mut edge => result,
@@ -98,13 +104,18 @@ impl Agent {
         };
         cancellation.cancel();
         drop(edge);
+        terminal_stop.cancel();
         tracing::info!("Agent shutting down");
         handle.graceful_shutdown(Some(SHUTDOWN_TIMEOUT));
-        let server_result = tokio::time::timeout(SHUTDOWN_TIMEOUT + Duration::from_secs(1), server)
-            .await
-            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "Agent shutdown timed out"))?;
+        let (server_result, cleanup_result) = tokio::join!(
+            tokio::time::timeout(SHUTDOWN_TIMEOUT + Duration::from_secs(1), server),
+            terminal_tasks.drain(SHUTDOWN_TIMEOUT),
+        );
+        cleanup_result
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "Terminal cleanup timed out"))?;
         edge_result?;
         server_result
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "Agent shutdown timed out"))?
     }
 }
 

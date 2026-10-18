@@ -115,6 +115,30 @@ must not bypass authentication.
 
 Implementation: [direct/auth.rs](../src/agent/src/direct/auth.rs).
 
+Interactive terminal execution shares Docker process ownership with Local Core:
+the Docker adapter records the terminal's container-namespace PID and start time,
+and cleans up that process session on disconnect, cancellation or idle expiry.
+An idle terminal has no input or output for 15 minutes; resize does not count as
+activity. Cleanup remains tracked during shutdown and never stops the application
+container. This does not change the signed Exec messages, operation numbers, or
+Swarm-node allowlists. It requires `/bin/sh`, `sleep`, and Linux procfs in the target image.
+Existing Agent versions must be upgraded to gain this cleanup and idle timeout.
+
+Non-interactive `ExecBinary` uses the same identity-checked process-session cleanup
+on cancellation, stream drop and shutdown. It preserves binary stdout/stderr,
+exit status, environment, working directory and the execution user. A private
+startup record is removed before forwarding output. It also requires `/bin/sh`, `sleep`,
+and readable Linux procfs in the target image; no extra privileges are granted.
+Binary commands retain their caller's operation deadline rather than the terminal
+inactivity timeout. Helper-container removal remains a separate cleanup layer.
+A launcher waits for identity-checked approval before running the requested
+command. If startup times out or its response is lost, an unapproved launcher
+terminates itself after 10 seconds. Approval failures after identity is known
+use the normal cleanup path. Descendant identities are collected before signals
+are sent, so a parent exiting during cleanup does not abandon the remaining
+captured children. Docker outages can still prevent cleanup of an approved
+command; upgraded Agents are required for this behavior.
+
 ## Edge lifecycle and limits
 
 Ordinary Edge and Edge Build Pool enroll once and persist a private key and
@@ -246,7 +270,7 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 | citadel.containers.v1.ContainerService/Delete | citadel.containers.v1.DeleteContainerRequest | google.protobuf.Empty | unary | CONTAINER_DELETE | 19 | allowed | connectors/docker/finite.rs:delete_container_with_options | G1 |
 | citadel.containers.v1.ContainerService/Inspect | citadel.containers.v1.InspectContainerRequest | citadel.shared_models.v1.InspectContainerResponse | unary | CONTAINER_INSPECT | 12 | allowed | connectors/docker/transport/mod.rs:inspect_container_document | G1 |
 | citadel.containers.v1.ContainerService/Create | citadel.containers.v1.CreateContainerRequest | citadel.containers.v1.CreateContainerResponse | unary | CONTAINER_CREATE | 13 | helper-only | connectors/docker/finite.rs:create_container | G1 |
-| citadel.containers.v1.ContainerService/Exec | citadel.containers.v1.ExecClientMessage | citadel.containers.v1.ExecServerMessage | bidi | CONTAINER_EXEC | 22 | allowed | connectors/docker/transport/mod.rs:execute_terminal | G3 |
+| citadel.containers.v1.ContainerService/Exec | citadel.containers.v1.ExecClientMessage | citadel.containers.v1.ExecServerMessage | bidi | CONTAINER_EXEC | 22 | allowed | connectors/docker/transport/terminal.rs:execute_terminal | G3 |
 | citadel.containers.v1.ContainerService/ExecBinary | citadel.containers.v1.ExecBinaryRequest | citadel.containers.v1.ExecServerMessage | server | CONTAINER_EXEC_BINARY | 23 | helper-only | connectors/docker/transport/binary_exec.rs:execute_binary | G3 |
 | citadel.containers.v1.ContainerService/StreamContainerLogs | citadel.containers.v1.ContainerLogRequest | citadel.containers.v1.ContainerLogResponse | server | CONTAINER_LOGS_STREAM | 11 | allowed | connectors/docker/transport/mod.rs:open_logs | G4 |
 | citadel.containers.v1.ContainerService/StreamContainersStats | citadel.containers.v1.StreamContainersStatsRequest | citadel.containers.v1.ContainersStatsResponse | server | CONTAINERS_STATS_STREAM | 21 | allowed | connectors/docker/local_sampler.rs:sample | G4 |
