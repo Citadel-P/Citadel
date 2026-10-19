@@ -242,13 +242,13 @@ jobs:
           curl --fail --silent --show-error --location \
             "https://download.docker.com/linux/static/stable/x86_64/docker-${docker_version}.tgz" \
             | tar --extract --gzip --directory "$tools_dir"
-          mkdir -p "$tools_dir/config/cli-plugins"
           curl --fail --silent --show-error --location \
             "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64" \
-            --output "$tools_dir/config/cli-plugins/docker-compose"
-          chmod +x "$tools_dir/config/cli-plugins/docker-compose"
+            --output "$tools_dir/docker-compose"
+          # Compose runs with a private HOME/DOCKER_CONFIG, so install the plugin
+          # in the disposable runner's system search path, outside auth config.
+          sudo install -D -m 0755 "$tools_dir/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose
           export PATH="$tools_dir/docker:$PATH"
-          export DOCKER_CONFIG="$tools_dir/config"
           docker compose version
           compose_env_test=stacks::tests::compose_interpolation_excludes_core_secrets
           compose_env_helper=stacks::tests::compose_environment_helper
