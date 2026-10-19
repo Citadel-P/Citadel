@@ -1,16 +1,10 @@
 use super::*;
-use citadel_adapters::{
-    connectors::{
-        docker::DockerClient,
-        routing::{
-            platforms::runtime::PlatformRuntimeRouter, resource_copies::CopyStorageRuntime,
-            swarm_services::SwarmServiceRuntimeRouter,
-        },
-    },
-    persistence::postgres::{
-        resource_copies::PostgresCopyRepository, swarm_services::PostgresSwarmServiceRepository,
-    },
-};
+use citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter;
+use citadel_adapters::connectors::routing::resource_copies::CopyStorageRuntime;
+use citadel_adapters::connectors::routing::swarm_services::SwarmServiceRuntimeRouter;
+use citadel_adapters::persistence::postgres::resource_copies::PostgresCopyRepository;
+use citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository;
+use citadel_docker::client::DockerClient;
 use citadel_resource_copies::*;
 use citadel_swarm_services::{SwarmServiceRepository, SwarmServiceRuntime};
 

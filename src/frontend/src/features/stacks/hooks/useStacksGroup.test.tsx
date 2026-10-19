@@ -13,9 +13,7 @@ function StacksProbe() {
 
   return (
     <>
-      <button onClick={() => navigate('/?platformId=00000000-0000-0000-0000-000000000300')}>
-        change platform
-      </button>
+      <button onClick={() => navigate('/?platformId=00000000-0000-0000-0000-000000000300')}>change platform</button>
       <ul>
         {(stacks ?? []).map((stack) => (
           <li key={stack.id}>{stack.name}</li>

@@ -150,7 +150,9 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[53_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),
@@ -182,6 +184,7 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
                 digests: digests.clone(),
             }),
             entitlements.clone(),
+            Arc::new(citadel_deployments::EmptyDeploymentBindingResolver),
             CancellationToken::new(),
         )
         .with_alerts(alerts.clone()),

@@ -147,10 +147,7 @@ export const ServiceMountsField = ({
             className="bg-background w-100"
             onChange={(event) => update(index, { target: event.target.value })}
           />
-          <Select
-            value={mount.kind}
-            disabled={disabled}
-            onValueChange={(kind: MountKind) => update(index, { kind })}>
+          <Select value={mount.kind} disabled={disabled} onValueChange={(kind: MountKind) => update(index, { kind })}>
             <SelectTrigger className="w-30" aria-label={`Mount type ${index + 1}`}>
               <SelectValue />
             </SelectTrigger>
@@ -184,9 +181,7 @@ export const ServiceMountsField = ({
         variant="outline"
         size="sm"
         disabled={disabled}
-        onClick={() =>
-          onChange([...value, { kind: MountKind.Volume, source: '', target: '', readOnly: false }])
-        }>
+        onClick={() => onChange([...value, { kind: MountKind.Volume, source: '', target: '', readOnly: false }])}>
         <Plus className="mr-2 h-4 w-4" />
         Add mount
       </Button>

@@ -57,6 +57,24 @@ header; **Back to docs** returns to the regular documentation layout.
 Edit pages under `content/docs` and update the matching `meta.json` when
 navigation changes.
 
+## Visual theme
+
+The product documentation, landing page and embedded API reference use the
+Citadel.Web slate/teal palette in both light and dark modes. `src/app/palette.css`
+is a local copy of the website palette so these repositories build independently;
+`global.css` maps it to Fumadocs semantic colors. The landing page reuses those
+tokens, while `src/components/api-reference.tsx` supplies matching concrete colors
+to ReDoc (which computes derived colors). Keep both mappings aligned when updating
+the palette. Warning/success/error callouts and code syntax colors retain their
+semantic meanings. The separate standalone API build keeps its own ReDoc defaults.
+
+Inter is self-hosted through `next/font/local`, with its OFL license beside the
+font in `src/app/fonts`. The logo uses the website's neutral Citadel artwork.
+Reading widths, navigation, search and theme persistence remain Fumadocs-owned.
+The docs sidebar uses `src/app/sidebar.css` for compact page rows, stronger section
+headings and a restrained active state. Utility links sit in its footer so the
+documentation tree comes first; touch devices retain larger navigation targets.
+
 ## Static export configuration
 
 The product site's build URL can include a path, for example

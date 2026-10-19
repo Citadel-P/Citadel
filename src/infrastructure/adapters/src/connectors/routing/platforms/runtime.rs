@@ -1,10 +1,10 @@
 //! Shared Platform and node transport selection. Authorization belongs to callers.
-use crate::connectors::{
-    agent::client::AgentClient,
-    docker::DockerClient,
-    edge::{EdgeRegistry, EdgeRuntime, EdgeTarget},
-};
+use crate::connectors::agent::client::AgentClient;
+use crate::connectors::edge::EdgeRegistry;
+use crate::connectors::edge::EdgeRuntime;
+use crate::connectors::edge::EdgeTarget;
 use crate::persistence::postgres::platforms::connection::{self, PlatformConnection};
+use citadel_docker::client::DockerClient;
 use citadel_platforms::{PlatformInfoPort, RuntimeCapabilityError, RuntimeErrorKind};
 use futures_util::future::BoxFuture;
 use sqlx::PgPool;

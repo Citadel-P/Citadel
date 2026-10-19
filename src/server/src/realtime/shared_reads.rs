@@ -11,6 +11,7 @@ pub(crate) struct CommittedReads {
     identities: OnceCell<Vec<citadel_platforms::ContainerIdentity>>,
     telemetry: OnceCell<Option<citadel_platforms::PlatformTelemetryContext>>,
     platform: OnceCell<Option<PlatformDetails>>,
+    swarm_summary: OnceCell<citadel_platforms::swarm_overview::SwarmSummary>,
     containers: OnceCell<Vec<ContainerDetails>>,
     images: OnceCell<Vec<ImageDetails>>,
     pub(crate) networks: OnceCell<Vec<citadel_platforms::RuntimeNetworkSummary>>,
@@ -45,6 +46,12 @@ macro_rules! shared_read {
     };
 }
 shared_read!(platform, platform, get_platform, Option<PlatformDetails>);
+shared_read!(
+    swarm_summary,
+    swarm_summary,
+    swarm_summary,
+    citadel_platforms::swarm_overview::SwarmSummary
+);
 shared_read!(
     containers,
     containers,

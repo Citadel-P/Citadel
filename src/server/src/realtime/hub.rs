@@ -1,6 +1,5 @@
 use super::PLATFORM_RESOURCE_TYPE;
 use crate::metrics::Metrics;
-use axum::{Router, extract::State, response::Response};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
@@ -9,33 +8,6 @@ use std::sync::{
 };
 use tokio::sync::broadcast;
 use uuid::Uuid;
-
-/// Coarse invalidations for resource routers whose writes finish inside the
-/// handler. Jobs publish their claim/completion separately; no payload or IDs
-/// are broadcast here, and every follow-up read applies its normal ACL.
-pub fn notify_mutations(router: Router, resource_type: &'static str) -> Router {
-    router.layer(axum::middleware::from_fn_with_state(
-        resource_type,
-        mutation_notification,
-    ))
-}
-
-async fn mutation_notification(
-    State(resource_type): State<&'static str>,
-    request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> Response {
-    let hub = (!request.method().is_safe())
-        .then(|| request.extensions().get::<RealtimeHub>().cloned())
-        .flatten();
-    let response = next.run(request).await;
-    if response.status().is_success()
-        && let Some(hub) = hub
-    {
-        hub.publish_resource_change(resource_type, Uuid::nil(), "resourceChanged");
-    }
-    response
-}
 
 pub fn change_callback(
     hub: Option<RealtimeHub>,

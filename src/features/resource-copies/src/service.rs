@@ -245,7 +245,10 @@ impl CopyService {
             if cancel.is_cancelled() {
                 break;
             }
-            let current = self.store.get(actor, id).await;
+            let current = match self.store.get(actor, id).await {
+                Err(error @ CopyError::Storage(_)) => return Err(error),
+                result => result,
+            };
             if matches!(current, Err(CopyError::NotFound)) {
                 // A revoked actor must not leave an authorized cleanup queued
                 // indefinitely. No storage is touched after access is revoked.
@@ -266,6 +269,7 @@ impl CopyService {
                         .cleanup(&plan, &progress.restores, cancel)
                         .await
                         .map_err(|e| e.to_string()),
+                    Err(error @ CopyError::Storage(_)) => return Err(error),
                     Err(error) => Err(error.to_string()),
                 };
                 if cancel.is_cancelled() {
@@ -280,11 +284,15 @@ impl CopyService {
                 && current.restores.iter().all(|r| r.status == "Succeeded")
             {
                 Some(match self.store.plan(actor, id).await {
-                    Ok(plan) => self
+                    Ok(plan) => match self
                         .storage
                         .check(&plan, Some(&current.restores), cancel)
                         .await
-                        .map_err(|e| e.to_string()),
+                    {
+                        Err(error @ CopyError::Storage(_)) => return Err(error),
+                        result => result.map_err(|error| error.to_string()),
+                    },
+                    Err(error @ CopyError::Storage(_)) => return Err(error),
                     Err(error) => Err(error.to_string()),
                 })
             } else {

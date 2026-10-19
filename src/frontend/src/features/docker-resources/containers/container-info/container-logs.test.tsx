@@ -13,7 +13,7 @@ vi.mock('@/hooks/useRealtimeGroup', () => ({
   useRealtimeGroup: groupMock,
 }));
 
-vi.mock('@/components/custom/common', () => ({
+vi.mock('@/components/custom/log-viewer', () => ({
   LogViewer: (props: { containerFilters?: string[]; enableContainerFilter?: boolean }) => {
     logViewerMock(props);
     return <div>Log viewer</div>;

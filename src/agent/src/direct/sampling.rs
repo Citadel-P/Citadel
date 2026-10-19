@@ -1,5 +1,7 @@
 //! Shared, bounded daemon snapshot. Concurrent RPCs refresh once and retain one cycle.
-use citadel_adapters::connectors::docker::{DockerClient, LocalDockerSample, LocalDockerSampler};
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::LocalDockerSample;
+use citadel_docker::client::LocalDockerSampler;
 use citadel_platforms::RuntimeCapabilityError;
 use std::{
     sync::atomic::{AtomicU64, Ordering},

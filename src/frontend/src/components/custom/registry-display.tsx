@@ -20,17 +20,14 @@ export function RegistryDisplay({
             </div>
           </HoverCardTrigger>
           <HoverCardContent className="flex flex-col gap-3 p-3 text-sm bg-background w-fit">
-            <div
-              className="flex items-center justify-center gap-1 hover:underline cursor-pointer"
-              onClick={() =>
-                window.open(
-                  registry.registryHost == '' ? 'https://hub.docker.com' : 'https://' + registry.registryHost,
-                  '_blank',
-                )
-              }>
+            <a
+              className="flex items-center justify-center gap-1 hover:underline"
+              href={registry.registryHost === '' ? 'https://hub.docker.com' : 'https://' + registry.registryHost}
+              target="_blank"
+              rel="noreferrer">
               <Link width={12} height={10} />{' '}
-              {registry.registryHost == '' ? 'https://hub.docker.com' : 'https://' + registry.registryHost}
-            </div>
+              {registry.registryHost === '' ? 'https://hub.docker.com' : 'https://' + registry.registryHost}
+            </a>
             <span className="text-foreground/75">Provider: {registry.type}</span>
           </HoverCardContent>
         </HoverCard>

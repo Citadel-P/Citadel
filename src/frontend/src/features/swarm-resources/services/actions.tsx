@@ -161,8 +161,7 @@ const serviceActions = createActionsBuilder<SwarmServiceListView>()
       const available = selection.every((service) =>
         isManagedService(service) ? isIdleManagedService(service) : !service.isStale,
       );
-      const canExecute =
-        !!platformId && selection.length > 0 && (managed || native) && permitted && available;
+      const canExecute = !!platformId && selection.length > 0 && (managed || native) && permitted && available;
       return {
         canExecute,
         isPending: managedMutation.isPending || nativeMutation.isPending,
@@ -200,11 +199,7 @@ const getAdoptDisabledReason = (
   return undefined;
 };
 
-const canRestart = (
-  service: SwarmServiceListView | undefined,
-  selectionCount: number,
-  hasPlatformId: boolean,
-) => {
+const canRestart = (service: SwarmServiceListView | undefined, selectionCount: number, hasPlatformId: boolean) => {
   if (!hasPlatformId || selectionCount !== 1 || !service || service.isStale) return false;
   if (service.managedServiceId)
     return !service.isManagedDraft && isIdleManagedService(service) && hasCapability(service, 'canApply');

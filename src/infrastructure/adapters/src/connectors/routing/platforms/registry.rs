@@ -278,7 +278,7 @@ mod tests {
         );
         let router = super::super::runtime::PlatformRuntimeRouter::new(
             pool.clone(),
-            crate::connectors::docker::DockerClient::new(
+            citadel_docker::client::DockerClient::new(
                 std::path::Path::new("/tmp/citadel-unused-registry.sock"),
                 Duration::from_secs(1),
             )

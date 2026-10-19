@@ -694,6 +694,7 @@ async fn timed_out_delete_releases_its_claim() {
         }),
         Arc::new(PendingRuntime),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     )
     .with_delete_timeout(Duration::from_millis(5));
@@ -734,6 +735,7 @@ async fn dropping_the_request_does_not_cancel_claim_recovery() {
         }),
         Arc::new(SignalledPendingRuntime(Arc::clone(&started))),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     )
     .with_delete_timeout(Duration::from_millis(20));
@@ -779,6 +781,7 @@ async fn dropping_apply_progress_does_not_cancel_the_claimed_operation() {
             commands: Arc::clone(&commands),
         }),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     );
 
@@ -812,6 +815,7 @@ async fn timed_out_apply_leaves_the_claim_for_bounded_reconciliation() {
         )),
         Arc::new(PendingApplyRuntime),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     )
     .with_apply_timeout(Duration::from_millis(5));
@@ -847,6 +851,7 @@ async fn stale_apply_reconciliation_finishes_only_a_running_container() {
             state: RuntimeContainerState::Running,
         }))),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     );
 
@@ -869,6 +874,7 @@ async fn stale_apply_reconciliation_fails_an_unconfirmed_runtime_outcome() {
         )),
         Arc::new(ObservedApplyRuntime(None)),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     );
 
@@ -935,6 +941,7 @@ async fn create_rejects_new_auto_deploy_without_its_entitlement() {
         }),
         Arc::new(PendingRuntime),
         Arc::new(DenyEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     );
     let input = CreateDeployment {
@@ -1007,6 +1014,7 @@ async fn rejected_task_admission_releases_delete_and_apply_claims_without_runtim
         store,
         Arc::new(PendingRuntime),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     );
     let actor = ActorId::new(Uuid::now_v7());
@@ -1040,6 +1048,7 @@ async fn completion_retries_preserve_successful_docker_work_and_do_not_fail_the_
                 commands: commands.clone(),
             }),
             Arc::new(AllowEntitlements),
+            Arc::new(crate::EmptyDeploymentBindingResolver),
             CancellationToken::new(),
         );
         let mut progress = service
@@ -1103,6 +1112,7 @@ async fn stale_apply_keeps_its_claim_when_the_runtime_cannot_be_observed() {
         Arc::new(apply_store(id, completions.clone(), failures.clone())),
         Arc::new(UnavailableObservationRuntime),
         Arc::new(AllowEntitlements),
+        Arc::new(crate::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     );
     assert_eq!(service.reconcile_stale_applies(1, 10).await.unwrap(), 0);

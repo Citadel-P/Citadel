@@ -19,13 +19,13 @@ import {
 } from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
 import { useState, useMemo } from 'react';
-import { useMutate, useSaveResource } from '@/lib/hooks';
+import { useSaveResource } from '@/lib/hooks';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useParams } from 'react-router';
 import { Globe, MoveUpRight } from 'lucide-react';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { useCreateRegistry, useUpdateRegistry } from '../queries';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { registrySettings, registryUpdate } from './values';
 
@@ -116,21 +116,22 @@ export const RegistryForm = ({
   disabled?: boolean;
 }) => {
   const id = useParams().id;
-  const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<RegistryInput>>({});
 
-  const { mutateAsync: createRegistry } = useMutate('createRegistry');
-  const { mutateAsync: updateRegistry } = useMutate('updateRegistry');
+  const { mutateAsync: createRegistry } = useCreateRegistry();
+  const { mutateAsync: updateRegistry } = useUpdateRegistry();
 
   const { save: handleSave, isPending } = useSaveResource<RegistryInput, any>({
     mode,
     basePath: 'registries',
     entityName: 'Registry',
     onCreate: (payload) => createRegistry({ data: payload as NewRegistry }),
-    onUpdate: (payload) => updateRegistry({ id: id!, data: registryUpdate(payload as RegistryPatch) }),
+    onUpdate: (payload) => {
+      if (!id) throw new Error('Missing registry ID');
+      return updateRegistry({ id, data: registryUpdate(payload as RegistryPatch) });
+    },
     onRefresh: () => {
       localStorage.removeItem(`Registry:${id ?? 'new'}`);
-      queryClient.invalidateQueries({ queryKey: ['getRegistryConfig', { id }] });
     },
   });
 

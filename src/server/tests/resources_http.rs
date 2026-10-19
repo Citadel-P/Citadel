@@ -63,7 +63,9 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[23_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),

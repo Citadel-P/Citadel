@@ -53,7 +53,9 @@ pub(super) fn build(
     )?);
     let service_account_tokens = Arc::new(OpaqueServiceAccountTokenCodec);
     let clock = Arc::new(SystemClock);
-    let password_hasher = Arc::new(Argon2PasswordHasher::default());
+    let password_hasher = Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+        Argon2PasswordHasher::default(),
+    )));
     let identity_store = Arc::new(PostgresIdentityStore::new(pool.clone()));
     let (last_used_tracker, last_used_worker) = service_account_last_used_channel(
         identity_store.clone(),

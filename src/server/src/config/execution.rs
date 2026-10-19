@@ -58,19 +58,19 @@ pub struct ExecutionConfig {
 }
 
 impl ExecutionConfig {
-    pub(super) fn from_env() -> Result<Self, ConfigError> {
-        Self::read(|key| std::env::var_os(key))
+    pub(super) fn from_env(http_port: u16) -> Result<Self, ConfigError> {
+        Self::read(|key| std::env::var_os(key), http_port)
     }
 
-    // An injected source keeps alias/default tests independent of process-global env.
-    fn read(get: impl Fn(&str) -> Option<OsString>) -> Result<Self, ConfigError> {
+    // An injected source keeps configuration tests independent of process-global env.
+    fn read(get: impl Fn(&str) -> Option<OsString>, http_port: u16) -> Result<Self, ConfigError> {
         let string = |key: &str| get(key).and_then(|value| value.into_string().ok());
         let data_root =
             PathBuf::from(get("CITADEL_DATA_ROOT").unwrap_or_else(|| "/app/data".into()));
-        let maximum_log_bytes = string("Automations__MaxLogBytes")
+        let maximum_log_bytes = string("CITADEL_AUTOMATIONS_MAX_LOG_BYTES")
             .map(|value| value.parse::<usize>())
             .transpose()
-            .map_err(|error| invalid("Automations__MaxLogBytes", error))?
+            .map_err(|error| invalid("CITADEL_AUTOMATIONS_MAX_LOG_BYTES", error))?
             .unwrap_or(1024 * 1024)
             .clamp(1024, 16 * 1024 * 1024);
         let bounded =
@@ -86,7 +86,11 @@ impl ExecutionConfig {
                 Ok(value)
             };
         let architectures: Vec<_> = (0..32)
-            .filter_map(|i| string(&format!("EdgeAgent__SupportedNodeArchitectures__{i}")))
+            .filter_map(|i| {
+                string(&format!(
+                    "CITADEL_EDGE_AGENT_SUPPORTED_NODE_ARCHITECTURE_{i}"
+                ))
+            })
             .collect();
         let architectures = if architectures.is_empty() {
             vec!["amd64".into(), "arm64".into()]
@@ -98,49 +102,49 @@ impl ExecutionConfig {
             .any(|s| !matches!(s.as_str(), "amd64" | "arm64"))
         {
             return Err(invalid(
-                "EdgeAgent__SupportedNodeArchitectures",
+                "CITADEL_EDGE_AGENT_SUPPORTED_NODE_ARCHITECTURE_N",
                 "supported values are amd64 and arm64",
             ));
         }
         let setup_policy = citadel_platforms::node_agents::setup::NodeAgentSetupPolicy {
             bootstrap_lifetime: std::time::Duration::from_secs(
-                bounded("EdgeAgent__NodeAgentBootstrapMinutes", 10, 1, 30)? as u64 * 60,
+                bounded("CITADEL_EDGE_AGENT_NODE_AGENT_BOOTSTRAP_MINUTES", 10, 1, 30)? as u64 * 60,
             ),
             setup_timeout: std::time::Duration::from_secs(
-                bounded("EdgeAgent__NodeAgentSetupMinutes", 5, 1, 20)? as u64 * 60,
+                bounded("CITADEL_EDGE_AGENT_NODE_AGENT_SETUP_MINUTES", 5, 1, 20)? as u64 * 60,
             ),
             supported_architectures: architectures,
             limits: citadel_platforms::node_agents::setup::NodeAgentLimits {
                 nano_cpus: bounded(
-                    "EdgeAgent__NodeAgentLimitNanoCpus",
+                    "CITADEL_EDGE_AGENT_NODE_AGENT_LIMIT_NANO_CPUS",
                     500_000_000,
                     100_000_000,
                     2_000_000_000,
                 )?,
                 memory_bytes: bounded(
-                    "EdgeAgent__NodeAgentLimitMemoryBytes",
+                    "CITADEL_EDGE_AGENT_NODE_AGENT_LIMIT_MEMORY_BYTES",
                     536_870_912,
                     134_217_728,
                     2_147_483_648,
                 )?,
-                pids: bounded("EdgeAgent__NodeAgentPidsLimit", 256, 64, 4096)?,
+                pids: bounded("CITADEL_EDGE_AGENT_NODE_AGENT_PIDS_LIMIT", 256, 64, 4096)?,
             },
         };
         let image = if let Some(image) = string("CITADEL_EDGE_AGENT_IMAGE") {
             image
         } else {
-            let repository = string("EdgeAgent__AgentImageRepository")
+            let repository = string("CITADEL_EDGE_AGENT_IMAGE_REPOSITORY")
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or_else(|| "ghcr.io/citadel-p/citadel.agent".into());
-            let version = string("EdgeAgent__AgentImageTag")
+            let version = string("CITADEL_EDGE_AGENT_IMAGE_TAG")
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or_else(|| env!("CITADEL_BUILD_VERSION").into());
             format!("{}:{}", repository.trim(), image_tag(&version))
         };
-        let allow_insecure = string("AgentTransport__AllowInsecure")
+        let allow_insecure = string("CITADEL_CORE_AGENT_ALLOW_INSECURE")
             .map(|value| value.parse::<bool>())
             .transpose()
-            .map_err(|error| invalid("AgentTransport__AllowInsecure", error))?
+            .map_err(|error| invalid("CITADEL_CORE_AGENT_ALLOW_INSECURE", error))?
             .unwrap_or(true);
         let absolute = |name, default| {
             std::path::absolute(get(name).map(PathBuf::from).unwrap_or(default))
@@ -150,12 +154,22 @@ impl ExecutionConfig {
             .map(|path| read_ca_bundle(PathBuf::from(path)))
             .transpose()?;
         let allowed_core_paths: Vec<_> = (0..128)
-            .filter_map(|i| get(&format!("Backups__AllowedCorePaths__{i}")).map(PathBuf::from))
+            .filter_map(|i| {
+                get(&format!("CITADEL_BACKUPS_ALLOWED_CORE_PATH_{i}")).map(PathBuf::from)
+            })
             .collect();
+        if allowed_core_paths.iter().any(|p: &PathBuf| {
+            p.as_os_str().is_empty() || p.to_str().is_some_and(|s| s.trim().is_empty())
+        }) {
+            return Err(invalid(
+                "CITADEL_BACKUPS_ALLOWED_CORE_PATH_N",
+                "paths cannot be empty",
+            ));
+        }
         let backups = BackupExecutionConfig {
             settings: citadel_adapters::external::backups::settings::BackupExecutionSettings {
                 working_directory: absolute(
-                    "Backups__WorkingDirectory",
+                    "CITADEL_BACKUPS_WORKING_DIRECTORY",
                     data_root.join("backups/work"),
                 )?,
                 allowed_core_paths: if allowed_core_paths.is_empty() {
@@ -164,57 +178,60 @@ impl ExecutionConfig {
                     allowed_core_paths
                 },
                 default_timeout: std::time::Duration::from_secs(bounded(
-                    "Backups__DefaultTimeoutSeconds",
+                    "CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS",
                     120,
                     5,
                     86400,
                 )? as u64),
                 maximum_log_line_bytes: bounded(
-                    "Backups__MaxLogLineBytes",
+                    "CITADEL_BACKUPS_MAX_LOG_LINE_BYTES",
                     8192,
                     1024,
                     16 * 1024 * 1024,
                 )? as usize,
             },
-            core_data_path: absolute("Backups__CoreDataPath", data_root.clone())?,
-            maximum_log_bytes: bounded("Backups__MaxLogBytes", 1_048_576, 1024, 64 * 1024 * 1024)?
-                as usize,
-            repository_lease_seconds: bounded("Backups__RepositoryLeaseSeconds", 300, 30, 604800)?
+            core_data_path: absolute("CITADEL_BACKUPS_CORE_DATA_PATH", data_root.clone())?,
+            maximum_log_bytes: bounded(
+                "CITADEL_BACKUPS_MAX_LOG_BYTES",
+                1_048_576,
+                1024,
+                64 * 1024 * 1024,
+            )? as usize,
+            repository_lease_seconds: bounded(
+                "CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS",
+                300,
+                30,
+                604800,
+            )? as i32,
+            source_lease_seconds: bounded("CITADEL_BACKUPS_SOURCE_LEASE_SECONDS", 300, 30, 604800)?
                 as i32,
-            source_lease_seconds: bounded("Backups__SourceLeaseSeconds", 300, 30, 604800)? as i32,
         };
         Ok(Self {
-            git_known_hosts: absolute("Git__KnownHostsPath", data_root.join("git-known-hosts"))?,
+            git_known_hosts: absolute(
+                "CITADEL_GIT_KNOWN_HOSTS_PATH",
+                data_root.join("git-known-hosts"),
+            )?,
             backups,
             tools: ExternalToolsConfig {
                 docker: get("CITADEL_DOCKER_PATH").unwrap_or_else(|| "docker".into()),
-                restic: get("Backups__ResticPath")
-                    .or_else(|| get("CITADEL_RESTIC_PATH"))
-                    .unwrap_or_else(|| "restic".into()),
-                pg_dump: get("Backups__PostgresDumpPath")
-                    .or_else(|| get("CITADEL_PG_DUMP_PATH"))
-                    .unwrap_or_else(|| "pg_dump".into()),
+                restic: get("CITADEL_RESTIC_PATH").unwrap_or_else(|| "restic".into()),
+                pg_dump: get("CITADEL_PG_DUMP_PATH").unwrap_or_else(|| "pg_dump".into()),
                 shoutrrr: get("CITADEL_SHOUTRRR_PATH").unwrap_or_else(|| "shoutrrr".into()),
             },
             automation: AutomationExecutionConfig {
-                deno: get("Automations__DenoPath")
-                    .or_else(|| get("CITADEL_DENO_PATH"))
-                    .unwrap_or_else(|| "deno".into()),
-                work_root: absolute("Automations__WorkDir", data_root.join("automations/runs"))?,
+                deno: get("CITADEL_DENO_PATH").unwrap_or_else(|| "deno".into()),
+                work_root: absolute(
+                    "CITADEL_AUTOMATIONS_WORK_DIR",
+                    data_root.join("automations/runs"),
+                )?,
                 cache_root: absolute(
-                    "Automations__DenoCacheDir",
+                    "CITADEL_AUTOMATIONS_DENO_CACHE_DIR",
                     data_root.join("automations/deno-cache"),
                 )?,
-                internal_base_url: string("Automations__InternalBaseUrl")
-                    .or_else(|| string("CITADEL_INTERNAL_BASE_URL"))
-                    .unwrap_or_else(|| {
-                        format!(
-                            "http://127.0.0.1:{}",
-                            string("Transport__ApiPort").unwrap_or_else(|| "8000".into())
-                        )
-                    }),
+                internal_base_url: string("CITADEL_INTERNAL_BASE_URL")
+                    .unwrap_or_else(|| format!("http://127.0.0.1:{http_port}")),
                 maximum_log_bytes,
-                allow_net: string("Automations__AllowNet"),
+                allow_net: string("CITADEL_AUTOMATIONS_ALLOW_NET"),
             },
             paths: PathsConfig {
                 data_root,
@@ -227,7 +244,7 @@ impl ExecutionConfig {
                 setup_policy,
                 allow_insecure,
                 node_agent_ca_bundle,
-                ca_certificate: get("AgentTransport__CaCertificatePath")
+                ca_certificate: get("CITADEL_CORE_AGENT_CA_CERTIFICATE_PATH")
                     .filter(|p| !p.is_empty())
                     .map(|path| read_agent_ca(PathBuf::from(path)))
                     .transpose()?,
@@ -276,7 +293,7 @@ fn invalid(name: &'static str, error: impl std::fmt::Display) -> ConfigError {
 }
 
 fn read_agent_ca(path: PathBuf) -> Result<Arc<[u8]>, ConfigError> {
-    const NAME: &str = "AgentTransport__CaCertificatePath";
+    const NAME: &str = "CITADEL_CORE_AGENT_CA_CERTIFICATE_PATH";
     let data = read_ca_bundle(path)
         .map_err(|_| invalid(NAME, "cannot read a CA bundle between 1 byte and 1 MiB"))?;
     let certificates = reqwest::Certificate::from_pem_bundle(&data)
@@ -309,12 +326,15 @@ mod tests {
     use super::*;
 
     fn parse(values: &[(&str, &str)]) -> Result<ExecutionConfig, ConfigError> {
-        ExecutionConfig::read(|key| {
-            values
-                .iter()
-                .find(|(name, _)| *name == key)
-                .map(|(_, value)| (*value).into())
-        })
+        ExecutionConfig::read(
+            |key| {
+                values
+                    .iter()
+                    .find(|(name, _)| *name == key)
+                    .map(|(_, value)| (*value).into())
+            },
+            8000,
+        )
     }
 
     #[test]
@@ -336,24 +356,20 @@ mod tests {
     }
 
     #[test]
-    fn aliases_and_primary_values_keep_their_precedence() {
-        let aliases = [
-            ("CITADEL_DENO_PATH", "/tools/deno"),
-            ("CITADEL_INTERNAL_BASE_URL", "http://core:8000"),
-        ];
-        let config = parse(&aliases).unwrap();
-        assert_eq!(config.automation.deno, OsString::from("/tools/deno"));
-        assert_eq!(config.automation.internal_base_url, "http://core:8000");
-        let mut values = aliases.to_vec();
-        values.extend([
-            ("Automations__DenoPath", "/primary/deno"),
-            ("Automations__InternalBaseUrl", "http://primary:8000"),
+    fn explicit_tools_and_execution_values_reach_consumers() {
+        let values = [
+            ("CITADEL_DENO_PATH", "/primary/deno"),
+            ("CITADEL_INTERNAL_BASE_URL", "http://primary:8000"),
+            ("CITADEL_RESTIC_PATH", "/tools/restic"),
+            ("CITADEL_PG_DUMP_PATH", "/tools/pg_dump"),
             ("CITADEL_DATA_ROOT", "/data"),
-            ("Automations__MaxLogBytes", "1"),
-            ("AgentTransport__AllowInsecure", "false"),
-        ]);
+            ("CITADEL_AUTOMATIONS_MAX_LOG_BYTES", "1"),
+            ("CITADEL_CORE_AGENT_ALLOW_INSECURE", "false"),
+        ];
         let config = parse(&values).unwrap();
         assert_eq!(config.automation.deno, OsString::from("/primary/deno"));
+        assert_eq!(config.tools.restic, OsString::from("/tools/restic"));
+        assert_eq!(config.tools.pg_dump, OsString::from("/tools/pg_dump"));
         assert_eq!(config.automation.internal_base_url, "http://primary:8000");
         assert_eq!(
             config.automation.cache_root,
@@ -362,7 +378,7 @@ mod tests {
         assert_eq!(config.automation.maximum_log_bytes, 1024);
         assert!(!config.edge_agent.allow_insecure);
         assert_eq!(
-            parse(&[("Automations__MaxLogBytes", "999999999")])
+            parse(&[("CITADEL_AUTOMATIONS_MAX_LOG_BYTES", "999999999")])
                 .unwrap()
                 .automation
                 .maximum_log_bytes,
@@ -373,8 +389,8 @@ mod tests {
     #[test]
     fn malformed_settings_fail_at_configuration_boundary() {
         for (key, value) in [
-            ("Automations__MaxLogBytes", "invalid"),
-            ("AgentTransport__AllowInsecure", "yes"),
+            ("CITADEL_AUTOMATIONS_MAX_LOG_BYTES", "invalid"),
+            ("CITADEL_CORE_AGENT_ALLOW_INSECURE", "yes"),
             (
                 "CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH",
                 "/missing-citadel-ca",
@@ -390,9 +406,13 @@ mod tests {
     fn ca_bundle_is_bounded_and_loaded_before_services() {
         let path = std::env::temp_dir().join(format!("citadel-ca-{}", uuid::Uuid::now_v7()));
         std::fs::write(&path, b"certificate").unwrap();
-        let config = ExecutionConfig::read(|key| {
-            (key == "CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH").then(|| path.clone().into_os_string())
-        })
+        let config = ExecutionConfig::read(
+            |key| {
+                (key == "CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH")
+                    .then(|| path.clone().into_os_string())
+            },
+            8000,
+        )
         .unwrap();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(

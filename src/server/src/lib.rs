@@ -104,3 +104,5 @@ pub mod release_updates;
 pub mod composition {
     pub mod workers;
 }
+
+pub mod http_trace;

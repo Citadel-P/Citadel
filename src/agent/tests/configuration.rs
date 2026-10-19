@@ -7,7 +7,7 @@ use ed25519_dalek::SigningKey;
 
 fn direct() -> BTreeMap<String, String> {
     BTreeMap::from([(
-        "HUB_PUBLIC_KEY".into(),
+        "CITADEL_CORE_PUBLIC_KEY".into(),
         STANDARD.encode(SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes()),
     )])
 }
@@ -115,9 +115,13 @@ fn only_case_insensitive_exact_edge_selects_outbound_mode() {
 #[test]
 fn invalid_configuration_fails_with_field_name_without_echoing_credentials() {
     for (base, key, value) in [
-        (direct(), "HUB_PUBLIC_KEY", ""),
-        (direct(), "HUB_PUBLIC_KEY", "private-secret-invalid-base64"),
-        (direct(), "HUB_PUBLIC_KEY", "c2hvcnQ="),
+        (direct(), "CITADEL_CORE_PUBLIC_KEY", ""),
+        (
+            direct(),
+            "CITADEL_CORE_PUBLIC_KEY",
+            "private-secret-invalid-base64",
+        ),
+        (direct(), "CITADEL_CORE_PUBLIC_KEY", "c2hvcnQ="),
         (direct(), "CITADEL_AGENT_PORT", "0"),
         (direct(), "CITADEL_AGENT_PORT", "65536"),
         (direct(), "CITADEL_AGENT_PORT", "-1"),
@@ -187,7 +191,10 @@ fn tls_settings_are_validated_only_for_direct_mode() {
     };
     assert!(config.tls.is_some());
     values.extend(edge());
-    values.insert("HUB_PUBLIC_KEY".into(), "invalid-but-unused".into());
+    values.insert(
+        "CITADEL_CORE_PUBLIC_KEY".into(),
+        "invalid-but-unused".into(),
+    );
     values.insert("CITADEL_AGENT_TLS_MODE".into(), "invalid-but-unused".into());
     assert!(matches!(parse(&values).unwrap().mode, AgentMode::Edge(_)));
 }

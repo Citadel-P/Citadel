@@ -8,10 +8,8 @@ import { ContainerInspect } from './container-inspect';
 import { ContainerStats } from './container-stats';
 import { ContainerInfoActions, getContainerManagementAction } from './actions';
 import { ContainerOverview } from './container-info-table';
-import { ContainerStateStatus, ContainerRuntimeView, ImageView, ResourceControlState } from '@/api/generated/api.types';
+import { ContainerStateStatus, ContainerRuntimeView, ResourceControlState } from '@/api/generated/api.types';
 import { hasCapability } from '@/lib/resource-capabilities';
-import { Link } from 'react-router';
-import { truncate } from '@/lib/truncate';
 import { ContainerExec } from './container-exec';
 import { SystemContainerBadge } from '../system-container-badge';
 import { useAppContext } from '@/lib/context/app-context';
@@ -95,16 +93,4 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
     const { containerInfo, isLoading, error, refetch, isFetching } = useContainerInfoGroup(resourceId, platformId);
     return { refetch, isFetching, resource: containerInfo, isLoading, error: error as any };
   },
-};
-
-export const ImageName = ({ image }: { image: ImageView | undefined }) => {
-  if (image === undefined || image?.name === undefined) return <div className="text-muted-foreground">{'<none>'}</div>;
-  return (
-    <Link
-      to={`/platforms/${image.platformId}/images/${image?.dockerImageId?.slice(0, 24)}`}
-      title={image?.name}
-      className="table-link">
-      {truncate(image?.name?.length > 0 ? image?.name : '<none>', 24)}
-    </Link>
-  );
 };

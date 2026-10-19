@@ -1,6 +1,6 @@
 import { BuildLogEntry } from '@/api/generated/api.types';
-import type { LogEntry, LogSeverity } from '@/components/custom/common';
 import { parseCitadelDate } from '@/lib/date-time';
+import type { LogEntry, LogSeverity } from '@/components/custom/log-viewer';
 
 export function mergeBuildRunLogEntries(current: BuildLogEntry[], incoming: BuildLogEntry[]) {
   if (incoming.length === 0) return current;

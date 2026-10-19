@@ -1,9 +1,9 @@
 //! Candidate connection validation intentionally accepts an uncommitted address.
-use crate::connectors::{
-    agent::client::AgentClient,
-    docker::DockerClient,
-    edge::{EdgeRegistry, EdgeRuntime, EdgeTarget},
-};
+use crate::connectors::agent::client::AgentClient;
+use crate::connectors::edge::EdgeRegistry;
+use crate::connectors::edge::EdgeRuntime;
+use crate::connectors::edge::EdgeTarget;
+use citadel_docker::client::DockerClient;
 use citadel_platforms::{
     CreatePlatformInput, PlatformConnectorType, PlatformInfoPort, RuntimeCapabilityError,
     RuntimeErrorKind, RuntimePlatformInfo, management::PlatformManagementRuntime,

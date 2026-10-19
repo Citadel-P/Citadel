@@ -1,9 +1,9 @@
 use super::{Runtime, container_mapping, docker_error, runtime_error, text};
-use citadel_adapters::connectors::docker::DockerImagePullOptions;
 use citadel_contracts::citadel::{
     images::v1::{image_service_server::ImageService, *},
     shared_models::v1::{ImageReply, ListImageResponse},
 };
+use citadel_docker::client::DockerImagePullOptions;
 use citadel_platforms::images::ImageInspectionPort;
 use futures_util::{Stream, StreamExt};
 use std::pin::Pin;
@@ -160,7 +160,7 @@ impl ImageService for Runtime {
                 architecture: target.architecture.clone(),
                 variant: target.variant.clone(),
             };
-            let observed = citadel_adapters::connectors::registries::image_metadata::inspect(
+            let observed = citadel_docker::image_metadata::inspect(
                 &r.image_name,
                 r.auth.as_deref(),
                 &target,

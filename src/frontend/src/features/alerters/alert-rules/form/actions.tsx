@@ -15,7 +15,9 @@ export const { info: AlertRuleActions } = createActionsBuilder<AuthorizedRegistr
     canExecute: () => true,
     useVariables: (resource) => {
       return {
-        ids: [(resource as AuthorizedRegistryView).id],
+        data: {
+          ids: [(resource as AuthorizedRegistryView).id],
+        },
       };
     },
     useSuccessHandler: () => {

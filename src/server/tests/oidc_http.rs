@@ -630,7 +630,7 @@ async fn fixture() -> Fixture {
     let (principal, email) = seed_administrator(&pool, passwords.as_ref()).await;
     let identity_service = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        passwords,
+        Arc::new(citadel_identity::CredentialWork::new(passwords)),
         Arc::new(
             JwtSessionTokenCodec::new(
                 &[7_u8; 32],

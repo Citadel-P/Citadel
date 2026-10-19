@@ -46,7 +46,9 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(codec()),
         Arc::new(OpaqueServiceAccountTokenCodec),
         Arc::new(StaticEntitlementService::new(true)),

@@ -196,7 +196,7 @@ impl BackupPersistence for PostgresBackupPersistence {
         &'a self,
         claim: &'a BackupClaim,
         result: &'a BackupExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BackupError>> {
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
         self.finish_backup_impl(claim, result)
     }
 
@@ -240,7 +240,7 @@ impl BackupPersistence for PostgresBackupPersistence {
         &'a self,
         claim: &'a RestoreClaim,
         result: &'a RestoreExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BackupError>> {
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
         self.finish_restore_impl(claim, result)
     }
 

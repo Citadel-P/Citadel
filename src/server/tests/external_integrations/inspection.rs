@@ -2,21 +2,14 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use citadel_adapters::{
-    connectors::{
-        docker::DockerClient,
-        edge::EdgeRegistry,
-        routing::{
-            containers::ContainerRuntimeRouter,
-            platforms::registration::PlatformRegistrationRuntimeRouter,
-            volumes::content::VolumeContentAdapter,
-        },
-    },
-    persistence::postgres::platforms::{
-        PostgresPlatformReader, inventory::store::PostgresInventoryProjectionStore,
-        registration::PostgresPlatformRegistrationRepository,
-    },
-};
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
+use citadel_adapters::connectors::routing::platforms::registration::PlatformRegistrationRuntimeRouter;
+use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter;
+use citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader;
+use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
+use citadel_adapters::persistence::postgres::platforms::registration::PostgresPlatformRegistrationRepository;
+use citadel_docker::client::DockerClient;
 use citadel_platforms::{
     PlatformReadService, PlatformRegistrationService,
     jobs::{EventRefresh, ReconciliationScope, collect_event_scope},

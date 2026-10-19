@@ -1,3 +1,5 @@
+#[path = "build_execution/completion.rs"]
+mod completion;
 use chrono::{Duration, Utc};
 use citadel_adapters::external::builds::executor::LocalDockerBuildExecutor;
 use citadel_adapters::persistence::postgres::builds::PostgresBuildRepository;
@@ -48,7 +50,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)").bind(platform).bind(format!("build-platform-{}",platform.simple())).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).bind(format!("build-platform-{}",platform.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}'::json,$2,$3,'docker.io','Enabled')").bind(registry).bind(actor.value()).bind(format!("build-registry-{}",registry.simple())).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url,controlstate) VALUES($1,$2,'main',$3,'Healthy','Manual','https://example.test/repo.git','Idle')").bind(repository).bind(actor.value()).bind(format!("build-repo-{}",repository.simple())).execute(&pool).await.unwrap();
     let store = PostgresBuildRepository::new(pool.clone());
@@ -77,6 +79,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         build_agent_pool_id: None,
     };
     input.validate().unwrap();
+    completion::verify(&pool, actor, &input).await;
     let project = store.create(actor, &input).await.unwrap();
     assert_eq!(project.tags.len(), 1);
     assert_eq!(project.tags[0].id, tag);
@@ -134,7 +137,12 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .execute(&pool)
         .await
         .unwrap();
-    assert!(store.finish(&claim, &success_result('a')).await.is_err());
+    assert!(
+        store
+            .finish(&claim, &success_result('a'), None)
+            .await
+            .is_err()
+    );
     assert_eq!(
         store.get_run(queued.id).await.unwrap().status,
         citadel_builds::BuildRunStatus::Preparing
@@ -162,6 +170,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
                 error_message: None,
                 logs: vec![],
             },
+            None,
         )
         .await
         .unwrap();
@@ -171,7 +180,12 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     );
     // Verify queued/started/terminal Activities. Late completion
     // must neither alter the result nor duplicate the terminal Activity.
-    assert!(!store.finish(&claim, &success_result('a')).await.unwrap());
+    assert!(
+        !store
+            .finish(&claim, &success_result('a'), None)
+            .await
+            .unwrap()
+    );
     let events: Vec<String> = sqlx::query_scalar(
         "SELECT eventtype FROM activityevents WHERE resourceid=$1 ORDER BY createdat,id",
     )
@@ -252,7 +266,10 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .unwrap()
             .unwrap();
         assert_eq!(claim.run.id, run.id);
-        store.finish(&claim, &success_result(marker)).await.unwrap();
+        store
+            .finish(&claim, &success_result(marker), None)
+            .await
+            .unwrap();
     }
     let retained: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM buildruns WHERE buildprojectid=$1")
@@ -300,7 +317,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     #[cfg(unix)]
     assert_local_build_skips_registry(&pool, &local_claim).await;
     store
-        .finish(&local_claim, &success_result('e'))
+        .finish(&local_claim, &success_result('e'), None)
         .await
         .unwrap();
     let result = PostgresStackBuildImageResolver::new(pool.clone())
@@ -398,7 +415,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .is_none()
     );
     store
-        .finish(&claimed[0], &success_result('e'))
+        .finish(&claimed[0], &success_result('e'), None)
         .await
         .unwrap();
     let next = store
@@ -407,7 +424,10 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .unwrap()
         .unwrap();
     assert_ne!(next.project.id, claimed[0].project.id);
-    store.finish(&next, &success_result('f')).await.unwrap();
+    store
+        .finish(&next, &success_result('f'), None)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM buildruns WHERE buildprojectid=ANY($1)")
         .bind(&pool_projects)
         .execute(&pool)
@@ -449,7 +469,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     ));
     let executor = LocalDockerBuildExecutor::new(
         git_execution,
-        citadel_adapters::connectors::docker::DockerEndpoint::Unix("/var/run/docker.sock".into()),
+        citadel_docker::client::DockerEndpoint::Unix("/var/run/docker.sock".into()),
         "docker-command-must-not-run",
         Arc::new(PostgresBuildSecretResolver::new(pool.clone(), target_guard_protector).unwrap()),
         Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone())),
@@ -699,7 +719,7 @@ async fn assert_local_build_skips_registry(
     ));
     let executor = LocalDockerBuildExecutor::new(
         git,
-        citadel_adapters::connectors::docker::DockerEndpoint::Unix("/unused.sock".into()),
+        citadel_docker::client::DockerEndpoint::Unix("/unused.sock".into()),
         docker.as_os_str(),
         Arc::new(PostgresBuildSecretResolver::new(pool.clone(), protector).unwrap()),
         Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone())),

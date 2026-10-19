@@ -40,7 +40,6 @@ use crate::DeploymentBindingResolverPort;
 use crate::DeploymentEntitlementPort;
 use crate::DeploymentRepository;
 use crate::DeploymentRuntime;
-use crate::EmptyDeploymentBindingResolver;
 use bindings::*;
 use mutations::{normalize_description, normalize_name};
 pub use updates::{DeploymentUpdateCheck, checkable_deployment_image};
@@ -81,6 +80,7 @@ impl DeploymentService {
         store: Arc<dyn DeploymentRepository>,
         runtime: Arc<dyn DeploymentRuntime>,
         entitlements: Arc<dyn DeploymentEntitlementPort>,
+        bindings: Arc<dyn DeploymentBindingResolverPort>,
         shutdown: CancellationToken,
     ) -> Self {
         Self {
@@ -89,7 +89,7 @@ impl DeploymentService {
             runtime,
             entitlements,
             notifier: Arc::new(NoopDeploymentChangeNotifier),
-            bindings: Arc::new(EmptyDeploymentBindingResolver),
+            bindings,
             shutdown,
             delete_timeout: Duration::from_secs(30),
             apply_timeout: Duration::from_secs(10 * 60),
@@ -110,15 +110,6 @@ impl DeploymentService {
         adoption: Arc<dyn crate::adoption::ContainerAdoptionPort>,
     ) -> Self {
         self.adoption = Some(adoption);
-        self
-    }
-
-    #[must_use]
-    pub fn with_binding_resolver(
-        mut self,
-        bindings: Arc<dyn DeploymentBindingResolverPort>,
-    ) -> Self {
-        self.bindings = bindings;
         self
     }
 

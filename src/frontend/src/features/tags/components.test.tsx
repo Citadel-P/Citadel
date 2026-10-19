@@ -32,11 +32,7 @@ describe('ResourceHeaderTagsEditor', () => {
     );
 
     const { user } = renderCitadel(
-      <ResourceHeaderTagsEditor
-        resourceType="SwarmService"
-        resourceId={serviceId}
-        tags={[tag]}
-      />,
+      <ResourceHeaderTagsEditor resourceType="SwarmService" resourceId={serviceId} tags={[tag]} />,
     );
 
     await user.click(await screen.findByTitle('Remove production tag'));

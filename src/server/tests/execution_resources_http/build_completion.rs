@@ -343,6 +343,7 @@ async fn verify_queued_snapshot(pool: &sqlx::PgPool, builds: &BuildService, proj
                 error_message: None,
                 logs: vec![],
             },
+            None,
         )
         .await
         .unwrap();

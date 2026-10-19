@@ -2,12 +2,9 @@ import { RegistryForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RegistryActions } from './actions';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
-import { useRead } from '@/lib/hooks';
+import { useRegistryConfig } from '../queries';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import {
-  RegistryConfigResponse,
-  AuthorizedRegistryView,
-} from '@/api/generated/api.types';
+import { RegistryConfigResponse, AuthorizedRegistryView } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
@@ -50,7 +47,7 @@ export const RegistryFormComponents: RequiredFormComponents = {
       },
     ],
     useData: function (id?: string): ResourceFormDataHookResult {
-      const { data, isLoading, error, refetch, isFetching } = useRead('getRegistryConfig', { id });
+      const { data, isLoading, error, refetch, isFetching } = useRegistryConfig(id);
       return { error, refetch, isFetching, item: data?.data, isLoading };
     },
   },

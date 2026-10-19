@@ -87,6 +87,28 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<StacksHt
         .normalized_routes(utoipa_axum::routes!(import))
 }
 
+// Source metadata is platform-scoped even when the caller may create Stacks.
+async fn authorize_import_platform(
+    state: &StacksHttpState,
+    principal: &ActorPrincipal,
+    platform_id: Uuid,
+    headers: &HeaderMap,
+) -> Result<(), crate::api::error::HttpError> {
+    api_result(
+        state
+            .identity
+            .authorize_resource(
+                principal,
+                ResourceType::Platform,
+                platform_id,
+                PermissionLevel::Read,
+                None,
+            )
+            .await,
+        headers,
+    )
+}
+
 async fn authorize_git_source(
     state: &StacksHttpState,
     principal: &ActorPrincipal,
@@ -371,19 +393,7 @@ async fn preflight(
     )?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     authorize_git_source(&state, &principal, &input.spec, &headers).await?;
-    api_result(
-        state
-            .identity
-            .authorize_resource(
-                &principal,
-                ResourceType::Platform,
-                input.platform_id,
-                PermissionLevel::Read,
-                None,
-            )
-            .await,
-        &headers,
-    )?;
+    authorize_import_platform(&state, &principal, input.platform_id, &headers).await?;
     let platform = api_result(
         state
             .platforms
@@ -476,19 +486,7 @@ async fn import_draft(
     let principal = api_result(require_actor(principal), &headers)?;
     let Path((platform_id, project_name)) = api_result(path.map_err(invalid_path), &headers)?;
     let Query(query) = api_result(query.map_err(invalid_query), &headers)?;
-    api_result(
-        state
-            .identity
-            .authorize_resource(
-                &principal,
-                ResourceType::Platform,
-                platform_id,
-                PermissionLevel::Read,
-                None,
-            )
-            .await,
-        &headers,
-    )?;
+    authorize_import_platform(&state, &principal, platform_id, &headers).await?;
     let value = api_result(
         state
             .stacks
@@ -538,6 +536,7 @@ async fn validate_import_draft(
         &headers,
     )?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
+    authorize_import_platform(&state, &principal, platform_id, &headers).await?;
     authorize_git_source(&state, &principal, &input.spec, &headers).await?;
     let value = api_result(
         state
@@ -589,6 +588,7 @@ async fn import(
         &headers,
     )?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
+    authorize_import_platform(&state, &principal, platform_id, &headers).await?;
     authorize_git_source(&state, &principal, &input.spec, &headers).await?;
     if input.stack_source != input.spec.clone().source() {
         return Err(crate::api::error::HttpError::from_parts(

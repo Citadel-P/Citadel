@@ -1,11 +1,27 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, FingerprintPattern, KeyRound, RefreshCw, ShieldAlert, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  FingerprintPattern,
+  KeyRound,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  XCircle,
+} from 'lucide-react';
 import { FormEvent, ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { RecoveryCodesPanel, TotpSetupPanel } from '@/features/auth/mfa/components';
@@ -83,7 +99,12 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
                 <RefreshCw className="size-4" />
                 Recovery Codes
               </Button>
-              <Button type="button" size="sm" variant="outline" disabled={!status?.canDisable} onClick={() => setDisableOpen(true)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!status?.canDisable}
+                onClick={() => setDisableOpen(true)}>
                 <ShieldOff className="size-4" />
                 Disable
               </Button>
@@ -175,7 +196,9 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
             <DialogTitle>Save recovery codes</DialogTitle>
             <DialogDescription>These codes replace the previous set and are shown only once.</DialogDescription>
           </DialogHeader>
-          {recoveryCodes && <RecoveryCodesPanel codes={recoveryCodes} actionLabel="Done" onContinue={() => setRecoveryCodes(null)} />}
+          {recoveryCodes && (
+            <RecoveryCodesPanel codes={recoveryCodes} actionLabel="Done" onContinue={() => setRecoveryCodes(null)} />
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -205,7 +228,9 @@ function MfaUnavailablePanel() {
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold">Authenticator app unavailable</p>
-          <p className="mt-1 text-sm text-muted-foreground">Citadel MFA applies to accounts that can sign in with a local password.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Citadel MFA applies to accounts that can sign in with a local password.
+          </p>
         </div>
       </div>
     </div>
@@ -243,7 +268,10 @@ function MfaSummaryCell({
   );
 }
 
-function getRecoveryState(enabled: boolean, remainingCodes: number): { label: string; tone: 'success' | 'warning' | 'muted' } {
+function getRecoveryState(
+  enabled: boolean,
+  remainingCodes: number,
+): { label: string; tone: 'success' | 'warning' | 'muted' } {
   if (!enabled) return { label: '-', tone: 'muted' };
   if (remainingCodes <= 0) return { label: 'No codes remaining', tone: 'warning' };
   if (remainingCodes <= 2) return { label: `${remainingCodes} remaining`, tone: 'warning' };
@@ -279,7 +307,8 @@ function SetupDialog({
           <DialogTitle>Enable two-factor authentication</DialogTitle>
           <DialogDescription>
             {setup?.step === 'password' && 'Confirm your password before creating a new authenticator setup.'}
-            {setup?.step === 'code' && 'Use your authenticator app to scan the QR code, then enter the six-digit TOTP code.'}
+            {setup?.step === 'code' &&
+              'Use your authenticator app to scan the QR code, then enter the six-digit TOTP code.'}
             {setup?.step === 'recovery' && 'Save these recovery codes before closing this dialog.'}
           </DialogDescription>
         </DialogHeader>
@@ -301,7 +330,9 @@ function SetupDialog({
             onSubmit={onSubmitCode}
           />
         )}
-        {setup?.step === 'recovery' && <RecoveryCodesPanel codes={setup.codes} actionLabel="Done" onContinue={onFinish} />}
+        {setup?.step === 'recovery' && (
+          <RecoveryCodesPanel codes={setup.codes} actionLabel="Done" onContinue={onFinish} />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -338,7 +369,8 @@ function SetupCodeStep({
           <div className="min-w-0">
             <p className="text-sm font-medium">Scan the QR code</p>
             <p className="text-sm text-muted-foreground">
-              Add this Citadel account in your authenticator app. Use the manual secret if the QR code cannot be scanned.
+              Add this Citadel account in your authenticator app. Use the manual secret if the QR code cannot be
+              scanned.
             </p>
           </div>
         </div>
@@ -352,7 +384,9 @@ function SetupCodeStep({
           </span>
           <div className="min-w-0">
             <p className="text-sm font-medium">Enter the TOTP code</p>
-            <p className="text-sm text-muted-foreground">Type the current six-digit code shown by your authenticator app.</p>
+            <p className="text-sm text-muted-foreground">
+              Type the current six-digit code shown by your authenticator app.
+            </p>
           </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -446,7 +480,9 @@ function DisableDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Disable two-factor authentication</DialogTitle>
-          <DialogDescription>Confirm with your password and either an authenticator code or a recovery code.</DialogDescription>
+          <DialogDescription>
+            Confirm with your password and either an authenticator code or a recovery code.
+          </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-3"
@@ -514,7 +550,9 @@ function RegenerateDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Regenerate recovery codes</DialogTitle>
-          <DialogDescription>Creating a new set immediately invalidates every existing recovery code.</DialogDescription>
+          <DialogDescription>
+            Creating a new set immediately invalidates every existing recovery code.
+          </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-3"
@@ -525,8 +563,19 @@ function RegenerateDialog({
             setCode('');
           }}>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Input type="password" value={password} placeholder="Current password" onChange={(event) => setPassword(event.target.value)} />
-          <Input value={code} inputMode="numeric" placeholder="Authenticator code" maxLength={6} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} />
+          <Input
+            type="password"
+            value={password}
+            placeholder="Current password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <Input
+            value={code}
+            inputMode="numeric"
+            placeholder="Authenticator code"
+            maxLength={6}
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+          />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
               Cancel

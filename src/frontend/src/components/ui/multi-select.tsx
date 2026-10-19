@@ -167,7 +167,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
       animationConfig,
       maxCount = 3,
       modalPopover = false,
-      asChild = false,
+      asChild: _asChild = false,
       className,
       hideSelectAll = false,
       searchable = true,
@@ -247,7 +247,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
       setIsPopoverOpen(false);
       setSearchValue('');
       onValueChange(defaultValue);
-    }, [defaultValue, onValueChange]);
+    }, [defaultValue, onValueChange, setSearchValue]);
 
     const buttonRef = React.useRef<HTMLButtonElement>(null);
 
@@ -535,7 +535,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
       if (!isPopoverOpen) {
         setSearchValue('');
       }
-    }, [isPopoverOpen]);
+    }, [isPopoverOpen, setSearchValue]);
 
     React.useEffect(() => {
       const selectedCount = selectedValues.length;

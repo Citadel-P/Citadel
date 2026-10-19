@@ -23,7 +23,6 @@ import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ActivitiesTab } from '@/features/activities';
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TabsWithActions as Tabs, TabActionsSlot } from '@/components/custom/tab-actions';
-import { LogViewer, type LogEntry } from '@/components/custom/common';
 import { MonacoEditor } from '@/lib/monaco';
 import { useRead } from '@/lib/hooks';
 import { TasksTable } from '@/features/swarm-resources/tasks/table';
@@ -47,6 +46,7 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { useContainersGroup } from '@/features/docker-resources/containers/hooks/useContainersGroup';
 import { getSwarmTaskIdFromContainerName, getTaskName } from '@/lib/utils';
 import { ServiceStats } from '@/features/swarm-resources/services/service-info/stats';
+import { LogViewer, type LogEntry } from '@/components/custom/log-viewer';
 
 export const SwarmServiceFormComponents: RequiredFormComponents<ManagedSwarmServiceView> = {
   AddForm: { Header: { title: 'Swarm Service' }, Content: () => <SwarmServiceForm mode="add" /> },

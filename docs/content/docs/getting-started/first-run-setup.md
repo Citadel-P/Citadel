@@ -32,7 +32,7 @@ password changes, and active browser sessions.
 Set the minimum password length in your Docker Compose `.env` file:
 
 ```dotenv
-Passwords__MinimumLength=15
+CITADEL_PASSWORDS_MINIMUM_LENGTH=15
 ```
 
 The minimum defaults to **15** and accepts values from **8 to 128**. The maximum
@@ -48,7 +48,7 @@ Two-factor authentication is optional by default. It can be enabled later from
 To require the initial administrator to enroll before entering Citadel, set:
 
 ```text
-Mfa__Policy=RequiredForAdministrators
+CITADEL_MFA_POLICY=RequiredForAdministrators
 ```
 
 The available policies are:
@@ -68,9 +68,9 @@ password is not accepted directly through an environment variable.
 Set all three options:
 
 ```text
-Bootstrap__AdminName=citadel-admin
-Bootstrap__AdminEmail=admin@example.com
-Bootstrap__AdminPasswordFile=/run/secrets/citadel-admin-password
+CITADEL_BOOTSTRAP_ADMIN_NAME=citadel-admin
+CITADEL_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/citadel-admin-password
 ```
 
 Mount the password file read-only into the server container:

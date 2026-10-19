@@ -1,6 +1,6 @@
 use super::{strings, text};
-use citadel_adapters::connectors::docker::projection as d;
 use citadel_contracts::citadel::swarm::v1::*;
+use citadel_docker::client::projection as d;
 use prost_types::Timestamp;
 use serde_json::Value;
 pub(super) fn time(v: &str) -> Option<Timestamp> {

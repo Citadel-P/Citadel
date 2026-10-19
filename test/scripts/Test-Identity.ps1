@@ -48,11 +48,11 @@ function Start-IdentityServer {
         --volume "${buildCacheVolume}:/source/target:ro" `
         --volume '/var/run/docker.sock:/var/run/docker.sock:ro' `
         --workdir /source `
-        --env "DATABASE_URL=postgres://citadel_identity:citadel_identity@${postgres}:5432/$serverDatabase" `
-        --env 'Transport__Mode=Disabled' `
-        --env 'Jwt__Key=identity-only-jwt-key-at-least-32-bytes' `
-        --env 'Secrets__EncryptionKey=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' `
-        --env 'JobConfiguration__MonitoringInterval=1' `
+        --env "CITADEL_DATABASE_URL=postgres://citadel_identity:citadel_identity@${postgres}:5432/$serverDatabase" `
+        --env 'CITADEL_TRANSPORT_MODE=Disabled' `
+        --env 'CITADEL_JWT_KEY=identity-only-jwt-key-at-least-32-bytes' `
+        --env 'CITADEL_SECRETS_ENCRYPTION_KEY=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' `
+        --env 'CITADEL_STATS_POLL_INTERVAL_SECONDS=1' `
         $rustImage `
         /source/target/debug/citadel-server serve | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'The identity server did not start.' }

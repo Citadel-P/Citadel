@@ -37,6 +37,8 @@ export function useHealthClock() {
     return () => clearInterval(timer);
   }, []);
   // A newly received snapshot can be newer than the last timer tick.
+  // This timer-driven display samples wall time on render so a new observation is not mistaken for a future timestamp.
+  // eslint-disable-next-line react-hooks/purity
   return Date.now();
 }
 export function healthTone(status: `${Status}` | 'Partial') {

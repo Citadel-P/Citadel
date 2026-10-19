@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateOidcProvider {
     pub name: String,
@@ -20,7 +20,7 @@ pub struct CreateOidcProvider {
     pub default_role_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchOidcProvider {
     #[serde(default)]
@@ -76,4 +76,26 @@ pub struct PatchOidcProviderMetadata {
 pub struct TestOidcDiscovery {
     pub provider_id: Option<Uuid>,
     pub issuer: Option<String>,
+}
+
+impl std::fmt::Debug for CreateOidcProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateOidcProvider")
+            .field("name", &self.name)
+            .field("issuer", &self.issuer)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for PatchOidcProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PatchOidcProvider")
+            .field("name", &self.name)
+            .field("issuer", &self.issuer)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }

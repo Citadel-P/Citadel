@@ -78,6 +78,7 @@ pub(super) async fn verify(
             ),
             Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
             Arc::new(CompletingRuntime),
+            Arc::new(citadel_swarm_services::EmptySwarmServiceBindingResolver),
             CancellationToken::new(),
         )
         .with_image_digests(digests.clone())

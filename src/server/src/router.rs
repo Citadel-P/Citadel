@@ -31,7 +31,10 @@ pub fn router(
     let ServerComponents {
         docker,
         updates,
-        pool,
+        database_health,
+        git_repositories,
+        backup_coverage,
+        edge_service,
         cancellation,
         readiness,
         metrics,
@@ -53,7 +56,6 @@ pub fn router(
         agent_setup,
         agent_setup_context,
         edge_context,
-        edge_registry,
         alert_store,
         alert_delivery,
         automation,
@@ -69,7 +71,7 @@ pub fn router(
         deployments,
         swarm_services,
         stacks,
-        mut platform_state,
+        platform_state,
         realtime,
         license_realtime_service,
         search,
@@ -78,19 +80,11 @@ pub fn router(
         audit,
         ..
     } = state;
-    let backup_coverage = Arc::new(
-        citadel_server::api::resources::backups::coverage::BackupCoverageService {
-            backups: backups.clone(),
-            identity: identity.clone(),
-            volume_coverage: platform_state.volume_coverage.clone(),
-        },
-    );
-    platform_state.backup_coverage = Some(backup_coverage.clone());
     let app = citadel_server::diagnostics_http::router(
         citadel_server::diagnostics_http::DiagnosticsHttpState {
             readiness: Arc::clone(&readiness),
             metrics,
-            database: Arc::new(citadel_adapters::persistence::postgres::connection::PostgresDatabaseHealth(pool.clone())),
+            database: database_health,
             docker,
         },
     )
@@ -147,11 +141,7 @@ pub fn router(
     .merge(citadel_server::api::routes::git_repositories::router(
         citadel_server::api::routes::git_repositories::GitRepositoriesHttpState {
             identity: Arc::clone(&identity),
-            repository: Arc::new(
-            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
-                pool.clone(),
-            ),
-        ),
+            repository: git_repositories.clone(),
             execution: Arc::clone(&git_execution),
             realtime: realtime_hub.clone(),
             cancellation: cancellation.clone(),
@@ -184,7 +174,11 @@ pub fn router(
             cancellation: cancellation.clone(),
         },
     ))
-    .merge(citadel_server::api::routes::resource_copies::router(citadel_server::api::routes::resource_copies::ResourceCopiesHttpState { copies: copies.clone() }))
+    .merge(citadel_server::api::routes::resource_copies::router(
+        citadel_server::api::routes::resource_copies::ResourceCopiesHttpState {
+            copies: copies.clone(),
+        },
+    ))
     .merge(alerts::router(alerts::AlertsHttpState {
         identity: Arc::clone(&identity),
         store: alert_store,
@@ -198,8 +192,8 @@ pub fn router(
     }))
     .merge(swarm_services_http::router(
         swarm_services_http::SwarmServicesHttpState {
-        copy_eligibility: Some(copies.clone()),
-        backup_coverage: Some(backup_coverage.clone()),
+            copy_eligibility: Some(copies.clone()),
+            backup_coverage: Some(backup_coverage.clone()),
             identity: Arc::clone(&identity),
             services: Arc::clone(&swarm_services),
         },
@@ -227,15 +221,13 @@ pub fn router(
         secrets,
         realtime: realtime_hub.clone(),
     }))
-    .merge(git_catalog::catalog_router(git_catalog::GitCatalogHttpState {
-        identity: Arc::clone(&identity),
-        git_repositories: Arc::new(
-            citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence::new(
-                pool.clone(),
-            ),
-        ),
-        realtime: realtime_hub.clone(),
-    }))
+    .merge(git_catalog::catalog_router(
+        git_catalog::GitCatalogHttpState {
+            identity: Arc::clone(&identity),
+            git_repositories,
+            realtime: realtime_hub.clone(),
+        },
+    ))
     .merge({
         platforms_http::router(platform_state.clone())
             .layer(axum::Extension(agent_setup))
@@ -270,10 +262,6 @@ pub fn router(
             },
         ));
     }
-    let edge_service = citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer::new(
-        citadel_adapters::connectors::edge::EdgeIntake::new(citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone()), edge_registry.clone()),
-    ).max_decoding_message_size(citadel_adapters::connectors::edge::MAX_PAYLOAD + 4096)
-        .max_encoding_message_size(citadel_adapters::connectors::edge::MAX_PAYLOAD + 4096);
     let edge_routes = tonic::service::Routes::new(edge_service).into_axum_router();
     app = app.layer(axum::Extension(edge_context));
     let mut edge_transport = config.transport.clone();
@@ -293,7 +281,9 @@ pub fn router(
     #[cfg(panic = "unwind")]
     let app = app.layer(CatchPanicLayer::custom(transport::panic_response));
     let app = transport::secure_router(
-        app.layer(TraceLayer::new_for_http()),
+        app.layer(
+            TraceLayer::new_for_http().make_span_with(citadel_server::http_trace::request_span),
+        ),
         &config.transport,
         Arc::clone(&readiness),
     )?;

@@ -1,8 +1,4 @@
-import {
-  LicenseCapability,
-  PagedResultServiceAccountView,
-  ServiceAccountView,
-} from '@/api/generated/api.types';
+import { LicenseCapability, PagedResultServiceAccountView, ServiceAccountView } from '@/api/generated/api.types';
 import { PagedDataTable } from '@/components/custom/common';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';

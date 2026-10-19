@@ -282,6 +282,8 @@ export const FieldInput = ({
       max={max}
       step={step}
       ref={ref}
+      // Explicit caller opt-in for a newly opened editor; ordinary fields never steal focus.
+      // eslint-disable-next-line jsx-a11y/no-autofocus
       autoFocus={autoFocus}
       value={value ?? ''}
       id={id}
@@ -1009,8 +1011,6 @@ export function FormShell<T>({
   confirmSave?: (payload: T) => Promise<boolean>;
 }) {
   const draftKey = useFormDraftKey(unscopedDraftKey);
-  const updateRef = React.useRef(update);
-  updateRef.current = update;
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1169,6 +1169,8 @@ export function FormShell<T>({
     }
     persistDraft(draftKey, draftVersion, restored);
     setUpdate((prev) => deepMerge<Partial<T>>(prev ?? {}, restored));
+    // Synchronize the form banner with the draft restored from external storage.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraftInfo({ hasDraft: true, savedAt: stored.savedAt });
     setDraftLoadedBanner(true);
   }, [draftKey, draftVersion, setUpdate, safeDraft]);
@@ -1183,7 +1185,7 @@ export function FormShell<T>({
         return { ...prev, [key]: true };
       });
 
-      const current = updateRef.current ?? {};
+      const current = update ?? {};
       const resolved = typeof partialOrUpdater === 'function' ? partialOrUpdater(current) : partialOrUpdater;
       const next = deepMerge<Partial<T>>(current, resolved);
 
@@ -1202,24 +1204,22 @@ export function FormShell<T>({
         }
       }
     },
-    [disabled, setUpdate, draftKey, draftVersion, safeDraft],
+    [disabled, update, setUpdate, draftKey, draftVersion, safeDraft],
   );
 
-  // Use a Ref for handleChange to ensure the cached handlers always call the latest version
-  // without needing to be re-created themselves.
-  const handleChangeRef = useRef(handleChange);
-  handleChangeRef.current = handleChange;
-
-  const fieldHandlersRef = useRef<Map<string, FieldChange<T>>>(new Map());
-
-  const getFieldHandler = useCallback((key: string) => {
-    if (!fieldHandlersRef.current.has(key)) {
-      fieldHandlersRef.current.set(key, (partialOrUpdater) => {
-        handleChangeRef.current(key, partialOrUpdater);
-      });
-    }
-    return fieldHandlersRef.current.get(key)!;
-  }, []);
+  const fieldHandlers = useMemo(
+    () =>
+      new Map<string, FieldChange<T>>(
+        Object.values(fieldMap).map((field) => [
+          field.key,
+          ((partialOrUpdater) => {
+            handleChange(field.key, partialOrUpdater);
+          }) as FieldChange<T>,
+        ]),
+      ),
+    [fieldMap, handleChange],
+  );
+  const getFieldHandler = (key: string) => fieldHandlers.get(key)!;
 
   const reset = useCallback(() => {
     if (onReset) {
@@ -1697,7 +1697,7 @@ function areValuesEqual(a: any, b: any): boolean {
 
   try {
     return JSON.stringify(a) === JSON.stringify(b);
-  } catch (e) {
+  } catch {
     return false;
   }
 }

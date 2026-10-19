@@ -80,23 +80,23 @@ Edge Agent -> HTTPS proxy -> Core HTTP/2 port 8001
 Set the Core environment:
 
 ```dotenv
-Transport__Mode=ReverseProxy
-Transport__PublicUrl=https://citadel.example.com
-Transport__ApiPort=8000
-Transport__EdgeGrpcPort=8001
+CITADEL_TRANSPORT_MODE=ReverseProxy
+CITADEL_PUBLIC_URL=https://citadel.example.com
+CITADEL_HTTP_LISTEN_PORT=8000
+CITADEL_EDGE_GRPC_LISTEN_PORT=8001
 
-EdgeAgent__PublicGrpcUrl=https://citadel.example.com
+CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com
 
-Transport__ForwardedHeaders__KnownProxies=172.30.0.2
-Transport__ForwardedHeaders__ForwardLimit=1
-AllowedHosts=citadel.example.com;localhost
+CITADEL_HTTP_TRUSTED_PROXIES=172.30.0.2
+CITADEL_HTTP_FORWARDED_LIMIT=1
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
 
-AgentTransport__AllowInsecure=true
+CITADEL_CORE_AGENT_ALLOW_INSECURE=true
 ```
 
-Set `Transport__ForwardedHeaders__KnownProxies` to the stable address of the
+Set `CITADEL_HTTP_TRUSTED_PROXIES` to the stable address of the
 immediate proxy. Multiple values are comma-separated. Use
-`Transport__ForwardedHeaders__KnownNetworks` only for a dedicated, isolated
+`CITADEL_HTTP_TRUSTED_PROXY_NETWORKS` only for a dedicated, isolated
 proxy subnet whose containers cannot be joined by untrusted workloads.
 Configure at least one known proxy or known network.
 
@@ -159,18 +159,18 @@ CITADEL_BIND_ADDRESS=0.0.0.0
 CITADEL_HTTP_PORT=443
 CITADEL_EDGE_PORT=8443
 
-Transport__Mode=Direct
-Transport__PublicUrl=https://citadel.example.com
-Transport__ApiPort=8000
-Transport__EdgeGrpcPort=8001
+CITADEL_TRANSPORT_MODE=Direct
+CITADEL_PUBLIC_URL=https://citadel.example.com
+CITADEL_HTTP_LISTEN_PORT=8000
+CITADEL_EDGE_GRPC_LISTEN_PORT=8001
 
-EdgeAgent__PublicGrpcUrl=https://citadel.example.com:8443
-AllowedHosts=citadel.example.com;localhost
+CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com:8443
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
 
-Transport__Certificate__Path=/etc/citadel/tls/core-fullchain.pem
-Transport__Certificate__PrivateKeyPath=/etc/citadel/tls/core-key.pem
+CITADEL_TLS_CERTIFICATE_PATH=/etc/citadel/tls/core-fullchain.pem
+CITADEL_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/core-key.pem
 
-AgentTransport__AllowInsecure=true
+CITADEL_CORE_AGENT_ALLOW_INSECURE=true
 ```
 
 From your installation directory, include the direct-TLS overlay to mount the certificates.
@@ -191,22 +191,22 @@ The PEM certificate file should contain the leaf certificate and required
 intermediate certificates. The private key must match it.
 
 The same Core certificate serves the API and Edge gRPC listeners. It must be
-valid for the hosts in both `Transport__PublicUrl` and
-`EdgeAgent__PublicGrpcUrl`.
+valid for the hosts in both `CITADEL_PUBLIC_URL` and
+`CITADEL_EDGE_PUBLIC_GRPC_URL`.
 
 ## Local development
 
 Use cleartext only when the network is intentionally isolated:
 
 ```dotenv
-Transport__Mode=Disabled
-Transport__PublicUrl=http://localhost:18000
-Transport__ApiPort=8000
-Transport__EdgeGrpcPort=8001
-EdgeAgent__PublicGrpcUrl=http://localhost:18001
-AllowedHosts=localhost;host.docker.internal
+CITADEL_TRANSPORT_MODE=Disabled
+CITADEL_PUBLIC_URL=http://localhost:18000
+CITADEL_HTTP_LISTEN_PORT=8000
+CITADEL_EDGE_GRPC_LISTEN_PORT=8001
+CITADEL_EDGE_PUBLIC_GRPC_URL=http://localhost:18001
+CITADEL_HTTP_ALLOWED_HOSTS=localhost;host.docker.internal
 
-AgentTransport__AllowInsecure=true
+CITADEL_CORE_AGENT_ALLOW_INSECURE=true
 ```
 
 The supplied Compose setup maps the container ports to host ports `18000` and
@@ -219,7 +219,7 @@ an untrusted LAN or the internet.
 Regular Platform Agents and inbound self-managed Build Pool Agents are gRPC
 servers. They authenticate Core requests over HTTP by default and require no
 certificate variables. To require encrypted connections instead, set
-`AgentTransport__AllowInsecure=false` on Core and configure direct TLS on the
+`CITADEL_CORE_AGENT_ALLOW_INSECURE=false` on Core and configure direct TLS on the
 Agent's existing port `9000`.
 
 Example Agent environment:
@@ -229,7 +229,7 @@ CITADEL_AGENT_TLS_MODE=Direct
 CITADEL_AGENT_PORT=9000
 CITADEL_AGENT_TLS_CERTIFICATE_PATH=/etc/citadel/tls/agent-fullchain.pem
 CITADEL_AGENT_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/agent-key.pem
-HUB_PUBLIC_KEY=the-public-key-shown-by-citadel
+CITADEL_CORE_PUBLIC_KEY=the-public-key-shown-by-citadel
 ```
 
 Mount the files and publish the Agent. Replace `AGENT_IMAGE` with the complete
@@ -250,7 +250,7 @@ docker run -d \
   -e CITADEL_AGENT_PORT=9000 \
   -e CITADEL_AGENT_TLS_CERTIFICATE_PATH=/etc/citadel/tls/agent-fullchain.pem \
   -e CITADEL_AGENT_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/agent-key.pem \
-  -e HUB_PUBLIC_KEY="..." \
+  -e CITADEL_CORE_PUBLIC_KEY="..." \
   AGENT_IMAGE
 ```
 
@@ -261,7 +261,7 @@ or IP covered by the certificate:
 https://docker-host.internal.example:9000
 ```
 
-Core still signs every Agent request. TLS does not replace `HUB_PUBLIC_KEY`.
+Core still signs every Agent request. TLS does not replace `CITADEL_CORE_PUBLIC_KEY`.
 
 ### Private CA for regular Agents
 
@@ -278,7 +278,7 @@ services:
 Set:
 
 ```dotenv
-AgentTransport__CaCertificatePath=/etc/citadel/tls/agent-ca.pem
+CITADEL_CORE_AGENT_CA_CERTIFICATE_PATH=/etc/citadel/tls/agent-ca.pem
 ```
 
 The bundle may contain multiple CA certificates. Citadel still validates the
@@ -296,7 +296,7 @@ CITADEL_CORE_URL=https://citadel.example.com
 ```
 
 Use the URL generated by Citadel enrollment. It points to
-`EdgeAgent__PublicGrpcUrl`, which may differ from the browser URL.
+`CITADEL_EDGE_PUBLIC_GRPC_URL`, which may differ from the browser URL.
 
 ### Private CA for Edge Agents
 
@@ -329,14 +329,14 @@ HTTPS URL.
 Keep these values consistent with the public deployment:
 
 ```dotenv
-Jwt__Issuer=https://citadel.example.com
-Jwt__Audience=https://citadel.example.com
+CITADEL_JWT_ISSUER=https://citadel.example.com
+CITADEL_JWT_AUDIENCE=https://citadel.example.com
 ```
 
 When explicit CORS origins are needed, configure them by index:
 
 ```dotenv
-Cors__0=https://citadel.example.com
+CITADEL_HTTP_CORS_ORIGIN_0=https://citadel.example.com
 ```
 
 Changing JWT issuer or audience invalidates existing access and refresh tokens.
@@ -364,15 +364,15 @@ Citadel warns at startup when a direct certificate expires within 30 days.
 
 ### Core rejects proxy configuration
 
-Confirm that `Transport__ForwardedHeaders__KnownProxies` or
-`Transport__ForwardedHeaders__KnownNetworks` identifies the immediate proxy-to-
+Confirm that `CITADEL_HTTP_TRUSTED_PROXIES` or
+`CITADEL_HTTP_TRUSTED_PROXY_NETWORKS` identifies the immediate proxy-to-
 Core connection. Do not enter public client networks.
 
 ### OIDC redirects to HTTP
 
 Confirm:
 
-- `Transport__PublicUrl` uses HTTPS;
+- `CITADEL_PUBLIC_URL` uses HTTPS;
 - Core is in `ReverseProxy` mode;
 - the immediate proxy is trusted;
 - the proxy sends `X-Forwarded-Proto: https`.
@@ -399,7 +399,7 @@ alternative names. Changing only the URL scheme does not fix a name mismatch.
 ### Agent endpoint is rejected as insecure
 
 Use an `https://` Agent endpoint, or set
-`AgentTransport__AllowInsecure=true` when the Agent is reachable only through
+`CITADEL_CORE_AGENT_ALLOW_INSECURE=true` when the Agent is reachable only through
 a trusted private network or VPN.
 
 Citadel does not provide a certificate-validation bypass.
@@ -407,7 +407,7 @@ Citadel does not provide a certificate-validation bypass.
 ## Request and login limits
 
 Core limits each client IP to 600 requests per minute by default, configurable
-with `CITADEL_RUST_REQUESTS_PER_MINUTE`. Login, initial setup and public MFA
+with `CITADEL_HTTP_REQUESTS_PER_MINUTE`. Login, initial setup and public MFA
 requests also share a 20-attempt per-client minute budget. Password verification
 allows five attempts per account per minute; a successful verification resets
 that account's budget. Username and email aliases share the same account limit.
@@ -438,7 +438,7 @@ developer tools; it **does not block** scripts, workers or connections. No repor
 endpoint is configured, so violation details are not uploaded to a collector.
 Monaco's bundled workers are allowed through `worker-src 'self' blob:`. Inline
 styles remain allowed for Monaco, charts, Radix positioning and terminal rendering.
-`connect-src` includes the page's own origin, `Transport__PublicUrl`, and that URL's
+`connect-src` includes the page's own origin, `CITADEL_PUBLIC_URL`, and that URL's
 explicit `ws://` or `wss://` equivalent for realtime, logs and terminal sessions.
 Configure the public URL to match the externally reachable API.
 

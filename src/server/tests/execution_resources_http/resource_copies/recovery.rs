@@ -11,6 +11,9 @@ struct FaultyStore {
     inner: PostgresCopyRepository,
     lose_claim: AtomicBool,
     completion_attempts: AtomicUsize,
+    lose_finalization: AtomicBool,
+    fail_plan: AtomicBool,
+    fail_read: AtomicBool,
 }
 impl CopyRepository for FaultyStore {
     fn targets(
@@ -102,7 +105,14 @@ impl CopyRepository for FaultyStore {
         self.inner.start(actor, id)
     }
     fn get(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
-        self.inner.get(actor, id)
+        Box::pin(async move {
+            if self.fail_read.swap(false, Ordering::SeqCst) {
+                return Err(CopyError::Storage(
+                    "Authorization storage unavailable".into(),
+                ));
+            }
+            self.inner.get(actor, id).await
+        })
     }
     fn cleanup(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
         self.inner.cleanup(actor, id)
@@ -122,7 +132,12 @@ impl CopyRepository for FaultyStore {
         self.inner.pending()
     }
     fn plan(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyPlan, CopyError>> {
-        self.inner.plan(actor, id)
+        Box::pin(async move {
+            if self.fail_plan.swap(false, Ordering::SeqCst) {
+                return Err(CopyError::Storage("Plan storage unavailable".into()));
+            }
+            self.inner.plan(actor, id).await
+        })
     }
     fn advance(
         &self,
@@ -130,7 +145,17 @@ impl CopyRepository for FaultyStore {
         id: Uuid,
         storage_result: Option<Result<(), String>>,
     ) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
-        self.inner.advance(actor, id, storage_result)
+        Box::pin(async move {
+            let progress = self.inner.advance(actor, id, storage_result).await?;
+            if progress.status == CopyStatus::Succeeded
+                && self.lose_finalization.swap(false, Ordering::SeqCst)
+            {
+                return Err(CopyError::Storage(
+                    "Lost finalization acknowledgement".into(),
+                ));
+            }
+            Ok(progress)
+        })
     }
 }
 #[derive(Default)]
@@ -215,6 +240,9 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
         inner: PostgresCopyRepository::new(pool.clone()),
         lose_claim: AtomicBool::new(true),
         completion_attempts: AtomicUsize::new(0),
+        lose_finalization: AtomicBool::new(false),
+        fail_plan: AtomicBool::new(false),
+        fail_read: AtomicBool::new(false),
     });
     let storage = Arc::new(PausedStorage::default());
     let backups = Arc::new(BackupService::new(
@@ -329,4 +357,105 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
         "Failed"
     );
     assert_eq!(storage.cancelled.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL"]
+async fn finalization_storage_faults_and_lost_commit_acknowledgements_reconcile_same_copy() {
+    let _fixture = FIXTURE_LOCK.lock().await;
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .unwrap();
+    let admin = seed_administrator(&pool).await;
+    let actor = admin.actor_id;
+    let ids = seed_dependencies(&pool, actor).await;
+    let deployment = PostgresDeploymentRepository::new(pool.clone()).create(actor, true, &citadel_deployments::CreateDeployment {
+        name: format!("finalization-source-{}", Uuid::now_v7().simple()), platform_id: ids.platform,
+        description: None, tag_ids: vec![], duplicate_source: None,
+        spec: serde_json::from_value(json!({"image":{"$type":"Local","imageId":"fixture"},"volumes":["fixture:/data"]})).unwrap(),
+    }).await.unwrap();
+    let store = Arc::new(FaultyStore {
+        inner: PostgresCopyRepository::new(pool.clone()),
+        lose_claim: AtomicBool::new(false),
+        completion_attempts: AtomicUsize::new(3),
+        lose_finalization: AtomicBool::new(false),
+        fail_plan: AtomicBool::new(false),
+        fail_read: AtomicBool::new(false),
+    });
+    let storage = Arc::new(PausedStorage::default());
+    let backups = Arc::new(BackupService::new(
+        Arc::new(PostgresBackupPersistence::new(pool.clone())),
+        Arc::new(FakeBackupExecutor),
+        Arc::new(FakeBackupPlanner::default()),
+        Duration::minutes(5),
+        Arc::new(AllowBackupExecution),
+    ));
+    let copies = CopyService::new(store.clone(), storage.clone(), backups, Arc::new(|_, _| {}));
+    let source = store
+        .source(actor, CopyKind::Deployment, deployment.id)
+        .await
+        .unwrap();
+    let id = queue(&store.inner, actor, &source).await;
+    let (_, job) = store.inner.claim_current(actor, id).await.unwrap().unwrap();
+    store
+        .inner
+        .finish_current(actor, id, job.id, Ok(()))
+        .await
+        .unwrap();
+    let before = store.get(actor, id).await.unwrap();
+    let cancel = CancellationToken::new();
+    for flag in [&store.fail_read, &store.fail_plan] {
+        flag.store(true, Ordering::SeqCst);
+        assert!(matches!(
+            copies.process(&cancel).await,
+            Err(CopyError::Storage(_))
+        ));
+        assert_eq!(
+            store.get(actor, id).await.unwrap().status,
+            CopyStatus::Restoring
+        );
+    }
+    // Only this disposable fixture's reviewed destination triggers the SQL fault.
+    let function = format!("copy_fault_{}", Uuid::now_v7().simple());
+    let name = before.name.replace("'", "''");
+    // Identifiers contain only a fixed prefix and UUID hex; the fixture name is SQL-escaped.
+    sqlx::raw_sql(sqlx::AssertSqlSafe(format!("CREATE FUNCTION {function}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name = '{name}' THEN RAISE EXCEPTION 'controlled finalization storage fault' USING ERRCODE = '08006'; END IF; RETURN NEW; END $$; CREATE TRIGGER {function} BEFORE INSERT ON deployments FOR EACH ROW EXECUTE FUNCTION {function}()")))
+        .execute(&pool).await.unwrap();
+    let failed = store.inner.advance(actor, id, Some(Ok(()))).await;
+    // Remove the fault before asserting, including when production returns the wrong result.
+    sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+        "DROP TRIGGER {function} ON deployments; DROP FUNCTION {function}()"
+    )))
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(failed, Err(CopyError::Storage(_))));
+    let pending = store.get(actor, id).await.unwrap();
+    assert_eq!(pending.status, CopyStatus::Restoring);
+    assert!(pending.destination_id.is_none());
+    assert_eq!(pending.restores[0].id, before.restores[0].id);
+    assert_eq!(pending.restores[0].status, "Succeeded");
+    store.lose_finalization.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        copies.process(&cancel).await,
+        Err(CopyError::Storage(_))
+    ));
+    let committed = store.get(actor, id).await.unwrap();
+    assert_eq!(committed.status, CopyStatus::Succeeded);
+    copies.process(&cancel).await.unwrap();
+    assert_eq!(
+        store.get(actor, id).await.unwrap().destination_id,
+        committed.destination_id
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM deployments WHERE name=$1")
+        .bind(&before.name)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    assert_eq!(storage.executions.load(Ordering::SeqCst), 0);
 }

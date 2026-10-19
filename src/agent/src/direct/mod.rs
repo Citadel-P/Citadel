@@ -17,11 +17,12 @@ mod swarm_spec;
 mod volumes;
 
 use axum::{Router, middleware};
-use citadel_adapters::connectors::docker::{DockerClient, DockerError};
 use citadel_contracts::citadel::{
     networks::v1::network_service_server::NetworkServiceServer,
     volumes::v1::volume_service_server::VolumeServiceServer,
 };
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::DockerError;
 use ed25519_dalek::VerifyingKey;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;

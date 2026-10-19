@@ -56,8 +56,7 @@ async fn lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_contain
         resource: None,
         stream_recovered: false,
         swarm_scope: false,
-        kind: citadel_adapters::connectors::docker::events::classify("container", action, "local")
-            .unwrap(),
+        kind: citadel_docker::client::events::classify("container", action, "local").unwrap(),
         platform_id: None,
         container_id: Some(id.into()),
         container_state: None,

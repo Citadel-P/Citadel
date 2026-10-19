@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use subtle::ConstantTimeEq;
-use tokio::sync::Semaphore;
+mod credential_work;
+pub use credential_work::CredentialWork;
 use uuid::Uuid;
 
 mod read_models;

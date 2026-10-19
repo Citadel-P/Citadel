@@ -309,7 +309,7 @@ it('uses the shared multi-delete list and click-to-copy confirmation', async () 
   expect(dialog.getByRole('heading', { name: 'Confirm Delete' })).toBeVisible();
   expect(dialog.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['app:latest', 'redis:latest']);
   expect(dialog.getByText('You may click the name in bold to copy it')).toBeVisible();
-  await user.click(dialog.getByText('Delete', { selector: 'b' }));
+  await user.click(dialog.getByRole('button', { name: 'Copy Delete' }));
   expect(copy).toHaveBeenCalledWith('Delete');
   expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled();
   await user.type(dialog.getByRole('textbox', { name: 'Enter Delete to confirm' }), 'Delete');

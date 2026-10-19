@@ -15,7 +15,7 @@ import { buildContainerRows } from './table';
 vi.mock('./actions', () => ({
   isContainerStackGroup: (resource: { isStackGroup?: boolean }) => resource.isStackGroup === true,
 }));
-vi.mock('./container-info/', () => ({ ImageName: () => null }));
+vi.mock('./container-info/image-name', () => ({ ImageName: () => null }));
 
 const container = (containerId: string): ContainerView =>
   ({

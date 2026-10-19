@@ -28,7 +28,7 @@ class PublicDeploymentComposeTests(unittest.TestCase):
                 ["docker", "compose", "--env-file", ".env", "--env-file", ".release.env",
                  "-f", "docker-compose.yml", "-f", "demo.override.yml", "config", "--format", "json"],
                 cwd=path, env={k: v for k, v in os.environ.items()
-                               if not k.startswith(("CITADEL_", "COMPOSE_", "PG_", "Transport__"))},
+                               if not k.startswith(("CITADEL_", "COMPOSE_", "PG_"))},
                 capture_output=True, text=True, check=True, timeout=30)
             value = json.loads(result.stdout)
             self.assertEqual(value["services"]["server"]["image"], core)
@@ -80,6 +80,73 @@ class PublicDeploymentComposeTests(unittest.TestCase):
                             rootless={"user": "citadel-demo", "uid": 1102, "network": network})
         self.assertEqual(value["networks"]["default"]["ipam"]["config"], [network])
 
+
+
+@unittest.skipUnless(shutil.which("docker"), "Docker Compose is needed to render configuration")
+class CanonicalConfigurationComposeTests(unittest.TestCase):
+    def render(self, root, files, overrides=None):
+        result = subprocess.run(
+            ["docker", "compose", "--env-file", str(root / "fixture.env"),
+             *[argument for file in files for argument in ("-f", str(root / file))],
+             "config", "--format", "json"],
+            cwd=root, env={**{k: v for k, v in os.environ.items()
+                          if not k.startswith(("CITADEL_", "COMPOSE_", "PG_"))}, **(overrides or {})},
+            capture_output=True, text=True, check=True, timeout=30)
+        return json.loads(result.stdout)
+
+    def configuration(self, root):
+        value = ("PG_USER=fixture\nPG_PASSWORD=literal$not-expanded\nPG_DATABASE=fixture\n"
+                 "CITADEL_TRANSPORT_MODE=Disabled\nCITADEL_HTTP_PORT=18443\nCITADEL_EDGE_PORT=18444\n"
+                 "CITADEL_HTTP_LISTEN_PORT=8443\nCITADEL_EDGE_GRPC_LISTEN_PORT=8444\n"
+                 "CITADEL_STATIC_ROOT=/custom/frontend\nCITADEL_TLS_CERTIFICATE_PATH=/etc/citadel/tls/core.pem\n"
+                 "CITADEL_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/key.pem\n")
+        (root / "fixture.env").write_text(value)
+        return value
+
+    def test_both_packages_and_direct_tls_keep_ports_and_raw_values_consistent(self):
+        for package in ("deploy", "deploy/install"):
+            with self.subTest(package=package), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "docker-compose.yml").write_text((ROOT / package / "docker-compose.yml").read_text())
+                (root / "direct.yml").write_text((ROOT / "deploy/compose.direct-tls.yml").read_text())
+                (root / ".env").write_text(self.configuration(root))
+                for overlay in ([], ["direct.yml"]):
+                    server = self.render(root, ["docker-compose.yml", *overlay])["services"]["server"]
+                    ports = {int(p["published"]): p["target"] for p in server["ports"]}
+                    self.assertEqual(ports, {18443: 8443, 18444: 8444})
+                    env = server["environment"]
+                    self.assertEqual(env["CITADEL_HTTP_LISTEN_PORT"], "8443")
+                    self.assertEqual(env["CITADEL_EDGE_GRPC_LISTEN_PORT"], "8444")
+                    self.assertEqual(env["CITADEL_STATIC_ROOT"], "/custom/frontend")
+                    # Compose escapes literal dollars when serializing a reusable config.
+                    self.assertEqual(env["PG_PASSWORD"], "literal$$not-expanded")
+                    self.assertEqual(env["CITADEL_TRANSPORT_MODE"], "Direct" if overlay else "Disabled")
+                    self.assertEqual(server["healthcheck"]["test"][-1], "healthcheck")
+                server = self.render(root, ["docker-compose.yml"], {"CITADEL_HTTP_LISTEN_PORT": "9443", "CITADEL_EDGE_GRPC_LISTEN_PORT": "9444"})["services"]["server"]
+                self.assertEqual({p["target"] for p in server["ports"]}, {9443, 9444})
+                self.assertEqual(server["environment"]["CITADEL_HTTP_LISTEN_PORT"], "9443")
+                self.assertEqual(server["environment"]["CITADEL_EDGE_GRPC_LISTEN_PORT"], "9444")
+
+    def test_development_mount_source_is_separate_from_container_socket(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for file in (".devcontainer/compose.yaml", ".devcontainer/compose.wsl.yaml", "deploy/compose.development.yml"):
+                (root / file).parent.mkdir(parents=True, exist_ok=True)
+                (root / file).write_text((ROOT / file).read_text())
+            env = self.configuration(root) + (
+                "CITADEL_DEV_UID=1000\nCITADEL_DEV_GID=1000\nCITADEL_DEV_DOCKER_GID=999\n"
+                "CITADEL_DEV_DOCKER_SOCKET=/tmp/custom host/docker.sock\n"
+                "CITADEL_DOCKER_SOCKET=/tmp/native.sock\nCITADEL_DATA_ROOT=/tmp/citadel-data\n"
+                "CITADEL_DEV_BINARY=/tmp/citadel-data/core\n")
+            (root / "fixture.env").write_text(env)
+            (root / "deploy/.env.development").write_text(env)
+            server = self.render(root, [".devcontainer/compose.yaml", ".devcontainer/compose.wsl.yaml", "deploy/compose.development.yml"])["services"]["core"]
+            self.assertEqual(server["environment"]["CITADEL_DOCKER_SOCKET"], "/var/run/docker.sock")
+            self.assertEqual(server["environment"]["DOCKER_HOST"], "unix:///var/run/docker.sock")
+            socket = next(v for v in server["volumes"] if v["target"] == "/var/run/docker.sock")
+            self.assertEqual(socket["source"], "/tmp/custom host/docker.sock")
+            self.assertEqual({int(p["published"]): p["target"] for p in server["ports"]}, {18443: 8443, 18444: 8444})
+            self.assertEqual(server["environment"]["CITADEL_STATIC_ROOT"], "/custom/frontend")
 
 if __name__ == "__main__":
     unittest.main()

@@ -292,7 +292,7 @@ Citadel should not write provider tokens, raw provider responses, or resolved se
 - activity events
 - alert events
 - apply logs
-- SignalR streams
+- WebSocket streams
 - release snapshots
 
 If the provider token is wrong, the path is missing, or the key does not exist in the KV v2 payload, the apply fails with a redacted error.
@@ -308,7 +308,7 @@ Citadel encrypts local stored secrets and external provider tokens with a dedica
 Set it with:
 
 ```text
-Secrets__EncryptionKey=
+CITADEL_SECRETS_ENCRYPTION_KEY=
 ```
 
 When the value is empty, Citadel generates a key at
@@ -319,7 +319,7 @@ using [control-plane backups](/docs/operations/control-plane-recovery).
 You can also provide your own base64-encoded 32-byte key:
 
 ```text
-Secrets__EncryptionKey=<base64-32-byte-key>
+CITADEL_SECRETS_ENCRYPTION_KEY=<base64-32-byte-key>
 ```
 
 Generate a custom key with PowerShell:
@@ -338,7 +338,7 @@ Keep this key outside source control and back it up with your Citadel data.
 Losing or replacing it makes existing local stored secrets and provider tokens
 undecryptable. Changing this key is not a way to rotate an application's password.
 
-This key is intentionally separate from `Jwt__Key`. JWT signing keys may be rotated without breaking stored secrets.
+This key is intentionally separate from `CITADEL_JWT_KEY`. JWT signing keys may be rotated without breaking stored secrets.
 
 ## Rotate an application secret
 

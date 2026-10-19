@@ -64,7 +64,7 @@ pub struct StoredSecretProviderPatch {
     pub protected_token: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretProviderInput {
     pub name: String,
@@ -73,11 +73,48 @@ pub struct SecretProviderInput {
     pub token: String,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretProviderPatch {
     pub name: Option<String>,
     pub address: Option<String>,
     pub mount_path: Option<String>,
     pub token: Option<String>,
+}
+
+impl std::fmt::Debug for SecretProviderInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SecretProviderInput")
+            .field("name", &self.name)
+            .field("address", &self.address)
+            .field("mount_path", &self.mount_path)
+            .field("token", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for SecretProviderPatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SecretProviderPatch")
+            .field("name", &self.name)
+            .field("address", &self.address)
+            .field("mount_path", &self.mount_path)
+            .field("token", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod credential_debug_tests {
+    use super::*;
+
+    #[test]
+    fn provider_commands_redact_plaintext_tokens() {
+        let input: SecretProviderInput = serde_json::from_str(r#"{"name":"vault","address":"https://vault.test","mountPath":"kv","token":"SECRET_TOKEN"}"#).unwrap();
+        let patch: SecretProviderPatch =
+            serde_json::from_str(r#"{"token":"SECRET_TOKEN"}"#).unwrap();
+        assert!(!format!("{input:?} {patch:?}").contains("SECRET_TOKEN"));
+        assert_eq!(input.token, "SECRET_TOKEN");
+        assert_eq!(patch.token.as_deref(), Some("SECRET_TOKEN"));
+    }
 }

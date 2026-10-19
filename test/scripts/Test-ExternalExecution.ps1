@@ -95,7 +95,7 @@ try {
     Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'swarm_services_http', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--lib')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_mutations')
-    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'docker_transport')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-docker', '--test', 'docker_transport')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_build_pool')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_sessions')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'automation_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'backup_source_discovery', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')

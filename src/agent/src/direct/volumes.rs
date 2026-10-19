@@ -1,6 +1,7 @@
 use super::{Runtime, docker_error, filters, strings, text};
-use citadel_adapters::connectors::docker::projection::{DockerVolume, VolumeCreateOptions};
 use citadel_contracts::citadel::{shared_models::v1::*, volumes::v1::*};
+use citadel_docker::client::projection::DockerVolume;
+use citadel_docker::client::projection::VolumeCreateOptions;
 use serde_json::Value;
 use tonic::{Request, Response, Status};
 

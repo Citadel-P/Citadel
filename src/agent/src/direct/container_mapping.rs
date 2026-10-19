@@ -86,11 +86,10 @@ pub(super) fn inspect_container_response(v: &Value) -> InspectContainerResponse 
     if let Some(health) = response.state.as_mut().and_then(|s| s.health.as_mut()) {
         for log in &mut health.log {
             if let Some(output) = &mut log.output {
-                *output =
-                    citadel_adapters::connectors::docker::container_health::bounded_probe_output(
-                        output,
-                        environment,
-                    );
+                *output = citadel_docker::client::container_health::bounded_probe_output(
+                    output,
+                    environment,
+                );
             }
         }
     }
@@ -622,7 +621,7 @@ mod health_tests {
                 .all(|log| log.output.as_ref().unwrap().len() <= 4096)
         );
         assert!(!health.log[0].output.as_ref().unwrap().contains("private"));
-        let normalized = citadel_adapters::connectors::containers::inspection::map_inspection(
+        let normalized = citadel_docker::containers::inspection::map_inspection(
             serde_json::to_value(response).unwrap(),
             "exact-id",
         )

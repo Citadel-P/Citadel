@@ -1,7 +1,8 @@
 use super::identity::invalid;
 use crate::config::{EdgeConfig, EdgeProfile};
-use citadel_adapters::connectors::docker::{DockerClient, projection::DockerInfo};
 use citadel_contracts::citadel::edge::v1::AgentHeartbeat;
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::projection::DockerInfo;
 use std::{io, time::Duration};
 
 #[derive(Clone)]
@@ -185,13 +186,11 @@ mod tests {
         let mut info = DockerInfo {
             id: "daemon".into(),
             hostname: "worker".into(),
-            swarm: Some(
-                citadel_adapters::connectors::docker::projection::DockerSwarmInfo {
-                    node_id: "node".into(),
-                    local_node_state: "active".into(),
-                    ..Default::default()
-                },
-            ),
+            swarm: Some(citadel_docker::client::projection::DockerSwarmInfo {
+                node_id: "node".into(),
+                local_node_state: "active".into(),
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let observed = Observation::from_info(info.clone(), &config).unwrap();

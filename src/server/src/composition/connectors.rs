@@ -1,12 +1,15 @@
 //! Connectors service construction.
-use citadel_adapters::connectors::{
-    agent::client::{AgentClient, AgentRequestSigner},
-    docker::DockerClient,
-};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_docker::client::DockerClient;
 use citadel_server::{api::routes::platforms as platforms_http, config::Config};
 use sqlx::PgPool;
 use std::sync::Arc;
 pub(super) struct ConnectorComponents {
+    pub edge_service:
+        citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer<
+            citadel_adapters::connectors::edge::EdgeIntake,
+        >,
     pub agent: Option<AgentClient>,
     pub agent_setup: Arc<citadel_server::api::resources::platforms::views::AgentSetupView>,
     pub agent_setup_context: platforms_http::AgentSetupContext,
@@ -62,6 +65,13 @@ pub(super) fn build(
             agent.clone(),
         );
     let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
+    let edge_service = citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer::new(
+        citadel_adapters::connectors::edge::EdgeIntake::new(
+            citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(pool.clone()),
+            edge_registry.clone(),
+        ),
+    ).max_decoding_message_size(citadel_adapters::connectors::edge::MAX_PAYLOAD + 4096)
+        .max_encoding_message_size(citadel_adapters::connectors::edge::MAX_PAYLOAD + 4096);
     let container_runtime =
         citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter::new(
             pool.clone(),
@@ -93,6 +103,7 @@ pub(super) fn build(
         agent_image,
     };
     Ok(ConnectorComponents {
+        edge_service,
         agent,
         agent_setup,
         agent_setup_context,

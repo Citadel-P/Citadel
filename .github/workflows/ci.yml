@@ -80,22 +80,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CITADEL_RUST_AGENT_RELEASE_ENABLED: ${{ vars.CITADEL_RUST_AGENT_RELEASE_ENABLED }}
-          CITADEL_AGENT_ROLLBACK_IMAGE: ${{ vars.CITADEL_AGENT_ROLLBACK_IMAGE }}
-          CITADEL_CORE_ROLLBACK_IMAGE: ${{ vars.CITADEL_CORE_ROLLBACK_IMAGE }}
-          CITADEL_FIRST_RUST_RELEASE: ${{ vars.CITADEL_FIRST_RUST_RELEASE }}
           DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
           API_DOCS_URL: ${{ vars.API_DOCS_URL }}
         run: |
-          printf '%s' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          if jq -e '.releaseEligible' "$RUNNER_TEMP/release-inputs/version.json" >/dev/null; then
-            printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
-          fi
           python3 src/tools/release/release.py preflight --repository "$GITHUB_REPOSITORY" \
-            --metadata "$RUNNER_TEMP/release-inputs/version.json" --directory "$RUNNER_TEMP/release-inputs" \
-            > "$RUNNER_TEMP/release-inputs/compatibility.json"
+            --metadata "$RUNNER_TEMP/release-inputs/version.json" --directory "$RUNNER_TEMP/release-inputs"
           python3 src/tools/release/release.py prepare --apply --repository "$GITHUB_REPOSITORY" \
             --metadata "$RUNNER_TEMP/release-inputs/version.json" --directory "$RUNNER_TEMP/release-inputs" \
             > "$RUNNER_TEMP/publication-state.json"
@@ -107,10 +99,6 @@ jobs:
         run: |
           python3 src/tools/release/notes.py generate --metadata "$RUNNER_TEMP/release-inputs/version.json" \
             --directory "$RUNNER_TEMP/release-inputs"
-      - name: Non-publishing validation context
-        if: steps.version.outputs.publicationEligible != 'true'
-        run: |
-          printf '%s\n' '{"bootstrap":false,"agent":null,"core":null,"protocolVersion":2,"architectures":["amd64","arm64"],"agentFirstUpgrades":true}' > "$RUNNER_TEMP/release-inputs/compatibility.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-inputs
@@ -269,15 +257,56 @@ jobs:
           export CITADEL_PLATFORM_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
           export CITADEL_EXECUTION_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
           export CITADEL_REQUIRE_QUERY_COUNTS=1
+          # The migration checksum test intentionally corrupts its journal.
+          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_migrations
+          export CITADEL_TEST_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_migrations"
+          : "${CITADEL_IDENTITY_DATABASE_URL:?}" "${CITADEL_EXECUTION_DATABASE_URL:?}" "${CITADEL_TEST_DATABASE_URL:?}"
           # Keep workspace feature resolution identical to the unit-test build.
           cargo test --locked --workspace --test deployments_http \
             deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle -- --ignored --exact --nocapture
+          stack_test=stack_endpoints_enforce_auth_and_persist_apply_release_and_delete
+          cargo test --locked --workspace --test stacks_http "$stack_test" -- --ignored --exact --list | grep -Fx "$stack_test: test"
+          cargo test --locked --workspace --test stacks_http "$stack_test" -- --ignored --exact --test-threads=1
           cargo test --locked --workspace --test identity_authorization_differential -- --ignored --test-threads=1
           cargo test --locked --workspace --test deployment_apply_persistence -- --ignored --test-threads=1
           cargo test --locked --workspace --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
           cargo test --locked --workspace --test platforms_http -- --ignored --test-threads=1
           cargo test --locked --workspace --test edge_transport -- --ignored --test-threads=1
           cargo test --locked --workspace --test backup_source_discovery -- --ignored --test-threads=1
+          cargo test --locked --workspace --test mfa_http --test oidc_http --test users_http --test teams_http --test roles_http -- --ignored --test-threads=1
+          cargo test --locked --workspace --test execution_resources_http resource_copies -- --ignored --test-threads=1
+          # These ignored fixtures exercise real completion transactions and fault injection.
+          for selection in \
+            'build_execution build_runs_claim_once_persist_results_cancel_and_recover' \
+            'backup_execution backup_claims_are_repository_exclusive_and_late_results_do_not_overwrite_recovery' \
+            'alert_persistence durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure'; do
+            read -r target test_name <<< "$selection"
+            # Recovery and receipt consumption inspect shared queues; each fixture
+            # gets a fresh execution database, separate from authorization tests.
+            docker exec "$container" createdb -h 127.0.0.1 -U citadel_test "citadel_$target"
+            (
+              export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_$target"
+              cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+              cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
+            )
+          done
+          # Inventory changes other fixture connectors: isolate these library tests,
+          # and keep execution serial. This does not replace platforms_http above.
+          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_runtime_platforms
+          (
+            export CITADEL_PLATFORM_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_runtime_platforms"
+            for test_name in \
+              workers::platforms::state_delta_tests::lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_container_scoped \
+              workers::platforms::state_delta_tests::local_and_direct_bursts_commit_once_and_publish_six_ids \
+              workers::platforms::inventory_tests::daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up; do
+              cargo test --locked --workspace --lib "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+              cargo test --locked --workspace --lib "$test_name" -- --ignored --exact --test-threads=1
+            done
+          )
+          cancellation_test=persistence::postgres::identity::authorization_cache::tests::cancelled_commits_preserve_acl_fencing_and_session_notifications
+          cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --list | grep -F "$cancellation_test: test"
+          cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --test-threads=1
+          cargo test --locked -p citadel-database --test migrations -- --ignored --test-threads=1
 
   # Preserve the existing required-check name while covering both parallel jobs.
   rust-openapi:
@@ -320,6 +349,12 @@ jobs:
 
       - name: Verify generated API client
         run: npm run api:verify
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Check frontend formatting
+        run: npm run prettier:verify
 
       - name: Check frontend types
         run: npx tsc -b
@@ -440,9 +475,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       CITADEL_RUST_AGENT_RELEASE_ENABLED: ${{ vars.CITADEL_RUST_AGENT_RELEASE_ENABLED }}
-      CITADEL_AGENT_ROLLBACK_IMAGE: ${{ vars.CITADEL_AGENT_ROLLBACK_IMAGE }}
-      CITADEL_CORE_ROLLBACK_IMAGE: ${{ vars.CITADEL_CORE_ROLLBACK_IMAGE }}
-      CITADEL_FIRST_RUST_RELEASE: ${{ vars.CITADEL_FIRST_RUST_RELEASE }}
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
       DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

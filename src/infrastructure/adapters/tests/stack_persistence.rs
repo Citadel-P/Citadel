@@ -2,10 +2,10 @@ use citadel_primitives::AuthorizedResource;
 use serde_json::json;
 use std::time::Duration;
 
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
 use citadel_database::MigrationRunner;
+use citadel_docker::client::DockerClient;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;
 use citadel_stacks::{

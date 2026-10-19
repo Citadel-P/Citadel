@@ -26,9 +26,7 @@ def record(product='1.2.3'):
     return dict(schemaVersion=1, sequence=0, tag='v'+product, metadata=metadata(product),
                 indexes={'agent': 'sha256:'+'a'*64, 'core': 'sha256:'+'b'*64},
                 steps={'artifacts-retained': True}, artifacts={}, status='prepared',
-                signingIdentity='https://example.invalid/ci', sourceRunId='42',
-                compatibility=dict(bootstrap=True, agent=None, core=None, protocolVersion=2,
-                                   architectures=['amd64','arm64'], agentFirstUpgrades=True))
+                signingIdentity='https://example.invalid/ci', sourceRunId='42')
 
 
 class FakeBackend:
@@ -289,31 +287,17 @@ class PreflightTests(unittest.TestCase):
 
     def check(self): return release.preflight(metadata(),self.backend,self.env)
 
-    def test_required_policy_and_bootstrap(self):
-        with self.assertRaisesRegex(ValueError,'baselines'): self.check()
-        self.env['CITADEL_FIRST_RUST_RELEASE']='1.2.3'
-        self.assertTrue(self.check()['bootstrap'])
+    def test_required_publication_policy(self):
+        self.check()
         for key in ['CITADEL_RUST_AGENT_RELEASE_ENABLED','DOCKERHUB_TOKEN','DOCKERHUB_NAMESPACE','DOCS_SITE_URL']:
             value=self.env.pop(key)
             with self.assertRaises(ValueError): self.check()
             self.env[key]=value
-        self.backend.images['ghcr.io/citadel-p/citadel','1.2.2']='sha256:'+'e'*64
-        with self.assertRaisesRegex(ValueError,'Bootstrap forbidden'): self.check()
 
-    def test_released_baselines_and_architectures(self):
-        prev=record('1.2.2'); prev['status']='complete'; self.backend.records[prev['tag']]=prev
-        self.env['CITADEL_AGENT_ROLLBACK_IMAGE']='ghcr.io/citadel-p/citadel.agent@'+prev['indexes']['agent']
-        self.env['CITADEL_CORE_ROLLBACK_IMAGE']='ghcr.io/citadel-p/citadel@'+prev['indexes']['core']
-        self.assertFalse(self.check()['bootstrap'])
-        with patch.object(self.backend,'manifest', return_value=b'{"manifests":[]}'):
-            with self.assertRaisesRegex(ValueError,'architecture'): self.check()
-        self.env['CITADEL_CORE_ROLLBACK_IMAGE']='ghcr.io/citadel-p/citadel@sha256:'+'c'*64
-        with self.assertRaisesRegex(ValueError,'earlier completed'): self.check()
-
-    def test_retry_uses_recorded_baselines_after_newer_release(self):
+    def test_retry_preserves_source_identity_after_newer_release(self):
         original=record(); self.backend.records[original['tag']]=original
         newer=record('1.2.4'); newer['status']='complete'; self.backend.records[newer['tag']]=newer
-        self.assertEqual(self.check(),original['compatibility'])
+        self.check()
         original['metadata']['sourceRevision']='b'*40
         with self.assertRaisesRegex(ValueError,'identity'): self.check()
 
@@ -377,18 +361,18 @@ class ArtifactTests(unittest.TestCase):
         for arch in ['amd64','arm64']:
             for component in ['core','agent']:
                 (self.root/f'{component}-{arch}.oci.tar').write_bytes(b'candidate')
-            evidence=dict(metadata=value['metadata'], compatibility=value['compatibility'],passed=True,
+            evidence=dict(metadata=value['metadata'], passed=True,
                           architecture=arch, checks=['independent-binary-and-oci-versions','core-runtime',
-                          'agent-image','agent-compatibility','candidate-acceptance'],mixedVersionChecks=[],
+                          'agent-image','agent-compatibility','candidate-acceptance'],
                           artifacts={c:release.digest(b'candidate').split(':')[1] for c in ['core','agent']})
             (self.root/f'evidence-{arch}.json').write_text(json.dumps(evidence))
-        release.validate_evidence(self.root,value['metadata'],value['compatibility'])
+        release.validate_evidence(self.root,value['metadata'])
         file=self.root/'evidence-arm64.json'; evidence['passed']=False; file.write_text(json.dumps(evidence))
-        with self.assertRaisesRegex(ValueError,'acceptance'): release.validate_evidence(self.root,value['metadata'],value['compatibility'])
+        with self.assertRaisesRegex(ValueError,'acceptance'): release.validate_evidence(self.root,value['metadata'])
         evidence['passed']=True; evidence['checks'].remove('core-runtime'); file.write_text(json.dumps(evidence))
-        with self.assertRaisesRegex(ValueError,'checks'): release.validate_evidence(self.root,value['metadata'],value['compatibility'])
+        with self.assertRaisesRegex(ValueError,'checks'): release.validate_evidence(self.root,value['metadata'])
         file.unlink()
-        with self.assertRaises(FileNotFoundError): release.validate_evidence(self.root,value['metadata'],value['compatibility'])
+        with self.assertRaises(FileNotFoundError): release.validate_evidence(self.root,value['metadata'])
 
 
 if __name__=='__main__': unittest.main()

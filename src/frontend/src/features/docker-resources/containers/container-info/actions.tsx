@@ -92,7 +92,7 @@ export const { info: ContainerInfoActions } = createActionsBuilder<ContainerDeta
     },
     useVariables: (resource) => {
       const selected = Array.isArray(resource) ? resource : [resource];
-      return { force: true, containerIds: selected.map((r) => r.id) };
+      return { data: { force: true, containerIds: selected.map((r) => r.id) } };
     },
     useSuccessHandler: () => {
       const navigate = useNavigate();

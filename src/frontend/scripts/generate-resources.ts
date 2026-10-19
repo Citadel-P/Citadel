@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { clientSignatures } from './client-signatures';
 
 const OPENAPI_PATH = path.resolve('./src/api/schema/swagger.json');
 const OUTPUT_PATH = path.resolve('./src/api/generated/resources.ts');
@@ -13,6 +14,7 @@ interface OpenAPIOperation {
 
 type Endpoint = {
   key: string;
+  namespace: string;
   path: string;
   method: string;
   tag: string;
@@ -21,11 +23,13 @@ type Endpoint = {
   pathParams: string[];
   requiredParams: string[];
   queryParams: string[];
+  requiredQueryParams: string[];
   hasBody: boolean;
 };
 
 const doc = JSON.parse(fs.readFileSync(OPENAPI_PATH, 'utf-8'));
 const endpoints: Endpoint[] = [];
+const signatures = clientSignatures(fs.readFileSync('./src/api/generated/api.types.ts', 'utf-8'));
 
 for (const pathStr in doc.paths) {
   const pathItem = doc.paths[pathStr];
@@ -34,30 +38,19 @@ for (const pathStr in doc.paths) {
     const op: OpenAPIOperation = pathItem[method];
     if (!op.operationId) continue;
 
-    const params: string[] = [];
-    const requiredParams: string[] = [];
+    const signature = signatures.get(op.operationId);
+    if (!signature) throw new Error(`Missing generated client method: ${op.operationId}`);
+    const { namespace, params, requiredParams } = signature;
     const tag = op.tags?.[0] ?? 'Default';
-
     const pathParams = op.parameters?.filter((p) => p.in === 'path') ?? [];
-    for (const p of pathParams) {
-      if (!params.includes(p.name)) params.push(p.name);
-      if (p.required) requiredParams.push(p.name);
-    }
-
     const qParams = op.parameters?.filter((p) => p.in === 'query') ?? [];
     const queryParams = qParams.map((p) => p.name);
-    if (qParams.length > 0) {
-      params.push('query');
-      requiredParams.push(...qParams.filter((p) => p.required && p.name !== 'tags').map((p) => p.name));
-    }
-
-    const hasBody = Boolean(op.requestBody && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method.toUpperCase()));
-    if (hasBody) params.push('data');
-
-    if (!params.includes('params')) params.push('params');
+    const requiredQueryParams = qParams.filter((p) => p.required).map((p) => p.name);
+    const hasBody = params.includes('data');
 
     endpoints.push({
       key: op.operationId,
+      namespace,
       path: pathStr,
       method: method.toUpperCase(),
       tag,
@@ -66,6 +59,7 @@ for (const pathStr in doc.paths) {
       pathParams: pathParams.map((p) => p.name),
       requiredParams,
       queryParams,
+      requiredQueryParams,
       hasBody,
     });
   }
@@ -104,13 +98,13 @@ console.log(`Generated ${OUTPUT_PATH} with ${endpoints.length} endpoints.`);
 console.log(`Generated ${automationEndpoints.length} automation endpoints.`);
 
 function tsEndpoint(endpoint: Endpoint) {
-  return `{ method: "${endpoint.method}", key: "${endpoint.key}", path: ${JSON.stringify(endpoint.path)}, tag: ${JSON.stringify(
+  return `{ method: "${endpoint.method}", key: "${endpoint.key}", namespace: "${endpoint.namespace}", path: ${JSON.stringify(endpoint.path)}, tag: ${JSON.stringify(
     endpoint.tag,
   )}, group: ${JSON.stringify(endpoint.group)}, params: ${JSON.stringify(endpoint.params)}, pathParams: ${JSON.stringify(
     endpoint.pathParams,
   )}, requiredParams: ${JSON.stringify(endpoint.requiredParams)}, queryParams: ${JSON.stringify(
     endpoint.queryParams,
-  )}, hasBody: ${endpoint.hasBody} }`;
+  )}, requiredQueryParams: ${JSON.stringify(endpoint.requiredQueryParams)}, hasBody: ${endpoint.hasBody} }`;
 }
 
 function toGroupName(tag: string) {

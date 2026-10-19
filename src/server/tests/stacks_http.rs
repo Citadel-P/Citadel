@@ -46,6 +46,8 @@ mod capabilities;
 mod drift;
 #[path = "stacks_http/failures.rs"]
 mod failures;
+#[path = "stacks_http/import_authorization.rs"]
+mod import_authorization;
 #[path = "stacks_http/offline_delete.rs"]
 mod offline_delete;
 #[path = "stacks_http/preflight.rs"]
@@ -70,6 +72,7 @@ struct ApplyCall {
 struct CompletingStackRuntime {
     apply_calls: Mutex<Vec<ApplyCall>>,
     import_claim: Mutex<Option<StackImportClaim>>,
+    import_reads: std::sync::atomic::AtomicUsize,
     state_failure: AtomicU8,
     apply_failure: AtomicU8,
     hold_apply: AtomicU8,
@@ -253,6 +256,7 @@ impl StackRuntime for CompletingStackRuntime {
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackImportClaim, StackError>> {
         Box::pin(async move {
+            self.import_reads.fetch_add(1, Ordering::Relaxed);
             self.import_claim
                 .lock()
                 .unwrap()
@@ -323,7 +327,9 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[73_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),
@@ -335,6 +341,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         Duration::days(30),
     ));
     let runtime = Arc::new(CompletingStackRuntime::default());
+    let materializer = Arc::new(import_authorization::Source::default());
     let scanner = Arc::new(updates::Scanner::new(pool.clone()));
     let stacks = Arc::new(
         StackService::new(
@@ -347,6 +354,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
             Arc::new(NoopStackChangeNotifier),
             CancellationToken::new(),
         )
+        .with_source_materializer(materializer.clone())
         .with_update_scanner(scanner.clone())
         .with_entitlements(Arc::new(drift::Entitlements(true))),
     );
@@ -411,6 +419,16 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
 
     preflight::verify(&app, &pool, &admin, swarm_platform_id).await;
     capabilities::verify(&app, &pool, &admin).await;
+    import_authorization::verify(
+        &app,
+        &pool,
+        &admin,
+        &runtime,
+        &materializer,
+        platform_id,
+        swarm_platform_id,
+    )
+    .await;
 
     let created_response = request(
         &app,

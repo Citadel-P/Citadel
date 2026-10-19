@@ -56,7 +56,7 @@ fn validate_operations(inventory: &str) -> Result<(), String> {
         .and_then(|(_, tail)| tail.split_once("<!-- /operations -->"))
         .ok_or("missing operation inventory")?
         .0;
-    let adapters = Path::new(env!("CARGO_MANIFEST_DIR")).join("../adapters/src");
+    let docker = Path::new(env!("CARGO_MANIFEST_DIR")).join("../docker/src");
     for line in section
         .lines()
         .filter(|line| line.starts_with("| "))
@@ -87,7 +87,7 @@ fn validate_operations(inventory: &str) -> Result<(), String> {
         let (file, operation) = cells[7]
             .split_once(':')
             .ok_or("missing runtime reference")?;
-        if !adapters.join(file).is_file() || operation.is_empty() {
+        if !docker.join(file).is_file() || operation.is_empty() {
             return Err(format!("invalid runtime reference: {}", cells[7]));
         }
         if cells[8].is_empty() || !inventory.contains(&format!("**{} —", cells[8])) {
@@ -168,7 +168,7 @@ fn deployment_templates_preserve_transport_and_pool_selection() {
     );
     assert_eq!(inbound.len(), 1);
     assert_eq!(
-        inbound["HUB_PUBLIC_KEY"],
+        inbound["CITADEL_CORE_PUBLIC_KEY"],
         "replace-with-citadel-core-hub-public-key"
     );
 
@@ -180,7 +180,7 @@ fn deployment_templates_preserve_transport_and_pool_selection() {
         assert_eq!(values["CITADEL_AGENT_MODE"], "edge");
         assert!(values["CITADEL_CORE_URL"].starts_with("https://citadel.example.com"));
         assert!(values["CITADEL_EDGE_ENROLLMENT_TOKEN"].starts_with("replace-with-"));
-        assert!(!values.contains_key("HUB_PUBLIC_KEY"));
+        assert!(!values.contains_key("CITADEL_CORE_PUBLIC_KEY"));
     }
     assert!(!edge.contains_key("CITADEL_EDGE_AGENT_PROFILE"));
     assert_eq!(edge_build["CITADEL_EDGE_AGENT_PROFILE"], "edge-build-agent");

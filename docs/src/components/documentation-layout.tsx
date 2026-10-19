@@ -1,8 +1,9 @@
 'use client';
 
 import { DocsLayout, type DocsLayoutProps } from 'fumadocs-ui/layouts/docs';
+import type { MainItemType } from 'fumadocs-ui/layouts/shared';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -11,7 +12,38 @@ import { appName, docsAssetUrl } from '@/lib/shared';
 export function DocumentationLayout({ children, ...props }: DocsLayoutProps) {
   const pathname = usePathname();
   if (pathname.replace(/\/$/, '') !== '/docs/reference/api') {
-    return <DocsLayout {...props}>{children}</DocsLayout>;
+    const utilityLinks = (props.links ?? []).filter(
+      (item): item is MainItemType => !item.type || item.type === 'main',
+    );
+
+    return (
+      <DocsLayout
+        {...props}
+        links={(props.links ?? []).filter((item) => item.type && item.type !== 'main')}
+        sidebar={{
+          ...props.sidebar,
+          banner: <p className="docs-sidebar-label">Documentation</p>,
+          footer: (
+            <nav aria-label="Documentation resources" className="docs-sidebar-resources">
+              {utilityLinks.map((item) => (
+                <Link
+                  key={item.url}
+                  href={item.url}
+                  aria-current={pathname.replace(/\/$/, '') === item.url ? 'page' : undefined}
+                  target={item.external ? '_blank' : undefined}
+                  rel={item.external ? 'noopener noreferrer' : undefined}
+                >
+                  {item.text}
+                  {item.external && <ArrowUpRight aria-hidden="true" />}
+                </Link>
+              ))}
+            </nav>
+          ),
+        }}
+      >
+        {children}
+      </DocsLayout>
+    );
   }
 
   return (

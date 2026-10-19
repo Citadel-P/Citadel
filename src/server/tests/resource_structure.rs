@@ -1,3 +1,6 @@
+mod support {
+    pub mod source_dependencies;
+}
 use std::path::{Path, PathBuf};
 
 fn crates() -> PathBuf {
@@ -425,7 +428,6 @@ fn feature_facades_and_dependencies_keep_presentation_in_server() {
 #[test]
 fn features_inject_task_ownership_except_bounded_password_cpu_work() {
     let features = crates().join("features");
-    let mut blocking = 0;
     for path in feature_sources(&features) {
         let relative = path.strip_prefix(&features).unwrap();
         if path.file_stem().unwrap() == "tests"
@@ -441,32 +443,15 @@ fn features_inject_task_ownership_except_bounded_password_cpu_work() {
             continue;
         }
         let source = std::fs::read_to_string(&path).unwrap();
-        let production = source.split("#[cfg(test)]").next().unwrap();
-        for unowned in [
-            "tokio::spawn(",
-            "tokio::task::spawn(",
-            "TaskTracker::new(",
-            "JoinSet::new(",
-        ] {
-            assert!(
-                !production.contains(unowned),
-                "{}: {unowned}",
-                path.display()
-            );
-        }
-        let count = production.matches("tokio::task::spawn_blocking(").count();
-        if count != 0 {
-            assert_eq!(
-                relative,
-                Path::new("identity/src/authentication/service.rs")
-            );
-            blocking += count;
-        }
+        let credential_owner =
+            relative == Path::new("identity/src/authentication/credential_work.rs");
+        assert_eq!(
+            support::source_dependencies::unowned_task(&source, credential_owner),
+            None,
+            "{} must use an injected task owner",
+            path.display()
+        );
     }
-    assert_eq!(
-        blocking, 2,
-        "review finite, semaphore-bounded password jobs explicitly"
-    );
 }
 
 #[test]
@@ -519,8 +504,8 @@ fn routes_and_api_resources_have_separate_owners() {
     for entry in std::fs::read_dir(api.join("routes")).unwrap() {
         let path = entry.unwrap().path();
         assert!(
-            path.is_file(),
-            "route families must use a single named file: {}",
+            path.is_file() || path.join("mod.rs").is_file(),
+            "route families require a named file or a module entry point: {}",
             path.display()
         );
     }
@@ -549,6 +534,54 @@ fn routes_and_api_resources_have_separate_owners() {
             "DynamicTasks",
         ] {
             assert!(!code.contains(forbidden), "{}: {forbidden}", path.display());
+        }
+    }
+}
+
+#[test]
+fn agent_normal_dependency_graph_excludes_core_persistence_and_identity_crypto() {
+    let output = std::process::Command::new(env!("CARGO"))
+        .args(["metadata", "--locked", "--format-version=1"])
+        .current_dir(crates().parent().unwrap())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let packages = metadata["packages"].as_array().unwrap();
+    let nodes = metadata["resolve"]["nodes"].as_array().unwrap();
+    let agent = packages
+        .iter()
+        .find(|p| p["name"] == "citadel-agent")
+        .unwrap();
+    let mut pending = vec![agent["id"].as_str().unwrap()];
+    let mut visited = std::collections::HashSet::new();
+    while let Some(id) = pending.pop() {
+        if !visited.insert(id) {
+            continue;
+        }
+        let package = packages.iter().find(|p| p["id"] == id).unwrap();
+        let name = package["name"].as_str().unwrap();
+        assert!(
+            !matches!(
+                name,
+                "citadel-adapters" | "citadel-database" | "argon2" | "jsonwebtoken"
+            ) && !name.starts_with("sqlx"),
+            "Agent normal dependency: {name}"
+        );
+        let node = nodes.iter().find(|n| n["id"] == id).unwrap();
+        for dependency in node["deps"].as_array().unwrap() {
+            if dependency["dep_kinds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|kind| kind["kind"].is_null())
+            {
+                pending.push(dependency["pkg"].as_str().unwrap());
+            }
         }
     }
 }

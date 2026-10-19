@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn inspection_envelope_preserves_redaction_and_docker_extension_fields() {
-        let value = citadel_adapters::connectors::containers::inspection::map_inspection(json!({
+        let value = citadel_docker::containers::inspection::map_inspection(json!({
             "Id":"container", "Created":"2026-09-30T10:00:00Z", "Name":"/web",
             "Config":{"Env":["API_TOKEN=secret","LOG_LEVEL=info"],"Labels":{"Mixed.Key":"value"}},
             "NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":"network"}}},

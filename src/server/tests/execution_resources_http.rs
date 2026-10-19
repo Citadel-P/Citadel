@@ -106,7 +106,9 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[83_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),
@@ -1480,7 +1482,7 @@ impl BackupExecutor for FakeBackupExecutor {
             if matches!(&repository.spec, citadel_backups::spec::BackupRepositorySpec::FileSystem { path, .. } if path == "/outside-allowed-backup-path")
             {
                 return Err(BackupError::Validation(
-                    "Core repository path is outside Backups__AllowedCorePaths.".into(),
+                    "Core repository path is outside CITADEL_BACKUPS_ALLOWED_CORE_PATH_N.".into(),
                 ));
             }
             Ok(vec![])

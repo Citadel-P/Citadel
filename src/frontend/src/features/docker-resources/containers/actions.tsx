@@ -125,7 +125,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
     type: 'command',
     icon: Play,
     mutateKey: 'startContainers',
-    useVariables: (r) => useVariables(r, 'start'),
+    useVariables: (r) => ({ data: useVariables(r, 'start') }),
     canExecute: (r) => canExecute(r, 'start', canStart),
     disabledReason: (r) => disabledReason(r, 'start'),
   };
@@ -135,7 +135,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
     type: 'command',
     icon: Ban,
     mutateKey: 'stopContainers',
-    useVariables: (r) => useVariables(r, 'stop'),
+    useVariables: (r) => ({ data: useVariables(r, 'stop') }),
     canExecute: (r) => canExecute(r, 'stop', canStop),
     disabledReason: (r) => disabledReason(r, 'stop'),
   };
@@ -147,7 +147,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
       title: 'Pause',
       icon: Pause,
       mutateKey: 'pauseContainers',
-      useVariables: (r) => useVariables(r, 'pause'),
+      useVariables: (r) => ({ data: useVariables(r, 'pause') }),
       canExecute: (r) => canExecute(r, 'pause', canPause),
       disabledReason: (r) => disabledReason(r, 'pause'),
     },
@@ -155,7 +155,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
       title: 'Resume',
       icon: StepForward,
       mutateKey: 'unpauseContainers',
-      useVariables: (r) => useVariables(r, 'unpause'),
+      useVariables: (r) => ({ data: useVariables(r, 'unpause') }),
       canExecute: (r) => canExecute(r, 'unpause', canUnpause),
       disabledReason: (r) => disabledReason(r, 'unpause'),
     },
@@ -166,7 +166,7 @@ export const createContainerActions = <T extends BaseContainerResource>(
     type: 'command',
     icon: RotateCcw,
     mutateKey: 'restartContainers',
-    useVariables: (r) => useVariables(r, 'restart'),
+    useVariables: (r) => ({ data: useVariables(r, 'restart') }),
     canExecute: (r) => canExecute(r, 'restart', canRestart),
     disabledReason: (r) => disabledReason(r, 'restart'),
   };
@@ -375,7 +375,7 @@ const { dropdown: baseContainerDropdownActions, group: baseContainerGroupActions
               .map((r) => r.id),
           ),
         );
-        return { force: true, containerIds };
+        return { data: { force: true, containerIds } };
       },
     })
     .build();

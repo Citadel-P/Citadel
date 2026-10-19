@@ -1,9 +1,11 @@
 use super::{Runtime, container_mapping as mapping, docker_error, runtime_error};
-use citadel_adapters::connectors::docker::{DockerExecError, DockerExecEvent, container_summary};
 use citadel_contracts::citadel::{
     containers::v1::*,
     shared_models::v1::{ContainerMessage, ContainerStatMessage, InspectContainerResponse},
 };
+use citadel_docker::client::DockerExecError;
+use citadel_docker::client::DockerExecEvent;
+use citadel_docker::client::container_summary;
 use citadel_platforms::{
     containers::ContainerAction,
     terminal::{TerminalInput, TerminalOutput},
@@ -92,7 +94,7 @@ impl container_service_server::ContainerService for Runtime {
                 };
                 if let Some(doc) = document {
                     c.state = super::container_mapping::state(doc["State"]["Status"].as_str().unwrap_or("unknown"));
-                    c.health_observation = Some(citadel_adapters::connectors::agent::container_health::to_wire(citadel_adapters::connectors::docker::container_health::observation(&doc)));
+                    c.health_observation = Some(citadel_docker::container_health_wire::to_wire(citadel_docker::client::container_health::observation(&doc)));
                 }
             }
             if metadata_only {

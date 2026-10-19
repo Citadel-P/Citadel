@@ -1,8 +1,8 @@
 use crate::Clock;
+use crate::CredentialWork;
 use crate::EntitlementService;
 use crate::IdentityError;
 use crate::PagedResult;
-use crate::PasswordHasher;
 use crate::PasswordPolicy;
 use crate::PatchField;
 use crate::ResourceInfo;

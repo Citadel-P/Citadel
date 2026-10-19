@@ -39,7 +39,9 @@ export const { dropdown: UserDropdownActions, group: UserGroupActions } = create
     useVariables: (resources) => {
       const selected = Array.isArray(resources) ? resources : [resources];
       return {
-        ids: selected.map((x) => x.id!),
+        data: {
+          ids: selected.map((x) => x.id!),
+        },
       };
     },
   })

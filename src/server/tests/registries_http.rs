@@ -38,7 +38,9 @@ async fn native_registry_contracts_preserve_credentials_permissions_and_default_
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(db.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(JwtSessionTokenCodec::new(&[93; 32], "fixture".into(), "fixture".into()).unwrap()),
         Arc::new(OpaqueServiceAccountTokenCodec),
         Arc::new(StaticEntitlementService::new(true)),

@@ -4,10 +4,7 @@ import { formatDateTime } from '@/lib/date-time';
 export type ProfileDateFormatter = (value: unknown) => string;
 
 export function getInitials(value: string | null | undefined) {
-  const parts = (value ?? '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = (value ?? '').trim().split(/\s+/).filter(Boolean);
 
   if (parts.length === 0) return '?';
   return parts

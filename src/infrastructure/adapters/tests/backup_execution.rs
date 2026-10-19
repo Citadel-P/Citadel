@@ -1,3 +1,5 @@
+#[path = "backup_execution/completion.rs"]
+mod completion;
 use chrono::{Duration, Timelike, Utc};
 use citadel_adapters::external::backups::restic::DockerResticBackupExecutor;
 use citadel_adapters::persistence::postgres::backups::PostgresBackupPersistence;
@@ -70,7 +72,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(platform)
         .bind(format!("backup-platform-{}", platform.simple()))
         .execute(&pool)
@@ -191,6 +193,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         assert!(created.latest_run.is_none());
         policies.push(created);
     }
+    completion::verify(&pool, actor, platform, repository.id).await;
     let persisted_tags: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM resourcetags WHERE resourcetype='BackupPolicy' AND resourceid=ANY($1) AND tagid=$2",
     )
@@ -274,7 +277,9 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let guarded_claim = first_claim.clone();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[71_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),
@@ -983,11 +988,11 @@ async fn edge_restore_uses_the_saved_snapshot_root(
     use citadel_contracts::citadel::{
         containers::v1::{
             CreateContainerRequest, CreateContainerResponse, ExecBinaryRequest, ExecExit,
-            ExecOutput, ExecServerMessage, exec_server_message,
+            ExecOutput, ExecServerMessage, ListContainersResponse, exec_server_message,
         },
         edge::v1::{EdgeCommandKind as Kind, core_envelope},
-        shared_models::v1::PlatformInfoResponse,
-        volumes::v1::ListVolumesResponse,
+        shared_models::v1::{PlatformInfoResponse, VolumeResponse},
+        volumes::v1::{CreateVolumeRequest, ListVolumesResponse},
     };
     use futures_util::future::BoxFuture;
     use prost::Message;
@@ -1056,17 +1061,29 @@ async fn edge_restore_uses_the_saved_snapshot_root(
         };
         let cancellation = CancellationToken::new();
         let peer = async {
+            // Snapshot metadata is read without mounting the destination. Only
+            // a valid root permits destination allocation and writable access.
             let mut kinds = vec![
-                Kind::VolumeList,
                 Kind::PlatformGetInfo,
                 Kind::ContainerCreate,
                 Kind::ContainerStart,
                 Kind::ContainerExecBinary,
+                Kind::ContainerDelete,
             ];
             if root != "/unexpected" {
-                kinds.push(Kind::ContainerExecBinary);
+                kinds.extend([
+                    Kind::VolumeList,
+                    Kind::VolumeCreate,
+                    Kind::PlatformGetInfo,
+                    Kind::ContainerCreate,
+                    Kind::VolumeInspect,
+                    Kind::ContainerList,
+                    Kind::ContainerStart,
+                    Kind::ContainerExecBinary,
+                    Kind::ContainerDelete,
+                ]);
             }
-            kinds.push(Kind::ContainerDelete);
+            let mut volume = VolumeResponse::default();
             let mut metadata = true;
             for kind in kinds {
                 let envelope =
@@ -1098,6 +1115,31 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                     Kind::VolumeList => {
                         session.output(id, ListVolumesResponse::default().encode_to_vec());
                     }
+                    Kind::VolumeCreate => {
+                        let request =
+                            CreateVolumeRequest::decode(command.payload.as_slice()).unwrap();
+                        assert_eq!(request.name, "target");
+                        assert_eq!(request.driver, "local");
+                        assert_eq!(request.labels["citadel.platform-id"], platform.to_string());
+                        assert_eq!(
+                            request.labels["citadel.backup.restoreRunId"],
+                            claim.run.id.to_string()
+                        );
+                        volume = VolumeResponse {
+                            name: request.name,
+                            driver: request.driver,
+                            scope: "local".into(),
+                            labels: request.labels,
+                            ..Default::default()
+                        };
+                        session.output(id, volume.encode_to_vec());
+                    }
+                    Kind::VolumeInspect => {
+                        session.output(id, volume.encode_to_vec());
+                    }
+                    Kind::ContainerList => {
+                        session.output(id, ListContainersResponse::default().encode_to_vec());
+                    }
                     Kind::ContainerCreate => {
                         let request =
                             CreateContainerRequest::decode(command.payload.as_slice()).unwrap();
@@ -1109,13 +1151,28 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                                 "citadel-agent:installed-on-restore-node"
                             }
                         );
-                        assert_eq!(request.mounts[0].source.as_deref(), Some("target"));
-                        assert_eq!(request.mounts[0].target.as_deref(), Some("/target"));
-                        assert!(request.cap_add.iter().any(|cap| cap == "CHOWN"));
+                        if metadata {
+                            assert!(
+                                request.mounts.is_empty(),
+                                "metadata cannot mount the target"
+                            );
+                        } else {
+                            assert_eq!(request.mounts[0].source.as_deref(), Some("target"));
+                            assert_eq!(
+                                request.mounts[0].target.as_deref(),
+                                Some(format!("/target{root}").as_str())
+                            );
+                            assert!(request.cap_add.iter().any(|cap| cap == "CHOWN"));
+                        }
                         session.output(
                             id,
                             CreateContainerResponse {
-                                container_id: "restore-helper".into(),
+                                container_id: if metadata {
+                                    "metadata-helper"
+                                } else {
+                                    "restore-helper"
+                                }
+                                .into(),
                             }
                             .encode_to_vec(),
                         );
@@ -1123,7 +1180,14 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                     Kind::ContainerExecBinary => {
                         let request =
                             ExecBinaryRequest::decode(command.payload.as_slice()).unwrap();
-                        assert_eq!(request.container_id, "restore-helper");
+                        assert_eq!(
+                            request.container_id,
+                            if metadata {
+                                "metadata-helper"
+                            } else {
+                                "restore-helper"
+                            }
+                        );
                         assert_eq!(request.env["RESTIC_PASSWORD"], "fixture-password");
                         if metadata {
                             assert_eq!(request.cmd, ["restic", "snapshots", "--json", &snapshot]);
@@ -1144,11 +1208,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                             assert_eq!(
                                 request.cmd,
                                 [
-                                    "restic",
-                                    "restore",
-                                    &format!("{snapshot}:{root}"),
-                                    "--target",
-                                    "/target",
+                                    "restic", "restore", &snapshot, "--target", "/target",
                                     "--delete"
                                 ]
                             );

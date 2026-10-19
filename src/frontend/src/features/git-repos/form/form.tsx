@@ -114,7 +114,10 @@ export const GitRepoForm = ({
     basePath: 'git-repos',
     entityName: 'Repository',
     onCreate: (payload) => createGitRepository({ data: payload as NewGitRepository }),
-    onUpdate: (payload) => updateGitRepository({ id, data: payload }),
+    onUpdate: async (payload) => {
+      if (!id) throw new Error('A resource ID is required to update this resource.');
+      return updateGitRepository({ id, data: payload });
+    },
     onRefresh: refreshData,
   });
 

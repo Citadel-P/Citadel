@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 mod child;
+mod environment;
 pub use child::OwnedChild;
 use citadel_execution::{
     OutputLimitPolicy, ProcessChunk, ProcessError, ProcessLimits, ProcessOutput, ProcessRequest,
     ProcessRunner,
 };
+pub use environment::tool_environment;
 use futures_util::future::BoxFuture;
 use std::process::Stdio;
 use std::time::Duration;
@@ -39,6 +41,8 @@ pub async fn run(
 
     let mut command = Command::new(&request.program);
     command
+        .env_clear()
+        .envs(tool_environment())
         .args(&request.arguments)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

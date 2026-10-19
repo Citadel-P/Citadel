@@ -528,7 +528,8 @@ function toCreateInput(value: AutomationActionFormValue): AutomationActionInput 
     enabled: value.enabled,
     scheduleEnabled: value.scheduleEnabled,
     scheduleCron: value.scheduleEnabled || value.duplicateSourceId ? value.scheduleCron?.trim() || null : null,
-    scheduleTimeZone: value.scheduleEnabled || value.duplicateSourceId ? value.scheduleTimeZone?.trim() || 'UTC' : 'UTC',
+    scheduleTimeZone:
+      value.scheduleEnabled || value.duplicateSourceId ? value.scheduleTimeZone?.trim() || 'UTC' : 'UTC',
     webhook: value.duplicateSourceId ? null : normalizeWebhook(value.webhook),
     timeoutSeconds: Number(value.timeoutSeconds) || 300,
     alertOnFailure: value.alertOnFailure,

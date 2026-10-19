@@ -9,7 +9,7 @@ import { useMutate } from '@/lib/hooks';
 import { capitalize } from '@/lib/utils';
 import { CapabilityKey, hasCapabilities } from '@/lib/resource-capabilities';
 import type { DropdownActionComponent, ButtonGroupComponent, ButtonActionComponent } from '@/pages/types';
-import type { KnownResourceName, PrimaryArg, ResourceType, UseMutateVariables } from '@/api/types';
+import type { KnownResourceName, ResourceType, UseMutateVariables } from '@/api/types';
 
 export type ActionKind = 'command' | 'toggle';
 export type BaseResource = { name: string };
@@ -27,10 +27,9 @@ export interface CommandAction<R, K extends KnownResourceName> {
   confirm?: boolean;
   confirmationDescription?: ReactNode;
   destructive?: boolean;
-  invalidate?: K;
+  invalidate?: KnownResourceName;
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
-  useVariables?: (resources: R[] | R) => K extends KnownResourceName ? PrimaryArg<K> | UseMutateVariables<K> : any;
-  argName?: 'params' | 'data' | 'variables';
+  useVariables?: (resources: R[] | R) => UseMutateVariables<K>;
   resourceType?: ResourceType;
   separatorBefore?: boolean;
   requiredCapabilities?: CapabilityKey[];
@@ -59,9 +58,9 @@ type ToggleConfig<R, K extends KnownResourceName> = {
   mutateKey?: K;
   confirm?: boolean;
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
-  canExecute?: (r: R) => boolean;
+  canExecute?: (r: R | R[]) => boolean;
   disabledReason?: (r: R | R[]) => string;
-  useVariables?: (resources: R | R[]) => K extends KnownResourceName ? PrimaryArg<K> | UseMutateVariables<K> : any;
+  useVariables?: (resources: R | R[]) => UseMutateVariables<K>;
   useHandler?: (ctx: { resources: R | R[] }) => {
     run: () => void | Promise<void>;
     canExecute?: boolean;
@@ -69,8 +68,7 @@ type ToggleConfig<R, K extends KnownResourceName> = {
     disabledReason?: string;
   };
   onSuccess?: (ctx: { resources: R | R[] }) => (() => void) | void;
-  invalidate?: K;
-  argName?: 'params' | 'data' | 'variables';
+  invalidate?: KnownResourceName;
   destructive?: boolean;
   resourceType?: ResourceType;
   requiredCapabilities?: CapabilityKey[];
@@ -124,9 +122,10 @@ export function createActionsBuilder<R extends BaseResource>(options?: { showToa
 // --- Component Factories ---
 function createCommandComponents<R extends BaseResource>(act: CommandAction<R, any>, showToast: boolean) {
   const title = act.title ?? capitalize(act.key);
+  const useExecutor = createExecutor(act, title, showToast);
 
   const Dropdown: DropdownActionComponent<R> = ({ resource, onAction }) => {
-    const { run, isPending, canExecute } = useUnifiedExecutor(act, resource, title, showToast);
+    const { run, isPending, canExecute } = useExecutor(resource);
     const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     return (
       <DropdownActionButton
@@ -157,7 +156,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
   };
 
   const Group: ButtonGroupComponent<R> = ({ resources }) => {
-    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(act, resources, title, showToast);
+    const { run, isPending, canExecute, disabledReason } = useExecutor(resources);
     const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     if (act.confirm || act.destructive) {
       return (
@@ -193,7 +192,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
   };
 
   const Info: ButtonActionComponent<R> = ({ resource }) => {
-    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(act, resource, title, showToast);
+    const { run, isPending, canExecute, disabledReason } = useExecutor(resource);
     const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     if (act.confirm || act.destructive) {
       return (
@@ -230,171 +229,81 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
 }
 
 function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any>, showToast: boolean) {
-  const useActiveConfig = (resources: R | R[]) => {
-    const rList = Array.isArray(resources) ? resources : [resources];
-    const isSecondary = act.predicate ? rList.some(act.predicate) : rList.some((r) => act.secondary.canExecute?.(r));
-
-    return isSecondary ? act.secondary : act.primary;
+  // Each branch owns its hooks. Switching branches remounts the selected component.
+  const primary = createCommandComponents(
+    {
+      ...act.primary,
+      useSuccessHandler: act.primary.onSuccess,
+      key: act.key,
+      type: 'command',
+      separatorBefore: act.separatorBefore,
+    },
+    showToast,
+  );
+  const secondary = createCommandComponents(
+    {
+      ...act.secondary,
+      useSuccessHandler: act.secondary.onSuccess,
+      key: act.key,
+      type: 'command',
+      separatorBefore: act.separatorBefore,
+    },
+    showToast,
+  );
+  const select = (resources: R | R[]) => {
+    const list = Array.isArray(resources) ? resources : [resources];
+    return (act.predicate ? list.some(act.predicate) : list.some((r) => act.secondary.canExecute?.(r)))
+      ? secondary
+      : primary;
   };
-
-  const Dropdown: DropdownActionComponent<R> = ({ resource, onAction }) => {
-    const config = useActiveConfig(resource);
-    const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
-    const { run, isPending, canExecute } = useUnifiedExecutor(config, resource, config.title, showToast);
-
-    return (
-      <DropdownActionButton
-        title={config.title}
-        icon={<config.icon className="h-4 w-4" />}
-        variant={variant}
-        onClick={
-          config.confirm || config.destructive
-            ? () =>
-                onAction?.('confirm', {
-                  name: resource.name,
-                  title: config.title,
-                  icon: <config.icon className="h-4 w-4" />,
-                  onClick: run,
-                  disabled: !canExecute,
-                  variant: variant,
-                })
-            : () => {
-                void run().catch(notifyRequestError);
-              }
-        }
-        disabled={!canExecute || isPending}
-        loading={isPending}
-        separatorBefore={act.separatorBefore}
-      />
-    );
+  const Dropdown: DropdownActionComponent<R> = (props) => {
+    const Component = select(props.resource).Dropdown;
+    return <Component {...props} />;
   };
-
-  const Group: ButtonGroupComponent<R> = ({ resources }) => {
-    const config = useActiveConfig(resources);
-    const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
-    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(
-      config,
-      resources,
-      config.title,
-      showToast,
-    );
-
-    if (config.confirm || config.destructive) {
-      return (
-        <GroupActionWithDialog
-          type={config.resourceType ?? 'Container'}
-          name={config.title}
-          title={config.title}
-          iconPosition="left"
-          variant={variant}
-          icon={<config.icon className="h-4 w-4" />}
-          onClick={run}
-          disabled={!canExecute || isPending}
-          disabledReason={!canExecute ? disabledReason : undefined}
-        />
-      );
-    }
-
-    return (
-      <ActionButton
-        title={config.title}
-        icon={<config.icon className="h-4 w-4" />}
-        iconPosition="left"
-        variant={variant}
-        onClick={() => {
-          void run().catch(notifyRequestError);
-        }}
-        disabled={!canExecute || isPending}
-        disabledReason={!canExecute ? disabledReason : undefined}
-        loading={isPending}
-      />
-    );
+  const Group: ButtonGroupComponent<R> = (props) => {
+    const Component = select(props.resources).Group;
+    return <Component {...props} />;
   };
-
-  const Info: ButtonActionComponent<R> = ({ resource }) => {
-    const config = useActiveConfig(resource);
-    const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
-    const { run, isPending, canExecute, disabledReason } = useUnifiedExecutor(
-      config,
-      resource,
-      config.title,
-      showToast,
-    );
-
-    if (config.confirm || config.destructive) {
-      return (
-        <ActionWithDialog
-          name={resource.name}
-          title={config.title}
-          iconPosition="left"
-          variant={variant}
-          icon={<config.icon className="h-4 w-4" />}
-          onClick={run}
-          disabled={!canExecute || isPending}
-          disabledReason={!canExecute ? disabledReason : undefined}
-        />
-      );
-    }
-
-    return (
-      <ActionButton
-        iconPosition="left"
-        variant={variant}
-        title={config.title}
-        icon={<config.icon className="h-4 w-4" />}
-        onClick={() => {
-          void run().catch(notifyRequestError);
-        }}
-        disabled={!canExecute || isPending}
-        disabledReason={!canExecute ? disabledReason : undefined}
-        loading={isPending}
-      />
-    );
+  const Info: ButtonActionComponent<R> = (props) => {
+    const Component = select(props.resource).Info;
+    return <Component {...props} />;
   };
-
   return { Dropdown, Group, Info };
 }
 
-function useUnifiedExecutor<R>(
-  act: {
-    useHandler?: any;
-    mutateKey?: KnownResourceName;
-    invalidate?: any;
-    argName?: 'params' | 'data' | 'variables';
-    canExecute?: any;
-    disabledReason?: (r: R | R[]) => string;
-    useVariables?: any;
-    useSuccessHandler?: any;
-    onSuccess?: any;
-    destructive?: boolean;
-    requiredCapabilities?: CapabilityKey[];
-  },
-  resources: R | R[],
-  title: string,
-  showToast: boolean,
-) {
+function createExecutor<R extends BaseResource>(act: CommandAction<R, any>, title: string, showToast: boolean) {
   const requiredCapabilities: CapabilityKey[] =
     act.requiredCapabilities ?? (act.destructive ? ['canExecute'] : act.mutateKey ? ['canWrite'] : []);
-  const capabilitiesAllow = hasCapabilities(resources, requiredCapabilities);
-
-  if (act.useHandler) {
-    const handler = act.useHandler({ resources });
-    const canExecute = (handler.canExecute ?? true) && (act.canExecute?.(resources) ?? true) && capabilitiesAllow;
-    return {
-      run: async () => await handler.run(),
-      canExecute,
-      isPending: handler.isPending ?? false,
-      disabledReason: canExecute
-        ? undefined
-        : capabilitiesAllow
-          ? (handler.disabledReason ??
-            act.disabledReason?.(resources) ??
-            'This action is unavailable in the current resource state.')
-          : 'You do not have permission to perform this action.',
+  const useHandler = act.useHandler;
+  if (useHandler) {
+    return function useHandlerExecutor(resources: R | R[]) {
+      const capabilitiesAllow = hasCapabilities(resources, requiredCapabilities);
+      const handler = useHandler({ resources });
+      const canExecute = (handler.canExecute ?? true) && (act.canExecute?.(resources) ?? true) && capabilitiesAllow;
+      return {
+        run: async () => await handler.run(),
+        canExecute,
+        isPending: handler.isPending ?? false,
+        disabledReason: canExecute
+          ? undefined
+          : capabilitiesAllow
+            ? (handler.disabledReason ??
+              act.disabledReason?.(resources) ??
+              'This action is unavailable in the current resource state.')
+            : 'You do not have permission to perform this action.',
+      };
     };
   }
-
-  return useMutationLogic(act, resources, title, showToast, capabilitiesAllow, act.invalidate, act.argName);
+  return function useMutationExecutor(resources: R | R[]) {
+    return useMutationLogic(
+      act,
+      resources,
+      title,
+      showToast,
+      hasCapabilities(resources, requiredCapabilities),
+      act.invalidate,
+    );
+  };
 }
 
 function useMutationLogic<R, K extends KnownResourceName>(
@@ -411,7 +320,6 @@ function useMutationLogic<R, K extends KnownResourceName>(
   showToast: boolean,
   capabilitiesAllow: boolean,
   invalidate?: string,
-  argName: 'params' | 'data' | 'variables' = 'data',
 ) {
   const { mutateAsync, isPending } = useMutate(act.mutateKey || ('none' as any));
   const client = useQueryClient();
@@ -429,13 +337,13 @@ function useMutationLogic<R, K extends KnownResourceName>(
   const run = async () => {
     if (!act.mutateKey) return;
     try {
-      await mutateAsync(argName === 'variables' ? vars : { [argName]: vars });
+      await mutateAsync(vars);
       if (invalidate) client.invalidateQueries({ queryKey: [invalidate] });
       if (showToast) {
         const name = Array.isArray(resources) ? `${resources.length} items` : (resources as any).name;
         toast.success(`${title} requested for ${name}`);
       }
-      if (successCallback) successCallback();
+      if (successCallback) await successCallback();
     } catch (err) {
       notifyRequestError(err);
       throw err;

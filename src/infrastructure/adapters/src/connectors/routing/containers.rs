@@ -8,8 +8,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::connectors::agent::client::AgentClient;
 use crate::connectors::agent::client::AgentContainerAction;
-use crate::connectors::docker::DockerClient;
 use crate::connectors::edge::EdgeRegistry;
+use citadel_docker::client::DockerClient;
 
 use super::platforms::runtime::PlatformAgentResolver;
 use super::platforms::runtime::PlatformRuntimeRouter;
@@ -111,7 +111,7 @@ impl ContainerMutationRuntime for ContainerRuntimeRouter {
                     let mut pending = futures_util::stream::iter(targets.iter().map(|t| (*t).clone()).collect::<Vec<_>>()).map(|target| async move {
                         let work = async {
                             let _permit = self.local_calls.acquire().await.map_err(|_| cancelled())?;
-                            runtime.change_container_state(&target.docker_id, action).await.map_err(crate::connectors::docker::runtime::normalize_docker_error)
+                            runtime.change_container_state(&target.docker_id, action).await.map_err(citadel_docker::client::runtime::normalize_docker_error)
                         };
                         let result = tokio::select! { biased; ()=cancellation.cancelled()=>Err(cancelled()), result=work=>result };
                         (target.id, result)
@@ -254,7 +254,7 @@ async fn inspect(
             .inspect_container(id)
             .await
             .map(|c| (c.id, c.state.status))
-            .map_err(crate::connectors::docker::runtime::normalize_docker_error),
+            .map_err(citadel_docker::client::runtime::normalize_docker_error),
         Runtime::Agent(runtime) => runtime
             .inspect_container(id, cancellation)
             .await

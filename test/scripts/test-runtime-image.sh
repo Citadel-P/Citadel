@@ -8,7 +8,7 @@ fixture="citadel-runtime-test-$$-$RANDOM"
 core="$fixture-core"
 database="$fixture-db"
 build_image="$fixture:build"
-socket="${CITADEL_RUST_DOCKER_SOCKET:-/var/run/docker.sock}"
+socket="${CITADEL_DOCKER_SOCKET:-/var/run/docker.sock}"
 
 cleanup() {
   result=$?
@@ -45,8 +45,9 @@ done
 docker exec "$database" pg_isready -h 127.0.0.1 -U citadel -d citadel >/dev/null
 
 docker run -d --name "$core" --network "$fixture" \
-  -e DATABASE_URL=postgres://citadel:runtime-test-only@postgres:5432/citadel \
-  -e Transport__Mode=Disabled -e Transport__PublicUrl=http://localhost:8000 \
+  -e CITADEL_DATABASE_URL=postgres://citadel:runtime-test-only@postgres:5432/citadel \
+  -e CITADEL_TRANSPORT_MODE=Disabled -e CITADEL_PUBLIC_URL=http://localhost:18443 \
+  -e CITADEL_HTTP_LISTEN_PORT=18443 \
   "$image" >/dev/null
 for attempt in {1..60}; do
   if docker exec "$core" /usr/local/bin/citadel-entrypoint healthcheck >/dev/null 2>&1; then break; fi
@@ -60,7 +61,7 @@ sleep 1
 docker exec "$core" sh -c 'for status in /proc/[0-9]*/status; do if grep -Eq "^State:.*Z" "$status" 2>/dev/null; then echo "Unreaped process: $status" >&2; exit 1; fi; done'
 docker exec --user 65532:0 -i "$core" sh -s <<'SH'
 set -eu
-wget -qO /tmp/index.html http://127.0.0.1:8000/
+wget -qO /tmp/index.html http://127.0.0.1:18443/
 cmp /tmp/index.html /app/wwwroot/index.html
 export PGPASSWORD=runtime-test-only PGHOST=postgres PGUSER=citadel
 pg_dump --format=custom --no-owner --no-privileges -f /tmp/core.dump citadel

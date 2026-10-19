@@ -29,8 +29,9 @@ import {
   getStackImageUpdateStates,
 } from './update-status';
 
-export const useVariables = (resources: StackView | StackView[]) =>
-  Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
+export const useVariables = (resources: StackView | StackView[]) => ({
+  data: Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id],
+});
 
 export const isProcessing = (resource: StackView) => resource.controlState === ResourceControlState.Processing;
 

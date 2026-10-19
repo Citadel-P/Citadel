@@ -1,9 +1,4 @@
-import {
-  AutomationRunStatus,
-  AutomationRunView,
-  AuthorizedAction,
-} from '@/api/generated/api.types';
-import { LogViewer } from '@/components/custom/common';
+import { AutomationRunStatus, AutomationRunView, AuthorizedAction } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Button } from '@/components/ui/button';
@@ -16,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Ban, FileText } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { LogViewer } from '@/components/custom/log-viewer';
 
 export function AutomationActionRunsTab({ resource }: { resource: AuthorizedAction }) {
   const [logRunId, setLogRunId] = useState<string | undefined>();

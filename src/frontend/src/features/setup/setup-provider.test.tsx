@@ -12,7 +12,9 @@ function SetupProbe() {
   const setup = useSetupContext();
   return (
     <>
-      <span data-testid="policy">{setup.passwordMinimumLength}–{setup.passwordMaximumLength}</span>
+      <span data-testid="policy">
+        {setup.passwordMinimumLength}–{setup.passwordMaximumLength}
+      </span>
       <span data-testid="setup-status">
         {!setup.isSetupReady ? 'loading' : setup.requiresSetup ? 'pending' : setup.error ? 'error' : 'complete'}
       </span>

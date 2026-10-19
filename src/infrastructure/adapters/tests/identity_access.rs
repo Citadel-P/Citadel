@@ -47,7 +47,9 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     let clock = Arc::new(SystemClock);
     let identity = Arc::new(IdentityService::new(
         identity_store.clone(),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[7_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),

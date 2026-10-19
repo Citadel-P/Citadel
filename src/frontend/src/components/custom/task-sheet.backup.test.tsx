@@ -34,8 +34,8 @@ vi.mock('@/lib/hooks', () => ({
   }),
 }));
 vi.mock('@/lib/monaco', () => ({ MonacoDiff: () => null, MonacoEditor: () => null }));
-vi.mock('@/components/custom/common', async (original) => ({
-  ...(await original<typeof import('@/components/custom/common')>()),
+vi.mock('@/components/custom/log-viewer', async (original) => ({
+  ...(await original<typeof import('@/components/custom/log-viewer')>()),
   LogViewer: ({ logs }: { logs: string }) => <pre data-testid="execution-log">{logs}</pre>,
 }));
 
@@ -106,7 +106,8 @@ it('does not repeat a pre-execution error recorded as the only log line', () => 
 });
 
 it.each(['Failed', 'TimedOut', 'Interrupted', 'Rejected'])(
-  'presents %s as a failure, including when diagnostics are missing', (status) => {
+  'presents %s as a failure, including when diagnostics are missing',
+  (status) => {
     mocks.run = { status, errorMessage: '', errorCode: '', items: [] };
     renderCitadel(<TaskSheet type="BackupPolicy" />);
     expect(screen.getByText('Run failed')).toBeVisible();

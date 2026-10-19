@@ -596,7 +596,7 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
     let router = Arc::new(
         citadel_adapters::connectors::routing::swarm_services::SwarmServiceRuntimeRouter::new(
             pool.clone(),
-            citadel_adapters::connectors::docker::DockerClient::new(
+            citadel_docker::client::DockerClient::new(
                 "/no-docker-for-cached-check",
                 std::time::Duration::from_millis(100),
             )
@@ -609,6 +609,7 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
         Arc::new(TestServiceTasks),
         Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
         router.clone(),
+        Arc::new(citadel_swarm_services::EmptySwarmServiceBindingResolver),
         CancellationToken::new(),
     )
     .with_image_digests(router);

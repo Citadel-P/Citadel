@@ -110,7 +110,7 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         )
         .await
         .unwrap_err();
-        assert!(error.to_string().contains("Secrets__EncryptionKey"));
+        assert!(error.to_string().contains("CITADEL_SECRETS_ENCRYPTION_KEY"));
         assert_eq!(
             sqlx::query_scalar::<_, String>("SELECT marker FROM recovery_untouched")
                 .fetch_one(&sentinel)

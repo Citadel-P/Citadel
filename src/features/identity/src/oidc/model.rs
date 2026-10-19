@@ -365,7 +365,7 @@ impl OidcProvider {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct OidcLoginState {
     pub id: Uuid,
     pub provider_id: Uuid,
@@ -503,4 +503,16 @@ pub struct OidcIdentity {
     pub email_verified: bool,
     pub name: Option<String>,
     pub claims: BTreeMap<String, Vec<String>>,
+}
+
+impl std::fmt::Debug for OidcLoginState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OidcLoginState")
+            .field("id", &self.id)
+            .field("provider_id", &self.provider_id)
+            .field("expires_at", &self.expires_at)
+            .field("nonce", &"[REDACTED]")
+            .field("code_verifier", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }

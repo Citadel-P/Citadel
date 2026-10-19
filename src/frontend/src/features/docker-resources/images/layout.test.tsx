@@ -353,7 +353,7 @@ it.each(['pointer', 'keyboard'])(
     const dialog = within(await screen.findByRole('dialog'));
     const name = row.name;
     expect(dialog.queryByRole('list')).not.toBeInTheDocument();
-    await user.click(dialog.getByText(name, { selector: 'b' }));
+    await user.click(dialog.getByRole('button', { name: `Copy ${name}` }));
     expect(copy).toHaveBeenCalledWith(name);
     const input = dialog.getByRole('textbox', { name: `Enter ${name} to confirm` });
     await user.type(input, 'Delete');

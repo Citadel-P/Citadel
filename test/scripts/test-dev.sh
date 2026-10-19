@@ -8,15 +8,23 @@ trap 'rm -rf -- "$fixture"' EXIT
 mkdir -p "$fixture/src/tools/dev" "$fixture/src/tools/build" "$fixture/.devcontainer"
 cp "$script_dir/../../src/tools/dev/dev.sh" "$fixture/src/tools/dev/dev.sh"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$fixture/.devcontainer/clean-build-cache.sh"
+# Version tooling is independently tested; this fixture preserves its exec boundary.
+cat > "$fixture/src/tools/build/version.py" <<'PYTHON'
+import os, sys
+if sys.argv[1] == "install":
+    sys.exit(0)
+assert sys.argv[1:3] == ["exec", "--"]
+os.execvp(sys.argv[3], sys.argv[3:])
+PYTHON
 dev="$fixture/src/tools/dev/dev.sh"
 env_file="$fixture/deploy/.env.development"
-unset DATABASE_URL CITADEL_RUST_DOCKER_SOCKET CITADEL_DATA_ROOT Secrets__EncryptionKey
+unset CITADEL_DATABASE_URL CITADEL_DOCKER_SOCKET CITADEL_DATA_ROOT CITADEL_SECRETS_ENCRYPTION_KEY
 export XDG_DATA_HOME="$fixture/data with spaces"
 bash "$dev" configure
 [[ "$(stat -c %a "$env_file")" == 600 ]]
 [[ "$(bash "$dev" exec printenv CITADEL_DATA_ROOT)" == "$XDG_DATA_HOME/citadel-wsl" ]]
-[[ "$(bash "$dev" exec printenv DATABASE_URL)" == postgres://citadel:citadel@127.0.0.1:15432/citadel ]]
-[[ "$(bash "$dev" exec printenv Secrets__EncryptionKey)" == AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA= ]]
+[[ "$(bash "$dev" exec printenv CITADEL_DATABASE_URL)" == postgres://citadel:citadel@127.0.0.1:15432/citadel ]]
+[[ "$(bash "$dev" exec printenv CITADEL_SECRETS_ENCRYPTION_KEY)" == AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA= ]]
 printf 'CUSTOM_VALUE=literal $(not-a-command)\r\n' >> "$env_file"
 bash "$dev" configure
 [[ "$(bash "$dev" exec printenv CUSTOM_VALUE)" == 'literal $(not-a-command)' ]]
@@ -27,11 +35,11 @@ fi
 rm -- "$env_file"
 
 # Inherited devcontainer settings must survive configuration generation.
-DATABASE_URL=postgres://citadel:citadel@postgres:5432/citadel \
-  CITADEL_RUST_DOCKER_SOCKET=/var/run/docker-host.sock \
+CITADEL_DATABASE_URL=postgres://citadel:citadel@postgres:5432/citadel \
+  CITADEL_DOCKER_SOCKET=/var/run/docker-host.sock \
   CITADEL_DATA_ROOT=/home/vscode/.local/share/citadel bash "$dev" configure
-[[ "$(bash "$dev" exec printenv DATABASE_URL)" == postgres://citadel:citadel@postgres:5432/citadel ]]
-[[ "$(bash "$dev" exec printenv CITADEL_RUST_DOCKER_SOCKET)" == /var/run/docker-host.sock ]]
+[[ "$(bash "$dev" exec printenv CITADEL_DATABASE_URL)" == postgres://citadel:citadel@postgres:5432/citadel ]]
+[[ "$(bash "$dev" exec printenv CITADEL_DOCKER_SOCKET)" == /var/run/docker-host.sock ]]
 [[ "$(bash "$dev" exec printenv DOCKER_HOST)" == unix:///var/run/docker-host.sock ]]
 [[ "$(bash "$dev" exec printenv CITADEL_DATA_ROOT)" == /home/vscode/.local/share/citadel ]]
 
@@ -45,7 +53,7 @@ if output="$(bash "$dev" prepare 2>&1)"; then exit 1; fi
 
 node() { echo linux; }
 export -f node
-printf 'CITADEL_RUST_DOCKER_SOCKET=%s/missing.sock\n' "$fixture" >> "$env_file"
+printf 'CITADEL_DOCKER_SOCKET=%s/missing.sock\n' "$fixture" >> "$env_file"
 if output="$(bash "$dev" prepare 2>&1)"; then exit 1; fi
 [[ "$output" == *'Docker socket is unavailable'* ]]
 
@@ -57,15 +65,15 @@ if [[ ! -f /.dockerenv && -S /var/run/docker.sock ]] && grep -qi microsoft /proc
     if [[ "$*" == *' info '* ]]; then echo Ubuntu; else printf '%s\n' "$*" >> "$DEV_TEST_DOCKER_LOG"; fi
   }
   export -f docker
-  printf 'CITADEL_RUST_DOCKER_SOCKET=/var/run/docker.sock\nDOCKER_HOST=unix:///var/run/docker.sock\n' >> "$env_file"
+  printf 'CITADEL_DOCKER_SOCKET=/var/run/docker.sock\nDOCKER_HOST=unix:///var/run/docker.sock\n' >> "$env_file"
   if output="$(bash "$dev" prepare 2>&1)"; then exit 1; fi
   [[ "$output" == *'separate Docker Engine'* && ! -f "$DEV_TEST_DOCKER_LOG" ]]
-  printf 'CITADEL_DEV_ALLOW_NATIVE_DOCKER=true\nCITADEL_DATA_ROOT=%s/runtime\nDATABASE_URL=postgres://citadel:citadel@127.0.0.1:15432/citadel\n' "$fixture" >> "$env_file"
+  printf 'CITADEL_DEV_ALLOW_NATIVE_DOCKER=true\nCITADEL_DATA_ROOT=%s/runtime\nCITADEL_DATABASE_URL=postgres://citadel:citadel@127.0.0.1:15432/citadel\n' "$fixture" >> "$env_file"
   bash "$dev" prepare
   [[ "$(cat "$DEV_TEST_DOCKER_LOG")" == *'--project-name citadel-wsl'*'up -d --wait --wait-timeout 90 postgres' ]]
   [[ "$(stat -c %a "$fixture/runtime")" == 700 ]]
   : > "$DEV_TEST_DOCKER_LOG"
-  printf 'DATABASE_URL=postgres://custom/database\n' >> "$env_file"
+  printf 'CITADEL_DATABASE_URL=postgres://custom/database\n' >> "$env_file"
   bash "$dev" prepare
   [[ ! -s "$DEV_TEST_DOCKER_LOG" ]]
 fi
@@ -74,7 +82,7 @@ fi
 if [[ ! -f /.dockerenv && -S /var/run/docker.sock ]]; then
   export DEV_TEST_TARGET_DIR="$fixture/cargo target"
   export DEV_TEST_DOCKER_LOG="$fixture/docker.log"
-  printf 'DATABASE_URL=postgres://citadel:citadel@127.0.0.1:15432/citadel\nCITADEL_RUST_DOCKER_SOCKET=/var/run/docker.sock\nDOCKER_HOST=unix:///var/run/docker.sock\nCITADEL_DATA_ROOT=%s/runtime\n' "$fixture" > "$env_file"
+  printf 'CITADEL_DATABASE_URL=postgres://citadel:citadel@127.0.0.1:15432/citadel\nCITADEL_DOCKER_SOCKET=/var/run/docker.sock\nDOCKER_HOST=unix:///var/run/docker.sock\nCITADEL_DATA_ROOT=%s/runtime\n' "$fixture" > "$env_file"
   cargo() { printf '{"target_directory":"%s"}\n' "$DEV_TEST_TARGET_DIR"; }
   node() {
     if [[ "${1:-}" == -p ]]; then echo linux; else command node "$@"; fi

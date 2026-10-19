@@ -11,24 +11,14 @@ pub trait StackRepository: Send + Sync {
         after: Uuid,
         images: bool,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>> {
-        let _ = (after, images, limit);
-        Box::pin(async { Ok(Vec::new()) })
-    }
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>>;
     fn save_update_check<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         expected: &'a crate::Stack,
         state: &'a crate::StackUpdateState,
-    ) -> BoxFuture<'a, Result<(), StackError>> {
-        let _ = (actor, administrator, expected, state);
-        Box::pin(async {
-            Err(StackError::Runtime(
-                "Stack update persistence is unavailable.".into(),
-            ))
-        })
-    }
+    ) -> BoxFuture<'a, Result<(), StackError>>;
     fn claim_apply_versioned(
         &self,
         actor: ActorId,

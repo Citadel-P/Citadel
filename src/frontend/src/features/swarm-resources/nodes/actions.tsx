@@ -29,7 +29,6 @@ const nodeAvailabilityAction = (
   requiredCapabilities: ['canWrite' as const],
   confirm,
   resourceType: 'Node' as const,
-  argName: 'variables' as const,
   canExecute: (resources: SwarmNodeListView | SwarmNodeListView[]) => canSetAvailability(resources, availability),
   useVariables: (resources: SwarmNodeListView | SwarmNodeListView[]) => {
     const { platformId = '' } = useParams<{ platformId: string }>();

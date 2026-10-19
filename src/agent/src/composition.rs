@@ -3,7 +3,7 @@ use std::io;
 use std::time::Duration;
 
 use axum_server::tls_rustls::RustlsConfig;
-use citadel_adapters::connectors::docker::DockerClient;
+use citadel_docker::client::DockerClient;
 
 use crate::config::{AgentConfig, AgentMode};
 

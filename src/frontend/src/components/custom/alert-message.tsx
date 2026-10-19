@@ -95,6 +95,14 @@ export const AlertMessage = ({
                   ? 'whitespace-normal w-full'
                   : 'truncate cursor-pointer hover:text-muted-foreground/80 w-full',
               )}
+              role={isExpanded ? undefined : 'button'}
+              tabIndex={isExpanded ? undefined : 0}
+              onKeyDown={(event) => {
+                if (!isExpanded && (event.key === 'Enter' || event.key === ' ')) {
+                  event.preventDefault();
+                  setIsExpanded(true);
+                }
+              }}
               onClick={() => !isExpanded && setIsExpanded(true)}
               title={isExpanded ? undefined : 'Click to expand'}>
               {children}

@@ -26,6 +26,7 @@ members = [
     "src/infrastructure/contracts",
     "src/infrastructure/database",
     "src/infrastructure/docker-api",
+    "src/infrastructure/docker",
     "src/infrastructure/processes",
     "src/infrastructure/runtime",
     "src/infrastructure/volume-helper",
@@ -64,7 +65,7 @@ prost-types = "=0.14.4"
 protoc-bin-vendored = "=3.2.0"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "stream", "rustls"] }
 rustix = { version = "=1.1.4", features = ["fs"] }
-rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 semver = "=1.0.28"
 serde_json = "=1.0.151"

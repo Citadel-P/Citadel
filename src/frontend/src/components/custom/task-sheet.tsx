@@ -19,7 +19,7 @@ import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { useAppContext } from '@/lib/context/app-context';
-import { ActorCell, LogViewer, TargetCell, ResourceSelectorField } from '@/components/custom/common';
+import { ActorCell, TargetCell, ResourceSelectorField } from '@/components/custom/common';
 import { StateBadge, isFailedRunStatus } from '@/components/custom/state-badge';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
@@ -70,6 +70,7 @@ import { StateIndicator } from './state-indicator';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { LogViewer } from '@/components/custom/log-viewer';
 
 interface PullImageParams {
   platformId?: string;

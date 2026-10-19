@@ -178,13 +178,13 @@ impl PostgresBackupPersistence {
         &'a self,
         claim: &'a RestoreClaim,
         result: &'a RestoreExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BackupError>> {
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let finished = sqlx::query("UPDATE backuprestoreruns SET status=$2,exitcode=$3,errorcode=$4,errormessage=$5,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running'").bind(claim.run.id).bind(result.status.as_str()).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if finished == 0 {
                 tx.rollback().await.map_err(storage)?;
-                return Ok(());
+                return Ok(false);
             }
             write_logs(
                 &mut tx,
@@ -199,7 +199,7 @@ impl PostgresBackupPersistence {
                 .await
                 .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
-            Ok(())
+            Ok(true)
         })
     }
 }

@@ -331,7 +331,7 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
         let mut values = HashMap::from([
             ("DOCKER_HOST", docker_host.clone()),
             (
-                "HUB_PUBLIC_KEY",
+                "CITADEL_CORE_PUBLIC_KEY",
                 AgentRequestSigner::from_bytes(&[42; 32]).public_key_base64(),
             ),
         ]);

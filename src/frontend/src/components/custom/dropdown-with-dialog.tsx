@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { forwardRef, ReactNode, startTransition, useEffect, useRef, useState } from 'react';
+import { forwardRef, ReactNode, startTransition, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { toast } from 'sonner';
 import { Input } from '../ui/input';
@@ -88,7 +88,7 @@ export const RowActionMenu = <T extends { id: string; name: string }>({
           onAction?.(action);
         }}
       />
-      <ActionDialog action={activeAction} onClose={() => setActiveAction(null)} />
+      <ActionDialog key={activeAction?.key ?? 'closed'} action={activeAction} onClose={() => setActiveAction(null)} />
     </>
   );
 };
@@ -149,6 +149,7 @@ const ActionDialog = ({
   const [input, setInput] = useState('');
   const [loading, setIsLoading] = useState(false);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const hasData = !!action?.data;
   const isConfirmDisabled = action?.data ? action.data.disabled || action.data.name !== input || loading : true;
@@ -168,13 +169,6 @@ const ActionDialog = ({
     }
   };
 
-  useEffect(() => {
-    if (hasData) {
-      setInput('');
-      setIsLoading(false);
-    }
-  }, [hasData]);
-
   useDialogHotkeys({
     enabled: hasData,
     onConfirm: handleConfirm,
@@ -189,28 +183,38 @@ const ActionDialog = ({
 
   return (
     <Dialog open={hasData} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          inputRef.current?.focus();
+        }}>
         <DialogHeader>
           <DialogTitle>Confirm {title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4">
-          <p
-            onClick={() => {
-              navigator.clipboard.writeText(name);
-              toast(`Copied "${name}" to clipboard!`);
-            }}
-            className="cursor-pointer break-all">
-            Please enter <b>{name}</b> below to confirm this action.
+          <p className="break-all">
+            Please enter{' '}
+            <button
+              type="button"
+              aria-label={`Copy ${name}`}
+              className="font-bold underline decoration-dotted"
+              onClick={() => {
+                void navigator.clipboard.writeText(name);
+                toast(`Copied "${name}" to clipboard!`);
+              }}>
+              {name}
+            </button>{' '}
+            below to confirm this action.
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
           </p>
           <Input
+            ref={inputRef}
             aria-label={`Enter ${name} to confirm`}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             className="focus-visible:ring-1"
-            autoFocus
           />
         </div>
         <DialogFooter>
@@ -297,3 +301,5 @@ export const DropdownActionButton = forwardRef<
     );
   },
 );
+
+DropdownActionButton.displayName = 'DropdownActionButton';

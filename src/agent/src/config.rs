@@ -58,7 +58,7 @@ pub struct SwarmIdentity {
     pub cluster_id: String,
 }
 
-pub use citadel_adapters::connectors::docker::DockerEndpoint;
+pub use citadel_docker::client::DockerEndpoint;
 
 #[derive(Debug, thiserror::Error)]
 #[error("{variable}: {reason}")]
@@ -125,19 +125,23 @@ impl AgentConfig {
 
 impl DirectConfig {
     fn parse(lookup: &mut impl FnMut(&str) -> Option<String>) -> Result<Self, ConfigError> {
-        let key = required(lookup, "HUB_PUBLIC_KEY")?;
+        let key = required(lookup, "CITADEL_CORE_PUBLIC_KEY")?;
         let bytes = STANDARD
             .decode(key)
             .ok()
             .and_then(|value| <[u8; 32]>::try_from(value).ok())
             .ok_or_else(|| {
                 invalid(
-                    "HUB_PUBLIC_KEY",
+                    "CITADEL_CORE_PUBLIC_KEY",
                     "must be a base64 encoded 32-byte Ed25519 public key",
                 )
             })?;
-        let hub_public_key = VerifyingKey::from_bytes(&bytes)
-            .map_err(|_| invalid("HUB_PUBLIC_KEY", "must be a valid Ed25519 public key"))?;
+        let hub_public_key = VerifyingKey::from_bytes(&bytes).map_err(|_| {
+            invalid(
+                "CITADEL_CORE_PUBLIC_KEY",
+                "must be a valid Ed25519 public key",
+            )
+        })?;
         let mode = optional(lookup, "CITADEL_AGENT_TLS_MODE").unwrap_or_else(|| "Disabled".into());
         let certificate = optional(lookup, "CITADEL_AGENT_TLS_CERTIFICATE_PATH");
         let private_key = optional(lookup, "CITADEL_AGENT_TLS_PRIVATE_KEY_PATH");

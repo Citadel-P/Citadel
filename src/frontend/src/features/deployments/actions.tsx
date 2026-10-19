@@ -6,8 +6,9 @@ import { Ban, Pause, Play, Rocket, StepForward } from 'lucide-react';
 import { useTaskSheet } from '@/lib/atoms';
 import { ActionConfig } from '@/components/custom/actions-builder';
 
-export const useVariables = (resources: DeploymentView | DeploymentView[]) =>
-  Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
+export const useVariables = (resources: DeploymentView | DeploymentView[]) => ({
+  data: Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id],
+});
 
 export const isProcessing = (resource: DeploymentView) => resource.controlState === ResourceControlState.Processing;
 

@@ -146,7 +146,7 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
             None
         } else {
         let mut key=[0;32];getrandom::fill(&mut key).unwrap();let signer=AgentRequestSigner::from_bytes(&key);key.fill(0);
-        command("docker",&["run","--detach","--name",&agent_name,"--network",&network,"--volume",&mount,"--env",&format!("HUB_PUBLIC_KEY={}",signer.public_key_base64()),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image]).await;
+        command("docker",&["run","--detach","--name",&agent_name,"--network",&network,"--volume",&mount,"--env",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image]).await;
         Some(tokio::time::timeout(Duration::from_secs(45),async {
             loop {
                 if let Ok(client)=AgentClient::connect(&address,signer.clone(),Duration::from_secs(10),true).await && client.handshake(&cancel).await.is_ok() { break client; }
@@ -186,7 +186,7 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
         let manifest=reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap().get(format!("http://{registry_name}:5000/v2/citadel-acceptance-{suffix}/manifests/{tag}"))
             .header("Accept","application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json").send().await.unwrap();
         assert!(manifest.status().is_success());assert_eq!(manifest.headers()["docker-content-digest"],digest.as_str());
-        assert!(store.finish(&claim,&completed).await.unwrap());
+        assert!(store.finish(&claim,&completed, None).await.unwrap());
         let persisted=store.get_run(queued.id).await.unwrap();assert_eq!(persisted.status,citadel_builds::BuildRunStatus::Succeeded);assert_eq!(persisted.image_digest,Some(digest.clone()));
         assert!(!store.logs(queued.id).await.unwrap().is_empty(),"Streamed progress must be persisted");
         // Inspect the built filesystem without executing the scratch image.

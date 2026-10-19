@@ -497,7 +497,7 @@ or decrypt stored credentials.
 
 The official Citadel Core image includes `pg_dump`. Native installations and
 custom images must provide a PostgreSQL client that supports the configured
-server version. Set `Backups__PostgresDumpPath` when `pg_dump` is not available
+server version. Set `CITADEL_PG_DUMP_PATH` when `pg_dump` is not available
 on `PATH`.
 
 ## Docker Platform Backups

@@ -7,7 +7,10 @@ impl PostgresCopyRepository {
         id: Uuid,
         storage_result: Option<Result<(), String>>,
     ) -> Result<CopyProgress, CopyError> {
-        let access = self.access(actor).await;
+        let access = match self.access(actor).await {
+            Err(error @ CopyError::Storage(_)) => return Err(error),
+            result => result,
+        };
         let mut tx = self.pool.begin().await.map_err(storage_error)?;
         sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             .execute(&mut *tx)
@@ -31,6 +34,9 @@ impl PostgresCopyRepository {
             },
             Err(_) => Err(CopyError::NotFound),
         };
+        if let Err(error @ CopyError::Storage(_)) = authorization {
+            return Err(error);
+        }
         let stopping = status == CopyStatus::Cancelling || failed || authorization.is_err();
         if stopping {
             cancel_queued(&mut tx, id).await?;
@@ -77,6 +83,11 @@ impl PostgresCopyRepository {
                         sqlx::query("UPDATE resourcecopies SET status='Succeeded',destinationid=$2,message='Copy created. Review its settings and Apply when ready.',updatedat=CURRENT_TIMESTAMP WHERE id=$1").bind(id).bind(destination).execute(&mut *creation).await.map_err(storage_error)?;
                         creation.commit().await.map_err(storage_error)?;
                     }
+                    Err(error @ CopyError::Storage(_)) => {
+                        creation.rollback().await.map_err(storage_error)?;
+                        tx.rollback().await.map_err(storage_error)?;
+                        return Err(error);
+                    }
                     Err(error) => {
                         creation.rollback().await.map_err(storage_error)?;
                         let error = error.to_string();
@@ -111,15 +122,113 @@ async fn create_destination(
     let id = Uuid::now_v7();
     let source = &plan.source;
     match &plan.spec {
-        CopySpec::Deployment(spec)=>super::super::deployments::create_in_transaction(tx,access.actor,access.administrator,id,&citadel_deployments::CreateDeployment {
-            name:plan.request.name.clone(),platform_id:plan.target_platform(),description:source.description.clone(),spec:*spec.clone(),tag_ids:source.tag_ids.clone(),duplicate_source:Some(citadel_deployments::DuplicateSource { resource_id:source.id,resource_type:"Deployment".into(),resource_name:source.name.clone() }),
-        }).await.map_err(|_|conflict("The Deployment could not be created. Check its name, references and permissions; restored volumes were retained."))?,
-        CopySpec::Stack(spec)=>super::super::stacks::create_in_transaction(tx,access.actor,access.administrator,id,&citadel_stacks::CreateStack {
-            name:plan.request.name.clone(),platform_id:plan.target_platform(),description:source.description.clone(),stack_source:spec.source(),spec:*spec.clone(),drift_policy:Some(citadel_stacks::StackDriftPolicy::default().for_duplicate()),tag_ids:source.tag_ids.clone(),duplicate_source:Some(citadel_stacks::DuplicateStackSource { id:source.id,name:source.name.clone() }),
-        }).await.map_err(|_|conflict("The Stack could not be created. Check its name, references and permissions; restored volumes were retained."))?,
-        CopySpec::SwarmService(spec)=>super::super::swarm_services::create_in_transaction(tx,access.actor,access.administrator,id,&citadel_swarm_services::CreateSwarmService {
-            name:plan.request.name.clone(),platform_id:plan.target_platform(),description:source.description.clone(),spec:*spec.clone(),tag_ids:source.tag_ids.clone(),duplicate_source:Some(citadel_swarm_services::SwarmServiceDuplicateSource { resource_id:source.id,resource_type:"SwarmService".into(),resource_name:source.name.clone() }),
-        }).await.map_err(|_|conflict("The Swarm Service could not be created. Check its name, references and permissions; restored volumes were retained."))?,
+        CopySpec::Deployment(spec) => super::super::deployments::create_in_transaction(
+            tx,
+            access.actor,
+            access.administrator,
+            id,
+            &citadel_deployments::CreateDeployment {
+                name: plan.request.name.clone(),
+                platform_id: plan.target_platform(),
+                description: source.description.clone(),
+                spec: *spec.clone(),
+                tag_ids: source.tag_ids.clone(),
+                duplicate_source: Some(citadel_deployments::DuplicateSource {
+                    resource_id: source.id,
+                    resource_type: "Deployment".into(),
+                    resource_name: source.name.clone(),
+                }),
+            },
+        )
+        .await
+        .map_err(deployments_creation_error)?,
+        CopySpec::Stack(spec) => super::super::stacks::create_in_transaction(
+            tx,
+            access.actor,
+            access.administrator,
+            id,
+            &citadel_stacks::CreateStack {
+                name: plan.request.name.clone(),
+                platform_id: plan.target_platform(),
+                description: source.description.clone(),
+                stack_source: spec.source(),
+                spec: *spec.clone(),
+                drift_policy: Some(citadel_stacks::StackDriftPolicy::default().for_duplicate()),
+                tag_ids: source.tag_ids.clone(),
+                duplicate_source: Some(citadel_stacks::DuplicateStackSource {
+                    id: source.id,
+                    name: source.name.clone(),
+                }),
+            },
+        )
+        .await
+        .map_err(stacks_creation_error)?,
+        CopySpec::SwarmService(spec) => super::super::swarm_services::create_in_transaction(
+            tx,
+            access.actor,
+            access.administrator,
+            id,
+            &citadel_swarm_services::CreateSwarmService {
+                name: plan.request.name.clone(),
+                platform_id: plan.target_platform(),
+                description: source.description.clone(),
+                spec: *spec.clone(),
+                tag_ids: source.tag_ids.clone(),
+                duplicate_source: Some(citadel_swarm_services::SwarmServiceDuplicateSource {
+                    resource_id: source.id,
+                    resource_type: "SwarmService".into(),
+                    resource_name: source.name.clone(),
+                }),
+            },
+        )
+        .await
+        .map_err(swarm_services_creation_error)?,
     }
     Ok(id)
+}
+
+fn deployments_creation_error(error: citadel_deployments::DeploymentError) -> CopyError {
+    use citadel_deployments::DeploymentError as Error;
+    match error {
+        Error::Storage(message) | Error::Runtime(message) => CopyError::Storage(message),
+        Error::Validation(_)
+        | Error::NotFound
+        | Error::Forbidden
+        | Error::Conflict(_)
+        | Error::Cancelled
+        | Error::LicenseRequired(_) => conflict(
+            "The Deployment could not be created. Check its name, references and permissions; restored volumes were retained.",
+        ),
+    }
+}
+
+fn stacks_creation_error(error: citadel_stacks::StackError) -> CopyError {
+    use citadel_stacks::StackError as Error;
+    match error {
+        Error::Storage(message) | Error::Runtime(message) => CopyError::Storage(message),
+        Error::Validation(_)
+        | Error::NotFound
+        | Error::Forbidden
+        | Error::Conflict(_)
+        | Error::Cancelled
+        | Error::LicenseRequired(_)
+        | Error::RuntimeRejected(_) => conflict(
+            "The Stack could not be created. Check its name, references and permissions; restored volumes were retained.",
+        ),
+    }
+}
+
+fn swarm_services_creation_error(error: citadel_swarm_services::SwarmServiceError) -> CopyError {
+    use citadel_swarm_services::SwarmServiceError as Error;
+    match error {
+        Error::Storage(message) | Error::Runtime(message) => CopyError::Storage(message),
+        Error::Validation(_)
+        | Error::NotFound
+        | Error::Forbidden
+        | Error::Conflict(_)
+        | Error::Cancelled
+        | Error::RuntimeRejected(_) => conflict(
+            "The Swarm Service could not be created. Check its name, references and permissions; restored volumes were retained.",
+        ),
+    }
 }

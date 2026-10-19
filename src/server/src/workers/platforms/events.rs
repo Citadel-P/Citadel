@@ -88,9 +88,7 @@ pub(crate) async fn event_source(
                         // projection trigger is coalesced and persistence is idempotent.
                         since = Some(event.time);
                     }
-                    let Some(kind) =
-                        citadel_adapters::connectors::docker::events::normalize(&event)
-                    else {
+                    let Some(kind) = citadel_docker::client::events::normalize(&event) else {
                         if event.resource_type == "container" {
                             RuntimeWork::ContainerEventIgnored.units(1);
                         }

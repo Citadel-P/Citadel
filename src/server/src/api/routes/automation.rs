@@ -41,7 +41,7 @@ pub struct AutomationHttpState {
 }
 
 pub fn router(state: AutomationHttpState) -> Router {
-    crate::realtime::notify_mutations(
+    crate::api::mutation_notifications::notify_mutations(
         documented_routes().split_for_parts().0.with_state(state),
         "AutomationAction",
     )

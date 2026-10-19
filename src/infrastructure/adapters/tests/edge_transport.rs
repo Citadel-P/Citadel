@@ -672,8 +672,8 @@ async fn verify_node_projection_isolation(
     let stale_event = citadel_adapters::connectors::agent::client::AgentDaemonEvent {
         resource: None,
         swarm_scope: false,
-        kind: citadel_adapters::connectors::docker::events::RuntimeEventKind::Container(
-            citadel_adapters::connectors::docker::events::ContainerChange::Tombstone,
+        kind: citadel_docker::client::events::RuntimeEventKind::Container(
+            citadel_docker::client::events::ContainerChange::Tombstone,
         ),
         container: None,
         resource_type: "container",
@@ -899,12 +899,12 @@ async fn verify_node_local_resources(
 #[tokio::test]
 #[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn persisted_edge_platform_routes_deployment_apply_without_using_local_docker() {
-    use citadel_adapters::connectors::docker::DockerClient;
     use citadel_adapters::connectors::routing::deployments::DeploymentRuntimeRouter;
     use citadel_contracts::citadel::deployments::v1::{
         ApplyDeploymentRequest, ApplyDeploymentResponse, DeployedContainerState,
     };
     use citadel_deployments::{DeploymentRuntime, RuntimeContainerState, RuntimeDeploymentCommand};
+    use citadel_docker::client::DockerClient;
     use prost::Message;
     let (pool, _store, target) = setup().await;
     sqlx::query("UPDATE platforms SET status='Online' WHERE id=$1")
@@ -1530,7 +1530,7 @@ async fn health_collection_stays_on_the_exact_edge_node_and_rejects_replaced_ses
         assert_eq!(command.platform_id, target.platform_id.to_string());
         let request = ListContainersRequest::decode(command.payload.as_slice()).unwrap();
         assert!(request.observe_health && request.metadata_only);
-        let health = citadel_adapters::connectors::docker::container_health::observation(
+        let health = citadel_docker::client::container_health::observation(
             &serde_json::json!({"Config":{"Healthcheck":{"Test":["CMD","probe"]}},"State":{"Health":{"Status":"healthy"}}}),
         );
         session.output(
@@ -1541,9 +1541,9 @@ async fn health_collection_stays_on_the_exact_edge_node_and_rejects_replaced_ses
                     ContainerMessage {
                         id: "exact-container".into(),
                         state: 2,
-                        health_observation: Some(
-                            citadel_adapters::connectors::agent::container_health::to_wire(health),
-                        ),
+                        health_observation: Some(citadel_docker::container_health_wire::to_wire(
+                            health,
+                        )),
                         ..Default::default()
                     },
                 )]

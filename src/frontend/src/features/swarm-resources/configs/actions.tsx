@@ -21,7 +21,6 @@ const configActions = createActionsBuilder<SwarmConfigView>()
     confirm: true,
     destructive: true,
     resourceType: 'Config',
-    argName: 'variables',
     useVariables: (resources) => {
       const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources : [resources];

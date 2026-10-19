@@ -118,7 +118,7 @@ Local settings are ignored by Git. Core and Agent read process environment;
 use the development launcher or Docker's `--env-file` to load a file.
 
 The development Compose task requires its own PostgreSQL database. To use a custom
-`DATABASE_URL`, run Core natively or through the debugger instead. Preserve signing
+`CITADEL_DATABASE_URL`, run Core natively or through the debugger instead. Preserve signing
 and encryption keys when reusing data or restoring a backup.
 
 Useful settings:
@@ -126,11 +126,11 @@ Useful settings:
 | Setting | Use |
 | --- | --- |
 | `RUST_LOG` | Defaults to `info`; add `citadel_server=debug` for targeted diagnostics |
-| `LogFormat` | `text` by default; `json` for structured collection |
+| `CITADEL_LOG_FORMAT` | `text` by default; `json` for structured collection |
 | `CITADEL_DATA_ROOT` | Persistent runtime directory |
-| `CITADEL_RUST_DOCKER_SOCKET`, `DOCKER_HOST` | Must select the same Docker daemon in development |
-| `Git__KnownHostsPath` | Verified SSH host keys; defaults to `<CITADEL_DATA_ROOT>/git-known-hosts` |
-| `Passwords__MinimumLength` | Defaults to 15; accepts 8–128 for newly set passwords |
+| `CITADEL_DOCKER_SOCKET`, `DOCKER_HOST` | Must select the same Docker daemon in development |
+| `CITADEL_GIT_KNOWN_HOSTS_PATH` | Verified SSH host keys; defaults to `<CITADEL_DATA_ROOT>/git-known-hosts` |
+| `CITADEL_PASSWORDS_MINIMUM_LENGTH` | Defaults to 15; accepts 8–128 for newly set passwords |
 
 Inspect non-secret effective configuration without connecting to PostgreSQL:
 
@@ -191,15 +191,82 @@ npm run api:verify --prefix src/frontend
 Do not hand-edit generated schemas or TypeScript models. Documentation-site
 commands are in [docs/README.md](README.md).
 
+## Frontend contributor path
+
+Use [Registries queries](../src/frontend/src/features/registries/queries.ts) as a bounded
+example of typed query keys/options and explicit mutation effects. Its
+[list](../src/frontend/src/features/registries/index.tsx),
+[actions](../src/frontend/src/features/registries/actions.tsx), and
+[form](../src/frontend/src/features/registries/form/form.tsx) consume that contract.
+Generic reads and mutations accept one named argument object: path parameters,
+`query`, `data`, and transport `params` remain distinct. Generated metadata follows
+the actual client signatures; the invocation adapter alone orders arguments.
+Transport options, tokens and signals never identify cached data. Reads wait for
+required route/query arguments and retain React Query cancellation.
+
+Registry updates explicitly invalidate filtered lists and the affected configuration
+key. Creation refreshes lists; deletion also invalidates affected configuration keys.
+Keep related-resource effects in the feature: OpenAPI tags cannot define a universal
+invalidation policy. Preserve actor cache isolation on account changes. Capabilities
+from authorized responses control action/form availability; server authorization
+remains authoritative. Shared resource page templates remain under `pages/`.
+
+Forms use the existing `FormShell`, field definitions and `useSaveResource` lifecycle.
+Keep draft keys/versioning and actor scoping, sensitive-field exclusions, dirty state,
+validation, successful-save cleanup and failure recovery. The Registry form's
+`registrySettings`/`registryUpdate` mappings preserve credential patch semantics.
+Use [the Registry query regression](../src/frontend/src/features/registries/queries.test.tsx)
+for real-client/MSW coverage of requests, filtered keys, scoped invalidation and
+success callback timing; retain form/draft tests when changing form behavior.
+
+Realtime supports the advertised `WebSocketV1` contract. Disabled, unresolved and
+unknown capabilities do not connect. Tests may inject a `RealtimeConnection` for
+that supported transport; native-adapter tests supply only a `webSocketFactory`.
+HTTP queries own ordinary reads; live subscription snapshots own their existing
+live-backed caches. Keep explicit reconnect reconciliation, group ownership and
+stale callback rejection instead of refetching every query. Swarm HTTP and live
+snapshots use the same server overview projection. Complete live overviews cancel
+older HTTP reads; partial node-local events retain omitted fields and allow the
+initial complete read to finish. Aggregate reads may be shared per event, while
+capabilities remain actor-specific.
+
+`npm run api:generate` synchronizes `schema/v1.json` into the frontend schema,
+generates the client and resource metadata, and owns `src/api/generated/` except
+`foundation-api.ts`. That file belongs to Rust `xtask openapi` and its `--check`.
+`npm run api:verify` regenerates all npm-owned outputs, checks file membership and
+bytes, and restores the original working-tree contents even on failure. It detects
+new, missing, edited and unexpected outputs without staging changes. After an
+intentional generation, run verification again to check deterministic output.
+Generated schema/client files are excluded from Prettier; their generators verify
+them. Authored components are included in ESLint and the frontend formatting check.
+
+Run from `src/frontend` (install with `npm ci` first):
+
+```bash
+npm run api:generate
+npm run api:verify
+npm run test:run -- src/features/registries/queries.test.tsx src/lib/hooks.test.tsx
+npm run test:run -- src/test/architecture.test.ts
+npx tsc -b
+npm run lint
+npm run prettier:verify
+npm run test:run
+npm run build:image
+```
+
+CI runs generation verification, TypeScript, lint, formatting and tests. The image
+build also runs lint. For Swarm projection changes, run the focused server tests
+with a disposable PostgreSQL fixture as described in [test/README.md](../test/README.md).
+
 ## Database schema changes
 
 The current checkout consolidates migrations `0001`–`0006` into a single
 `0001_initial.sql` for fresh databases. Its checksum differs from earlier
-catalogs, including published v0.1.x releases, so it cannot upgrade those
-databases. Existing storage must be preserved; this consolidation does not
+development catalogs, so it cannot upgrade databases initialized with a different
+applied migration checksum. Existing storage must be preserved; this consolidation does not
 authorize resetting databases or rewriting their migration journals.
 
-Preserve published migrations, including `0001_initial.sql`. Add each schema
+Preserve applied migrations, including `0001_initial.sql`. Add each schema
 change as the next numbered SQL migration under `src/infrastructure/database/generated/`.
 Append the same upgrade SQL to `src/infrastructure/database/src/schema/schema.sql`;
 the verifier compares this schema authority with the ordered migration sequence.
@@ -233,7 +300,7 @@ For an Agent container on Docker Desktop, use `http://host.docker.internal:8001`
 For another machine, use Core's reachable IP/hostname and publish the Edge port.
 Development Compose binds it to loopback by default; set
 `CITADEL_DEV_EDGE_BIND_ADDRESS=0.0.0.0` in `deploy/.env.development` and recreate Core
-when remote access is needed. `EdgeAgent__PublicGrpcUrl` configures Core's advertised
+when remote access is needed. `CITADEL_EDGE_PUBLIC_GRPC_URL` configures Core's advertised
 address. Use TLS outside local testing.
 
 Agent checks, from least to most involved:
@@ -246,7 +313,8 @@ bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent
 ```
 
 These use disposable fixtures. See [test/README.md](../test/README.md) for prerequisites
-and the optional released-Agent baseline used for mixed-version verification.
+and current-build acceptance coverage. Core, Agent and frontend must use the same
+current build; no older-version image baseline is required.
 
 ## Dev Container fallback
 
@@ -285,7 +353,7 @@ separate volumes from `citadel-wsl`. The equivalent VS Code task is
 | Edge connection times out | Check Core's reachable gRPC address, published port and firewall; container `localhost` is not the host |
 | SQLx cannot find offline metadata | Confirm `src/.sqlx/` exists and run Cargo from the checkout so `.cargo/config.toml` is loaded |
 | Cargo cannot open its build lock | Check target-directory ownership and active builds; avoid running Cargo with `sudo` |
-| SSH Git clone rejects a host key | Provision a verified host key in `Git__KnownHostsPath`; do not disable verification |
+| SSH Git clone rejects a host key | Provision a verified host key in `CITADEL_GIT_KNOWN_HOSTS_PATH`; do not disable verification |
 | Host disk usage is unavailable | Mount the actual daemon host at `/host:ro`; the Docker socket alone cannot provide host filesystem usage |
 
 Use `/health` for process liveness and `/ready` for dependency readiness. Agent

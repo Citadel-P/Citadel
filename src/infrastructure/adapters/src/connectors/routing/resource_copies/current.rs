@@ -1,21 +1,22 @@
 //! Policy-independent, temporary Restic snapshot and restore on one daemon.
 use super::*;
-use crate::connectors::{
-    agent::{client::AgentContainerAction, execution::AgentExecutionClient},
-    docker::{DockerClient, DockerExecEvent},
-    routing::platforms::runtime::Runtime,
-};
+use crate::connectors::agent::client::AgentContainerAction;
+use crate::connectors::agent::execution::AgentExecutionClient;
+use crate::connectors::routing::platforms::runtime::Runtime;
 use citadel_contracts::citadel::{
     containers::v1::{CreateContainerRequest, ExecBinaryRequest},
     shared_models::v1::Mount,
 };
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::DockerExecEvent;
 use citadel_platforms::{ContainerInventoryPort, containers::ContainerInspectionPort};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use std::{collections::HashMap, time::Duration};
 use uuid::Uuid;
 
-use crate::external::backups::current_copy::{COPY_JOB_LABEL, CURRENT_COPY_SCRIPT};
+use citadel_docker::current_copy::COPY_JOB_LABEL;
+use citadel_docker::current_copy::CURRENT_COPY_SCRIPT;
 const TIMEOUT: Duration = Duration::from_secs(14_400);
 fn helper_name(id: Uuid) -> String {
     format!("citadel-backup-helper-copy-{}", id.simple())
@@ -119,7 +120,7 @@ async fn remove_helper(
     match runtime {
         Runtime::Local(docker) => match docker.delete_container(id, false, true).await {
             Ok(()) => Ok(()),
-            Err(crate::connectors::docker::DockerError::Api { status, .. })
+            Err(citadel_docker::client::DockerError::Api { status, .. })
                 if status == reqwest::StatusCode::NOT_FOUND =>
             {
                 Ok(())
@@ -232,7 +233,7 @@ impl CopyStorageRuntime {
             if let Runtime::Local(docker) = &runtime {
                 match docker.inspect_image(&image).await {
                     Ok(_) => {}
-                    Err(crate::connectors::docker::DockerError::Api { status, .. })
+                    Err(citadel_docker::client::DockerError::Api { status, .. })
                         if status == reqwest::StatusCode::NOT_FOUND =>
                     {
                         use citadel_platforms::image_pull::ImagePullPort;

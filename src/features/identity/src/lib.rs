@@ -7,8 +7,8 @@ pub use actors::{
 };
 pub mod authentication;
 pub use authentication::{
-    AccessTokenClaims, AuthenticatedBearer, Clock, EntitlementService, IdentityService,
-    IdentityStore, InitializeCitadel, Login, LoginNextStep, LoginOutcome,
+    AccessTokenClaims, AuthenticatedBearer, Clock, CredentialWork, EntitlementService,
+    IdentityService, IdentityStore, InitializeCitadel, Login, LoginNextStep, LoginOutcome,
     MAXIMUM_PASSWORD_CHARACTERS, MAXIMUM_SESSIONS_PER_USER, MINIMUM_PASSWORD_CHARACTERS,
     NewSession, PasswordHasher, PasswordPolicy, PreparedSession, RefreshTokenClaims,
     ServiceAccountTokenCodec, SessionMetadata, SessionTokenCodec, SessionTokens,

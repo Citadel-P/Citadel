@@ -18,7 +18,11 @@ Core reaches Docker through one of three paths:
 | Direct Agent | Core calls an Agent over gRPC | Agent |
 | Edge Agent | Agent maintains an outbound gRPC stream to Core | Agent |
 
-Agents execute Docker and external-tool operations without a database. Core owns
+Agents execute Docker and external-tool operations without a database.
+The `citadel-docker` crate implements feature ports for local execution; it is not
+foundational infrastructure. Agent normal dependencies exclude Core adapters,
+SQLx, database migrations and identity cryptography. Core keeps Direct/Edge
+routing, target selection and database-aware build and backup orchestration. Core owns
 persistence, user authorization, target selection and operation scheduling. Build
 Pools use the same Agent executable; Swarm-node Agents use a restricted profile.
 
@@ -29,7 +33,8 @@ Pools use the same Agent executable; Swarm-node Agents use a restricted profile.
 | `src/server/` | HTTP/realtime presentation, composition, startup and workers |
 | `src/agent/` | Agent configuration, authentication, Direct/Edge dispatch and lifecycle |
 | `src/features/` | Business models, use cases, typed errors and consumed interfaces |
-| `src/infrastructure/adapters/` | PostgreSQL, Docker, Agent, filesystem and security implementations |
+| `src/infrastructure/adapters/` | PostgreSQL, remote Agent routing, filesystem and security implementations |
+| `src/infrastructure/docker/` | Shared local Docker, Compose/build execution and transport mapping for Core and Agent |
 | `src/infrastructure/database/` | Declarative schema, migrations and migration runner |
 | `src/infrastructure/contracts/` | Core/Agent protobufs and generated bindings |
 | `src/infrastructure/docker-api/` | Generated Docker protocol client and pinned source schema |
@@ -68,6 +73,15 @@ They discover every workspace crate, including target-specific, renamed, build a
 development dependencies. Features cannot import database, HTTP or protocol
 implementations. Foundational infrastructure stays independent of business features;
 the process runner's dependency on the Execution port is intentional.
+Feature task checks parse production items and supported macro token groups,
+including `select!`, and resolve ordinary imported task aliases. Comments and
+string literals are not executable dependencies. Definitely test-only items are
+excluded; potentially production `cfg` branches remain checked. These checks do
+not expand macros or perform compiler name resolution. Injected task-owner ports
+remain allowed. The sole feature-owned blocking-task exception is Identity's
+`CredentialWork`, whose semaphore and cancellation lifetime have behavioral tests.
+Request cancellation is verified through HTTP/Edge cleanup, not guard spelling.
+
 Source checks cover all features, HTTP/realtime handlers, workers and Agent code,
 and keep SQL execution and row mapping in PostgreSQL persistence modules. Test-only
 fixtures may use concrete implementations. These guards detect dependency regressions;
@@ -177,7 +191,9 @@ reuse the copy service's initiating-actor authorization and persisted progress.
 ### HTTP and realtime presentation
 
 `src/server/src/api/routes/` owns endpoint registration, extraction and HTTP responses.
-`src/server/src/api/resources/` owns request DTOs, views, patch handling and mappings.
+`src/server/src/api/resources/` owns shared HTTP/WebSocket public views and mappings,
+plus resource-owned HTTP request DTOs and patch handling. Both transports reuse
+these representations and actor-specific enrichment.
 Keep routes thin: authorize, call the feature, then map the result.
 
 Use `From` for context-free projections and named mapping functions when actor
@@ -186,19 +202,35 @@ secret redaction. Feature errors retain their meaning until Server maps them to
 sanitized HTTP errors; unexpected failures are logged internally.
 
 Realtime consumes feature interfaces and shared presentation mappings. It does
-not import HTTP route modules or select Local, Direct and Edge transports itself.
+not import HTTP route modules, request states or HTTP error rendering, execute SQL,
+or select Local, Direct and Edge transports itself. WebSocket upgrades remain in
+realtime; HTTP mutation-notification middleware lives in
+`api/mutation_notifications.rs` and calls the existing realtime publication boundary.
 
 ## Composition and lifecycle
 
 Server parses and validates configuration before constructing services.
 `src/server/src/composition/` builds typed components once and passes narrow handles
 to routes and workers. Constructors receive settings explicitly rather than
-reading environment variables themselves.
+reading environment variables themselves. Composition constructs health/Git/Edge
+adapters and one shared backup-coverage service before route assembly. HTTP coverage
+remains available when realtime is disabled. The router assembles endpoint groups
+and middleware from these constructed dependencies.
 
 Core applies migrations and acquires its background-job lease before running
 workers. Only one Core process may own that lease for a database. Shutdown cancels
 listeners and workers, drains tracked work, then closes database resources.
 Every spawned task needs an owner, cancellation policy and shutdown behavior.
+
+Build, Backup and Restore workers retain known execution results in their current
+slot while retrying completion storage failures, with cancellation-aware backoff
+capped at five seconds. They never repeat execution or cleanup to retry persistence.
+A rejected guarded transition is read back: recovered terminal state wins, while
+superseded or removed claims end the attempt. Terminal progress follows confirmed
+storage. Build failure observations are optional and enter the durable alert queue
+in the successful completion transaction. Shutdown may leave an unresolved claim
+for existing recovery; the in-memory result does not survive a Core crash.
+
 
 Interactive streams normally end with their caller. Durable operations use
 persisted claims and may continue after a browser disconnect. Recovery inspects
@@ -269,6 +301,13 @@ The frontend uses the full Rust OpenAPI schema. Server owns `utoipa` definitions
 feature crates do not depend on them. Generate both API documents and the TypeScript
 client together; see [API changes](DEVELOPMENT.md#api-changes). Do not hand-edit
 schemas or generated client types.
+
+Core advertises `WebSocketV1`; the frontend connects only when that capability is
+enabled. HTTP queries and live snapshots retain distinct ownership, with explicit
+reconnect reconciliation. Swarm HTTP and live overview payloads share the server
+projection of persisted quorum, platform control and manager/node-local freshness.
+Event-scoped aggregate reads are shared across recipients; capabilities and group
+authorization remain actor-specific.
 
 Shared resource pages and UI components own layout, status badges, loading states
 and actions. Appearance uses CSS variables and shared density/radius tokens.

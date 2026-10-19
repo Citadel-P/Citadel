@@ -55,7 +55,7 @@ try {
     if (-not $healthy) { throw 'The platform read PostgreSQL fixture did not become healthy.' }
 
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--lib')
-    Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'docker_transport')
+    Invoke-RustTest @('test', '--locked', '-p', 'citadel-docker', '--test', 'docker_transport')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_transport')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'platform_inventory_persistence', '--', '--ignored', '--test-threads=1')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-server', '--lib')

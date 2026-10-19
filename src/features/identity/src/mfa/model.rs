@@ -21,7 +21,7 @@ pub struct UserMfaRecoveryCode {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MfaSetupSession {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -38,7 +38,7 @@ impl MfaSetupSession {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MfaChallenge {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -104,7 +104,7 @@ pub struct MfaConfiguration {
     pub recovery_code_count: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TotpSetup {
     pub secret: String,
     pub otp_auth_uri: String,
@@ -120,4 +120,34 @@ pub enum MfaCredentialAcceptance {
     RecoveryCode {
         code_hash: String,
     },
+}
+
+impl std::fmt::Debug for TotpSetup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TotpSetup")
+            .field("expires_at", &self.expires_at)
+            .field("secret", &"[REDACTED]")
+            .field("otp_auth_uri", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for MfaSetupSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MfaSetupSession")
+            .field("user_id", &self.user_id)
+            .field("expires_at", &self.expires_at)
+            .field("id", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for MfaChallenge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MfaChallenge")
+            .field("user_id", &self.user_id)
+            .field("expires_at", &self.expires_at)
+            .field("id", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }

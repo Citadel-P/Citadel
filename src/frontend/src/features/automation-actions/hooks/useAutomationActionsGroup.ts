@@ -1,7 +1,4 @@
-import {
-  AuthorizedAction,
-  ResourceCapabilitiesView,
-} from '@/api/generated/api.types';
+import { AuthorizedAction, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

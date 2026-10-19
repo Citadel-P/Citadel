@@ -35,6 +35,24 @@ pub struct SwarmOverviewView {
     pub capabilities: PlatformCapabilitiesView,
 }
 
+/// Shared HTTP/live projection. Reading or initializing inventory belongs to
+/// the caller; this mapping only uses the persisted platform and aggregate.
+pub fn for_platform(
+    summary: SwarmSummary,
+    platform: &citadel_platforms::PlatformDetails,
+    capabilities: PlatformCapabilitiesView,
+) -> SwarmOverviewView {
+    let routing = &platform.platform_descriptor.routing;
+    overview(
+        summary,
+        platform.id,
+        platform.status == citadel_primitives::PlatformStatus::Online,
+        routing.control_available,
+        routing.error.as_deref(),
+        capabilities,
+    )
+}
+
 pub fn overview(
     summary: SwarmSummary,
     platform: Uuid,

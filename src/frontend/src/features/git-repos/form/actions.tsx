@@ -17,7 +17,9 @@ export const { info: GitRepoActions } = createActionsBuilder<AuthorizedGitReposi
     canExecute: () => true,
     useVariables: (resource) => {
       return {
-        ids: [(resource as AuthorizedGitRepositoryView).id],
+        data: {
+          ids: [(resource as AuthorizedGitRepositoryView).id],
+        },
       };
     },
     useSuccessHandler: () => {

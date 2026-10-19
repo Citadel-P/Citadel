@@ -46,9 +46,7 @@ export function useConfigurationCopyReview<T>({
               Copying from {sourceName}. The source will not change. The new resource will not run automatically.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm">
-            {payload !== null && describe(payload)}
-          </div>
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm">{payload !== null && describe(payload)}</div>
           <DialogFooter>
             <Button variant="outline" onClick={() => finish(false)}>
               Back to editing

@@ -79,7 +79,6 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   const queryClient = useQueryClient();
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const realtimeEnabled = isRealtimeTransportEnabled(realtimeTransport);
-  const webSocketEnabled = realtimeTransport === 'WebSocketV1';
 
   const tokenRef = useRef<string | undefined>(accessToken);
   const prevTokenRef = useRef<string | undefined>(accessToken);
@@ -130,10 +129,9 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       activeCancelRef.current = cancelRef;
 
       const options = { baseUrl, accessTokenFactory: () => tokenRef.current ?? '' };
-      const conn =
-        connectionFactory && !webSocketEnabled
-          ? connectionFactory(options)
-          : createRealtimeConnection(realtimeTransport, options, webSocketFactory);
+      const conn = connectionFactory
+        ? connectionFactory(options)
+        : createRealtimeConnection(realtimeTransport, options, webSocketFactory);
 
       activeConnectionRef.current = conn;
       startInProgressRef.current = true;
@@ -281,7 +279,6 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       baseUrl,
       connectionFactory,
       realtimeTransport,
-      webSocketEnabled,
       webSocketFactory,
       markConnected,
       markInterrupted,

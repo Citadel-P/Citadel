@@ -92,24 +92,30 @@ impl Fixture {
             .arg("serve")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("DATABASE_URL", &self.database_url)
-            .env("Transport__Mode", "Disabled")
-            .env("EnableSwagger", "true")
+            .env("CITADEL_DATABASE_URL", &self.database_url)
+            .env("CITADEL_TRANSPORT_MODE", "Disabled")
+            .env("CITADEL_HTTP_OPENAPI_ENABLED", "true")
             // Lifecycle assertions below intentionally inspect structured log fields.
-            .env("LogFormat", "json")
-            .env("Passwords__MinimumLength", minimum.to_string())
-            .env("CITADEL_RUST_REALTIME_ENABLED", realtime.to_string())
-            .env("Transport__ApiPort", http_port.to_string())
-            .env("Transport__EdgeGrpcPort", edge_port.to_string())
-            .env("Transport__PublicUrl", &url)
-            .env("Jwt__Key", "bootstrap-test-jwt-key-at-least-32-bytes")
+            .env("CITADEL_LOG_FORMAT", "json")
+            // A slow fresh-install migration can log the entire schema and fill
+            // the bounded capture before Core's lifecycle records arrive.
+            .env("RUST_LOG", "info,sqlx::query=error")
+            .env("CITADEL_PASSWORDS_MINIMUM_LENGTH", minimum.to_string())
+            .env("CITADEL_REALTIME_ENABLED", realtime.to_string())
+            .env("CITADEL_HTTP_LISTEN_PORT", http_port.to_string())
+            .env("CITADEL_EDGE_GRPC_LISTEN_PORT", edge_port.to_string())
+            .env("CITADEL_PUBLIC_URL", &url)
             .env(
-                "Secrets__EncryptionKey",
+                "CITADEL_JWT_KEY",
+                "bootstrap-test-jwt-key-at-least-32-bytes",
+            )
+            .env(
+                "CITADEL_SECRETS_ENCRYPTION_KEY",
                 "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
             )
             .env("CITADEL_DATA_ROOT", &self.directory)
             .env(
-                "CITADEL_RUST_DOCKER_SOCKET",
+                "CITADEL_DOCKER_SOCKET",
                 self.directory.join("absent-docker.sock"),
             )
             .current_dir(&self.directory)
@@ -117,12 +123,12 @@ impl Fixture {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         if bootstrap {
-            command.env("Bootstrap__AdminName", "bootstrap-admin");
+            command.env("CITADEL_BOOTSTRAP_ADMIN_NAME", "bootstrap-admin");
             if !partial {
                 command
-                    .env("Bootstrap__AdminEmail", "bootstrap@example.test")
+                    .env("CITADEL_BOOTSTRAP_ADMIN_EMAIL", "bootstrap@example.test")
                     .env(
-                        "Bootstrap__AdminPasswordFile",
+                        "CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE",
                         self.directory.join("password"),
                     );
             }
@@ -435,13 +441,13 @@ async fn offline_restore_rejects_missing_or_malformed_encryption_key_before_acce
                 "--confirm-instance-replacement",
             ])
             .env(
-                "DATABASE_URL",
+                "CITADEL_DATABASE_URL",
                 "postgres://unused:unused@127.0.0.1:1/never-connect",
             )
-            .env("Jwt__Key", "restore-test-jwt-key-at-least-32-bytes")
+            .env("CITADEL_JWT_KEY", "restore-test-jwt-key-at-least-32-bytes")
             .kill_on_drop(true);
         if let Some(key) = key {
-            command.env("Secrets__EncryptionKey", key);
+            command.env("CITADEL_SECRETS_ENCRYPTION_KEY", key);
         }
         let output = tokio::time::timeout(Duration::from_secs(10), command.output())
             .await
@@ -449,7 +455,7 @@ async fn offline_restore_rejects_missing_or_malformed_encryption_key_before_acce
             .unwrap();
         assert!(!output.status.success());
         let error = String::from_utf8_lossy(&output.stderr);
-        assert!(error.contains("Secrets__EncryptionKey"), "{error}");
+        assert!(error.contains("CITADEL_SECRETS_ENCRYPTION_KEY"), "{error}");
         assert!(!error.contains("not-a-base64-key"));
         assert!(
             !error.contains("missing-test-bundle"),

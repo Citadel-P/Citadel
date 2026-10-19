@@ -1,4 +1,6 @@
-use crate::connectors::docker::events::{self, ContainerChange, RuntimeEventKind};
+use citadel_docker::client::events;
+use citadel_docker::client::events::ContainerChange;
+use citadel_docker::client::events::RuntimeEventKind;
 use std::fs;
 
 mod containers;
@@ -2519,7 +2521,7 @@ pub(crate) fn map_container(value: ContainerMessage) -> RuntimeContainerSummary 
         value.image_id.clone()
     };
     RuntimeContainerSummary {
-        health: value.health_observation.map(crate::connectors::agent::container_health::from_wire),
+        health: value.health_observation.map(citadel_docker::container_health_wire::from_wire),
         mounts: value.mounts_observed.then(|| serde_json::json!(value.mounts.iter().map(|m| serde_json::json!({"type":m.r#type,"name":m.name,"source":m.source,"destination":m.destination})).collect::<Vec<_>>())),
         id: value.id,
         name: value.name.trim_start_matches('/').to_owned(),

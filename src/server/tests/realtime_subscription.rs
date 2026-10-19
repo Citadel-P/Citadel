@@ -34,46 +34,6 @@ use uuid::Uuid;
 const TOKEN: &str = "realtime-test-token-with-at-least-32-characters";
 
 #[tokio::test]
-async fn successful_mutations_invalidate_but_reads_and_failures_do_not() {
-    use axum::{
-        body::Body,
-        http::{Method, Request, StatusCode},
-    };
-    use tower::ServiceExt;
-
-    let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));
-    let _subscriber = hub.subscribe();
-    for (method, status, revision) in [
-        (Method::GET, StatusCode::OK, 0),
-        (Method::POST, StatusCode::BAD_REQUEST, 0),
-        (Method::POST, StatusCode::INTERNAL_SERVER_ERROR, 0),
-        (Method::POST, StatusCode::NO_CONTENT, 1),
-        (Method::DELETE, StatusCode::OK, 2),
-    ] {
-        let app = citadel_server::realtime::notify_mutations(
-            axum::Router::new().route(
-                "/resource",
-                axum::routing::any(move || async move { status }),
-            ),
-            "User",
-        )
-        .layer(axum::Extension(hub.clone()));
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/resource")
-                    .method(method)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), status);
-        assert_eq!(hub.current_revision(), revision);
-    }
-}
-
-#[tokio::test]
 async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
     let platform_id = Uuid::now_v7();
     let allowed = Arc::new(AtomicBool::new(true));

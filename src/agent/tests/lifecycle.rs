@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 fn settings(edge: bool) -> BTreeMap<String, String> {
     let mut values = BTreeMap::from([(
-        "HUB_PUBLIC_KEY".into(),
+        "CITADEL_CORE_PUBLIC_KEY".into(),
         STANDARD.encode(SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes()),
     )]);
     if edge {

@@ -1,7 +1,15 @@
 import { Provider } from '@/components/provider';
 import { docsAssetUrl, getSiteUrl } from '@/lib/shared';
 import type { Metadata } from 'next';
+import localFont from 'next/font/local';
 import './global.css';
+
+const inter = localFont({
+  src: './fonts/inter-latin-wght-normal.woff2',
+  variable: '--font-citadel',
+  weight: '100 900',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
@@ -15,7 +23,7 @@ export const metadata: Metadata = {
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
         <Provider>{children}</Provider>
       </body>

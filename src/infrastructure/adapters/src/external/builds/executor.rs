@@ -37,14 +37,14 @@ use crate::connectors::edge::EdgeTarget;
 
 use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuard;
 
-use super::output;
-use super::runtime::{
+use citadel_docker::builds::output;
+use citadel_docker::builds::runtime::{
     BuildRuntimeError as BuildFailure, DockerBuildOptions, DockerBuildSession, DockerBuildSource,
     find_digest, limits, logs, normalize_registry_host, redact, redact_values,
 };
 
 pub struct LocalDockerBuildExecutor {
-    endpoint: crate::connectors::docker::DockerEndpoint,
+    endpoint: citadel_docker::client::DockerEndpoint,
     git: Arc<citadel_git::GitRepositoryExecutionService>,
     docker: OsString,
     secrets: Arc<dyn BuildSecretResolver>,
@@ -459,7 +459,7 @@ impl BuildExecutor for AgentDockerBuildExecutor {
 impl LocalDockerBuildExecutor {
     pub fn new(
         git: Arc<citadel_git::GitRepositoryExecutionService>,
-        endpoint: crate::connectors::docker::DockerEndpoint,
+        endpoint: citadel_docker::client::DockerEndpoint,
         docker: impl Into<OsString>,
         secrets: Arc<dyn BuildSecretResolver>,
         registries: Arc<dyn BuildRegistryCredentialResolver>,

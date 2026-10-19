@@ -34,7 +34,7 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
       options: Object.fromEntries((merged.options ?? []).map((x) => [x.key, x.value])),
     };
 
-    const result = await mutateAsync(payload);
+    const result = await mutateAsync({ data: payload });
 
     if (result?.data) {
       toast.success(`Volume created (ID: ${result.data.id})`);

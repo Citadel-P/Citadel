@@ -34,7 +34,10 @@ export const SwarmQuorumStatus = ({
         <span
           role="status"
           aria-label={`Swarm quorum ${label}${countLabel ? `, ${countLabel} managers reachable` : ''}`}
-          className={cn('inline-flex min-w-0 cursor-default items-center gap-1.5 text-xs text-muted-foreground', className)}>
+          className={cn(
+            'inline-flex min-w-0 cursor-default items-center gap-1.5 text-xs text-muted-foreground',
+            className,
+          )}>
           <span className={cn('h-2 w-2 shrink-0 rounded-full', stateStyles[quorum.state])} />
           <span className="whitespace-nowrap">Quorum {label}</span>
           {showCounts && countLabel && <span className="tabular-nums">{countLabel}</span>}

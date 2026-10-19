@@ -165,8 +165,9 @@ impl BuildRepository for PostgresBuildRepository {
         &'a self,
         claim: &'a BuildClaim,
         result: &'a BuildExecutionResult,
+        observation: Option<&'a citadel_alerts::AlertObservation>,
     ) -> BoxFuture<'a, Result<bool, BuildError>> {
-        self.finish_impl(claim, result)
+        self.finish_impl(claim, result, observation)
     }
 
     fn list_runs<'a>(

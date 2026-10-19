@@ -26,7 +26,6 @@ version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(version)
 POLICY = json.loads(Path(__file__).with_name("policy.json").read_text())
 RECOVERY_PREFIX = POLICY["recovery"]["tagPrefix"]
-IMAGE = re.compile(r"[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}\Z")
 
 
 def canonical(data):
@@ -74,12 +73,6 @@ def documentation_eligible(metadata, backend):
                  for tag in backend.tags(repos[0])
                  if version.STABLE.fullmatch(tag) or version.DEVELOPMENT.fullmatch(tag))
     return not any(documentation_order(tag) > current for tag in published)
-
-
-def development_compatibility():
-    # No stable upgrade guarantee is claimed for the development channel.
-    return dict(bootstrap=False, agent=None, core=None, protocolVersion=POLICY["protocolVersion"],
-                architectures=POLICY["architectures"], agentFirstUpgrades=POLICY["agentFirstUpgrades"])
 
 
 def aliases(product, component, releases):
@@ -154,7 +147,7 @@ class Backend:
             raise ValueError("Reserved release identity differs from current inputs")
         return data
 
-    def prepare(self, metadata, compatibility):
+    def prepare(self, metadata):
         """Reserve one original build run before any candidates can be accepted."""
         tag = "v" + metadata["displayVersion"]
         published = self.release(tag)
@@ -167,14 +160,12 @@ class Backend:
             return True
         existing = self.reservation(metadata)
         if existing:
-            if existing["compatibility"] != compatibility:
-                raise ValueError("Reserved compatibility differs")
             return
         if self.release(tag) is not None:
             # Legacy journals continue to recover in place. Never migrate history.
             self.load(tag)
             return
-        data = dict(metadata=metadata, compatibility=compatibility, sourceRunId=os.environ["GITHUB_RUN_ID"])
+        data = dict(metadata=metadata, sourceRunId=os.environ["GITHUB_RUN_ID"])
         # A draft can refer to a non-existent internal tag. Never publish it or
         # create a Git ref: product tags and NBGV history remain unchanged.
         payload = dict(tag_name=RECOVERY_PREFIX + tag, target_commitish=metadata["sourceRevision"],
@@ -461,71 +452,17 @@ def preflight(metadata, backend, environ):
     for key in ["DOCS_SITE_URL", "API_DOCS_URL"]:
         if environ.get(key) and not re.fullmatch(r"https://[^\s]+", environ[key]):
             raise ValueError(f"{key} must be a canonical HTTPS URL")
-    if development(metadata):
-        recorded = backend.load("v" + metadata["displayVersion"])
-        if recorded and recorded["metadata"] != metadata:
-            raise ValueError("Recorded release identity differs from current inputs")
-        return recorded["compatibility"] if recorded else development_compatibility()
-    if environ.get("DOCKERHUB_NAMESPACE") != "citadelplane":
-        raise ValueError("DOCKERHUB_NAMESPACE must match the reviewed destinations")
-    for key in ["DOCKERHUB_USERNAME", "DOCKERHUB_TOKEN"]:
-        if not environ.get(key):
-            raise ValueError(f"Release blocked: {key} is not configured")
-    recorded = backend.load("v" + metadata["productVersion"])
-    if recorded:
-        if recorded["metadata"] != metadata:
-            raise ValueError("Recorded release identity differs from current inputs")
-        # Baselines/bootstrap are frozen once candidates are accepted. Changing
-        # repository variables for a later release must not change an old retry.
-        return recorded["compatibility"]
-    reserved = backend.reservation(metadata)
-    if reserved:
-        return reserved["compatibility"]
-    agent, core = environ.get("CITADEL_AGENT_ROLLBACK_IMAGE", ""), environ.get("CITADEL_CORE_ROLLBACK_IMAGE", "")
-    bootstrap = environ.get("CITADEL_FIRST_RUST_RELEASE", "") == metadata["productVersion"]
-    current = "v" + metadata["productVersion"]
-    if not agent or not core:
-        if not bootstrap or agent or core:
-            raise ValueError("Both digest-pinned Core and Agent baselines are required, or explicit first-release bootstrap")
-        # Prior exact tags in either registry prohibit waiving the baseline.
-        for repositories in POLICY["registries"].values():
-            for repository in repositories:
-                if any(version.STABLE.fullmatch(tag) and tag != metadata["productVersion"] for tag in backend.tags(repository)):
-                    raise ValueError("Bootstrap forbidden: released images already exist")
-        if any(r["tag_name"] != current and version.STABLE.fullmatch(r["tag_name"].removeprefix("v")) for r in backend.releases()):
-            raise ValueError("Bootstrap forbidden: a previous release exists")
-    else:
-        bootstrap = False
-        for image in [agent, core]:
-            if not IMAGE.fullmatch(image):
-                raise ValueError("Baseline must be an explicit repository@sha256 digest")
-            manifest = json.loads(backend.manifest(image))
-            arches = {m.get("platform", {}).get("architecture") for m in manifest.get("manifests", [])
-                      if m.get("platform", {}).get("os") == "linux"}
-            if not set(POLICY["architectures"]).issubset(arches):
-                raise ValueError("Baseline lacks a required Linux architecture")
-    if not bootstrap:
-        for component, image in [("agent", agent), ("core", core)]:
-            # Only an earlier completed coordinated Rust release can establish
-            # the supported baseline. An arbitrary digest is not release evidence.
-            found = False
-            for prior in backend.releases():
-                name = prior["tag_name"]
-                if prior["draft"] or not name.startswith("v") or not version.STABLE.fullmatch(name[1:]):
-                    continue
-                if semver(name[1:]) >= semver(metadata["productVersion"]):
-                    continue
-                journal = backend.load(name)
-                if (journal and journal.get("status") == "complete"
-                        and image in [repo + "@" + journal["indexes"][component]
-                                      for repo in POLICY["registries"][component]]):
-                    found = True
-                    break
-            if not found:
-                raise ValueError(f"{component} baseline is not an earlier completed Rust release")
-    return dict(bootstrap=bootstrap, agent=agent or None, core=core or None,
-                protocolVersion=POLICY["protocolVersion"], architectures=POLICY["architectures"],
-                agentFirstUpgrades=POLICY["agentFirstUpgrades"])
+    if not development(metadata):
+        if environ.get("DOCKERHUB_NAMESPACE") != "citadelplane":
+            raise ValueError("DOCKERHUB_NAMESPACE must match the reviewed destinations")
+        for key in ["DOCKERHUB_USERNAME", "DOCKERHUB_TOKEN"]:
+            if not environ.get(key):
+                raise ValueError(f"Release blocked: {key} is not configured")
+    recorded = backend.load("v" + metadata["displayVersion"])
+    if recorded and recorded["metadata"] != metadata:
+        raise ValueError("Recorded release identity differs from current inputs")
+    # Reservations validate source identity and retain the original build run.
+    backend.reservation(metadata)
 
 
 def unpack(archive, destination):
@@ -725,18 +662,16 @@ def recover(backend, tag, directory, durable_only=False):
     return record
 
 
-def validate_evidence(directory, metadata, compatibility):
+def validate_evidence(directory, metadata):
     for arch in POLICY["architectures"]:
         evidence = json.loads((directory / f"evidence-{arch}.json").read_text())
-        if (evidence["metadata"] != metadata or evidence["compatibility"] != compatibility
+        if (evidence["metadata"] != metadata
                 or evidence["passed"] is not True or evidence["architecture"] != arch):
             raise ValueError("Candidate acceptance evidence does not match release")
         required = {"independent-binary-and-oci-versions", "core-runtime", "agent-image",
                     "agent-compatibility", "candidate-acceptance"}
         if not required.issubset(evidence["checks"]):
             raise ValueError("Missing required candidate checks")
-        if set(evidence["mixedVersionChecks"]) != {c for c in ["agent", "core"] if compatibility.get(c)}:
-            raise ValueError("Missing supported mixed-version checks")
         for component in ["core", "agent"]:
             if evidence["artifacts"][component] != version.sha256(directory / f"{component}-{arch}.oci.tar"):
                 raise ValueError("Candidate was changed after acceptance")
@@ -764,7 +699,6 @@ def published_record(backend, published, metadata=None):
     identity = f"https://github.com/{backend.repository}/.github/workflows/ci.yml@refs/tags/{tag}"
     if (manifest.get("schemaVersion") != 1 or manifest.get("tag") != tag or manifest.get("metadata") != metadata
             or manifest.get("architectures") != POLICY["architectures"]
-            or manifest.get("upgradeOrder") != ["agent", "core"]
             or manifest.get("signatures") != dict(tool="cosign", certificateIdentity=identity,
                 certificateOidcIssuer="https://token.actions.githubusercontent.com")):
         raise ValueError("Published manifest identity differs")
@@ -785,10 +719,7 @@ def published_record(backend, published, metadata=None):
                 raise ValueError("Missing verified signature checkpoint or inconsistent image digest")
             indexes[component] = digest
             steps["signed:" + ref] = digest
-    # Older manifests omitted compatibility. Completed retries skip all builds;
-    # future release baselines need only the verified immutable image indexes.
     return dict(tag=tag, metadata=metadata, status="complete", indexes=indexes, steps=steps,
-                compatibility=manifest.get("compatibility") or {"completed": True},
                 artifacts={}, publicManifest=True)
 
 
@@ -802,8 +733,8 @@ def public_files(record, directory):
                 raise ValueError("Missing verified signature checkpoint for public manifest")
             signed[reference] = record["indexes"][component]
     manifest = dict(schemaVersion=1, tag=record["tag"], metadata=record["metadata"],
-                    verifiedSignatures=signed, compatibility=record["compatibility"],
-                    architectures=POLICY["architectures"], upgradeOrder=["agent", "core"],
+                    verifiedSignatures=signed,
+                    architectures=POLICY["architectures"],
                     images={component: [dict(tag=repo + ":" + record["metadata"]["displayVersion"],
                                              digest=repo + "@" + record["indexes"][component])
                                         for repo in repos]
@@ -889,15 +820,14 @@ def main():
             restored = backend.recover_validation_artifact(args.artifact, args.directory, metadata)
         print(json.dumps({"recovered": restored}))
         return
-    compatibility = preflight(metadata, backend, os.environ)
+    preflight(metadata, backend, os.environ)
     if args.command == "prepare":
         if not args.apply:
             raise ValueError("Reservation requires --apply")
-        completed = backend.prepare(metadata, compatibility)
+        completed = backend.prepare(metadata)
         print(json.dumps({"completed": bool(completed)}))
         return
     if args.command == "preflight":
-        print(json.dumps(compatibility, indent=2))
         return
     record = backend.load(tag)
     published = backend.release(tag) if record and record["status"] == "complete" else None
@@ -944,7 +874,7 @@ def main():
             backend.cleanup(metadata)
         return
     if record:
-        if record["metadata"] != metadata or record["compatibility"] != compatibility:
+        if record["metadata"] != metadata:
             raise ValueError("Release inputs differ from durable record")
         recover(backend, tag, args.directory)
     else:
@@ -960,12 +890,12 @@ def main():
         required += ["agent.oci.tar", "core.oci.tar", "docs.tar", "api-docs.tar",
                      "documentation-inputs.json", "release-notes.md", "release-review.json"]
         required += [f"evidence-{a}.json" for a in POLICY["architectures"]]
-        validate_evidence(args.directory, metadata, compatibility)
+        validate_evidence(args.directory, metadata)
         reservation = backend.reservation(metadata)
         if args.apply and reservation is None:
             raise ValueError("Prepare durable recovery storage before building")
         record = dict(schemaVersion=2, recoveryTag=RECOVERY_PREFIX + tag, sequence=0, tag=tag, metadata=metadata,
-                      compatibility=compatibility, indexes=indexes, status="prepared", steps={},
+                      indexes=indexes, status="prepared", steps={},
                       sourceRunId=reservation["sourceRunId"] if reservation else os.environ.get("GITHUB_RUN_ID"),
                       evidence={a: json.loads((args.directory / f"evidence-{a}.json").read_text()) for a in POLICY["architectures"]},
                       artifacts={name: version.sha256(args.directory / name) for name in required},

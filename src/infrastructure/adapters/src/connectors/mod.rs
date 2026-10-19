@@ -2,8 +2,6 @@ pub mod agent;
 
 pub mod containers;
 
-pub mod docker;
-
 pub mod edge;
 
 pub mod oidc;

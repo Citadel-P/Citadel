@@ -2,11 +2,11 @@
 use crate::composition::connect_database;
 use citadel_adapters::connectors::agent::client::AgentClient;
 use citadel_adapters::connectors::agent::client::AgentRequestSigner;
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::external::backups::system_recovery::CitadelSystemRestoreOptions;
 use citadel_adapters::external::backups::system_recovery::restore_citadel_system;
 use citadel_adapters::persistence::postgres::platforms::PostgresAuthorizedPlatformReader;
 use citadel_database::MigrationRunner;
+use citadel_docker::client::DockerClient;
 use citadel_platforms::AuthorizedPlatformReader;
 use citadel_platforms::{ContainerInventoryPort, PlatformInfoPort, PlatformStatsPort};
 use citadel_primitives::ActorId;
@@ -115,14 +115,14 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let url = match url {
                 Some(url) => url,
                 None => {
-                    let port: u16 = std::env::var("Transport__ApiPort")
+                    let port: u16 = std::env::var("CITADEL_HTTP_LISTEN_PORT")
                         .unwrap_or_else(|_| "8000".into())
                         .parse()?;
-                    let direct = std::env::var("Transport__Mode")
-                        .is_ok_and(|mode| mode.eq_ignore_ascii_case("Direct"));
+                    let direct = std::env::var("CITADEL_TRANSPORT_MODE")
+                        .is_ok_and(|mode| mode.trim().eq_ignore_ascii_case("Direct"));
                     if direct {
                         let certificate =
-                            std::fs::read(std::env::var("Transport__Certificate__Path")?)?;
+                            std::fs::read(std::env::var("CITADEL_TLS_CERTIFICATE_PATH")?)?;
                         // Local liveness probe: trust only Core's configured certificate chain.
                         // Its public DNS name need not include the loopback IP.
                         client = client
@@ -245,7 +245,7 @@ async fn agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let agent_config = config
         .agent
         .as_ref()
-        .ok_or("CITADEL_RUST_AGENT_ADDRESS and CITADEL_RUST_AGENT_PRIVATE_KEY_PATH are required")?;
+        .ok_or("CITADEL_CORE_AGENT_ADDRESS and CITADEL_CORE_AGENT_PRIVATE_KEY_PATH are required")?;
     let local = DockerClient::with_host_root(
         &config.docker_socket,
         config.docker_request_timeout,

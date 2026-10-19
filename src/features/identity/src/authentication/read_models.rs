@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginOutcome {
     pub access_token: Option<String>,
@@ -22,7 +22,7 @@ pub enum LoginNextStep {
     EnrollMfa,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SessionTokens {
     pub access_token: String,
     pub refresh_token: String,
@@ -43,4 +43,23 @@ pub struct UserSessionRecord {
 pub struct AuthenticatedBearer {
     pub principal: ActorPrincipal,
     pub automation_run_id: Option<Uuid>,
+}
+
+impl std::fmt::Debug for LoginOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginOutcome")
+            .field("access_token", &"[REDACTED]")
+            .field("next_step", &self.next_step)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for SessionTokens {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionTokens")
+            .field("access_token", &"[REDACTED]")
+            .field("refresh_token", &"[REDACTED]")
+            .field("refresh_expires_at", &self.refresh_expires_at)
+            .finish()
+    }
 }

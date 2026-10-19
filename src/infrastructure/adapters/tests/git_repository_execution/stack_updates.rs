@@ -1,7 +1,7 @@
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_adapters::connectors::routing::stacks::StackUpdateRuntime;
 use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
+use citadel_docker::client::DockerClient;
 use citadel_git::GitRepositoryExecutionService;
 use citadel_primitives::ActorId;
 use citadel_stacks::{

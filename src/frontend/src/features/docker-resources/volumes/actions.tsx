@@ -47,9 +47,11 @@ const volumeActions = createActionsBuilder<VolumeView>()
       const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources : [resources];
       return {
-        platformId: currentPlatform?.id ?? '',
-        names: selected.map((x) => x.id!),
-        force: true,
+        data: {
+          platformId: currentPlatform?.id ?? '',
+          names: selected.map((x) => x.id!),
+          force: true,
+        },
       };
     },
   })

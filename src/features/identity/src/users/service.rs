@@ -82,7 +82,7 @@ impl UserReadService {
 
 pub struct UserMutationService {
     store: Arc<dyn UserRepository>,
-    password_hasher: Arc<dyn PasswordHasher>,
+    password_hasher: Arc<CredentialWork>,
     password_policy: PasswordPolicy,
     entitlements: Arc<dyn EntitlementService>,
     clock: Arc<dyn Clock>,
@@ -92,7 +92,7 @@ impl UserMutationService {
     #[must_use]
     pub fn new(
         store: Arc<dyn UserRepository>,
-        password_hasher: Arc<dyn PasswordHasher>,
+        password_hasher: Arc<CredentialWork>,
         entitlements: Arc<dyn EntitlementService>,
         clock: Arc<dyn Clock>,
     ) -> Self {
@@ -129,7 +129,7 @@ impl UserMutationService {
             actor_id: ActorId::new(Uuid::now_v7()),
             name: request.name.trim().to_owned(),
             email: request.email.trim().to_owned(),
-            password_hash: self.password_hasher.hash(&request.password)?,
+            password_hash: self.password_hasher.hash_password(request.password).await?,
             is_enabled: request.is_enabled,
             created_by_actor_id: actor_id,
             created_at: self.clock.now(),
@@ -170,10 +170,10 @@ impl UserMutationService {
         }
         let patch = UserPatchMutation {
             email: email.map(|value| value.trim().to_owned()),
-            password_hash: password
-                .as_deref()
-                .map(|value| self.password_hasher.hash(value))
-                .transpose()?,
+            password_hash: match password {
+                Some(value) => Some(self.password_hasher.hash_password(value).await?),
+                None => None,
+            },
             is_enabled: patch_value(request.is_enabled),
             team_ids: patch_value(request.team_ids)
                 .map(deduplicate_ids)

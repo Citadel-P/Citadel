@@ -1,9 +1,9 @@
 import { useCallback, useState, useRef, useEffect, memo } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
-import { LogViewer } from '@/components/custom/common';
 import { normalizeContainerReference } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { LogViewer } from '@/components/custom/log-viewer';
 
 const MAX_LOGS = 5000;
 const MAX_CACHED_LOG_GROUPS = 8;

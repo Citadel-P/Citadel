@@ -188,9 +188,7 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
         projection_stale_since: row.try_get("projectionstalesince").map_err(storage)?,
         projection_stale_reason: row.try_get("projectionstalereason").map_err(storage)?,
         last_stats,
-        ports: crate::connectors::containers::ports::normalize(
-            row.try_get("ports").map_err(storage)?,
-        ),
+        ports: citadel_docker::containers::ports::normalize(row.try_get("ports").map_err(storage)?),
         deployment_id: row.try_get("deploymentid").map_err(storage)?,
         stack_id: row.try_get("stackid").map_err(storage)?,
         image_view,

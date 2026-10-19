@@ -69,7 +69,8 @@ const normalize = (resource?: ServiceAccountFormResource): ServiceAccountInput =
         isEnabled: resource.isEnabled,
         teamIds: extractIds(resource.teams),
         roleIds: extractIds(resource.roles),
-        resourceAccesses: (resource as ServiceAccountDetailResponse).resourceAccesses as AddServiceAccountResourceAccessRequest[],
+        resourceAccesses: (resource as ServiceAccountDetailResponse)
+          .resourceAccesses as AddServiceAccountResourceAccessRequest[],
       } as ServiceAccountInput)
     : { name: '', isEnabled: true, description: null, teamIds: [], roleIds: [], resourceAccesses: [] };
 

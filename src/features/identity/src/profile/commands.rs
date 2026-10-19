@@ -39,9 +39,18 @@ pub struct UserPreferencesUpdate {
     pub density: Option<UserUiDensity>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeCurrentPassword {
     pub current_password: String,
     pub new_password: String,
+}
+
+impl std::fmt::Debug for ChangeCurrentPassword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChangeCurrentPassword")
+            .field("current_password", &"[REDACTED]")
+            .field("new_password", &"[REDACTED]")
+            .finish()
+    }
 }

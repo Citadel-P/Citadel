@@ -6,22 +6,17 @@ use axum::{
     http::{Method, Request, StatusCode},
 };
 use chrono::{Duration, Utc};
-use citadel_adapters::{
-    connectors::{
-        docker::DockerClient, routing::platforms::registration::PlatformRegistrationRuntimeRouter,
-    },
-    persistence::postgres::{
-        identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
-        platforms::{
-            PostgresPlatformReader, inventory::store::PostgresInventoryProjectionStore,
-            registration::PostgresPlatformRegistrationRepository,
-        },
-    },
-    security::identity::crypto::{
-        Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
-    },
-};
+use citadel_adapters::connectors::routing::platforms::registration::PlatformRegistrationRuntimeRouter;
+use citadel_adapters::persistence::postgres::identity::authentication::store::PostgresIdentityStore;
+use citadel_adapters::persistence::postgres::identity::authentication::store::StaticEntitlementService;
+use citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader;
+use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
+use citadel_adapters::persistence::postgres::platforms::registration::PostgresPlatformRegistrationRepository;
+use citadel_adapters::security::identity::crypto::Argon2PasswordHasher;
+use citadel_adapters::security::identity::crypto::JwtSessionTokenCodec;
+use citadel_adapters::security::identity::crypto::OpaqueServiceAccountTokenCodec;
 use citadel_database::MigrationRunner;
+use citadel_docker::client::DockerClient;
 use citadel_identity::{
     ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityService,
     NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
@@ -523,7 +518,9 @@ async fn fixture_for_cluster(cluster: String) -> Fixture {
 
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[7_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),

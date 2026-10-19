@@ -105,9 +105,11 @@ function FolderNode({
   const entries = useMemo(() => sortEntries(query.data?.entries ?? []), [query.data?.entries]);
   const isLoading = query.isLoading || (query.isFetching && !query.data);
 
-  useEffect(() => {
+  const [previousReveal, setPreviousReveal] = useState(shouldRevealInitialPath);
+  if (previousReveal !== shouldRevealInitialPath) {
+    setPreviousReveal(shouldRevealInitialPath);
     if (shouldRevealInitialPath) setExpanded(true);
-  }, [shouldRevealInitialPath]);
+  }
 
   useEffect(() => {
     if (!initialPath || !onSelect || selectedPath) return;

@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { renderCitadel } from '@/test/render-citadel';
-import { LogViewer } from './common';
+import { LogViewer } from './log-viewer';
 
 describe('LogViewer empty message', () => {
   it('shows a waiting message until streamed lines arrive', () => {

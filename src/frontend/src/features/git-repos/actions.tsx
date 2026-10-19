@@ -7,7 +7,8 @@ import { useMutate } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-const isProcessing = (resource: AuthorizedGitRepositoryView) => resource.controlState === ResourceControlState.Processing;
+const isProcessing = (resource: AuthorizedGitRepositoryView) =>
+  resource.controlState === ResourceControlState.Processing;
 
 export const syncGitRepositoryAction: ActionConfig<AuthorizedGitRepositoryView, 'syncGitRepository'> = {
   key: 'sync',
@@ -78,7 +79,9 @@ export const { dropdown: GitRepoDropdownActions, group: GitRepoGroupActions } =
       useVariables: (resources) => {
         const selected = Array.isArray(resources) ? resources : [resources];
         return {
-          ids: selected.map((x) => x.id!),
+          data: {
+            ids: selected.map((x) => x.id!),
+          },
         };
       },
     })

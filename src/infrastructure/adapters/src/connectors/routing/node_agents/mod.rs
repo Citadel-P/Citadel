@@ -1,11 +1,11 @@
 use crate::connectors::agent::client::AgentClient;
 use crate::connectors::agent::execution::AgentExecutionClient;
 use crate::connectors::agent::execution::unary;
-use crate::connectors::docker::DockerClient;
 use crate::connectors::edge::EdgeRegistry;
 use crate::connectors::edge::EdgeRuntime;
 use crate::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::{edge::v1::EdgeCommandKind, swarm::v1::*};
+use citadel_docker::client::DockerClient;
 use citadel_platforms::{node_agents::lifecycle::*, *};
 use futures_util::future::BoxFuture;
 use sqlx::PgPool;
@@ -256,8 +256,8 @@ fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
         false,
     )
 }
-fn docker_error(error: crate::connectors::docker::DockerError) -> RuntimeCapabilityError {
-    crate::connectors::docker::runtime::normalize_docker_error(error)
+fn docker_error(error: citadel_docker::client::DockerError) -> RuntimeCapabilityError {
+    citadel_docker::client::runtime::normalize_docker_error(error)
 }
 
 #[cfg(test)]

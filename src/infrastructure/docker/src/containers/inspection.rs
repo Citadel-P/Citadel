@@ -1,0 +1,251 @@
+use crate::client::DockerClient;
+use citadel_contracts::citadel::shared_models::v1::ContainerStateType;
+use citadel_platforms::{
+    RuntimeCapabilityError, RuntimeErrorKind, containers::ContainerInspectionPort,
+};
+use futures_util::future::BoxFuture;
+use serde_json::{Map, Value};
+use tokio_util::sync::CancellationToken;
+
+impl ContainerInspectionPort for DockerClient {
+    fn inspection<'a>(
+        &'a self,
+        id: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Value, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            let document = tokio::select! {
+                biased;
+                () = cancel.cancelled() => return Err(RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "operation cancelled", false)),
+                result = self.inspect_container_document(id) => result.map_err(crate::client::runtime::normalize_docker_error)?,
+            };
+            let mut document = document;
+            document["HealthMetadataObserved"] =
+                Value::Bool(document.get("Config").is_some_and(Value::is_object));
+            map_inspection(document, id)
+        })
+    }
+}
+pub fn invalid(message: &str) -> RuntimeCapabilityError {
+    RuntimeCapabilityError::new(RuntimeErrorKind::Conflict, message, false)
+}
+
+/// Preserve dictionary keys (labels, paths, port names, network names), unlike
+/// indiscriminately camel-casing every JSON key. Agent/protobuf containers and
+/// Docker responses have the same information but different collection wrappers.
+pub fn map_inspection(document: Value, expected_id: &str) -> Result<Value, RuntimeCapabilityError> {
+    let mut result = normalize(document, "");
+    let secrets = result
+        .pointer("/config/env")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_str()?.split_once('='))
+        .filter(|(name, value)| {
+            !value.is_empty() && citadel_primitives::is_sensitive_environment_name(name)
+        })
+        .map(|(_, value)| value.to_owned())
+        .collect::<Vec<_>>();
+    if let Some(logs) = result
+        .pointer_mut("/state/health/log")
+        .and_then(Value::as_array_mut)
+    {
+        if logs.len() > 5 {
+            logs.drain(..logs.len() - 5);
+        }
+        for log in logs {
+            if let Some(output) = log.get_mut("output") {
+                redact_health_text(output, &secrets);
+            }
+        }
+    }
+    if let Some(command) = result
+        .pointer_mut("/config/healthcheck/test")
+        .and_then(Value::as_array_mut)
+    {
+        for argument in command {
+            redact_health_text(argument, &secrets);
+        }
+    }
+    if result["id"].as_str() != Some(expected_id) {
+        return Err(invalid(
+            "Container identity changed. Refresh inventory before inspecting.",
+        ));
+    }
+    if let Some(environment) = result
+        .pointer_mut("/config/env")
+        .and_then(Value::as_array_mut)
+    {
+        for entry in environment {
+            if let Some((name, value)) = entry.as_str().and_then(|value| value.split_once('='))
+                && !value.is_empty()
+                && citadel_primitives::is_sensitive_environment_name(name)
+            {
+                *entry = Value::String(format!("{name}=********"));
+            }
+        }
+    }
+    if let Some(status) = result.pointer_mut("/state/status") {
+        if let Some(value) = status.as_i64() {
+            *status = Value::String(
+                i32::try_from(value)
+                    .ok()
+                    .and_then(|value| ContainerStateType::try_from(value).ok())
+                    .unwrap_or(ContainerStateType::Unknown)
+                    .as_str_name()
+                    .into(),
+            );
+        } else if let Some(value) = status.as_str() {
+            let mut chars = value.chars();
+            *status = Value::String(chars.next().map_or_else(String::new, |first| {
+                first.to_ascii_uppercase().to_string() + chars.as_str()
+            }));
+        }
+    }
+    // Missing mount information is unknown, not proof that a container has no
+    // storage. Backup discovery must be able to reject incomplete inspection.
+    // Agent repeated fields already serialize a known empty mount list as [].
+    for key in ["args", "execIDs"] {
+        if result[key].is_null() {
+            result[key] = Value::Array(vec![]);
+        }
+    }
+    Ok(result)
+}
+
+fn redact_health_text(value: &mut Value, secrets: &[String]) {
+    if let Some(text) = value.as_str() {
+        let mut text = text.to_owned();
+        for secret in secrets {
+            text = text.replace(secret, "********");
+        }
+        *value = Value::String(text.chars().take(4096).collect());
+    }
+}
+
+fn normalize(value: Value, context: &str) -> Value {
+    match value {
+        Value::Array(items) if context == "networks" => Value::Object(
+            items
+                .into_iter()
+                .filter_map(|mut entry| {
+                    let key = entry.get_mut("key")?.take().as_str()?.to_owned();
+                    let value = entry.get_mut("value")?.take();
+                    Some((key, normalize(value, "endpoint")))
+                })
+                .collect(),
+        ),
+        Value::Array(items) => {
+            Value::Array(items.into_iter().map(|item| normalize(item, "")).collect())
+        }
+        Value::Object(map)
+            if matches!(
+                context,
+                "labels"
+                    | "annotations"
+                    | "storageOpt"
+                    | "tmpfs"
+                    | "sysctls"
+                    | "options"
+                    | "driverOpts"
+                    | "data"
+                    | "logOptions"
+            ) =>
+        {
+            Value::Object(map)
+        }
+        Value::Object(map) if matches!(context, "exposedPorts" | "volumes") => {
+            Value::Array(map.into_iter().map(|(key, _)| Value::String(key)).collect())
+        }
+        Value::Object(map) if matches!(context, "ports" | "portBindings" | "networks") => {
+            Value::Object(
+                map.into_iter()
+                    .map(|(name, mut value)| {
+                        if context != "networks"
+                            && let Some(bindings) = value.get_mut("host_port_binding")
+                        {
+                            value = bindings.take();
+                        }
+                        (name, normalize(value, ""))
+                    })
+                    .collect(),
+            )
+        }
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(key, value)| {
+                    let key = field_name(&key);
+                    let child = if context == "logConfig" && key == "config" {
+                        "logOptions"
+                    } else {
+                        &key
+                    };
+                    let value = normalize(value, child);
+                    (key, value)
+                })
+                .collect::<Map<_, _>>(),
+        ),
+        value => value,
+    }
+}
+
+fn field_name(name: &str) -> String {
+    // Acronyms whose public property spelling differs from protobuf snake_case.
+    const ACRONYMS: &[&str] = &[
+        "execIDs",
+        "containerIDFile",
+        "sandboxID",
+        "endpointID",
+        "networkID",
+        "hostIP",
+        "dnsNames",
+        "linkLocalIPs",
+        "secondaryIPAddresses",
+        "secondaryIPv6Addresses",
+        "globalIPv6Address",
+        "globalIPv6PrefixLen",
+        "linkLocalIPv6Address",
+        "linkLocalIPv6PrefixLen",
+        "kernelMemoryTCP",
+        "utsMode",
+        "ioMaximumBandwidth",
+        "oomKilled",
+        "rw",
+        "tty",
+        "ipAddress",
+        "ipPrefixLen",
+        "ipv6Gateway",
+        "ipv4Address",
+        "ipv6Address",
+        "ipamConfig",
+        "dns",
+        "dnsOptions",
+        "dnsSearch",
+    ];
+    if let Some(key) = ACRONYMS.iter().find(|key| {
+        key.bytes().map(|b| b.to_ascii_lowercase()).eq(name
+            .bytes()
+            .filter(|b| *b != b'_')
+            .map(|b| b.to_ascii_lowercase()))
+    }) {
+        return (*key).into();
+    }
+    let mut chars = name.chars();
+    let mut result = chars
+        .next()
+        .map_or_else(String::new, |first| first.to_ascii_lowercase().to_string());
+    let mut uppercase = false;
+    for ch in chars {
+        if ch == '_' {
+            uppercase = true;
+        } else {
+            result.push(if uppercase {
+                ch.to_ascii_uppercase()
+            } else {
+                ch
+            });
+            uppercase = false;
+        }
+    }
+    result
+}

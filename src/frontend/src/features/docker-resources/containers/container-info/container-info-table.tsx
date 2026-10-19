@@ -19,7 +19,7 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerDetailsView } from '../hooks/useContainerInfoGroup';
 import { ContainerOverviewHealth } from './container-overview-health';
-import { ImageName } from '.';
+import { ImageName } from './image-name';
 import {
   CPUCell,
   DockerContainerCell,
