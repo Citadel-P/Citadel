@@ -33,6 +33,11 @@ SELECT service_summary.*, node_summary.*,
     ((SELECT COUNT(*) FROM swarmnetworkprojections WHERE platformid = $1)
         + (SELECT COUNT(*) FROM swarmnodenetworkprojections WHERE platformid = $1)) AS networkcount,
     (SELECT COUNT(*) FROM swarmnodenetworkprojections WHERE platformid = $1) AS localnetworkcount,
-    (SELECT COUNT(*) FROM swarmnodevolumeprojections WHERE platformid = $1) AS volumecount,
-    (SELECT COUNT(*) FROM swarmnodeimageprojections WHERE platformid = $1) AS imagecount
+    -- Manager volumes are live lists with a persisted snapshot count; manager
+    -- images have durable rows. Satellite projections exclude the pinned manager.
+    -- Count each daemon's entry, including repeated Docker IDs and volume names.
+    (COALESCE((SELECT volumecount::bigint FROM platforms WHERE id = $1), 0)
+        + (SELECT COUNT(*) FROM swarmnodevolumeprojections WHERE platformid = $1)) AS volumecount,
+    ((SELECT COUNT(*) FROM images WHERE platformid = $1)
+        + (SELECT COUNT(*) FROM swarmnodeimageprojections WHERE platformid = $1)) AS imagecount
 FROM service_summary CROSS JOIN node_summary

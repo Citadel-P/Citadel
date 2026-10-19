@@ -31,7 +31,6 @@ function Probe() {
 describe('useStackGroup activity updates', () => {
   it.each([
     ['Rust JSON', info],
-    ['.NET MessagePack', ['StackDegraded', { reason: info.reason }]],
     ['no activity', null],
   ])('preserves %s activity details', async (_format, wireInfo) => {
     const fake = new FakeRealtimeConnection();

@@ -297,12 +297,22 @@ fn compose_environment_helper() {
 #[test]
 #[ignore = "requires docker compose executable; no daemon needed"]
 fn compose_interpolation_excludes_core_secrets() {
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "stacks::tests::compose_environment_helper",
-            "--nocapture",
-        ])
+    let executable = std::env::current_exe().unwrap();
+    let helper = "stacks::tests::compose_environment_helper";
+    let listed = std::process::Command::new(&executable)
+        .args(["--exact", helper, "--list"])
+        .output()
+        .unwrap();
+    assert!(listed.status.success());
+    assert!(
+        String::from_utf8(listed.stdout)
+            .unwrap()
+            .lines()
+            .any(|line| line == format!("{helper}: test")),
+        "Compose subprocess helper must resolve to a real test"
+    );
+    let status = std::process::Command::new(executable)
+        .args(["--exact", helper, "--nocapture"])
         .env("CITADEL_COMPOSE_ENV_HELPER", "1")
         .env("CITADEL_TEST_CORE_ONLY_SECRET", "parent-only-value")
         .status()

@@ -403,7 +403,10 @@ Cargo dependency advisories run independently in `.github/workflows/advisories.y
 on dependency pull requests and default-branch pushes. The pinned `cargo-audit`
 scans `Cargo.lock`; it does not scan OS packages, Docker/Compose, Restic, Deno or
 frontend assets. Any narrowly scoped exceptions live in `.cargo/audit.toml`.
-The Compose environment-isolation check needs the Compose executable, not a daemon:
+The Compose environment-isolation check runs explicitly in CI's **Rust unit and
+database tests** job, after workspace tests. It verifies both exact test selectors
+and runs the ignored wrapper with the pinned Docker CLI and Compose plugin from
+`test/scripts/test-stack-runtime.sh`. It needs the Compose executable, not a daemon:
 
 ```bash
 cargo test --locked -p citadel-docker --lib stacks::tests::compose_interpolation_excludes_core_secrets -- --ignored --exact

@@ -1,5 +1,126 @@
 use super::*;
 
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn overview_counts_manager_and_each_satellite_daemon_through_partial_updates() {
+    let f = fixture().await;
+    // fixture() persists the real manager snapshot: one image and one volume.
+    assert_inventory_totals(&f, 1, 1).await;
+    let manager = snapshot(f.platform_id);
+    for node in ["worker-a", "worker-b"] {
+        // Identical Docker IDs and volume names on different daemons count separately.
+        sqlx::query("INSERT INTO swarmnodeimageprojections(platformid,dockernodeid,dockerimageid,observedat,resource,id,contentidentity) VALUES($1,$2,$3,NOW(),$4,$5,$3)")
+            .bind(f.platform_id).bind(node).bind(&manager.images[0].id)
+            .bind(json!(manager.images[0])).bind(Uuid::now_v7()).execute(&f.pool).await.unwrap();
+        sqlx::query("INSERT INTO swarmnodevolumeprojections(platformid,dockernodeid,volumename,observedat,resource) VALUES($1,$2,$3,NOW(),$4)")
+            .bind(f.platform_id).bind(node).bind(&manager.volumes[0].name)
+            .bind(json!(manager.volumes[0])).execute(&f.pool).await.unwrap();
+    }
+    assert_inventory_totals(&f, 3, 3).await;
+
+    // A committed image-only node update retains manager, sibling and volume counts.
+    sqlx::query(
+        "DELETE FROM swarmnodeimageprojections WHERE platformid=$1 AND dockernodeid='worker-a'",
+    )
+    .bind(f.platform_id)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    assert_inventory_totals(&f, 2, 3).await;
+    // A volume-only update must likewise leave the images and other daemons intact.
+    sqlx::query(
+        "DELETE FROM swarmnodevolumeprojections WHERE platformid=$1 AND dockernodeid='worker-b'",
+    )
+    .bind(f.platform_id)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    assert_inventory_totals(&f, 2, 2).await;
+    super::realtime_groups::cleanup(f).await;
+}
+
+async fn assert_inventory_totals(f: &Fixture, images: u64, volumes: u64) {
+    use citadel_server::realtime_groups::{Group, GroupReadPort};
+    let response = send(
+        f,
+        &format!("/api/v1/platforms/{}/swarm", f.platform_id),
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let http = json_body(response).await;
+    assert_eq!(http["imageCount"], images);
+    assert_eq!(http["volumeCount"], volumes);
+    for (resource, expected) in [("images", images), ("volumes", volumes)] {
+        let response = send(
+            f,
+            &format!("/api/v1/{resource}/{}", f.platform_id),
+            Some(f.administrator.clone()),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let list = json_body(response).await;
+        assert_eq!(
+            list[resource].as_array().unwrap().len() as u64,
+            expected,
+            "{resource}"
+        );
+    }
+    let reader = super::realtime_groups::reader(f);
+    let group = Group::parse(&format!("docker-daemon:{}", f.platform_id)).unwrap();
+    let hub = citadel_server::realtime::RealtimeHub::new(
+        16,
+        Arc::new(citadel_server::metrics::Metrics::default()),
+    );
+    let mut events = hub.subscribe();
+    for kind in ["swarm", "image", "volume"] {
+        if kind != "swarm" {
+            let delta = if kind == "image" {
+                citadel_platforms::jobs::ResourceDelta::Image {
+                    id: "sha256:image-1".into(),
+                    value: None,
+                }
+            } else {
+                citadel_platforms::jobs::ResourceDelta::Volume {
+                    id: "data".into(),
+                    value: None,
+                }
+            };
+            hub.publish_resource_observation(
+                f.platform_id,
+                Some(if kind == "image" {
+                    "worker-a"
+                } else {
+                    "worker-b"
+                }),
+                "delete",
+                &delta,
+            );
+        } else {
+            hub.publish_inventory_observation(f.platform_id, "swarm");
+        }
+        let event = events.recv().await.unwrap();
+        let live = reader
+            .read(&f.administrator, &group, Some(&event))
+            .await
+            .unwrap();
+        let target = if kind != "swarm" {
+            "SwarmNodeLocalResourcesUpdated"
+        } else {
+            "SwarmInventoryUpdated"
+        };
+        let overview = &live
+            .events
+            .iter()
+            .find(|event| event.target == target)
+            .unwrap()
+            .arguments[0]["overview"];
+        assert_eq!(overview["imageCount"], images, "{target}");
+        assert_eq!(overview["volumeCount"], volumes, "{target}");
+        assert_eq!(overview, &http);
+    }
+}
+
 // Ports SwarmEndpointTests overview authorization/aggregation and the quorum
 // cases: an online socket does not imply a healthy manager quorum.
 #[tokio::test]
@@ -172,7 +293,8 @@ async fn http_and_live_overviews_share_node_freshness_and_actor_specific_capabil
         .await;
         assert_eq!(http["health"], health);
         assert_eq!(http["quorum"]["state"], quorum);
-        assert_eq!(http["volumeCount"], 1);
+        assert_eq!(http["volumeCount"], 2);
+        assert_eq!(http["imageCount"], 1);
         for node_local in [false, true] {
             if node_local {
                 hub.publish_resource_observation(

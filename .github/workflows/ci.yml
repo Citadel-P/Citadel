@@ -231,6 +231,31 @@ jobs:
       - name: Run Rust workspace tests
         run: cargo test --locked --workspace
 
+      - name: Run real Compose environment isolation test
+        run: |
+          set -euo pipefail
+          # Match the CLI/plugin versions used by test/scripts/test-stack-runtime.sh.
+          docker_version=29.0.0
+          compose_version=v2.40.3
+          tools_dir=$(mktemp -d)
+          trap 'rm -rf "$tools_dir"' EXIT
+          curl --fail --silent --show-error --location \
+            "https://download.docker.com/linux/static/stable/x86_64/docker-${docker_version}.tgz" \
+            | tar --extract --gzip --directory "$tools_dir"
+          mkdir -p "$tools_dir/config/cli-plugins"
+          curl --fail --silent --show-error --location \
+            "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64" \
+            --output "$tools_dir/config/cli-plugins/docker-compose"
+          chmod +x "$tools_dir/config/cli-plugins/docker-compose"
+          export PATH="$tools_dir/docker:$PATH"
+          export DOCKER_CONFIG="$tools_dir/config"
+          docker compose version
+          compose_env_test=stacks::tests::compose_interpolation_excludes_core_secrets
+          compose_env_helper=stacks::tests::compose_environment_helper
+          cargo test --locked -p citadel-docker --lib "$compose_env_test" -- --ignored --exact --list | grep -Fx "$compose_env_test: test"
+          cargo test --locked -p citadel-docker --lib "$compose_env_helper" -- --exact --list | grep -Fx "$compose_env_helper: test"
+          cargo test --locked -p citadel-docker --lib "$compose_env_test" -- --ignored --exact
+
       - name: Run authorization and runtime database regressions
         run: |
           set -euo pipefail

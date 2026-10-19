@@ -361,6 +361,130 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
 
 #[tokio::test]
 #[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL"]
+async fn finalization_name_conflict_rolls_back_creation_and_preserves_successful_receipts() {
+    let _fixture = FIXTURE_LOCK.lock().await;
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .unwrap();
+    let actor = seed_administrator(&pool).await.actor_id;
+    let ids = seed_dependencies(&pool, actor).await;
+    let deployments = PostgresDeploymentRepository::new(pool.clone());
+    let mut input = citadel_deployments::CreateDeployment {
+        name: format!("conflict-source-{}", Uuid::now_v7().simple()),
+        platform_id: ids.platform,
+        description: None,
+        tag_ids: vec![],
+        duplicate_source: None,
+        spec: serde_json::from_value(
+            json!({"image":{"$type":"Local","imageId":"fixture"},"volumes":["fixture:/data"]}),
+        )
+        .unwrap(),
+    };
+    let deployment = deployments.create(actor, true, &input).await.unwrap();
+    let store = Arc::new(PostgresCopyRepository::new(pool.clone()));
+    let source = store
+        .source(actor, CopyKind::Deployment, deployment.id)
+        .await
+        .unwrap();
+    let id = queue(&store, actor, &source).await;
+    let (_, job) = store.claim_current(actor, id).await.unwrap().unwrap();
+    store
+        .finish_current(actor, id, job.id, Ok(()))
+        .await
+        .unwrap();
+    let before = store.get(actor, id).await.unwrap();
+    assert_eq!(before.status, CopyStatus::Restoring);
+    assert_eq!(before.restores.len(), 1);
+    assert_eq!(before.restores[0].status, "Succeeded");
+
+    // Introduce the real unique-name conflict only after review, start and restore.
+    input.name = before.name.clone();
+    input.description = Some("Competing workload must remain unchanged".into());
+    let competing = deployments.create(actor, true, &input).await.unwrap();
+    let competing_row =
+        sqlx::query_scalar::<_, Value>("SELECT to_jsonb(d) FROM deployments d WHERE id=$1")
+            .bind(competing.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let creation_counts = || async {
+        sqlx::query_as::<_, (i64, i64, i64, i64)>("SELECT (SELECT count(*) FROM deployments),(SELECT count(*) FROM resourcetags),(SELECT count(*) FROM resourcebindings),(SELECT count(*) FROM activityevents)")
+            .fetch_one(&pool).await.unwrap()
+    };
+    let counts_before = creation_counts().await;
+    let storage = Arc::new(PausedStorage::default());
+    let backups = Arc::new(BackupService::new(
+        Arc::new(PostgresBackupPersistence::new(pool.clone())),
+        Arc::new(FakeBackupExecutor),
+        Arc::new(FakeBackupPlanner::default()),
+        Duration::minutes(5),
+        Arc::new(AllowBackupExecution),
+    ));
+    let copies = CopyService::new(store.clone(), storage.clone(), backups, Arc::new(|_, _| {}));
+    let cancel = CancellationToken::new();
+    copies.process(&cancel).await.unwrap();
+    let failed = store.get(actor, id).await.unwrap();
+    assert_eq!(failed.status, CopyStatus::Failed);
+    assert!(failed.destination_id.is_none());
+    assert_eq!(
+        failed.message.as_deref(),
+        Some(
+            "The Deployment could not be created. Check its name, references and permissions; restored volumes were retained."
+        )
+    );
+    assert_eq!(
+        serde_json::to_value(&failed.restores).unwrap(),
+        serde_json::to_value(&before.restores).unwrap()
+    );
+    let persisted: (String, Option<Uuid>, Option<String>) =
+        sqlx::query_as("SELECT status,destinationid,message FROM resourcecopies WHERE id=$1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(persisted, ("Failed".into(), None, failed.message.clone()));
+
+    // Normal reconciliation and execution cannot reopen a terminal parent or repeat receipts.
+    copies.process(&cancel).await.unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        copies.process_current_queue(&cancel),
+    )
+    .await
+    .expect("completed restores must not run again")
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(store.get(actor, id).await.unwrap()).unwrap(),
+        serde_json::to_value(&failed).unwrap()
+    );
+    assert_eq!(
+        creation_counts().await,
+        counts_before,
+        "no copy-created rows or creation effects survive"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>("SELECT to_jsonb(d) FROM deployments d WHERE id=$1")
+            .bind(competing.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        competing_row
+    );
+    let destination_ids: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM deployments WHERE name=$1")
+        .bind(&before.name)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(destination_ids, vec![competing.id]);
+    assert_eq!(storage.executions.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL"]
 async fn finalization_storage_faults_and_lost_commit_acknowledgements_reconcile_same_copy() {
     let _fixture = FIXTURE_LOCK.lock().await;
     let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();

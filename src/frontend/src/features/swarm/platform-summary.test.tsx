@@ -4,7 +4,9 @@ import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
-import { SwarmQuorumState } from '@/api/generated/api.types';
+import { PlatformType, SwarmQuorumState } from '@/api/generated/api.types';
+import { PlatformResourceSummary } from '@/features/platforms/forms/platform-stats';
+import { createPlatform } from '@/test/factories/resources';
 import { useHTTPErrorHandler } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { createQueryClient } from '@/query-client-wrapper';
@@ -14,6 +16,48 @@ import { SwarmPlatformSummary } from './platform-summary';
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('SwarmPlatformSummary', () => {
+  it('displays authoritative manager and satellite totals after inventory and partial node events', async () => {
+    const fake = new FakeRealtimeConnection();
+    const managerOnly = { ...healthyInventory().overview, imageCount: 1, volumeCount: 1 };
+    server.use(http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () => HttpResponse.json(managerOnly)));
+    renderCitadel(
+      <PlatformResourceSummary platform={{ ...createPlatform(), id: platformId, type: PlatformType.DockerSwarm }} />,
+      {
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+    const expectCounts = (images: number, volumes: number) => {
+      expect(within(screen.getByRole('link', { name: /Images/ })).getByText(String(images))).toBeVisible();
+      expect(within(screen.getByRole('link', { name: /Volumes/ })).getByText(String(volumes))).toBeVisible();
+    };
+    await waitFor(() => expectCounts(1, 1));
+    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBeGreaterThan(0));
+    const combined = { ...managerOnly, imageCount: 3, volumeCount: 3 };
+    act(() => fake.emit('SwarmInventoryUpdated', { ...healthyInventory(), overview: combined }));
+    await waitFor(() => expectCounts(3, 3));
+    act(() =>
+      fake.emit('SwarmNodeLocalResourcesUpdated', {
+        platformId,
+        dockerNodeId: 'worker-a',
+        images: [],
+        overview: { ...combined, imageCount: 2 },
+      }),
+    );
+    await waitFor(() => expectCounts(2, 3));
+    act(() =>
+      fake.emit('SwarmNodeLocalResourcesUpdated', {
+        platformId,
+        dockerNodeId: 'worker-b',
+        volumes: [],
+        overview: { ...combined, imageCount: 2, volumeCount: 2 },
+      }),
+    );
+    await waitFor(() => expectCounts(2, 2));
+  });
+
   it('refreshes stale inventory from the manager and clears the warning after success', async () => {
     const fake = new FakeRealtimeConnection();
     let refreshed = false;
