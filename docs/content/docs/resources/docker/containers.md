@@ -90,6 +90,11 @@ or entirely unavailable evidence show **No checks**, **Not running**, or
 by status. This summarizes container checks, not the saved Stack's deployment
 state, and does not include containers you cannot access.
 
+Select **View details** in the stack health card to choose a container and view
+its health history and probe details, using the same dialog as the Stacks page.
+The selector includes accessible containers hidden by table filters. Opening
+health details does not change which containers are selected for group actions.
+
 Hover over or focus the **Health** icon in the table or the labeled health status
 in **Container overview** for the same card with status, check times, and
 consecutive failures. Click to keep the card open. Select **View details** to open a dialog with a

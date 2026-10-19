@@ -60,6 +60,7 @@ it('keeps health independent of filtered group membership without broadening sel
   if (!isContainerStackGroup(group)) throw new Error('Expected stack group');
   expect(group.healthSummary?.status).toBe(Status.Unhealthy);
   expect(group.healthSummary?.counts).toMatchObject({ Healthy: 1, Unhealthy: 1 });
+  expect(group.healthSummary?.members?.map((member) => member.containerId)).toEqual(['web', 'db']);
   expect(group.containers.map((row) => row.id)).toEqual(['web']);
 });
 
@@ -70,8 +71,30 @@ it('isolates groups by platform and stack name and follows inventory changes', (
     { ...container('redis', Status.Unhealthy), stack: 'other-stack' },
   ];
   expect(withContainerGroupHealth(rows, now)[0].stackHealth?.status).toBe(Status.Healthy);
+  expect(withContainerGroupHealth(rows, now)[0].stackHealth?.members?.map((member) => member.containerId)).toEqual([
+    'web',
+  ]);
   expect(withContainerGroupHealth([...rows, container('worker', Status.Unhealthy)], now)[0].stackHealth?.status).toBe(
     Status.Unhealthy,
   );
   expect(withContainerGroupHealth(rows, now + 180_001)[0].stackHealth?.status).toBe(Status.Unknown);
+});
+
+it('preserves persisted identity and node scope for container diagnostics', () => {
+  const source = {
+    ...container('persisted-id', Status.Healthy),
+    containerId: 'docker-id',
+    dockerNodeId: 'worker-node',
+    projectionStaleSince: now,
+  };
+  const member = withContainerGroupHealth([source], now)[0].stackHealth?.members?.[0];
+  expect(member).toMatchObject({
+    containerId: 'persisted-id',
+    dockerContainerId: 'docker-id',
+    platformId: 'host',
+    nodeId: 'worker-node',
+    available: false,
+    status: 'Unknown',
+    observation: { observedAt: now },
+  });
 });

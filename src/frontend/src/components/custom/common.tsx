@@ -34,7 +34,9 @@ import {
   ArrowUpCircle,
   Bell,
   Bot,
+  Boxes,
   Cable,
+  CalendarClock,
   Check,
   ChevronDown,
   CircleCheck,
@@ -893,10 +895,12 @@ export const TargetCell = ({
   resourceType,
   resourceId,
   resourceName,
+  dockerNodeId,
 }: {
   resourceType: ActivityResourceType | AlertResourceType;
   resourceId: string | undefined;
   resourceName: string | undefined;
+  dockerNodeId?: string | null;
 }) => {
   const resourceConfig: Partial<Record<string, { Icon: any; path: string }>> = {
     [ActivityResourceType.AlertRule]: { Icon: Megaphone, path: `/alert-rules/edit/${resourceId}` },
@@ -904,10 +908,12 @@ export const TargetCell = ({
     [ActivityResourceType.Registry]: { Icon: Cable, path: `/registries/edit/${resourceId}` },
     [ActivityResourceType.Platform]: { Icon: Server, path: `/platforms/edit/${resourceId}` },
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
+    [ActivityResourceType.SwarmService]: { Icon: Boxes, path: `/swarm-services/edit/${resourceId}` },
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
     [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/edit/${resourceId}` },
     [ActivityResourceType.Build]: { Icon: Hammer, path: `/builds/edit/${resourceId}` },
     [ActivityResourceType.BuildAgentPool]: { Icon: ServerPlus, path: `/build-pools/edit/${resourceId}` },
+    [ActivityResourceType.BackupPolicy]: { Icon: CalendarClock, path: `/backup-policies/edit/${resourceId}` },
     [ActivityResourceType.User]: { Icon: User, path: `/access/users/edit/${resourceId}` },
     [ActivityResourceType.Team]: { Icon: Users, path: `/access/teams/edit/${resourceId}` },
     [ActivityResourceType.Role]: { Icon: Shield, path: '/access/roles' },
@@ -918,7 +924,7 @@ export const TargetCell = ({
     [ActivityResourceType.Volume]: {
       Icon: Database,
       path: resourceName
-        ? `/platforms/${resourceId}/volumes/${encodeURIComponent(resourceName)}`
+        ? `/platforms/${resourceId}/volumes/${encodeURIComponent(resourceName)}${dockerNodeId ? `?dockerNodeId=${encodeURIComponent(dockerNodeId)}` : ''}`
         : `/platforms/${resourceId}/volumes`,
     },
   };

@@ -1,5 +1,6 @@
 import { act, screen, within, waitFor } from '@testing-library/react';
 import { Provider } from 'jotai';
+import { http, HttpResponse } from 'msw';
 import { useLocation, useNavigate } from 'react-router';
 import {
   BackupCoverageStatus,
@@ -11,6 +12,7 @@ import {
 } from '@/api/generated/api.types';
 import { RegularResourceView } from '@/pages/regular-resource';
 import { renderCitadel } from '@/test/render-citadel';
+import { server } from '@/test/server';
 import { ContainerComponents } from './index';
 
 vi.hoisted(() => {
@@ -235,7 +237,16 @@ it('pauses health filtering while its column is hidden and restores the selectio
 });
 
 it('shows full stack health when health and search filters hide a failing member', async () => {
-  data.items = data.items.map((item) => ({ ...item, stack: 'wordpress' }));
+  const webId = '019fbf2c-1c80-790f-a50a-11bbec0241d3';
+  const dbId = '019fbf2c-1c80-790f-a50a-11bbec0241d4';
+  data.items = data.items.map((item, index) => ({ ...item, id: index === 0 ? webId : dbId, stack: 'wordpress' }));
+  const reads: string[] = [];
+  server.use(
+    http.get('http://localhost/api/v1/containers/:id', ({ params }) => {
+      reads.push(String(params.id));
+      return HttpResponse.json(data.items.find((item) => item.id === params.id));
+    }),
+  );
   const { user, rerender } = renderCitadel(<View />);
   await user.click(screen.getByRole('button', { name: 'Health Filter' }));
   await user.click(screen.getByRole('option', { name: 'Healthy' }));
@@ -249,7 +260,18 @@ it('shows full stack health when health and search filters hide a failing member
   expect(card.getByText(/Based on 2 accessible containers/)).toBeVisible();
   expect(card.getByText('Healthy')).toBeVisible();
   expect(card.getAllByText('Unhealthy')).toHaveLength(2);
-  expect(card.queryByRole('button', { name: 'View details' })).not.toBeInTheDocument();
+  expect(reads).toEqual([]);
+  await user.click(card.getByRole('button', { name: 'View details' }));
+  const details = within(screen.getByRole('dialog', { name: 'Health details' }));
+  expect(await details.findByRole('region', { name: 'Current health' })).toBeVisible();
+  expect(reads).toEqual([webId]);
+  await user.click(details.getByRole('combobox', { name: 'Container' }));
+  await user.click(screen.getByRole('option', { name: /wordpress-db/ }));
+  await waitFor(() => expect(reads).toEqual([webId, dbId]));
+  expect(await details.findByRole('region', { name: 'Current health' })).toHaveTextContent('Unhealthy');
+  expect(screen.getByText('1 container')).toBeVisible();
+  await user.click(details.getByRole('button', { name: 'Close' }));
+  expect(trigger).toHaveFocus();
   await user.keyboard('{Escape}');
   data.items = data.items.map((item) => ({
     ...item,

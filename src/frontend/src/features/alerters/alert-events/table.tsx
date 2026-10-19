@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { PagedDataTable, TargetCell } from '@/components/custom/common';
+import { PagedDataTable } from '@/components/custom/common';
+import { createResourceTargetColumn } from '@/components/custom/resource-target-column';
 import { StateBadge } from '@/components/custom/state-badge';
 import type { AlertEventView, AlertEventPage } from '@/api/generated/api.types';
 import { useAlertEventQuery, useSelectedResources } from '@/lib/atoms';
@@ -77,18 +78,17 @@ const columns = (
     cell: ({ row }) => <AlertTypeCell event={row.original} />,
     sortingFn: (rowA, rowB) => rowA.original.type.localeCompare(rowB.original.type),
   },
-  {
-    accessorKey: 'target',
-    header: ({ column }) => <SortableCell cellName="Target" column={column} />,
-    cell: ({ row }) => (
-      <TargetCell
-        resourceType={row.original.resourceType}
-        resourceId={row.original.resourceId!}
-        resourceName={row.original.resourceName}
-      />
-    ),
-    sortingFn: (rowA, rowB) => (rowA.original.resourcePath ?? '').localeCompare(rowB.original.resourcePath ?? ''),
-  },
+  createResourceTargetColumn({
+    id: 'target',
+    header: 'Target',
+    getValue: (event: AlertEventView) => ({
+      target: {
+        resourceType: event.resourceType,
+        resourceId: event.resourceId ?? undefined,
+        resourceName: event.resourceName,
+      },
+    }),
+  }),
   {
     accessorKey: 'severity',
     header: ({ column }) => <SortableCell cellName="Severity" column={column} />,

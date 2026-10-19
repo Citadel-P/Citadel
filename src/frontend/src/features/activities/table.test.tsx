@@ -1,7 +1,8 @@
 import type { ActivityView } from '@/api/generated/api.types';
 import { formatActivityEvent } from '@/lib/utils';
 import { renderCitadel } from '@/test/render-citadel';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ActivitiesTable } from './table';
 
 vi.mock('@/lib/use-profile-date-time', () => ({
@@ -9,6 +10,53 @@ vi.mock('@/lib/use-profile-date-time', () => ({
 }));
 
 describe('ActivitiesTable', () => {
+  it('links and sorts targets by resource name instead of platform name', async () => {
+    const user = userEvent.setup();
+    const items = [
+      { resourceType: 'Stack', resourceId: 'stack', resourceName: 'wordpress', platformName: 'Zulu' },
+      { resourceType: 'Deployment', resourceId: 'deployment', resourceName: 'forgejo', platformName: 'Alpha' },
+      { resourceType: 'SwarmService', resourceId: 'service', resourceName: 'api', platformName: 'Middle' },
+    ].map((target) => ({
+      ...target,
+      id: target.resourceId,
+      eventType: 'DeploymentUpdated',
+      status: 'Success',
+      createdAt: '2026-10-04T00:00:00Z',
+      actorName: 'System',
+      actorType: 'System',
+    })) as ActivityView[];
+
+    renderCitadel(
+      <ActivitiesTable
+        pagedResult={{ items, totalCount: items.length, page: 1, pageSize: 20 }}
+        isLoading={false}
+        displayTarget
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'forgejo' })).toHaveAttribute('href', '/deployments/edit/deployment');
+    expect(screen.getByRole('link', { name: 'wordpress' })).toHaveAttribute('href', '/stacks/edit/stack');
+    expect(screen.getByRole('link', { name: 'api' })).toHaveAttribute('href', '/swarm-services/edit/service');
+
+    const sortButton = within(screen.getByRole('columnheader', { name: 'Target' })).getByRole('button', {
+      hidden: true,
+    });
+    await user.click(sortButton);
+    expect(
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => within(row).getByRole('link').textContent),
+    ).toEqual(['api', 'forgejo', 'wordpress']);
+    await user.click(sortButton);
+    expect(
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => within(row).getByRole('link').textContent),
+    ).toEqual(['wordpress', 'forgejo', 'api']);
+  });
+
   it.each([
     ['Warning', 'Warning', 'noop', 'Repository identity mismatch', 'Repository identity mismatch'],
     ['Information', 'Info', 'noop', 'No relevant path changes', 'no watched path changes'],
@@ -107,9 +155,17 @@ describe('ActivitiesTable', () => {
     } as ActivityView;
 
     renderCitadel(
-      <ActivitiesTable pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }} isLoading={false} />,
+      <ActivitiesTable
+        pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }}
+        isLoading={false}
+        displayTarget
+      />,
     );
 
+    expect(screen.getByRole('link', { name: 'Daily backup' })).toHaveAttribute(
+      'href',
+      `/backup-policies/edit/${activity.resourceId}`,
+    );
     expect(screen.getByText('Backup Run Completed')).toBeVisible();
     expect(screen.getByText(summary)).toBeVisible();
   });
