@@ -4,6 +4,13 @@
   color: var(--citadel-text-muted);
 }
 
+/* Anchor navigation to the viewport edge without widening its surface. */
+#nd-sidebar[data-collapsed='false'] {
+  width: var(--fd-sidebar-width);
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+}
+
 .docs-sidebar-label {
   margin: 12px 8px 0;
   color: var(--citadel-text-muted);
@@ -18,15 +25,12 @@
   min-height: 34px;
   padding-block: 6px;
   border-radius: 6px;
-  font-size: 0.8125rem;
-  line-height: 1.375rem;
   overflow-wrap: normal;
 }
 
 :is(#nd-sidebar, #nd-sidebar-mobile) button[aria-expanded],
 :is(#nd-sidebar, #nd-sidebar-mobile) a[data-active]:has(> [data-icon]) {
   color: var(--citadel-text);
-  font-weight: 600;
 }
 
 :is(#nd-sidebar, #nd-sidebar-mobile) button[aria-expanded] > svg {
@@ -38,7 +42,6 @@
 :is(#nd-sidebar, #nd-sidebar-mobile) a[data-active='true'] {
   background: var(--citadel-accent-soft);
   color: var(--citadel-accent);
-  font-weight: 600;
 }
 
 :is(#nd-sidebar, #nd-sidebar-mobile) a[data-active='true']::before {

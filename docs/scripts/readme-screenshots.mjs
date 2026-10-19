@@ -1,4 +1,6 @@
 // Demonstration data rendered by the real frontend, never a live installation.
+import { MIN_SCREENSHOT_WIDTH, saveScreenshot } from "./screenshot-output.mjs";
+
 export function prepareReadme({ routes, lookups, fixture, id, caps, version, capturedAt }) {
   routes["/application/info"].version = version;
   routes["/application/info"].realtimeTransport = "WebSocketV1";
@@ -7,7 +9,7 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version, cap
   routes["/application/info"].informationalVersion = version;
   const preferences = (routes["/profile/preferences"] = {
     theme: "Light",
-    themeColor: "Violet",
+    themeColor: "Blue",
   });
   const counts = (healthy) =>
     fixture("WorkloadStatusCounts", { total: healthy, healthy });
@@ -343,7 +345,7 @@ export async function captureReadme({
   expect,
   data,
 }) {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: MIN_SCREENSHOT_WIDTH, height: 1000 });
   for (const [name, path, ready] of [
     ["platforms", "/platforms", "Production Docker"],
     [
@@ -389,9 +391,10 @@ export async function captureReadme({
     await expect(page.locator("html")).toHaveClass(
       name.endsWith("-dark") ? /dark/ : /light/,
     );
+    await expect(page.locator("html")).toHaveAttribute("data-theme-color", "blue");
     await page.evaluate(() => document.fonts.ready);
     await expect(page.locator('div[style*="position: fixed"][style*="height: 2px"] > div').first()).toHaveCSS("width", "0px");
-    await page.screenshot({
+    await saveScreenshot(page, {
       path: `${root}/docs/public/screenshots/${name}.png`,
       animations: "disabled",
     });

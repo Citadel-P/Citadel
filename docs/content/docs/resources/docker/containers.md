@@ -116,7 +116,7 @@ extra HTTP requests.
 Chart and detail timestamps use local time. Gaps and grouped results do not
 establish continuous health or uptime.
 
-[![Container health details showing a healthy current result and a recent failure followed by recovery](/screenshots/container-health-details.png)](/screenshots/container-health-details.png)
+![Container health details showing a healthy current result and a recent failure followed by recovery](/screenshots/container-health-details.png)
 
 This example shows a recovered container: the current check is healthy, while
 the history preserves the earlier unhealthy observations.

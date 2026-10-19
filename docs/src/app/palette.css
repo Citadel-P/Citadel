@@ -1,4 +1,4 @@
-/* Citadel brand palette, mirrored from Citadel.Web/src/frontend/src/layout/palette.css.
+/* Citadel slate surfaces with blue interaction accents.
    Documentation maps these colors to Fumadocs roles in global.css. */
 :root {
   --citadel-brand-surface: linear-gradient(145deg, #203738, #142326);
@@ -11,14 +11,14 @@
   --citadel-surface-soft: #f1f5f9;
   --citadel-text: #0f172a;
   --citadel-text-muted: #475569;
-  --citadel-accent: #006a61;
-  --citadel-accent-soft: #e6f4f1;
-  --citadel-action: #172435;
-  --citadel-action-hover: #293d52;
+  --citadel-accent: #2563eb;
+  --citadel-accent-soft: #eff6ff;
+  --citadel-action: #2563eb;
+  --citadel-action-hover: #1d4ed8;
   --citadel-action-text: #ffffff;
   --citadel-rule: #dce3eb;
   --citadel-control-border: #8492a3;
-  --citadel-focus: #00796e;
+  --citadel-focus: #2563eb;
   --citadel-frame-shadow: 0 24px 48px -24px rgb(15 23 42 / 30%), 0 2px 8px rgb(15 23 42 / 5%);
   --citadel-danger: #b83232;
   --citadel-danger-text: #ffffff;
@@ -29,14 +29,14 @@
   --citadel-surface-soft: #1d2a38;
   --citadel-text: #edf2f7;
   --citadel-text-muted: #afbdcc;
-  --citadel-accent: #8ed8c9;
-  --citadel-accent-soft: #203b3b;
-  --citadel-action: #b0e6d8;
-  --citadel-action-hover: #caeee4;
-  --citadel-action-text: #102822;
+  --citadel-accent: #93c5fd;
+  --citadel-accent-soft: #1c304d;
+  --citadel-action: #93c5fd;
+  --citadel-action-hover: #bfdbfe;
+  --citadel-action-text: #102238;
   --citadel-rule: #334253;
   --citadel-control-border: #7e91a4;
-  --citadel-focus: #8ed8c9;
+  --citadel-focus: #93c5fd;
   --citadel-frame-shadow: 0 24px 48px -24px rgb(0 0 0 / 65%);
   --citadel-danger: #f48e8e;
   --citadel-danger-text: #351718;

@@ -19,6 +19,16 @@ export function DocumentationLayout({ children, ...props }: DocsLayoutProps) {
     return (
       <DocsLayout
         {...props}
+        containerProps={{
+          ...props.containerProps,
+          style: {
+            ...props.containerProps?.style,
+            gridTemplate: `"sidebar sidebar header toc toc" auto
+              "sidebar sidebar toc-popover toc toc" auto
+              "sidebar sidebar main toc toc" 1fr / 0px var(--fd-sidebar-col)
+              minmax(0, 1fr) var(--fd-toc-width) 0px`,
+          },
+        }}
         links={(props.links ?? []).filter((item) => item.type && item.type !== 'main')}
         sidebar={{
           ...props.sidebar,

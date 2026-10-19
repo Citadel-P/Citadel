@@ -299,7 +299,13 @@ jobs:
           cargo test --locked --workspace --test edge_transport -- --ignored --test-threads=1
           cargo test --locked --workspace --test backup_source_discovery -- --ignored --test-threads=1
           cargo test --locked --workspace --test mfa_http --test oidc_http --test users_http --test teams_http --test roles_http -- --ignored --test-threads=1
-          cargo test --locked --workspace --test execution_resources_http resource_copies -- --ignored --test-threads=1
+          # Copy catalog reads include all authorized workloads. Keep them separate
+          # from earlier inventory fixtures that intentionally seed partial rows.
+          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_copies
+          (
+            export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_resource_copies"
+            cargo test --locked --workspace --test execution_resources_http resource_copies -- --ignored --test-threads=1
+          )
           # These ignored fixtures exercise real completion transactions and fault injection.
           for selection in \
             'build_execution build_runs_claim_once_persist_results_cancel_and_recover' \

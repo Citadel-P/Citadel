@@ -21,7 +21,7 @@ export function ApiReference() {
     theme: {
       spacing: { sectionHorizontal: 24, sectionVertical: 28 },
       colors: {
-        primary: { main: dark ? '#8ed8c9' : '#006a61' },
+        primary: { main: dark ? '#93c5fd' : '#2563eb' },
         text: { primary: dark ? '#edf2f7' : '#0f172a', secondary: dark ? '#afbdcc' : '#475569' },
         gray: { 50: dark ? '#1d2a38' : '#f1f5f9', 100: dark ? '#17212d' : '#f8fafc' },
         border: { dark: dark ? '#334253' : '#dce3eb', light: dark ? '#17212d' : '#ffffff' },
@@ -36,7 +36,7 @@ export function ApiReference() {
         width: '240px',
         backgroundColor: dark ? '#17212d' : '#f8fafc',
         textColor: dark ? '#afbdcc' : '#475569',
-        activeTextColor: dark ? '#8ed8c9' : '#006a61',
+        activeTextColor: dark ? '#93c5fd' : '#2563eb',
       },
       rightPanel: { backgroundColor: '#17212d', textColor: '#edf2f7' },
       schema: {

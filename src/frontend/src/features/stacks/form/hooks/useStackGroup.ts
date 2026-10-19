@@ -17,6 +17,8 @@ export const useStackGroup = (stackId: string) => {
         void queryClient.cancelQueries({ queryKey: driftQueryKey });
         return;
       }
+      const activityInfo = stack.latestActivityView?.info;
+      const info = Array.isArray(activityInfo) ? { ...activityInfo[1], $type: activityInfo[0] } : activityInfo;
       queryClient.setQueryData<ResourceResponse<'getStack'>>(['getStack', { stackId }], (current) =>
         current?.data
           ? {
@@ -33,7 +35,7 @@ export const useStackGroup = (stackId: string) => {
                 stackUpdateState: stack.stackUpdateState,
                 platformStatus: stack.platformStatus,
                 platformName: stack.platformName,
-                latestActivityView: stack.latestActivityView ?? null,
+                latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,
               },
             }
           : current,

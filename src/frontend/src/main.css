@@ -398,7 +398,11 @@
   --primary-foreground: oklch(0.145 0 0);
 }
 :root[data-theme-color='blue'] {
-  --primary: oklch(0.488 0.243 264.376);
+  --primary: #2563eb;
+}
+.dark[data-theme-color='blue'] {
+  --primary: #60a5fa;
+  --primary-foreground: #0f172a;
 }
 :root[data-theme-color='indigo'] {
   --primary: oklch(0.511 0.262 276.966);

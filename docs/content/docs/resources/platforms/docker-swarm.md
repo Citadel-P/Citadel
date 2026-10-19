@@ -93,7 +93,7 @@ so coverage becomes **Partial** instead of shrinking the total. A deliberately
 paused or drained Node is shown as unschedulable and is not counted as a missing
 Agent target until it becomes active again.
 
-[![Partial Swarm node coverage with a manager connector, a connected worker, and an offline worker](/screenshots/swarm-node-coverage.png)](/screenshots/swarm-node-coverage.png)
+![Partial Swarm node coverage with a manager connector, a connected worker, and an offline worker](/screenshots/swarm-node-coverage.png)
 
 Example coverage with demo Nodes: the manager and `worker-01` have usable local
 data sources, while `worker-02` is offline. **Partial** describes node coverage;

@@ -56,6 +56,8 @@ both production images. The cleanup is skipped on self-hosted runners. Database
 fixtures must use unique Docker service IDs and bootstrap token hashes because
 most regression suites share one database and the production schema enforces
 uniqueness. Platform HTTP tests use an isolated database per fixture.
+Resource Copy HTTP regressions use a separate fresh execution database so their
+authorized catalog reads do not encounter partial rows from inventory fixtures.
 
 Agent compatibility executables are compiled in `Dockerfile.agent`'s pinned `rust-source`
 stage, then run inside the tested Agent image. Host-built binaries can require a
