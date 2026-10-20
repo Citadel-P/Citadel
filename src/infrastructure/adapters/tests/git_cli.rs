@@ -274,6 +274,9 @@ async fn unchanged_sync_repairs_files_hidden_by_assume_unchanged_and_ignorestat(
         .await
         .unwrap();
 
+    // Model an established cache whose timestamps Git trusts. Keeping mtime
+    // older than the index avoids Git's racy-timestamp content recheck.
+    cache.run(["config", "core.trustctime", "false"]);
     for ignorestat in [false, true] {
         cache.run([
             "config",
@@ -281,15 +284,22 @@ async fn unchanged_sync_repairs_files_hidden_by_assume_unchanged_and_ignorestat(
             if ignorestat { "true" } else { "false" },
         ]);
         for state in ["modified", "deleted", "clean"] {
-            if ignorestat {
-                // Git itself marks entries assume-unchanged with this setting.
-                cache.run(["reset", "--hard", "HEAD"]);
-                cache.run(["update-index", "--really-refresh"]);
-            } else {
+            let tracked = cache.path().join("tracked.txt");
+            cache.run(["update-index", "--no-assume-unchanged", "tracked.txt"]);
+            std::fs::File::options()
+                .write(true)
+                .open(&tracked)
+                .unwrap()
+                .set_modified(
+                    std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1_600_000_000),
+                )
+                .unwrap();
+            // Git itself sets assume-unchanged during refresh with ignorestat.
+            cache.run(["update-index", "--really-refresh"]);
+            if !ignorestat {
                 cache.run(["update-index", "--assume-unchanged", "tracked.txt"]);
             }
             assert_eq!(cache.run(["ls-files", "-v"]), "h tracked.txt\n");
-            let tracked = cache.path().join("tracked.txt");
             let times = std::fs::metadata(&tracked).unwrap();
             match state {
                 "modified" => {
