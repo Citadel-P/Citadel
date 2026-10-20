@@ -642,6 +642,19 @@ impl GitCli {
             if !index.stdout_truncated && index_checks_all_files(&index.stdout) {
                 return Ok(fetched);
             }
+            // Rebuild the index from HEAD without copying its stat cache or
+            // assume-unchanged/skip-worktree bits. Checkout/reset can otherwise
+            // preserve hidden edits when the fetched commit has not changed.
+            self.success(
+                self.request_os([
+                    OsStr::new("-C"),
+                    target.as_os_str(),
+                    OsStr::new("read-tree"),
+                    OsStr::new("HEAD"),
+                ]),
+                cancellation,
+            )
+            .await?;
         }
         self.success(
             self.remote_request_os(
@@ -1378,6 +1391,7 @@ mod tests {
             output(&commit),
             output(&format!("# branch.oid {commit}\0# branch.head main\0")),
             Ok(index),
+            output(""),
             output(""),
             output(""),
             output(&commit),

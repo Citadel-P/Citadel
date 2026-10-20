@@ -284,13 +284,28 @@ async fn unchanged_sync_repairs_files_hidden_by_assume_unchanged_and_ignorestat(
             if ignorestat {
                 // Git itself marks entries assume-unchanged with this setting.
                 cache.run(["reset", "--hard", "HEAD"]);
+                cache.run(["update-index", "--really-refresh"]);
             } else {
                 cache.run(["update-index", "--assume-unchanged", "tracked.txt"]);
             }
             assert_eq!(cache.run(["ls-files", "-v"]), "h tracked.txt\n");
+            let tracked = cache.path().join("tracked.txt");
+            let times = std::fs::metadata(&tracked).unwrap();
             match state {
                 "modified" => {
-                    std::fs::write(cache.path().join("tracked.txt"), "modified\n").unwrap()
+                    // Same-length edits with the original timestamp must still
+                    // be repaired when Git trusts assume-unchanged entries.
+                    std::fs::write(&tracked, "modified\n").unwrap();
+                    std::fs::File::options()
+                        .write(true)
+                        .open(&tracked)
+                        .unwrap()
+                        .set_times(
+                            std::fs::FileTimes::new()
+                                .set_accessed(times.accessed().unwrap())
+                                .set_modified(times.modified().unwrap()),
+                        )
+                        .unwrap();
                 }
                 "deleted" => std::fs::remove_file(cache.path().join("tracked.txt")).unwrap(),
                 _ => {}
@@ -304,7 +319,8 @@ async fn unchanged_sync_repairs_files_hidden_by_assume_unchanged_and_ignorestat(
             assert_eq!(result.commit, commit);
             assert_eq!(
                 std::fs::read_to_string(cache.path().join("tracked.txt")).unwrap(),
-                "original\n"
+                "original\n",
+                "ignorestat={ignorestat}, {state}"
             );
             assert!(
                 used_command(&process, "reset"),

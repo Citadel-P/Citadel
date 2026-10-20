@@ -86,6 +86,8 @@ Changed commits, branch changes, and dirty tracked files use the normal checkout
 path. Successful unchanged syncs still update their timestamp and notify waiting consumers.
 Citadel also uses the normal path when Git index flags can hide file changes or the
 bounded cleanliness checks cannot inspect the complete output.
+When index flags hide changes, Citadel rebuilds the cached index from the current
+commit before checkout/reset so those flags cannot preserve modified or missing files.
 
 Available sync modes:
 
