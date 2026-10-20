@@ -91,7 +91,9 @@ pub async fn verify(
     };
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(JwtSessionTokenCodec::new(&[23; 32], "fixture".into(), "fixture".into()).unwrap()),
         Arc::new(OpaqueServiceAccountTokenCodec),
         Arc::new(StaticEntitlementService::new(true)),

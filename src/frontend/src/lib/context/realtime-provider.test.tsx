@@ -36,8 +36,14 @@ function GroupSubscriber({ name }: { name: string }) {
 function EventSubscriber({ name }: { name: string }) {
   const [message, setMessage] = useState('waiting');
   const handleEvent = useCallback((value: string) => setMessage(value), []);
-  const setupEventListeners = useCallback((hub: RealtimeConnection) => hub.on('StreamEvent', handleEvent), [handleEvent]);
-  const removeEventListeners = useCallback((hub: RealtimeConnection) => hub.off('StreamEvent', handleEvent), [handleEvent]);
+  const setupEventListeners = useCallback(
+    (hub: RealtimeConnection) => hub.on('StreamEvent', handleEvent),
+    [handleEvent],
+  );
+  const removeEventListeners = useCallback(
+    (hub: RealtimeConnection) => hub.off('StreamEvent', handleEvent),
+    [handleEvent],
+  );
   const { isConnected } = useRealtimeGroup({
     groupName: name,
     setupEventListeners,
@@ -55,8 +61,14 @@ function EventSubscriber({ name }: { name: string }) {
 function MultiGroupEventSubscriber({ names }: { names: string[] }) {
   const [message, setMessage] = useState('waiting');
   const handleEvent = useCallback((value: string) => setMessage(value), []);
-  const setupEventListeners = useCallback((hub: RealtimeConnection) => hub.on('StreamEvent', handleEvent), [handleEvent]);
-  const removeEventListeners = useCallback((hub: RealtimeConnection) => hub.off('StreamEvent', handleEvent), [handleEvent]);
+  const setupEventListeners = useCallback(
+    (hub: RealtimeConnection) => hub.on('StreamEvent', handleEvent),
+    [handleEvent],
+  );
+  const removeEventListeners = useCallback(
+    (hub: RealtimeConnection) => hub.off('StreamEvent', handleEvent),
+    [handleEvent],
+  );
   const { isConnected } = useRealtimeGroup({
     groupName: names,
     setupEventListeners,
@@ -101,9 +113,9 @@ function RealtimeTestRoot({
     <QueryClientProvider client={queryClient ?? defaultQueryClient}>
       <AuthContext.Provider value={authValue}>
         <RealtimeProvider
-          connectionFactory={connectionFactory ?? (() => fake.asRealtimeConnection())}
+          connectionFactory={connectionFactory ?? (webSocketFactory ? undefined : () => fake.asRealtimeConnection())}
           startConnection={startConnection ?? ((connection) => connection.start())}
-          realtimeTransport={realtimeTransport ?? 'SignalR'}
+          realtimeTransport={realtimeTransport ?? 'WebSocketV1'}
           webSocketFactory={webSocketFactory}>
           {children}
         </RealtimeProvider>
@@ -144,47 +156,50 @@ function ConnectionStatusProbe({ onContext }: { onContext?: (context: RealtimeCo
 }
 
 describe('RealtimeProvider', () => {
-  it.each(['SignalR', 'WebSocketV1'])('does not show an outage while discovering and starting %s', async (transport) => {
-    const fake = new FakeRealtimeConnection();
-    const socket = new FakeWebSocket();
-    const startGate = deferred<void>();
-    fake.start.mockImplementation(async () => {
-      await startGate.promise;
-      fake.state = RealtimeConnectionState.Connected;
-    });
-    const factory = vi.fn(() => fake.asRealtimeConnection());
-    const queryClient = new QueryClient();
-    const observedStates: string[] = [];
-    const provider = (realtimeTransport?: string) => (
-      <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider value={authValue}>
-          <RealtimeProvider
-            realtimeTransport={realtimeTransport}
-            connectionFactory={factory}
-            startConnection={(connection) => connection.start()}
-            webSocketFactory={() => socket.asWebSocket()}>
-            <ConnectionStatusProbe onContext={(context) => observedStates.push(context.liveConnectionState)} />
-            <LiveConnectionIndicator />
-          </RealtimeProvider>
-        </AuthContext.Provider>
-      </QueryClientProvider>
-    );
-    const view = render(provider());
-    expect(screen.getByTestId('live-state')).toHaveTextContent('connecting');
-    expect(screen.queryByRole('button', { name: /Retry live updates/ })).not.toBeInTheDocument();
-    expect(factory).not.toHaveBeenCalled();
+  it.each(['injected', 'native'])(
+    'does not show an outage while discovering and starting WebSocketV1 (%s)',
+    async (adapter) => {
+      const fake = new FakeRealtimeConnection();
+      const socket = new FakeWebSocket();
+      const startGate = deferred<void>();
+      fake.start.mockImplementation(async () => {
+        await startGate.promise;
+        fake.state = RealtimeConnectionState.Connected;
+      });
+      const factory = vi.fn(() => fake.asRealtimeConnection());
+      const queryClient = new QueryClient();
+      const observedStates: string[] = [];
+      const provider = (realtimeTransport?: string) => (
+        <QueryClientProvider client={queryClient}>
+          <AuthContext.Provider value={authValue}>
+            <RealtimeProvider
+              realtimeTransport={realtimeTransport}
+              connectionFactory={adapter === 'injected' ? factory : undefined}
+              startConnection={(connection) => connection.start()}
+              webSocketFactory={() => socket.asWebSocket()}>
+              <ConnectionStatusProbe onContext={(context) => observedStates.push(context.liveConnectionState)} />
+              <LiveConnectionIndicator />
+            </RealtimeProvider>
+          </AuthContext.Provider>
+        </QueryClientProvider>
+      );
+      const view = render(provider());
+      expect(screen.getByTestId('live-state')).toHaveTextContent('connecting');
+      expect(screen.queryByRole('button', { name: /Retry live updates/ })).not.toBeInTheDocument();
+      expect(factory).not.toHaveBeenCalled();
 
-    view.rerender(provider(transport));
-    expect(screen.getByTestId('live-state')).toHaveTextContent('connecting');
-    expect(screen.getByTestId('interrupted-at')).toHaveTextContent('none');
-    act(() => {
-      if (transport === 'SignalR') startGate.resolve();
-      else socket.message({ protocolVersion: 1, kind: 'subscribed' });
-    });
-    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
-    expect(observedStates).not.toContain('disconnected');
-    expect(screen.queryByRole('button', { name: /Retry live updates/ })).not.toBeInTheDocument();
-  });
+      view.rerender(provider('WebSocketV1'));
+      expect(screen.getByTestId('live-state')).toHaveTextContent('connecting');
+      expect(screen.getByTestId('interrupted-at')).toHaveTextContent('none');
+      act(() => {
+        if (adapter === 'injected') startGate.resolve();
+        else socket.message({ protocolVersion: 1, kind: 'subscribed' });
+      });
+      await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+      expect(observedStates).not.toContain('disconnected');
+      expect(screen.queryByRole('button', { name: /Retry live updates/ })).not.toBeInTheDocument();
+    },
+  );
 
   it('still reports unavailable when the server declares an unsupported transport', () => {
     render(
@@ -271,7 +286,10 @@ describe('RealtimeProvider', () => {
       second.state = RealtimeConnectionState.Connected;
     });
 
-    const factory = vi.fn().mockReturnValueOnce(first.asRealtimeConnection()).mockReturnValueOnce(second.asRealtimeConnection());
+    const factory = vi
+      .fn()
+      .mockReturnValueOnce(first.asRealtimeConnection())
+      .mockReturnValueOnce(second.asRealtimeConnection());
     let context: RealtimeContextType | undefined;
 
     render(
@@ -309,7 +327,10 @@ describe('RealtimeProvider', () => {
     const second = new FakeRealtimeConnection();
     second.start.mockRejectedValue(new Error('Core unavailable'));
 
-    const factory = vi.fn().mockReturnValueOnce(first.asRealtimeConnection()).mockReturnValueOnce(second.asRealtimeConnection());
+    const factory = vi
+      .fn()
+      .mockReturnValueOnce(first.asRealtimeConnection())
+      .mockReturnValueOnce(second.asRealtimeConnection());
     let context: RealtimeContextType | undefined;
 
     render(
@@ -334,7 +355,10 @@ describe('RealtimeProvider', () => {
   it('does not publish an outage while replacing a connection after token rotation', async () => {
     const first = new FakeRealtimeConnection();
     const second = new FakeRealtimeConnection();
-    const factory = vi.fn().mockReturnValueOnce(first.asRealtimeConnection()).mockReturnValueOnce(second.asRealtimeConnection());
+    const factory = vi
+      .fn()
+      .mockReturnValueOnce(first.asRealtimeConnection())
+      .mockReturnValueOnce(second.asRealtimeConnection());
     const observedStates: string[] = [];
 
     function TokenRotationRoot() {
@@ -345,7 +369,7 @@ describe('RealtimeProvider', () => {
             <RealtimeProvider
               connectionFactory={factory}
               startConnection={(candidate) => candidate.start()}
-              realtimeTransport="SignalR">
+              realtimeTransport="WebSocketV1">
               <ConnectionStatusProbe onContext={(value) => observedStates.push(value.liveConnectionState)} />
               <button onClick={() => setToken('token-2')}>rotate token</button>
             </RealtimeProvider>
@@ -592,14 +616,21 @@ describe('RealtimeProvider', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const rendered = render(
-      <RealtimeTestRoot fake={fake} queryClient={queryClient} realtimeTransport="WebSocketV1"
-        startConnection={(connection) => connection.start()} webSocketFactory={() => socket.asWebSocket()}>
+      <RealtimeTestRoot
+        fake={fake}
+        queryClient={queryClient}
+        realtimeTransport="WebSocketV1"
+        startConnection={(connection) => connection.start()}
+        webSocketFactory={() => socket.asWebSocket()}>
         <ConnectionStatusProbe />
       </RealtimeTestRoot>,
     );
     act(() => socket.emit('open', new Event('open')));
     expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
-      protocolVersion: 1, kind: 'subscribe', clientMode: 'groups', accessToken: 'access-token',
+      protocolVersion: 1,
+      kind: 'subscribe',
+      clientMode: 'groups',
+      accessToken: 'access-token',
     });
     act(() => socket.message({ protocolVersion: 1, kind: 'subscribed' }));
     await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));

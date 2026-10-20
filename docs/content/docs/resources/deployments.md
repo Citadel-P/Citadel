@@ -342,7 +342,7 @@ output and error. If you have closed it, open the Deployment's **Activities** ta
 or the main **Activities** page and select the failed **Deployment Applied** event.
 The event details show the recorded configuration and failure message.
 
-[![Deployment Applied activity details showing the configured image and a manifest unknown failure for a missing image tag](/screenshots/deployment-failure-details.png)](/screenshots/deployment-failure-details.png)
+![Deployment Applied activity details showing the configured image and a manifest unknown failure for a missing image tag](/screenshots/deployment-failure-details.png)
 
 This demo failure refers to `nginx:demo-missing`. Compare the image reference in
 **Applied configuration** with the failure message, correct the image tag under

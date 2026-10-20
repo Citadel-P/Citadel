@@ -1080,7 +1080,7 @@ async fn fixture_with_custom_access(custom_access_control_enabled: bool) -> Fixt
     let clock = Arc::new(SystemClock);
     let identity = Arc::new(IdentityService::new(
         identity_store,
-        passwords.clone(),
+        Arc::new(citadel_identity::CredentialWork::new(passwords.clone())),
         Arc::new(
             JwtSessionTokenCodec::new(
                 &[9_u8; 32],
@@ -1100,7 +1100,7 @@ async fn fixture_with_custom_access(custom_access_control_enabled: bool) -> Fixt
     let users = Arc::new(UserReadService::new(store.clone()));
     let mutations = Arc::new(UserMutationService::new(
         store,
-        passwords,
+        Arc::new(citadel_identity::CredentialWork::new(passwords)),
         entitlements,
         clock,
     ));

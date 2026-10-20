@@ -5,20 +5,16 @@ use axum::{
     routing::get,
 };
 use chrono::Utc;
-use citadel_adapters::{
-    connectors::{
-        docker::{DockerClient, DockerEndpoint},
-        edge::EdgeRegistry,
-        routing::containers::ContainerRuntimeRouter,
-    },
-    persistence::postgres::{
-        backups::{PostgresBackupPersistence, source_planner::PostgresBackupSourcePlanner},
-        stacks::PostgresStackRepository,
-    },
-};
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
+use citadel_adapters::persistence::postgres::backups::PostgresBackupPersistence;
+use citadel_adapters::persistence::postgres::backups::source_planner::PostgresBackupSourcePlanner;
+use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
 use citadel_backups::policies::read_models::BackupPreviewKind;
 use citadel_backups::*;
 use citadel_database::MigrationRunner;
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::DockerEndpoint;
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;
 use citadel_stacks::{

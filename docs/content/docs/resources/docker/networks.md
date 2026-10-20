@@ -72,7 +72,7 @@ members. Use **Open network details** at the bottom to open the selected network
 Configured use is optional; it does not imply an active connection.
 Swarm task coverage can be incomplete, and limited results are marked.
 
-[![Storefront stack connected to frontend and backend networks, with network details alongside the map](/screenshots/network-map.png)](/screenshots/network-map.png)
+![Storefront stack connected to frontend and backend networks, with network details alongside the map](/screenshots/network-map.png)
 
 The expanded stack shows which containers share each network. Select a network
 to see its subnet, gateway, and connected containers.

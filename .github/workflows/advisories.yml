@@ -1,0 +1,31 @@
+name: Cargo dependency advisories
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - .cargo/audit.toml
+      - Cargo.lock
+      - '**/Cargo.toml'
+      - .github/workflows/advisories.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    name: Cargo advisory scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install pinned Rust toolchain
+        run: |
+          toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$toolchain" --profile minimal
+      - name: Install pinned advisory checker
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit committed Rust lockfile
+        run: cargo audit --file Cargo.lock

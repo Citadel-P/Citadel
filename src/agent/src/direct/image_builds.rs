@@ -1,12 +1,13 @@
 use super::Runtime;
 use base64::Engine;
-use citadel_adapters::external::builds::runtime::{
-    BuildRuntimeError, DockerBuildOptions, DockerBuildSession, DockerBuildSource,
-};
 use citadel_builds::{BuildArgSpec, BuildError, BuildLogSink, BuildRegistryCredentials};
 use citadel_contracts::citadel::images::v1::{
     BuildImageRequest, ImageBuildResponse, PushImageRequest,
 };
+use citadel_docker::builds::runtime::BuildRuntimeError;
+use citadel_docker::builds::runtime::DockerBuildOptions;
+use citadel_docker::builds::runtime::DockerBuildSession;
+use citadel_docker::builds::runtime::DockerBuildSource;
 use futures_util::{future::BoxFuture, stream::BoxStream};
 use std::{path::Path, time::Duration};
 use tokio::sync::mpsc;
@@ -136,7 +137,7 @@ mod tests {
         }
         fn runtime(&self) -> Runtime {
             let mut runtime = Runtime::new(
-                citadel_adapters::connectors::docker::DockerClient::with_endpoint(
+                citadel_docker::client::DockerClient::with_endpoint(
                     "tcp://fixture:2375".parse().unwrap(),
                     Duration::from_secs(3),
                     "/host",

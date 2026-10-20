@@ -1,8 +1,8 @@
 use super::{Runtime, stack_source};
-use citadel_adapters::external::stacks::LocalStackApply;
 use citadel_contracts::citadel::stacks::v1::{
     StackApplyRequest, StackApplyResponse, stack_service_server::StackService,
 };
+use citadel_docker::stacks::LocalStackApply;
 use citadel_stacks::{StackCommand, StackOrchestrationMode, StackProgress, StackReleaseStatus};
 use futures_util::{StreamExt, stream::BoxStream};
 use tonic::{Request, Response, Status};
@@ -116,7 +116,7 @@ fn event(v: citadel_stacks::StackProgressItem) -> StackApplyResponse {
 }
 
 async fn observe_compose(
-    docker: &citadel_adapters::connectors::docker::DockerClient,
+    docker: &citadel_docker::client::DockerClient,
     project: &str,
 ) -> Option<StackReleaseStatus> {
     let filter =
@@ -141,7 +141,7 @@ async fn observe_compose(
     Some(compose_status(&states))
 }
 fn compose_status(
-    states: &[citadel_adapters::connectors::docker::projection::ContainerState],
+    states: &[citadel_docker::client::projection::ContainerState],
 ) -> StackReleaseStatus {
     let (mut running, mut pending, mut paused, mut stopped) = (false, false, false, false);
     for s in states {
@@ -182,7 +182,7 @@ mod tests {
     use super::*;
     #[test]
     fn compose_success_is_not_assumed_healthy() {
-        use citadel_adapters::connectors::docker::projection::ContainerState;
+        use citadel_docker::client::projection::ContainerState;
         let state = |status: &str, exit_code: i64| ContainerState {
             status: status.into(),
             exit_code,

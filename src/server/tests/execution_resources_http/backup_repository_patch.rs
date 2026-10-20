@@ -127,7 +127,7 @@ pub(super) async fn before_ready(
         .await;
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
-        assert!(String::from_utf8_lossy(&body).contains("AllowedCorePaths"));
+        assert!(String::from_utf8_lossy(&body).contains("CITADEL_BACKUPS_ALLOWED_CORE_PATH_N"));
         assert_eq!(
             store.get_repository(repo_id).await.unwrap().control_state,
             citadel_primitives::ResourceControlState::Idle

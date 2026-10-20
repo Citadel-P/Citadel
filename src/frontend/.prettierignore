@@ -4,3 +4,5 @@ package-lock.json
 dist
 build
 node_modules
+# Generated API output is checked by its owning generators (npm and xtask).
+src/api/generated/**

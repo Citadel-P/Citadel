@@ -197,6 +197,37 @@ async fn logs_authorize_validate_and_route_current_tasks_to_the_exact_node() {
     let value = json_body(response).await;
     assert_eq!(status, StatusCode::OK, "{value}");
     assert_eq!(value["lines"], json!(["héllo\n"]));
+    // Drop an actual HTTP read after its downstream Agent command starts.
+    // The command stream must release admission and send cancellation, even
+    // though the Agent never sends a completion frame.
+    let mut abandoned = Box::pin(send(&f, &task_with_tail, Some(reader.clone())));
+    let envelope = tokio::time::timeout(StdDuration::from_secs(3), async {
+        tokio::select! {
+            envelope = commands.recv() => envelope.unwrap(),
+            response = &mut abandoned => panic!("unfinished logs returned {}", response.status()),
+        }
+    })
+    .await
+    .unwrap();
+    let Some(core_envelope::Body::Command(command)) = envelope.body else {
+        panic!("expected log read");
+    };
+    assert_eq!(session.pending_count(), 1);
+    drop(abandoned);
+    let cancelled = tokio::time::timeout(StdDuration::from_secs(3), commands.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(cancelled.command_id, command.command_id);
+    assert!(matches!(
+        cancelled.body,
+        Some(core_envelope::Body::CancelCommand(_))
+    ));
+    assert_eq!(
+        session.pending_count(),
+        0,
+        "request drop must release downstream admission"
+    );
     assert!(other_commands.try_recv().is_err());
     sqlx::query("UPDATE swarmtaskprojections SET dockernodeid='other-node' WHERE platformid=$1")
         .bind(f.platform_id)

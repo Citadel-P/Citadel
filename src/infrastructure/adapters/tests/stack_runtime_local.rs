@@ -2,9 +2,9 @@
 
 use std::time::Duration;
 
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_database::MigrationRunner;
+use citadel_docker::client::DockerClient;
 use citadel_stacks::{
     StackApplySource, StackDeletionClaim, StackOperationClaim, StackRuntime, StackSourceFile,
     StackSpec, StackSpecCommon, StackUpdateBehavior, create_ownership_labels_override,

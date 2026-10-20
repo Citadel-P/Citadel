@@ -182,7 +182,7 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
             let network=std::env::var("CITADEL_TEST_AGENT_NETWORK").unwrap();
             let mut key=[0;32];getrandom::fill(&mut key).unwrap();
             let signer=AgentRequestSigner::from_bytes(&key);key.fill(0);
-            docker(&["run","--detach","--name",&agent_name,"--network",&network,"--mount","type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock","--env",&format!("HUB_PUBLIC_KEY={}",signer.public_key_base64()),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
+            docker(&["run","--detach","--name",&agent_name,"--network",&network,"--mount","type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock","--env",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
             let address=format!("http://{agent_name}:9000");
             let deadline=tokio::time::Instant::now()+Duration::from_secs(30);
             let client=loop {
@@ -195,7 +195,8 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
             Some(client)
         } else {None};
         if use_agent {
-            use citadel_adapters::connectors::{docker::DockerClient, routing::volumes::content::VolumeContentAdapter};
+            use citadel_docker::client::DockerClient;
+use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter;
             use futures_util::StreamExt;
             let cancel = CancellationToken::new();
             let browser = VolumeContentAdapter::new(
@@ -235,7 +236,7 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
         let repository = store.create_repository(actor, &input).await.unwrap();
         let copy_runtime = Arc::new(citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter::new(
             pool.clone(),
-            citadel_adapters::connectors::docker::DockerClient::new(if use_agent { "/no-core-docker-allowed.sock" } else { "/var/run/docker.sock" }, Duration::from_secs(30)).unwrap(),
+            citadel_docker::client::DockerClient::new(if use_agent { "/no-core-docker-allowed.sock" } else { "/var/run/docker.sock" }, Duration::from_secs(30)).unwrap(),
             agent.clone(), edge_registry.clone(),
         ));
         let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());

@@ -1091,11 +1091,10 @@ export const StackForm = ({
 
       return createStack({ data: normalizedPayload });
     },
-    onUpdate: () =>
-      updateStack({
-        id,
-        data: toPatchStackInput(update, original),
-      }),
+    onUpdate: async () => {
+      if (!id) throw new Error('A Stack ID is required to update this Stack.');
+      return updateStack({ id, data: toPatchStackInput(update, original) });
+    },
     onRefresh: refreshData,
   });
 

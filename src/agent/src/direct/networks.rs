@@ -1,6 +1,7 @@
 use super::{Runtime, docker_error, filters, strings, text};
-use citadel_adapters::connectors::docker::projection::{DockerNetwork, NetworkCreateRequest};
 use citadel_contracts::citadel::{networks::v1::*, shared_models::v1::*};
+use citadel_docker::client::projection::DockerNetwork;
+use citadel_docker::client::projection::NetworkCreateRequest;
 use serde_json::{Value, json};
 use tonic::{Request, Response, Status};
 
@@ -28,10 +29,7 @@ impl network_service_server::NetworkService for Runtime {
             .list_container_models(Some(true), None, None, None)
             .await
             .map_err(docker_error)?;
-        citadel_adapters::connectors::docker::populate_network_attachments(
-            &mut networks,
-            &containers,
-        );
+        citadel_docker::client::populate_network_attachments(&mut networks, &containers);
         let used: std::collections::HashSet<_> = containers
             .iter()
             .flat_map(|c| {

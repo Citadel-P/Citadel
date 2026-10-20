@@ -2987,9 +2987,9 @@ async fn runtime_identity_index_follows_commits_rebuilds_and_repairs_stale_hints
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn six_container_verification_is_sequential_and_keeps_every_authoritative_result() {
     use axum::{Json, Router, response::IntoResponse};
-    use citadel_adapters::connectors::{
-        docker::DockerClient, edge::EdgeRegistry, routing::containers::ContainerRuntimeRouter,
-    };
+    use citadel_adapters::connectors::edge::EdgeRegistry;
+    use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
+    use citadel_docker::client::DockerClient;
     use citadel_platforms::containers::{ContainerMutationRuntime, ContainerTarget};
     use std::{
         sync::{

@@ -1,9 +1,4 @@
-import {
-  AuthorizedProject,
-  BuildRunStatus,
-  BuildRunView,
-  ResourceControlState,
-} from '@/api/generated/api.types';
+import { AuthorizedProject, BuildRunStatus, BuildRunView, ResourceControlState } from '@/api/generated/api.types';
 import { parseCitadelDate } from '@/lib/date-time';
 
 export function isActiveBuildRun(run: Pick<BuildRunView, 'status'>) {

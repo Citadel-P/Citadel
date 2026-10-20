@@ -1,9 +1,8 @@
 use super::*;
 use axum::{Json, Router, response::IntoResponse};
-use citadel_adapters::connectors::{
-    agent::client::decode_daemon_event,
-    docker::{DockerClient, projection::DockerEvent},
-};
+use citadel_adapters::connectors::agent::client::decode_daemon_event;
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::projection::DockerEvent;
 use platform_service_server::PlatformService;
 use prost::Message;
 use std::{
@@ -228,11 +227,9 @@ async fn platform_metadata_rpc_does_not_sample_stats_or_enumerate_resources() {
         }
     });
     let cancel = tokio_util::sync::CancellationToken::new();
-    let docker = citadel_adapters::connectors::docker::DockerClient::new(
-        &path,
-        std::time::Duration::from_secs(2),
-    )
-    .unwrap();
+    let docker =
+        citadel_docker::client::DockerClient::new(&path, std::time::Duration::from_secs(2))
+            .unwrap();
     let runtime = super::super::Runtime::new(docker, cancel, None);
     let result = runtime
         .get_platform_info(tonic::Request::new(()))

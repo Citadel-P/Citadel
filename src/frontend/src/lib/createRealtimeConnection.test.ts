@@ -1,13 +1,9 @@
 import { createRealtimeConnection, isRealtimeTransportEnabled } from './createRealtimeConnection';
-import { createSignalRConnection } from './createSignalRConnection';
-import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { FakeWebSocket } from '@/test/fakes/websocket';
-
-vi.mock('./createSignalRConnection', () => ({ createSignalRConnection: vi.fn() }));
 
 beforeEach(() => vi.clearAllMocks());
 
-it('uses native WebSocket for Rust without constructing a SignalR connection', async () => {
+it('uses the native WebSocket adapter for the supported capability', async () => {
   const socket = new FakeWebSocket();
   const socketFactory = vi.fn(() => socket.asWebSocket());
   const connection = createRealtimeConnection(
@@ -20,22 +16,17 @@ it('uses native WebSocket for Rust without constructing a SignalR connection', a
   socket.message({ protocolVersion: 1, kind: 'subscribed' });
   await started;
   expect(socketFactory).toHaveBeenCalledWith('ws://localhost:8000/api/v1/realtime');
-  expect(createSignalRConnection).not.toHaveBeenCalled();
   await connection.stop();
 });
 
-it('keeps the .NET transport isolated behind explicit negotiation', () => {
-  const fake = new FakeRealtimeConnection();
-  vi.mocked(createSignalRConnection).mockReturnValue(fake);
-  const options = { baseUrl: 'http://localhost:8000', accessTokenFactory: () => 'token' };
-  expect(createRealtimeConnection('SignalR', options)).toBe(fake);
-  expect(createSignalRConnection).toHaveBeenCalledWith(options);
-});
-
-it.each([undefined, 'None', 'unknown'])('does not default unsupported transport %s to SignalR', (transport) => {
-  expect(isRealtimeTransportEnabled(transport)).toBe(false);
-  expect(() => createRealtimeConnection(transport, { baseUrl: '', accessTokenFactory: () => '' })).toThrow(
-    'Realtime transport is not enabled',
-  );
-  expect(createSignalRConnection).not.toHaveBeenCalled();
-});
+it.each([undefined, 'None', 'unknown'])(
+  'does not connect for unresolved, disabled or unsupported transport %s',
+  (transport) => {
+    const socketFactory = vi.fn();
+    expect(isRealtimeTransportEnabled(transport)).toBe(false);
+    expect(() =>
+      createRealtimeConnection(transport, { baseUrl: '', accessTokenFactory: () => '' }, socketFactory),
+    ).toThrow('Realtime transport is not enabled');
+    expect(socketFactory).not.toHaveBeenCalled();
+  },
+);

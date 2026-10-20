@@ -149,7 +149,7 @@ impl Process {
             .env("CITADEL_AGENT_PORT", port.to_string())
             .env("DOCKER_HOST", &f.docker)
             .env(
-                "HUB_PUBLIC_KEY",
+                "CITADEL_CORE_PUBLIC_KEY",
                 STANDARD.encode(SigningKey::from_bytes(&[42; 32]).verifying_key().as_bytes()),
             )
             .stdin(Stdio::null())

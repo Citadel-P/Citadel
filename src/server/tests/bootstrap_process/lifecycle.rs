@@ -246,7 +246,7 @@ async fn startup_registers_routes_starts_workers_and_shuts_down_both_listeners()
             .lines()
             .filter_map(|line| serde_json::from_str::<Value>(line).ok())
             .find(|line| line["fields"]["message"] == "database migrations completed")
-            .expect("migrations must run on every serve");
+            .unwrap_or_else(|| panic!("migrations must run on every serve\n{output}"));
         if realtime {
             assert!(migration["fields"]["applied"].as_u64().unwrap() > 0);
         } else {

@@ -602,7 +602,9 @@ fn license_router(pool: &PgPool) -> Router {
 fn identity_service(pool: &PgPool) -> Arc<IdentityService> {
     Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(
                 &[13_u8; 32],

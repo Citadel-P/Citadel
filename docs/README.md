@@ -57,6 +57,31 @@ header; **Back to docs** returns to the regular documentation layout.
 Edit pages under `content/docs` and update the matching `meta.json` when
 navigation changes.
 
+## Visual theme
+
+The product documentation, landing page and embedded API reference use slate
+surfaces with blue interaction accents in both light and dark modes. Light-mode
+actions use blue `#2563eb`; dark-mode accents use light blue `#93c5fd`.
+`src/app/palette.css` owns the local palette so the documentation builds
+independently; `global.css` maps it to Fumadocs semantic colors. The landing page
+reuses those tokens, while `src/components/api-reference.tsx` supplies matching concrete colors
+to ReDoc (which computes derived colors). Keep both mappings aligned when updating
+the palette. Warning/success/error callouts and code syntax colors retain their
+semantic meanings. The separate standalone API build keeps its own ReDoc defaults.
+
+Typography follows the published documentation's Inter/system fallback stack
+without downloading a web font. Article and navigation sizing remain
+Fumadocs-owned. The README and documentation use the blue Citadel logo, matching
+the favicon artwork.
+Reading widths, navigation, search and theme persistence remain Fumadocs-owned.
+The docs sidebar uses `src/app/sidebar.css` for compact navigation rows and a
+restrained active state. Search stays above the navigation tree; utility links,
+GitHub and theme controls sit in the sidebar footer. Mobile screens use a compact
+bar for search and navigation. Touch devices retain larger navigation targets.
+The desktop navigation stays at the viewport's left edge, with the table of
+contents at the right edge. The article is centered between them and keeps a
+bounded reading width.
+
 ## Static export configuration
 
 The product site's build URL can include a path, for example
@@ -86,8 +111,15 @@ with descriptive alt text and say when they show demonstration data.
 Use screenshots for configuration decisions and useful result states. Keep simple
 navigation and single-field instructions as text. Crop to the relevant panel,
 use demonstration resources, add descriptive alt text and a short explanation,
-and keep all essential instructions in the text. Link images to their original
-files so readers can enlarge them.
+and keep all essential instructions in the text. Use standard Markdown images;
+the docs renderer adds click-to-zoom automatically. Readers can also focus the
+zoom control and press Enter, then close it with Escape or the close control.
+Do not wrap screenshots in links to their original files.
+
+Every saved PNG must be at least 1660 pixels wide. Capture at a 1660px browser
+viewport; guide crops use 4x pixel density so narrow dialogs meet the minimum
+without enlarging a bitmap. README captures use 1x density. The shared screenshot
+writer checks the PNG width after each capture and fails if it is too small.
 
 To refresh the Git Stack, Swarm coverage, backup policy, automation, and Role
 screenshots, including restore selection, resource access, deployment failures,
@@ -123,9 +155,10 @@ node docs/scripts/capture-guide-screenshots.mjs network health volume
 
 Set `CITADEL_SCREENSHOT_BASE_URL` if the frontend uses a different address.
 The script uses a fresh browser context and intercepted API fixtures; no login,
-running backend, or real resources are needed. Writes and unknown API requests
-are blocked, and realtime messages are handled locally. A fixed browser clock
-keeps example health observations fresh and timestamps reproducible.
+running backend, or real resources are needed. README and guide screenshots use
+the Blue accent, including the light and dark README variants. Writes and
+unknown API requests are blocked, and realtime messages are handled locally.
+A fixed browser clock keeps example health observations fresh and timestamps reproducible.
 On Linux, install Chromium's system dependencies with
 `npx playwright install --with-deps chromium` from `test/e2e` if needed.
 The permission matrix fixture contains public capability metadata,

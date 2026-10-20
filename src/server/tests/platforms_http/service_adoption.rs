@@ -22,6 +22,7 @@ async fn setup() -> (Fixture, Arc<Mutex<super::swarm_inventory::DockerState>>) {
         ),
         Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
         Arc::new(router.clone()),
+        Arc::new(citadel_swarm_services::EmptySwarmServiceBindingResolver),
         CancellationToken::new(),
     )
     .with_adoption(Arc::new(PostgresSwarmServiceAdoption::new(

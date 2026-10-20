@@ -177,6 +177,7 @@ async fn retention_obeys_configuration_and_preserves_referenced_builds() {
                     error_message: None,
                     logs: vec![],
                 },
+                None,
             )
             .await
             .unwrap();

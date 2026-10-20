@@ -5,13 +5,11 @@ export const getTokenExpirationPresets = (defaultLifetimeDays: number, maximumLi
     .filter((days) => days > 0 && days <= maximumLifetimeDays)
     .sort((left, right) => left - right);
 
-export const isValidTokenExpiration = (
-  value: string,
-  maximumLifetimeDays: number,
-  referenceTime = Date.now(),
-) => {
+export const isValidTokenExpiration = (value: string, maximumLifetimeDays: number, referenceTime = Date.now()) => {
   const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp)
-    && timestamp > referenceTime
-    && timestamp <= referenceTime + maximumLifetimeDays * DAY_IN_MILLISECONDS;
+  return (
+    Number.isFinite(timestamp) &&
+    timestamp > referenceTime &&
+    timestamp <= referenceTime + maximumLifetimeDays * DAY_IN_MILLISECONDS
+  );
 };

@@ -14,7 +14,8 @@ pub struct AgentSetupInstructions {
 
 impl AgentSetupInstructions {
     pub fn new(hub_public_key: String, agent_image: String, requires_tls: bool) -> Self {
-        let mut environment = BTreeMap::from([("HUB_PUBLIC_KEY".into(), hub_public_key.clone())]);
+        let mut environment =
+            BTreeMap::from([("CITADEL_CORE_PUBLIC_KEY".into(), hub_public_key.clone())]);
         if requires_tls {
             environment.extend([
                 ("CITADEL_AGENT_TLS_MODE".into(), "Direct".into()),
@@ -76,13 +77,13 @@ mod tests {
             "registry.example.com/citadel-agent:1.2.3".into(),
             false,
         );
-        assert_eq!(setup.environment["HUB_PUBLIC_KEY"], "public-key");
+        assert_eq!(setup.environment["CITADEL_CORE_PUBLIC_KEY"], "public-key");
         assert!(!setup.requires_tls);
         for expected in [
             "-p 9000:9000",
             "-v /var/run/docker.sock:/var/run/docker.sock",
             "-v /:/host:ro",
-            "-e HUB_PUBLIC_KEY=\"public-key\"",
+            "-e CITADEL_CORE_PUBLIC_KEY=\"public-key\"",
         ] {
             assert!(setup.docker_run_command.contains(expected));
         }

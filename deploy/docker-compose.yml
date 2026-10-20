@@ -16,6 +16,8 @@ services:
       - path: .env
         format: raw
     environment:
+      CITADEL_HTTP_LISTEN_PORT: "${CITADEL_HTTP_LISTEN_PORT:-8000}"
+      CITADEL_EDGE_GRPC_LISTEN_PORT: "${CITADEL_EDGE_GRPC_LISTEN_PORT:-8001}"
       PG_HOST: ${PG_HOST:-pg_db}
       PG_PORT: "${PG_PORT:-5432}"
     depends_on:
@@ -26,8 +28,8 @@ services:
       - /:/host:ro
       - citadel_data:/app/data
     ports:
-      - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_HTTP_PORT:-18000}:${Transport__ApiPort:-8000}"
-      - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_EDGE_PORT:-18001}:${Transport__EdgeGrpcPort:-8001}"
+      - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_HTTP_PORT:-18000}:${CITADEL_HTTP_LISTEN_PORT:-8000}"
+      - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_EDGE_PORT:-18001}:${CITADEL_EDGE_GRPC_LISTEN_PORT:-8001}"
     healthcheck:
       test: ["CMD", "/usr/local/bin/citadel-entrypoint", "healthcheck"]
       interval: 30s

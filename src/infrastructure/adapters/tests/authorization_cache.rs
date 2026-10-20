@@ -522,7 +522,9 @@ fn identity_service(store: PostgresIdentityStore) -> IdentityService {
     use std::sync::Arc;
     IdentityService::new(
         Arc::new(store),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[7_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),

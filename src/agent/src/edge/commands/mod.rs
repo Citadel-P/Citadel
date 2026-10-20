@@ -5,11 +5,11 @@ use super::{
     outgoing::Outgoing,
 };
 use crate::{config::EdgeProfile, direct::Runtime};
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_contracts::citadel::{
     containers::v1::ExecClientMessage,
     edge::v1::{CommandCompleted, CommandFailed, CommandOutput},
 };
+use citadel_docker::client::DockerClient;
 use futures_util::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use prost::Message;
 use std::{collections::HashMap, io, sync::Arc, time::Duration};

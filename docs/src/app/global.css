@@ -1,16 +1,39 @@
 @import 'tailwindcss';
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
+@import './palette.css';
+@import './sidebar.css';
+@import './image-zoom.css';
 
 html {
   scrollbar-gutter: stable;
 }
 
 :root {
-  --color-fd-primary: #168bff;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --color-fd-background: var(--citadel-canvas);
+  --color-fd-foreground: var(--citadel-text);
+  --color-fd-muted: var(--citadel-surface-soft);
+  --color-fd-muted-foreground: var(--citadel-text-muted);
+  --color-fd-popover: var(--citadel-surface);
+  --color-fd-popover-foreground: var(--citadel-text);
+  --color-fd-card: var(--citadel-surface);
+  --color-fd-card-foreground: var(--citadel-text);
+  --color-fd-border: var(--citadel-rule);
+  --color-fd-primary: var(--citadel-accent);
+  --color-fd-primary-foreground: var(--citadel-surface);
+  --color-fd-secondary: var(--citadel-surface-soft);
+  --color-fd-secondary-foreground: var(--citadel-text);
+  --color-fd-accent: var(--citadel-accent-soft);
+  --color-fd-accent-foreground: var(--citadel-accent);
+  --color-fd-ring: var(--citadel-focus);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Neutral's sidebar has local overrides; keep these in the shared palette too. */
+.dark #nd-sidebar {
+  --color-fd-muted: var(--citadel-surface-soft);
+  --color-fd-secondary: var(--citadel-surface-soft);
+  --color-fd-muted-foreground: var(--citadel-text-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

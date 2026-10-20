@@ -49,7 +49,7 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
     getrandom::fill(&mut key).unwrap();
     let signer = AgentRequestSigner::from_bytes(&key);
     key.fill(0);
-    let public_key = format!("HUB_PUBLIC_KEY={}", signer.public_key_base64());
+    let public_key = format!("CITADEL_CORE_PUBLIC_KEY={}", signer.public_key_base64());
     let result = AssertUnwindSafe(async {
         docker(&[
             "run",

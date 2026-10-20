@@ -87,6 +87,7 @@ async fn exercise_adoption(external: bool) {
             None,
         )),
         Arc::new(StaticEntitlementService::new(true)),
+        Arc::new(citadel_deployments::EmptyDeploymentBindingResolver),
         CancellationToken::new(),
     )
     .with_adoption(Arc::new(PostgresContainerAdoption::new(

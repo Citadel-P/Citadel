@@ -1,14 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityEventType, ActivityStatus, ActivityView, PagedActivityView } from '@/api/generated/api.types';
+import {
+  ActivityResourceType,
+  ActivityEventType,
+  ActivityStatus,
+  ActivityView,
+  PagedActivityView,
+} from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useActivityQuery } from '@/lib/atoms';
-import { ResourceType } from '@/api/types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 
 export const useActivitiesGroup = (
   resourceId?: string | undefined,
-  resourceType?: ResourceType | undefined,
+  resourceType?: `${ActivityResourceType}` | undefined,
   pageSize?: number | undefined,
 ) => {
   const [query] = useActivityQuery();
@@ -26,7 +31,7 @@ export const useActivitiesGroup = (
     query: {
       Page: query.page,
       PageSize: pageSize ?? query.pageSize,
-      ResourceType: selectedResourceType,
+      ResourceType: Object.values(ActivityResourceType).find((type) => type === selectedResourceType),
       EventType: eventType,
       Status: status,
       ResourceId: selectedResourceId,

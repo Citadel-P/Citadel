@@ -1,9 +1,4 @@
-import {
-  WebhookConfig,
-  StackWebhookConfig,
-  WebhookAuthScheme,
-  WebhookProvider,
-} from '@/api/generated/api.types';
+import { WebhookConfig, StackWebhookConfig, WebhookAuthScheme, WebhookProvider } from '@/api/generated/api.types';
 import { FieldInput, FieldSelect, FieldSwitch } from '@/components/custom/form-builder';
 import { Button } from '@/components/ui/button';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';

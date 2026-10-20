@@ -19,7 +19,6 @@ export const useStackGroup = (stackId: string) => {
       }
       const activityInfo = stack.latestActivityView?.info;
       const info = Array.isArray(activityInfo) ? { ...activityInfo[1], $type: activityInfo[0] } : activityInfo;
-
       queryClient.setQueryData<ResourceResponse<'getStack'>>(['getStack', { stackId }], (current) =>
         current?.data
           ? {

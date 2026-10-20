@@ -1,5 +1,7 @@
 import { notifyRequestError, requestErrorStatus } from '@/lib/request-error';
 import { resources } from '@/api/generated/resources';
+import { invokeResource, resourceQueryKey } from '@/api/dispatch';
+import { resourceReadOptions } from '@/api/read-options';
 import {
   useMutation,
   UseMutationOptions,
@@ -13,7 +15,6 @@ import { useApiClientContext } from '@/api/api-client-context';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  AnyFn,
   Cancellable,
   KnownResourceName,
   PluralResourceMap,
@@ -38,101 +39,39 @@ import {
 } from '@/api/generated/api.types';
 import { useAuthContext } from '@/features/auth/auth-context';
 
-const EMPTY_ARGS = Object.freeze({});
-type EmptyArgs = Record<string, never>;
-
 export function useRead<
   TResource extends KnownResourceName,
   TResult extends ResourceResponse<TResource> = ResourceResponse<TResource>,
 >(
   resource: TResource,
-  args?: UseReadArgs<TResource>,
+  args?: NoInfer<UseReadArgs<TResource>>,
   options?: Omit<
-    UseQueryOptions<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | EmptyArgs]>,
+    UseQueryOptions<TResult, Error, TResult, ReturnType<typeof resourceQueryKey<TResource>>>,
     'queryKey' | 'queryFn'
   >,
 ): UseQueryResult<TResult, Error> {
   const { apiClient } = useApiClientContext();
-  const resDef = resources[resource];
-  if (!resDef) throw new Error(`Unknown resource: ${String(resource)}`);
-
-  const stableArgs = args ?? EMPTY_ARGS;
-  const queryKey = useMemo(() => [resource, stableArgs] as const, [resource, stableArgs]);
-
-  const isEnabled =
-    !!apiClient &&
-    resDef.requiredParams.every((p) => {
-      const topLevelValue = (args as any)?.[p];
-      if (topLevelValue != null) return true;
-
-      const queryValue = (args as any)?.query?.[p];
-      return queryValue != null;
-    });
-
-  return useQuery<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | EmptyArgs]>({
-    queryKey,
-    enabled: options?.enabled ?? isEnabled,
-    queryFn: async ({ signal }) => {
-      const fn = (apiClient?.api as any)[resource] as AnyFn;
-      if (!fn) throw new Error(`Unknown API resource: ${resource}`);
-
-      // Build arguments dynamically based on the resource definition
-      const callArgs = resDef.params.map((paramName) => {
-        if (paramName === 'params') return { ...(args?.params ?? {}), signal };
-        if (paramName === 'query') return args?.query ?? {};
-        return (args as any)?.[paramName];
-      });
-
-      return fn(...callArgs);
-    },
+  const query = resourceReadOptions(apiClient, resource, args);
+  return useQuery<TResult, Error, TResult, ReturnType<typeof resourceQueryKey<TResource>>>({
+    queryKey: query.queryKey,
+    queryFn: async (context) => query.queryFn!(context) as Promise<TResult>,
     ...options,
+    enabled: query.enabled ? (options?.enabled ?? true) : false,
   });
 }
 
-export function useMutate<TResource extends KnownResourceName, TVariables = UseMutateVariables<TResource>>(
+export function useMutate<TResource extends KnownResourceName>(
   resource: TResource,
-  options?: Omit<UseMutationOptions<ResourceResponse<TResource>, Error, TVariables>, 'mutationFn'>,
+  options?: Omit<UseMutationOptions<ResourceResponse<TResource>, Error, UseMutateVariables<TResource>>, 'mutationFn'>,
 ) {
   const { apiClient } = useApiClientContext();
   const resDef = resources[resource];
   if (!resDef) throw new Error(`Unknown resource: ${String(resource)}`);
 
-  const fn = apiClient.api[resource] as AnyFn;
-
-  const mutation = useMutation<ResourceResponse<TResource>, Error, TVariables>({
+  const mutation = useMutation<ResourceResponse<TResource>, Error, UseMutateVariables<TResource>>({
     mutationKey: [resource],
     ...options,
-    mutationFn: (variables: TVariables) => {
-      const v: any = variables;
-      const paramNames = resDef.params ?? [];
-      const requiredParamNames = resDef.requiredParams ?? [];
-      const args: any[] = [];
-      const isObject = v !== null && typeof v === 'object';
-
-      const hasAllRequiredNamed =
-        isObject && requiredParamNames.length > 0 && requiredParamNames.every((p: string) => p in v);
-
-      if (hasAllRequiredNamed) {
-        for (const name of paramNames) {
-          if (name === 'params') {
-            args.push(v.params ?? {});
-          } else {
-            args.push(v[name]);
-          }
-        }
-      } else if (isObject && 'data' in v) {
-        args.push(v.data);
-        args.push(v.params ?? {});
-      } else {
-        args.push(v);
-        const fnParamLen = fn.length ?? 1;
-        if (fnParamLen > 1) {
-          args.push({});
-        }
-      }
-
-      return fn(...args) as Promise<ResourceResponse<TResource>>;
-    },
+    mutationFn: (variables) => invokeResource<TResource>(apiClient, resource, variables),
   });
 
   const validationErrors = useGetValidationErrors(mutation.error);
@@ -140,7 +79,7 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
   return {
     ...mutation,
     validationErrors,
-  } as UseMutationResult<ResourceResponse<TResource>, Error, TVariables, unknown> & {
+  } as UseMutationResult<ResourceResponse<TResource>, Error, UseMutateVariables<TResource>, unknown> & {
     validationErrors: ReturnType<typeof useGetValidationErrors>;
   };
 }

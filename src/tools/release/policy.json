@@ -15,7 +15,6 @@
       "docker.io/citadelplane/citadel"
     ]
   },
-  "agentFirstUpgrades": true,
   "recovery": {
     "storage": "github-draft-until-published",
     "tagPrefix": "citadel-recovery/",

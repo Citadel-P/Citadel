@@ -69,9 +69,9 @@ describe('NodeInfoComponents', () => {
     expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Drain' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
-    expect(
-      screen.getByRole('tab', { name: 'Inspect' }).compareDocumentPosition(screen.getByText('Labels')),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole('tab', { name: 'Inspect' }).compareDocumentPosition(screen.getByText('Labels'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 });
 

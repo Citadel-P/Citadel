@@ -245,7 +245,7 @@ Example cron values:
 0 2 * * 1        Mondays at 02:00
 ```
 
-[![Automation runtime and schedule with an Operations runner identity, a 120 second timeout, failure alerts, and a weekday UTC schedule](/screenshots/automation-runtime-schedule.png)](/screenshots/automation-runtime-schedule.png)
+![Automation runtime and schedule with an Operations runner identity, a 120 second timeout, failure alerts, and a weekday UTC schedule](/screenshots/automation-runtime-schedule.png)
 
 This demo Action uses the `Operations runner` identity, a 120-second timeout,
 and `0 8 * * 1-5` to run at 08:00 UTC on weekdays. Review **Run as** and its

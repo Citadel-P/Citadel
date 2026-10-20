@@ -59,14 +59,14 @@ For a shared installation, choose one of these options:
 
 | Option | Who should use it? | What to configure |
 | --- | --- | --- |
-| Reverse proxy | You already have a proxy that manages HTTPS certificates | `Transport__Mode=ReverseProxy`, public URLs, trusted proxy addresses, and an HTTP/2 gRPC route if you use Edge Agents |
-| Direct TLS | Citadel will serve HTTPS itself | `Transport__Mode=Direct`, public URLs, certificates, and `compose.direct-tls.yml` |
+| Reverse proxy | You already have a proxy that manages HTTPS certificates | `CITADEL_TRANSPORT_MODE=ReverseProxy`, public URLs, trusted proxy addresses, and an HTTP/2 gRPC route if you use Edge Agents |
+| Direct TLS | Citadel will serve HTTPS itself | `CITADEL_TRANSPORT_MODE=Direct`, public URLs, certificates, and `compose.direct-tls.yml` |
 
 Follow [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport)
 for the full settings. Do not simply change the bind address to `0.0.0.0`
-while leaving local HTTP enabled. Set `Transport__PublicUrl` to the browser
+while leaving local HTTP enabled. Set `CITADEL_PUBLIC_URL` to the browser
 address users will actually open. If you use Edge Agents, also set
-`EdgeAgent__PublicGrpcUrl` to the separate address those Agents can reach.
+`CITADEL_EDGE_PUBLIC_GRPC_URL` to the separate address those Agents can reach.
 
 For a complete reverse-proxy setup using the same Compose installation, follow
 [Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy).

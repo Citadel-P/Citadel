@@ -77,9 +77,19 @@ vi.mock('@/lib/monaco', () => ({
   MonacoToArrayEditor: () => null,
 }));
 vi.mock('@/features/git-repos/browser/compare-dialog', () => ({
-  GitRepositoryCompareAction: ({ repositoryId, baseCommitSha, headCommitSha }: {
-    repositoryId: string; baseCommitSha: string; headCommitSha: string;
-  }) => <button data-repository={repositoryId} data-base={baseCommitSha} data-head={headCommitSha}>View changes</button>,
+  GitRepositoryCompareAction: ({
+    repositoryId,
+    baseCommitSha,
+    headCommitSha,
+  }: {
+    repositoryId: string;
+    baseCommitSha: string;
+    headCommitSha: string;
+  }) => (
+    <button data-repository={repositoryId} data-base={baseCommitSha} data-head={headCommitSha}>
+      View changes
+    </button>
+  ),
 }));
 vi.mock('@/features/docker-resources/containers/container-info/container-logs', () => ({
   StackLogs: ({ containers }: { containers: string[] }) => <div>Logs for {containers.join(', ')}</div>,
@@ -106,8 +116,13 @@ describe('Stack subheader', () => {
       ...stack(PlatformType.Docker),
       source: { sourceType: StackSource.Git, gitRepositoryId: 'repo', resolvedCommitSha: 'deployed' },
       stackUpdateState: {
-        $type: 'Git', recreateStackOnNewImageState: {},
-        recreateStackOnNewCommitState: { currentCommitSha: 'old-check', remoteCommitSha: 'available', lastCheckedAt: '' },
+        $type: 'Git',
+        recreateStackOnNewImageState: {},
+        recreateStackOnNewCommitState: {
+          currentCommitSha: 'old-check',
+          remoteCommitSha: 'available',
+          lastCheckedAt: '',
+        },
       },
     };
     const { rerender } = renderCitadel(<SubHeader resource={resource} />);

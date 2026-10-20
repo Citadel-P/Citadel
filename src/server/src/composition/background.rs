@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Duration};
 
 /// Background-only services and worker inputs that must be started once.
 pub struct BackgroundServices {
-    pub docker: citadel_adapters::connectors::docker::DockerClient,
+    pub docker: citadel_docker::client::DockerClient,
     pub agent: Option<citadel_adapters::connectors::agent::client::AgentClient>,
     pub volume_content:
         Arc<citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter>,

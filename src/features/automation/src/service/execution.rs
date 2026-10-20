@@ -132,6 +132,9 @@ impl AutomationService {
         let mut request = ProcessRequest::new(self.deno_path.clone())
             .args(args)
             .current_dir(directory)
+            .env("HOME", directory.as_os_str())
+            .env("TMPDIR", directory.as_os_str())
+            .env("DENO_DIR", directory.join("deno-cache").as_os_str())
             .env("NO_COLOR", "1")
             .env("CITADEL_ACTION_ARGS", &claim.run.args_json)
             .limits(ProcessLimits {

@@ -5,7 +5,7 @@ use citadel_platforms::{
 
 use crate::connectors::agent::client::AgentClient;
 
-use crate::connectors::docker::DockerClient;
+use citadel_docker::client::DockerClient;
 use std::sync::Arc;
 
 #[derive(Clone)]

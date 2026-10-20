@@ -57,7 +57,7 @@ try {
     if (-not $healthy) { throw 'The deployment apply PostgreSQL fixture did not become healthy.' }
 
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-deployments')
-    Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'docker_transport')
+    Invoke-RustTest @('test', '--locked', '-p', 'citadel-docker', '--test', 'docker_transport')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_mutations')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'deployment_apply_persistence', '--', '--ignored', '--test-threads=1')
     Invoke-RustTest @('test', '--locked', '-p', 'citadel-adapters', '--test', 'deployment_runtime_local', '--', '--ignored', '--test-threads=1')

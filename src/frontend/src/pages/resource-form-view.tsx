@@ -1,3 +1,4 @@
+import type { KnownResourceName } from '@/api/types';
 import { canShowCachedResource } from '@/lib/request-error';
 import { ResourceReadError } from '@/components/custom/resource-read-error';
 import { AppContent } from '@/components/custom/app-content';
@@ -118,7 +119,7 @@ const EditFormPageWithRename = ({
   Components: any;
   type: ResourceType;
 }) => {
-  const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
+  const { mutateAsync: renameResource } = useMutate(`rename${type}` as Extract<KnownResourceName, `rename${string}`>);
 
   return <EditFormContent id={id} item={item} renameResource={renameResource} Components={Components} type={type} />;
 };
@@ -134,8 +135,10 @@ const EditFormPageWithMetadata = ({
   Components: any;
   type: ResourceType;
 }) => {
-  const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
-  const { mutateAsync: updateMetadata } = useMutate(`update${type}Metadata` as any);
+  const { mutateAsync: renameResource } = useMutate(`rename${type}` as Extract<KnownResourceName, `rename${string}`>);
+  const { mutateAsync: updateMetadata } = useMutate(
+    `update${type}Metadata` as Extract<KnownResourceName, `update${string}Metadata`>,
+  );
 
   return (
     <EditFormContent
@@ -160,7 +163,7 @@ const EditFormContent = ({
   id: string;
   item: RequiredFormFields;
   updateMetadata?: (variables: { id: string; data: Partial<PatchResourceMetadataInput> }) => Promise<any>;
-  renameResource?: (variables: { id: string; name: string }) => Promise<any>;
+  renameResource?: (variables: { data: { id: string; name: string } }) => Promise<any>;
   Components: any;
   type: ResourceType;
 }) => {
@@ -183,7 +186,7 @@ const EditFormContent = ({
 
   const handleRenameResource = async (name: string) => {
     if (!renameResource) return;
-    await renameResource({ id, name });
+    await renameResource({ data: { id, name } });
     await invalidateRelatedQueries();
     setMetaDataChanged(true);
   };

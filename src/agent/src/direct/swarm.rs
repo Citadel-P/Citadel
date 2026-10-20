@@ -1,9 +1,8 @@
 use super::{Runtime, docker_error, runtime_error, swarm_mapping as map, text};
 use base64::Engine;
-use citadel_adapters::connectors::swarm::{
-    inspection::inspect_service_message, inventory::SwarmInventoryClient,
-};
 use citadel_contracts::citadel::swarm::v1::{swarm_service_server::SwarmService, *};
+use citadel_docker::swarm::inspection::inspect_service_message;
+use citadel_docker::swarm::inventory::LocalSwarmInventory;
 use citadel_platforms::{
     logs::{LogReadPort, LogResource},
     swarm_mutations::{UpdateSwarmNodeInput, UpdateSwarmResourceLabelsInput},
@@ -66,7 +65,7 @@ impl SwarmService for Runtime {
         if !matches!(availability.as_str(), "active" | "pause" | "drain") {
             return Err(Status::invalid_argument("Invalid node availability"));
         }
-        SwarmInventoryClient::Local(&self.docker)
+        LocalSwarmInventory(&self.docker)
             .update_node(
                 &r.node_id,
                 &UpdateSwarmNodeInput {
@@ -114,7 +113,7 @@ impl SwarmService for Runtime {
         r: Request<InspectSwarmServiceRequest>,
     ) -> Result<Response<SwarmServiceMessage>, Status> {
         Ok(Response::new(
-            SwarmInventoryClient::Local(&self.docker)
+            LocalSwarmInventory(&self.docker)
                 .inspect_service(&r.into_inner().service_id, &self.shutdown)
                 .await
                 .map_err(runtime_error)?,
@@ -124,7 +123,7 @@ impl SwarmService for Runtime {
         &self,
         r: Request<RestartSwarmServiceRequest>,
     ) -> Result<Response<()>, Status> {
-        SwarmInventoryClient::Local(&self.docker)
+        LocalSwarmInventory(&self.docker)
             .restart_service(&r.into_inner().service_id, &self.shutdown)
             .await
             .map_err(runtime_error)?;
@@ -496,7 +495,7 @@ impl Runtime {
         secret: bool,
         r: UpdateSwarmResourceLabelsRequest,
     ) -> Result<Response<()>, Status> {
-        SwarmInventoryClient::Local(&self.docker)
+        LocalSwarmInventory(&self.docker)
             .update_labels(
                 secret,
                 &r.resource_id,

@@ -333,6 +333,20 @@ impl ApplicationGroupReader {
         e: Option<&PublishedRuntimeEvent>,
         lease: Option<&crate::realtime::AuthorizationLease>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
+        let mut snapshot = self.read_group_data(p, g, e, lease).await?;
+        if let Topic::DockerDaemon(id) = g.topic() {
+            runtime::attach_swarm_overview(self, p, *id, lease, e, &mut snapshot).await?;
+        }
+        Ok(snapshot)
+    }
+
+    async fn read_group_data(
+        &self,
+        p: &ActorPrincipal,
+        g: &Group,
+        e: Option<&PublishedRuntimeEvent>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<GroupSnapshot, RealtimeReadError> {
         if matches!(
             g.topic(),
             Topic::ContainerExec { .. } | Topic::SwarmTaskExec { .. }

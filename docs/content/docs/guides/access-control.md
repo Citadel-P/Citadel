@@ -36,7 +36,7 @@ Open **Access → Roles** and select a Role to inspect its **Permissions Matrix*
 Choose a permission **Level** for each resource type and review its optional
 **Capabilities** separately. Assign the Role to the Users or Teams that need it.
 
-[![Excerpt of the Operations reader role matrix with Read access to Platforms, Deployments, and Stacks and no Swarm Service access](/screenshots/role-permissions.png)](/screenshots/role-permissions.png)
+![Excerpt of the Operations reader role matrix with Read access to Platforms, Deployments, and Stacks and no Swarm Service access](/screenshots/role-permissions.png)
 
 This excerpt uses a demo Role with **Read** access to Platforms, Deployments,
 and Stacks. No additional capabilities are selected. **None** means this Role
@@ -86,7 +86,7 @@ Do not add a Role with Read access to all Stacks just to make this one Stack
 visible. For several teammates with the same responsibilities, review Team
 assignments so their access stays consistent.
 
-[![Resource Overrides dialog granting Write access to the Storefront Stack while leaving Internal tools without a direct grant](/screenshots/resource-access-grant.png)](/screenshots/resource-access-grant.png)
+![Resource Overrides dialog granting Write access to the Storefront Stack while leaving Internal tools without a direct grant](/screenshots/resource-access-grant.png)
 
 This screenshot shows a different, additive example: an **Operations reader**
 receives **Write** on `Storefront`. That user retains inherited Read access to

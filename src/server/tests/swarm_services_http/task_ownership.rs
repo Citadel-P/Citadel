@@ -20,6 +20,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {
         Arc::new(TrackedSwarmServiceTasks::new(owner.clone())),
         repository.clone(),
         Arc::new(CompletingRuntime),
+        Arc::new(citadel_swarm_services::EmptySwarmServiceBindingResolver),
         shutdown,
     );
     // Accepted rollouts finish through observation without replaying Apply.
@@ -106,6 +107,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, id: Uuid) {
         Arc::new(TrackedSwarmServiceTasks::new(owner.clone())),
         repository.clone(),
         runtime.clone(),
+        Arc::new(citadel_swarm_services::EmptySwarmServiceBindingResolver),
         shutdown.clone(),
     );
     let progress = cancelling.apply(actor, true, id);

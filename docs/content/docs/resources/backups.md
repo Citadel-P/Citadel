@@ -248,7 +248,7 @@ Keep the test instance separate from production ports, networks, and external
 integrations. File presence alone does not verify database or application
 recovery. Record the snapshot tested, application version, and result.
 
-[![Restore Volume dialog selecting an application data snapshot, the target Docker Platform, and a new recovery volume with overwrite disabled](/screenshots/backup-restore-selection.png)](/screenshots/backup-restore-selection.png)
+![Restore Volume dialog selecting an application data snapshot, the target Docker Platform, and a new recovery volume with overwrite disabled](/screenshots/backup-restore-selection.png)
 
 This demo backup contains two volume snapshots. **Snapshot Volume** selects the
 one to restore; **Target Platform** and **Target Volume** specify where it goes.
@@ -375,7 +375,7 @@ Supported sources:
 - **Deployment storage**: backs up declared named volumes and supported bind mounts discovered from the synchronized container on standalone Docker. Runtime-only anonymous volumes still need a direct Docker volume policy.
 - **Swarm service storage**: backs up supported local Docker volumes and bind mounts on the Nodes running the managed Service’s current Tasks.
 
-[![Backup policy selecting a Stack, previewing its named volume, and choosing a repository with retention of fourteen successful snapshots](/screenshots/backup-policy-source-destination.png)](/screenshots/backup-policy-source-destination.png)
+![Backup policy selecting a Stack, previewing its named volume, and choosing a repository with retention of fourteen successful snapshots](/screenshots/backup-policy-source-destination.png)
 
 Example policy using demo resources. Review the resolved volume and Node under
 **Source**, then choose the repository and retention under **Destination**.
@@ -497,7 +497,7 @@ or decrypt stored credentials.
 
 The official Citadel Core image includes `pg_dump`. Native installations and
 custom images must provide a PostgreSQL client that supports the configured
-server version. Set `Backups__PostgresDumpPath` when `pg_dump` is not available
+server version. Set `CITADEL_PG_DUMP_PATH` when `pg_dump` is not available
 on `PATH`.
 
 ## Docker Platform Backups

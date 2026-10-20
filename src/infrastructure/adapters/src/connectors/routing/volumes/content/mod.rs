@@ -3,7 +3,6 @@
 use crate::connectors::agent::client::AgentClient;
 use crate::connectors::agent::client::AgentContainerAction;
 use crate::connectors::agent::execution::AgentExecutionClient;
-use crate::connectors::docker::DockerClient;
 use crate::connectors::edge::EdgeRegistry;
 use crate::connectors::routing::containers::ContainerRuntimeRouter;
 use crate::connectors::routing::containers::Runtime;
@@ -14,6 +13,7 @@ use citadel_contracts::citadel::{
     edge::v1::EdgeCommandKind,
     shared_models::v1::Mount,
 };
+use citadel_docker::client::DockerClient;
 use citadel_platforms::VolumeObservationPort;
 use citadel_platforms::{
     RuntimeCapabilityError, RuntimeErrorKind, containers::ContainerTarget, volume_content::*,
@@ -133,7 +133,7 @@ impl VolumeContentAdapter {
                 let inspected = r
                     .inspect_volume(volume)
                     .await
-                    .map_err(crate::connectors::docker::runtime::normalize_docker_error)?;
+                    .map_err(citadel_docker::client::runtime::normalize_docker_error)?;
                 require_content_access(inspected.content_access_allowed)?;
                 HelperRuntime::Local(r.clone())
             }
@@ -459,7 +459,7 @@ async fn cleanup(runtime: HelperRuntime, id: String, _permit: OwnedSemaphorePerm
             HelperRuntime::Local(r) => r
                 .delete_container_with_options(&id, false, true, false)
                 .await
-                .map_err(crate::connectors::docker::runtime::normalize_docker_error),
+                .map_err(citadel_docker::client::runtime::normalize_docker_error),
             HelperRuntime::Agent(AgentExecutionClient::Direct(r)) => {
                 r.delete_container_with_options(
                     &id,

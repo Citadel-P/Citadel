@@ -46,8 +46,10 @@ export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } = 
       const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources : [resources];
       return {
-        platformId: currentPlatform?.id ?? '',
-        ids: selected.map((x) => x.id!),
+        data: {
+          platformId: currentPlatform?.id ?? '',
+          ids: selected.map((x) => x.id!),
+        },
       };
     },
   })

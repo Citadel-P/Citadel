@@ -1,13 +1,13 @@
 //! Inspected state checks for operations that cannot be authorized from the request alone.
 use super::{dispatch::decode, swarm_policy as policy};
 use crate::config::SwarmIdentity;
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_contracts::citadel::{
     containers::v1::{CreateContainerRequest, ExecBinaryRequest},
     edge::v1::EdgeCommandKind,
     shared_models::v1::Mount,
     volumes::v1::{CreateVolumeRequest, RemoveVolumeRequest},
 };
+use citadel_docker::client::DockerClient;
 use prost::Message;
 use serde_json::Value;
 use tonic::Status;
@@ -225,7 +225,7 @@ async fn verify_copy_mounts(
     helper: &CreateContainerRequest,
     platform: Uuid,
 ) -> Result<(), Status> {
-    use citadel_adapters::external::backups::current_copy::COPY_JOB_LABEL;
+    use citadel_docker::current_copy::COPY_JOB_LABEL;
     let source = docker
         .inspect_volume(helper.mounts[0].source.as_deref().ok_or_else(denied)?)
         .await

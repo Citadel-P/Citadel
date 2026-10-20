@@ -39,7 +39,7 @@ test administrator with `CITADEL_E2E_ADMIN_NAME`,
 ```powershell
 npm run test:smoke            # Fast authentication, authorization, licensing, navigation, and tag checks
 npm run test:core-runtime     # Deploy, rollback, snapshot copies, and Core crash recovery
-npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real SignalR reconnect coverage
+npm run test:nightly-runtime  # Logs, Inspect, Terminal, and real WebSocket reconnect coverage
 npm run test:visual           # Chromium desktop and mobile visual regression coverage
 npm run test:accessibility    # Focused WCAG A/AA checks for login and representative application surfaces
 npm run test:oidc             # Real Keycloak redirect, refresh session, claim policy, and logout

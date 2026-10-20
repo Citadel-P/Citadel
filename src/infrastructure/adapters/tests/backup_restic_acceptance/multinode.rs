@@ -214,7 +214,7 @@ impl Cluster {
                 "--volume",
                 &format!("{}:/var/run", self.sockets),
                 "--env",
-                &format!("HUB_PUBLIC_KEY={}", signer.public_key_base64()),
+                &format!("CITADEL_CORE_PUBLIC_KEY={}", signer.public_key_base64()),
                 "--env",
                 "CITADEL_AGENT_TLS_MODE=Disabled",
                 &image,

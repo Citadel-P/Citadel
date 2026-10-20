@@ -139,3 +139,15 @@ status meanings and scheduling requirements.
 - [Adopt an existing Compose project or Docker Stack](/docs/guides/adopting-existing-workloads).
 - [Configure variables and secrets](/docs/guides/variables-and-secrets).
 - [Back up application data](/docs/resources/backups).
+
+## Local command trust boundary
+
+Local pre/post-deployment shell commands run with the operating-system access of
+the Core or Agent executing the Stack. They are trusted code: they can access
+host files and any Docker daemon available to that process. Only grant this
+capability to users trusted with that access.
+
+Commands receive explicit workload variables and selected tool settings (PATH,
+locale, timezone, proxy and CA paths), rather than the complete Core environment.
+Compose uses the staged working directory and private registry configuration.
+This reduces accidental secret inheritance; it does not sandbox shell commands.

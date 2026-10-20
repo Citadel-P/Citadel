@@ -131,7 +131,7 @@ impl ImageUpdateResolver for ImageUpdateAdapter {
                 use citadel_contracts::citadel::images::v1::{DistributionInspectRequest,DistributionInspectResponse,OciPlatformResponse};
                 let request=DistributionInspectRequest {image_name:reference.into(),auth:auth.as_deref().cloned(),target_platform:Some(OciPlatformResponse {os:target.os.clone(),architecture:target.architecture.clone(),variant:target.variant.clone(),..Default::default()})};
                 let response:DistributionInspectResponse=match self.runtime.resolve(platform,node,true,cancel).await? {
-                    Runtime::Local(_)=>return super::image_metadata::inspect(reference,auth.as_deref().map(String::as_str),target,cancel).await,
+                    Runtime::Local(_)=>return citadel_docker::image_metadata::inspect(reference,auth.as_deref().map(String::as_str),target,cancel).await,
                     Runtime::Agent(agent)=>agent.node_agent_distribution(request,cancel).await.map_err(metadata_transport_error)?,
                     Runtime::Edge(edge)=>crate::connectors::agent::execution::unary(&edge.session,citadel_contracts::citadel::edge::v1::EdgeCommandKind::ImageDistributionInspect,request,cancel).await.map_err(metadata_transport_error)?,
                 };

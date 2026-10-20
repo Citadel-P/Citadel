@@ -58,7 +58,7 @@ impl Harness {
                 .unwrap();
         });
         let mut config = AgentConfig::from_lookup(|name| match name {
-            "HUB_PUBLIC_KEY" => {
+            "CITADEL_CORE_PUBLIC_KEY" => {
                 Some(STANDARD.encode(SigningKey::from_bytes(&[42; 32]).verifying_key().as_bytes()))
             }
             "DOCKER_HOST" => Some(format!("tcp://{daemon_address}")),

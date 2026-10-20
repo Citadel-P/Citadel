@@ -13,7 +13,7 @@ vi.hoisted(() => {
   document.queryCommandSupported ??= () => false;
 });
 vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPlatform: undefined }) }));
-vi.mock('./container-info/', () => ({ ImageName: () => null }));
+vi.mock('./container-info/image-name', () => ({ ImageName: () => null }));
 vi.mock('@/features/stacks/backup-cell', () => ({
   StackBackupCell: ({ stackId }: { stackId: string }) => <span data-testid="stack-backup">{stackId}</span>,
 }));

@@ -3,13 +3,13 @@
 use std::path::Path;
 use std::time::Duration;
 
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::connectors::routing::deployments::DeploymentRuntimeRouter;
 use citadel_database::MigrationRunner;
 use citadel_deployments::{
     ContainerRestartPolicy, DeploymentImageInfo, DeploymentRuntime, DeploymentSpec, LifeCycleSpec,
     RuntimeContainerState, RuntimeDeploymentCommand, UpdateBehavior,
 };
+use citadel_docker::client::DockerClient;
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;

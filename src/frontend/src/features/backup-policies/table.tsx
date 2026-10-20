@@ -1,4 +1,11 @@
-import { BackupSourceSpec, BackupPolicyView, ResourceControlState } from '@/api/generated/api.types';
+import {
+  ActivityResourceType,
+  BackupSourceSpec,
+  BackupPolicyView,
+  LookupResourceType,
+  ResourceControlState,
+} from '@/api/generated/api.types';
+import { createResourceTargetColumn, type ResourceTargetValue } from '@/components/custom/resource-target-column';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -8,11 +15,11 @@ import { DataTable } from '@/components/ui/data-table';
 import { TagChips } from '@/features/tags/components';
 import { useSelectedResources } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
-import { formatId } from '@/lib/utils';
+import { useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
 import { ColumnDef } from '@tanstack/react-table';
-import { Box, CalendarClock, Database, HardDrive, Layers } from 'lucide-react';
+import { CalendarClock, Database, HardDrive } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -30,7 +37,11 @@ export function BackupPoliciesTable({
 }) {
   const [, setSelectedResources] = useSelectedResources<BackupPolicyView>('BackupPolicy');
   const formatDateTime = useProfileDateTimeFormatter();
-  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
+  const sourceNames = useSourceNames(items);
+  const cols = useMemo(
+    () => columns(actions ?? {}, formatDateTime, sourceNames),
+    [actions, formatDateTime, sourceNames],
+  );
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 }
@@ -41,6 +52,7 @@ const columns = (
     React.FC<{ resource: BackupPolicyView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   formatDateTime: DateTimeFormatter,
+  sourceNames: ReturnType<typeof useSourceNames>,
 ): ColumnDef<BackupPolicyView>[] => [
   {
     id: 'select',
@@ -67,12 +79,11 @@ const columns = (
     cell: ({ row }) => <PolicyNameRow policy={row.original} />,
     sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
-  {
-    accessorKey: 'source',
-    header: ({ column }) => <SortableCell cellName="Source" column={column} />,
-    cell: ({ row }) => <SourceCell source={row.original.source} />,
-    sortingFn: (rowA, rowB) => sourceText(rowA.original.source).localeCompare(sourceText(rowB.original.source)),
-  },
+  createResourceTargetColumn({
+    id: 'source',
+    header: 'Source',
+    getValue: (policy: BackupPolicyView) => sourceValue(policy.source, sourceNames),
+  }),
   {
     accessorKey: 'cron',
     header: ({ column }) => <SortableCell cellName="Schedule" column={column} />,
@@ -119,61 +130,48 @@ const PolicyNameRow = ({ policy }: { policy: BackupPolicyView }) => (
   </div>
 );
 
-const SourceCell = ({ source }: { source: BackupSourceSpec }) => {
+const sourceValue = (source: BackupSourceSpec, names: ReturnType<typeof useSourceNames>): ResourceTargetValue => {
+  const target = workloadTarget(source);
+  if (target) {
+    const name = names.names.get(`${target.type}:${target.id}`);
+    if (name) return { target: { resourceType: target.type, resourceId: target.id, resourceName: name } };
+    const label = names.loading.has(target.type)
+      ? 'Loading source…'
+      : `${target.type === ActivityResourceType.SwarmService ? 'Swarm Service' : target.type} unavailable`;
+    return { label, content: <span className="text-sm text-muted-foreground">{label}</span> };
+  }
   if (source.$type === 'BindMount')
-    return (
-      <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
-        <HardDrive className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate" title={source.hostPath}>
-          Bind: {source.hostPath}
+    return {
+      label: source.hostPath,
+      content: (
+        <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
+          <HardDrive className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate" title={source.hostPath}>
+            Bind: {source.hostPath}
+          </span>
         </span>
-      </span>
-    );
+      ),
+    };
   if (source.$type === 'DockerVolume') {
-    const dockerSource = source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>;
-
-    return (
-      <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
-        <HardDrive className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate" title={dockerSource.volumeName}>
-          {dockerSource.volumeName}
-        </span>
-      </span>
-    );
+    return {
+      target: {
+        resourceType: ActivityResourceType.Volume,
+        resourceId: source.platformId,
+        resourceName: source.volumeName,
+        dockerNodeId: source.dockerNodeId,
+      },
+    };
   }
 
-  if (source.$type === 'Stack') {
-    const stackSource = source as Extract<BackupSourceSpec, { $type: 'Stack' }>;
-
-    return (
-      <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
-        <Layers className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate" title={stackSource.stackId}>
-          Stack {formatId(stackSource.stackId)}
-        </span>
+  return {
+    label: 'Citadel backup',
+    content: (
+      <span className="inline-flex items-center gap-2 text-sm">
+        <Database className="size-3.5 text-muted-foreground" />
+        Citadel backup
       </span>
-    );
-  }
-
-  if (source.$type === 'Deployment') {
-    const deploymentSource = source as Extract<BackupSourceSpec, { $type: 'Deployment' }>;
-
-    return (
-      <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">
-        <Box className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate" title={deploymentSource.deploymentId}>
-          Deployment {formatId(deploymentSource.deploymentId)}
-        </span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="inline-flex items-center gap-2 text-sm">
-      <Database className="size-3.5 text-muted-foreground" />
-      Citadel backup
-    </span>
-  );
+    ),
+  };
 };
 
 const ScheduleCell = ({ policy }: { policy: BackupPolicyView }) => {
@@ -190,12 +188,55 @@ const ScheduleCell = ({ policy }: { policy: BackupPolicyView }) => {
   );
 };
 
-const sourceText = (source: BackupSourceSpec) => {
-  if (source.$type === 'BindMount') return source.hostPath;
-  if (source.$type === 'DockerVolume')
-    return (source as Extract<BackupSourceSpec, { $type: 'DockerVolume' }>).volumeName;
-  if (source.$type === 'Stack') return (source as Extract<BackupSourceSpec, { $type: 'Stack' }>).stackId;
-  if (source.$type === 'Deployment') return (source as Extract<BackupSourceSpec, { $type: 'Deployment' }>).deploymentId;
-  if (source.$type === 'CitadelSystem') return 'Citadel backup';
-  return '';
-};
+function workloadTarget(source: BackupSourceSpec) {
+  switch (source.$type) {
+    case 'Deployment':
+      return { type: ActivityResourceType.Deployment, id: source.deploymentId };
+    case 'Stack':
+      return { type: ActivityResourceType.Stack, id: source.stackId };
+    case 'SwarmService':
+      return { type: ActivityResourceType.SwarmService, id: source.swarmServiceId };
+    default:
+      return undefined;
+  }
+}
+
+function useSourceNames(items: BackupPolicyView[]) {
+  // Share the existing authorized lookup cache; never fetch a workload per row.
+  const deployments = useRead(
+    'lookup',
+    { query: { TargetResourceType: LookupResourceType.Deployment } },
+    {
+      enabled: items.some((policy) => policy.source.$type === 'Deployment'),
+    },
+  );
+  const stacks = useRead(
+    'lookup',
+    { query: { TargetResourceType: LookupResourceType.Stack } },
+    {
+      enabled: items.some((policy) => policy.source.$type === 'Stack'),
+    },
+  );
+  const services = useRead(
+    'lookup',
+    { query: { TargetResourceType: LookupResourceType.SwarmService } },
+    {
+      enabled: items.some((policy) => policy.source.$type === 'SwarmService'),
+    },
+  );
+  return useMemo(() => {
+    const names = new Map<string, string>();
+    for (const [type, resources] of [
+      ['Deployment', deployments.data?.data],
+      ['Stack', stacks.data?.data],
+      ['SwarmService', services.data?.data],
+    ] as const) {
+      for (const resource of resources ?? []) names.set(`${type}:${resource.id}`, resource.name);
+    }
+    const loading = new Set<string>();
+    if (deployments.isPending) loading.add('Deployment');
+    if (stacks.isPending) loading.add('Stack');
+    if (services.isPending) loading.add('SwarmService');
+    return { names, loading };
+  }, [deployments.data, stacks.data, services.data, deployments.isPending, stacks.isPending, services.isPending]);
+}

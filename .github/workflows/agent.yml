@@ -74,11 +74,6 @@ jobs:
             --artifact candidates-${{ matrix.arch }} \
             > "$RUNNER_TEMP/recovery.json"
           echo "recovered=$(jq -r .recovered "$RUNNER_TEMP/recovery.json")" >> "$GITHUB_OUTPUT"
-      - name: Authenticate released baseline reads
-        if: inputs.release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
       - name: Read shared metadata
         id: version
         run: |
@@ -91,9 +86,9 @@ jobs:
           PY
       - name: Validate Agent and transport components
         run: |
-          cargo fmt -p citadel-agent -p citadel-contracts -p citadel-volume-helper -- --check
-          cargo clippy --locked -p citadel-agent -p citadel-contracts -p citadel-volume-helper --all-targets -- -D warnings
-          cargo test --locked -p citadel-agent -p citadel-contracts -p citadel-volume-helper
+          cargo fmt -p citadel-agent -p citadel-docker -p citadel-contracts -p citadel-volume-helper -- --check
+          cargo clippy --locked -p citadel-agent -p citadel-docker -p citadel-contracts -p citadel-volume-helper --all-targets -- -D warnings
+          cargo test --locked -p citadel-agent -p citadel-docker -p citadel-contracts -p citadel-volume-helper
           cargo test --locked -p citadel-adapters --test agent_mutations --test edge_sessions
           cargo test --locked -p citadel-adapters --lib connectors::agent::execution::tests
       - name: Authenticate Docker Hub pulls

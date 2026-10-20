@@ -94,10 +94,14 @@ pub trait BuildRepository: Send + Sync {
         &'a self,
         stale_before: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<Option<BuildClaim>, BuildError>>;
+    /// Atomically finish the owned active run and enqueue its optional observation.
+    /// `false` means the run no longer owns the project or is no longer active;
+    /// callers may read terminal state but must not retry a no-op as a write error.
     fn finish<'a>(
         &'a self,
         claim: &'a BuildClaim,
         result: &'a BuildExecutionResult,
+        observation: Option<&'a citadel_alerts::AlertObservation>,
     ) -> BoxFuture<'a, Result<bool, BuildError>>;
     fn list_runs<'a>(
         &'a self,

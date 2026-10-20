@@ -106,11 +106,13 @@ pub trait BackupPersistence: Send + Sync {
         claim: &'a BackupClaim,
         plan: &'a BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), BackupError>>;
+    /// Returns true only for a committed Running -> terminal transition.
+    /// On false, read persisted state before publishing terminal progress.
     fn finish_backup<'a>(
         &'a self,
         claim: &'a BackupClaim,
         result: &'a BackupExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BackupError>>;
+    ) -> BoxFuture<'a, Result<bool, BackupError>>;
     fn list_runs(
         &self,
         actor: ActorId,
@@ -129,11 +131,13 @@ pub trait BackupPersistence: Send + Sync {
         &self,
         stale_before: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<Option<RestoreClaim>, BackupError>>;
+    /// Returns true only for a committed Running -> terminal transition.
+    /// On false, recovery/removal may have superseded this result.
     fn finish_restore<'a>(
         &'a self,
         claim: &'a RestoreClaim,
         result: &'a RestoreExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BackupError>>;
+    ) -> BoxFuture<'a, Result<bool, BackupError>>;
     fn list_restores(
         &self,
         actor: ActorId,

@@ -275,7 +275,7 @@ export function DuplicateWorkload({
                     <div className="space-y-2">
                       <Label htmlFor={`copy-platform-${sourceId}`}>Destination platform</Label>
                       <ResourceSelectorField
-                        className='max-w-full w-full'
+                        className="max-w-full w-full"
                         id={`copy-platform-${sourceId}`}
                         items={targetCatalog?.platforms ?? []}
                         selected={platformId}

@@ -1,5 +1,6 @@
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
-import { useRead } from '@/lib/hooks';
+import { useRegistryList } from './queries';
+import type { AuthorizedRegistryView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { RegistryDropdownActions, RegistryGroupActions } from './actions';
 import { RegistriesTable } from './table';
@@ -24,9 +25,9 @@ export const RegistryComponents: RequiredComponents = {
     return <ActionBar type="Registry" items={items} actions={Object.values(RegistryGroupActions)} />;
   },
 
-  useData: function (): ResourceDataHookResult<any> {
+  useData: function (): ResourceDataHookResult<AuthorizedRegistryView> {
     const { selectedTagNames } = useResourceTagFilter();
-    const { data, isLoading, error, refetch, isFetching } = useRead(`listRegistries`, {
+    const { data, isLoading, error, refetch, isFetching } = useRegistryList({
       query: { includeDisabled: true, ...(selectedTagNames.length > 0 ? { tags: selectedTagNames } : {}) },
     });
     return {

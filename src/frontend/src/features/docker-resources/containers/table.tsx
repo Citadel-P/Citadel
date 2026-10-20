@@ -22,7 +22,7 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { Link } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { PortsDisplay } from '@/components/custom/ports-display';
-import { ImageName } from './container-info/';
+import { ImageName } from './container-info/image-name';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useCallback, useMemo, useRef } from 'react';
 import { useAtomValue } from 'jotai';

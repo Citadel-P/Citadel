@@ -53,7 +53,7 @@ export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = 
           <SetupContext.Provider value={setupValue}>
             <AuthContext.Provider value={authValue}>
               {groups ? (
-                <RealtimeProvider realtimeTransport="SignalR" {...groups}>
+                <RealtimeProvider realtimeTransport="WebSocketV1" {...groups}>
                   {children}
                 </RealtimeProvider>
               ) : (

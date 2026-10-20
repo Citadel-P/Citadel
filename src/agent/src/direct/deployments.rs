@@ -1,9 +1,10 @@
 use super::Runtime;
-use citadel_adapters::connectors::docker::deployments::{parse_mount, parse_port};
 use citadel_contracts::citadel::deployments::v1::{
     deployment_service_server::DeploymentService, *,
 };
 use citadel_deployments::{DeploymentError, RuntimeContainerState};
+use citadel_docker::client::deployments::parse_mount;
+use citadel_docker::client::deployments::parse_port;
 use serde_json::{Value, json};
 use tonic::{Request, Response, Status};
 

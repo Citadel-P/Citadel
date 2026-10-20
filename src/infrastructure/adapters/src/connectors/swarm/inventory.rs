@@ -1,10 +1,8 @@
 //! Native Swarm operations across the three existing transports.
 use crate::connectors::agent::client::AgentClient;
-use crate::connectors::docker::DockerClient;
-use crate::connectors::docker::runtime::normalize_docker_error;
 use crate::connectors::edge::EdgeRuntime;
-use base64::Engine;
 use citadel_contracts::citadel::{edge::v1::EdgeCommandKind, swarm::v1::*};
+use citadel_docker::client::DockerClient;
 use citadel_platforms::{
     RuntimeCapabilityError, RuntimeErrorKind, RuntimeSwarmNode, swarm_mutations::*,
 };
@@ -43,12 +41,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<SwarmServiceMessage, RuntimeCapabilityError> {
         if let Self::Local(docker) = self {
-            let (native, tasks) = tokio::try_join!(
-                docker.inspect_swarm_service(id),
-                docker.list_swarm_service_tasks(id)
-            )
-            .map_err(normalize_docker_error)?;
-            return crate::connectors::swarm::inspection::inspect_service_message(native, &tasks);
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .inspect_service(id, cancel)
+                .await;
         }
         match self {
             Self::Agent(agent) => agent.inspect_managed_swarm_service(id, cancel).await,
@@ -72,26 +67,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<(RuntimeSwarmNode, i32, i32), RuntimeCapabilityError> {
         if let Self::Local(docker) = self {
-            let (node, tasks) = tokio::try_join!(
-                docker.inspect_swarm_node(id),
-                docker.list_swarm_node_tasks(id)
-            )
-            .map_err(normalize_docker_error)?;
-            let current: Vec<_> = tasks
-                .iter()
-                .filter(|task| {
-                    task.node_id == id && task.desired_state.eq_ignore_ascii_case("running")
-                })
-                .collect();
-            let running = current
-                .iter()
-                .filter(|task| task.status["State"].as_str() == Some("running"))
-                .count();
-            return Ok((
-                crate::connectors::docker::inventory::map_node(node),
-                running as i32,
-                current.len() as i32,
-            ));
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .inspect_node(id, cancel)
+                .await;
         }
         let node: SwarmNodeMessage = remote!(
             self,
@@ -114,19 +92,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
         if let Self::Local(docker) = self {
-            let mut live = docker
-                .inspect_swarm_node(id)
-                .await
-                .map_err(normalize_docker_error)?;
-            if live.id != id || live.version.index != input.version_index as u64 {
-                return Err(conflict("Node changed. Reload it before saving."));
-            }
-            live.spec["Availability"] = serde_json::json!(input.availability.to_ascii_lowercase());
-            live.spec["Labels"] = serde_json::json!(input.labels);
-            return docker
-                .update_swarm_node(id, input.version_index, &live.spec)
-                .await
-                .map_err(normalize_docker_error);
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .update_node(id, input, cancel)
+                .await;
         }
         remote!(
             self,
@@ -147,29 +115,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
         if let Self::Local(docker) = self {
-            let mut live = docker
-                .inspect_swarm_service(id)
-                .await
-                .map_err(normalize_docker_error)?;
-            if live.id != id {
-                return Err(conflict("Docker returned a different Service."));
-            }
-            let force = live.spec["TaskTemplate"]["ForceUpdate"]
-                .as_u64()
-                .unwrap_or(0)
-                .checked_add(1)
-                .ok_or_else(|| conflict("Service restart counter overflow."))?;
-            live.spec["TaskTemplate"]["ForceUpdate"] = serde_json::json!(force);
-            return docker
-                .update_swarm_service(
-                    id,
-                    i64::try_from(live.version.index)
-                        .map_err(|_| conflict("Invalid Service version."))?,
-                    &live.spec,
-                )
-                .await
-                .map(|_| ())
-                .map_err(normalize_docker_error);
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .restart_service(id, cancel)
+                .await;
         }
         remote!(
             self,
@@ -187,10 +135,11 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
         match self {
-            Self::Local(docker) => docker
-                .delete_swarm_service(id)
-                .await
-                .map_err(normalize_docker_error),
+            Self::Local(docker) => {
+                citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                    .delete_service(id, cancel)
+                    .await
+            }
             Self::Agent(agent) => {
                 agent
                     .delete_managed_swarm_service(
@@ -223,17 +172,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
         if let Self::Local(docker) = self {
-            let spec = serde_json::json!({"Name":input.name,"Labels":input.labels,"Data":base64::engine::general_purpose::STANDARD.encode(input.data.as_bytes())});
-            let response = docker
-                .create_swarm_material(secret, &spec)
-                .await
-                .map_err(normalize_docker_error)
-                .map_err(material_error)?;
-            return if response["ID"].as_str().is_some_and(|id| !id.is_empty()) {
-                Ok(())
-            } else {
-                Err(conflict("Docker returned no id for the created resource."))
-            };
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .create_material(secret, input, cancel)
+                .await;
         }
         let response: SwarmResourceCreateResponse = if secret {
             remote!(
@@ -276,32 +217,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
         if let Self::Local(docker) = self {
-            let (live_id, version, mut spec) = if secret {
-                let value = docker
-                    .inspect_swarm_secret(id)
-                    .await
-                    .map_err(normalize_docker_error)?;
-                (value.id, value.version.index, value.spec)
-            } else {
-                let value = docker
-                    .inspect_swarm_config(id)
-                    .await
-                    .map_err(normalize_docker_error)?;
-                (value.id, value.version.index, value.spec)
-            };
-            if live_id != id || version != input.version_index as u64 {
-                return Err(conflict("Resource changed. Reload it before saving."));
-            }
-            spec["Labels"] = serde_json::json!(input.labels);
-            // Config updates must resubmit exactly the original data. Secret
-            // inspection intentionally omits data, so metadata-only is correct.
-            if secret && let Some(object) = spec.as_object_mut() {
-                object.remove("Data");
-            }
-            return docker
-                .update_swarm_material(secret, id, input.version_index, &spec)
-                .await
-                .map_err(normalize_docker_error);
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .update_labels(secret, id, input, cancel)
+                .await;
         }
         let request = UpdateSwarmResourceLabelsRequest {
             resource_id: id.into(),
@@ -333,12 +251,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
         if let Self::Local(docker) = self {
-            return if secret {
-                docker.delete_swarm_secret(id).await
-            } else {
-                docker.delete_swarm_config(id).await
-            }
-            .map_err(normalize_docker_error);
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .delete_material(secret, id, cancel)
+                .await;
         }
         if secret {
             remote!(
@@ -368,16 +283,9 @@ impl SwarmInventoryClient<'_> {
         cancel: &CancellationToken,
     ) -> Result<String, RuntimeCapabilityError> {
         let bytes = if let Self::Local(docker) = self {
-            let config = docker
-                .inspect_swarm_config(id)
-                .await
-                .map_err(normalize_docker_error)?;
-            if config.id != id {
-                return Err(conflict("Docker returned a different Config."));
-            }
-            base64::engine::general_purpose::STANDARD
-                .decode(config.spec["Data"].as_str().unwrap_or_default())
-                .map_err(|_| conflict("Docker returned invalid Config data."))?
+            return citadel_docker::swarm::inventory::LocalSwarmInventory(docker)
+                .config_data(id, cancel)
+                .await;
         } else {
             let response: SwarmConfigDataResponse = remote!(
                 self,

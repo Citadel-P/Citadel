@@ -4,7 +4,7 @@ import Loader from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useMutate } from '@/lib/hooks';
 import { PlatformResourceMetric } from '@/features/platforms/forms/platform-stats';
-import { applySwarmInventoryToOverview, useSwarmOverview } from './hooks/useSwarmOverview';
+import { useSwarmOverview } from './hooks/useSwarmOverview';
 import {
   getBackupMetric,
   getBackupSourceStates,
@@ -13,8 +13,6 @@ import {
 import { ArchiveRestore, Boxes, CircleDot, ListTodo, Network, RefreshCw, Server } from 'lucide-react';
 import { SwarmQuorumStatus } from './swarm-quorum-status';
 import { getServiceStates } from '@/features/platforms/platform-workload-status';
-
-export { applySwarmInventoryToOverview };
 
 export const SwarmPlatformSummary = ({
   platformId,

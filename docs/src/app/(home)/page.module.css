@@ -1,21 +1,13 @@
 .home {
-  --landing-blue: #1266c5;
-  --landing-tint: #eef5fe;
-  --landing-text: #142438;
-  --landing-muted: #596a7c;
-  --landing-line: #dce5ef;
+  --landing-accent: var(--citadel-accent);
+  --landing-tint: var(--citadel-accent-soft);
+  --landing-text: var(--citadel-text);
+  --landing-muted: var(--citadel-text-muted);
+  --landing-line: var(--citadel-rule);
   color: var(--landing-text);
   width: 100%;
   overflow: clip;
-  background: #fafcfe;
-}
-:global(.dark) .home {
-  --landing-blue: #78b5ff;
-  --landing-tint: #142439;
-  --landing-text: #e8eef7;
-  --landing-muted: #a0afc2;
-  --landing-line: #26364a;
-  background: #0c131e;
+  background: var(--citadel-canvas);
 }
 .home a,
 .home button {
@@ -26,7 +18,7 @@
 }
 .home a:focus-visible,
 .home button:focus-visible {
-  outline: 2px solid var(--landing-blue);
+  outline: 2px solid var(--landing-accent);
   outline-offset: 5px;
 }
 .hero {
@@ -49,7 +41,7 @@
   text-align: center;
 }
 .eyebrow {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.13em;
@@ -64,7 +56,7 @@
 .hero .eyebrow > span {
   height: 6px;
   width: 6px;
-  background: var(--landing-blue);
+  background: var(--landing-accent);
   border-radius: 50%;
 }
 .hero h1 {
@@ -75,7 +67,7 @@
   line-height: 1.07;
 }
 .hero h1 > span {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
 }
 .intro {
   margin: 25px auto 0;
@@ -105,19 +97,18 @@
   border: 1px solid transparent;
 }
 .primary {
-  background: #1266c5;
-  color: #fff;
-  box-shadow: 0 2px 3px #103c6f16;
+  background: var(--citadel-action);
+  color: var(--citadel-action-text);
 }
 .primary:hover {
-  background: #0b54a8;
+  background: var(--citadel-action-hover);
 }
 .secondary {
   border-color: var(--landing-line);
   background: var(--color-fd-background);
 }
 .secondary:hover {
-  border-color: var(--landing-blue);
+  border-color: var(--landing-accent);
   background: var(--landing-tint);
 }
 .heroNote {
@@ -141,7 +132,7 @@
   border-radius: 12px;
   overflow: hidden;
   background: var(--color-fd-background);
-  box-shadow: 0 20px 70px -24px #123c7540;
+  box-shadow: var(--citadel-frame-shadow);
 }
 .previewToolbar {
   display: flex;
@@ -169,7 +160,7 @@
   background: var(--landing-tint);
 }
 .previewTabs button[aria-pressed="true"] {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
   background: var(--landing-tint);
 }
 .previewDemo {
@@ -181,7 +172,7 @@
   white-space: nowrap;
 }
 .previewDemo:hover {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
 }
 .screenshot {
   aspect-ratio: 1440 / 900;
@@ -223,7 +214,7 @@
   text-wrap: balance;
 }
 .textLink {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
   font-size: 13px;
   font-weight: 550;
   display: inline-flex;
@@ -258,7 +249,7 @@
   background: var(--landing-tint);
 }
 .resourceIcon {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
   margin-bottom: 24px;
 }
 .home h3 {
@@ -276,7 +267,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  color: var(--landing-blue);
+  color: var(--landing-accent);
   font-size: 12px;
   font-weight: 550;
   margin-top: auto;
@@ -298,7 +289,7 @@
   background: var(--color-fd-background);
   border-radius: 10px;
   font-size: 12px;
-  box-shadow: 0 12px 30px -22px #123c7570;
+  box-shadow: var(--citadel-frame-shadow);
   overflow: hidden;
 }
 .repoHeader {
@@ -310,7 +301,7 @@
   font-weight: 600;
 }
 .repoHeader > svg {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
 }
 .repoHeader code {
   margin-left: auto;
@@ -343,10 +334,10 @@
   color: var(--landing-text);
 }
 .treeLine {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
 }
 .stackLabel {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -365,7 +356,7 @@
   font-size: 11px;
 }
 .repoFooter svg {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
 }
 .operations {
   display: grid;
@@ -380,7 +371,7 @@
   align-items: start;
 }
 .operations a > svg:first-child {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -399,7 +390,7 @@
   color: var(--landing-muted);
 }
 .operations a:hover h3 {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
 }
 .licensing > p {
   max-width: 850px;
@@ -495,7 +486,7 @@
   align-items: center;
 }
 .footer nav a:hover {
-  color: var(--landing-blue);
+  color: var(--landing-accent);
 }
 @media (max-width: 1199px) {
   .section,

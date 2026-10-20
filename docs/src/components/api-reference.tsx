@@ -21,10 +21,10 @@ export function ApiReference() {
     theme: {
       spacing: { sectionHorizontal: 24, sectionVertical: 28 },
       colors: {
-        primary: { main: dark ? '#60a5fa' : '#1673cc' },
-        text: { primary: dark ? '#e5e5e5' : '#262626', secondary: dark ? '#a3a3a3' : '#525252' },
-        gray: { 50: dark ? '#202020' : '#fafafa', 100: dark ? '#262626' : '#f5f5f5' },
-        border: { dark: dark ? '#404040' : '#d4d4d4', light: dark ? '#262626' : '#ffffff' },
+        primary: { main: dark ? '#93c5fd' : '#2563eb' },
+        text: { primary: dark ? '#edf2f7' : '#0f172a', secondary: dark ? '#afbdcc' : '#475569' },
+        gray: { 50: dark ? '#1d2a38' : '#f1f5f9', 100: dark ? '#17212d' : '#f8fafc' },
+        border: { dark: dark ? '#334253' : '#dce3eb', light: dark ? '#17212d' : '#ffffff' },
       },
       typography: {
         fontSize: '14px',
@@ -34,17 +34,17 @@ export function ApiReference() {
       },
       sidebar: {
         width: '240px',
-        backgroundColor: dark ? '#171717' : '#fafafa',
-        textColor: dark ? '#d4d4d4' : '#404040',
-        activeTextColor: dark ? '#60a5fa' : '#1673cc',
+        backgroundColor: dark ? '#17212d' : '#f8fafc',
+        textColor: dark ? '#afbdcc' : '#475569',
+        activeTextColor: dark ? '#93c5fd' : '#2563eb',
       },
-      rightPanel: { backgroundColor: '#171717', textColor: '#e5e5e5' },
+      rightPanel: { backgroundColor: '#17212d', textColor: '#edf2f7' },
       schema: {
-        nestedBackground: dark ? '#202020' : '#fafafa',
-        arrow: { color: dark ? '#a3a3a3' : '#525252' },
+        nestedBackground: dark ? '#1d2a38' : '#f1f5f9',
+        arrow: { color: dark ? '#afbdcc' : '#475569' },
       },
       extensionsHook: (name: string) => name === 'UnderlinedHeader'
-        ? `color: ${dark ? '#a3a3a3' : '#525252'}; border-color: ${dark ? '#404040' : '#d4d4d4'};`
+        ? `color: ${dark ? '#afbdcc' : '#475569'}; border-color: ${dark ? '#334253' : '#dce3eb'};`
         : '',
     },
   }), [dark]);

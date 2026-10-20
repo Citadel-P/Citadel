@@ -24,7 +24,7 @@ the old migration journal or its checksums to bypass this check.
 ## Release notifications
 
 [Update checks](/docs/getting-started/configuration#allow-update-checks) are enabled
-by default. Set `Updates__Enabled=false` to disable them. Administrators see newer releases in their installed channel on
+by default. Set `CITADEL_UPDATE_CHECKS_ENABLED=false` to disable them. Administrators see newer releases in their installed channel on
 Home and beside the sidebar version. Checks use completed public GitHub releases,
 which Citadel publishes after verifying its Core and Agent images; pushing an
 image tag alone does not trigger a notification. Stable installations track stable

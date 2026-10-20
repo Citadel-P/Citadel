@@ -42,14 +42,14 @@ pub struct BuildsHttpState {
 }
 
 pub fn router(state: BuildsHttpState) -> Router {
-    crate::realtime::notify_mutations(
+    crate::api::mutation_notifications::notify_mutations(
         documented_routes()
             .split_for_parts()
             .0
             .with_state(state.clone()),
         "Build",
     )
-    .merge(crate::realtime::notify_mutations(
+    .merge(crate::api::mutation_notifications::notify_mutations(
         documented_pool_routes()
             .split_for_parts()
             .0

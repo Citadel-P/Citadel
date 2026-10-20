@@ -127,6 +127,28 @@ pub(crate) fn validation_error(message: String) -> ApiError {
     field_error("$".to_owned(), message)
 }
 
+/// The authenticated principal inserted by the existing authentication middleware.
+/// Authorization (including human-only administrator checks) stays with the handler.
+pub(crate) struct AuthenticatedActor(pub citadel_identity::ActorPrincipal);
+
+impl<S: Send + Sync> axum::extract::FromRequestParts<S> for AuthenticatedActor {
+    type Rejection = axum::response::Response;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _: &S,
+    ) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<citadel_identity::ActorPrincipal>()
+            .cloned()
+            .map(Self)
+            .ok_or_else(|| {
+                crate::api::error::error_response(ApiError::Unauthenticated, &parts.headers)
+            })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

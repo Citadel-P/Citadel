@@ -105,7 +105,7 @@ export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
       },
     };
 
-    const result = await mutateAsync(payload);
+    const result = await mutateAsync({ data: payload });
 
     if (result?.data) {
       toast.success(`Network created (ID: ${result.data.id})`);

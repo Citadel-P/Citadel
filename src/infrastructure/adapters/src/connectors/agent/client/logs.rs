@@ -10,7 +10,7 @@ impl LogReadPort for AgentClient {
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<LogSnapshot, RuntimeCapabilityError>> {
         Box::pin(async move {
-            crate::connectors::containers::logs::validate_tail(tail)?;
+            citadel_docker::containers::logs::validate_tail(tail)?;
             let operation = async {
                 match resource {
                     LogResource::Service(id) => {
@@ -28,7 +28,7 @@ impl LogReadPort for AgentClient {
                             .await
                             .map_err(normalize_status)?
                             .into_inner();
-                        crate::connectors::containers::logs::checked_snapshot(
+                        citadel_docker::containers::logs::checked_snapshot(
                             response.lines,
                             response.truncated,
                         )
@@ -52,11 +52,11 @@ impl LogReadPort for AgentClient {
                         let output = Box::pin(async_stream::try_stream! {
                             while let Some(frame) = stream.next().await {
                                 let frame = frame.map_err(normalize_status)?;
-                                if frame.log.len()>MAX_LOG_FRAME {Err(crate::connectors::containers::logs::failure("Agent log frame exceeds the limit."))?;}
+                                if frame.log.len()>MAX_LOG_FRAME {Err(citadel_docker::containers::logs::failure("Agent log frame exceeds the limit."))?;}
                                 yield frame.log;
                             }
                         });
-                        crate::connectors::containers::logs::snapshot(output).await
+                        citadel_docker::containers::logs::snapshot(output).await
                     }
                 }
             };
@@ -97,7 +97,7 @@ impl ContainerLogPort for AgentClient {
                 loop {
                     let item=tokio::select!{biased;()=cancel.cancelled()=>break,item=input.next()=>item};
                     let Some(item)=item else {break}; let item=item.map_err(normalize_status)?;
-                    if item.log.len()>MAX_LOG_FRAME {Err(crate::connectors::containers::logs::failure("Agent log frame exceeds the limit."))?;}
+                    if item.log.len()>MAX_LOG_FRAME {Err(citadel_docker::containers::logs::failure("Agent log frame exceeds the limit."))?;}
                     yield item.log;
                 }
             }) as RuntimeLogStream)

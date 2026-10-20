@@ -60,7 +60,9 @@ it('uses the same plain-language update explanation in the dialog and hover card
   expect(explanation).toContain('Existing workloads keep using their current image.');
   expect(screen.queryByText('sha256:remote')).not.toBeInTheDocument();
   rerender(<ImageUpdateStatus updates={updates} compact />);
-  fireEvent.pointerEnter(screen.getByRole('button', { name: 'Update status: Update available' }), { pointerType: 'mouse' });
+  fireEvent.pointerEnter(screen.getByRole('button', { name: 'Update status: Update available' }), {
+    pointerType: 'mouse',
+  });
   const card = within(await openHoverCard());
   expect(card.getByText(explanation)).toBeVisible();
   expect(card.queryByText('sha256:remote')).not.toBeInTheDocument();

@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use crate::workers::platforms::*;
 use citadel_adapters::connectors::agent::client::AgentClient;
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::persistence::postgres::notifications::PostgresNotifications;
 use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
 use citadel_alerts::{AlertDeliveryService, AlertEventSink};
@@ -13,6 +12,7 @@ use citadel_automation::AutomationService;
 use citadel_backups::BackupService;
 use citadel_builds::BuildService;
 use citadel_deployments::DeploymentService;
+use citadel_docker::client::DockerClient;
 use citadel_git::GitRepositoryExecutionService;
 use citadel_runtime::{QueueOverflowPolicy, TaskSupervisor, bounded_channel};
 use citadel_stacks::StackService;

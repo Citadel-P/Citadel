@@ -2,23 +2,19 @@
 //! resolve/inject/redact scenario against actual external services and Docker.
 #![cfg(unix)]
 use base64::{Engine, engine::general_purpose::STANDARD};
-use citadel_adapters::{
-    connectors::{docker::DockerClient, routing::stacks::StackRuntimeRouter},
-    filesystem::stacks::materializer::GitStackSourceMaterializer,
-    persistence::postgres::{
-        activities::store::PostgresActivityStore,
-        automation::PostgresAutomationRepository,
-        git::{
-            accounts::PostgresGitAccountRepository,
-            repositories::PostgresGitRepositoryExecutionPersistence,
-        },
-        stacks::{PostgresStackRepository, bindings::PostgresStackBindingResolver},
-    },
-    security::identity::crypto::AesGcmSecretProtector,
-};
+use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
+use citadel_adapters::filesystem::stacks::materializer::GitStackSourceMaterializer;
+use citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore;
+use citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository;
+use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRepository;
+use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
+use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
+use citadel_adapters::persistence::postgres::stacks::bindings::PostgresStackBindingResolver;
+use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_automation::{
     AutomationError, AutomationRunTokenIssuer, AutomationRuntimeConfig, AutomationService,
 };
+use citadel_docker::client::DockerClient;
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;

@@ -593,7 +593,7 @@ const ResourceBindingDialog = ({
                         targetPath: secretDeliveryMode === MOUNTED_FILE_DELIVERY_MODE ? (prev.targetPath ?? '') : null,
                       }))
                     }>
-                    <SelectTrigger className="w-55">
+                    <SelectTrigger className="w-55" aria-label="Source">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-background">
@@ -666,9 +666,7 @@ export const EditExternalSecretDialog = ({
   isPending: boolean;
   isTesting: boolean;
   onOpenChange: (open: boolean) => void;
-  onInputChange: (
-    input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput),
-  ) => void;
+  onInputChange: (input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput)) => void;
   onSave: () => void;
   onTest: () => void;
 }) => {
@@ -710,9 +708,7 @@ const ExternalSecretFields = ({
 }: {
   input: ExternalSecretInput;
   providers: SecretProviderView[];
-  onInputChange: (
-    input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput),
-  ) => void;
+  onInputChange: (input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput)) => void;
 }) => (
   <div className="grid gap-4">
     <LabeledInput
@@ -875,23 +871,17 @@ export const useSecretCreation = (
   const createExternalSecret = useMutate('createExternalSecret');
   const testExternalSecret = useMutate('testExternalSecret');
   const [open, setOpen] = useState(false);
-  const [source, setSource] = useState<SecretSource>('internal');
+  const [selectedSource, setSource] = useState<SecretSource>('internal');
   const [internalInput, setInternalInput] = useState<InternalSecretInput>(INTERNAL_SECRET_INPUT);
-  const [externalInput, setExternalInput] = useState<ExternalSecretInput>(EXTERNAL_SECRET_INPUT);
+  const [externalDraft, setExternalInput] = useState<ExternalSecretInput>(EXTERNAL_SECRET_INPUT);
   const allowExternalSecrets = options?.allowExternalSecrets ?? true;
+  const source = allowExternalSecrets ? selectedSource : 'internal';
   const { data: providersData } = useRead('listSecretProviders', undefined, {
     enabled: allowExternalSecrets && open && source === 'vault',
   });
   const providers = useMemo(() => providersData?.data.providers ?? [], [providersData?.data.providers]);
 
-  useEffect(() => {
-    if (!allowExternalSecrets && source !== 'internal') setSource('internal');
-  }, [allowExternalSecrets, source]);
-
-  useEffect(() => {
-    if (externalInput.providerId || providers.length === 0) return;
-    setExternalInput((prev) => ({ ...prev, providerId: providers[0].id }));
-  }, [externalInput.providerId, providers]);
+  const externalInput = { ...externalDraft, providerId: externalDraft.providerId || providers[0]?.id || '' };
 
   const resetSecretInputs = () => {
     setInternalInput(INTERNAL_SECRET_INPUT);
@@ -915,10 +905,10 @@ export const useSecretCreation = (
           ? await createInternalSecret.mutateAsync({
               query: options ? { scope: options.scope, resourceId: options.resourceId } : undefined,
               data: internalInput,
-            } as any)
+            })
           : await createExternalSecret.mutateAsync({
               data: normalizeExternalSecretInput(externalInput),
-            } as any);
+            });
 
       const added = await addSecretBinding(result.data);
       if (!added) return;
@@ -1021,12 +1011,8 @@ export const CreateSecretDialog = ({
   isTesting: boolean;
   onOpenChange: (open: boolean) => void;
   onSourceChange: (source: SecretSource) => void;
-  onInternalInputChange: (
-    input: InternalSecretInput | ((prev: InternalSecretInput) => InternalSecretInput),
-  ) => void;
-  onExternalInputChange: (
-    input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput),
-  ) => void;
+  onInternalInputChange: (input: InternalSecretInput | ((prev: InternalSecretInput) => InternalSecretInput)) => void;
+  onExternalInputChange: (input: ExternalSecretInput | ((prev: ExternalSecretInput) => ExternalSecretInput)) => void;
   onCreate: () => void;
   onTest: () => void;
 }) => {
@@ -1053,10 +1039,10 @@ export const CreateSecretDialog = ({
         </DialogHeader>
         <div className="grid gap-4">
           {allowExternalSecrets && (
-            <label className="grid gap-1.5 text-sm">
+            <div className="grid gap-1.5 text-sm">
               <span className="text-xs text-muted-foreground">Source</span>
               <Select value={source} onValueChange={(value) => onSourceChange(value as SecretSource)}>
-                <SelectTrigger className="w-55">
+                <SelectTrigger className="w-55" aria-label="Source">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-background">
@@ -1064,7 +1050,7 @@ export const CreateSecretDialog = ({
                   <SelectItem value="vault">Vault-compatible KV v2</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
+            </div>
           )}
 
           {source === 'internal' ? (

@@ -94,7 +94,9 @@ async fn bind_mount_directory_and_file_round_trip_with_overwrite_guards() {
             let policy = store.create_policy(actor, &configuration).await.unwrap();
             let run = store.enqueue_backup(actor, policy.id, "Manual").await.unwrap();
             let claim = store.claim_backup(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();
-            use citadel_adapters::connectors::{docker::DockerClient, edge::EdgeRegistry, routing::containers::ContainerRuntimeRouter};
+            use citadel_docker::client::DockerClient;
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
             let runtime = ContainerRuntimeRouter::new(pool.clone(), DockerClient::new("/var/run/docker.sock", Duration::from_secs(30)).unwrap(), None, EdgeRegistry::default());
             let planner = PostgresBackupSourcePlanner::new(pool.clone()).with_runtime(runtime);
             let plan = planner.plan(&claim, &cancel).await.unwrap();

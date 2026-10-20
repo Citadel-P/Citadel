@@ -1,7 +1,4 @@
-import {
-  AuthorizedProject,
-  ResourceCapabilitiesView,
-} from '@/api/generated/api.types';
+import { AuthorizedProject, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';

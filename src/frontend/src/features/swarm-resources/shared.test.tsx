@@ -16,7 +16,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => ({
   useRead: useReadMock,
 }));
 
-vi.mock('@/components/custom/common', () => ({
+vi.mock('@/components/custom/log-viewer', () => ({
   LogViewer: ({ logs }: { logs: string[] }) => <div>{logs.join('\n')}</div>,
 }));
 

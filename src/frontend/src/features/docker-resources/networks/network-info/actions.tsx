@@ -20,8 +20,10 @@ export const { info: NetworkInfoActions } = createActionsBuilder<NetworkView>()
     useVariables: (resource) => {
       const { currentPlatform } = useAppContext();
       return {
-        platformId: currentPlatform?.id ?? '',
-        ids: Array.isArray(resource) ? resource.map((r) => r.id) : [resource.id],
+        data: {
+          platformId: currentPlatform?.id ?? '',
+          ids: Array.isArray(resource) ? resource.map((r) => r.id) : [resource.id],
+        },
       };
     },
     useSuccessHandler: () => {

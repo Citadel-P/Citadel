@@ -66,7 +66,7 @@ In production:
 
 The public Edge Agent gRPC URL may differ from the browser URL because Citadel
 keeps separate API and Edge gRPC listeners. Configure
-`EdgeAgent__PublicGrpcUrl` with the address that the Agent can reach.
+`CITADEL_EDGE_PUBLIC_GRPC_URL` with the address that the Agent can reach.
 
 If the proxy does not support gRPC over HTTP/2, the agent may connect and then fail with HTTP/2 protocol errors.
 
@@ -135,7 +135,7 @@ Do not remove the persistent data volume unless you intend to re-enroll the agen
 
 Core listens for Edge gRPC on container port `8001`. The supplied Compose setup
 maps it to `127.0.0.1:18001` on the host. This local-only binding cannot be reached
-by a remote Agent. Configure a reachable `EdgeAgent__PublicGrpcUrl` and secure
+by a remote Agent. Configure a reachable `CITADEL_EDGE_PUBLIC_GRPC_URL` and secure
 network access before enrolling one. Use the generated command rather than
 copying a hard-coded local address.
 

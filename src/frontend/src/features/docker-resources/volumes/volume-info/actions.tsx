@@ -23,9 +23,11 @@ const volumeInfoActions = createActionsBuilder<VolumeView>()
     useVariables: (resource) => {
       const { currentPlatform } = useAppContext();
       return {
-        platformId: currentPlatform?.id ?? '',
-        names: Array.isArray(resource) ? resource.map((r) => r.id) : [resource.id],
-        force: true,
+        data: {
+          platformId: currentPlatform?.id ?? '',
+          names: Array.isArray(resource) ? resource.map((r) => r.id) : [resource.id],
+          force: true,
+        },
       };
     },
     useSuccessHandler: () => {

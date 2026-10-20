@@ -201,15 +201,15 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
         sock = Path(temp) / "docker.sock"
         proxy_server = await asyncio.start_unix_server(proxy, path=sock)
         env = {"PATH": os.environ["PATH"], "LANG": "C.UTF-8",
-               "DATABASE_URL": f"postgres://citadel_cpu:citadel_cpu_fixture@127.0.0.1:55449/{database}",
-               "Transport__Mode": "Disabled", "Transport__ApiPort": "58049",
-               "Jwt__Key": "cpu-measurement-disposable-signing-key-32bytes",
-               "Secrets__EncryptionKey": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+               "CITADEL_DATABASE_URL": f"postgres://citadel_cpu:citadel_cpu_fixture@127.0.0.1:55449/{database}",
+               "CITADEL_TRANSPORT_MODE": "Disabled", "CITADEL_HTTP_LISTEN_PORT": "58049",
+               "CITADEL_JWT_KEY": "cpu-measurement-disposable-signing-key-32bytes",
+               "CITADEL_SECRETS_ENCRYPTION_KEY": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
                "CITADEL_DATA_ROOT": str(Path(temp) / "state"),
-               "CITADEL_RUST_DOCKER_SOCKET": str(sock),
-               "CITADEL_RUST_DB_MAX_CONNECTIONS": "5",
-               "CITADEL_RUST_EVENT_QUEUE_CAPACITY": "256",
-               "JobConfiguration__MonitoringInterval": "10",
+               "CITADEL_DOCKER_SOCKET": str(sock),
+               "CITADEL_DATABASE_MAX_CONNECTIONS": "5",
+               "CITADEL_EVENT_QUEUE_CAPACITY": "256",
+               "CITADEL_STATS_POLL_INTERVAL_SECONDS": "10",
                "RUST_LOG": "citadel_server=info,citadel_adapters=info"}
         with (args.output / "server.log").open("w") as log:
             proc = await asyncio.create_subprocess_exec(str(binary), "serve", env=env,

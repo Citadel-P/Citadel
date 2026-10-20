@@ -63,7 +63,7 @@ pub async fn restore_citadel_system(
         .is_none_or(|key| key.len() != 32)
     {
         return Err(BackupError::Validation(
-            "Restore requires the original Secrets__EncryptionKey (32 decoded bytes) before modifying PostgreSQL.".into(),
+            "Restore requires the original CITADEL_SECRETS_ENCRYPTION_KEY (32 decoded bytes) before modifying PostgreSQL.".into(),
         ));
     }
     let dump = validate_recovery_bundle(&options.bundle).await?;
@@ -185,7 +185,10 @@ impl PgDumpSystemBackupBuilder {
         );
         let (recovery_files, required_external_configuration) = match &self.recovery_assets {
             Some(assets) => copy_recovery_assets(assets, directory, &mut checksums).await?,
-            None => (vec![], vec!["Jwt__Key", "Secrets__EncryptionKey"]),
+            None => (
+                vec![],
+                vec!["CITADEL_JWT_KEY", "CITADEL_SECRETS_ENCRYPTION_KEY"],
+            ),
         };
         let manifest = RecoveryManifest {
             format_version: 1,
@@ -225,10 +228,10 @@ async fn copy_recovery_assets(
     let mut files = Vec::new();
     let mut external = Vec::new();
     for (name, setting, configured) in [
-        ("jwtsecret", "Jwt__Key", assets.jwt_key_is_external),
+        ("jwtsecret", "CITADEL_JWT_KEY", assets.jwt_key_is_external),
         (
             "secret-encryption-key",
-            "Secrets__EncryptionKey",
+            "CITADEL_SECRETS_ENCRYPTION_KEY",
             assets.encryption_key_is_external,
         ),
         ("agent/signing-key", "", false),
@@ -750,7 +753,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(files, ["recovery/agent/signing-key"]);
-        assert_eq!(external, ["Jwt__Key", "Secrets__EncryptionKey"]);
+        assert_eq!(
+            external,
+            ["CITADEL_JWT_KEY", "CITADEL_SECRETS_ENCRYPTION_KEY"]
+        );
         assert!(!external_bundle.join("recovery/jwtsecret").exists());
         tokio::fs::remove_file(data.join("secret-encryption-key"))
             .await
@@ -837,7 +843,10 @@ mod tests {
                 path: "database/citadel.dump",
                 sha256: dump_hash.clone(),
             },
-            required_external_configuration: vec!["Jwt__Key", "Secrets__EncryptionKey"],
+            required_external_configuration: vec![
+                "CITADEL_JWT_KEY",
+                "CITADEL_SECRETS_ENCRYPTION_KEY",
+            ],
             recovery_files: vec!["recovery/jwtsecret".into()],
         };
         write_json(&root.join("manifest.json"), &manifest)

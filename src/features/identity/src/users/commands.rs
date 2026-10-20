@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateUser {
     pub name: String,
@@ -16,7 +16,7 @@ pub struct CreateUser {
     pub resource_accesses: Vec<ResourceAccessInput>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchUser {
     #[serde(default)]
@@ -75,4 +75,31 @@ pub struct UserPatchMutation {
     pub team_ids: Option<Vec<Uuid>>,
     pub role_ids: Option<Vec<Uuid>>,
     pub resource_accesses: Option<Vec<ResourceAccessInput>>,
+}
+
+impl std::fmt::Debug for CreateUser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateUser")
+            .field("name", &self.name)
+            .field("email", &self.email)
+            .field("password", &"[REDACTED]")
+            .field("is_enabled", &self.is_enabled)
+            .field("team_ids", &self.team_ids)
+            .field("role_ids", &self.role_ids)
+            .field("resource_accesses", &self.resource_accesses)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for PatchUser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PatchUser")
+            .field("email", &self.email)
+            .field("password", &"[REDACTED]")
+            .field("is_enabled", &self.is_enabled)
+            .field("team_ids", &self.team_ids)
+            .field("role_ids", &self.role_ids)
+            .field("resource_accesses", &self.resource_accesses)
+            .finish()
+    }
 }

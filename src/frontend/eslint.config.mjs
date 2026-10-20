@@ -41,7 +41,6 @@ export default [
       '!**/plopfile.js',
       '!**/react-shim.js',
       '!**/tsup.config.ts',
-      'src/components/*',
     ],
   },
   ...fixupConfigRules(

@@ -30,10 +30,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[cfg(test)]
 use super::test_support::PgPool;
 use citadel_adapters::connectors::agent::client::AgentClient;
-use citadel_adapters::connectors::docker::DockerClient;
-use citadel_adapters::connectors::docker::DockerError;
-use citadel_adapters::connectors::docker::events::{ContainerChange, RuntimeEventKind};
 use citadel_alerts::{AlertEventSink, AlertObservation};
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::DockerError;
+use citadel_docker::client::events::ContainerChange;
+use citadel_docker::client::events::RuntimeEventKind;
 use citadel_platforms::jobs::observations::{PlatformLifecycleStore, RuntimeProjectionStore};
 use citadel_platforms::jobs::{DeltaOutcome, EventRefresh, ReconciliationDecision, event_decision};
 use citadel_platforms::{PlatformInventoryPort, RuntimeCapabilityError};

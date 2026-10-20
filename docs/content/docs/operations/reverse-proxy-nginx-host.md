@@ -43,22 +43,22 @@ CITADEL_BIND_ADDRESS=127.0.0.1
 CITADEL_HTTP_PORT=18000
 CITADEL_EDGE_PORT=18001
 
-Transport__Mode=ReverseProxy
-Transport__PublicUrl=https://citadel.example.com
-Transport__ApiPort=8000
-Transport__EdgeGrpcPort=8001
-Transport__ForwardedHeaders__KnownProxies=172.19.0.1
-Transport__ForwardedHeaders__ForwardLimit=1
-AllowedHosts=citadel.example.com;localhost
-EdgeAgent__PublicGrpcUrl=https://citadel.example.com
+CITADEL_TRANSPORT_MODE=ReverseProxy
+CITADEL_PUBLIC_URL=https://citadel.example.com
+CITADEL_HTTP_LISTEN_PORT=8000
+CITADEL_EDGE_GRPC_LISTEN_PORT=8001
+CITADEL_HTTP_TRUSTED_PROXIES=172.19.0.1
+CITADEL_HTTP_FORWARDED_LIMIT=1
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
+CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com
 
-Jwt__Issuer=https://citadel.example.com
-Jwt__Audience=https://citadel.example.com
+CITADEL_JWT_ISSUER=https://citadel.example.com
+CITADEL_JWT_AUDIENCE=https://citadel.example.com
 ```
 
-Clear existing `Transport__Certificate__Path`,
-`Transport__Certificate__PrivateKeyPath`, and
-`Transport__ForwardedHeaders__KnownNetworks` values. Update explicit CORS origins
+Clear existing `CITADEL_TLS_CERTIFICATE_PATH`,
+`CITADEL_TLS_PRIVATE_KEY_PATH`, and
+`CITADEL_HTTP_TRUSTED_PROXY_NETWORKS` values. Update explicit CORS origins
 and OIDC callback URLs if configured; see
 [related URL settings](/docs/operations/tls-and-secure-agent-transport#related-url-settings).
 Changing the JWT issuer or audience signs existing users out.

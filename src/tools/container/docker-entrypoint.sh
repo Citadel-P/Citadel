@@ -3,7 +3,7 @@ set -eu
 
 # Explicit non-root users (including development) retain their configured groups.
 if [ "$(id -u)" = 0 ]; then
-  socket=${CITADEL_RUST_DOCKER_SOCKET:-/var/run/docker.sock}
+  socket=${CITADEL_DOCKER_SOCKET:-/var/run/docker.sock}
   runtime_groups=0
   if [ -S "$socket" ]; then
     socket_group=$(stat -c '%g' "$socket")

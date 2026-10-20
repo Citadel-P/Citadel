@@ -7,11 +7,11 @@ import {
   SwarmServiceView,
 } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { LogViewer } from '@/components/custom/common';
 import { Badge } from '@/components/ui/badge';
 import { AppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 import { ReactNode, useContext } from 'react';
+import { LogViewer } from '@/components/custom/log-viewer';
 
 export const NoResourceActions = () => null;
 

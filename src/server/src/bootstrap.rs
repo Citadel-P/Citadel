@@ -15,9 +15,9 @@ pub async fn initialize_from_environment(identity: &IdentityService) -> Result<(
         return Ok(());
     }
     let settings = [
-        "Bootstrap__AdminName",
-        "Bootstrap__AdminEmail",
-        "Bootstrap__AdminPasswordFile",
+        "CITADEL_BOOTSTRAP_ADMIN_NAME",
+        "CITADEL_BOOTSTRAP_ADMIN_EMAIL",
+        "CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE",
     ];
     let values = settings.map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()));
     if values.iter().all(Option::is_none) {
@@ -104,7 +104,7 @@ fn decode_password(bytes: &[u8]) -> Result<String, IdentityError> {
 }
 
 fn invalid(message: &str) -> IdentityError {
-    IdentityError::Validation(format!("Bootstrap__AdminPasswordFile {message}."))
+    IdentityError::Validation(format!("CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE {message}."))
 }
 
 #[cfg(test)]

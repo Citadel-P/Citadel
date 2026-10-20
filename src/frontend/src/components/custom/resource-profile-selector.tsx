@@ -62,12 +62,5 @@ export function ResourceProfileSelector({
   onChange: (profile: ResourceProfile) => void;
   disabled?: boolean;
 }) {
-  return (
-    <ItemSelector
-      collection={resourceProfiles}
-      value={value}
-      disabled={disabled}
-      onChange={onChange}
-    />
-  );
+  return <ItemSelector collection={resourceProfiles} value={value} disabled={disabled} onChange={onChange} />;
 }

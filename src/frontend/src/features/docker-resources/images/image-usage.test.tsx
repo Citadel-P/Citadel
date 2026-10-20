@@ -40,7 +40,9 @@ it('requests the selected node, labels saved references, and links to the worklo
   expect(screen.getByText('Saved tag reference: nginx:latest')).toBeVisible();
   expect(screen.queryByText('Git references may be incomplete.')).not.toBeInTheDocument();
   expect(
-    screen.getByText('Some image references may be missing. Confirm this image is no longer needed before deleting it.'),
+    screen.getByText(
+      'Some image references may be missing. Confirm this image is no longer needed before deleting it.',
+    ),
   ).toBeVisible();
   expect(requests).toHaveBeenCalledWith('worker-2');
 });

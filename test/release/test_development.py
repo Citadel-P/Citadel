@@ -31,16 +31,16 @@ def dev_record(number=1):
     data.update(displayVersion=f"1.2.3-dev.{number}", releaseEligible=False,
                 developmentReleaseEligible=True, publicationEligible=True)
     data["informationalVersion"] = data["displayVersion"] + "+height.5.sha." + "a" * 40
-    value.update(tag="v" + data["displayVersion"], compatibility=release.development_compatibility())
+    value.update(tag="v" + data["displayVersion"])
     return value
 
 
 class DevelopmentTests(unittest.TestCase):
-    def test_preflight_requires_docs_but_not_stable_registries_or_baselines(self):
+    def test_development_preflight_requires_docs_and_ghcr_only(self):
         value = dev_record()
         backend = FakeBackend()
         env = {"CITADEL_RUST_AGENT_RELEASE_ENABLED": "true", "DOCS_SITE_URL": "https://docs.example.invalid"}
-        self.assertEqual(release.preflight(value["metadata"], backend, env), release.development_compatibility())
+        release.preflight(value["metadata"], backend, env)
         with self.assertRaises(ValueError):
             release.preflight(metadata(), backend, env)
         for change in [dict(releaseEligible=True), dict(displayVersion="1.2.4-dev.1"), dict(dirty=True)]:

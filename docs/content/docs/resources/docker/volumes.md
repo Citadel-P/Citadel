@@ -35,7 +35,7 @@ must provide a usable connection to that Node.
 3. Use a file's download button to save its contents, or a directory's download
    button to save a `.tar` archive.
 
-[![Volume browser with expanded image and document folders, file sizes, and a download action](/screenshots/volume-browser.png)](/screenshots/volume-browser.png)
+![Volume browser with expanded image and document folders, file sizes, and a download action](/screenshots/volume-browser.png)
 
 Expand a folder to inspect its contents. Hover over a file or folder to reveal
 its download action.

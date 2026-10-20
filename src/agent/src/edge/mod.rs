@@ -10,11 +10,11 @@ mod swarm_policy;
 mod tests;
 
 use crate::config::{EdgeConfig, EdgeProfile};
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_contracts::citadel::edge::v1::{
     agent_envelope::Body as AgentBody, core_envelope::Body as CoreBody,
     edge_agent_service_client::EdgeAgentServiceClient, *,
 };
+use citadel_docker::client::DockerClient;
 use commands::Commands;
 use ed25519_dalek::Signer;
 use identity::{State, invalid};

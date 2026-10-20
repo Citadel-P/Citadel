@@ -1,13 +1,7 @@
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { fromNow } from '@/lib/dayjs.helper';
 
-export function TimestampCell({
-  value,
-  formatDateTime,
-}: {
-  value: unknown;
-  formatDateTime: DateTimeFormatter;
-}) {
+export function TimestampCell({ value, formatDateTime }: { value: unknown; formatDateTime: DateTimeFormatter }) {
   const absolute = formatDateTime(value);
   const relative = fromNow(value);
 

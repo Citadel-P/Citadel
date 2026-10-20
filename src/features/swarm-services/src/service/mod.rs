@@ -52,6 +52,7 @@ impl SwarmServiceService {
         tasks: Arc<dyn crate::SwarmServiceTaskSpawner>,
         store: Arc<dyn SwarmServiceRepository>,
         runtime: Arc<dyn SwarmServiceRuntime>,
+        bindings: Arc<dyn SwarmServiceBindingResolverPort>,
         shutdown: CancellationToken,
     ) -> Self {
         Self {
@@ -60,7 +61,7 @@ impl SwarmServiceService {
             store,
             runtime,
             notifier: Arc::new(NoopSwarmServiceChangeNotifier),
-            bindings: Arc::new(EmptySwarmServiceBindingResolver),
+            bindings,
             shutdown,
             operation_timeout: Duration::from_secs(10 * 60),
             slots: Arc::new(Semaphore::new(4)),
@@ -79,15 +80,6 @@ impl SwarmServiceService {
     #[must_use]
     pub fn with_notifier(mut self, notifier: Arc<dyn SwarmServiceChangeNotifier>) -> Self {
         self.notifier = notifier;
-        self
-    }
-
-    #[must_use]
-    pub fn with_binding_resolver(
-        mut self,
-        bindings: Arc<dyn SwarmServiceBindingResolverPort>,
-    ) -> Self {
-        self.bindings = bindings;
         self
     }
 

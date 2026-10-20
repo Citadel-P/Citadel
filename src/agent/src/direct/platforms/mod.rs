@@ -1,8 +1,10 @@
 use super::{Runtime, docker_error, runtime_error};
-use citadel_adapters::connectors::docker::events::{
-    self, ContainerChange, ResourceChange, RuntimeEventKind, SwarmResource,
-};
 use citadel_contracts::citadel::{platforms::v1::*, shared_models::v1::*};
+use citadel_docker::client::events;
+use citadel_docker::client::events::ContainerChange;
+use citadel_docker::client::events::ResourceChange;
+use citadel_docker::client::events::RuntimeEventKind;
+use citadel_docker::client::events::SwarmResource;
 use citadel_platforms::{RuntimePlatformStats, prune::PlatformPrunePort};
 use futures_util::{StreamExt, stream::BoxStream};
 use tonic::{Request, Response, Status};
@@ -193,7 +195,7 @@ impl platform_service_server::PlatformService for Runtime {
                                     if inspected.id != id || inspected.image.is_empty() { return Ok(None); }
                                     model.image_id = Some(inspected.image);
                                 }
-                                Ok::<_, citadel_adapters::connectors::docker::DockerError>(Some(model))
+                                Ok::<_, citadel_docker::client::DockerError>(Some(model))
                             }.await;
                             match observed {
                                 Ok(Some(model)) => Some(super::containers::summary(model)?),
@@ -207,7 +209,7 @@ impl platform_service_server::PlatformService for Runtime {
                                 .filter(|doc| doc["Id"].as_str() == Some(id.as_str()));
                             if let Some(doc) = document {
                                 container.state = super::container_mapping::state(doc["State"]["Status"].as_str().unwrap_or("unknown"));
-                                container.health_observation = Some(citadel_adapters::connectors::agent::container_health::to_wire(citadel_adapters::connectors::docker::container_health::observation(&doc)));
+                                container.health_observation = Some(citadel_docker::container_health_wire::to_wire(citadel_docker::client::container_health::observation(&doc)));
                             }
                           }
                             if let Some(state) = change.state() { container.state = super::container_mapping::state(state); }
@@ -257,7 +259,7 @@ fn stat(s: &RuntimePlatformStats) -> PlatformStatMessage {
 }
 
 fn aggregate(
-    sample: citadel_adapters::connectors::docker::LocalDockerSample,
+    sample: citadel_docker::client::LocalDockerSample,
     cpus: i64,
 ) -> Result<RuntimePlatformStats, Status> {
     let mut s = sample

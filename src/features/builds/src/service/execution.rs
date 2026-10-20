@@ -58,40 +58,80 @@ impl BuildService {
         if let Ok(mut active) = self.active.lock() {
             active.remove(&claim.run.id);
         }
-        if !self.store.finish(&claim, &result).await? {
-            return Ok(true);
-        }
-        self.changed();
-        if matches!(
-            result.status,
-            crate::BuildRunStatus::Failed | crate::BuildRunStatus::TimedOut
-        ) && let Some(alerts) = &self.alerts
-        {
-            let message = result
-                .error_message
-                .as_deref()
-                .unwrap_or("Build Run failed.");
-            let observation = AlertObservation {
-                alert_type: "BuildRunFailed".to_owned(),
-                info: serde_json::json!({
-                    "RunId": claim.run.id,
-                    "Trigger": claim.run.trigger,
-                    "Status": result.status,
-                    "ExitCode": result.exit_code,
-                    "ErrorMessage": message,
-                    "HumanMessage": message,
-                }),
-                resource_id: claim.project.id,
-                resource_name: claim.project.name.clone(),
-                resource_type: "Build".to_owned(),
-                deduplication_component: claim.run.id.to_string(),
-                observed_at: Utc::now(),
-                value: None,
-                matched: true,
+        let observation = if self.alerts.is_some()
+            && matches!(
+                result.status,
+                crate::BuildRunStatus::Failed | crate::BuildRunStatus::TimedOut
+            ) {
+            Some({
+                let message = result
+                    .error_message
+                    .as_deref()
+                    .unwrap_or("Build Run failed.");
+                AlertObservation {
+                    alert_type: "BuildRunFailed".to_owned(),
+                    info: serde_json::json!({
+                        "RunId": claim.run.id,
+                        "Trigger": claim.run.trigger,
+                        "Status": result.status,
+                        "ExitCode": result.exit_code,
+                        "ErrorMessage": message,
+                        "HumanMessage": message,
+                    }),
+                    resource_id: claim.project.id,
+                    resource_name: claim.project.name.clone(),
+                    resource_type: "Build".to_owned(),
+                    deduplication_component: claim.run.id.to_string(),
+                    observed_at: Utc::now(),
+                    value: None,
+                    matched: true,
+                }
+            })
+        } else {
+            None
+        };
+        let mut delay = std::time::Duration::from_millis(250);
+        loop {
+            // Keep this result in the worker slot. Only persistence is retried.
+            let completion = async {
+                if self
+                    .store
+                    .finish(&claim, &result, observation.as_ref())
+                    .await?
+                {
+                    return Ok(true);
+                }
+                // A no-op is definitive: the guarded transaction checked currentrunid.
+                // Readback distinguishes a committed/later terminal result from an
+                // obsolete, still nonterminal claim; neither may be overwritten.
+                match self.store.get_run(claim.run.id).await {
+                    Ok(run) => Ok(run.status.is_terminal()),
+                    Err(BuildError::NotFound) => Ok(false),
+                    Err(error) => Err(error),
+                }
             };
-            if let Err(error) = alerts.observe(&observation).await {
-                tracing::error!(%error, run_id=%claim.run.id, "Build failure alert evaluation failed");
+            let outcome = tokio::select! {
+                biased;
+                () = shutdown.cancelled() => return Ok(true),
+                outcome = completion => outcome,
+            };
+            match outcome {
+                Ok(confirmed) => {
+                    if confirmed {
+                        self.changed();
+                    }
+                    break;
+                }
+                Err(BuildError::Storage(error)) => {
+                    tracing::warn!(%error, run_id=%claim.run.id, "Build completion pending");
+                }
+                Err(error) => return Err(error),
             }
+            tokio::select! {
+                () = shutdown.cancelled() => return Ok(true),
+                () = tokio::time::sleep(delay) => {}
+            }
+            delay = (delay * 2).min(std::time::Duration::from_secs(5));
         }
         Ok(true)
     }

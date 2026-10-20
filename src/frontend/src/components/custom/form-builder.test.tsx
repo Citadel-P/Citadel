@@ -475,3 +475,27 @@ it('honors explicit secret-field exclusions both when saving and restoring a bro
   expect(screen.getByLabelText('Endpoint', { selector: 'input' })).toHaveValue('registry.example.com');
   expect(localStorage.getItem(key)).not.toContain('injected-');
 });
+
+it('binds an explicitly identified field to its data path', async () => {
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  const customSchema: FormSchema<TestConfiguration> = {
+    general: {
+      title: 'General',
+      items: [
+        defineField<TestConfiguration, 'name'>({
+          id: 'display-name',
+          key: 'name',
+          label: 'Name',
+          render: (value, set) => (
+            <Input aria-label="Name" value={value ?? ''} onChange={(event) => set({ name: event.target.value })} />
+          ),
+        }),
+      ],
+    },
+  };
+  const { user } = renderCitadel(<FormHarness onSave={onSave} formSchema={customSchema} />);
+  await user.clear(screen.getByRole('textbox', { name: 'Name' }));
+  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'worker');
+  await user.click(enabledSaveButton()!);
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({ ...original, name: 'worker' }));
+});

@@ -1,11 +1,4 @@
-import {
-  ActorType,
-  AuthorizedProject,
-  BuildLogEntry,
-  BuildRunStatus,
-  BuildRunView,
-} from '@/api/generated/api.types';
-import { LogViewer, type LogEntry } from '@/components/custom/common';
+import { ActorType, AuthorizedProject, BuildLogEntry, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -41,6 +34,7 @@ import { toast } from 'sonner';
 import { formatBuildRunLogViewerEntries, mergeBuildRunLogEntries } from '../build-run-logs';
 import { isActiveBuildRun, isTerminalBuildRunStatus, pickMostAdvancedBuildRun } from '../build-run-state';
 import { useBuildRunQuery } from '../hooks/useBuildRunQuery';
+import { LogViewer, type LogEntry } from '@/components/custom/log-viewer';
 
 export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   const [logRunId, setLogRunId] = useState<string | undefined>();

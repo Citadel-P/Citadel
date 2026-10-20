@@ -1,6 +1,6 @@
-use super::bind_mount::{BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT};
 use super::restore_storage::RestoreVolumeOwner;
 use citadel_backups::spec::{BackupExecutionLocation, BackupRepositorySpec};
+use citadel_docker::bind_mount::{BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT};
 use citadel_platforms::PlatformInfoPort;
 use std::ffi::OsString;
 
@@ -2085,6 +2085,43 @@ impl DockerResticBackupExecutor {
                 .map_err(citadel_execution::ProcessError::Io)?;
             if request.current_directory.is_none() {
                 request.current_directory = Some(settings.working_directory.clone());
+            }
+        }
+        // Restic cache and Docker CLI configuration belong to this invocation,
+        // never to the Core account's home directory.
+        struct Workspace(std::path::PathBuf);
+        impl Drop for Workspace {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let root = request
+            .current_directory
+            .clone()
+            .unwrap_or_else(std::env::temp_dir)
+            .join(format!("citadel-backup-process-{}", Uuid::now_v7()));
+        let mut directory = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            directory.mode(0o700);
+        }
+        directory
+            .create(&root)
+            .map_err(citadel_execution::ProcessError::Io)?;
+        let _cleanup = Workspace(root.clone());
+        request = request
+            .env("HOME", root.as_os_str())
+            .env("TMPDIR", root.as_os_str())
+            .env("RESTIC_CACHE_DIR", root.join("restic-cache").as_os_str())
+            .env("DOCKER_CONFIG", root.join("docker").as_os_str());
+        if request.program == self.docker {
+            for key in ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"] {
+                if !request.environment.iter().any(|(name, _)| name == key)
+                    && let Some(value) = std::env::var_os(key)
+                {
+                    request = request.env(key, value);
+                }
             }
         }
         let Some(progress) = &self.progress else {

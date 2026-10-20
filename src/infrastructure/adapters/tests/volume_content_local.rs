@@ -1,7 +1,7 @@
-use citadel_adapters::connectors::{
-    docker::DockerClient, edge::EdgeRegistry, routing::volumes::content::VolumeContentAdapter,
-};
+use citadel_adapters::connectors::edge::EdgeRegistry;
+use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter;
 use citadel_database::MigrationRunner;
+use citadel_docker::client::DockerClient;
 use citadel_platforms::RuntimeErrorKind;
 use citadel_runtime::DynamicTasks;
 use futures_util::{FutureExt, StreamExt};
@@ -76,8 +76,7 @@ async fn local_volume_browser_uses_core_image_without_pulling_agent() {
     let cancel = CancellationToken::new();
     let tasks = DynamicTasks::new(cancel.clone());
     let client = DockerClient::new(
-        std::env::var("CITADEL_RUST_DOCKER_SOCKET")
-            .unwrap_or_else(|_| "/var/run/docker.sock".into()),
+        std::env::var("CITADEL_DOCKER_SOCKET").unwrap_or_else(|_| "/var/run/docker.sock".into()),
         Duration::from_secs(10),
     )
     .unwrap();

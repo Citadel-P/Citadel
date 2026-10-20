@@ -11,21 +11,21 @@ mod licensing;
 mod platforms;
 mod workloads;
 use citadel_activities::ActivityService;
-use citadel_adapters::{
-    connectors::{agent::client::AgentClient, docker::DockerClient},
-    persistence::postgres::{
-        activities::store::PostgresActivityStore, alerts::PostgresAlertRepository,
-        connection as postgres_runtime, deployments::PostgresDeploymentRepository,
-        git::repositories::PostgresGitRepositoryPersistence,
-        licensing::store::PostgresLicenseEntitlementService, stacks::PostgresStackRepository,
-        swarm_services::PostgresSwarmServiceRepository,
-    },
-};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore;
+use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
+use citadel_adapters::persistence::postgres::connection as postgres_runtime;
+use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
+use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence;
+use citadel_adapters::persistence::postgres::licensing::store::PostgresLicenseEntitlementService;
+use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
+use citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository;
 use citadel_automation::AutomationService;
 use citadel_backups::BackupService;
 use citadel_bindings::SecretService;
 use citadel_builds::BuildService;
 use citadel_deployments::DeploymentService;
+use citadel_docker::client::DockerClient;
 use citadel_git::{GitAccountService, GitRepositoryExecutionService};
 use citadel_identity::{
     IdentityService, MfaService, OidcService, ProfileService, RoleMutationService, RoleReadService,
@@ -59,6 +59,10 @@ pub(super) struct RuntimeContext {
 }
 
 pub struct ServerComponents {
+    pub database_health: Arc<dyn citadel_runtime::database_health::DatabaseHealth>,
+    pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
+    pub backup_coverage: Arc<citadel_server::api::resources::backups::coverage::BackupCoverageService>,
+    pub edge_service: citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer<citadel_adapters::connectors::edge::EdgeIntake>,
     pub updates: citadel_server::release_updates::UpdateChecker,
     pub docker: DockerClient,
     pub pool: PgPool,
@@ -119,6 +123,9 @@ impl ServerComponents {
         config: &Config,
     ) -> Result<(Self, background::BackgroundServices), Box<dyn std::error::Error>> {
         let pool = connect_database(config).await?;
+        let database_health = Arc::new(postgres_runtime::PostgresDatabaseHealth(pool.clone()));
+        let git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence> =
+            Arc::new(PostgresGitRepositoryPersistence::new(pool.clone()));
         let docker = DockerClient::with_host_root(
             &config.docker_socket,
             config.docker_request_timeout,
@@ -179,6 +186,7 @@ impl ServerComponents {
             agent_setup_context,
             edge_context,
             edge_registry,
+            edge_service,
             runtime_targets,
             container_runtime,
         } = connectors::build(config, &pool, &docker)?;
@@ -237,10 +245,18 @@ impl ServerComponents {
             &alert_store,
         )?;
         let platforms::PlatformComponents {
-            platform_state,
+            mut platform_state,
             platform_reads,
             volume_content,
         } = platforms::build(config, &runtime, &identity, &registries);
+        let backup_coverage = Arc::new(
+            citadel_server::api::resources::backups::coverage::BackupCoverageService {
+                backups: backups.clone(),
+                identity: identity.clone(),
+                volume_coverage: platform_state.volume_coverage.clone(),
+            },
+        );
+        platform_state.backup_coverage = Some(backup_coverage.clone());
         let realtime = config.realtime.as_ref().map(|realtime_config| {
             RealtimeService::with_hub(
                 realtime_config,
@@ -260,14 +276,8 @@ impl ServerComponents {
                     image_updates: platform_state.image_updates.clone(),
                     registries: platform_state.registries.clone(),
                     copy_eligibility: Some(copies.clone()),
-                    backup_coverage: Some(Arc::new(
-                        citadel_server::api::resources::backups::coverage::BackupCoverageService {
-                            backups: backups.clone(),
-                            identity: identity.clone(),
-                            volume_coverage: platform_state.volume_coverage.clone(),
-                        },
-                    )),
-                    git_repositories: Arc::new(PostgresGitRepositoryPersistence::new(pool.clone())),
+                    backup_coverage: Some(backup_coverage.clone()),
+                    git_repositories: git_repositories.clone(),
                     identity: Arc::clone(&identity),
                     platforms: Arc::clone(&platform_reads),
                     deployments: Arc::new(PostgresDeploymentRepository::new(pool.clone())),
@@ -305,6 +315,10 @@ impl ServerComponents {
         };
         Ok((
             Self {
+                database_health,
+                git_repositories,
+                backup_coverage,
+                edge_service,
                 updates: citadel_server::release_updates::UpdateChecker::default(),
                 docker,
                 pool,

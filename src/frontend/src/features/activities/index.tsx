@@ -6,7 +6,6 @@ import { ActivitiesTable } from './table';
 import { ActivityEventType, ActivityResourceType, LookupResourceType } from '@/api/generated/api.types';
 import { ActivityFiltersState, useActivityQuery } from '@/lib/atoms';
 import { FilterBar, filterFieldClassName, ResourceSelectorField, SelectField } from '@/components/custom/common';
-import { ResourceType } from '@/api/types';
 import TaskSheet from '@/components/custom/task-sheet';
 import { Link } from 'react-router';
 import { CitadelIcons } from '@/lib/icons';
@@ -213,7 +212,13 @@ function SearchSection() {
   );
 }
 
-export function ActivitiesTab({ resourceId, resourceType }: { resourceId: string; resourceType: ResourceType }) {
+export function ActivitiesTab({
+  resourceId,
+  resourceType,
+}: {
+  resourceId: string;
+  resourceType: `${ActivityResourceType}`;
+}) {
   const { pagedActivities, isLoading } = useActivitiesGroup(resourceId, resourceType, 20);
   const link = useMemo(
     () => `../activities?resourceType=${resourceType}&resourceId=${resourceId}`,

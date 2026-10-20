@@ -102,12 +102,12 @@ try {
         --volume "${repoRoot}:/source:ro" `
         --volume "${BuildCacheVolume}:/source/target:ro" `
         --volume '/var/run/docker.sock:/var/run/docker.sock:ro' `
-        --env "DATABASE_URL=postgres://citadel:citadel-e2e@${postgres}:5432/citadel" `
-        --env 'Transport__Mode=Disabled' `
-        --env "Transport__PublicUrl=$serverOrigin" `
-        --env 'Jwt__Key=citadel-e2e-only-signing-key-00000000000000000000000000000000' `
-        --env 'Secrets__EncryptionKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' `
-        --env 'CITADEL_RUST_STATIC_ROOT=/source/src/frontend/dist' `
+        --env "CITADEL_DATABASE_URL=postgres://citadel:citadel-e2e@${postgres}:5432/citadel" `
+        --env 'CITADEL_TRANSPORT_MODE=Disabled' `
+        --env "CITADEL_PUBLIC_URL=$serverOrigin" `
+        --env 'CITADEL_JWT_KEY=citadel-e2e-only-signing-key-00000000000000000000000000000000' `
+        --env 'CITADEL_SECRETS_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' `
+        --env 'CITADEL_STATIC_ROOT=/source/src/frontend/dist' `
         $rustImage `
         /source/target/debug/citadel-server serve | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not start the identity frontend Rust server.' }

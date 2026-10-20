@@ -43,24 +43,6 @@ fn failure(message: &str) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, message, false)
 }
 
-impl ContainerTerminalPort for crate::connectors::docker::DockerClient {
-    fn container_terminal<'a>(
-        &'a self,
-        id: &'a str,
-        shell: TerminalShell,
-        cancel: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<TerminalSession, RuntimeCapabilityError>> {
-        Box::pin(async move {
-            tokio::select! {
-                biased;
-                ()=cancel.cancelled()=>Err(cancelled()),
-                result=tokio::time::timeout(self.request_timeout(),self.open_terminal(id,shell,cancel))=>
-                    result.map_err(|_|RuntimeCapabilityError::new(RuntimeErrorKind::Timeout,"Opening terminal timed out.",false))?.map_err(crate::connectors::docker::runtime::normalize_docker_error),
-            }
-        })
-    }
-}
-
 impl ContainerTerminalPort for crate::connectors::edge::EdgeRuntime {
     fn container_terminal<'a>(
         &'a self,

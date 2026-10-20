@@ -5,7 +5,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use citadel_adapters::connectors::docker::DockerClient;
+use citadel_docker::client::DockerClient;
 use citadel_runtime::database_health::DatabaseHealth;
 use serde::Serialize;
 use std::sync::Arc;

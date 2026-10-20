@@ -52,7 +52,7 @@ pub struct OidcDiscoveryDetails {
     pub jwks_uri: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct OidcLoginStart {
     pub authorization_url: String,
 }
@@ -61,4 +61,12 @@ pub struct OidcLoginStart {
 pub struct OidcLoginComplete {
     pub session: SessionTokens,
     pub return_url: String,
+}
+
+impl std::fmt::Debug for OidcLoginStart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OidcLoginStart")
+            .field("authorization_url", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }

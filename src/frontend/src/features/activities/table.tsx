@@ -3,7 +3,8 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useActivityQuery, useTaskSheet } from '@/lib/atoms';
-import { ActorCell, PagedDataTable, TargetCell } from '@/components/custom/common';
+import { ActorCell, PagedDataTable } from '@/components/custom/common';
+import { createResourceTargetColumn } from '@/components/custom/resource-target-column';
 import { StateBadge } from '@/components/custom/state-badge';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import type { DateTimeFormatter } from '@/lib/date-time';
@@ -52,18 +53,19 @@ const columns = (displayTarget: boolean, formatDateTime: DateTimeFormatter): Col
   ];
 
   if (displayTarget) {
-    cols.push({
-      accessorKey: 'target',
-      header: ({ column }) => <SortableCell cellName="Target" column={column} />,
-      cell: ({ row }) => (
-        <TargetCell
-          resourceType={row.original.resourceType}
-          resourceId={row.original.resourceId!}
-          resourceName={row.original.resourceName}
-        />
-      ),
-      sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
-    });
+    cols.push(
+      createResourceTargetColumn({
+        id: 'target',
+        header: 'Target',
+        getValue: (activity: ActivityView) => ({
+          target: {
+            resourceType: activity.resourceType,
+            resourceId: activity.resourceId ?? undefined,
+            resourceName: activity.resourceName,
+          },
+        }),
+      }),
+    );
   }
 
   cols.push(

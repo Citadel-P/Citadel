@@ -1,3 +1,4 @@
+import { useRegistryDeletionEffects } from '../queries';
 import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
@@ -15,12 +16,18 @@ export const { info: RegistryActions } = createActionsBuilder<AuthorizedRegistry
     canExecute: () => true,
     useVariables: (resource) => {
       return {
-        ids: [(resource as AuthorizedRegistryView).id],
+        data: {
+          ids: [(resource as AuthorizedRegistryView).id],
+        },
       };
     },
-    useSuccessHandler: () => {
+    useSuccessHandler: ({ resources }) => {
+      const invalidate = useRegistryDeletionEffects(
+        (Array.isArray(resources) ? resources : [resources]).map((resource) => resource.id),
+      );
       const navigate = useNavigate();
-      return () => {
+      return async () => {
+        await invalidate();
         navigate(`/registries`);
       };
     },

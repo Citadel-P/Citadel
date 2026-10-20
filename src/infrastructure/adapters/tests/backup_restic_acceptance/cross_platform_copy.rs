@@ -1,19 +1,14 @@
 use super::*;
-use citadel_adapters::{
-    connectors::{
-        agent::client::{AgentClient, AgentRequestSigner},
-        docker::DockerClient,
-        routing::{
-            platforms::runtime::PlatformRuntimeRouter,
-            resource_copies::{CopyStorageRuntime, verify_destination},
-        },
-    },
-    persistence::postgres::{
-        deployments::PostgresDeploymentRepository, resource_copies::PostgresCopyRepository,
-        stacks::PostgresStackRepository,
-    },
-};
+use citadel_adapters::connectors::agent::client::AgentClient;
+use citadel_adapters::connectors::agent::client::AgentRequestSigner;
+use citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter;
+use citadel_adapters::connectors::routing::resource_copies::CopyStorageRuntime;
+use citadel_adapters::connectors::routing::resource_copies::verify_destination;
+use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
+use citadel_adapters::persistence::postgres::resource_copies::PostgresCopyRepository;
+use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
 use citadel_deployments::DeploymentRepository;
+use citadel_docker::client::DockerClient;
 use citadel_resource_copies::*;
 use citadel_stacks::StackRepository;
 
@@ -47,7 +42,7 @@ pub(super) async fn verify(
         docker(&["exec",&daemon,"docker","load","-i","/root/helper.tar"],None).await;
         let mut key=[0;32];getrandom::fill(&mut key).unwrap();
         let signer=AgentRequestSigner::from_bytes(&key);key.fill(0);
-        docker(&["run","-d","--name",&agent_name,"--network",&network,"-v",&format!("{socket}:/var/run"),"-e",&format!("HUB_PUBLIC_KEY={}",signer.public_key_base64()),"-e","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
+        docker(&["run","-d","--name",&agent_name,"--network",&network,"-v",&format!("{socket}:/var/run"),"-e",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"-e","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
         let address=format!("http://{agent_name}:9000");
         let deadline=tokio::time::Instant::now()+Duration::from_secs(30);
         let agent=loop {

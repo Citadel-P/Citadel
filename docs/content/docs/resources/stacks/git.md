@@ -64,7 +64,7 @@ A pinned Stack does not track later branch updates until you clear **Commit**.
 For recovery, follow [Rollback](#rollback); a saved release alone does not pin
 an otherwise unpinned branch to its historical commit.
 
-[![Git Stack configuration showing repository, branch, ordered Compose paths, and an environment file](/screenshots/git-stack-source.png)](/screenshots/git-stack-source.png)
+![Git Stack configuration showing repository, branch, ordered Compose paths, and an environment file](/screenshots/git-stack-source.png)
 
 Example configuration for a demo Storefront application. The base Compose file
 comes before its production override; the environment file belongs to the same
@@ -196,7 +196,7 @@ stacks/demo-app/compose.yml
 stacks/demo-app/compose.override.yml
 ```
 
-[![Git Source Paths with the Storefront working directory and watch paths for the application and shared files](/screenshots/git-stack-watch-paths.png)](/screenshots/git-stack-watch-paths.png)
+![Git Source Paths with the Storefront working directory and watch paths for the application and shared files](/screenshots/git-stack-watch-paths.png)
 
 This demo Stack explicitly watches its application folder and `shared/**`.
 Add shared paths only when changes there should mark the Stack outdated; leave

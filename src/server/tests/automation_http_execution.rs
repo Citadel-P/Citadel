@@ -52,7 +52,9 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(db.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(JwtSessionTokenCodec::new(&[93; 32], "fixture".into(), "fixture".into()).unwrap()),
         Arc::new(OpaqueServiceAccountTokenCodec),
         Arc::new(StaticEntitlementService::new(true)),

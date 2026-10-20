@@ -88,6 +88,10 @@ pub(super) fn build(
                     .with_runtime_router(container_runtime.runtime_router()),
             ),
             entitlements.clone(),
+            Arc::new(PostgresDeploymentBindingResolver::new(
+                pool.clone(),
+                secret_protector.clone(),
+            )?),
             cancellation.clone(),
         )
         .with_notifier(Arc::new(
@@ -95,10 +99,6 @@ pub(super) fn build(
                 realtime_hub.clone(),
             ),
         ))
-        .with_binding_resolver(Arc::new(PostgresDeploymentBindingResolver::new(
-            pool.clone(),
-            secret_protector.clone(),
-        )?))
         .with_adoption(Arc::new(
             citadel_adapters::persistence::postgres::deployments::PostgresContainerAdoption::new(
                 pool.clone(),
@@ -118,6 +118,10 @@ pub(super) fn build(
             ),
             Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
             Arc::new(swarm_runtime.clone()),
+            Arc::new(PostgresSwarmServiceBindingResolver::new(
+            pool.clone(),
+            secret_protector.clone(),
+        )?),
             cancellation.clone(),
         )
         .with_image_digests(Arc::new(swarm_runtime.clone()))
@@ -132,10 +136,7 @@ pub(super) fn build(
         .with_notifier(Arc::new(
             citadel_server::realtime::notifiers::SwarmServicesRealtimeNotifier::new(realtime_hub.clone()),
         ))
-        .with_binding_resolver(Arc::new(PostgresSwarmServiceBindingResolver::new(
-            pool.clone(),
-            secret_protector.clone(),
-        )?))
+
         .with_alerts(alert_store.clone()),
     );
     let stacks = Arc::new(

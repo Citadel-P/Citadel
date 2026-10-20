@@ -1,4 +1,4 @@
-use citadel_adapters::connectors::containers::inspection::map_inspection;
+use citadel_docker::containers::inspection::map_inspection;
 use serde_json::json;
 
 // Verify redaction of sensitive container inspection fields.
@@ -195,7 +195,7 @@ fn absent_configuration_is_supported_but_mismatched_identity_is_rejected() {
 #[tokio::test]
 async fn cancelled_inspection_does_not_connect_to_docker() {
     use citadel_platforms::containers::ContainerInspectionPort;
-    let client = citadel_adapters::connectors::docker::DockerClient::new(
+    let client = citadel_docker::client::DockerClient::new(
         "/nonexistent/inspection.sock",
         std::time::Duration::from_secs(1),
     )

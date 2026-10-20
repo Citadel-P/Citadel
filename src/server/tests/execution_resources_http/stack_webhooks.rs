@@ -21,7 +21,7 @@ impl StackBindingResolverPort for Bindings {
 }
 pub fn service(pool: sqlx::PgPool) -> (Arc<StackService>, Arc<Entitlement>) {
     let entitlement = Arc::new(Entitlement::default());
-    let docker = citadel_adapters::connectors::docker::DockerClient::new(
+    let docker = citadel_docker::client::DockerClient::new(
         "/no-webhook-http-docker.sock",
         std::time::Duration::from_secs(1),
     )

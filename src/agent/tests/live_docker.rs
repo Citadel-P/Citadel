@@ -65,7 +65,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
         stop: stop.clone(),
     };
     let mut config = AgentConfig::from_lookup(|key| match key {
-        "HUB_PUBLIC_KEY" => {
+        "CITADEL_CORE_PUBLIC_KEY" => {
             Some(STANDARD.encode(SigningKey::from_bytes(&[42; 32]).verifying_key().as_bytes()))
         }
         "DOCKER_HOST" => std::env::var("DOCKER_HOST").ok(),

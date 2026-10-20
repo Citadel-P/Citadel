@@ -93,7 +93,7 @@ so coverage becomes **Partial** instead of shrinking the total. A deliberately
 paused or drained Node is shown as unschedulable and is not counted as a missing
 Agent target until it becomes active again.
 
-[![Partial Swarm node coverage with a manager connector, a connected worker, and an offline worker](/screenshots/swarm-node-coverage.png)](/screenshots/swarm-node-coverage.png)
+![Partial Swarm node coverage with a manager connector, a connected worker, and an offline worker](/screenshots/swarm-node-coverage.png)
 
 Example coverage with demo Nodes: the manager and `worker-01` have usable local
 data sources, while `worker-02` is offline. **Partial** describes node coverage;
@@ -247,7 +247,7 @@ copy if you may need the value later.
 On a Config page, **Edit** opens a dialog and loads the content from the
 connected Swarm manager only when the user has Platform Inspect permission.
 The editor is read-only; Citadel does not persist the content in its inventory
-projection or publish it through SignalR. On a Secret page, **Edit** opens the
+projection or publish it through WebSocket. On a Secret page, **Edit** opens the
 same compact dialog but shows labels only because Docker does not disclose the
 stored value.
 

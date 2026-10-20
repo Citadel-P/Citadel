@@ -1,8 +1,4 @@
-import {
-  CreateOidcProviderRequest,
-  OidcProviderView,
-  PatchOidcProviderRequest,
-} from '@/api/generated/api.types';
+import { CreateOidcProviderRequest, OidcProviderView, PatchOidcProviderRequest } from '@/api/generated/api.types';
 import {
   defineField,
   defineGroupField,

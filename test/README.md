@@ -8,8 +8,6 @@ bash test/scripts/test-agent-image.sh citadel-agent:local
 bash test/scripts/test-agent-compatibility.sh citadel-agent:local
 docker build -t citadel-core:acceptance -f Dockerfile .
 bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local
-# Optional third argument: an already-pulled released Agent pinned by digest.
-bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local "$RELEASED_AGENT_IMAGE"
 ```
 
 The smoke test removes its disposable containers and build image. The compatibility,
@@ -24,39 +22,13 @@ and removes only its own containers, volumes and network.
 The current-pair run also exercises network explorer metadata over Direct and Edge:
 a two-network application, backend-only container, aliases, host/none/shared
 namespace modes, sanitized networking responses and detach. Swarm-node routing
-checks include the narrow networking inspection. Mixed-version runs retain the
-existing network CRUD checks for older Core versions without explorer routes.
-With current Core and an older Agent, network lists may omit endpoint evidence;
-acceptance requires that Core marks this evidence incomplete, while container
-networking and network inspection still expose the actual endpoints.
-With current Core and Agent images, it also checks real health transitions and
-unchecked members over Direct/Edge, retained history, intentional stops, and
-three-node Swarm health coverage (including the connected manager) during worker
-loss and recovery. Observing
-Standalone health must not restart the container. Cross-version baseline runs
-retain their existing transport checks without requiring the newer health contract.
-The optional released-Agent baseline covers both Direct and Edge, including
-Edge reconnection without the enrollment token. For a release known to predate
-health observations (such as v0.1.2), set
-`CITADEL_ACCEPTANCE_BASELINE_HEALTH=unknown` when invoking the acceptance runner.
-This additionally verifies that checked and unchecked containers both remain
-Unknown, inspection does not claim observed health metadata, and history does
-not invent periodic health samples. Do not set this flag for released Agents
-that support the health contract.
-The same released-Agent section can be rerun independently with already-pulled
-images, without repeating current-pair Swarm acceptance:
-
-```bash
-CITADEL_ACCEPTANCE_CORE_IMAGE=citadel-core:acceptance \
-CITADEL_ACCEPTANCE_BASELINE_AGENT_IMAGE="$RELEASED_AGENT_IMAGE" \
-CITADEL_ACCEPTANCE_BASELINE_HEALTH=unknown \
-cargo test --locked -p citadel-agent --test acceptance packaged_released_agent_compatibility -- --ignored --nocapture --test-threads=1
-```
-
-The full runner still invokes this section when its third argument is supplied;
-it skips the independent test to avoid running the same section twice. Long
-scenarios renew the fixture administrator's session through normal login at
-scenario boundaries; production token expiration and authorization remain intact.
+checks include the narrow networking inspection. The current Core/Agent pair also
+checks real health transitions and unchecked members over Direct/Edge, retained
+history, intentional stops, and three-node Swarm health coverage during worker
+loss and recovery. Observing Standalone health must not restart the container.
+Long scenarios renew the fixture administrator's session through normal login;
+production token expiration and authorization remain intact. Citadel targets one
+current Core/Agent/frontend build, with no historical image matrix.
 The Swarm image-transfer regression also checks digest-pinned inputs in a clean
 Docker daemon, verifying that save/load preserves the selected image identity.
 Run it independently with:
@@ -142,7 +114,7 @@ These focused regressions run in the existing Rust workspace test job:
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib openapi::
 SQLX_OFFLINE=true cargo test --locked -p citadel-contracts --test protocol_sources
-SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test local_runtime
+SQLX_OFFLINE=true cargo test --locked -p citadel-docker --test local_runtime
 ```
 
 The OpenAPI tests inspect the live handler definitions, so missing public-operation
@@ -168,6 +140,7 @@ Test names and fixture variables describe the subsystem they exercise:
 | Deployments, Stacks and Swarm workloads | `CITADEL_WORKLOAD_DATABASE_URL` |
 | Git, Builds, Backups, Automation and Alerts execution | `CITADEL_EXECUTION_DATABASE_URL` |
 | Statistics persistence | `CITADEL_STATISTICS_DATABASE_URL` |
+| Migrations and parity | `CITADEL_TEST_DATABASE_URL` (separate fresh database, CREATE DATABASE permission) |
 
 These must point to disposable test databases. The PowerShell harnesses set them
 for their fixture processes. Recovery tests use separate source and target databases.
@@ -182,10 +155,44 @@ optional Docker and Agent probes are `docker-smoke` and `agent-smoke`.
 `realtime-client.mjs` takes its token from `CITADEL_REALTIME_TEST_TOKEN` and connects
 to the URL supplied through `--url`; the Core endpoint is `/api/v1/realtime`.
 
+## Completion, import authorization and runtime CI regressions
+
+The existing authorization/runtime database CI stage explicitly lists each critical
+selector before executing it, so a renamed test cannot silently run zero tests:
+
+- `stacks_http::stack_endpoints_enforce_auth_and_persist_apply_release_and_delete`
+  uses `CITADEL_WORKLOAD_DATABASE_URL`. Its import matrix checks source-read and
+  materialization counters for denied users/service accounts and explicit/inferred
+  import kinds, alongside the existing transaction and preflight fixtures.
+- `build_execution::build_runs_claim_once_persist_results_cancel_and_recover` and
+  `backup_execution::backup_claims_are_repository_exclusive_and_late_results_do_not_overwrite_recovery`
+  use `CITADEL_EXECUTION_DATABASE_URL`, each with its own fresh database because
+  recovery inspects shared queues. They run real service orchestration with
+  transaction wrappers injecting precommit failures and lost commit acknowledgments,
+  recovery, supersession and cancellation. Execution and cleanup remain single-use.
+- `alert_persistence::durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure`
+  keeps durable observation consumer/receipt coverage on a separate fresh execution
+  database, so unrelated queued observations cannot affect its receipt counts.
+- Server **library** tests
+  `workers::platforms::state_delta_tests::lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_container_scoped`,
+  `workers::platforms::state_delta_tests::local_and_direct_bursts_commit_once_and_publish_six_ids`,
+  and `workers::platforms::inventory_tests::daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up`
+  run serially with `CITADEL_PLATFORM_DATABASE_URL` pointing to a separate runtime
+  database. Inventory temporarily changes other fixture connectors.
+
+The already selected `platforms_http` suite retains realtime authorization/generation
+coverage and checks HTTP request-drop cancellation of an active Edge log command,
+including release of pending work. Migration/checksum tests keep their separate
+database. Required CI check names and workspace feature resolution are unchanged.
+
 ## Focused release regressions
 
 Run these locally when changing process cleanup, authentication dependencies, or
-the persistence fixtures; they do not add work to CI:
+the persistence fixtures. CI also runs the ignored MFA, OIDC, users, teams and
+roles HTTP suites, resource-copy HTTP regressions, cancellation-safe ACL commit
+regression, and the complete `migrations` binary (including parity), serially
+against disposable PostgreSQL. Migration checksum testing uses a separate fresh
+database because it deliberately corrupts its migration journal:
 
 ```bash
 cargo test --locked -p citadel-processes --test process_runner -- --include-ignored
@@ -212,7 +219,7 @@ Interactive and binary Docker exec cleanup have a disposable-container suite
 (local Docker and an existing `redis:latest` image):
 
 ```bash
-SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib connectors::docker::transport::terminal -- --include-ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-docker --lib client::transport::terminal -- --include-ignored --test-threads=1
 ```
 
 It checks shell/job exit after disconnect, idle expiry and shutdown, isolation
@@ -222,7 +229,7 @@ descendant cleanup after parent exit, and lost startup/approval responses. Stack
 cleanup and realtime heartbeat regressions run without Docker:
 
 ```bash
-SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::stacks::process_tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-docker --lib stacks::process_tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib realtime::connection
 ```
 
@@ -391,3 +398,16 @@ to also exercise Deployment and Web Editor Stack copying to a second disposable
 Docker daemon through a signed Direct Agent. Its S3 endpoint must be reachable
 from nested Docker helpers. The fixture checks payload/ownership/symlinks,
 source isolation, destination receipts and cleanup, and removes its nested daemon.
+
+Cargo dependency advisories run independently in `.github/workflows/advisories.yml`
+on dependency pull requests and default-branch pushes. The pinned `cargo-audit`
+scans `Cargo.lock`; it does not scan OS packages, Docker/Compose, Restic, Deno or
+frontend assets. Any narrowly scoped exceptions live in `.cargo/audit.toml`.
+The Compose environment-isolation check runs explicitly in CI's **Rust unit and
+database tests** job, after workspace tests. It verifies both exact test selectors
+and runs the ignored wrapper with the pinned Docker CLI and Compose plugin from
+`test/scripts/test-stack-runtime.sh`. It needs the Compose executable, not a daemon:
+
+```bash
+cargo test --locked -p citadel-docker --lib stacks::tests::compose_interpolation_excludes_core_secrets -- --ignored --exact
+```

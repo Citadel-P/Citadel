@@ -30,14 +30,14 @@ services:
       measurement-postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://citadel_measurement:citadel_measurement@measurement-postgres:5432/citadel_measurement
-      Transport__Mode: Disabled
-      Jwt__Key: measurement-only-jwt-key-at-least-32-bytes
-      Secrets__EncryptionKey: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
+      CITADEL_DATABASE_URL: postgres://citadel_measurement:citadel_measurement@measurement-postgres:5432/citadel_measurement
+      CITADEL_TRANSPORT_MODE: Disabled
+      CITADEL_JWT_KEY: measurement-only-jwt-key-at-least-32-bytes
+      CITADEL_SECRETS_ENCRYPTION_KEY: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
       RUST_LOG: citadel_server=info,citadel_adapters=info
-      CITADEL_RUST_DB_MAX_CONNECTIONS: "5"
-      CITADEL_RUST_EVENT_QUEUE_CAPACITY: "256"
-      JobConfiguration__MonitoringInterval: "10"
+      CITADEL_DATABASE_MAX_CONNECTIONS: "5"
+      CITADEL_EVENT_QUEUE_CAPACITY: "256"
+      CITADEL_STATS_POLL_INTERVAL_SECONDS: "10"
     ports:
       - "18000:8000"
     volumes:

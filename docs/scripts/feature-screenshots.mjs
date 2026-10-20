@@ -1,4 +1,6 @@
 // Capture current resource interfaces with deterministic demonstration data.
+import { MIN_SCREENSHOT_WIDTH, saveScreenshot } from "./screenshot-output.mjs";
+
 export function prepareFeatures({
   routes,
   fixture,
@@ -171,8 +173,9 @@ export async function captureFeatures({
   data,
   modes,
 }) {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: MIN_SCREENSHOT_WIDTH, height: 900 });
   async function save(name, panel) {
+    await expect(page.locator("html")).toHaveAttribute("data-theme-color", "blue");
     await page.evaluate(() => document.fonts.ready);
     await expect(
       page.getByText("Live updates unavailable", { exact: false }),
@@ -182,7 +185,7 @@ export async function captureFeatures({
         .locator('div[style*="position: fixed"][style*="height: 2px"] > div')
         .first(),
     ).toHaveCSS("width", "0px");
-    await panel.screenshot({
+    await saveScreenshot(panel, {
       path: `${root}/docs/public/screenshots/${name}.png`,
       animations: "disabled",
     });
@@ -245,7 +248,7 @@ export async function captureFeatures({
     await save("container-health-details", dialog);
   }
   if (modes.includes("volume")) {
-    await page.setViewportSize({ width: 1440, height: 540 });
+    await page.setViewportSize({ width: MIN_SCREENSHOT_WIDTH, height: 540 });
     await page.goto(
       `${origin}/platforms/${data.platformId}/volumes/${data.volumeName}`,
       { waitUntil: "networkidle" },

@@ -58,12 +58,12 @@ try {
         --volume "${buildCacheVolume}:/source/target:ro" `
         --volume '/var/run/docker.sock:/var/run/docker.sock:ro' `
         --workdir /source `
-        --env "DATABASE_URL=postgres://citadel_foundation:citadel_foundation@${postgres}:5432/citadel_foundation_server" `
-        --env 'Transport__Mode=Disabled' `
-        --env 'Jwt__Key=foundation-only-jwt-key-at-least-32-bytes' `
-        --env 'Secrets__EncryptionKey=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' `
-        --env 'EnableSwagger=true' `
-        --env 'JobConfiguration__MonitoringInterval=1' `
+        --env "CITADEL_DATABASE_URL=postgres://citadel_foundation:citadel_foundation@${postgres}:5432/citadel_foundation_server" `
+        --env 'CITADEL_TRANSPORT_MODE=Disabled' `
+        --env 'CITADEL_JWT_KEY=foundation-only-jwt-key-at-least-32-bytes' `
+        --env 'CITADEL_SECRETS_ENCRYPTION_KEY=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' `
+        --env 'CITADEL_HTTP_OPENAPI_ENABLED=true' `
+        --env 'CITADEL_STATS_POLL_INTERVAL_SECONDS=1' `
         $rustImage `
         /source/target/debug/citadel-server serve | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'The foundation server did not start.' }

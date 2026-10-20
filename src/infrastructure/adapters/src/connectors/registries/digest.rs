@@ -1,10 +1,10 @@
 //! Shared distribution inspection; neither pull nor credentials appear in errors.
 use crate::connectors::agent::execution::AgentExecutionClient;
-use crate::connectors::docker::DockerClient;
 use citadel_contracts::citadel::{
     edge::v1::EdgeCommandKind,
     images::v1::{DistributionInspectRequest, DistributionInspectResponse},
 };
+use citadel_docker::client::DockerClient;
 use serde_json::Value;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;

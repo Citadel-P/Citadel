@@ -81,7 +81,7 @@ class RecoveryStorageTests(unittest.TestCase):
         self.storage = 'citadel-recovery/' + self.value['tag']
         self.env = patch.dict(release.os.environ, {'GITHUB_RUN_ID': '42'}, clear=True)
         self.env.start(); self.addCleanup(self.env.stop)
-        self.backend.prepare(self.data, self.value['compatibility'])
+        self.backend.prepare(self.data)
 
     def docs(self):
         for name in ['docs.tar', 'api-docs.tar']:
@@ -98,7 +98,7 @@ class RecoveryStorageTests(unittest.TestCase):
         self.assertEqual(self.backend.reservation(self.data)['sourceRunId'], '42')
         self.assertIsNone(self.backend.load(self.value['tag']))
         count = len(self.backend.operations)
-        self.backend.prepare(self.data, self.value['compatibility'])
+        self.backend.prepare(self.data)
         self.assertEqual(len(self.backend.operations), count)
         with patch.dict(release.os.environ, GITHUB_RUN_ID='43'):
             with self.assertRaisesRegex(ValueError, 'original run'):
@@ -110,9 +110,9 @@ class RecoveryStorageTests(unittest.TestCase):
     def test_reservation_creation_interruption_fails_closed(self):
         backend = MemoryGitHub(); backend.fail_upload = 'reservation.json'
         with self.assertRaisesRegex(RuntimeError, 'Interrupted'):
-            backend.prepare(self.data, self.value['compatibility'])
+            backend.prepare(self.data)
         with self.assertRaisesRegex(RuntimeError, 'Missing durable'):
-            backend.prepare(self.data, self.value['compatibility'])
+            backend.prepare(self.data)
 
     def test_accepted_outputs_recover_after_actions_expiry_in_another_run(self):
         self.docs()
@@ -201,7 +201,6 @@ class RecoveryStorageTests(unittest.TestCase):
         self.assertEqual({a['name'] for a in draft['assets']}, {'release-manifest.json', 'SHA256SUMS'})
         public = json.loads(self.backend.bytes[self.value['tag'], 'release-manifest.json'])
         self.assertEqual(public['images']['agent'][0]['digest'], 'ghcr.io/citadel-p/citadel.agent@' + self.value['indexes']['agent'])
-        self.assertEqual(public['upgradeOrder'], ['agent', 'core'])
         count = len(self.backend.operations)
         release.prepare_presentation(self.backend, self.value, self.root)
         self.assertEqual(len(self.backend.operations), count)
@@ -246,7 +245,7 @@ class RecoveryStorageTests(unittest.TestCase):
         self.data = self.value['metadata']
         self.storage = 'citadel-recovery/' + self.value['tag']
         self.value['signingIdentity'] = f"https://github.com/{self.backend.repository}/.github/workflows/ci.yml@refs/tags/{self.value['tag']}"
-        self.backend.prepare(self.data, self.value['compatibility'])
+        self.backend.prepare(self.data)
         self.finalize_and_check_cleanup()
         self.assertTrue(self.backend.release(self.value['tag'])['prerelease'])
         self.assertIn('citadel-recovery/v1.2.3', self.backend.items)
@@ -259,7 +258,7 @@ class RecoveryStorageTests(unittest.TestCase):
                    GITHUB_SHA=self.data["sourceRevision"], DOCS_SITE_URL="https://docs.example.invalid",
                    CITADEL_DOCS_RESULT="https://docs.example.invalid")
         with patch.object(release, "Backend", return_value=self.backend), \
-             patch.object(release, "preflight", return_value=self.value["compatibility"]), \
+             patch.object(release, "preflight", return_value=None), \
              patch.object(release, "documentation_eligible", return_value=True), \
              patch.object(release.version, "git", side_effect=["tag", self.data["sourceRevision"]]), \
              patch.dict(release.os.environ, env), \
@@ -283,7 +282,7 @@ class RecoveryStorageTests(unittest.TestCase):
         for command in ['promote', 'finalize']:
             count = len(self.backend.operations)
             with patch.object(release, 'Backend', return_value=self.backend), \
-                 patch.object(release, 'preflight', return_value=self.value['compatibility']), \
+                 patch.object(release, 'preflight', return_value=None), \
                  patch.object(release.version, 'git', side_effect=['tag', self.data['sourceRevision']]), \
                  patch.dict(release.os.environ, GITHUB_EVENT_NAME='push', GITHUB_REF='refs/tags/' + self.value['tag'], GITHUB_SHA=self.data['sourceRevision']), \
                  patch.object(release.sys, 'argv', ['release.py', command, '--apply', '--repository', self.backend.repository,
@@ -338,7 +337,7 @@ class RecoveryStorageTests(unittest.TestCase):
         key = self.value['tag'], 'release-manifest.json'
         self.backend.bytes[key] += b' '
         for action in [lambda: self.backend.cleanup(self.data),
-                       lambda: self.backend.prepare(self.data, self.value['compatibility'])]:
+                       lambda: self.backend.prepare(self.data)]:
             with self.assertRaisesRegex(ValueError, 'checksum differs'):
                 action()
         self.assertIsNotNone(self.backend.release(self.storage))
@@ -351,11 +350,11 @@ class RecoveryStorageTests(unittest.TestCase):
         self.assertIsNotNone(self.backend.release(self.storage))
         self.backend.fail_delete = False
         count = len(self.backend.operations)
-        self.assertTrue(self.backend.prepare(self.data, self.value['compatibility']))
+        self.assertTrue(self.backend.prepare(self.data))
         self.assertEqual(len(self.backend.operations), count + 1)
         self.assertIsNone(self.backend.release(self.storage))
         count = len(self.backend.operations)
-        self.assertTrue(self.backend.prepare(self.data, self.value['compatibility']))
+        self.assertTrue(self.backend.prepare(self.data))
         self.assertEqual(len(self.backend.operations), count)
         with self.assertRaisesRegex(ValueError, 'already published'):
             release.recover(self.backend, self.value['tag'], self.root / 'retry')
@@ -364,29 +363,7 @@ class RecoveryStorageTests(unittest.TestCase):
         self.complete(); self.backend.cleanup(self.data)
         completed = self.backend.load(self.value['tag'])
         self.assertEqual(completed['indexes'], self.value['indexes'])
-        self.assertEqual(completed['compatibility'], self.value['compatibility'])
         self.assertTrue(completed['publicManifest'])
-        # Releases published before cleanup was implemented omitted compatibility.
-        key = self.value['tag'], 'release-manifest.json'
-        manifest = json.loads(self.backend.bytes[key]); del manifest['compatibility']
-        self.backend.bytes[key] = json.dumps(manifest).encode()
-        self.backend.bytes[self.value['tag'], 'SHA256SUMS'] = (hashlib.sha256(self.backend.bytes[key]).hexdigest() + '  release-manifest.json\n').encode()
-        self.assertEqual(self.backend.load(self.value['tag'])['indexes'], self.value['indexes'])
-        self.assertTrue(self.backend.prepare(self.data, {'completed': True}))
-
-    def test_next_release_accepts_cleaned_public_manifest_as_compatibility_baseline(self):
-        self.complete(); self.backend.cleanup(self.data)
-        env = dict(CITADEL_RUST_AGENT_RELEASE_ENABLED='true', DOCS_SITE_URL='https://docs.example.invalid',
-                   DOCKERHUB_NAMESPACE='citadelplane', DOCKERHUB_USERNAME='test', DOCKERHUB_TOKEN='test',
-                   CITADEL_AGENT_ROLLBACK_IMAGE='ghcr.io/citadel-p/citadel.agent@' + self.value['indexes']['agent'],
-                   CITADEL_CORE_ROLLBACK_IMAGE='ghcr.io/citadel-p/citadel@' + self.value['indexes']['core'])
-        with patch.object(self.backend, 'manifest', return_value=json.dumps(dict(manifests=[
-                dict(platform=dict(os='linux', architecture=a)) for a in release.POLICY['architectures']]))):
-            result = release.preflight(metadata('1.2.4'), self.backend, env)
-        self.assertFalse(result['bootstrap'])
-        self.assertEqual(result['agent'], env['CITADEL_AGENT_ROLLBACK_IMAGE'])
-        self.assertEqual(result['core'], env['CITADEL_CORE_ROLLBACK_IMAGE'])
-
     def test_missing_signature_checkpoint_blocks_cleanup_even_with_valid_checksum(self):
         self.complete()
         key = self.value['tag'], 'release-manifest.json'

@@ -14,14 +14,13 @@ impl Clock for SystemClock {
 
 pub struct IdentityService {
     store: Arc<dyn IdentityStore>,
-    passwords: Arc<dyn PasswordHasher>,
+    passwords: Arc<CredentialWork>,
     tokens: Arc<dyn SessionTokenCodec>,
     service_account_tokens: Arc<dyn ServiceAccountTokenCodec>,
     entitlements: Arc<dyn EntitlementService>,
     clock: Arc<dyn Clock>,
     access_token_lifetime: Duration,
     refresh_token_lifetime: Duration,
-    credential_workers: Arc<Semaphore>,
     password_policy: PasswordPolicy,
     login_throttle: LoginThrottle,
     last_used_tracker: Arc<dyn ServiceAccountLastUsedTracker>,
@@ -32,7 +31,7 @@ impl IdentityService {
     #[must_use]
     pub fn new(
         store: Arc<dyn IdentityStore>,
-        passwords: Arc<dyn PasswordHasher>,
+        passwords: Arc<CredentialWork>,
         tokens: Arc<dyn SessionTokenCodec>,
         service_account_tokens: Arc<dyn ServiceAccountTokenCodec>,
         entitlements: Arc<dyn EntitlementService>,
@@ -50,7 +49,6 @@ impl IdentityService {
             clock,
             access_token_lifetime,
             refresh_token_lifetime,
-            credential_workers: Arc::new(Semaphore::new(2)),
             password_policy: PasswordPolicy::default(),
             login_throttle: LoginThrottle::default(),
             last_used_tracker,
@@ -717,20 +715,7 @@ impl IdentityService {
     }
 
     pub(crate) async fn hash_password(&self, password: String) -> Result<String, IdentityError> {
-        let password = zeroize::Zeroizing::new(password);
-        let permit = Arc::clone(&self.credential_workers)
-            .try_acquire_owned()
-            .map_err(|_| IdentityError::RateLimited)?;
-        let passwords = Arc::clone(&self.passwords);
-        // Accepted blocking boundary: the bounded credential permit stays inside
-        // the hash job if HTTP is cancelled. This closure has no database/session
-        // handles or durable claims; Tokio owns its finite CPU work through exit.
-        tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            passwords.hash(&password)
-        })
-        .await
-        .map_err(|_| IdentityError::Credential)?
+        self.passwords.hash_password(password).await
     }
 
     pub(crate) async fn verify_password(
@@ -738,19 +723,7 @@ impl IdentityService {
         password: String,
         encoded_hash: String,
     ) -> Result<bool, IdentityError> {
-        let permit = Arc::clone(&self.credential_workers)
-            .try_acquire_owned()
-            .map_err(|_| IdentityError::RateLimited)?;
-        let passwords = Arc::clone(&self.passwords);
-        // Accepted blocking boundary: the bounded credential permit stays inside
-        // the hash job if HTTP is cancelled. This closure has no database/session
-        // handles or durable claims; Tokio owns its finite CPU work through exit.
-        tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            passwords.verify(&password, &encoded_hash)
-        })
-        .await
-        .map_err(|_| IdentityError::Credential)
+        self.passwords.verify_password(password, encoded_hash).await
     }
 }
 

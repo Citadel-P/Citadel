@@ -18,9 +18,7 @@ describe('useTokenRefresh', () => {
         }),
     );
     const onTokenRefreshed = vi.fn();
-    const { result } = renderHook(() =>
-      useTokenRefresh(undefined, false, refreshToken, onTokenRefreshed),
-    );
+    const { result } = renderHook(() => useTokenRefresh(undefined, false, refreshToken, onTokenRefreshed));
 
     let firstRefresh: Promise<string | undefined>;
     let secondRefresh: Promise<string | undefined>;
@@ -77,10 +75,9 @@ describe('useTokenRefresh', () => {
 
   it('reports missing, malformed, and expired tokens as expired', () => {
     const refreshToken = vi.fn().mockResolvedValue(undefined);
-    const { result, rerender } = renderHook(
-      ({ token }) => useTokenRefresh(token, false, refreshToken, vi.fn()),
-      { initialProps: { token: undefined as string | undefined } },
-    );
+    const { result, rerender } = renderHook(({ token }) => useTokenRefresh(token, false, refreshToken, vi.fn()), {
+      initialProps: { token: undefined as string | undefined },
+    });
 
     expect(result.current.isAccessTokenExpired).toBe(true);
 

@@ -12,17 +12,10 @@ spec.loader.exec_module(candidates)
 
 
 class CandidateIdentityTests(unittest.TestCase):
-    def test_acceptance_scopes_baseline_to_the_mixed_pair(self):
-        with patch.dict(candidates.os.environ, {"CITADEL_ACCEPTANCE_BASELINE_COMPONENT": "core"}):
-            with patch.object(candidates.subprocess, 'run') as run:
-                for baseline in [None, 'agent', 'core']:
-                    candidates.run_acceptance('core-image', 'agent-image', baseline)
-                    args, kwargs = run.call_args
-                    self.assertEqual(args[0][-2:], ['core-image', 'agent-image'])
-                    self.assertTrue(kwargs['check'])
-                    self.assertEqual(kwargs['env'].get('CITADEL_ACCEPTANCE_BASELINE_COMPONENT'), baseline)
-                with self.assertRaises(ValueError):
-                    candidates.run_acceptance('core-image', 'agent-image', 'both')
+    def test_acceptance_checks_current_pair(self):
+        with patch.object(candidates.subprocess, 'run') as run:
+            candidates.run_acceptance('core-image', 'agent-image')
+            run.assert_called_once_with(['bash', 'test/scripts/test-agent-acceptance.sh', 'core-image', 'agent-image'], check=True)
 
     def test_display_informational_revision_and_loaded_artifact_checked_independently(self):
         metadata=dict(productVersion='1.2.3',displayVersion='1.2.3-dev.5.g0123456789ab',

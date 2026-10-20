@@ -27,10 +27,10 @@ The example is a **local HTTP setup**, not a ready-made public installation.
 | `CITADEL_BIND_ADDRESS` | `127.0.0.1` | Change only after configuring secure network access |
 | `CITADEL_HTTP_PORT` | `18000` | Change if this host port is already in use |
 | `CITADEL_EDGE_PORT` | `18001` | Host port for the separate Edge Agent connection |
-| `Transport__Mode` | `Disabled` | Choose `ReverseProxy` or `Direct` for HTTPS network access |
-| `Transport__PublicUrl` | `http://localhost:18000` | Set to the browser address users will open |
-| `EdgeAgent__PublicGrpcUrl` | `http://localhost:18001` | Set to the reachable gRPC address for Edge Agents |
-| `AllowedHosts` | Local hostnames | Include the hostname of your shared installation |
+| `CITADEL_TRANSPORT_MODE` | `Disabled` | Choose `ReverseProxy` or `Direct` for HTTPS network access |
+| `CITADEL_PUBLIC_URL` | `http://localhost:18000` | Set to the browser address users will open |
+| `CITADEL_EDGE_PUBLIC_GRPC_URL` | `http://localhost:18001` | Set to the reachable gRPC address for Edge Agents |
+| `CITADEL_HTTP_ALLOWED_HOSTS` | Local hostnames | Include the hostname of your shared installation |
 
 The supplied PostgreSQL values are `PG_HOST=pg_db`, `PG_PORT=5432`,
 `PG_USER=citadel`, and `PG_DATABASE=citadel`. These match the Compose database
@@ -51,19 +51,19 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `Passwords__MinimumLength` | `15` | Minimum length for new or changed passwords; accepts 8–128 characters, with a fixed maximum password length of 128 |
-| `Mfa__Policy` | `Optional` | Require two-factor authentication for administrators or all users |
-| `Updates__Enabled` | `true` | Allow Core to check for new Citadel releases in its installed channel |
-| `EnableSwagger` | `false` | Show API reference pages on your installation |
-| `JobConfiguration__MonitoringInterval` | `10` | Collect metrics every 10 seconds |
-| `JobConfiguration__FlashInterval` | `60` | Save buffered metrics every 60 seconds |
-| `Jwt__AccessToken__ValidForMinutes` | `15` | Access-token lifetime |
-| `Jwt__RefreshToken__ValidForDays` | `30` | Refresh-token lifetime |
-| `Automations__Enabled` | `true` | Allow automation execution |
-| `Automations__MaxParallelRuns` | `4` | Limit concurrent automation runs |
+| `CITADEL_PASSWORDS_MINIMUM_LENGTH` | `15` | Minimum length for new or changed passwords; accepts 8–128 characters, with a fixed maximum password length of 128 |
+| `CITADEL_MFA_POLICY` | `Optional` | Require two-factor authentication for administrators or all users |
+| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Allow Core to check for new Citadel releases in its installed channel |
+| `CITADEL_HTTP_OPENAPI_ENABLED` | `false` | Show API reference pages on your installation |
+| `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Collect metrics every 10 seconds |
+| `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Save buffered metrics every 60 seconds |
+| `CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES` | `15` | Access-token lifetime |
+| `CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS` | `30` | Refresh-token lifetime |
+| `CITADEL_AUTOMATIONS_ENABLED` | `true` | Allow automation execution |
+| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Limit concurrent automation runs |
 
-Leave `Jwt__Key` and `Secrets__EncryptionKey` unset to let Citadel generate
-and save them in `citadel_data`. `Jwt__Issuer` and `Jwt__Audience` normally
+Leave `CITADEL_JWT_KEY` and `CITADEL_SECRETS_ENCRYPTION_KEY` unset to let Citadel generate
+and save them in `citadel_data`. `CITADEL_JWT_ISSUER` and `CITADEL_JWT_AUDIENCE` normally
 follow the public URL when not explicitly configured. Back up the data volume
 with PostgreSQL so these keys remain available during recovery.
 
@@ -77,7 +77,7 @@ Update checks are **on by default**. To disable them, set this in `.env` and
 [apply the setting change](#apply-a-setting-change):
 
 ```dotenv
-Updates__Enabled=false
+CITADEL_UPDATE_CHECKS_ENABLED=false
 ```
 
 Core checks Citadel's public GitHub release information at startup and every
@@ -86,7 +86,7 @@ notice on Home when a newer release in the installed channel is available.
 Stable installations track stable releases; development versions such as
 `0.1.4-dev.1` track development releases. Open either notification for
 release notes and the [upgrade guide](/docs/operations/upgrade-and-rollback).
-Checks do not install updates. Set `Updates__Enabled=true` to re-enable them
+Checks do not install updates. Set `CITADEL_UPDATE_CHECKS_ENABLED=true` to re-enable them
 after opting out. Agents and Edge Agents do not make these requests.
 
 **No telemetry is collected by Citadel through update checks.** Requests send no

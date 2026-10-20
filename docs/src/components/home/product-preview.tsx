@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
+import { ImageZoom } from "fumadocs-ui/components/image-zoom";
 import { ArrowUpRight, Boxes, Network, Server } from "lucide-react";
 import { docsAssetUrl } from "@/lib/shared";
 import styles from "@/app/(home)/page.module.css";
@@ -59,7 +59,7 @@ export function ProductPreview() {
         </a>
       </div>
       <div id="product-screenshot" className={styles.screenshot}>
-        <Image
+        <ImageZoom
           className={view.file === "platforms" ? "dark:hidden" : ""}
           src={docsAssetUrl(`/screenshots/${view.file}.png`)}
           alt={view.alt}
@@ -69,7 +69,7 @@ export function ProductPreview() {
           priority={selected === 0}
         />
         {view.file === "platforms" && (
-          <Image
+          <ImageZoom
             className="hidden dark:block"
             src={docsAssetUrl("/screenshots/platforms-dark.png")}
             alt={view.alt}

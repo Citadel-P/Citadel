@@ -290,3 +290,52 @@ async fn kills_process_when_request_is_cancelled() {
 
     assert!(matches!(error, ProcessError::Cancelled));
 }
+
+#[test]
+fn environment_isolation_helper() {
+    if std::env::var_os("CITADEL_ENVIRONMENT_HELPER").is_none() {
+        return;
+    }
+    assert!(std::env::var_os("CITADEL_TEST_CORE_ONLY_SECRET").is_some());
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let output = runtime
+        .block_on(run(
+            ProcessRequest::new(std::env::current_exe().unwrap())
+                .args(["--exact", "environment_child", "--nocapture"])
+                .env("CITADEL_EXPLICIT_WORKLOAD", "workload-value"),
+            &CancellationToken::new(),
+        ))
+        .unwrap();
+    assert!(
+        output.succeeded(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn environment_child() {
+    if std::env::var_os("CITADEL_EXPLICIT_WORKLOAD").is_none() {
+        return;
+    }
+    assert!(std::env::var_os("CITADEL_TEST_CORE_ONLY_SECRET").is_none());
+    assert!(std::env::var_os("HOME").is_none());
+    assert!(std::env::var_os("DOCKER_CONFIG").is_none());
+    assert_eq!(
+        std::env::var("CITADEL_EXPLICIT_WORKLOAD").unwrap(),
+        "workload-value"
+    );
+}
+
+#[test]
+fn excludes_parent_secrets_and_preserves_explicit_workload_environment() {
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "environment_isolation_helper", "--nocapture"])
+        .env("CITADEL_ENVIRONMENT_HELPER", "1")
+        .env("CITADEL_TEST_CORE_ONLY_SECRET", "parent-only")
+        .env("HOME", "/core/private-home")
+        .env("DOCKER_CONFIG", "/core/private-docker")
+        .status()
+        .unwrap();
+    assert!(status.success());
+}

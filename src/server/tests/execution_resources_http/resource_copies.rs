@@ -1,14 +1,10 @@
 use super::*;
-use citadel_adapters::{
-    connectors::{
-        docker::DockerClient,
-        routing::{platforms::runtime::PlatformRuntimeRouter, resource_copies::CopyStorageRuntime},
-    },
-    persistence::postgres::{
-        deployments::PostgresDeploymentRepository, resource_copies::PostgresCopyRepository,
-    },
-};
+use citadel_adapters::connectors::routing::platforms::runtime::PlatformRuntimeRouter;
+use citadel_adapters::connectors::routing::resource_copies::CopyStorageRuntime;
+use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
+use citadel_adapters::persistence::postgres::resource_copies::PostgresCopyRepository;
 use citadel_deployments::DeploymentRepository;
+use citadel_docker::client::DockerClient;
 use citadel_resource_copies::CopyService;
 use citadel_server::api::routes::resource_copies::{ResourceCopiesHttpState, router};
 

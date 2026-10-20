@@ -15,7 +15,7 @@ async fn health_transitions_are_bounded_deduplicated_and_fenced() {
     let platform = Uuid::now_v7();
     let container = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,volumecount,platformdescriptor,status) VALUES($1,$1::text,$1::text,'Local',1,0,1024,0,0,'{\"$type\":\"Docker\"}','Online')").bind(platform).execute(&pool).await.unwrap();
-    let health = citadel_adapters::connectors::docker::container_health::observation(
+    let health = citadel_docker::client::container_health::observation(
         &json!({"Config":{"Healthcheck":{"Test":["CMD","probe"]}},"State":{"Health":{"Status":"healthy"}}}),
     );
     sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports,health,projectionobservedat) VALUES($1,$2,'full-id','image','health',1,$4,'Running','[]',$3,$4)").bind(container).bind(platform).bind(serde_json::to_value(&health).unwrap()).bind(health.observed_at / 1000).execute(&pool).await.unwrap();
@@ -144,7 +144,7 @@ async fn periodic_health_samples_preserve_failures_and_use_actual_inspection_tim
     let container = Uuid::now_v7();
     // Align away from minute boundaries without waiting on wall time.
     let now = Utc::now().timestamp_millis() / 60000 * 60000;
-    let mut health = citadel_adapters::connectors::docker::container_health::observation(
+    let mut health = citadel_docker::client::container_health::observation(
         &json!({"Config":{"Healthcheck":{"Test":["CMD","probe"]}},"State":{"Health":{"Status":"healthy"}}}),
     );
     health.observed_at = now - 120000;

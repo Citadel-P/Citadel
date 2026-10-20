@@ -151,8 +151,8 @@ async fn verify_container_actions(
     nodes: &[String],
     registry: &EdgeRegistry,
 ) {
-    use citadel_adapters::connectors::docker::DockerClient;
     use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
+    use citadel_docker::client::DockerClient;
     use citadel_platforms::containers::{
         ContainerAction, ContainerMutationRuntime, ContainerTarget, DeleteContainerOptions,
     };

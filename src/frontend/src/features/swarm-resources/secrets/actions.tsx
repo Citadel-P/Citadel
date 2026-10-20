@@ -21,7 +21,6 @@ const secretActions = createActionsBuilder<SwarmSecretView>()
     confirm: true,
     destructive: true,
     resourceType: 'Secret',
-    argName: 'variables',
     useVariables: (resources) => {
       const { currentPlatform } = useAppContext();
       const selected = Array.isArray(resources) ? resources : [resources];

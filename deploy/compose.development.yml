@@ -16,13 +16,15 @@ services:
       - path: ../deploy/.env.development
         format: raw
     environment:
-      DATABASE_URL: postgres://citadel:citadel@postgres:5432/citadel
-      CITADEL_RUST_DOCKER_SOCKET: /var/run/docker.sock
+      CITADEL_HTTP_LISTEN_PORT: "${CITADEL_HTTP_LISTEN_PORT:-8000}"
+      CITADEL_EDGE_GRPC_LISTEN_PORT: "${CITADEL_EDGE_GRPC_LISTEN_PORT:-8001}"
+      CITADEL_DATABASE_URL: postgres://citadel:citadel@postgres:5432/citadel
+      CITADEL_DOCKER_SOCKET: /var/run/docker.sock
       DOCKER_HOST: unix:///var/run/docker.sock
       CITADEL_DATA_ROOT: "${CITADEL_DATA_ROOT:?}"
     ports:
-      - "127.0.0.1:8000:8000"
-      - "${CITADEL_DEV_EDGE_BIND_ADDRESS:-127.0.0.1}:8001:8001"
+      - "127.0.0.1:${CITADEL_HTTP_PORT:-8000}:${CITADEL_HTTP_LISTEN_PORT:-8000}"
+      - "${CITADEL_DEV_EDGE_BIND_ADDRESS:-127.0.0.1}:${CITADEL_EDGE_PORT:-8001}:${CITADEL_EDGE_GRPC_LISTEN_PORT:-8001}"
     volumes:
       - type: bind
         source: "${CITADEL_DEV_BINARY:?}"
@@ -37,7 +39,7 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: "${CITADEL_RUST_DOCKER_SOCKET:?}"
+        source: "${CITADEL_DEV_DOCKER_SOCKET:?}"
         target: /var/run/docker.sock
         bind:
           create_host_path: false

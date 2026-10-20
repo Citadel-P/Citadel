@@ -34,7 +34,7 @@ impl VolumeContentAdapter {
             let result = tokio::time::timeout(Duration::from_secs(10),async {
                 let (runtime,id,name,labels) = match self.router.resolve(&target,&cancel).await? {
                     Runtime::Local(runtime) => {
-                        let value = runtime.inspect_container(&target.docker_id).await.map_err(crate::connectors::docker::runtime::normalize_docker_error)?;
+                        let value = runtime.inspect_container(&target.docker_id).await.map_err(citadel_docker::client::runtime::normalize_docker_error)?;
                         (HelperRuntime::Local(runtime.clone()),value.id,value.name,value.config.labels.into_iter().collect::<std::collections::BTreeMap<_,_>>())
                     },
                     Runtime::Agent(runtime) => {

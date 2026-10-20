@@ -88,7 +88,7 @@ secret-encryption-key
 agent/signing-key
 ```
 
-If `Jwt__Key` or `Secrets__EncryptionKey` is supplied by a secret manager or
+If `CITADEL_JWT_KEY` or `CITADEL_SECRETS_ENCRYPTION_KEY` is supplied by a secret manager or
 environment configuration, preserve that external value through the same
 secure system. It will not exist as a file in `/app/data`.
 
@@ -124,7 +124,7 @@ deletes the plaintext staging directory before completing the run.
 
 The official Citadel Core image includes the PostgreSQL client. Native
 installations and custom images must install a `pg_dump` version that supports
-the PostgreSQL server and can set `Backups__PostgresDumpPath` to its executable.
+the PostgreSQL server and can set `CITADEL_PG_DUMP_PATH` to its executable.
 
 The recovery bundle directory contains:
 
@@ -137,7 +137,7 @@ recovery/secret-encryption-key
 recovery/agent/signing-key
 ```
 
-Keys supplied through `Jwt__Key` or `Secrets__EncryptionKey` are listed in
+Keys supplied through `CITADEL_JWT_KEY` or `CITADEL_SECRETS_ENCRYPTION_KEY` are listed in
 `manifest.json` under `requiredExternalConfiguration` and are not copied into
 the bundle. Recover their original values from your secret manager.
 
@@ -192,9 +192,8 @@ at `PG_HOST=pg_db` and project-scoped volumes. A different project name does
 not isolate an external database or explicitly shared volumes. If you changed
 those settings, configure separate recovery storage before continuing.
 
-Check for `DATABASE_URL` and `ConnectionStrings__Postgres` overrides in the
-copied environment: they take precedence over `PG_HOST` and the other `PG_*`
-settings. Remove them to use the example's new `pg_db`, or point them explicitly
+Check for a `CITADEL_DATABASE_URL` override in the copied environment: it takes precedence over `PG_HOST` and the other `PG_*`
+settings. Remove it to use the example's new `pg_db`, or point it explicitly
 at an empty recovery database. Likewise, the commands below assume the default
 data path `/app/data`; adapt them if you use `CITADEL_DATA_ROOT`.
 
@@ -246,7 +245,7 @@ docker compose -p "$recovery_project" run --rm --no-deps \
 ```
 
 The command reads the original file-backed encryption key from `/app/data`,
-or the original `Secrets__EncryptionKey` from the container environment.
+or the original `CITADEL_SECRETS_ENCRYPTION_KEY` from the container environment.
 It never generates a replacement key. A new key cannot decrypt the restored
 secrets. Wait for `Citadel system recovery bundle restored successfully.`
 before continuing.
@@ -304,8 +303,8 @@ Do not start Core when:
 - bundle validation or the restore command fails;
 - the target database or data volume was not empty before this procedure;
 - `secret-encryption-key` is missing and no external
-  `Secrets__EncryptionKey` is available;
-- `jwtsecret` is missing and no external `Jwt__Key` is available;
+  `CITADEL_SECRETS_ENCRYPTION_KEY` is available;
+- `jwtsecret` is missing and no external `CITADEL_JWT_KEY` is available;
 - `agent/signing-key` is missing.
 
 Keep the failed target isolated, correct the recovery inputs, and repeat the

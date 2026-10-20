@@ -15,10 +15,12 @@ vi.mock('@/lib/context/app-context', () => ({
   useAppContext: () => ({ currentPlatform: { id: 'platform-1', capabilities: { canRead: true, canPull: true } } }),
 }));
 vi.mock('@/lib/monaco', () => ({ MonacoDiff: () => null, MonacoEditor: () => null }));
+vi.mock('@/components/custom/log-viewer', () => ({
+  LogViewer: ({ logs }: { logs: unknown }) => <pre>{JSON.stringify(logs)}</pre>,
+}));
 vi.mock('@/components/custom/common', () => ({
   ActorCell: () => null,
   TargetCell: () => null,
-  LogViewer: ({ logs }: { logs: unknown }) => <pre>{JSON.stringify(logs)}</pre>,
   ResourceSelectorField: ({
     id,
     onSelect,
@@ -26,7 +28,12 @@ vi.mock('@/components/custom/common', () => ({
     id?: string;
     onSelect: (value: { id: string; name: string }) => void;
   }) => (
-    <button id={id} role="combobox" onClick={() => onSelect({ id: 'matching-registry', name: 'Matching Registry' })}>
+    <button
+      id={id}
+      role="combobox"
+      aria-expanded="false"
+      aria-controls="mock-options"
+      onClick={() => onSelect({ id: 'matching-registry', name: 'Matching Registry' })}>
       Choose Registry
     </button>
   ),

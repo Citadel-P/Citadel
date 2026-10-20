@@ -86,7 +86,12 @@ describe('Image pull permissions', () => {
     await user.click(submit);
     expect(openTask).toHaveBeenCalledExactlyOnceWith({
       kind: 'pull',
-      payload: { imageTag: 'nginx:alpine', registryId: registry.id, platformId: 'platform-1', sourceImageId: undefined },
+      payload: {
+        imageTag: 'nginx:alpine',
+        registryId: registry.id,
+        platformId: 'platform-1',
+        sourceImageId: undefined,
+      },
     });
     expect(screen.getByText('Downloads the image to this host. Does not redeploy workloads.')).toBeVisible();
   });

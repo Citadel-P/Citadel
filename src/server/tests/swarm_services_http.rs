@@ -119,7 +119,9 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
         .unwrap();
     let identity = Arc::new(IdentityService::new(
         Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(&[71_u8; 32], "fixture".into(), "fixture".into()).unwrap(),
         ),
@@ -140,6 +142,7 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
             ),
             Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
             Arc::new(CompletingRuntime),
+            Arc::new(citadel_swarm_services::EmptySwarmServiceBindingResolver),
             CancellationToken::new(),
         )
         .with_image_digests(digests.clone()),

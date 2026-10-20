@@ -4,16 +4,60 @@ import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
-import { SwarmQuorumState } from '@/api/generated/api.types';
+import { PlatformType, SwarmQuorumState } from '@/api/generated/api.types';
+import { PlatformResourceSummary } from '@/features/platforms/forms/platform-stats';
+import { createPlatform } from '@/test/factories/resources';
 import { useHTTPErrorHandler } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { createQueryClient } from '@/query-client-wrapper';
-import { calculateSwarmQuorum, useSwarmOverview } from './hooks/useSwarmOverview';
-import { applySwarmInventoryToOverview, SwarmPlatformSummary } from './platform-summary';
+import { useSwarmOverview } from './hooks/useSwarmOverview';
+import { SwarmPlatformSummary } from './platform-summary';
 
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('SwarmPlatformSummary', () => {
+  it('displays authoritative manager and satellite totals after inventory and partial node events', async () => {
+    const fake = new FakeRealtimeConnection();
+    const managerOnly = { ...healthyInventory().overview, imageCount: 1, volumeCount: 1 };
+    server.use(http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () => HttpResponse.json(managerOnly)));
+    renderCitadel(
+      <PlatformResourceSummary platform={{ ...createPlatform(), id: platformId, type: PlatformType.DockerSwarm }} />,
+      {
+        groups: {
+          connectionFactory: () => fake.asRealtimeConnection(),
+          startConnection: (connection) => connection.start(),
+        },
+      },
+    );
+    const expectCounts = (images: number, volumes: number) => {
+      expect(within(screen.getByRole('link', { name: /Images/ })).getByText(String(images))).toBeVisible();
+      expect(within(screen.getByRole('link', { name: /Volumes/ })).getByText(String(volumes))).toBeVisible();
+    };
+    await waitFor(() => expectCounts(1, 1));
+    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBeGreaterThan(0));
+    const combined = { ...managerOnly, imageCount: 3, volumeCount: 3 };
+    act(() => fake.emit('SwarmInventoryUpdated', { ...healthyInventory(), overview: combined }));
+    await waitFor(() => expectCounts(3, 3));
+    act(() =>
+      fake.emit('SwarmNodeLocalResourcesUpdated', {
+        platformId,
+        dockerNodeId: 'worker-a',
+        images: [],
+        overview: { ...combined, imageCount: 2 },
+      }),
+    );
+    await waitFor(() => expectCounts(2, 3));
+    act(() =>
+      fake.emit('SwarmNodeLocalResourcesUpdated', {
+        platformId,
+        dockerNodeId: 'worker-b',
+        volumes: [],
+        overview: { ...combined, imageCount: 2, volumeCount: 2 },
+      }),
+    );
+    await waitFor(() => expectCounts(2, 2));
+  });
+
   it('refreshes stale inventory from the manager and clears the warning after success', async () => {
     const fake = new FakeRealtimeConnection();
     let refreshed = false;
@@ -247,6 +291,8 @@ describe('SwarmPlatformSummary', () => {
       await waitFor(() => expect(read).toHaveBeenCalledOnce());
       await waitFor(() => expect(fake.listenerCount('SwarmNodeLocalResourcesUpdated')).toBe(1));
       await act(async () => fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, volumes: [], volumeCount: 4 }));
+      await act(async () => fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, nodeOnly: true, volumes: [] }));
+      await act(async () => fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, volumeCount: 5 }));
       expect(queryClient.getQueryState(queryKey)).toMatchObject({
         status: hasCachedOverview ? 'success' : 'pending',
         fetchStatus: hasCachedOverview ? 'idle' : 'fetching',
@@ -258,74 +304,146 @@ describe('SwarmPlatformSummary', () => {
         await responseGate;
       });
     }
-    expect(await screen.findByText(`${hasCachedOverview ? 2 : 3} nodes, 4 volumes`)).toBeVisible();
+    expect(await screen.findByText(`${hasCachedOverview ? 2 : 3} nodes, 5 volumes`)).toBeVisible();
     expect(queryClient.getQueryState(queryKey)).toMatchObject({ status: 'success', fetchStatus: 'idle', error: null });
     expect(errorToast).not.toHaveBeenCalled();
   });
 
-  it.each(['Offline', 'Degraded'])('clears a previous %s state after a healthy inventory update', (health) => {
-    const updated = applySwarmInventoryToOverview(healthyInventory(), {
+  it.each(['Stale', 'Offline', 'Degraded'])(
+    'replaces a previous %s state with the authoritative recovered overview',
+    async (health) => {
+      const fake = new FakeRealtimeConnection();
+      server.use(
+        http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () =>
+          HttpResponse.json({
+            ...overview(),
+            health,
+            isStale: true,
+            message: 'previous state',
+          }),
+        ),
+      );
+      const view = renderCitadel(
+        <SwarmPlatformSummary platformId={platformId} networkCount={0} serviceStatusCounts={managedServiceCounts()} />,
+        {
+          groups: {
+            connectionFactory: () => fake.asRealtimeConnection(),
+            startConnection: (connection) => connection.start(),
+          },
+        },
+      );
+      await screen.findByText('previous state');
+      await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(1));
+      const inventory = healthyInventory();
+      act(() => fake.emit('SwarmInventoryUpdated', inventory));
+      await waitFor(() => expect(screen.queryByText('previous state')).not.toBeInTheDocument());
+      expect(view.queryClient.getQueryData(['getSwarmOverview', { platformId }])).toMatchObject({
+        data: inventory.overview,
+      });
+    },
+  );
+
+  it.each(['manager-first', 'local-first'])(
+    'preserves node-local staleness and counts with %s delivery, including after manager refresh',
+    async (order) => {
+      const fake = new FakeRealtimeConnection();
+      const stale = {
+        ...healthyInventory().overview,
+        health: 'Stale',
+        isStale: true,
+        message: 'Some inventory is out of date. Last-known state is shown.',
+        volumeCount: 4,
+        imageCount: 3,
+        localNetworkCount: 2,
+        networkCount: 5,
+      };
+      server.use(
+        http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () => HttpResponse.json(stale)),
+        http.post(
+          `http://localhost/api/v1/platforms/${platformId}/swarm/refresh`,
+          () => new HttpResponse(null, { status: 204 }),
+        ),
+      );
+      const view = renderCitadel(
+        <SwarmPlatformSummary platformId={platformId} networkCount={5} serviceStatusCounts={managedServiceCounts()} />,
+        {
+          groups: {
+            connectionFactory: () => fake.asRealtimeConnection(),
+            startConnection: (connection) => connection.start(),
+          },
+        },
+      );
+      await screen.findByText(stale.message);
+      await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(1));
+      const managerEvent = () => fake.emit('SwarmInventoryUpdated', { ...healthyInventory(), overview: stale });
+      const localEvent = () =>
+        fake.emit('SwarmNodeLocalResourcesUpdated', {
+          platformId,
+          nodeOnly: true,
+          volumes: [{ isStale: true }],
+          overview: stale,
+        });
+      act(() => {
+        if (order === 'manager-first') {
+          managerEvent();
+          localEvent();
+        } else {
+          localEvent();
+          managerEvent();
+        }
+      });
+      expect(view.queryClient.getQueryData(['getSwarmOverview', { platformId }])).toMatchObject({ data: stale });
+      expect(screen.getByText('Stale')).toBeVisible();
+      await view.user.click(screen.getByRole('button', { name: 'Refresh inventory' }));
+      expect(await screen.findByText(/Check Node Agent connections/)).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Refresh inventory' })).toBeVisible();
+      expect(screen.getByText(stale.message)).toBeVisible();
+    },
+  );
+
+  it('changes only supplied local counts and ignores another Platform', async () => {
+    const fake = new FakeRealtimeConnection();
+    const initial = {
       ...overview(),
-      health,
-      message: 'old connection state',
+      health: 'Stale',
+      isStale: true,
+      volumeCount: 7,
+      imageCount: 3,
+      networkCount: 5,
+      localNetworkCount: 2,
+    };
+    server.use(http.get(`http://localhost/api/v1/platforms/${platformId}/swarm`, () => HttpResponse.json(initial)));
+    function Probe() {
+      const { overview: value } = useSwarmOverview(platformId);
+      return <output>{JSON.stringify(value)}</output>;
+    }
+    const view = renderCitadel(<Probe />, {
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
     });
-
-    expect(updated.health).toBe('Healthy');
-    expect(updated.message).toBeNull();
-  });
-
-  it('derives lost quorum from live manager reachability', () => {
-    const inventory = healthyInventory();
-    inventory.nodes.items.push(manager('manager-2', false, 'Unreachable'));
-    inventory.nodes.items.push(manager('manager-3', false, 'Unreachable'));
-
-    const updated = applySwarmInventoryToOverview(inventory, overview());
-
-    expect(updated.quorum).toEqual({
-      state: SwarmQuorumState.Lost,
-      reachableManagers: 1,
-      requiredManagers: 2,
-      hasLeader: true,
-    });
-    expect(updated.health).toBe('Degraded');
-    expect(updated.message).toContain('1 of 3 managers are reachable');
-  });
-
-  it('does not report stale manager inventory as lost quorum', () => {
-    const nodes = [manager('manager-1', true, 'Reachable', true)];
-
-    expect(calculateSwarmQuorum(nodes).state).toBe(SwarmQuorumState.Unknown);
-  });
-
-  it('updates service state counts from a realtime inventory snapshot', () => {
-    const inventory = emptyInventory();
-    inventory.services.items = [
-      service('healthy', 2, 2),
-      service('degraded', 1, 2),
-      service('failed', 0, 1),
-      service('stopped', 0, 0),
-      service('unknown', 1, 1, true),
-    ];
-
-    const updated = applySwarmInventoryToOverview(inventory, overview());
-
-    expect(updated.serviceCount).toBe(5);
-    expect(updated.serviceStatusCounts).toEqual({
-      total: 5,
-      healthy: 1,
-      degraded: 1,
-      failed: 1,
-      stopped: 1,
-      paused: 0,
-      inProgress: 0,
-      unknown: 1,
-    });
+    await waitFor(() =>
+      expect(view.queryClient.getQueryData(['getSwarmOverview', { platformId }])).toMatchObject({ data: initial }),
+    );
+    await waitFor(() => expect(fake.listenerCount('SwarmNodeLocalResourcesUpdated')).toBe(1));
+    act(() =>
+      fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, nodeOnly: true, volumes: [{ isStale: true }] }),
+    );
+    expect(JSON.parse(screen.getByRole('status').textContent!)).toEqual(initial);
+    act(() => fake.emit('SwarmNodeLocalResourcesUpdated', { platformId, images: [] }));
+    expect(JSON.parse(screen.getByRole('status').textContent!)).toEqual({ ...initial, imageCount: 0 });
+    act(() =>
+      fake.emit('SwarmNodeLocalResourcesUpdated', { platformId: 'other', overview: healthyInventory().overview }),
+    );
+    expect(JSON.parse(screen.getByRole('status').textContent!)).toEqual({ ...initial, imageCount: 0 });
   });
 });
 
 function emptyInventory(): SwarmInventoryUpdate {
   return {
     platformId,
+    overview: { ...overview(), health: 'Degraded', networkCount: 2, localNetworkCount: 2 },
     nodes: {
       items: [],
       capabilities: {
@@ -410,6 +528,12 @@ function emptyInventory(): SwarmInventoryUpdate {
 function healthyInventory(): SwarmInventoryUpdate {
   const inventory = emptyInventory();
   inventory.nodes.items = [manager('manager-1', true, 'Reachable')];
+  inventory.overview = {
+    ...overview(),
+    nodeCount: 1,
+    managerCount: 1,
+    quorum: { state: SwarmQuorumState.Healthy, reachableManagers: 1, requiredManagers: 1, hasLeader: true },
+  };
   return inventory;
 }
 
@@ -478,14 +602,4 @@ function managedServiceCounts() {
     inProgress: 1,
     unknown: 0,
   };
-}
-
-function service(id: string, runningTaskCount: number, desiredTaskCount: number, isStale = false) {
-  return {
-    id,
-    runningTaskCount,
-    desiredTaskCount,
-    updateState: 'Completed',
-    isStale,
-  } as SwarmInventoryUpdate['services']['items'][number];
 }

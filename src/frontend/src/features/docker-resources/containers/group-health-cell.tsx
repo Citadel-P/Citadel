@@ -2,6 +2,7 @@ import { Activity } from 'lucide-react';
 import { ContainerHealthStatus as Status } from '@/api/generated/api.types';
 import { HealthCard } from '@/components/custom/health-card';
 import { StateBadge } from '@/components/custom/state-badge';
+import { WorkloadHealthMembers } from '@/features/workload-health/card';
 import { healthLabels, healthTone } from './health';
 import type { ContainerGroupHealth } from './group-health';
 
@@ -18,6 +19,9 @@ export function ContainerGroupHealthCell({ name, summary }: { name: string; summ
       triggerClassName={tone}
       trigger={<Activity className={`size-4 ${tone}`} aria-hidden="true" />}
       status={<StateBadge kind="health" value={status} label={label} indicator={<Activity aria-hidden="true" />} />}
+      renderDetails={() => (
+        <WorkloadHealthMembers members={summary?.members ?? []} unavailable={status === Status.Unknown} />
+      )}
       summary={
         <div className="space-y-3">
           <p className="text-sm font-medium break-words">{name}</p>

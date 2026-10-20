@@ -19,7 +19,7 @@ Control** license capability. User JWTs remain subject to the operation's own
 permissions and capability requirements. Keep tokens out of source files and logs.
 
 This reference does not send API requests or store credentials. To try requests
-against your own installation, set `EnableSwagger=true` in `.env` and recreate
+against your own installation, set `CITADEL_HTTP_OPENAPI_ENABLED=true` in `.env` and recreate
 Core with `docker compose up -d server`. Include your TLS overlay if you use one.
 Swagger UI is then available at `/swagger/`, with the public schema at
 `/openapi/public/v1.json`.

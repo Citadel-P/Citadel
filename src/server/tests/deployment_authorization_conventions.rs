@@ -13,7 +13,7 @@ fn shared_entry_points_use_deployment_policies() {
     // Scope this guard to Deployment policies within shared resource modules.
     for (file, marker, policies) in [
         (
-            "api/routes/platforms.rs",
+            "api/routes/platforms/containers.rs",
             "async fn read_deployment(",
             &[
                 "require_resource::<ReadDeployment>",
@@ -42,7 +42,7 @@ fn shared_entry_points_use_deployment_policies() {
         assert_policy_source(block(&source, marker), file, policies);
     }
 
-    let file = "api/routes/platforms.rs";
+    let file = "api/routes/platforms/statistics.rs";
     let source = std::fs::read_to_string(root.join(file)).unwrap();
     let workload = block(&source, "async fn workload(");
     let deployment = workload

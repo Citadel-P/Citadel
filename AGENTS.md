@@ -22,7 +22,7 @@ For nontrivial changes, provide a concise implementation plan in the conversatio
 
 - User-facing product docs belong in `docs/content/docs/`. Architecture and development guidance live in the repository documents listed above; keep changes aligned with those sources.
 - Update affected documentation when behavior changes. Describe implemented behavior and actual limitations; do not invent historical compatibility restrictions or infer backup coverage from a UI label.
-- `v0.1.0` was published on 14 October 2026. Use `version.json`, published release records and the release workflow for subsequent version decisions. Earlier development/demo versions do not establish public compatibility guarantees.
+- Citadel is pre-release and targets one current Core/Agent/frontend build. Do not retain historical-version configuration aliases or mixed-version release prerequisites. Use `version.json` and the release workflow for version identity; preserve stored data, applied migration history and publication safeguards.
 - Preserve application storage during deployments. Keep credentials, private data captures and operational journals outside this repository.
 
 ## Code ownership and boundaries
@@ -35,7 +35,7 @@ For nontrivial changes, provide a concise implementation plan in the conversatio
 | `src/infrastructure/contracts/`, `src/infrastructure/docker-api/` | Protobuf and Docker wire contracts / generated clients |
 | `src/infrastructure/processes/`, `src/infrastructure/runtime/` | Bounded subprocess execution, task ownership, supervision and concurrency controls |
 | `src/server/src/api/routes/` | Thin HTTP endpoints: extract, authorize, invoke use case, map response |
-| `src/server/src/api/resources/` | HTTP DTOs, views, patch semantics and presentation mappings |
+| `src/server/src/api/resources/` | Shared HTTP/WebSocket public views and presentation mappings; resource-owned HTTP inputs and patch semantics |
 | `src/server/src/composition/`, `src/server/src/workers/` | Explicit dependency wiring, background-job construction, execution and lifecycle |
 | `src/agent/` | Agent transport, authenticated execution, Direct/Edge session behavior; **no database** |
 | `src/frontend/` | React screens, shared UI, state/query integration and generated API consumption |

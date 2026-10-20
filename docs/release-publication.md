@@ -2,7 +2,7 @@
 
 The annotated product tag and Nerdbank.GitVersioning resolver remain authoritative.
 Agent images are verified and signed before Core promotion. Existing acceptance,
-compatibility, registry and Pages gates still apply. Stable images publish to GHCR
+current-pair runtime, registry and Pages gates still apply. Stable images publish to GHCR
 and Docker Hub; development images retain the existing GHCR-only policy.
 
 ## Notes and public files
@@ -31,8 +31,7 @@ DOCS_SITE_URL=https://docs.citadelplane.com python3 src/tools/release/notes.py g
 The public release has two uploaded files: `release-manifest.json` and `SHA256SUMS`.
 Deployment jobs read and verify this public manifest with their existing read-only
 tokens; they do not need access to recovery drafts.
-The manifest lists immutable image references, verified signature checkpoints, architectures, Agent-before-Core
-upgrade order, and the existing cosign certificate identity/issuer. GitHub additionally
+The manifest lists immutable image references, verified signature checkpoints, architectures and the existing cosign certificate identity/issuer. GitHub additionally
 supplies its standard source archives. Notes link installation/upgrade documentation
 and versioned images. The public draft is exposed only after images, signatures,
 aliases, documentation and public attachment checks succeed. Registry copies cannot
@@ -44,7 +43,7 @@ The GitHub release page is the final user-facing completion signal.
 **Thirty-day Actions retention is not a durable recovery policy.** Actions artifacts
 remain 30-day transfer/fallback copies. For new releases, the workflow first reserves
 an internal draft named `citadel-recovery/vVERSION`, binding the tagged revision,
-compatibility inputs and original Actions run. It never publishes this draft or
+and original Actions run. It never publishes this draft or
 creates an internal Git tag. It uses the existing repository and GitHub token;
 reservation and artifact-producing jobs need `contents: write` for release assets.
 Publication mutations additionally require the validated annotated-tag push context.
@@ -57,8 +56,7 @@ append-only publication journals there too. **Keep these drafts while publicatio
 incomplete, including failed runs.** After the product release becomes public, the
 publisher verifies its manifest, checksum, metadata, image digests and signature
 checkpoints against the completed journal, then deletes only the internal draft.
-The public manifest becomes the permanent completion record for deployments and
-future compatibility baselines. Image digests and registry signatures remain intact.
+The public manifest becomes the permanent completion record for deployments. Image digests and registry signatures remain intact.
 Repository writers can see incomplete drafts; public visitors see product releases.
 
 A cleanup failure leaves the public release intact and fails the publication job.

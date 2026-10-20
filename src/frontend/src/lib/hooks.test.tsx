@@ -448,3 +448,59 @@ describe('registry save errors', () => {
     }
   });
 });
+
+describe('named mutation arguments', () => {
+  it('preserves a scoped secret query, body and request headers through the hook', async () => {
+    const requests: { query: Record<string, string>; body: unknown; header: string | null }[] = [];
+    const callbacks: string[] = [];
+    server.use(
+      http.post('http://localhost/api/v1/resourceBindings/secrets', async ({ request }) => {
+        requests.push({
+          query: Object.fromEntries(new URL(request.url).searchParams),
+          body: await request.json(),
+          header: request.headers.get('X-Fixture'),
+        });
+        return HttpResponse.json({ id: 'secret-id' });
+      }),
+    );
+    function Probe() {
+      const mutation = useMutate('createInternalSecret', {
+        onSuccess: () => {
+          callbacks.push('hook-success');
+        },
+        onSettled: () => {
+          callbacks.push('hook-settled');
+        },
+      });
+      return (
+        <button
+          onClick={() =>
+            mutation.mutate(
+              {
+                data: { name: 'fixture', value: 'secret-value' },
+                query: { scope: 'Stack', resourceId: 'stack-id' },
+                params: { headers: { 'X-Fixture': 'preserved' } },
+              },
+              {
+                onSuccess: () => {
+                  callbacks.push('call-success');
+                },
+              },
+            )
+          }>
+          Create scoped secret
+        </button>
+      );
+    }
+    const view = renderCitadel(<Probe />);
+    await view.user.click(view.getByRole('button', { name: 'Create scoped secret' }));
+    await waitFor(() => expect(callbacks).toEqual(['hook-success', 'hook-settled', 'call-success']));
+    expect(requests).toEqual([
+      {
+        query: { scope: 'Stack', resourceId: 'stack-id' },
+        body: { name: 'fixture', value: 'secret-value' },
+        header: 'preserved',
+      },
+    ]);
+  });
+});

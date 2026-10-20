@@ -3,8 +3,9 @@ title: "Environment variables"
 description: "Reference the production settings exposed by Citadel's Docker Compose environment template."
 ---
 
-Citadel uses environment variable names with double underscores between
-sections. The `.env` downloaded in the [installation guide](/docs/getting-started/install)
+Citadel runtime settings use `CITADEL_` followed by uppercase words separated
+by single underscores. Standard tool settings such as `RUST_LOG`, `DOCKER_HOST`
+and `PG_*` retain their names. The `.env` downloaded in the [installation guide](/docs/getting-started/install)
 contains the settings needed to start Citadel. Add optional settings from this
 reference as needed. The defaults are for local HTTP; configure TLS before
 sharing an installation.
@@ -18,20 +19,20 @@ sharing an installation.
 | `CITADEL_HTTP_PORT`, `CITADEL_EDGE_PORT` | Optional | Host ports; default to `18000` and `18001` |
 | `PG_HOST` | External or renamed PostgreSQL | PostgreSQL hostname; Compose defaults to `pg_db` |
 | `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` | Always | PostgreSQL credentials and database |
-| `Transport__Mode` | Always | `ReverseProxy`, `Direct`, or development-only `Disabled` |
-| `Transport__PublicUrl` | Always | Canonical browser and API origin |
-| `EdgeAgent__PublicGrpcUrl` | Edge Agent use | Public Edge gRPC address |
-| `AllowedHosts` | Always | Hostnames accepted by Core |
-| `Transport__ForwardedHeaders__KnownProxies` | Reverse proxy | Immediate trusted proxy address |
-| `Transport__ForwardedHeaders__KnownNetworks` | Reverse proxy alternative | Immediate trusted proxy network |
-| `Transport__Certificate__Path` | Direct TLS | PEM certificate chain inside Core |
-| `Transport__Certificate__PrivateKeyPath` | Direct TLS | PEM private key inside Core |
-| `Jwt__Issuer`, `Jwt__Audience` | Optional override | Token validation identities; otherwise derived from the public URL |
-| `Jwt__Key` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
-| `Secrets__EncryptionKey` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
-| `Mfa__Policy` | Optional | `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers` |
-| `Passwords__MinimumLength` | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
-| `EnableSwagger` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
+| `CITADEL_TRANSPORT_MODE` | Always | `ReverseProxy`, `Direct`, or development-only `Disabled` |
+| `CITADEL_PUBLIC_URL` | Always | Canonical browser and API origin |
+| `CITADEL_EDGE_PUBLIC_GRPC_URL` | Edge Agent use | Public Edge gRPC address |
+| `CITADEL_HTTP_ALLOWED_HOSTS` | Always | Semicolon-separated hostnames accepted by Core |
+| `CITADEL_HTTP_TRUSTED_PROXIES` | Reverse proxy | Immediate trusted proxy address |
+| `CITADEL_HTTP_TRUSTED_PROXY_NETWORKS` | Reverse proxy alternative | Immediate trusted proxy network |
+| `CITADEL_TLS_CERTIFICATE_PATH` | Direct TLS | PEM certificate chain inside Core |
+| `CITADEL_TLS_PRIVATE_KEY_PATH` | Direct TLS | PEM private key inside Core |
+| `CITADEL_JWT_ISSUER`, `CITADEL_JWT_AUDIENCE` | Optional override | Token validation identities; otherwise derived from the public URL |
+| `CITADEL_JWT_KEY` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
+| `CITADEL_SECRETS_ENCRYPTION_KEY` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
+| `CITADEL_MFA_POLICY` | Optional | `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers` |
+| `CITADEL_PASSWORDS_MINIMUM_LENGTH` | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
+| `CITADEL_HTTP_OPENAPI_ENABLED` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
 `CITADEL_IMAGE`, `COMPOSE_PROJECT_NAME`, and host port settings control Compose.
 The application settings must reach the Core container; the supplied Compose
@@ -48,7 +49,7 @@ restart alone does not load a changed Compose environment.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `Updates__Enabled` | `true` | Allow Core to check public releases in its installed channel at startup and every six hours; no automatic installation |
+| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Allow Core to check public releases in its installed channel at startup and every six hours; no automatic installation |
 
 No Citadel telemetry or instance data is sent. GitHub receives normal connection
 information, including the outbound IP address. See
@@ -59,9 +60,8 @@ for details and how to turn checks on or off.
 
 Core chooses its database connection in this order:
 
-1. `DATABASE_URL`, if set.
-2. `ConnectionStrings__Postgres`, if set.
-3. `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, and `PG_DATABASE`.
+1. `CITADEL_DATABASE_URL`, if set: a PostgreSQL URI (`postgres://` or `postgresql://`). A blank or malformed selected URI fails startup.
+2. Otherwise, `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, and `PG_DATABASE`; credentials are escaped when constructing the URI.
 
 Remove unused overrides instead of leaving them blank. The supplied Compose
 PostgreSQL service still requires its `PG_*` credentials. Changing the initial
@@ -72,7 +72,7 @@ database password in `.env` does not reset the password of an existing database.
 | `PG_PORT` | `5432` | PostgreSQL port used with the `PG_*` connection settings |
 | `CITADEL_DATA_ROOT` | `/app/data` | Persistent Core data and generated recovery keys; match the container's data mount |
 | `CITADEL_HOST_ROOT` | `/host` | Read-only host mount used for Docker storage filesystem metrics |
-| `Backups__PostgresDumpPath` | `pg_dump` | PostgreSQL dump executable for control-plane backups |
+| `CITADEL_PG_DUMP_PATH` | `pg_dump` | PostgreSQL dump executable for control-plane backups |
 | `CITADEL_PG_RESTORE_PATH` | `pg_restore` | PostgreSQL restore executable used by offline `restore-system` |
 
 Preserve original keys and verify the database target before
@@ -83,13 +83,13 @@ project does not isolate an external database configured by an override.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `JobConfiguration__MonitoringInterval` | `10` | Platform metric collection interval, in seconds |
-| `JobConfiguration__FlashInterval` | `60` | Metric persistence interval, in seconds; `Flash` is the supported setting name |
-| `Automations__Enabled` | `true` | Enables Automation Action execution |
-| `Automations__MaxParallelRuns` | `4` | Maximum concurrent Automation Action runs |
-| `Automations__DefaultTimeoutSeconds` | `300` | Default Action timeout |
-| `Automations__MaxTimeoutSeconds` | `1800` | Maximum Action timeout |
-| `LogFormat` | `Text` | Core log format: `Text` or `Json` |
+| `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Platform metric collection interval, in seconds |
+| `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Metric persistence interval, in seconds |
+| `CITADEL_AUTOMATIONS_ENABLED` | `true` | Enables Automation Action execution |
+| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Maximum concurrent Automation Action runs |
+| `CITADEL_AUTOMATIONS_DEFAULT_TIMEOUT_SECONDS` | `300` | Default Action timeout |
+| `CITADEL_AUTOMATIONS_MAX_TIMEOUT_SECONDS` | `1800` | Maximum Action timeout |
+| `CITADEL_LOG_FORMAT` | `Text` | Core log format: `Text` or `Json` |
 
 These settings do not override resource permissions, enabled states, or license
 requirements. Resource schedules are configured on the resource itself.
@@ -98,3 +98,102 @@ For first-run password-file bootstrap, use the complete
 [unattended setup procedure](/docs/getting-started/first-run-setup#unattended-setup).
 For common configuration changes, see
 [Docker Compose configuration](/docs/getting-started/configuration).
+
+## HTTP listeners and runtime limits
+
+Host-published ports above are separate from the container listeners. The supplied
+Compose packages use the listen-port settings for container port targets and the
+health check reads the same HTTP port. Bare binaries have no static-root default;
+the packaged image sets `CITADEL_STATIC_ROOT=/app/wwwroot` and accepts an override.
+
+| Setting | Default / units |
+| --- | --- |
+| `CITADEL_HTTP_LISTEN_PORT` / `CITADEL_EDGE_GRPC_LISTEN_PORT` | `8000` / `8001` |
+| `CITADEL_HTTP_CORS_ORIGIN_<n>` | No origins; indexed list ordered numerically, sparse indices allowed; blank entries rejected |
+| `CITADEL_HTTP_FORWARDED_LIMIT` | `1` trusted hop |
+| `CITADEL_HTTP_BODY_LIMIT_BYTES` | `2097152` bytes |
+| `CITADEL_HTTP_REQUESTS_PER_MINUTE` | `600` |
+| `CITADEL_DATABASE_MAX_CONNECTIONS` | `5` |
+| `CITADEL_DOCKER_SOCKET` | `/var/run/docker.sock` inside Core |
+| `CITADEL_DOCKER_TIMEOUT_SECONDS` | `10` seconds |
+| `CITADEL_STATIC_ROOT` | Optional frontend directory |
+| `CITADEL_SHUTDOWN_TIMEOUT_SECONDS` | `10` seconds |
+| `CITADEL_LOG_COLOR_ENABLED` | Terminal detection; JSON always omits ANSI color |
+| `CITADEL_STATS_BATCH_SIZE` | `500` |
+| `CITADEL_EVENT_QUEUE_CAPACITY` | `256` |
+| `CITADEL_SWARM_RECONCILIATION_INTERVAL_SECONDS` | `1800` seconds |
+| `CITADEL_RETENTION_INTERVAL_SECONDS` | `900` seconds |
+| `CITADEL_REALTIME_ENABLED` | `true`; disabled realtime skips its other settings |
+| `CITADEL_REALTIME_QUEUE_CAPACITY` / `CITADEL_REALTIME_MAX_CONNECTIONS` | `64` / `8` |
+| `CITADEL_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS` / `CITADEL_REALTIME_SEND_TIMEOUT_SECONDS` | `5` / `2` seconds |
+| `CITADEL_REALTIME_AUTH_RECHECK_SECONDS` | `30` seconds |
+| `CITADEL_REALTIME_SNAPSHOT_LIMIT` | `1024` |
+
+In the development overlay, `CITADEL_DEV_DOCKER_SOCKET` selects the host socket
+mount source; Core and the entrypoint both use `/var/run/docker.sock` inside the
+container. The launcher derives this source from its native `CITADEL_DOCKER_SOCKET`.
+
+## Identity and bootstrap
+
+| Setting | Default / units |
+| --- | --- |
+| `CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES` | `15` minutes |
+| `CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS` | `30` days |
+| `CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES` / `CITADEL_MFA_SETUP_LIFETIME_MINUTES` | `5` / `10` minutes |
+| `CITADEL_MFA_MAX_FAILED_ATTEMPTS` / `CITADEL_MFA_RECOVERY_CODE_COUNT` | `5` / `10` |
+| `CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS` / `CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS` | `90` / `365` days |
+| `CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT` | `10` |
+| `CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES` | `5` minutes |
+| `CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY` | `10000` |
+| `CITADEL_BOOTSTRAP_ADMIN_NAME` / `CITADEL_BOOTSTRAP_ADMIN_EMAIL` / `CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Optional unattended setup; resolved only when setup is required |
+
+Carry existing JWT/encryption key bytes into the named settings when changing
+configuration. Generated keys remain in `jwtsecret` and `secret-encryption-key`
+under the same data root. Offline recovery never generates replacement keys.
+
+## Execution tools, paths and scheduling
+
+| Setting | Default / units |
+| --- | --- |
+| `CITADEL_DOCKER_PATH` / `CITADEL_RESTIC_PATH` / `CITADEL_SHOUTRRR_PATH` | `docker` / `restic` / `shoutrrr` |
+| `CITADEL_DENO_PATH` | `deno` |
+| `CITADEL_INTERNAL_BASE_URL` | `http://127.0.0.1:<resolved HTTP listen port>` |
+| `CITADEL_GIT_KNOWN_HOSTS_PATH` | `<data root>/git-known-hosts` |
+| `CITADEL_AUTOMATIONS_WORK_DIR` / `CITADEL_AUTOMATIONS_DENO_CACHE_DIR` | `<data root>/automations/runs` / `<data root>/automations/deno-cache` |
+| `CITADEL_AUTOMATIONS_ALLOW_NET` | Optional Deno network allowlist; existing comma-separated format |
+| `CITADEL_AUTOMATIONS_MAX_LOG_BYTES` | `1048576` bytes, clamped to 1024–16777216 |
+| `CITADEL_AUTOMATIONS_POLL_INTERVAL_SECONDS` / `CITADEL_AUTOMATIONS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
+| `CITADEL_BUILDS_MAX_PARALLEL_RUNS` | `4` |
+| `CITADEL_BUILDS_RUN_CLEANUP_ENABLED` / `CITADEL_BUILDS_RUN_RETENTION_DAYS` | `true` / `90` days; disabling cleanup disables retention |
+| `CITADEL_BACKUPS_ENABLED` / `CITADEL_BACKUPS_MAX_PARALLEL_RUNS` | `true` / `2` |
+| `CITADEL_BACKUPS_POLL_INTERVAL_SECONDS` / `CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
+| `CITADEL_BACKUPS_WORKING_DIRECTORY` / `CITADEL_BACKUPS_CORE_DATA_PATH` | `<data root>/backups/work` / `<data root>` |
+| `CITADEL_BACKUPS_ALLOWED_CORE_PATH_<n>` | `<data root>/backups/repositories`; indices 0–127, numeric order, sparse indices allowed; paths retain spaces and commas |
+| `CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS` | `120` seconds |
+| `CITADEL_BACKUPS_MAX_LOG_BYTES` / `CITADEL_BACKUPS_MAX_LOG_LINE_BYTES` | `1048576` / `8192` bytes |
+| `CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS` / `CITADEL_BACKUPS_SOURCE_LEASE_SECONDS` | `300` / `300` seconds |
+| `CITADEL_RESTIC_IMAGE` | `restic/restic:0.18.1` |
+| `CITADEL_VOLUME_HELPER_IMAGE` | Optional helper image override |
+
+## Core connections to Agents
+
+| Setting | Default / units |
+| --- | --- |
+| `CITADEL_CORE_AGENT_ADDRESS` / `CITADEL_CORE_AGENT_PRIVATE_KEY_PATH` | Optional pair; configure both together |
+| `CITADEL_CORE_AGENT_TIMEOUT_SECONDS` | Required positive seconds when that pair is set |
+| `CITADEL_CORE_AGENT_ALLOW_INSECURE` | `true`; set `false` to require HTTPS |
+| `CITADEL_CORE_AGENT_CA_CERTIFICATE_PATH` | Optional PEM trust bundle for Direct Agents |
+| `CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH` | Optional Core CA distributed to Swarm node agents |
+| `CITADEL_EDGE_AGENT_IMAGE` | Optional full image override |
+| `CITADEL_EDGE_AGENT_IMAGE_REPOSITORY` / `CITADEL_EDGE_AGENT_IMAGE_TAG` | `ghcr.io/citadel-p/citadel.agent` / current build version; used without the full-image override |
+| `CITADEL_EDGE_AGENT_SUPPORTED_NODE_ARCHITECTURE_<n>` | `amd64`, `arm64`; indices 0–31, numeric order, sparse indices allowed; blank/unknown values rejected |
+| `CITADEL_EDGE_AGENT_NODE_AGENT_BOOTSTRAP_MINUTES` / `CITADEL_EDGE_AGENT_NODE_AGENT_SETUP_MINUTES` | `10` / `5` minutes |
+| `CITADEL_EDGE_AGENT_NODE_AGENT_REMOVAL_GRACE_MINUTES` | `10` minutes |
+| `CITADEL_EDGE_AGENT_NODE_AGENT_LIMIT_NANO_CPUS` | `500000000` nanocpus |
+| `CITADEL_EDGE_AGENT_NODE_AGENT_LIMIT_MEMORY_BYTES` / `CITADEL_EDGE_AGENT_NODE_AGENT_PIDS_LIMIT` | `536870912` bytes / `256` processes |
+
+Direct Agent containers require `CITADEL_CORE_PUBLIC_KEY`, the base64 Ed25519 public
+key emitted by Core setup. Edge mode does not read that Direct-only setting.
+Agent-owned `CITADEL_AGENT_*` and Edge profile settings are unchanged; use the
+[Direct](/docs/operations/agent) and [Edge](/docs/operations/edge-agent)
+setup guides for their generated configuration.

@@ -1,6 +1,7 @@
 // Run against the frontend dev server: node docs/scripts/capture-guide-screenshots.mjs readme
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { MIN_SCREENSHOT_WIDTH, saveScreenshot } from "./screenshot-output.mjs";
 const require = createRequire(
   new URL("../../test/e2e/package.json", import.meta.url),
 );
@@ -183,7 +184,7 @@ const routes = {
     passwordMinimumLength: 15,
     passwordMaximumLength: 128,
   },
-  "/profile/preferences": { theme: "Light", themeColor: "Violet" },
+  "/profile/preferences": { theme: "Light", themeColor: "Blue" },
   "/profile": {
     id: id(10),
     displayName: "Demo Administrator",
@@ -410,8 +411,9 @@ const featureModes = ["network", "health", "volume"].filter(name =>
   process.argv.length === 2 || process.argv.includes(name) || (readmeMode && name === "network"));
 const browser = await chromium.launch();
 const context = await browser.newContext({
-  viewport: { width: 1360, height: 2000 },
-  deviceScaleFactor: readmeMode ? 1 : 2,
+  viewport: { width: MIN_SCREENSHOT_WIDTH, height: 2000 },
+  // Narrow guide dialogs need 4x density to retain detail at >= 1660px wide.
+  deviceScaleFactor: readmeMode ? 1 : 4,
   colorScheme: "light",
   reducedMotion: "reduce",
   timezoneId: "UTC",
@@ -470,13 +472,13 @@ async function capture(name, start, end = start) {
     height: last.y + last.height - first.y,
   };
   if (start === end)
-    await start.screenshot({
+    await saveScreenshot(start, {
       path: `${root}/docs/public/screenshots/${name}.png`,
       animations: "disabled",
     });
   else {
     expect(clip.y + clip.height).toBeLessThanOrEqual(2000);
-    await page.screenshot({
+    await saveScreenshot(page, {
       path: `${root}/docs/public/screenshots/${name}.png`,
       clip,
       animations: "disabled",
@@ -500,10 +502,11 @@ try {
     if (process.argv.length > 2 && !process.argv.slice(2).includes(name))
       continue;
     await page.setViewportSize({
-      width: name === "failure" ? 900 : 1360,
+      width: MIN_SCREENSHOT_WIDTH,
       height: 2000,
     });
     await page.goto(`${origin}/${path}`, { waitUntil: "networkidle" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme-color", "blue");
     if (name === "git") {
       await expect(page.locator("#git_stack_source")).toContainText(
         "Application infrastructure",
@@ -562,7 +565,7 @@ try {
         dialog.getByRole("button", { name: "Restore", exact: true }),
       ).toBeEnabled();
       await expect(dialog.getByRole("switch")).not.toBeChecked();
-      await dialog.screenshot({
+      await saveScreenshot(dialog, {
         path: `${root}/docs/public/screenshots/backup-restore-selection.png`,
         animations: "disabled",
       });
@@ -577,7 +580,7 @@ try {
       await expect(
         dialog.getByRole("row").filter({ hasText: "Storefront" }),
       ).toContainText("Write");
-      await dialog.screenshot({
+      await saveScreenshot(dialog, {
         path: `${root}/docs/public/screenshots/resource-access-grant.png`,
         animations: "disabled",
       });

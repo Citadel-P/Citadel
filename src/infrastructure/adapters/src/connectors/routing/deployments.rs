@@ -1,5 +1,6 @@
-use crate::connectors::docker::deployments::observed_container_state;
-use crate::connectors::docker::deployments::{parse_mount, parse_port};
+use citadel_docker::client::deployments::observed_container_state;
+use citadel_docker::client::deployments::parse_mount;
+use citadel_docker::client::deployments::parse_port;
 use std::collections::BTreeMap;
 
 use base64::Engine;
@@ -17,8 +18,8 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::connectors::agent::client::AgentClient;
-use crate::connectors::docker::DockerClient;
-use crate::connectors::docker::DockerError;
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::DockerError;
 
 const DEFAULT_DOCKER_HUB_ID: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000100);
 const DEPLOYMENT_LABEL: &str = "com.citadel.deployment-id";
@@ -803,8 +804,8 @@ fn storage(error: sqlx::Error) -> DeploymentError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::connectors::docker::deployments::observed_container_state;
     use citadel_deployments::{DeploymentImageInfo, DeploymentSpec, UpdateBehavior};
+    use citadel_docker::client::deployments::observed_container_state;
 
     fn command() -> RuntimeDeploymentCommand {
         RuntimeDeploymentCommand {
@@ -895,9 +896,9 @@ mod tests {
 
     #[test]
     fn container_health_takes_precedence_over_the_running_flag() {
-        let mut state = crate::connectors::docker::projection::ContainerState {
+        let mut state = citadel_docker::client::projection::ContainerState {
             running: true,
-            health: Some(crate::connectors::docker::projection::ContainerHealth {
+            health: Some(citadel_docker::client::projection::ContainerHealth {
                 status: "starting".to_owned(),
             }),
             ..Default::default()

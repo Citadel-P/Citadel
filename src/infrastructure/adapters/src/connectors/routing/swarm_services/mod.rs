@@ -24,8 +24,8 @@ use uuid::Uuid;
 
 use crate::connectors::agent::client::AgentClient;
 
-use crate::connectors::docker::DockerClient;
-use crate::connectors::docker::DockerError;
+use citadel_docker::client::DockerClient;
+use citadel_docker::client::DockerError;
 
 const MANAGED_LABEL: &str = "com.citadel.managed";
 
@@ -186,7 +186,7 @@ impl SwarmServiceRuntimeRouter {
         claim: &ServiceOperationClaim,
         spec: &Value,
     ) -> Result<String, SwarmServiceError> {
-        let hash = crate::connectors::swarm::inspection::runtime_hash(spec);
+        let hash = citadel_docker::swarm::inspection::runtime_hash(spec);
         crate::persistence::postgres::swarm_services::runtime_observation::record_target(
             &self.pool,
             claim,
@@ -645,7 +645,7 @@ fn proto_spec(
 }
 
 fn observed_result(
-    service: crate::connectors::docker::projection::SwarmService,
+    service: citadel_docker::client::projection::SwarmService,
     warnings: Vec<String>,
     accepted: bool,
 ) -> RuntimeServiceResult {
@@ -690,7 +690,7 @@ fn observed_result(
             && citadel_platforms::jobs::rollout_complete_state(update_state)
             && running >= desired,
         rollout_error,
-        runtime_hash: crate::connectors::swarm::inspection::runtime_hash(&service.spec),
+        runtime_hash: citadel_docker::swarm::inspection::runtime_hash(&service.spec),
         applied_digest: service
             .spec
             .pointer("/TaskTemplate/ContainerSpec/Image")

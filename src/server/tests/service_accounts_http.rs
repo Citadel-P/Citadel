@@ -471,7 +471,9 @@ async fn fixture_with_limits(
     let token_codec = Arc::new(OpaqueServiceAccountTokenCodec);
     let identity = Arc::new(IdentityService::new(
         identity_store,
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(
                 &[44_u8; 32],

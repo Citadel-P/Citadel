@@ -475,7 +475,9 @@ async fn fixture(custom_access: bool) -> Fixture {
     let clock = Arc::new(SystemClock);
     let identity = Arc::new(IdentityService::new(
         identity_store,
-        Arc::new(Argon2PasswordHasher::default()),
+        Arc::new(citadel_identity::CredentialWork::new(Arc::new(
+            Argon2PasswordHasher::default(),
+        ))),
         Arc::new(
             JwtSessionTokenCodec::new(
                 &[12_u8; 32],

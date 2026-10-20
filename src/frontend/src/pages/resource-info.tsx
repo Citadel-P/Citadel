@@ -54,7 +54,7 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
                         {Header.Status ? (
                           <Header.Status resource={resource} />
                         ) : Header.Indicator ? (
-                            <Header.Indicator resource={resource} />                       
+                          <Header.Indicator resource={resource} />
                         ) : null}
                         {Header.NameSuffix && <Header.NameSuffix resource={resource} />}
                       </div>

@@ -135,9 +135,7 @@ fn local_event_bursts_cannot_hide_an_agent_reconciliation_trigger() {
         resource: None,
         stream_recovered: true,
         swarm_scope: false,
-        kind: RuntimeEventKind::SwarmDirty(
-            citadel_adapters::connectors::docker::events::SwarmResource::Service,
-        ),
+        kind: RuntimeEventKind::SwarmDirty(citadel_docker::client::events::SwarmResource::Service),
         platform_id: None,
         container_id: None,
         container_state: None,

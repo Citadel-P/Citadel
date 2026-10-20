@@ -402,7 +402,10 @@ export const DeploymentForm = ({
 
       return createDeployment({ data: payload as CreateDeploymentInput });
     },
-    onUpdate: (payload) => updateDeployment({ id, data: payload }),
+    onUpdate: async (payload) => {
+      if (!id) throw new Error('A resource ID is required to update this resource.');
+      return updateDeployment({ id, data: payload });
+    },
     onRefresh: refreshData,
   });
 

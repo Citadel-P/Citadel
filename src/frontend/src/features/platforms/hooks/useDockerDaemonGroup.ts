@@ -1,3 +1,4 @@
+import type { SwarmOverviewView } from '@/api/generated/api.types';
 import { useCallback, useRef, useEffect } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import {
@@ -150,6 +151,7 @@ export type DockerDaemonListeners = {
 };
 
 export type SwarmInventoryUpdate = {
+  overview: SwarmOverviewView;
   platformId: string;
   nodes: SwarmItemsResponseSwarmNodeView;
   services: SwarmItemsResponseSwarmServiceView;
@@ -160,6 +162,8 @@ export type SwarmInventoryUpdate = {
 };
 
 export type SwarmNodeLocalResourcesUpdate = {
+  /** Present when this event also carries a complete persisted overview. */
+  overview?: SwarmOverviewView;
   platformId: string;
   images?: ImageView[];
   volumes?: VolumeView[];

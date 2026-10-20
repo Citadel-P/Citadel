@@ -136,7 +136,7 @@ export const {
     resourceType: 'SwarmService',
     requiredCapabilities: ['canExecute'],
     canExecute: (service) => (Array.isArray(service) ? service.every(idle) : idle(service)),
-    useVariables: ids,
+    useVariables: (resources) => ({ data: ids(resources) }),
     useSuccessHandler: () => {
       const navigate = useNavigate();
       return () => navigate('/swarm-services');

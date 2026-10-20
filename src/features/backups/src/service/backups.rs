@@ -82,16 +82,48 @@ impl BackupService {
         if let Ok(mut active) = self.active_backups.lock() {
             active.remove(&claim.run.id);
         }
-        self.store.finish_backup(&claim, &result).await?;
-        self.progress(
-            claim.run.id,
-            result.status.as_str(),
-            result
-                .error_message
-                .as_deref()
-                .unwrap_or("Backup run completed."),
-        );
-        self.changed();
+        let mut delay = std::time::Duration::from_millis(250);
+        loop {
+            let completion = async {
+                if self.store.finish_backup(&claim, &result).await? {
+                    return Ok(Some((result.status, result.error_message.clone())));
+                }
+                match self.store.get_run(claim.run.id).await {
+                    Ok(run) if run.status.is_terminal() => {
+                        Ok(Some((run.status, run.error_message)))
+                    }
+                    Ok(_) | Err(BackupError::NotFound) => Ok(None),
+                    Err(error) => Err(error),
+                }
+            };
+            let outcome = tokio::select! {
+                biased;
+                () = shutdown.cancelled() => return Ok(true),
+                outcome = completion => outcome,
+            };
+            match outcome {
+                Ok(confirmed) => {
+                    if let Some((status, message)) = confirmed {
+                        self.progress(
+                            claim.run.id,
+                            status.as_str(),
+                            message.as_deref().unwrap_or("Backup run completed."),
+                        );
+                        self.changed();
+                    }
+                    break;
+                }
+                Err(BackupError::Storage(error)) => {
+                    tracing::warn!(%error, run_id=%claim.run.id, "Backup completion pending");
+                }
+                Err(error) => return Err(error),
+            }
+            tokio::select! {
+                () = shutdown.cancelled() => return Ok(true),
+                () = tokio::time::sleep(delay) => {}
+            }
+            delay = (delay * 2).min(std::time::Duration::from_secs(5));
+        }
         Ok(true)
     }
 }

@@ -493,6 +493,7 @@ dependencies = [
  "citadel-database",
  "citadel-deployments",
  "citadel-discovery",
+ "citadel-docker",
  "citadel-docker-api",
  "citadel-execution",
  "citadel-git",
@@ -549,6 +550,7 @@ dependencies = [
  "citadel-contracts",
  "citadel-database",
  "citadel-deployments",
+ "citadel-docker",
  "citadel-docker-api",
  "citadel-identity",
  "citadel-platforms",
@@ -635,6 +637,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tracing",
  "url",
  "uuid",
  "zeroize",
@@ -735,6 +738,47 @@ dependencies = [
  "serde",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "citadel-docker"
+version = "0.0.0"
+dependencies = [
+ "async-stream",
+ "axum",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "citadel-backups",
+ "citadel-builds",
+ "citadel-contracts",
+ "citadel-deployments",
+ "citadel-docker-api",
+ "citadel-execution",
+ "citadel-platforms",
+ "citadel-primitives",
+ "citadel-processes",
+ "citadel-runtime",
+ "citadel-stacks",
+ "citadel-swarm-services",
+ "futures-util",
+ "getrandom 0.4.3",
+ "prost-types",
+ "reqwest",
+ "rustix",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tracing",
+ "url",
+ "urlencoding",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -932,6 +976,7 @@ dependencies = [
  "citadel-database",
  "citadel-deployments",
  "citadel-discovery",
+ "citadel-docker",
  "citadel-git",
  "citadel-identity",
  "citadel-licensing",
@@ -1435,7 +1480,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2752,9 +2797,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.16"
+version = "0.11.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f4bfc015262b9df63c8845072ce59068853ff5872180c2ce2f13038b970e560"
+checksum = "a9746dbde176634f4f2f1faf2404e30a31b2bc1e9cafb5329c95d8177a18c9fc"
 dependencies = [
  "aws-lc-rs",
  "bytes",
@@ -2784,7 +2829,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3045,14 +3090,14 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -3104,7 +3149,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3747,10 +3792,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4488,7 +4533,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -3,6 +3,77 @@ use crate::api::resources::platforms::runtime_views::*;
 use citadel_platforms::{AuthorizedReadError, RuntimeCapabilityError};
 use tokio_util::sync::CancellationToken;
 
+/// Enrich the existing manager/local events with the same typed projection as
+/// HTTP. Only raw aggregate reads are shared; capabilities remain actor-specific.
+pub(super) async fn attach_swarm_overview(
+    state: &ApplicationGroupReader,
+    principal: &ActorPrincipal,
+    id: Uuid,
+    lease: Option<&crate::realtime::AuthorizationLease>,
+    event: Option<&PublishedRuntimeEvent>,
+    snapshot: &mut GroupSnapshot,
+) -> Result<(), RealtimeReadError> {
+    let is_inventory = |target: &str| {
+        matches!(
+            target,
+            "SwarmInventoryUpdated" | "SwarmNodeLocalResourcesUpdated"
+        )
+    };
+    let has_inventory = snapshot
+        .events
+        .iter()
+        .any(|event| is_inventory(event.target));
+    let local_delta = event.is_some_and(|event| {
+        event.platform_id == Some(id)
+            && matches!(
+                event.payload["dockerResourceType"].as_str(),
+                Some("image" | "network" | "volume")
+            )
+    });
+    if !has_inventory && !local_delta {
+        return Ok(());
+    }
+    let Some(platform) =
+        crate::realtime::shared_reads::platform(&state.platforms, id, event).await?
+    else {
+        return Ok(());
+    };
+    if platform.platform_type != citadel_platforms::PlatformKind::DockerSwarm {
+        return Ok(());
+    }
+    let (capabilities, _) = match lease {
+        Some(lease) => {
+            lease
+                .daemon_capabilities(&state.identity, principal, id)
+                .await?
+        }
+        None => daemon_capabilities(state, principal, id).await?,
+    };
+    let summary = crate::realtime::shared_reads::swarm_summary(&state.platforms, id, event).await?;
+    let overview =
+        serde_json::to_value(crate::api::resources::platforms::swarm_views::for_platform(
+            summary,
+            &platform,
+            capabilities,
+        ))
+        .map_err(super::failure)?;
+    if !has_inventory {
+        snapshot.events.push(ClientEvent::new(
+            "SwarmNodeLocalResourcesUpdated",
+            vec![json!({"platformId":id,"overview":overview})],
+        ));
+        return Ok(());
+    }
+    for event in snapshot
+        .events
+        .iter_mut()
+        .filter(|event| is_inventory(event.target))
+    {
+        event.arguments[0]["overview"] = overview.clone();
+    }
+    Ok(())
+}
+
 /// Project only the changed resource. Authorization and capabilities remain per actor;
 /// event payloads are immutable observations accepted by the projection writer.
 pub(crate) async fn realtime_resource_snapshot(

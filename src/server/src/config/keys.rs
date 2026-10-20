@@ -60,7 +60,9 @@ mod tests {
         let root = std::env::temp_dir().join(format!("citadel-keys-{}", uuid::Uuid::now_v7()));
         let values = std::thread::scope(|scope| {
             let handles: Vec<_> = (0..8)
-                .map(|_| scope.spawn(|| load_or_create(&root, "jwtsecret", "Jwt__Key").unwrap()))
+                .map(|_| {
+                    scope.spawn(|| load_or_create(&root, "jwtsecret", "CITADEL_JWT_KEY").unwrap())
+                })
                 .collect();
             handles
                 .into_iter()
@@ -83,7 +85,7 @@ mod tests {
         }
         fs::write(root.join("jwtsecret"), "existing-key").unwrap();
         assert_eq!(
-            load_or_create(&root, "jwtsecret", "Jwt__Key")
+            load_or_create(&root, "jwtsecret", "CITADEL_JWT_KEY")
                 .unwrap()
                 .as_str(),
             "existing-key"

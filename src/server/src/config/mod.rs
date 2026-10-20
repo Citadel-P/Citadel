@@ -1,7 +1,6 @@
 pub mod execution;
 mod keys;
 
-use std::collections::HashMap;
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
@@ -43,7 +42,7 @@ const DEFAULT_MFA_RECOVERY_CODE_COUNT: usize = 10;
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error(
-        "missing PostgreSQL configuration: set DATABASE_URL, ConnectionStrings__Postgres, or PG_USER/PG_PASSWORD/PG_DATABASE"
+        "missing PostgreSQL configuration: set CITADEL_DATABASE_URL or PG_USER/PG_PASSWORD/PG_DATABASE"
     )]
     MissingDatabase,
     #[error("invalid {name}: {message}")]
@@ -254,58 +253,61 @@ pub struct EffectiveConfig {
 
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
-        let port = parse_env("Transport__ApiPort", DEFAULT_API_PORT)?;
+        let port = parse_env("CITADEL_HTTP_LISTEN_PORT", DEFAULT_API_PORT)?;
         let transport = transport_config(port)?;
         let listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let (database_url, database_source) = database_url()?;
         let database_max_connections = parse_env(
-            "CITADEL_RUST_DB_MAX_CONNECTIONS",
+            "CITADEL_DATABASE_MAX_CONNECTIONS",
             DEFAULT_DATABASE_MAX_CONNECTIONS,
         )?;
         if database_max_connections == 0 {
             return Err(ConfigError::Invalid {
-                name: "CITADEL_RUST_DB_MAX_CONNECTIONS",
+                name: "CITADEL_DATABASE_MAX_CONNECTIONS",
                 message: "must be greater than zero".to_owned(),
             });
         }
-        let event_queue_capacity = parse_env(
-            "CITADEL_RUST_EVENT_QUEUE_CAPACITY",
-            DEFAULT_EVENT_QUEUE_CAPACITY,
-        )?;
+        let event_queue_capacity =
+            parse_env("CITADEL_EVENT_QUEUE_CAPACITY", DEFAULT_EVENT_QUEUE_CAPACITY)?;
         if event_queue_capacity == 0 {
             return Err(ConfigError::Invalid {
-                name: "CITADEL_RUST_EVENT_QUEUE_CAPACITY",
+                name: "CITADEL_EVENT_QUEUE_CAPACITY",
                 message: "must be greater than zero".to_owned(),
             });
         }
         let docker_request_timeout_seconds = nonzero_seconds(
-            "CITADEL_RUST_DOCKER_TIMEOUT_SECONDS",
+            "CITADEL_DOCKER_TIMEOUT_SECONDS",
             DEFAULT_DOCKER_REQUEST_TIMEOUT_SECONDS,
         )?;
         let probe_interval_seconds = nonzero_seconds(
-            "JobConfiguration__MonitoringInterval",
+            "CITADEL_STATS_POLL_INTERVAL_SECONDS",
             DEFAULT_MONITORING_INTERVAL_SECONDS,
         )?;
         let reconciliation_interval_seconds = nonzero_seconds(
-            "JobConfiguration__SwarmReconciliationIntervalSeconds",
+            "CITADEL_SWARM_RECONCILIATION_INTERVAL_SECONDS",
             DEFAULT_RECONCILIATION_INTERVAL_SECONDS,
         )?;
         let shutdown_timeout_seconds = nonzero_seconds(
-            "CITADEL_RUST_SHUTDOWN_TIMEOUT_SECONDS",
+            "CITADEL_SHUTDOWN_TIMEOUT_SECONDS",
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
         )?;
-        let execution = execution::ExecutionConfig::from_env()?;
+        let execution = execution::ExecutionConfig::from_env(port)?;
+        let supported_architectures = execution
+            .edge_agent
+            .setup_policy
+            .supported_architectures
+            .clone();
         let agent = agent_config(execution.edge_agent.allow_insecure)?;
         let realtime = realtime_config()?;
         let identity = identity_config(&transport)?;
 
         Ok(Self {
-            updates_enabled: parse_env("Updates__Enabled", true)?,
+            updates_enabled: parse_env("CITADEL_UPDATE_CHECKS_ENABLED", true)?,
             execution,
             listen_address,
             database_url,
             database_max_connections,
-            docker_socket: env::var_os("CITADEL_RUST_DOCKER_SOCKET")
+            docker_socket: env::var_os("CITADEL_DOCKER_SOCKET")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("/var/run/docker.sock")),
             docker_request_timeout: Duration::from_secs(docker_request_timeout_seconds),
@@ -320,52 +322,42 @@ impl Config {
             automation: automation_options()?,
             node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy {
                 removal_grace: Duration::from_secs(
-                    positive_usize("EdgeAgent__NodeAgentRemovalGraceMinutes", 10)? as u64 * 60,
+                    positive_usize("CITADEL_EDGE_AGENT_NODE_AGENT_REMOVAL_GRACE_MINUTES", 10)?
+                        as u64
+                        * 60,
                 ),
-                supported_architectures: {
-                    let configured: Vec<_> = (0..32)
-                        .filter_map(|index| {
-                            env::var(format!("EdgeAgent__SupportedNodeArchitectures__{index}")).ok()
-                        })
-                        .collect();
-                    if configured.is_empty() {
-                        vec!["amd64".into(), "arm64".into()]
-                    } else {
-                        configured
-                    }
-                },
+                supported_architectures,
             },
             retention_interval: Duration::from_secs(nonzero_seconds(
-                "CITADEL_RUST_RETENTION_INTERVAL_SECONDS",
+                "CITADEL_RETENTION_INTERVAL_SECONDS",
                 900,
             )?),
             stats_flush_interval: Duration::from_secs(positive_usize(
-                "JobConfiguration__FlashInterval",
+                "CITADEL_STATS_FLUSH_INTERVAL_SECONDS",
                 60,
             )? as u64),
-            stats_batch_size: positive_usize("JobConfiguration__BatchSize", 500)?,
-            build_parallel_runs: positive_usize("Builds__MaxParallelRuns", 4)?,
-            build_retention_days: if parse_env("Builds__RunCleanupEnabled", true)? {
+            stats_batch_size: positive_usize("CITADEL_STATS_BATCH_SIZE", 500)?,
+            build_parallel_runs: positive_usize("CITADEL_BUILDS_MAX_PARALLEL_RUNS", 4)?,
+            build_retention_days: if parse_env("CITADEL_BUILDS_RUN_CLEANUP_ENABLED", true)? {
                 Some(
-                    i32::try_from(positive_usize("Builds__RunRetentionDays", 90)?).map_err(
-                        |_| ConfigError::Invalid {
-                            name: "Builds__RunRetentionDays",
+                    i32::try_from(positive_usize("CITADEL_BUILDS_RUN_RETENTION_DAYS", 90)?)
+                        .map_err(|_| ConfigError::Invalid {
+                            name: "CITADEL_BUILDS_RUN_RETENTION_DAYS",
                             message: "must fit a positive 32-bit integer".into(),
-                        },
-                    )?,
+                        })?,
                 )
             } else {
                 None
             },
             backup_workers: BackupWorkerConfig {
-                enabled: parse_env("Backups__Enabled", true)?,
-                parallel_runs: positive_usize("Backups__MaxParallelRuns", 2)?,
+                enabled: parse_env("CITADEL_BACKUPS_ENABLED", true)?,
+                parallel_runs: positive_usize("CITADEL_BACKUPS_MAX_PARALLEL_RUNS", 2)?,
                 poll_interval: Duration::from_secs(positive_usize(
-                    "Backups__PollIntervalSeconds",
+                    "CITADEL_BACKUPS_POLL_INTERVAL_SECONDS",
                     2,
                 )? as u64),
                 schedule_interval: Duration::from_secs(positive_usize(
-                    "Backups__SchedulePollIntervalSeconds",
+                    "CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS",
                     30,
                 )? as u64),
             },
@@ -500,32 +492,32 @@ impl DatabaseConfig {
 }
 
 fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
-    let mode = parse_transport_mode(env::var("Transport__Mode").ok().as_deref())?;
-    let edge_grpc_port = parse_env("Transport__EdgeGrpcPort", DEFAULT_EDGE_GRPC_PORT)?;
+    let mode = parse_transport_mode(env::var("CITADEL_TRANSPORT_MODE").ok().as_deref())?;
+    let edge_grpc_port = parse_env("CITADEL_EDGE_GRPC_LISTEN_PORT", DEFAULT_EDGE_GRPC_PORT)?;
     if api_port == edge_grpc_port {
         return Err(ConfigError::Invalid {
-            name: "Transport__EdgeGrpcPort",
-            message: "must differ from Transport__ApiPort".to_owned(),
+            name: "CITADEL_EDGE_GRPC_LISTEN_PORT",
+            message: "must differ from CITADEL_HTTP_LISTEN_PORT".to_owned(),
         });
     }
 
     let public_url = parse_origin(
-        "Transport__PublicUrl",
-        env::var("Transport__PublicUrl").ok(),
+        "CITADEL_PUBLIC_URL",
+        env::var("CITADEL_PUBLIC_URL").ok(),
         mode,
         format!("http://localhost:{api_port}"),
     )?;
     let edge_agent_public_url = parse_origin(
-        "EdgeAgent__PublicGrpcUrl",
-        env::var("EdgeAgent__PublicGrpcUrl").ok(),
+        "CITADEL_EDGE_PUBLIC_GRPC_URL",
+        env::var("CITADEL_EDGE_PUBLIC_GRPC_URL").ok(),
         mode,
         format!("http://localhost:{edge_grpc_port}"),
     )?;
-    let allowed_hosts = split_values(env::var("AllowedHosts").ok().as_deref(), ';')?;
+    let allowed_hosts = split_values(env::var("CITADEL_HTTP_ALLOWED_HOSTS").ok().as_deref(), ';')?;
     if mode != TransportMode::Disabled {
         if allowed_hosts.is_empty() || allowed_hosts.iter().any(|host| host == "*") {
             return Err(ConfigError::Invalid {
-                name: "AllowedHosts",
+                name: "CITADEL_HTTP_ALLOWED_HOSTS",
                 message: "must explicitly include the configured public hosts".to_owned(),
             });
         }
@@ -538,7 +530,7 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
                 .any(|allowed| allowed.eq_ignore_ascii_case(host))
             {
                 return Err(ConfigError::Invalid {
-                    name: "AllowedHosts",
+                    name: "CITADEL_HTTP_ALLOWED_HOSTS",
                     message: format!("does not include configured public host '{host}'"),
                 });
             }
@@ -546,9 +538,7 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
     }
 
     let known_proxies = split_values(
-        env::var("Transport__ForwardedHeaders__KnownProxies")
-            .ok()
-            .as_deref(),
+        env::var("CITADEL_HTTP_TRUSTED_PROXIES").ok().as_deref(),
         ',',
     )?
     .into_iter()
@@ -556,13 +546,13 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         value
             .parse()
             .map_err(|error: std::net::AddrParseError| ConfigError::Invalid {
-                name: "Transport__ForwardedHeaders__KnownProxies",
+                name: "CITADEL_HTTP_TRUSTED_PROXIES",
                 message: error.to_string(),
             })
     })
     .collect::<Result<Vec<_>, _>>()?;
     let known_networks = split_values(
-        env::var("Transport__ForwardedHeaders__KnownNetworks")
+        env::var("CITADEL_HTTP_TRUSTED_PROXY_NETWORKS")
             .ok()
             .as_deref(),
         ',',
@@ -572,34 +562,34 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         value
             .parse::<IpNet>()
             .map_err(|error| ConfigError::Invalid {
-                name: "Transport__ForwardedHeaders__KnownNetworks",
+                name: "CITADEL_HTTP_TRUSTED_PROXY_NETWORKS",
                 message: error.to_string(),
             })
     })
     .collect::<Result<Vec<_>, _>>()?;
     let forwarded_configured = !known_proxies.is_empty() || !known_networks.is_empty();
-    let certificate_path = env::var_os("Transport__Certificate__Path").map(PathBuf::from);
+    let certificate_path = env::var_os("CITADEL_TLS_CERTIFICATE_PATH").map(PathBuf::from);
     let certificate_private_key_path =
-        env::var_os("Transport__Certificate__PrivateKeyPath").map(PathBuf::from);
+        env::var_os("CITADEL_TLS_PRIVATE_KEY_PATH").map(PathBuf::from);
     let certificate_configured =
         certificate_path.is_some() || certificate_private_key_path.is_some();
 
     match mode {
         TransportMode::ReverseProxy if !forwarded_configured => {
             return Err(ConfigError::Invalid {
-                name: "Transport__ForwardedHeaders",
+                name: "CITADEL_HTTP_TRUSTED_PROXIES/CITADEL_HTTP_TRUSTED_PROXY_NETWORKS",
                 message: "ReverseProxy mode requires a known proxy or network".to_owned(),
             });
         }
         TransportMode::ReverseProxy if certificate_configured => {
             return Err(ConfigError::Invalid {
-                name: "Transport__Certificate",
+                name: "CITADEL_TLS_CERTIFICATE_PATH/CITADEL_TLS_PRIVATE_KEY_PATH",
                 message: "certificate settings are not valid in ReverseProxy mode".to_owned(),
             });
         }
         TransportMode::Direct if forwarded_configured => {
             return Err(ConfigError::Invalid {
-                name: "Transport__ForwardedHeaders",
+                name: "CITADEL_HTTP_TRUSTED_PROXIES/CITADEL_HTTP_TRUSTED_PROXY_NETWORKS",
                 message: "forwarded-header settings are not valid in Direct mode".to_owned(),
             });
         }
@@ -607,7 +597,7 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
             if certificate_path.is_none() || certificate_private_key_path.is_none() =>
         {
             return Err(ConfigError::Invalid {
-                name: "Transport__Certificate",
+                name: "CITADEL_TLS_CERTIFICATE_PATH/CITADEL_TLS_PRIVATE_KEY_PATH",
                 message: "Direct mode requires a PEM certificate and private key".to_owned(),
             });
         }
@@ -618,7 +608,7 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
                     .is_some_and(|path| path.is_file()) =>
         {
             return Err(ConfigError::Invalid {
-                name: "Transport__Certificate",
+                name: "CITADEL_TLS_CERTIFICATE_PATH/CITADEL_TLS_PRIVATE_KEY_PATH",
                 message: "certificate and private-key paths must identify readable files"
                     .to_owned(),
             });
@@ -633,13 +623,10 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         _ => {}
     }
 
-    let forward_limit = parse_env(
-        "Transport__ForwardedHeaders__ForwardLimit",
-        DEFAULT_FORWARD_LIMIT,
-    )?;
-    let body_limit_bytes = parse_env("CITADEL_RUST_BODY_LIMIT_BYTES", DEFAULT_BODY_LIMIT_BYTES)?;
+    let forward_limit = parse_env("CITADEL_HTTP_FORWARDED_LIMIT", DEFAULT_FORWARD_LIMIT)?;
+    let body_limit_bytes = parse_env("CITADEL_HTTP_BODY_LIMIT_BYTES", DEFAULT_BODY_LIMIT_BYTES)?;
     let requests_per_minute = parse_env(
-        "CITADEL_RUST_REQUESTS_PER_MINUTE",
+        "CITADEL_HTTP_REQUESTS_PER_MINUTE",
         DEFAULT_REQUESTS_PER_MINUTE,
     )?;
     if forward_limit == 0 || body_limit_bytes == 0 || requests_per_minute == 0 {
@@ -650,14 +637,19 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
     }
     if requests_per_minute > u64::from(u32::MAX) {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_RUST_REQUESTS_PER_MINUTE",
+            name: "CITADEL_HTTP_REQUESTS_PER_MINUTE",
             message: format!("must not exceed {}", u32::MAX),
         });
     }
 
-    let cors_origins = indexed_env("Cors__")?;
+    let cors_origins = indexed_env("CITADEL_HTTP_CORS_ORIGIN_")?;
     for origin in &cors_origins {
-        parse_origin("Cors__N", Some(origin.clone()), mode, String::new())?;
+        parse_origin(
+            "CITADEL_HTTP_CORS_ORIGIN_N",
+            Some(origin.clone()),
+            mode,
+            String::new(),
+        )?;
     }
 
     Ok(TransportConfig {
@@ -674,8 +666,8 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         cors_origins,
         body_limit_bytes,
         requests_per_minute,
-        openapi_enabled: parse_env("EnableSwagger", false)?,
-        static_root: env::var_os("CITADEL_RUST_STATIC_ROOT").map(PathBuf::from),
+        openapi_enabled: parse_env("CITADEL_HTTP_OPENAPI_ENABLED", false)?,
+        static_root: env::var_os("CITADEL_STATIC_ROOT").map(PathBuf::from),
     })
 }
 
@@ -687,7 +679,7 @@ fn parse_transport_mode(value: Option<&str>) -> Result<TransportMode, ConfigErro
         Some(value) if value.eq_ignore_ascii_case("direct") => Ok(TransportMode::Direct),
         Some(value) if value.eq_ignore_ascii_case("disabled") => Ok(TransportMode::Disabled),
         _ => Err(ConfigError::Invalid {
-            name: "Transport__Mode",
+            name: "CITADEL_TRANSPORT_MODE",
             message: "must be ReverseProxy, Direct, or Disabled".to_owned(),
         }),
     }
@@ -703,22 +695,29 @@ pub fn identity_keys_from_env() -> Result<(SecretBytes, SecretBytes), ConfigErro
     let root = env::var_os("CITADEL_DATA_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| "/app/data".into());
-    let jwt_key = match env::var("Jwt__Key").ok().filter(|v| !v.trim().is_empty()) {
-        Some(value) => Zeroizing::new(value),
-        None => keys::load_or_create(&root, "jwtsecret", "Jwt__Key")?,
-    };
-    if jwt_key.len() < 32 {
-        return Err(ConfigError::Invalid {
-            name: "Jwt__Key",
-            message: "must contain at least 32 bytes".to_owned(),
-        });
-    }
-    let encrypted_secrets_key = match env::var("Secrets__EncryptionKey")
+    let jwt_key = match env::var("CITADEL_JWT_KEY")
         .ok()
         .filter(|v| !v.trim().is_empty())
     {
         Some(value) => Zeroizing::new(value),
-        None => keys::load_or_create(&root, "secret-encryption-key", "Secrets__EncryptionKey")?,
+        None => keys::load_or_create(&root, "jwtsecret", "CITADEL_JWT_KEY")?,
+    };
+    if jwt_key.len() < 32 {
+        return Err(ConfigError::Invalid {
+            name: "CITADEL_JWT_KEY",
+            message: "must contain at least 32 bytes".to_owned(),
+        });
+    }
+    let encrypted_secrets_key = match env::var("CITADEL_SECRETS_ENCRYPTION_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
+        Some(value) => Zeroizing::new(value),
+        None => keys::load_or_create(
+            &root,
+            "secret-encryption-key",
+            "CITADEL_SECRETS_ENCRYPTION_KEY",
+        )?,
     };
     Ok((
         SecretBytes(Zeroizing::new(jwt_key.as_bytes().to_vec())),
@@ -731,10 +730,10 @@ pub fn recovery_encryption_key_from_env() -> Result<SecretBytes, ConfigError> {
     let root = env::var_os("CITADEL_DATA_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| "/app/data".into());
-    let encoded = match env::var("Secrets__EncryptionKey").ok().filter(|v| !v.trim().is_empty()) {
+    let encoded = match env::var("CITADEL_SECRETS_ENCRYPTION_KEY").ok().filter(|v| !v.trim().is_empty()) {
         Some(value) => Zeroizing::new(value),
         None => Zeroizing::new(std::fs::read_to_string(root.join("secret-encryption-key"))
-            .map_err(|_| ConfigError::Invalid { name: "Secrets__EncryptionKey", message: "restore requires the original key: configure it explicitly or restore secret-encryption-key into CITADEL_DATA_ROOT".into() })?),
+            .map_err(|_| ConfigError::Invalid { name: "CITADEL_SECRETS_ENCRYPTION_KEY", message: "restore requires the original key: configure it explicitly or restore secret-encryption-key into CITADEL_DATA_ROOT".into() })?),
     };
     decode_encryption_key(&encoded)
 }
@@ -745,13 +744,13 @@ fn decode_encryption_key(encoded: &str) -> Result<SecretBytes, ConfigError> {
             STANDARD
                 .decode(encoded.trim())
                 .map_err(|_| ConfigError::Invalid {
-                    name: "Secrets__EncryptionKey",
+                    name: "CITADEL_SECRETS_ENCRYPTION_KEY",
                     message: "must be a base64-encoded 32-byte key".into(),
                 })?,
         );
     if bytes.len() != 32 {
         return Err(ConfigError::Invalid {
-            name: "Secrets__EncryptionKey",
+            name: "CITADEL_SECRETS_ENCRYPTION_KEY",
             message: "must decode to exactly 32 bytes".into(),
         });
     }
@@ -763,50 +762,50 @@ fn identity_config_with_keys(
     jwt_key: SecretBytes,
     secret_encryption_key: SecretBytes,
 ) -> Result<IdentityConfig, ConfigError> {
-    let issuer = env::var("Jwt__Issuer").unwrap_or_else(|_| {
+    let issuer = env::var("CITADEL_JWT_ISSUER").unwrap_or_else(|_| {
         transport
             .public_url
             .as_str()
             .trim_end_matches('/')
             .to_owned()
     });
-    let audience = env::var("Jwt__Audience").unwrap_or_else(|_| issuer.clone());
+    let audience = env::var("CITADEL_JWT_AUDIENCE").unwrap_or_else(|_| issuer.clone());
     if issuer.trim().is_empty() || audience.trim().is_empty() {
         return Err(ConfigError::Invalid {
-            name: "Jwt__Issuer/Jwt__Audience",
+            name: "CITADEL_JWT_ISSUER/CITADEL_JWT_AUDIENCE",
             message: "must not be empty".to_owned(),
         });
     }
     let access_token_minutes = nonzero_seconds(
-        "Jwt__AccessToken__ValidForMinutes",
+        "CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES",
         DEFAULT_ACCESS_TOKEN_MINUTES,
     )?;
     let refresh_token_days = nonzero_seconds(
-        "Jwt__RefreshToken__ValidForDays",
+        "CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS",
         DEFAULT_REFRESH_TOKEN_DAYS,
     )?;
     let service_account_last_used_capacity = parse_env(
-        "ServiceAccounts__LastUsedTrackingCapacity",
+        "CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY",
         DEFAULT_SERVICE_ACCOUNT_LAST_USED_CAPACITY,
     )?;
     if service_account_last_used_capacity == 0 {
         return Err(ConfigError::Invalid {
-            name: "ServiceAccounts__LastUsedTrackingCapacity",
+            name: "CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY",
             message: "must be greater than zero".to_owned(),
         });
     }
     let password_policy = citadel_identity::PasswordPolicy::new(parse_env(
-        "Passwords__MinimumLength",
+        "CITADEL_PASSWORDS_MINIMUM_LENGTH",
         citadel_identity::MINIMUM_PASSWORD_CHARACTERS,
     )?)
     .map_err(|error| ConfigError::Invalid {
-        name: "Passwords__MinimumLength",
+        name: "CITADEL_PASSWORDS_MINIMUM_LENGTH",
         message: error.to_string(),
     })?;
     let mfa = mfa_config()?;
     Ok(IdentityConfig {
-        jwt_key_is_external: env::var("Jwt__Key").is_ok_and(|v| !v.trim().is_empty()),
-        encryption_key_is_external: env::var("Secrets__EncryptionKey")
+        jwt_key_is_external: env::var("CITADEL_JWT_KEY").is_ok_and(|v| !v.trim().is_empty()),
+        encryption_key_is_external: env::var("CITADEL_SECRETS_ENCRYPTION_KEY")
             .is_ok_and(|v| !v.trim().is_empty()),
         jwt_key,
         secret_encryption_key,
@@ -814,24 +813,27 @@ fn identity_config_with_keys(
         audience,
         access_token_lifetime: Duration::from_secs(access_token_minutes.checked_mul(60).ok_or(
             ConfigError::Invalid {
-                name: "Jwt__AccessToken__ValidForMinutes",
+                name: "CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES",
                 message: "is too large".to_owned(),
             },
         )?),
         refresh_token_lifetime: Duration::from_secs(refresh_token_days.checked_mul(86_400).ok_or(
             ConfigError::Invalid {
-                name: "Jwt__RefreshToken__ValidForDays",
+                name: "CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS",
                 message: "is too large".to_owned(),
             },
         )?),
         service_account_limits: service_account_limits()?,
         service_account_last_used_interval: Duration::from_secs(
-            nonzero_seconds("ServiceAccounts__LastUsedWriteIntervalMinutes", 5)?
-                .checked_mul(60)
-                .ok_or(ConfigError::Invalid {
-                    name: "ServiceAccounts__LastUsedWriteIntervalMinutes",
-                    message: "is too large".into(),
-                })?,
+            nonzero_seconds(
+                "CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES",
+                5,
+            )?
+            .checked_mul(60)
+            .ok_or(ConfigError::Invalid {
+                name: "CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES",
+                message: "is too large".into(),
+            })?,
         ),
         service_account_last_used_capacity,
         mfa,
@@ -840,7 +842,7 @@ fn identity_config_with_keys(
 }
 
 fn mfa_config() -> Result<MfaConfig, ConfigError> {
-    let policy_value = env::var("Mfa__Policy").unwrap_or_else(|_| "Optional".to_owned());
+    let policy_value = env::var("CITADEL_MFA_POLICY").unwrap_or_else(|_| "Optional".to_owned());
     let policy = MfaPolicy::ALL
         .iter()
         .copied()
@@ -850,31 +852,35 @@ fn mfa_config() -> Result<MfaConfig, ConfigError> {
                 .eq_ignore_ascii_case(policy_value.trim())
         })
         .ok_or_else(|| ConfigError::Invalid {
-            name: "Mfa__Policy",
+            name: "CITADEL_MFA_POLICY",
             message: "must be Optional, RequiredForAdministrators, or RequiredForAllUsers"
                 .to_owned(),
         })?;
     let challenge_minutes = nonzero_seconds(
-        "Mfa__ChallengeLifetimeMinutes",
+        "CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES",
         DEFAULT_MFA_CHALLENGE_MINUTES,
     )?;
-    let setup_minutes = nonzero_seconds("Mfa__SetupLifetimeMinutes", DEFAULT_MFA_SETUP_MINUTES)?;
-    let attempts_setting = if env::var_os("Mfa__MaxFailedAttempts").is_some() {
-        "Mfa__MaxFailedAttempts"
-    } else {
-        "Mfa__MaximumFailedAttempts" // Historical Rust alias.
-    };
-    let maximum_failed_attempts = parse_env(attempts_setting, DEFAULT_MFA_MAXIMUM_FAILED_ATTEMPTS)?;
+    let setup_minutes = nonzero_seconds(
+        "CITADEL_MFA_SETUP_LIFETIME_MINUTES",
+        DEFAULT_MFA_SETUP_MINUTES,
+    )?;
+    let maximum_failed_attempts = parse_env(
+        "CITADEL_MFA_MAX_FAILED_ATTEMPTS",
+        DEFAULT_MFA_MAXIMUM_FAILED_ATTEMPTS,
+    )?;
     if maximum_failed_attempts <= 0 {
         return Err(ConfigError::Invalid {
-            name: attempts_setting,
+            name: "CITADEL_MFA_MAX_FAILED_ATTEMPTS",
             message: "must be greater than zero".to_owned(),
         });
     }
-    let recovery_code_count = parse_env("Mfa__RecoveryCodeCount", DEFAULT_MFA_RECOVERY_CODE_COUNT)?;
+    let recovery_code_count = parse_env(
+        "CITADEL_MFA_RECOVERY_CODE_COUNT",
+        DEFAULT_MFA_RECOVERY_CODE_COUNT,
+    )?;
     if recovery_code_count == 0 || recovery_code_count > 100 {
         return Err(ConfigError::Invalid {
-            name: "Mfa__RecoveryCodeCount",
+            name: "CITADEL_MFA_RECOVERY_CODE_COUNT",
             message: "must be between 1 and 100".to_owned(),
         });
     }
@@ -882,13 +888,13 @@ fn mfa_config() -> Result<MfaConfig, ConfigError> {
         policy,
         challenge_lifetime: Duration::from_secs(challenge_minutes.checked_mul(60).ok_or(
             ConfigError::Invalid {
-                name: "Mfa__ChallengeLifetimeMinutes",
+                name: "CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES",
                 message: "is too large".to_owned(),
             },
         )?),
         setup_lifetime: Duration::from_secs(setup_minutes.checked_mul(60).ok_or(
             ConfigError::Invalid {
-                name: "Mfa__SetupLifetimeMinutes",
+                name: "CITADEL_MFA_SETUP_LIFETIME_MINUTES",
                 message: "is too large".to_owned(),
             },
         )?),
@@ -959,17 +965,25 @@ fn split_values(value: Option<&str>, separator: char) -> Result<Vec<String>, Con
 }
 
 fn indexed_env(prefix: &str) -> Result<Vec<String>, ConfigError> {
-    let mut entries = env::vars()
-        .filter_map(|(name, value)| {
-            name.strip_prefix(prefix)
-                .and_then(|index| index.parse::<usize>().ok())
-                .map(|index| (index, value))
-        })
-        .collect::<Vec<_>>();
+    let mut entries = Vec::new();
+    for (name, value) in env::vars_os() {
+        let Some(index) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix(prefix))
+            .and_then(|index| index.parse::<usize>().ok())
+        else {
+            continue;
+        };
+        let value = value.into_string().map_err(|_| ConfigError::Invalid {
+            name: "CITADEL_HTTP_CORS_ORIGIN_N",
+            message: "origins must be valid UTF-8".to_owned(),
+        })?;
+        entries.push((index, value));
+    }
     entries.sort_by_key(|(index, _)| *index);
     if entries.iter().any(|(_, value)| value.trim().is_empty()) {
         return Err(ConfigError::Invalid {
-            name: "Cors__N",
+            name: "CITADEL_HTTP_CORS_ORIGIN_N",
             message: "origins cannot be empty".to_owned(),
         });
     }
@@ -977,24 +991,24 @@ fn indexed_env(prefix: &str) -> Result<Vec<String>, ConfigError> {
 }
 
 fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
-    if !parse_env("CITADEL_RUST_REALTIME_ENABLED", true)? {
+    if !parse_env("CITADEL_REALTIME_ENABLED", true)? {
         return Ok(None);
     }
     let queue_capacity = parse_env(
-        "CITADEL_RUST_REALTIME_QUEUE_CAPACITY",
+        "CITADEL_REALTIME_QUEUE_CAPACITY",
         DEFAULT_REALTIME_QUEUE_CAPACITY,
     )?;
     let snapshot_limit = parse_env(
-        "CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
+        "CITADEL_REALTIME_SNAPSHOT_LIMIT",
         DEFAULT_REALTIME_SNAPSHOT_LIMIT,
     )?;
     let max_connections = parse_env(
-        "CITADEL_RUST_REALTIME_MAX_CONNECTIONS",
+        "CITADEL_REALTIME_MAX_CONNECTIONS",
         DEFAULT_REALTIME_MAX_CONNECTIONS,
     )?;
     if queue_capacity == 0 || snapshot_limit == 0 || max_connections == 0 {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_RUST_REALTIME_QUEUE_CAPACITY/CITADEL_RUST_REALTIME_MAX_CONNECTIONS/CITADEL_RUST_REALTIME_SNAPSHOT_LIMIT",
+            name: "CITADEL_REALTIME_QUEUE_CAPACITY/CITADEL_REALTIME_MAX_CONNECTIONS/CITADEL_REALTIME_SNAPSHOT_LIMIT",
             message: "values must be greater than zero".to_owned(),
         });
     }
@@ -1002,15 +1016,15 @@ fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
         queue_capacity,
         max_connections,
         subscribe_timeout: Duration::from_secs(nonzero_seconds(
-            "CITADEL_RUST_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS",
+            "CITADEL_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS",
             DEFAULT_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS,
         )?),
         send_timeout: Duration::from_secs(nonzero_seconds(
-            "CITADEL_RUST_REALTIME_SEND_TIMEOUT_SECONDS",
+            "CITADEL_REALTIME_SEND_TIMEOUT_SECONDS",
             DEFAULT_REALTIME_SEND_TIMEOUT_SECONDS,
         )?),
         authorization_recheck_interval: Duration::from_secs(nonzero_seconds(
-            "CITADEL_RUST_REALTIME_AUTH_RECHECK_SECONDS",
+            "CITADEL_REALTIME_AUTH_RECHECK_SECONDS",
             DEFAULT_REALTIME_AUTH_RECHECK_SECONDS,
         )?),
         snapshot_limit,
@@ -1018,12 +1032,12 @@ fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
 }
 
 fn agent_config(allow_insecure: bool) -> Result<Option<AgentConfig>, ConfigError> {
-    let address = env::var("CITADEL_RUST_AGENT_ADDRESS").ok();
-    let private_key_path = env::var_os("CITADEL_RUST_AGENT_PRIVATE_KEY_PATH");
+    let address = env::var("CITADEL_CORE_AGENT_ADDRESS").ok();
+    let private_key_path = env::var_os("CITADEL_CORE_AGENT_PRIVATE_KEY_PATH");
     match (address, private_key_path) {
         (None, None) => Ok(None),
         (Some(address), Some(private_key_path)) if !address.trim().is_empty() => {
-            let timeout = required_nonzero_seconds("CITADEL_RUST_AGENT_TIMEOUT_SECONDS")?;
+            let timeout = required_nonzero_seconds("CITADEL_CORE_AGENT_TIMEOUT_SECONDS")?;
             Ok(Some(AgentConfig {
                 address,
                 private_key_path: PathBuf::from(private_key_path),
@@ -1033,7 +1047,7 @@ fn agent_config(allow_insecure: bool) -> Result<Option<AgentConfig>, ConfigError
             }))
         }
         _ => Err(ConfigError::Invalid {
-            name: "CITADEL_RUST_AGENT_ADDRESS/CITADEL_RUST_AGENT_PRIVATE_KEY_PATH",
+            name: "CITADEL_CORE_AGENT_ADDRESS/CITADEL_CORE_AGENT_PRIVATE_KEY_PATH",
             message: "both values must be set together and the address must not be empty"
                 .to_owned(),
         }),
@@ -1041,17 +1055,10 @@ fn agent_config(allow_insecure: bool) -> Result<Option<AgentConfig>, ConfigError
 }
 
 fn database_url() -> Result<(String, &'static str), ConfigError> {
-    if let Ok(value) = env::var("DATABASE_URL") {
+    if let Ok(value) = env::var("CITADEL_DATABASE_URL") {
         validate_database_url(&value)?;
-        return Ok((value, "DATABASE_URL"));
+        return Ok((value, "CITADEL_DATABASE_URL"));
     }
-    if let Ok(value) = env::var("ConnectionStrings__Postgres") {
-        return Ok((
-            dotnet_connection_string_to_url(&value)?,
-            "ConnectionStrings__Postgres",
-        ));
-    }
-
     let user = env::var("PG_USER").map_err(|_| ConfigError::MissingDatabase)?;
     let password = env::var("PG_PASSWORD").map_err(|_| ConfigError::MissingDatabase)?;
     let database = env::var("PG_DATABASE").map_err(|_| ConfigError::MissingDatabase)?;
@@ -1061,33 +1068,6 @@ fn database_url() -> Result<(String, &'static str), ConfigError> {
         build_database_url(&host, port, &database, &user, &password)?,
         "PG_*",
     ))
-}
-
-fn dotnet_connection_string_to_url(value: &str) -> Result<String, ConfigError> {
-    let values = value
-        .split(';')
-        .filter_map(|part| part.split_once('='))
-        .map(|(key, value)| (key.trim().to_ascii_lowercase(), value.trim().to_owned()))
-        .collect::<HashMap<_, _>>();
-    let required = |keys: &[&str]| {
-        keys.iter()
-            .find_map(|key| values.get(*key))
-            .cloned()
-            .ok_or(ConfigError::MissingDatabase)
-    };
-    let host = required(&["host", "server"])?;
-    let database = required(&["database", "initial catalog"])?;
-    let user = required(&["username", "user id", "user"])?;
-    let password = required(&["password"])?;
-    let port = values.get("port").map_or(Ok(5432), |value| {
-        value
-            .parse()
-            .map_err(|error: std::num::ParseIntError| ConfigError::Invalid {
-                name: "ConnectionStrings__Postgres Port",
-                message: error.to_string(),
-            })
-    })?;
-    build_database_url(&host, port, &database, &user, &password)
 }
 
 fn build_database_url(
@@ -1121,12 +1101,12 @@ fn build_database_url(
 
 fn validate_database_url(value: &str) -> Result<(), ConfigError> {
     let url = Url::parse(value).map_err(|error| ConfigError::Invalid {
-        name: "DATABASE_URL",
+        name: "CITADEL_DATABASE_URL",
         message: error.to_string(),
     })?;
     if !matches!(url.scheme(), "postgres" | "postgresql") {
         return Err(ConfigError::Invalid {
-            name: "DATABASE_URL",
+            name: "CITADEL_DATABASE_URL",
             message: "scheme must be postgres or postgresql".to_owned(),
         });
     }
@@ -1135,25 +1115,31 @@ fn validate_database_url(value: &str) -> Result<(), ConfigError> {
 
 fn service_account_limits() -> Result<citadel_identity::ServiceAccountLimitsDetails, ConfigError> {
     let limits = citadel_identity::ServiceAccountLimitsDetails {
-        default_token_lifetime_days: parse_env("ServiceAccounts__DefaultTokenLifetimeDays", 90)?,
-        maximum_token_lifetime_days: parse_env("ServiceAccounts__MaximumTokenLifetimeDays", 365)?,
+        default_token_lifetime_days: parse_env(
+            "CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS",
+            90,
+        )?,
+        maximum_token_lifetime_days: parse_env(
+            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS",
+            365,
+        )?,
         maximum_active_tokens_per_account: parse_env(
-            "ServiceAccounts__MaximumActiveTokensPerAccount",
+            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT",
             10,
         )?,
     };
     for (name, valid) in [
         (
-            "ServiceAccounts__DefaultTokenLifetimeDays",
+            "CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS",
             limits.default_token_lifetime_days > 0,
         ),
         (
-            "ServiceAccounts__MaximumTokenLifetimeDays",
+            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS",
             limits.maximum_token_lifetime_days >= limits.default_token_lifetime_days
                 && limits.maximum_token_lifetime_days <= 365_000,
         ),
         (
-            "ServiceAccounts__MaximumActiveTokensPerAccount",
+            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT",
             limits.maximum_active_tokens_per_account > 0,
         ),
     ] {
@@ -1166,13 +1152,16 @@ fn service_account_limits() -> Result<citadel_identity::ServiceAccountLimitsDeta
 
 fn automation_options() -> Result<citadel_automation::AutomationOptions, ConfigError> {
     let options = citadel_automation::AutomationOptions {
-        enabled: parse_env("Automations__Enabled", true)?,
-        max_parallel_runs: parse_env("Automations__MaxParallelRuns", 4)?,
-        default_timeout_seconds: parse_env("Automations__DefaultTimeoutSeconds", 300)?,
-        max_timeout_seconds: parse_env("Automations__MaxTimeoutSeconds", 1800)?,
-        poll_interval: Duration::from_secs(parse_env("Automations__PollIntervalSeconds", 2)?),
+        enabled: parse_env("CITADEL_AUTOMATIONS_ENABLED", true)?,
+        max_parallel_runs: parse_env("CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS", 4)?,
+        default_timeout_seconds: parse_env("CITADEL_AUTOMATIONS_DEFAULT_TIMEOUT_SECONDS", 300)?,
+        max_timeout_seconds: parse_env("CITADEL_AUTOMATIONS_MAX_TIMEOUT_SECONDS", 1800)?,
+        poll_interval: Duration::from_secs(parse_env(
+            "CITADEL_AUTOMATIONS_POLL_INTERVAL_SECONDS",
+            2,
+        )?),
         schedule_poll_interval: Duration::from_secs(parse_env(
-            "Automations__SchedulePollIntervalSeconds",
+            "CITADEL_AUTOMATIONS_SCHEDULE_POLL_INTERVAL_SECONDS",
             30,
         )?),
     };
@@ -1245,13 +1234,13 @@ impl std::str::FromStr for LogFormat {
 }
 
 pub fn log_format_from_env() -> Result<LogFormat, ConfigError> {
-    parse_env("LogFormat", LogFormat::default())
+    parse_env("CITADEL_LOG_FORMAT", LogFormat::default())
 }
 
 /// Color is independent of format and defaults to interactive terminals only.
 pub fn log_color_from_env() -> Result<bool, ConfigError> {
     use std::io::IsTerminal;
-    parse_env("EnableLogColor", std::io::stdout().is_terminal())
+    parse_env("CITADEL_LOG_COLOR_ENABLED", std::io::stdout().is_terminal())
 }
 
 #[cfg(test)]
@@ -1259,15 +1248,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_dotnet_connection_string_without_exposing_password() {
-        let url = dotnet_connection_string_to_url(
-            "Host=pg_db;Database=citadel;Username=app;Password=a b#c;Port=5433",
-        )
-        .unwrap();
+    fn component_database_credentials_are_escaped() {
+        let url = build_database_url("pg_db", 5433, "citadel", "user@host", "a b#c").unwrap();
         let parsed = Url::parse(&url).unwrap();
         assert_eq!(parsed.host_str(), Some("pg_db"));
         assert_eq!(parsed.port(), Some(5433));
         assert_eq!(parsed.path(), "/citadel");
+        assert_eq!(parsed.username(), "user%40host");
         assert_eq!(parsed.password(), Some("a%20b%23c"));
     }
 

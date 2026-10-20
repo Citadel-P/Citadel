@@ -8,16 +8,16 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://citadel:citadel@postgres:5432/citadel
-      Transport__Mode: Disabled
-      Transport__PublicUrl: http://localhost:8000
-      Cors__0: http://localhost:5173
-      Cors__1: http://127.0.0.1:5173
-      Jwt__Key: citadel-development-jwt-key-at-least-32-bytes
-      Secrets__EncryptionKey: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
+      CITADEL_DATABASE_URL: postgres://citadel:citadel@postgres:5432/citadel
+      CITADEL_TRANSPORT_MODE: Disabled
+      CITADEL_PUBLIC_URL: http://localhost:8000
+      CITADEL_HTTP_CORS_ORIGIN_0: http://localhost:5173
+      CITADEL_HTTP_CORS_ORIGIN_1: http://127.0.0.1:5173
+      CITADEL_JWT_KEY: citadel-development-jwt-key-at-least-32-bytes
+      CITADEL_SECRETS_ENCRYPTION_KEY: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
       # Bypass the feature's socat proxy: its half-close timeout truncates exec/run output.
       DOCKER_HOST: unix:///var/run/docker-host.sock
-      CITADEL_RUST_DOCKER_SOCKET: /var/run/docker-host.sock
+      CITADEL_DOCKER_SOCKET: /var/run/docker-host.sock
       CITADEL_DATA_ROOT: /home/vscode/.local/share/citadel
       CARGO_TARGET_DIR: /home/vscode/.cache/citadel-target
       SQLX_OFFLINE: "true"

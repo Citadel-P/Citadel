@@ -66,7 +66,9 @@ describe('Platform deletion navigation', () => {
       await user.type(dialog.getByRole('textbox'), platform.name);
       await user.click(dialog.getByRole('button', { name: 'Delete' }));
 
-      await waitFor(() => expect(errorToast).toHaveBeenCalledWith('Request failed', { description: 'Deletion failed' }));
+      await waitFor(() =>
+        expect(errorToast).toHaveBeenCalledWith('Request failed', { description: 'Deletion failed' }),
+      );
       expect(screen.getByRole('dialog')).toBeVisible();
       expect(dialog.getByRole('textbox')).toHaveValue(platform.name);
       await waitFor(() => expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled());

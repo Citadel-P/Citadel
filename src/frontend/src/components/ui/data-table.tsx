@@ -53,6 +53,8 @@ export function DataTable<TData extends Identifiable, TValue>({
   const lastSelectionRef = useRef<{ ids?: string; rows?: TData[] }>({});
   const onSelectionChangeRef = useRef(onSelectionChange);
 
+  // TanStack Table intentionally exposes mutable instance methods; keep this call outside compiler memoization.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

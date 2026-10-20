@@ -1,13 +1,14 @@
 //! Restricted node operations. Validate helper requests before any Docker mutation.
-use citadel_adapters::external::backups::bind_mount::{
-    BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT, validate_bind_path,
-};
 use citadel_contracts::citadel::{
     containers::v1::{CreateContainerRequest, ExecBinaryRequest},
     edge::v1::EdgeCommandKind,
     shared_models::v1::Mount,
     volumes::v1::CreateVolumeRequest,
 };
+use citadel_docker::bind_mount::BIND_BACKUP_SCRIPT;
+use citadel_docker::bind_mount::BIND_PATH_PROBE;
+use citadel_docker::bind_mount::BIND_RESTORE_SCRIPT;
+use citadel_docker::bind_mount::validate_bind_path;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -749,7 +750,7 @@ mod bind_tests {
 // Current-data copying has a separate exact helper shape. Ordinary backup
 // helpers keep their existing single-mount and remote-repository restrictions.
 pub(super) fn current_copy_helper(r: &CreateContainerRequest, platform: Uuid) -> bool {
-    use citadel_adapters::external::backups::current_copy::COPY_JOB_LABEL;
+    use citadel_docker::current_copy::COPY_JOB_LABEL;
     let Some(job) = r
         .labels
         .get(COPY_JOB_LABEL)
@@ -781,7 +782,7 @@ pub(super) fn current_copy_helper(r: &CreateContainerRequest, platform: Uuid) ->
         && r.mounts[0].source != r.mounts[1].source
 }
 pub(super) fn current_copy_exec(r: &ExecBinaryRequest) -> bool {
-    use citadel_adapters::external::backups::current_copy::CURRENT_COPY_SCRIPT;
+    use citadel_docker::current_copy::CURRENT_COPY_SCRIPT;
     !r.tty
         && r.cmd == ["/bin/sh", "-ec", CURRENT_COPY_SCRIPT]
         && r.env.len() == 2
@@ -794,7 +795,8 @@ pub(super) fn current_copy_exec(r: &ExecBinaryRequest) -> bool {
 #[cfg(test)]
 mod current_copy_tests {
     use super::*;
-    use citadel_adapters::external::backups::current_copy::{COPY_JOB_LABEL, CURRENT_COPY_SCRIPT};
+    use citadel_docker::current_copy::COPY_JOB_LABEL;
+    use citadel_docker::current_copy::CURRENT_COPY_SCRIPT;
 
     #[test]
     fn current_copy_requires_isolated_read_only_source_and_exact_script() {

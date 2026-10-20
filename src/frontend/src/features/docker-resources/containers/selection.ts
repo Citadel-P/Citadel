@@ -12,9 +12,7 @@ export const filterVisibleContainers = <T extends Pick<ContainerView, 'isSwarmTa
 
 export const normalizeContainerSelection = (selectedRows: ContainerActionResource[]) => {
   const groupedContainerIds = new Set(
-    selectedRows
-      .filter(isContainerStackGroup)
-      .flatMap((group) => group.containers.map((container) => container.id)),
+    selectedRows.filter(isContainerStackGroup).flatMap((group) => group.containers.map((container) => container.id)),
   );
   const seen = new Set<string>();
 

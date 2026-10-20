@@ -12,7 +12,7 @@ const acknowledgeAction: ActionConfig<AlertEventListItem, 'acknowledgeAlertEvent
   type: 'command',
   icon: Check,
   mutateKey: 'acknowledgeAlertEvents',
-  useVariables: (resources) => ({ ids: useIds(resources) }),
+  useVariables: (resources) => ({ data: { ids: useIds(resources) } }),
   canExecute: (resources) => {
     const can = (resource: AlertEventListItem) => resource.status === AlertEventStatus.Active;
     return Array.isArray(resources) ? resources.every(can) : can(resources);
@@ -24,7 +24,7 @@ const resolveAction: ActionConfig<AlertEventListItem, 'resolveAlertEvents'> = {
   type: 'command',
   icon: CheckCheck,
   mutateKey: 'resolveAlertEvents',
-  useVariables: (resources) => ({ ids: useIds(resources), resolutionNote: null }),
+  useVariables: (resources) => ({ data: { ids: useIds(resources), resolutionNote: null } }),
   canExecute: (resources) => {
     const can = (resource: AlertEventListItem) => resource.status !== AlertEventStatus.Resolved;
     return Array.isArray(resources) ? resources.every(can) : can(resources);

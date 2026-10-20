@@ -1,9 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import {
-  AuthorizedGitRepositoryView,
-  GitRepositoryStatus,
-  ResourceControlState,
-} from '@/api/generated/api.types';
+import { AuthorizedGitRepositoryView, GitRepositoryStatus, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';

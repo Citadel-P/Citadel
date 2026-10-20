@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RefreshCw } from 'lucide-react';
@@ -197,4 +198,35 @@ describe('action failure recovery', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(run).toHaveBeenCalledTimes(2);
   });
+});
+
+it('remounts toggle branches with different hooks and cleans up the previous branch', () => {
+  const cleanup = vi.fn();
+  const { info } = createActionsBuilder<{ name: string; running: boolean }>()
+    .addAction({
+      key: 'toggle',
+      type: 'toggle',
+      predicate: (resource) => resource.running,
+      primary: {
+        title: 'Start',
+        icon: RefreshCw,
+        useHandler: () => {
+          const [value] = useState('start');
+          useEffect(() => cleanup, []);
+          return {
+            run: () => {
+              expect(value).toBe('start');
+            },
+          };
+        },
+      },
+      secondary: { title: 'Stop', icon: RefreshCw, useHandler: () => ({ run: vi.fn() }) },
+    })
+    .build();
+  const Action = info.toggle;
+  const view = render(<Action resource={{ name: 'test', running: false }} />);
+  expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled();
+  view.rerender(<Action resource={{ name: 'test', running: true }} />);
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();
+  expect(cleanup).toHaveBeenCalledOnce();
 });

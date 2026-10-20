@@ -178,7 +178,7 @@ export const Roles = ({ items, isLoading }: { items: RoleView[]; isLoading: bool
     if (selectedRoleId === role.id) {
       setSelectedRoleId(null);
     }
-    deleteRoles({ ids: [role.id] });
+    deleteRoles({ data: { ids: [role.id] } });
   };
 
   return (
@@ -352,7 +352,7 @@ const CreateRoleDialog = ({
 
   const handleCreate = () => {
     const permissions = buildPermissionInputs(selectedPermissions);
-    mutate({ name: roleName, permissions });
+    mutate({ data: { name: roleName, permissions } });
   };
 
   return (

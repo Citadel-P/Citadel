@@ -10,7 +10,7 @@ publishing credentials or access to the project's hosting environments.
 | --- | --- |
 | CI | Pinned native NBGV/version and promotion policy fixtures, digest-transfer testing between two local registries; Rust source ownership and isolated build context; formatting; generated Docker API, database schema, OpenAPI and frontend client; workspace Clippy and tests; database regressions; frontend types and unit tests |
 | Documentation | Content and links, site configuration regressions, lint and types, static product export, public schema validation, independent ReDoc export, and smoke checks |
-| Reusable Core/Agent candidates | Native amd64 and arm64 validation, both packaged runtime checks, Direct/Edge/live Docker tests and complete Core/Agent acceptance; mixed-version fixtures can also exercise compatibility with released images |
+| Reusable Core/Agent candidates | Native amd64 and arm64 validation, both packaged runtime checks, Direct/Edge/live Docker tests and complete Core/Agent acceptance for the current checkout |
 
 Version resolution and release preflight run first. If either fails, downstream
 validation and image builds are skipped. After preflight succeeds, Rust
@@ -56,6 +56,8 @@ both production images. The cleanup is skipped on self-hosted runners. Database
 fixtures must use unique Docker service IDs and bootstrap token hashes because
 most regression suites share one database and the production schema enforces
 uniqueness. Platform HTTP tests use an isolated database per fixture.
+Resource Copy HTTP regressions use a separate fresh execution database so their
+authorized catalog reads do not encounter partial rows from inventory fixtures.
 
 Agent compatibility executables are compiled in `Dockerfile.agent`'s pinned `rust-source`
 stage, then run inside the tested Agent image. Host-built binaries can require a

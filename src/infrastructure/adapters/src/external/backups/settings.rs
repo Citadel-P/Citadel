@@ -31,7 +31,7 @@ impl BackupExecutionSettings {
                 return Ok(path);
             }
         }
-        Err("Core repository path is outside Backups__AllowedCorePaths.".into())
+        Err("Core repository path is outside CITADEL_BACKUPS_ALLOWED_CORE_PATH_N.".into())
     }
 }
 

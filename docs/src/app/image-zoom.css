@@ -1,0 +1,36 @@
+/* Keep Fumadocs' zoom trigger available to keyboard users. */
+[data-rmiz-ghost] > [data-rmiz-btn-zoom] {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
+  color: var(--citadel-accent);
+  opacity: 0;
+}
+
+[data-rmiz-ghost] > [data-rmiz-btn-zoom]:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--citadel-focus);
+  outline-offset: 3px;
+}
+
+[data-rmiz-modal-content] > [data-rmiz-btn-unzoom] {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  inset-block-start: 1rem;
+  inset-inline-end: 1rem;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--citadel-rule);
+  border-radius: 0.5rem;
+  background: var(--citadel-surface);
+  color: var(--citadel-text);
+  cursor: zoom-out;
+}
+
+[data-rmiz-modal-content] > [data-rmiz-btn-unzoom]:focus-visible {
+  outline: 2px solid var(--citadel-focus);
+  outline-offset: 3px;
+}

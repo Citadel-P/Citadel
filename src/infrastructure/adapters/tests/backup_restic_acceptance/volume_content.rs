@@ -1,6 +1,6 @@
 use super::*;
-use citadel_adapters::connectors::docker::DockerClient;
 use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter;
+use citadel_docker::client::DockerClient;
 use futures_util::StreamExt;
 
 pub(super) async fn verify(

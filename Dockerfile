@@ -102,4 +102,4 @@ CMD ["serve"]
 FROM runtime-base AS final
 COPY --from=build --chown=65532:0 /tmp/citadel-server /app/citadel-server
 COPY --from=frontend-build /source/src/frontend/dist /app/wwwroot
-ENV CITADEL_RUST_STATIC_ROOT=/app/wwwroot
+ENV CITADEL_STATIC_ROOT=/app/wwwroot

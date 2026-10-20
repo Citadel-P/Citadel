@@ -12,7 +12,7 @@ vi.mock('@/lib/hooks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/hooks')>()),
   useRead: read,
 }));
-vi.mock('.', () => ({ ImageName: () => null }));
+vi.mock('./image-name', () => ({ ImageName: () => null }));
 beforeEach(() => read.mockReset().mockReturnValue({ data: undefined, isLoading: false }));
 
 describe('Container overview visibility', () => {

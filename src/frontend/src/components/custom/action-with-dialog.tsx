@@ -75,6 +75,8 @@ export const ActionButton = forwardRef<
     return (
       <Tooltip>
         <TooltipTrigger asChild>
+          {/* Disabled buttons cannot receive focus; this wrapper exposes their reason to keyboard users. */}
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
           <span className="inline-flex min-w-max flex-1 cursor-not-allowed" tabIndex={0}>
             {button}
           </span>
@@ -108,7 +110,7 @@ export const ConfirmButton = forwardRef<
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
-        onClick && onClick(e);
+        onClick?.(e);
       }}
       loading={loading}
       className={className}
@@ -169,6 +171,7 @@ export const ActionWithDialog = ({
     [controlledOpen, onOpenChange],
   );
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { input, setInput, isLoading, isConfirmDisabled, handleConfirm } = useConfirmByName({
     name,
     disabled,
@@ -205,24 +208,35 @@ export const ActionWithDialog = ({
           />
         </DialogTrigger>
       )}
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          inputRef.current?.focus();
+        }}>
         <DialogHeader>
           <DialogTitle>Confirm {title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4">
           {items && <ActionSelectionList items={items} />}
-          <p
-            onClick={() => {
-              navigator.clipboard.writeText(name);
-              toast(`Copied "${name}" to clipboard!`);
-            }}
-            className="cursor-pointer break-all">
-            Please enter <b>{name}</b> below to confirm this action.
+          <p className="break-all">
+            Please enter{' '}
+            <button
+              type="button"
+              aria-label={`Copy ${name}`}
+              className="font-bold underline decoration-dotted"
+              onClick={() => {
+                void navigator.clipboard.writeText(name);
+                toast(`Copied "${name}" to clipboard!`);
+              }}>
+              {name}
+            </button>{' '}
+            below to confirm this action.
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
           </p>
           <Input
+            ref={inputRef}
             aria-label={`Enter ${name} to confirm`}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -297,6 +311,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
 }) => {
   const [open, setOpen] = useState(false);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [selected, _] = useSelectedResources<T>(type);
   const { input, setInput, isLoading, isConfirmDisabled, handleConfirm, reset } = useConfirmByName({
     name,
@@ -332,25 +347,36 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
           variant={variant}
         />
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          inputRef.current?.focus();
+        }}>
         <DialogHeader>
           <DialogTitle>Group Execute - {title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="flex flex-col gap-4 my-4 whitespace-nowrap overflow-x-auto">
           <ActionSelectionList items={selected} />
-          <p
-            onClick={() => {
-              navigator.clipboard.writeText(name);
-              toast(`Copied "${name}" to clipboard!`);
-            }}
-            className="cursor-pointer">
-            Please enter <b>{name}</b> below to confirm this action.
+          <p className="break-all">
+            Please enter{' '}
+            <button
+              type="button"
+              aria-label={`Copy ${name}`}
+              className="font-bold underline decoration-dotted"
+              onClick={() => {
+                void navigator.clipboard.writeText(name);
+                toast(`Copied "${name}" to clipboard!`);
+              }}>
+              {name}
+            </button>{' '}
+            below to confirm this action.
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
           </p>
           <div className="p-1">
             <Input
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="focus-visible:ring-1 shadow-xs"
@@ -373,3 +399,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
     </Dialog>
   );
 };
+
+ActionButton.displayName = 'ActionButton';
+
+ConfirmButton.displayName = 'ConfirmButton';

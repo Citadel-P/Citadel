@@ -347,13 +347,13 @@ impl PostgresBackupPersistence {
         &'a self,
         claim: &'a BackupClaim,
         result: &'a BackupExecutionResult,
-    ) -> BoxFuture<'a, Result<(), BackupError>> {
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let finished = sqlx::query("UPDATE backupruns SET status=$2,snapshotavailability=$3,resticsnapshotid=$4,parentsnapshotid=$5,filesprocessed=$6,bytesprocessed=$7,bytesadded=$8,exitcode=$9,errorcode=$10,errormessage=$11,warnings=$12,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running'").bind(claim.run.id).bind(result.status.as_str()).bind(result.snapshot_availability.as_str()).bind(&result.restic_snapshot_id).bind(&result.parent_snapshot_id).bind(result.files_processed).bind(result.bytes_processed).bind(result.bytes_added).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).bind(sqlx::types::Json(&result.warnings)).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if finished == 0 {
                 tx.rollback().await.map_err(storage)?;
-                return Ok(());
+                return Ok(false);
             }
             for item in &result.items {
                 sqlx::query("UPDATE backuprunitems SET status=$3,resticsnapshotid=$4,parentsnapshotid=$5,filesprocessed=$6,bytesprocessed=$7,bytesadded=$8,exitcode=$9,errorcode=$10,errormessage=$11,startedat=COALESCE(startedat,CURRENT_TIMESTAMP),completedat=CURRENT_TIMESTAMP,updatedat=CURRENT_TIMESTAMP WHERE id=$1 AND backuprunid=$2 AND status IN ('Queued','Running')")
@@ -413,7 +413,7 @@ impl PostgresBackupPersistence {
             .await?;
             record_run_activity(&mut tx, claim.run.id).await?;
             tx.commit().await.map_err(storage)?;
-            Ok(())
+            Ok(true)
         })
     }
 }

@@ -59,7 +59,7 @@ requiredness, and error status coverage. It does not claim field-level parity:
 the former check only compared matching `$ref` names and missed field drift.
 Serialization and HTTP tests cover request/response behavior.
 
-With `EnableSwagger=true`, the running API serves the same Utoipa documents at
+With `CITADEL_HTTP_OPENAPI_ENABLED=true`, the running API serves the same Utoipa documents at
 `/openapi/v1.json` and `/openapi/public/v1.json`. It no longer embeds potentially
 stale generated JSON files. The existing setting still defaults to disabled. The frontend uses this same full contract. `openapi --check` remains read-only and
 does not require Node.js; `npm run api:verify` checks generated frontend freshness.
@@ -99,7 +99,7 @@ and response headers.
 Bearer documentation describes both User JWTs and Service Account tokens; shared
 error responses document 429 using `application/problem+json`.
 
-With `EnableSwagger=true`, `/swagger/` serves embedded Swagger UI assets, the custom
+With `CITADEL_HTTP_OPENAPI_ENABLED=true`, `/swagger/` serves embedded Swagger UI assets, the custom
 operation-ID stylesheet, deep links, operation IDs, request durations, enabled
 Try it out and persisted authorization. No CDN is needed. Both JSON endpoints add
 the request origin after transport Host/proxy validation and return `no-store`;

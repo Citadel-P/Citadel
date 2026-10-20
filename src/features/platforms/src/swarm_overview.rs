@@ -1,6 +1,6 @@
 use crate::WorkloadStatusCounts;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SwarmSummary {
     pub is_stale: bool,
     pub node_count: i64,

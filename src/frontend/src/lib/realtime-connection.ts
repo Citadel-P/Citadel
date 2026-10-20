@@ -8,7 +8,7 @@ export const RealtimeConnectionState = {
 
 export type RealtimeConnectionState = (typeof RealtimeConnectionState)[keyof typeof RealtimeConnectionState];
 
-// The event/group contract shared by Citadel transports, not a SignalR protocol.
+// The current WebSocket event/group interface used by resource subscriptions.
 export interface RealtimeConnection {
   readonly state: RealtimeConnectionState;
   start(): Promise<void>;

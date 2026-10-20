@@ -9,7 +9,12 @@ const trailingChars = '...';
  * @param noTrail If true, the trailing ellipsis will not be added. Defaults to false.
  * @returns The truncated string.
  */
-export function truncate(value: string, limit: number = 18, dir: 'left' | 'right' = 'right', noTrail: boolean = false): string {
+export function truncate(
+  value: string,
+  limit: number = 18,
+  dir: 'left' | 'right' = 'right',
+  noTrail: boolean = false,
+): string {
   if (value.length <= limit) {
     return value;
   }

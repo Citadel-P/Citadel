@@ -46,8 +46,8 @@ export const ConfirmDeleteDialog = ({
             <>Are you sure you want to delete this {resourceName.toLowerCase()}? This action cannot be undone.</>
           ) : (
             <>
-              You&apos;re about to delete <span className="font-medium text-foreground">{count}</span> {pluralize(resourceName).toLocaleLowerCase()}.
-              This action is permanent. Do you want to continue?
+              You&apos;re about to delete <span className="font-medium text-foreground">{count}</span>{' '}
+              {pluralize(resourceName).toLocaleLowerCase()}. This action is permanent. Do you want to continue?
             </>
           )}
         </DialogDescription>
