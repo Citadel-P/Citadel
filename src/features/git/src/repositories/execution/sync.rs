@@ -97,7 +97,13 @@ impl GitRepositoryExecutionService {
         match result {
             Ok(result) => self.store.complete(&claim, &result).await?,
             Err(error) => {
-                let message = bounded_error(&error.to_string());
+                let message = if claim.repository.has_hooks() {
+                    bounded_error(&format!(
+                        "{error}. Review hook side effects and run Sync manually before retrying."
+                    ))
+                } else {
+                    bounded_error(&error.to_string())
+                };
                 self.store.fail(&claim, &message).await?;
             }
         }
@@ -181,15 +187,68 @@ impl GitRepositoryExecutionService {
         cancellation: &CancellationToken,
     ) -> Result<SyncResult, GitRepositoryExecutionError> {
         let remote = self.prepare_remote(&claim.repository).await?;
-        self.cli
+        let cache = self.cache_path(claim.repository.id);
+        // Keep a failed initial hook from publishing a cache that would skip On Clone on retry.
+        let mut staging = if claim
+            .repository
+            .on_clone
+            .as_ref()
+            .is_some_and(|hook| !hook.commands.is_empty())
+            && !self
+                .cli
+                .workspace
+                .exists(&cache)
+                .await
+                .map_err(storage_error)?
+        {
+            Some(
+                self.cli
+                    .workspace
+                    .stage(&cache)
+                    .await
+                    .map_err(storage_error)?,
+            )
+        } else {
+            None
+        };
+        let target = staging
+            .as_ref()
+            .map_or(cache.as_path(), |staging| staging.path());
+        let synchronized = self
+            .cli
             .synchronize_with_environment(
                 &remote.url,
-                &self.cache_path(claim.repository.id),
+                target,
                 &claim.branch,
                 &remote.environment,
                 cancellation,
             )
-            .await
-            .map_err(Into::into)
+            .await;
+        // Remove temporary SSH credentials before executing user commands.
+        drop(remote);
+        let result = async {
+            let result = synchronized?;
+            let (name, hook) = if result.cloned {
+                ("On Clone", &claim.repository.on_clone)
+            } else {
+                ("On Pull", &claim.repository.on_pull)
+            };
+            if let Some(hook) = hook {
+                self.cli.run_hook(target, hook, name, cancellation).await?;
+            }
+            Ok::<_, GitError>(result)
+        }
+        .await;
+        if let Some(staging) = staging.as_mut() {
+            if result.is_ok() {
+                if let Err(error) = staging.publish(&cache).await {
+                    let _ = staging.cleanup().await;
+                    return Err(GitError::Io(error).into());
+                }
+            } else {
+                let _ = staging.cleanup().await;
+            }
+        }
+        result.map_err(Into::into)
     }
 }

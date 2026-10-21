@@ -71,7 +71,7 @@ impl VolumeCoverageReader for CoverageFixture {
         })
     }
 }
-struct NoExecution;
+pub(super) struct NoExecution;
 impl BackupExecutor for NoExecution {
     fn repository<'a>(
         &'a self,

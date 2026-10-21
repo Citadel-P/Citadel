@@ -575,7 +575,7 @@ async fn save_pool(
     if let Some(name) = name {
         input.name = name;
     }
-    api_result(input.validate().map_err(map_error), headers)?;
+    api_result(input.validate_update(&current).map_err(map_error), headers)?;
     let pool = api_result(
         state
             .builds

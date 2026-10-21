@@ -13,6 +13,12 @@ builds also require **Automated Operations**. Existing in-flight builds may fini
 or be cancelled after a license change; queued builds cannot acquire capacity
 without the required capability.
 
+Self-managed VM pools with **Inbound Agent** or **Edge Agent** connections are
+currently executable. AWS EC2 provisioning is not implemented and cannot be
+selected for new pools. A manually provisioned VM hosted in AWS works as a
+self-managed builder. Saved AWS configurations remain inspectable and can be
+disabled or deleted; Citadel does not convert them or queue builds against them.
+
 ## Configure a pool
 
 Use a Build Pool when builds should run on builder infrastructure rather than on one of the Docker platforms managed by Citadel.
@@ -49,11 +55,25 @@ Connection mode: Inbound Agent endpoint
 Endpoint: http://<builder-host>:9001
 ```
 
-For local Docker testing where Citadel Core also runs in Docker, use:
+On Docker Desktop, when Core also runs in Docker on the Agent host, use:
 
 ```text
 http://host.docker.internal:9001
 ```
+
+On native Linux, add a host-gateway mapping to the **Core** service and recreate
+Core with the overlay:
+
+```yaml
+services:
+  server:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+Alternatively, attach Core and the Agent to a shared Docker network and use
+`http://citadel-agent-build:9000`. Port **9001** is the published host port;
+**9000** is the Agent's container port. See [Compose networking](https://docs.docker.com/compose/how-tos/networking/).
 
 Click **Test** on the Build Pool before selecting it in a build project. A ready pool confirms that Citadel can reach the Agent and that the Agent can reach Docker.
 

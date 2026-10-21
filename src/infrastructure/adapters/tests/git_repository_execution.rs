@@ -1336,3 +1336,9 @@ async fn committed_git_enqueue_notifies_and_idle_claims_throttle_stale_recovery(
         .unwrap();
     pool.close().await;
 }
+
+#[path = "git_repository_execution/hooks.rs"]
+mod hooks;
+
+#[path = "git_repository_execution/queue_safety.rs"]
+mod queue_safety;

@@ -314,27 +314,10 @@ async fn list_policies(
             .await,
         &h,
     )?;
-    let ids = records.iter().map(|item| item.id).collect::<Vec<_>>();
-    let permissions = api_result(
-        s.identity
-            .permissions_for_resources(&p, ResourceType::BackupPolicy, &ids)
-            .await,
+    let items = api_result(
+        crate::api::resources::backups::views::authorized_policies(&s.identity, &p, records).await,
         &h,
     )?;
-    let items = records
-        .into_iter()
-        .map(|item| {
-            let id = item.id;
-            let mut view = api_result(
-                BackupPolicyView::try_from(item).map_err(ApiError::internal),
-                &h,
-            )?;
-            view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
-                permissions.get(&id).copied().flatten(),
-            ));
-            Ok::<_, crate::api::error::HttpError>(view)
-        })
-        .collect::<Result<_, _>>()?;
     let permission = api_result(
         s.identity
             .global_permission(&p, ResourceType::BackupPolicy)
@@ -833,27 +816,11 @@ async fn list_repositories(
             .await,
         &h,
     )?;
-    let ids = records.iter().map(|item| item.id).collect::<Vec<_>>();
-    let permissions = api_result(
-        s.identity
-            .permissions_for_resources(&p, ResourceType::BackupRepository, &ids)
+    let items = api_result(
+        crate::api::resources::backups::views::authorized_repositories(&s.identity, &p, records)
             .await,
         &h,
     )?;
-    let items = records
-        .into_iter()
-        .map(|item| {
-            let id = item.id;
-            let mut view = api_result(
-                BackupRepositoryView::try_from(item).map_err(ApiError::internal),
-                &h,
-            )?;
-            view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
-                permissions.get(&id).copied().flatten(),
-            ));
-            Ok::<_, crate::api::error::HttpError>(view)
-        })
-        .collect::<Result<_, _>>()?;
     let permission = api_result(
         s.identity
             .global_permission(&p, ResourceType::BackupRepository)

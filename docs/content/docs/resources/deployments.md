@@ -252,9 +252,14 @@ If a platform is disconnected, deploy and runtime actions can fail because Citad
 
 ## Duplicate
 
-The **Duplicate** menu on the detail page offers **Configuration only** and
-**Configuration + data**. Configuration only opens a prefilled add form from
-the saved configuration.
+Copy availability is included when the resource list loads and refreshed with
+resource updates. Opening **Duplicate** does not fetch the resource details.
+
+The **Duplicate** menu is available on the detail page, in each list row's action
+menu, and in the bottom action bar when one Deployment is selected. It offers
+**Configuration only** and **Configuration + data**. Configuration only opens a
+prefilled add form from the saved configuration. Configuration + data opens the
+copy wizard on the source Deployment's page; unavailable data copies show a reason.
 
 The duplicate flow:
 

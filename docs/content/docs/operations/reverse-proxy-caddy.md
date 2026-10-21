@@ -36,7 +36,7 @@ CITADEL_HTTP_LISTEN_PORT=8000
 CITADEL_EDGE_GRPC_LISTEN_PORT=8001
 CITADEL_HTTP_TRUSTED_PROXIES=172.30.250.2
 CITADEL_HTTP_FORWARDED_LIMIT=1
-CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost;127.0.0.1
 CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com
 
 CITADEL_JWT_ISSUER=https://citadel.example.com
@@ -99,6 +99,7 @@ Create `Caddyfile` in the same directory:
 
 ```text
 citadel.example.com {
+    header Strict-Transport-Security "max-age=31536000"
     @edge path /citadel.edge.v1.EdgeAgentService/*
     handle @edge {
         reverse_proxy h2c://server:8001
@@ -115,6 +116,10 @@ inside the proxy network. Caddy's [reverse proxy](https://caddyserver.com/docs/c
 handles WebSocket upgrades and forwarding headers for browser traffic.
 [Automatic HTTPS](https://caddyserver.com/docs/automatic-https) obtains and renews
 the public certificate.
+
+Set HSTS at one HTTPS boundary. If a CDN already supplies it, configure that
+boundary consistently instead of adding another HSTS header. This example does
+not enable `includeSubDomains` or `preload`.
 
 ## 3. Validate and start
 
@@ -144,7 +149,7 @@ existing installation's images.
 
 If the browser works but Edge enrollment fails, check the gRPC route and ensure
 the Agent uses the HTTPS endpoint. If Core rejects forwarded headers, verify
-that Caddy's address matches `KnownProxies`.
+that Caddy's address matches `CITADEL_HTTP_TRUSTED_PROXIES`.
 
 For certificate issuance or upstream errors, inspect Caddy's logs:
 
@@ -155,3 +160,21 @@ docker compose -f docker-compose.yml -f compose.caddy.yml logs --tail=100 caddy
 Check DNS, inbound ports, and Core health before retrying. See
 [transport troubleshooting](/docs/operations/tls-and-secure-agent-transport#troubleshooting)
 for certificate trust and hostname errors.
+
+## Check Automation API access
+
+`CITADEL_PUBLIC_URL` is the browser origin. Automation Actions call Core through
+`CITADEL_INTERNAL_BASE_URL`, which defaults to `http://127.0.0.1:8000` with this
+listener configuration. Keep `127.0.0.1` in `CITADEL_HTTP_ALLOWED_HOSTS` so that
+internal calls pass host validation; Core's private listener bindings remain in place.
+
+Create a manual Automation Action using an identity with Platform Read access:
+
+```typescript
+const result = await citadel.api.listPlatforms();
+console.log("Accessible Platforms:", result.platforms.map(platform => platform.name));
+```
+
+Run it and confirm the Platform names (or an empty list) in the Action logs.
+A console-only Action does not test this connection. For HTTPS-only Core, follow
+[Direct TLS Automation setup](/docs/operations/tls-and-secure-agent-transport#automation-api-access).

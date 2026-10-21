@@ -107,6 +107,11 @@ impl BuildService {
         if project.builder_kind == "BuildAgentPool" {
             self.ensure_entitled(citadel_licensing::LicenseCapability::ElasticBuildExecution)
                 .await?;
+            let pool_id = project
+                .build_agent_pool_id
+                .ok_or_else(|| BuildError::Validation("A Build Pool is required.".into()))?;
+            let pool = self.store.get_pool(pool_id).await?;
+            pool_target(&pool.provider_spec)?;
         }
         Ok(())
     }

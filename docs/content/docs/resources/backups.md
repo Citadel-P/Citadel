@@ -209,8 +209,8 @@ and clean up retained volumes, then start a new reviewed copy. Unclaimed queued
 restores can still run after startup.
 
 If a restore fails or the copy is cancelled, no destination resource is created.
-Completed destination volumes are retained; failed restores may remove their own
-partial volumes. The progress card lists every destination name. **Clean up volumes**
+Destination volumes are retained, including partial data from failed restores.
+The progress card lists every destination name. **Clean up volumes**
 is an explicit, name-confirmed action that removes only unused volumes whose
 ownership matches this operation; it never removes the source volumes or a
 replacement volume created by someone else. In-use volumes are retained.
@@ -344,7 +344,7 @@ After creating a repository:
 1. Select **Initialize** if the repository is new.
 2. Select **Validate** to confirm Citadel can read the repository.
 3. Use **Check** for periodic repository health checks.
-4. Use **Prune** when you want restic to remove unreferenced data after retention changes.
+4. Use **Prune** to reclaim unreferenced repository data. It does not expire snapshots or impose a keep count. Policy retention removes snapshots using that policy’s settings and scope; repository Prune reclaims their now-unused data.
 
 ## Backup Policies
 

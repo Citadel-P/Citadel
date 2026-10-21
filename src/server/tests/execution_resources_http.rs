@@ -256,7 +256,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     );
     let fixture = seed_dependencies(&pool, principal.actor_id).await;
     validation::verify_inputs(&app, &principal, fixture.git_repository).await;
-    git_contracts::verify(&app, &principal).await;
+    git_contracts::verify(&app, &pool, &principal).await;
     let suffix = Uuid::now_v7().simple().to_string();
 
     let build_pool_response = request(
@@ -557,6 +557,16 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .await;
     let project_id = project["id"].as_str().unwrap();
     assert_eq!(project["capabilities"]["canWrite"], true);
+    build_entitlement.set_enabled(true);
+    build_pools::verify_unsupported_admission(
+        &app,
+        &pool,
+        &builds,
+        &principal,
+        Uuid::parse_str(project_id).unwrap(),
+    )
+    .await;
+    build_entitlement.set_enabled(false);
     let project_path = format!("/api/v1/buildProjects/{project_id}");
     let tag = response_json(
         request(

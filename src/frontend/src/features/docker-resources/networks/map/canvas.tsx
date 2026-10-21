@@ -175,11 +175,11 @@ export default function NetworkCanvas({
   }, [graph.nodes, layout, selected, onToggle, onSelect, related]);
   const edges = useMemo(
     () =>
-      graph.edges.map(({ saved, service, ...edge }) => ({
+      graph.edges.map(({ saved, service, label, ...edge }) => ({
         ...edge,
         type: 'default',
         zIndex: 0,
-        label: saved ? 'Configured use' : service ? 'Service network' : undefined,
+        label: label ?? (saved ? 'Configured use' : service ? 'Service network' : undefined),
         style: {
           stroke:
             related.has(edge.source) && related.has(edge.target)

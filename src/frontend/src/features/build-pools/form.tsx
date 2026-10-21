@@ -80,7 +80,7 @@ const defaultBuildPool: BuildAgentPoolInput = {
   name: '',
   description: null,
   enabled: true,
-  providerSpec: defaultAwsSpec,
+  providerSpec: defaultSelfManagedVmSpec,
   maxActiveBuilders: 1,
   queueTimeoutSeconds: 3600,
   provisioningTimeoutSeconds: 600,
@@ -227,7 +227,7 @@ function BuildPoolForm({
     return {
       description: resource.description,
       enabled: resource.enabled,
-      providerSpec: normalizeProviderSpec(resource.providerSpec),
+      providerSpec: resource.providerSpec,
       maxActiveBuilders: resource.maxActiveBuilders,
       queueTimeoutSeconds: resource.queueTimeoutSeconds,
       provisioningTimeoutSeconds: resource.provisioningTimeoutSeconds,
@@ -353,12 +353,11 @@ function BuildPoolForm({
                 dirtyKey: 'providerSpec.provider',
                 label: 'Type',
                 required: true,
-                description:
-                  'AWS EC2 provisions temporary builders. Self-managed VM uses pre-provisioned builder hosts.',
+                description: 'Self-managed VM pools use pre-provisioned hosts. AWS EC2 provisioning is not supported.',
                 render: () => (
                   <FieldSelect
                     value={provider}
-                    disabled={disabled}
+                    disabled={disabled || provider === BuildAgentPoolProvider.AwsEc2}
                     onChange={(nextProvider) =>
                       setProviderSpec(
                         nextProvider === BuildAgentPoolProvider.SelfManagedVm
@@ -367,7 +366,9 @@ function BuildPoolForm({
                       )
                     }
                     options={[
-                      { value: BuildAgentPoolProvider.AwsEc2, label: 'AWS EC2' },
+                      ...(provider === BuildAgentPoolProvider.AwsEc2
+                        ? [{ value: BuildAgentPoolProvider.AwsEc2, label: 'AWS EC2 (unsupported)' }]
+                        : []),
                       { value: BuildAgentPoolProvider.SelfManagedVm, label: 'Self-managed VM / Static VM' },
                     ]}
                   />
@@ -388,7 +389,7 @@ function BuildPoolForm({
                 regenerateEnrollment,
                 disabled,
               )
-            : awsEc2Fields(awsSpec, setAwsSpec, disabled),
+            : awsEc2Fields(awsSpec, setAwsSpec, true),
         ],
       }),
       Limits: defineSection<BuildPoolInput>({
@@ -512,7 +513,7 @@ function awsEc2Fields(
   return defineGroupField<BuildPoolInput>({
     id: 'aws',
     label: 'AWS EC2 Settings',
-    description: 'Settings used when Citadel provisions temporary EC2 builder instances.',
+    description: 'AWS EC2 provisioning is not supported. Saved settings are shown read-only and are preserved.',
     items: [
       defineField({
         id: 'aws-region',
@@ -978,6 +979,11 @@ function normalizePoolPayload(payload: BuildPoolInput, mode: 'add' | 'edit') {
   };
 
   if (mode === 'edit') {
+    // API views expand sparse AWS records with defaults. Leave the stored JSON
+    // untouched when saving these read-only settings.
+    if (getProvider(payload.providerSpec) === BuildAgentPoolProvider.AwsEc2) {
+      delete (normalized as Partial<BuildAgentPoolInput>).providerSpec;
+    }
     delete (normalized as Partial<BuildAgentPoolInput>).name;
     delete (normalized as Partial<BuildAgentPoolInput>).tagIds;
   }

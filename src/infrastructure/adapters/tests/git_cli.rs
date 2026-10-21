@@ -522,3 +522,6 @@ async fn blob_reads_are_bounded_and_report_truncation() {
     assert_eq!(blob.content.len(), 32);
     assert!(blob.truncated);
 }
+
+#[path = "git_cli/hooks.rs"]
+mod hooks;

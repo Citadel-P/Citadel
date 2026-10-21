@@ -133,3 +133,26 @@ it('hides cached networking after permission is denied', async () => {
   expect(screen.queryByText('Aliases: app')).not.toBeInTheDocument();
   expect(state.inventory).not.toHaveBeenCalled();
 });
+
+it('shows a stopped container’s configured network and legend without an active address', async () => {
+  state.details = {
+    ...state.details!,
+    container: { ...state.details!.container, containerState: 'Exited' },
+    endpoints: state.details!.endpoints.map((endpoint) => ({ ...endpoint, attached: false })),
+  };
+  render(
+    <MemoryRouter>
+      <ContainerNetworkAction {...props} />
+    </MemoryRouter>,
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'View connections: backend' }));
+  expect(await screen.findByTestId('graph')).toHaveTextContent('backend');
+  expect(screen.getByText('Configured network · Not attached')).toBeVisible();
+  expect(screen.getByText('Configured use')).toBeVisible();
+  expect(screen.getByText('No active address')).toBeVisible();
+  expect(screen.queryByText('10.0.0.2/24')).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Open network details' })).toHaveAttribute(
+    'href',
+    '/platforms/platform/networks/network-id/?dockerNodeId=worker',
+  );
+});

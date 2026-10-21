@@ -1,4 +1,6 @@
-import { Copy, Eye, Trash } from 'lucide-react';
+import { DuplicateWorkloadAction } from '@/features/resource-copies/duplicate-actions';
+import { ResourceCopyKind } from '@/api/generated/api.types';
+import { Eye, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
@@ -103,66 +105,57 @@ export const pauseAction: ActionConfig<DeploymentView, 'pauseDeployments' | 'res
   },
 };
 
-export const duplicateAction: ActionConfig<DeploymentView, any> = {
-  key: 'duplicate',
-  type: 'command',
-  icon: Copy,
-  requiredCapabilities: ['canRead', 'canWrite'],
-  useHandler: ({ resources }) => {
-    const navigate = useNavigate();
-    const selected = Array.isArray(resources) ? resources[0] : resources;
-    const multiSelect = Array.isArray(resources) && resources.length > 1;
-    const canExecute = !!selected && !multiSelect;
+const { dropdown, group } = createActionsBuilder<DeploymentView>()
+  .addAction(deployAction)
+  .addAction(startAction)
+  .addAction(stopAction)
+  .addAction(pauseAction)
+  .addAction({
+    key: 'details',
+    type: 'command',
+    separatorBefore: true,
+    icon: Eye,
+    useHandler: ({ resources }) => {
+      const navigate = useNavigate();
+      const selected = Array.isArray(resources) ? resources[0] : resources;
+      const multiSelect = Array.isArray(resources) && resources.length > 1;
+      const canExecute = !!selected && !multiSelect;
 
-    return {
-      canExecute,
-      isPending: false,
-      run: () => {
-        if (!canExecute || !selected) return;
-        navigate(`/deployments/add?duplicateFrom=${selected.id}`);
-      },
-    };
-  },
+      return {
+        canExecute,
+        isPending: false,
+        run: () => {
+          if (!canExecute || !selected) return;
+          navigate(`/deployments/edit/${selected.id}/`);
+        },
+      };
+    },
+  })
+  .addAction({
+    key: 'delete',
+    type: 'command',
+    icon: Trash,
+    mutateKey: 'deleteDeployments',
+    canExecute: () => true,
+    separatorBefore: true,
+    confirm: true,
+    destructive: true,
+    resourceType: 'Deployment',
+    useVariables,
+  })
+  .build();
+
+const { details, delete: deleteDropdown, ...primaryDropdown } = dropdown;
+
+export const DeploymentDropdownActions: typeof dropdown = {
+  ...primaryDropdown,
+  duplicate: ({ resource }) => (
+    <DuplicateWorkloadAction resources={resource} kind={ResourceCopyKind.Deployment} submenu />
+  ),
+  details,
+  delete: deleteDropdown,
 };
-
-export const { dropdown: DeploymentDropdownActions, group: DeploymentGroupActions } =
-  createActionsBuilder<DeploymentView>()
-    .addAction(deployAction)
-    .addAction(startAction)
-    .addAction(stopAction)
-    .addAction(pauseAction)
-    .addAction(duplicateAction)
-    .addAction({
-      key: 'details',
-      type: 'command',
-      separatorBefore: true,
-      icon: Eye,
-      useHandler: ({ resources }) => {
-        const navigate = useNavigate();
-        const selected = Array.isArray(resources) ? resources[0] : resources;
-        const multiSelect = Array.isArray(resources) && resources.length > 1;
-        const canExecute = !!selected && !multiSelect;
-
-        return {
-          canExecute,
-          isPending: false,
-          run: () => {
-            if (!canExecute || !selected) return;
-            navigate(`/deployments/edit/${selected.id}/`);
-          },
-        };
-      },
-    })
-    .addAction({
-      key: 'delete',
-      type: 'command',
-      icon: Trash,
-      mutateKey: 'deleteDeployments',
-      canExecute: () => true,
-      separatorBefore: true,
-      confirm: true,
-      destructive: true,
-      resourceType: 'Deployment',
-      useVariables,
-    })
-    .build();
+export const DeploymentGroupActions: typeof group = {
+  duplicate: ({ resources }) => <DuplicateWorkloadAction resources={resources} kind={ResourceCopyKind.Deployment} />,
+  ...group,
+};

@@ -1,4 +1,6 @@
-import { Copy, Eye, Trash } from 'lucide-react';
+import { DuplicateWorkloadAction } from '@/features/resource-copies/duplicate-actions';
+import { ResourceCopyKind } from '@/api/generated/api.types';
+import { Eye, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { Ban, Pause, Play, RefreshCw, Rocket, StepForward } from 'lucide-react';
@@ -254,35 +256,12 @@ export const pauseAction: ActionConfig<StackView, 'pauseStacks' | 'resumeStacks'
   },
 };
 
-export const duplicateAction: ActionConfig<StackView, any> = {
-  key: 'duplicate',
-  type: 'command',
-  icon: Copy,
-  requiredCapabilities: ['canRead', 'canWrite'],
-  useHandler: ({ resources }) => {
-    const navigate = useNavigate();
-    const selected = Array.isArray(resources) ? resources[0] : resources;
-    const multiSelect = Array.isArray(resources) && resources.length > 1;
-    const canExecute = !!selected && !multiSelect;
-
-    return {
-      canExecute,
-      isPending: false,
-      run: () => {
-        if (!canExecute || !selected) return;
-        navigate(`/stacks/add?duplicateFrom=${selected.id}`);
-      },
-    };
-  },
-};
-
-export const { dropdown: StackDropdownActions, group: StackGroupActions } = createActionsBuilder<StackView>()
+const { dropdown, group } = createActionsBuilder<StackView>()
   .addAction(deployAction)
   .addAction(syncAction)
   .addAction(startAction)
   .addAction(stopAction)
   .addAction(pauseAction)
-  .addAction(duplicateAction)
   .addAction({
     key: 'details',
     type: 'command',
@@ -388,4 +367,17 @@ export const getStackReconciliationToast = (
     kind: 'warning',
     title: 'Stack drift partially reconciled',
   };
+};
+
+const { details, delete: deleteDropdown, ...primaryDropdown } = dropdown;
+
+export const StackDropdownActions: typeof dropdown = {
+  ...primaryDropdown,
+  duplicate: ({ resource }) => <DuplicateWorkloadAction resources={resource} kind={ResourceCopyKind.Stack} submenu />,
+  details,
+  delete: deleteDropdown,
+};
+export const StackGroupActions: typeof group = {
+  duplicate: ({ resources }) => <DuplicateWorkloadAction resources={resources} kind={ResourceCopyKind.Stack} />,
+  ...group,
 };

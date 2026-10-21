@@ -61,26 +61,41 @@ it('scopes a workload graph by owner identity and merges members attached to mul
   expect(expanded.edges).toHaveLength(4);
 });
 
-it('keeps service observations visible without claiming that tasks are connected', () => {
-  const value = network(
-    [
-      {
-        relationship: NetworkRelationship.ServiceNetwork,
-        workloadKind: NetworkWorkloadKind.SwarmService,
-        workloadId: 'service',
-        workloadName: 'worker',
-        dockerServiceId: 'docker-service',
-        serviceName: 'worker',
-        isStale: false,
-        workloadProcessing: false,
-      },
-    ],
-    { scope: 'swarm' },
-  );
-  const graph = ownerGraph('p', { kind: 'SwarmService', id: 'service' }, [value], false, new Set());
-  expect(graph.nodes.filter((n) => n.kind === 'container')).toHaveLength(0);
-  expect(graph.nodes.find((n) => n.kind === 'service')?.subtitle).toBe('1 service network');
-  expect(graph.edges[0].service).toBe(true);
+it('keeps Swarm service networks through scale-to-zero and falls back to saved configuration', () => {
+  const owner = { kind: NetworkWorkloadKind.SwarmService, id: 'service' };
+  const saved: NetworkUsageEntry = {
+    relationship: NetworkRelationship.SavedReference,
+    workloadKind: owner.kind,
+    workloadId: owner.id,
+    workloadName: 'worker',
+    reference: 'proxy',
+    isStale: false,
+    workloadProcessing: false,
+  };
+  const service: NetworkUsageEntry = {
+    ...saved,
+    relationship: NetworkRelationship.ServiceNetwork,
+    dockerServiceId: 'docker-service',
+    serviceName: 'worker',
+  };
+  const task = attachment('task', { workloadKind: owner.kind, workloadId: owner.id });
+  const graph = (entries: NetworkUsageEntry[]) =>
+    ownerGraph('p', owner, [network(entries, { scope: 'swarm' })], true, new Set());
+  const running = graph([task, service, saved]);
+  expect(running.edges).toHaveLength(1);
+  expect(running.nodes.some((node) => node.kind === 'reference')).toBe(false);
+
+  // Zero tasks does not remove the service's network specification.
+  const stopped = graph([service, saved]);
+  expect(stopped.nodes.map((node) => node.kind)).toEqual(['network', 'service']);
+  expect(stopped.nodes[1].subtitle).toBe('1 service network');
+  expect(stopped.edges).toEqual([expect.objectContaining({ service: true, saved: false })]);
+  expect(layoutStructure(stopped)).toBe(layoutStructure(running));
+
+  // Without a runtime service, only the saved reference remains; no task is invented.
+  const removed = graph([saved]);
+  expect(removed.nodes.map((node) => node.kind)).toEqual(['network', 'reference']);
+  expect(removed.edges).toEqual([expect.objectContaining({ saved: true })]);
 });
 
 it('preserves both nodes’ observations when merging the same overlay network', () => {
@@ -128,6 +143,26 @@ it('bounds the whole workload graph and keeps saved use separate from observatio
   expect(
     ownerGraph('p', owner, [{ ...refs, usage: { ...refs.usage!, truncated: true } }], false, new Set()).truncated,
   ).toBe(true);
+});
+
+it('replaces workload attachments with configured references after stopping without duplicating running workloads', () => {
+  const reference: NetworkUsageEntry = {
+    ...stack,
+    relationship: NetworkRelationship.SavedReference,
+    reference: 'proxy',
+    isStale: false,
+    workloadProcessing: false,
+  };
+  const owner = { kind: 'Stack', id: 'stack-uuid' } as const;
+  const running = ownerGraph('p', owner, [network([attachment('app', stack), reference])], true, new Set());
+  expect(running.edges).toHaveLength(1);
+  expect(running.edges[0].saved).toBe(false);
+  expect(running.nodes.some((node) => node.kind === 'reference')).toBe(false);
+  const stopped = ownerGraph('p', owner, [network([reference], { inUse: false })], true, new Set());
+  expect(stopped.nodes.map((node) => node.kind)).toEqual(['network', 'reference']);
+  expect(stopped.edges).toEqual([expect.objectContaining({ saved: true })]);
+  expect(stopped.nodes[0].network?.containers).toEqual({});
+  expect(stopped.nodes.some((node) => node.kind === 'container')).toBe(false);
 });
 
 it('draws only authorized attachments; saved references are opt-in and distinct', () => {
@@ -260,27 +295,66 @@ it('shows an application on two networks without inventing network-to-network ro
   expect(graph.nodes.find((node) => node.network?.id === 'proxy')?.network?.usage?.entries[0].containerId).toBe(
     'uuid-app',
   );
-  expect(
-    workloadGraph(
-      'p',
-      container,
-      { ...networking, endpoints: networking.endpoints.map((endpoint) => ({ ...endpoint, attached: false })) },
-      [network([])],
-    ).edges,
-  ).toEqual([]);
-  expect(
-    workloadGraph(
-      'p',
-      container,
-      { ...networking, endpoints: networking.endpoints.map((endpoint) => ({ ...endpoint, attached: null })) },
-      [network([])],
-    ).edges,
-  ).toEqual([]);
   expect(highlightedNodes(graph, app.id).size).toBe(3);
   expect(highlightedNodes(graph, graph.nodes[1].id).size).toBe(2);
   expect(workloadGraph('p', container, { ...networking, mode: 'host' }, [network([])]).edges).toEqual([]);
   expect(workloadGraph('p', container, { ...networking, mode: 'shared' }, [network([])]).edges).toEqual([]);
   expect(workloadGraph('p', container, networking, [network([], { dockerNodeId: 'another-node' })]).edges).toEqual([]);
+});
+
+it.each([
+  [false, 'Configured · Not attached'],
+  [null, 'Attachment unconfirmed'],
+] as const)('keeps configured container networks visible with attachment evidence %s', (attached, label) => {
+  const container = {
+    containerId: 'uuid-app',
+    dockerContainerId: 'app',
+    dockerNodeId: null,
+    containerName: 'app',
+    containerState: 'Exited',
+    isStale: false,
+    workloadProcessing: false,
+  };
+  const networking = {
+    container,
+    mode: 'networks',
+    endpoints: [{ attached, networkId: 'proxy', name: 'proxy', addresses: ['172.20.0.2'], aliases: ['app'] }],
+    publishedPorts: [],
+    observedAt: 1,
+    truncated: false,
+  };
+  // The inspection can be newer than inventory. Do not retain an old live attachment.
+  const inventory = network([attachment('app')], {
+    inUse: false,
+    containers: {
+      app: { name: 'app', endpointId: 'old', macAddress: null, ipV4Address: '172.20.0.2', ipv6Address: null },
+    },
+  });
+  const stopped = workloadGraph('p', container, networking, [inventory]);
+  expect(stopped.nodes.map((node) => node.kind)).toEqual(['container', 'network']);
+  expect(stopped.edges).toEqual([expect.objectContaining({ saved: true, label })]);
+  expect(stopped.nodes[0].entries[0].relationship).toBe(NetworkRelationship.SavedReference);
+  expect(stopped.nodes[0].searchTerms).not.toContain('172.20.0.2');
+  expect(stopped.nodes[1].network).toMatchObject({ inUse: false, containers: {}, usage: { entries: [] } });
+  expect(inventory.containers.app.ipV4Address).toBe('172.20.0.2');
+  expect(inventory.usage!.entries).toHaveLength(1);
+
+  const running = workloadGraph(
+    'p',
+    { ...container, containerState: 'Running' },
+    { ...networking, endpoints: networking.endpoints.map((endpoint) => ({ ...endpoint, attached: true })) },
+    [inventory],
+  );
+  expect(running.edges[0]).toMatchObject({ saved: false, label: undefined });
+  expect(running.nodes[1].network).toMatchObject({
+    inUse: true,
+    containers: { app: { ipV4Address: '172.20.0.2' } },
+    usage: { entries: [expect.objectContaining({ relationship: NetworkRelationship.Attachment })] },
+  });
+  expect(layoutStructure(running)).toBe(layoutStructure(stopped));
+  expect(workloadGraph('p', container, networking, []).edges).toEqual([]);
+  expect(workloadGraph('p', container, networking, [network([], { id: 'same-name-other-id' })]).edges).toEqual([]);
+  expect(workloadGraph('p', container, networking, [network([], { dockerNodeId: 'other-node' })]).edges).toEqual([]);
 });
 
 it('groups observed Swarm service membership without inventing task attachments', () => {

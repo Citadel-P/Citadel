@@ -54,6 +54,25 @@ pub fn runtime_hash(spec: &Value) -> String {
     crate::swarm::runtime_hash::hash(spec)
 }
 
+/// Service membership includes Docker-assigned networks (for example ingress),
+/// even with zero tasks. Keep these out of the editable/adopted definition.
+pub(crate) fn service_network_ids(spec: &Value, endpoint: &Value) -> Vec<String> {
+    let configured = spec["TaskTemplate"]
+        .get("Networks")
+        .or_else(|| spec.get("Networks"));
+    let mut ids: Vec<_> = configured
+        .into_iter()
+        .flat_map(items)
+        .filter_map(|network| network["Target"].as_str())
+        .chain(items(&endpoint["VirtualIPs"]).filter_map(|network| network["NetworkID"].as_str()))
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 pub fn inspect_service_message(
     native: SwarmService,
     tasks: &[SwarmTask],
@@ -213,7 +232,7 @@ pub fn inspect_service_message(
                 )
             })
             .collect(),
-        network_ids,
+        network_ids: service_network_ids(spec, &native.endpoint),
         secret_ids: items(&container["Secrets"])
             .map(|s| text(s, "SecretID"))
             .collect(),

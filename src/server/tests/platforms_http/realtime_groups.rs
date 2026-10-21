@@ -1500,10 +1500,34 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
         changed["arguments"][0]["containers"][0]["name"],
         "renamed-live"
     );
-    assert_eq!(
-        receive(&mut second).await["arguments"],
-        changed["arguments"]
-    );
+    let mut restricted_changed = receive(&mut second).await;
+    assert_eq!(restricted_changed["target"], changed["target"]);
+    let mut shared_arguments = changed["arguments"].clone();
+    // Both subscribers receive the same committed data, with their own permissions.
+    for (arguments, administrator) in [
+        (&mut shared_arguments, true),
+        (&mut restricted_changed["arguments"], false),
+    ] {
+        let capabilities = arguments[0]["containers"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("capabilities")
+            .unwrap();
+        assert_eq!(
+            capabilities,
+            json!({
+                "canRead": true,
+                "canWrite": administrator,
+                "canExecute": administrator,
+                "canInspect": administrator,
+                "canViewLogs": administrator,
+                "canOpenTerminal": administrator,
+                "canPull": administrator,
+                "canManageNodeAgents": administrator,
+            })
+        );
+    }
+    assert_eq!(restricted_changed["arguments"], shared_arguments);
     // A resource ACL removal must affect an existing authenticated socket,
     // including a repeated join. A cached token role is insufficient.
     remove_platform_access(&f, &restricted).await;

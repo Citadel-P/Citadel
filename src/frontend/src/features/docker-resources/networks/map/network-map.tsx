@@ -183,7 +183,7 @@ export function FocusedMap({
   onExplore?: (id: string) => void;
   onFindWorkload?: () => void;
 }) {
-  const [references, setReferences] = useState(false);
+  const [references, setReferences] = useState(!!owner);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selectedId, setSelectedId] = useState<string>();
   const [reset, setReset] = useState(0);
@@ -267,7 +267,7 @@ export function FocusedMap({
                 <span className="w-4 border-t border-muted-foreground/60" />
                 Network connection
               </span>
-              {references && (
+              {(references || graph.edges.some((edge) => edge.saved)) && (
                 <span className="inline-flex items-center gap-2">
                   <span className="w-4 border-t border-dashed border-muted-foreground/60" />
                   Configured use

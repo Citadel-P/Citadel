@@ -95,18 +95,8 @@ pub struct GitRepositoryPatch {
 }
 
 fn validate_repo_command(command: Option<&RepoCommand>) -> Result<(), GitRepositoryError> {
-    if command.is_some_and(|command| {
-        command.commands.len() > 100
-            || command
-                .commands
-                .iter()
-                .any(|value| value.is_empty() || value.len() > 4096)
-            || command.path.is_empty()
-            || command.path.len() > 1024
-    }) {
-        return Err(GitRepositoryError::Validation(
-            "Git repository commands exceed the supported limits.".to_owned(),
-        ));
+    if let Some(command) = command {
+        command.validate()?;
     }
     Ok(())
 }

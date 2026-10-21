@@ -449,7 +449,7 @@ fn map_service(value: SwarmService) -> RuntimeSwarmService {
         update_state: string_or_default(&value.update_status, &["State"]),
         update_message: string(&value.update_status, &["Message"]),
         ports: port_strings(&value.endpoint),
-        network_ids: string_array(&value.spec, &["TaskTemplate", "Networks"], "Target"),
+        network_ids: crate::swarm::inspection::service_network_ids(&value.spec, &value.endpoint),
         secret_ids: string_array(
             &value.spec,
             &["TaskTemplate", "ContainerSpec", "Secrets"],
@@ -652,6 +652,46 @@ mod tests {
         assert_eq!(service.image, "nginx:alpine");
         assert_eq!(service.network_ids, ["network-1"]);
         assert_eq!(service.stack_namespace.as_deref(), Some("demo"));
+    }
+
+    #[test]
+    fn stopped_service_networks_match_local_and_agent_without_changing_adoption() {
+        for configured in [json!([]), json!([{ "Target": "overlay" }])] {
+            let native = SwarmService {
+                spec: json!({
+                    "TaskTemplate": {"ContainerSpec": {"Image": "nginx"}, "Networks": configured},
+                    "Mode": {"Replicated": {"Replicas": 0}}
+                }),
+                endpoint: json!({"VirtualIPs": [
+                    {"NetworkID": "ingress", "Addr": "10.0.0.2/24"},
+                    {"NetworkID": "ingress"}, {"NetworkID": ""}, {}
+                ]}),
+                ..Default::default()
+            };
+            let agent =
+                crate::swarm::inspection::inspect_service_message(native.clone(), &[]).unwrap();
+            let local = map_service(native);
+            let expected = if configured.as_array().unwrap().is_empty() {
+                vec!["ingress"]
+            } else {
+                vec!["ingress", "overlay"]
+            };
+            assert_eq!(local.network_ids, expected);
+            assert_eq!(agent.network_ids, local.network_ids);
+            assert_eq!(local.running_task_count, 0);
+            assert_eq!(agent.running_task_count, 0);
+            assert_eq!(agent.desired_task_count, 0);
+            assert_eq!(
+                agent.definition.unwrap().network_ids.len(),
+                configured.as_array().unwrap().len()
+            );
+        }
+        // DNS round-robin services may have configured networks and no virtual IPs.
+        let service = SwarmService {
+            spec: json!({"TaskTemplate": {"Networks": [{"Target": "overlay"}]}}),
+            ..Default::default()
+        };
+        assert_eq!(map_service(service).network_ids, ["overlay"]);
     }
 
     #[test]

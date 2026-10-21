@@ -60,7 +60,7 @@ impl PostgresCopyRepository {
             } else if authorization.is_err() {
                 "Source or destination permissions, configuration, placement or references changed. No workload was created. Retained destination volumes are listed below."
             } else {
-                "Copy stopped. No workload was created. Completed destination volumes are retained; failed restores may have removed their partial volumes."
+                "Copy stopped. No workload was created. Destination volumes are retained, including partial data from failed restores. Inspect and explicitly remove unwanted volumes after verifying their ownership."
             };
             sqlx::query("UPDATE resourcecopies SET status=$2,message=$3,updatedat=CURRENT_TIMESTAMP WHERE id=$1").bind(id).bind(status).bind(message).execute(&mut *tx).await.map_err(storage_error)?;
         } else if let Some(storage_result) = storage_result

@@ -23,7 +23,7 @@ impl CopyService {
             on_change,
         }
     }
-    /// Read-only eligibility for resource detail models; never creates a review
+    /// Read-only eligibility for resource list and detail models; never creates a review
     /// or contacts Docker. Full preview remains authoritative at submission.
     pub async fn eligibility(
         &self,

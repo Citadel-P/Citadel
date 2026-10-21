@@ -159,7 +159,7 @@ export function NetworkDetailsBody({
             ))}
           </ul>
           <p className="text-xs text-muted-foreground">
-            These workloads are configured to use this network, but may not be attached.
+            These workloads reference this network or its Compose project. Active connections are listed separately.
           </p>
         </section>
       )}
@@ -168,7 +168,7 @@ export function NetworkDetailsBody({
         {network.scope === 'swarm' || network.dockerNodeId
           ? 'Attachments reflect this node’s observation, not the whole Swarm. '
           : ''}
-        Coverage may be incomplete. Only accessible workloads and explicit saved network names are shown.
+        Coverage may be incomplete. Only workloads you can access are shown.
       </p>
     </div>
   );

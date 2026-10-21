@@ -23,17 +23,17 @@
     LEFT JOIN swarmserviceprojections projection ON projection.platformid=c.platformid AND projection.dockerserviceid=task.dockerserviceid
 ), candidates AS (
     SELECT a.network_index,a.id containerid,a.dockercontainerid,a.dockernodeid,a.name containername,
-        w.kind,w.id ownerid,w.name ownername,'[]'::jsonb refs,NULL::text compose,
+        w.kind,w.id ownerid,w.name ownername,'[]'::jsonb refs,NULL::text compose,NULL::text projectname,
         NULL::text dockerserviceid,NULL::text servicename,NULL::bigint observedat,a.projectionstalesince IS NOT NULL isstale,a.state containerstate,w.status ownerstatus,COALESCE(w.controlstate='Processing',false) ownerprocessing
     FROM actual a LEFT JOIN authorized w ON w.kind=a.kind AND w.id=a.ownerid
     -- Match container-map visibility, including unresolved ownership for administrators.
     WHERE $2 OR (a.ownerid IS NULL AND NOT a.hascitadelownershiplabels) OR w.id IS NOT NULL
     UNION ALL
     SELECT NULL,NULL,NULL,NULL,NULL,w.kind,w.id,w.name,w.refs,
-        CASE WHEN sum(COALESCE(octet_length(w.compose),0)) OVER (ORDER BY w.kind,w.id)<=4194304 THEN w.compose END, NULL,NULL,NULL,false,NULL::text,w.status,COALESCE(w.controlstate='Processing',false)
+        CASE WHEN sum(COALESCE(octet_length(w.compose),0)) OVER (ORDER BY w.kind,w.id)<=4194304 THEN w.compose END,w.projectname, NULL,NULL,NULL,false,NULL::text,w.status,COALESCE(w.controlstate='Processing',false)
     FROM authorized w
     UNION ALL
-    SELECT (r.ordinality-1)::integer,NULL,NULL,NULL,NULL,w.kind,w.id,w.name,'[]'::jsonb,NULL,
+    SELECT (r.ordinality-1)::integer,NULL,NULL,NULL,NULL,w.kind,w.id,w.name,'[]'::jsonb,NULL,NULL,
         s.dockerserviceid,s.name,extract(epoch FROM s.observedat)::bigint,s.isstale,NULL::text,w.status,COALESCE(w.controlstate='Processing',false)
     FROM jsonb_array_elements($4::jsonb) WITH ORDINALITY r
     JOIN swarmserviceprojections s ON s.platformid=$3 AND s.networkids ? (r.value->>'id')

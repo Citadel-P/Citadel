@@ -1,47 +1,43 @@
 ---
 title: "Releases"
-description: "Find published versions and choose a repeatable installation."
+description: "Understand image versions and update development installations safely."
 ---
 
-Use a stable release for your installation. Development builds (`-dev.N`) are
-for testing upcoming changes; demo deployments let you explore Citadel before
-installing it.
+Citadel is under development and has not had a public release. Version numbers
+in the source identify builds; they do not establish a published release history.
+Use the matching current Core, Agent, and frontend build when testing Citadel.
 
 Use the [Citadel releases page](https://github.com/Citadel-P/Citadel/releases)
-to check which versions and images are available. Read the notes for the version
-you plan to install. Leaving `CITADEL_IMAGE` blank in your installation's `.env`
+to check for published versions and their notes when they become available.
+Leaving `CITADEL_IMAGE` blank in your installation's `.env`
 uses `ghcr.io/citadel-p/citadel:latest`. You can set a complete image address to
 choose a specific version instead.
 
-Release notes group features, fixes, performance changes and improvements, with
-breaking changes called out separately. When a preceding stable version exists,
-stable notes compare against it and include intervening development changes.
-
-Install Core and Agent from their container registries. The two release attachments
-are `release-manifest.json` (exact image digests, architectures and signing identity)
-and `SHA256SUMS` (the manifest checksum). GitHub also provides source archives.
-Internal build archives and recovery journals are not installation downloads.
+The release workflow prepares notes for features, fixes, and breaking changes.
+It publishes Core and Agent container images with `release-manifest.json`
+(exact image digests, architectures, and signing identity) and `SHA256SUMS`
+(the manifest checksum). Check the published artifacts before choosing an image;
+a version in the source or an image tag alone does not mean a release is complete.
 
 ## Choose an image version
 
-Stable images are published under their full version, with moving aliases for
-the latest release in each minor and major version.
+The release workflow uses these tag conventions:
 
-For a release numbered `0.1.2`, its version aliases are `0.1.2`, `0.1`, and `0`.
-Minor and major aliases can later move. Use an exact patch version or digest
-when you need a repeatable installation. Core releases also publish `latest`,
-the default for new installations. Pulling a newer image does not update a
-running container until you recreate it with `docker compose up -d`.
+- Stable images use a full `MAJOR.MINOR.PATCH` version, with moving minor and
+  major aliases. Core also uses `latest` for the newest stable image.
+- Development images use a `MAJOR.MINOR.PATCH-dev.N` tag and the moving `dev`
+  alias. They do not update stable aliases or `latest`.
 
-Development images use exact tags such as `0.1.3-dev.1` and the moving `dev`
-alias. They do not update stable aliases or `latest`.
+These describe the publication scheme, not a list of available releases. Use an
+exact published version or digest when you need a repeatable installation.
+Pulling a newer image does not update a running container until you recreate it
+with `docker compose up -d`.
 
 ## Documentation and API
 
-The hosted documentation follows the newest published version, including
-development releases, so it can describe features ahead of the stable channel.
-For version-specific instructions, read `docs/content/docs` at your release tag
-in the source repository. Use your installation's `/openapi/public/v1.json`
+During development, documentation can change alongside the implementation.
+For build-specific instructions, read `docs/content/docs` at the source revision
+used to build your installation. Use your installation's `/openapi/public/v1.json`
 when building integrations; enable Swagger as described in the API reference.
 
 See [API Reference](/docs/reference/api) for reference options, including Swagger UI
@@ -49,3 +45,17 @@ on your own installation.
 
 For installation steps, see [install Citadel](/docs/getting-started/install).
 Before changing versions, follow [upgrade and rollback](/docs/operations/upgrade-and-rollback).
+
+## Development database changes
+
+Development builds can change the database baseline. Check the target build's
+instructions before updating; do not assume an existing development database
+can always be upgraded in place. If startup reports a migration checksum
+mismatch, stop and investigate rather than rewriting the migration journal or
+applied checksums.
+
+Back up the database, configuration, recovery keys, and workload data before
+changing builds. If a clean installation or data import is required, verify it
+separately and preserve the original database and volumes until recovery succeeds.
+Changing an image does not undo migrations; follow
+[upgrade and rollback](/docs/operations/upgrade-and-rollback) for the full procedure.

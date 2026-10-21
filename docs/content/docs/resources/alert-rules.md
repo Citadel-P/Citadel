@@ -7,6 +7,9 @@ Alert rules record operational events and notify the people responsible for the
 affected resources. Start with the built-in rules, then tune them when you know
 which conditions need attention.
 
+Users with Read permission can view a rule's configuration. Changing its settings
+requires Write permission; configuration controls are disabled for read-only users.
+
 Notifications are delivered through notification channels. The Citadel server image includes notification delivery support, so normal Docker installs do not need any extra notification service.
 
 ## Receive your first notification
@@ -454,8 +457,9 @@ Choose a type based on the condition you need to investigate:
 rather than a percentage. See [Build Pool availability](/docs/resources/build-pools#build-pool-connection-and-availability)
 for the built-in rule's grace period and recovery behavior.
 
-`BackupRunFailed` handles failed, timed-out, interrupted, and rejected runs when
-**Alert on failure** is enabled on the backup policy. Deliberate cancellation is
+`BackupRunFailed` handles eligible scheduled and webhook-triggered runs that
+fail, time out, are interrupted, or are rejected when **Alert on failure** is
+enabled on the backup policy. Manual runs and deliberate cancellation are
 excluded. Each failed run is a separate incident with a link to its logs;
 reprocessing the same result does not create another incident. Configure channels
 on the seeded **Backup Run Failed** rule as described above. See

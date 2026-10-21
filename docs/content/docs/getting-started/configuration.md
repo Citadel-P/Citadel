@@ -83,8 +83,8 @@ CITADEL_UPDATE_CHECKS_ENABLED=false
 Core checks Citadel's public GitHub release information at startup and every
 six hours. Administrators see a small dot beside the sidebar version and a
 notice on Home when a newer release in the installed channel is available.
-Stable installations track stable releases; development versions such as
-`0.1.4-dev.1` track development releases. Open either notification for
+Stable installations track stable releases; development versions (`-dev.N`)
+track development releases. Open either notification for
 release notes and the [upgrade guide](/docs/operations/upgrade-and-rollback).
 Checks do not install updates. Set `CITADEL_UPDATE_CHECKS_ENABLED=true` to re-enable them
 after opting out. Agents and Edge Agents do not make these requests.

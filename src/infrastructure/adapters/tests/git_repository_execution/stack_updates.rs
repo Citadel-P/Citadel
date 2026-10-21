@@ -1,3 +1,5 @@
+#[path = "stack_images.rs"]
+mod stack_images;
 use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_adapters::connectors::routing::stacks::StackUpdateRuntime;
 use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
@@ -148,7 +150,9 @@ pub async fn verify(
     );
     // A pinned Stack with a Registry is an image candidate even when its Git
     // observation is unavailable. Discovery uses the applied local tree only.
-    let registry = Uuid::from_u128(0x100);
+    let registry = Uuid::now_v7();
+    sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,json_build_object('$type','DockerHub'),$2,$1::text,'docker.io','Enabled')")
+        .bind(registry).bind(actor.value()).execute(pool).await.unwrap();
     stack
         .resource
         .spec
@@ -199,37 +203,16 @@ pub async fn verify(
     );
     assert_eq!(
         cache.get(registry, "nginx:alpine").unwrap().digest,
-        "sha256:remote"
+        stack_images::remote_digest()
     );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let owner = stack.id.to_string();
-    let api = axum::Router::new().fallback(move |uri: axum::http::Uri| {
-        let owner = owner.clone();
-        async move {
-            let value = if uri.path().ends_with("/version") {
-                json!({"ApiVersion":"1.49","MinAPIVersion":"1.24","Version":"28.0.0"})
-            } else if uri.path().ends_with("/containers/json") {
-                json!([{"Id":"container","Names":["/web"],"Image":"nginx:alpine","ImageID":"sha256:fixture","Created":1,
-                    "Labels":{"com.citadel.stack-id":owner,"com.docker.compose.service":"web"},"State":"running","Status":"Up"}])
-            } else if uri.path().ends_with("/images/json") {
-                json!([{"Id":"sha256:fixture","RepoTags":["nginx:alpine"],"RepoDigests":["nginx@sha256:deployed"],"Created":1,"Size":10,"Labels":{},"Containers":1}])
-            } else { panic!("Unexpected Docker request: {uri}") };
-            axum::Json(value)
-        }
-    });
-    let server = tokio::spawn(async move { axum::serve(listener, api).await.unwrap() });
+    let (edge, peer) = stack_images::start(pool, platform, stack.id).await;
     let image_runtime = StackUpdateRuntime::new(
         StackRuntimeRouter::new(
             pool.clone(),
-            DockerClient::with_endpoint(
-                format!("http://{address}").parse().unwrap(),
-                Duration::from_secs(2),
-                "/host",
-            )
-            .unwrap(),
+            DockerClient::new("/no-local-daemon-for-edge-fixture", Duration::from_secs(2)).unwrap(),
             None,
         )
+        .with_edge(edge)
         .with_image_cache(cache),
         git.clone(),
     );
@@ -246,8 +229,11 @@ pub async fn verify(
     };
     let image = &recreate_stack_on_new_image_state.auto_update_states[0];
     assert!(image.update_available);
-    assert_eq!(image.current_digest, "sha256:deployed");
-    assert_eq!(image.remote_digest.as_deref(), Some("sha256:remote"));
+    assert_eq!(image.current_digest, stack_images::deployed_digest());
+    assert_eq!(
+        image.remote_digest.as_deref(),
+        Some(stack_images::remote_digest().as_str())
+    );
     let StackUpdateState::Git {
         recreate_stack_on_new_commit_state: prior,
         ..
@@ -256,8 +242,11 @@ pub async fn verify(
         unreachable!()
     };
     assert_eq!(&recreate_stack_on_new_commit_state, prior);
-    server.abort();
-    let _ = server.await;
+    assert_eq!(
+        peer.await.unwrap(),
+        5,
+        "inventory, inspection and both immutable manifests must be checked"
+    );
     let queued: bool =
         sqlx::query_scalar("SELECT controlstate='Queued' FROM gitrepositories WHERE id=$1")
             .bind(repository)
@@ -280,6 +269,11 @@ pub async fn verify(
         .execute(pool)
         .await
         .unwrap();
+    sqlx::query("DELETE FROM registries WHERE id=$1")
+        .bind(registry)
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM platforms WHERE id=$1")
         .bind(platform)
         .execute(pool)
@@ -296,7 +290,7 @@ impl citadel_adapters::connectors::routing::images::scanner::ImageScanRuntime fo
     ) -> futures_util::future::BoxFuture<'a, Result<String, String>> {
         Box::pin(async move {
             assert_eq!(task.reference, "nginx:alpine");
-            Ok("sha256:remote".into())
+            Ok(stack_images::remote_digest())
         })
     }
 }

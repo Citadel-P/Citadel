@@ -29,8 +29,10 @@ Stack lists show detected changes, excluding unknown and failed checks.
    timestamp. A tag check looks for changed image content for the platforms running
    the workload; it does not select a newer version tag for you.
 3. For a Git Stack, inspect changed source and watched paths. A pinned commit
-   stays pinned. A manual Stack check does not run repository hooks or update
-   sibling Stacks; repository **Sync** can do both through their configured policies.
+   stays pinned. A manual Stack check does not update sibling Stacks; repository
+   **Sync** can trigger their configured automatic-deployment policies. Repository
+   [On Clone / On Pull hooks](/docs/resources/git-repositories#clone-and-pull-hooks)
+   run during synchronization when configured.
 4. Save any intended configuration change, then deploy or apply. Keep the
    progress view connected and inspect the final operation result.
 5. Verify current containers or Tasks, logs, and the application endpoint. Keep

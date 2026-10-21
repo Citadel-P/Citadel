@@ -1,8 +1,11 @@
 use super::spec::*;
 use crate::api::resources::capabilities::ResourceCapabilitiesView;
+use crate::api::{error::ApiError, resource_access::capabilities_from_permission};
 use chrono::{DateTime, Utc};
+use citadel_identity::{ActorPrincipal, IdentityService};
 use citadel_primitives::PlatformStatus;
 use citadel_primitives::ResourceControlState;
+use citadel_primitives::ResourceType;
 use citadel_primitives::WebhookConfig;
 use serde::Serialize;
 use uuid::Uuid;
@@ -597,4 +600,44 @@ pub struct BackupRestoreRunStreamItem {
     pub message: Option<String>,
     pub stream: Option<String>,
     pub exit_code: Option<i32>,
+}
+
+pub(crate) async fn authorized_repositories(
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+    repositories: Vec<citadel_backups::BackupRepository>,
+) -> Result<Vec<BackupRepositoryView>, ApiError> {
+    let ids = repositories.iter().map(|item| item.id).collect::<Vec<_>>();
+    let permissions = identity
+        .permissions_for_resources(principal, ResourceType::BackupRepository, &ids)
+        .await?;
+    repositories
+        .into_iter()
+        .map(|item| {
+            let permission = permissions.get(&item.id).copied().flatten();
+            let mut view = BackupRepositoryView::try_from(item).map_err(ApiError::internal)?;
+            view.capabilities = Some(capabilities_from_permission(permission));
+            Ok(view)
+        })
+        .collect()
+}
+
+pub(crate) async fn authorized_policies(
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+    policies: Vec<citadel_backups::BackupPolicy>,
+) -> Result<Vec<BackupPolicyView>, ApiError> {
+    let ids = policies.iter().map(|item| item.id).collect::<Vec<_>>();
+    let permissions = identity
+        .permissions_for_resources(principal, ResourceType::BackupPolicy, &ids)
+        .await?;
+    policies
+        .into_iter()
+        .map(|item| {
+            let permission = permissions.get(&item.id).copied().flatten();
+            let mut view = BackupPolicyView::try_from(item).map_err(ApiError::internal)?;
+            view.capabilities = Some(capabilities_from_permission(permission));
+            Ok(view)
+        })
+        .collect()
 }

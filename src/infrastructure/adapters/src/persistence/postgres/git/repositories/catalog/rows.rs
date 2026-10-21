@@ -95,7 +95,7 @@ pub(super) async fn load_git_repositories_tx(
     ids: &[Uuid],
 ) -> Result<Vec<GitRepository>, GitRepositoryError> {
     let q = format!(
-        "SELECT resource.*, {SYNC_STATUS}, {TAG_SUMMARIES}, NULL::jsonb AS latest_activity FROM gitrepositories resource WHERE resource.id=ANY($2::uuid[]) ORDER BY resource.id"
+        "SELECT resource.*, {SYNC_STATUS}, {TAG_SUMMARIES}, NULL::jsonb AS latest_activity FROM gitrepositories resource WHERE resource.id=ANY($2::uuid[]) ORDER BY resource.id FOR NO KEY UPDATE OF resource"
     );
     sqlx::query(AssertSqlSafe(q.as_str()))
         .bind(TaggableResourceType::GitRepository.as_database_str())

@@ -99,6 +99,10 @@ the **16 MiB** transport envelope; see [Build Context Size](#build-context-size)
 
 Build Pool builds run on a reusable build pool instead of a Docker platform. For a self-managed VM pool, Citadel either connects to a dedicated inbound Agent endpoint or uses a pool-scoped Edge Agent connection. In both modes, the builder host's Docker daemon performs the build and push.
 
+Build Pool execution currently supports only self-managed VM pools using inbound
+or Edge Agents. AWS EC2 provisioning is not implemented; manually provisioned
+AWS VMs can use the self-managed provider. See [Build Pools](/docs/resources/build-pools).
+
 Executing a build through a Build Pool requires `Elastic Build Execution`.
 Creating, testing, updating, disabling, or deleting the pool definition does
 not.
@@ -426,8 +430,8 @@ When a new terminal run is recorded, Citadel deletes older terminal runs beyond 
 Citadel also uses the existing cleanup job to remove old terminal build runs. By default, completed build runs older than `90` days are deleted during the normal cleanup cycle. Administrators can configure this with:
 
 ```text
-Builds:RunCleanupEnabled
-Builds:RunRetentionDays
+CITADEL_BUILDS_RUN_CLEANUP_ENABLED
+CITADEL_BUILDS_RUN_RETENTION_DAYS
 ```
 
 Retention does not delete:

@@ -247,6 +247,14 @@ async fn list_deployments(
     if let Some(service) = &state.backup_coverage {
         views = service.enrich_deployments(&principal, views).await;
     }
+    if let Some(service) = &state.copy_eligibility {
+        crate::api::resources::resource_copies::enrich_deployments(
+            service,
+            principal.actor_id,
+            &mut views,
+        )
+        .await;
+    }
     Ok(no_store(
         Json(DeploymentsView {
             deployments: views,

@@ -24,8 +24,8 @@ repository, also prepare a read-only token or SSH deploy key.
 4. Select **Save** and wait for the initial sync to finish.
 5. Check that the repository files and branches are available before creating a Git Stack or Build Project.
 
-Leave clone and pull scripts empty unless your maintainer needs them. They execute
-commands on Core. The sections below cover credentials and more advanced sync options.
+Optional [On Clone / On Pull hooks](#clone-and-pull-hooks) run on Core during
+synchronization. Review any configured commands before saving or synchronizing.
 
 ## Git Accounts
 
@@ -63,8 +63,7 @@ Create a repository and choose:
 - Default Branch: the branch Citadel should sync first, such as `main`.
 - Git Account: optional credentials for private or authenticated repositories.
 - Sync mode: how Citadel refreshes the local cache.
-- On Pull: optional shell commands to run after a pull.
-- On Clone: optional shell commands to run after the first clone.
+- On Pull / On Clone: optional shell commands executed on Core during synchronization.
 - Webhook: optional provider webhook that queues a repository pull.
 
 Citadel normalizes repository URLs by trimming whitespace, a trailing slash, and a trailing `.git` suffix.
@@ -143,16 +142,47 @@ state instead of displaying another revision or fetching it automatically.
 
 ## Clone And Pull Hooks
 
-Use **On Clone** and **On Pull** when the repository needs a small preparation step before Git stacks consume it.
+Repository hooks run in the existing sync worker for manual, interval, webhook,
+and Stack/Build-triggered synchronization:
 
-Each hook has:
+- **On Clone** runs after a fresh clone, before the cache is published. A failed
+  hook discards that staged clone. It runs again if the cache is rebuilt.
+- **On Pull** runs after an existing checkout is refreshed, including checks
+  where the commit has not changed. It does not also run after an initial clone.
+- Each command runs sequentially in a separate `/bin/sh -eu -c` process. Shell
+  variables and `cd` changes do not carry between commands. Required tools must
+  already be installed in Core.
+- **Path** defaults to `./` and must resolve to an existing directory inside the
+  checkout. Absolute paths, parent traversal, and symlinks escaping the checkout
+  are rejected.
+- The command list has a shared 120-second execution budget. Each command allows
+  at most 64 KiB stdout and 16 KiB stderr. A nonzero exit, timeout, cancellation,
+  or output-limit failure stops the remaining commands and fails synchronization.
 
-- Path: the command working directory, relative to the repository root.
-- Commands: one command per line.
+Write permission is required to change hooks; read-only users can inspect them.
+Manual **Sync** requires Execute permission. While a sync is running, changes
+to its source or hooks and repository deletion are rejected; metadata can still
+be edited. Grant repository Write only to users
+trusted to run shell commands as the Core operating-system user. Hooks are not
+sandboxed; the working-directory check is not a filesystem access boundary.
+Git account authentication is not passed to hook processes, and temporary SSH key
+files are removed before hooks start. Core's application environment is not
+inherited, though the process runner supplies its normal tool environment such as
+PATH and proxy settings. Command text and stdout/stderr are not included in sync
+errors; the failed hook, command number, and failure reason are reported.
 
-`On Clone` runs after the repository is cloned for the first time. `On Pull` runs after clone and after later pulls.
+For repositories with hooks, failed or interrupted synchronization requires
+review and a manual **Sync** of the affected branch before automatic refreshes
+resume. Polling, webhooks, and deployment refreshes cannot retry that failed
+branch automatically. Already completed command side effects are not rolled
+back. Make commands safe to repeat, inspect external side effects before retrying,
+and do not assume exactly-once execution. Disconnecting the browser does not
+cancel the durable sync; Core shutdown cancels its processes.
 
-Keep hooks short and deterministic. Long build steps are usually better as automation actions or CI jobs, because repository sync should stay fast and predictable.
+Hook-created or modified working-tree files do not become Stack deployment inputs:
+Git Stacks still materialize the selected **committed Git tree**. Commit required
+inputs or generate them in CI. Stack pre-deploy/post-deploy commands remain a
+separate deployment feature.
 
 ## Webhooks
 
@@ -215,12 +245,39 @@ Private HTTPS repository:
 - Use auth type `Token` unless your Git provider specifically requires basic credentials.
 - Link that account to the repository.
 
-Private SSH repository:
+### Private SSH repository
 
-- Create a Git account with transport `SSH`.
-- Use auth type `SSH Key`.
-- Use the SSH clone URL for the repository, such as `git@github.com:org/repo.git`.
-- Link that account to the repository.
+1. Create a dedicated, read-only deploy key for the repository. Unattended sync
+   does **not** support passphrase-protected private keys; leave passphrase empty.
+   Store the private key only in the Citadel Git Account, using **SSH / SSH Key**.
+2. Obtain the Git server's public host key and verify its fingerprint against
+   provider-published fingerprints or another trusted channel. An unverified
+   `ssh-keyscan` result is not trusted evidence.
+3. Put that verified host-key entry in a file readable by Core. The standard
+   installation uses `/app/data/git-known-hosts` (`<data root>/git-known-hosts`
+   with a custom data root). For a separate read-only file, create
+   `git-known-hosts` beside the installation Compose file and use this overlay:
+
+   ```yaml
+   services:
+     server:
+       environment:
+         CITADEL_GIT_KNOWN_HOSTS_PATH: /etc/citadel/git-known-hosts
+       volumes:
+         - ./git-known-hosts:/etc/citadel/git-known-hosts:ro
+   ```
+
+   The source must be an existing file, not a directory. A verified entry has
+   the form `git.example.com ssh-ed25519 <verified-public-host-key>`; replace the
+   placeholder with the actual verified public key. For a nonstandard SSH port,
+   use `[git.example.com]:2222` as the known-hosts hostname.
+4. Recreate Core with the overlay, preserving its existing volumes and project
+   name. Use `git@git.example.com:team/app.git`, link the matching Git Account,
+   save, and select **Sync Repo**. Confirm the sync succeeds and **Browse Repo**
+   shows the expected committed files.
+
+Citadel enforces strict host verification and non-interactive SSH. Never disable
+host-key checking to work around a missing or mismatched entry.
 
 ## Troubleshooting
 
@@ -230,7 +287,9 @@ If repository sync fails:
 - Confirm the default branch exists.
 - For a linked account, confirm the account domain matches the repository URL domain.
 - For HTTPS private repositories, confirm the token has read access.
-- For SSH repositories, confirm the private key and optional passphrase are correct.
+- For SSH host-verification failures, check the known-hosts path, Core read access, hostname/port, and verified fingerprint; investigate changed keys before replacing them.
+- For SSH authentication failures, check the deploy key, repository permissions, username and linked account domain.
+- For an unsupported-passphrase error, use a dedicated unattended deploy key without a passphrase; changing known-hosts entries does not fix credentials.
 - Review the repository activity entry for the exact clone or pull error.
 
 If a branch does not appear in a Git stack form, sync the repository first. You can still enter a branch manually when the ref has not been cached yet.

@@ -1,4 +1,4 @@
-//! Actor-visible network relationships. Saved configuration is not an attachment.
+//! Actor-visible network relationships. Configuration/project references are not attachments.
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -9,6 +9,8 @@ pub struct NetworkUsageQuery {
     pub scope: String,
     pub docker_node_id: Option<String>,
     pub container_ids: Vec<String>,
+    /// Docker-reported Compose project or Swarm stack namespace, not an attachment.
+    pub stack_project: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

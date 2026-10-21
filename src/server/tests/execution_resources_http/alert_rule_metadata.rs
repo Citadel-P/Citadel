@@ -42,6 +42,48 @@ pub(super) async fn verify(
     assert_eq!(config["channelIds"], rule["channelIds"]);
     assert_eq!(config["isSystem"], false);
     assert!(config.get("createdByActorId").is_none());
+    assert_eq!(
+        config["capabilities"],
+        json!({"canRead":true,"canWrite":true,"canExecute":true})
+    );
+
+    let scoped_reader = seed_regular_user(pool).await;
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,0)")
+        .bind(Uuid::now_v7())
+        .bind(scoped_reader.actor_id.value())
+        .bind(Uuid::parse_str(id).unwrap())
+        .bind(ResourceType::Alert as i32)
+        .execute(pool).await.unwrap();
+    let response = request(app, Method::GET, &cfg, Some(scoped_reader.clone()), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await["capabilities"],
+        json!({"canRead":true,"canWrite":false,"canExecute":false})
+    );
+    for (method, path, body) in [
+        (
+            Method::PATCH,
+            format!("/api/v1/alertRules/{id}"),
+            json!({"status":"Disabled"}),
+        ),
+        (
+            Method::PATCH,
+            metadata.clone(),
+            json!({"description":"denied"}),
+        ),
+        (
+            Method::POST,
+            "/api/v1/alertRules/rename".into(),
+            json!({"id":id,"name":"denied"}),
+        ),
+    ] {
+        assert_eq!(
+            request(app, method, &path, Some(scoped_reader.clone()), Some(body))
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
 
     let renamed = request(
         app,

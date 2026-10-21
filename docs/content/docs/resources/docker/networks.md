@@ -36,10 +36,15 @@ status indicators as the Deployment, Stack, and Swarm Service lists.
 The **Connected to network** section shows each container’s status, addresses,
 and owning workload. Open **Connection details** for aliases and published ports.
 
-**Configured workloads** lists Deployments, Swarm Services, and Stacks whose saved
-configuration explicitly names this network. These workloads may not be attached.
-Generated or interpolated Stack network names may be unresolved;
-Citadel does not fetch Git repositories to fill these gaps. Search also matches
+**Configured workloads** lists saved network references and networks associated
+with a Stack's Docker project. These workloads may not be attached.
+Compose-created networks, including the default network, are associated with a
+Stack using Docker's Compose project or Swarm stack namespace label and the saved
+project identity. This also works for Git-backed Stacks. Explicit external network
+references use the available saved configuration; unresolved or Git-only external
+references may be missing. Citadel does not fetch Git repositories to fill these
+gaps. Deployments with no network selection reference Docker's default bridge.
+Search also matches
 workload names available in the list's usage information.
 
 **In use** means Docker reported usage without listing visible endpoints.
@@ -69,7 +74,15 @@ Deployments, Stacks, and Swarm services also have **View connections** beside
 Health, with Backup last. This opens the same sheet scoped to that workload’s
 reported networks and containers. Shared networks show only that workload’s
 members. Use **Open network details** at the bottom to open the selected network.
-Configured use is optional; it does not imply an active connection.
+Configured networks are shown by default in these workload maps, including for
+stopped workloads, using dashed **Configured use** lines. They do not imply an
+active container connection. **Map options → Show configured networks** hides
+or shows these references. Running workloads use their observed connections
+without duplicating the same network as a configured reference.
+Swarm services scaled to zero retain their **Service network** relationships,
+from the service specification and Docker-reported virtual IP networks (including
+ingress), even when no tasks are attached. If the
+runtime service is absent, its saved network selections appear as configured use.
 Swarm task coverage can be incomplete, and limited results are marked.
 
 ![Storefront stack connected to frontend and backend networks, with network details alongside the map](/screenshots/network-map.png)
@@ -96,8 +109,13 @@ addresses, aliases and published ports. **Map options → Explore workload** als
 lets you find a container by its name, Docker ID or owner, including containers
 using host, none or shared-namespace networking. **Back to** returns to the original
 network. Networks hidden by list filters or absent from inventory are identified
-in the details rather than treated as disconnected. Stopped containers may retain
-network configuration; it is labelled **Not attached** without a live edge.
+in the details rather than treated as disconnected. Stopped containers retain
+their configured networks in the container graph when those networks are present
+in the authorized inventory. Dashed lines labelled **Configured · Not attached**
+distinguish them from active connections, and no active container address is shown.
+When attachment evidence is missing, the dashed line is labelled
+**Attachment unconfirmed**. Starting the container restores solid
+connections and active addresses when Docker reports its endpoints again.
 
 The diagram follows realtime updates without polling and loads only when a sheet
 opens. Maximizing does not start another inspection. It displays at most 50

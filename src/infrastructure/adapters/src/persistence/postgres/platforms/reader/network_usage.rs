@@ -83,6 +83,25 @@ pub(super) async fn read(
             }
             let mut references: Vec<String> =
                 serde_json::from_value(row.try_get("refs").map_err(storage)?).unwrap_or_default();
+            // Deployments do not expose host/none/shared namespace modes. An
+            // omitted or empty network list uses Docker's default bridge.
+            if entry.workload_kind == Some(NetworkWorkloadKind::Deployment) && references.is_empty()
+            {
+                references.push("bridge".into());
+            }
+            let project = if entry.workload_kind == Some(NetworkWorkloadKind::Stack) {
+                row.try_get::<Option<String>, _>("projectname")
+                    .map_err(storage)?
+                    .or_else(|| {
+                        entry
+                            .workload_name
+                            .as_deref()
+                            .zip(entry.workload_id)
+                            .map(|(name, id)| citadel_stacks::normalize_project_name(name, id))
+                    })
+            } else {
+                None
+            };
             if let Some(compose) = row
                 .try_get::<Option<String>, _>("compose")
                 .map_err(storage)?
@@ -90,22 +109,25 @@ pub(super) async fn read(
             {
                 references.extend(model.network_names.into_values());
             }
-            references.sort();
-            references.dedup();
             for (index, network) in batch.iter().enumerate() {
                 // Saved configuration has no worker-local identity. Do not match it
                 // to a same-named local network on an arbitrary Swarm node.
                 if network.docker_node_id.is_some() && network.scope != "swarm" {
                     continue;
                 }
-                for reference in &references {
-                    if !reference.contains('$')
-                        && (reference == &network.id || reference == &network.name)
-                    {
-                        let mut entry = entry.clone();
-                        entry.reference = Some(reference.clone());
-                        push(&mut result[batch_index * 100 + index], entry);
-                    }
+                // Explicit references and Docker's project identity describe
+                // configured use, even without containers or running Swarm tasks.
+                let reference = references.iter().find(|reference| {
+                    !reference.contains('$')
+                        && (*reference == &network.id || *reference == &network.name)
+                });
+                let project_matches = project.as_ref().is_some_and(|project| {
+                    !project.is_empty() && network.stack_project.as_ref() == Some(project)
+                });
+                if reference.is_some() || project_matches {
+                    let mut entry = entry.clone();
+                    entry.reference = Some(reference.unwrap_or(&network.name).clone());
+                    push(&mut result[batch_index * 100 + index], entry);
                 }
             }
         }

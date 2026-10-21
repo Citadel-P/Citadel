@@ -6,7 +6,7 @@ pub(super) async fn get_source(
     id: Uuid,
 ) -> Result<GitRepositorySource, GitRepositoryExecutionError> {
     sqlx::query(
-        "SELECT id,name,url,defaultbranch,gitaccountid,syncmode,syncintervalminutes FROM gitrepositories WHERE id=$1",
+        "SELECT id,name,url,defaultbranch,gitaccountid,syncmode,syncintervalminutes,onclone,onpull FROM gitrepositories WHERE id=$1",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -36,6 +36,16 @@ pub(super) fn map_source(
             }
         },
         sync_interval_minutes: row.try_get("syncintervalminutes").map_err(storage)?,
+        on_clone: row
+            .try_get::<Option<String>, _>("onclone")
+            .map_err(storage)?
+            .map(|value| serde_json::from_str(&value).map_err(storage))
+            .transpose()?,
+        on_pull: row
+            .try_get::<Option<String>, _>("onpull")
+            .map_err(storage)?
+            .map(|value| serde_json::from_str(&value).map_err(storage))
+            .transpose()?,
     })
 }
 
@@ -95,6 +105,7 @@ pub(super) async fn finish_sync(
     .fetch_one(&mut *transaction)
     .await
     .map_err(storage)?;
+    let rerun_requested = rerun_requested && !(error.is_some() && claim.repository.has_hooks());
     let (status, commit) = if let Some(result) = result {
         (
             GitRepositoryRefStatus::Healthy,
@@ -104,12 +115,13 @@ pub(super) async fn finish_sync(
         (GitRepositoryRefStatus::Degraded, None)
     };
     let affected = sqlx::query(
-        "UPDATE gitrepositoryrefs SET status=$2,resolvedcommitsha=COALESCE($3,resolvedcommitsha),lasterror=$4,lastsyncedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Syncing'",
+        "UPDATE gitrepositoryrefs SET status=$2,resolvedcommitsha=COALESCE($3,resolvedcommitsha),lasterror=$4,lastsyncedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Syncing' AND lastsyncedat=$5",
     )
     .bind(claim.reference_id)
     .bind(status.as_str())
     .bind(commit)
     .bind(error)
+    .bind(claim.started_at)
     .execute(&mut *transaction)
     .await
     .map_err(storage)?

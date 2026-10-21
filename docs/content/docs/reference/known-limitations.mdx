@@ -19,5 +19,9 @@ description: "Review confirmed Citadel operational and compatibility limitations
 - Rolling Swarm updates retain historical Task containers according to Docker behavior; Citadel may hide those from current workload summaries and can prune eligible historical containers according to platform policy.
 - Restoring a previous Core image does not automatically reverse database migrations.
 
+- Git Stacks materialize the full committed tree within 512 entries/files and 12 MiB on Core across all connectors; generated ownership files also consume the Agent's final transport budget. See [Git source requirements](/docs/resources/stacks/git#git-source-requirements).
+- Git repository hooks run trusted shell commands on Core without a sandbox. They do not provide exactly-once execution or add uncommitted generated files to Git Stack inputs. Failed syncs with hooks require review and manual retry. See [repository hooks](/docs/resources/git-repositories#clone-and-pull-hooks).
+- Build Pool execution supports self-managed inbound and Edge Agents. AWS EC2 provisioning is not implemented; manually provisioned AWS VMs can be self-managed builders.
+
 Release notes may add narrower limitations for a specific version. Treat those
 notes as authoritative for that release.

@@ -1,10 +1,12 @@
-import { Routes, Route } from 'react-router';
+import { Routes, Route, useParams } from 'react-router';
 import { screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { RegistryStatus, type RegistryConfigResponse } from '@/api/generated/api.types';
 import { RegistryForm } from './form';
+import { RegistryFormComponents } from './index';
+import { useRegistryConfig } from '../queries';
 
 vi.mock('@/lib/monaco', () => ({
   MonacoDiff: (props: { original: unknown; modified: unknown }) => (
@@ -19,8 +21,61 @@ const resource: RegistryConfigResponse = {
   status: RegistryStatus.Active,
   description: '',
   tags: [],
+  capabilities: { canRead: true, canWrite: true, canExecute: true },
   configuration: { $type: 'DockerHub', userName: 'operator', hasPat: true },
 };
+
+function RegistryConfigPage() {
+  const { id } = useParams();
+  const { data } = useRegistryConfig(id);
+  const Config = RegistryFormComponents.EditForm!.Tabs[0].Content;
+  return data ? <Config resource={data.data} /> : null;
+}
+
+it.each<RegistryConfigResponse['configuration']>([
+  { $type: 'DockerHub', userName: 'operator', hasPat: true },
+  { $type: 'GitHub', nameSpace: 'example', ghcrAuthEnabled: true, hasPat: true },
+  { $type: 'Custom', authEnabled: true, userName: 'operator', hasPassword: true },
+])('disables configuration controls for a read-only user (%j)', async (configuration) => {
+  server.use(
+    http.get('http://localhost/api/v1/registries/registry-1/_cfg', () =>
+      HttpResponse.json({
+        ...resource,
+        configuration,
+        capabilities: { canRead: true, canWrite: false, canExecute: false },
+      }),
+    ),
+  );
+  const { container } = renderCitadel(
+    <Routes>
+      <Route path="/registries/edit/:id" element={<RegistryConfigPage />} />
+    </Routes>,
+    { route: '/registries/edit/registry-1' },
+  );
+
+  await screen.findByRole('combobox', { name: 'Status' });
+  const controls = container.querySelectorAll('fieldset input, fieldset [role="combobox"], fieldset [role="switch"]');
+  expect(controls.length).toBeGreaterThan(2);
+  for (const control of controls) expect(control).toBeDisabled();
+  for (const save of screen.getAllByRole('button', { name: 'Save' })) expect(save).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'Jump to section' })).toBeEnabled();
+});
+
+it('keeps configuration editing available when the API grants Write permission', async () => {
+  server.use(http.get('http://localhost/api/v1/registries/registry-1/_cfg', () => HttpResponse.json(resource)));
+  const { user } = renderCitadel(
+    <Routes>
+      <Route path="/registries/edit/:id" element={<RegistryConfigPage />} />
+    </Routes>,
+    { route: '/registries/edit/registry-1' },
+  );
+
+  const username = await screen.findByDisplayValue('operator');
+  expect(username).toBeEnabled();
+  expect(screen.getByRole('combobox', { name: 'Status' })).toBeEnabled();
+  await user.type(username, '-updated');
+  expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeEnabled();
+});
 
 it('saves public settings without requesting or resubmitting a stored PAT', async () => {
   let payload: unknown;
