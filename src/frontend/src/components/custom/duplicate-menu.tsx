@@ -35,7 +35,7 @@ export function DuplicateMenu({
   if (submenu) {
     return (
       <DropdownMenuSub>
-        <DropdownMenuSubTrigger disabled={disabled} className="gap-2 px-3 py-2 text-xs font-semibold">
+        <DropdownMenuSubTrigger disabled={disabled} className="gap-2 px-3 py-2 text-sm font-normal">
           <Copy className="size-4" aria-hidden="true" />
           Duplicate
         </DropdownMenuSubTrigger>
