@@ -238,6 +238,14 @@ async fn get_registry_config(
         &headers,
     )
     .await?;
+    let caps = capabilities(
+        &state.identity,
+        &principal,
+        ResourceType::Registry,
+        Some(id),
+        &headers,
+    )
+    .await?;
     let value = load_registry(&state, id, &headers).await?;
     Ok(no_store(
         Json(RegistryConfigResponse {
@@ -255,6 +263,7 @@ async fn get_registry_config(
                 &headers,
             )?,
             tags: value.tags,
+            capabilities: caps,
         })
         .into_response(),
     ))

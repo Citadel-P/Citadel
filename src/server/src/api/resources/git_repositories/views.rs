@@ -1,3 +1,4 @@
+use crate::api::error::ApiError;
 use crate::api::resources::{
     activities::views::LatestActivityView,
     capabilities::ResourceCapabilitiesView,
@@ -8,8 +9,10 @@ use crate::api::resources::{
 };
 use chrono::{DateTime, Utc};
 use citadel_git::RemoteBranch;
+use citadel_identity::{ActorPrincipal, IdentityService};
 use citadel_primitives::ResourceControlState;
 use citadel_primitives::WebhookConfig;
+use citadel_primitives::{PermissionLevel, ResourceType};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -408,4 +411,53 @@ pub(crate) struct GitRepositoryConfigResponse {
     #[schema(required = true)]
     pub(crate) on_pull: Option<RepoCommand>,
     pub(crate) tags: Vec<crate::api::resources::tags::views::TagSummary>,
+}
+
+pub(crate) async fn authorized_repositories(
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+    repositories: Vec<citadel_git::GitRepository>,
+) -> Result<Vec<AuthorizedGitRepositoryView>, ApiError> {
+    let ids = repositories.iter().map(|item| item.id).collect::<Vec<_>>();
+    let permissions = if principal.is_administrator() {
+        Default::default()
+    } else {
+        identity
+            .permissions_for_resources(principal, ResourceType::GitRepository, &ids)
+            .await?
+    };
+    repositories
+        .into_iter()
+        .map(|repository| {
+            let capabilities = git_capabilities(
+                principal,
+                permissions.get(&repository.id).copied().flatten(),
+            );
+            Ok(AuthorizedGitRepositoryView {
+                repository: GitRepositoryView::try_from(repository).map_err(ApiError::internal)?,
+                capabilities,
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn git_capabilities(
+    principal: &ActorPrincipal,
+    grant: Option<citadel_identity::PermissionGrant>,
+) -> ResourceCapabilitiesView {
+    use citadel_git::permissions::*;
+    use citadel_primitives::{EffectivePermission, PermissionPolicy, SpecificPermissions};
+    let permission = if principal.is_administrator() {
+        EffectivePermission::Administrator
+    } else {
+        EffectivePermission::Granted {
+            level: grant.map_or(PermissionLevel::None, |grant| grant.level),
+            specifics: SpecificPermissions::EMPTY,
+        }
+    };
+    ResourceCapabilitiesView {
+        can_read: permission.allows(ReadGitRepository::REQUIREMENT),
+        can_write: permission.allows(WriteGitRepository::REQUIREMENT),
+        can_execute: permission.allows(ExecuteGitRepository::REQUIREMENT),
+    }
 }

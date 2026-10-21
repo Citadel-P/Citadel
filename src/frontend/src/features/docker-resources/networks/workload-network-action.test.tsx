@@ -130,3 +130,48 @@ it('does not offer connections without a platform', () => {
   expect(screen.queryByRole('button', { name: 'View connections' })).not.toBeInTheDocument();
   expect(state.read).not.toHaveBeenCalled();
 });
+
+it.each(['Deployment', 'Stack', 'SwarmService'] as const)(
+  'shows a stopped %s’s configured networks by default',
+  async (kind) => {
+    state.networks = [
+      {
+        id: 'configured-network',
+        name: 'application_default',
+        driver: kind === 'Deployment' ? 'bridge' : 'overlay',
+        scope: kind === 'Deployment' ? 'local' : 'swarm',
+        inUse: false,
+        containers: {},
+        usage: {
+          isPartial: true,
+          truncated: false,
+          entries: [
+            {
+              relationship: NetworkRelationship.SavedReference,
+              workloadKind: NetworkWorkloadKind[kind],
+              workloadId: 'owner',
+              workloadName: 'Application',
+              workloadStatus: 'Stopped',
+              workloadProcessing: false,
+              isStale: false,
+              reference: 'application_default',
+            },
+          ],
+        },
+      } as NetworkView,
+    ];
+    render(
+      <MemoryRouter>
+        <WorkloadNetworkAction resource={{ id: 'owner', name: 'Application', platformId: 'p' }} kind={kind} />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'View connections' }));
+    expect(await screen.findByTestId('graph')).toHaveTextContent('application_default');
+    expect(screen.getByText('Configured use')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Map options' }));
+    const configured = screen.getByRole('menuitemcheckbox', { name: 'Show configured networks' });
+    expect(configured).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(configured);
+    expect(await screen.findByText('No network connections reported for this workload.')).toBeVisible();
+  },
+);

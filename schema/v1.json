@@ -1121,6 +1121,16 @@
           },
           {
             "properties": {
+              "capabilities": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                  }
+                ]
+              },
               "id": {
                 "format": "uuid",
                 "type": "string"
@@ -1130,6 +1140,7 @@
               }
             },
             "required": [
+              "capabilities",
               "id",
               "isSystem"
             ],
@@ -18667,6 +18678,9 @@
       },
       "RegistryConfigResponse": {
         "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilitiesView"
+          },
           "configuration": {
             "$ref": "#/components/schemas/RegistryConfigurationView"
           },
@@ -18700,7 +18714,8 @@
           "status",
           "description",
           "configuration",
-          "tags"
+          "tags",
+          "capabilities"
         ],
         "type": "object"
       },
@@ -20004,7 +20019,7 @@
         "type": "string"
       },
       "ResourceCopyEligibility": {
-        "description": "Actor-specific configuration-plus-data eligibility, included in detail reads\nand realtime detail snapshots. Preview and submission revalidate this hint.",
+        "description": "Actor-specific configuration-plus-data eligibility, included in list/detail reads\nand realtime snapshots. Preview and submission revalidate this hint.",
         "properties": {
           "reason": {
             "type": [

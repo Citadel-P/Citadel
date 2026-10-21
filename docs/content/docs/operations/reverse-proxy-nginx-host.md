@@ -29,7 +29,7 @@ docker inspect "$(docker compose ps -q server)" \
   --format '{{range $name, $network := .NetworkSettings.Networks}}{{$name}} gateway={{$network.Gateway}}{{println}}{{end}}'
 ```
 
-Use the installation's bridge gateway for `KnownProxies` below; `172.19.0.1`
+Use the installation's bridge gateway for `CITADEL_HTTP_TRUSTED_PROXIES` below; `172.19.0.1`
 is an example, not a fixed installation default. With
 [rootless Docker](https://docs.docker.com/engine/security/rootless/troubleshoot/#networking-errors),
 the source address also depends on the port-forwarding driver. If Core rejects
@@ -49,7 +49,7 @@ CITADEL_HTTP_LISTEN_PORT=8000
 CITADEL_EDGE_GRPC_LISTEN_PORT=8001
 CITADEL_HTTP_TRUSTED_PROXIES=172.19.0.1
 CITADEL_HTTP_FORWARDED_LIMIT=1
-CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost;127.0.0.1
 CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com
 
 CITADEL_JWT_ISSUER=https://citadel.example.com
@@ -192,5 +192,23 @@ with socket.socket() as listener:
 
 In another terminal on the same host, run `curl http://127.0.0.1:18002/`. The
 listener prints the peer and exits; Docker removes the temporary container.
-Set `KnownProxies` to that address and recreate Core with `docker compose up -d`.
+Set `CITADEL_HTTP_TRUSTED_PROXIES` to that address and recreate Core with `docker compose up -d`.
 Verify it again if you recreate the Docker network or change rootless networking.
+
+## Check Automation API access
+
+`CITADEL_PUBLIC_URL` is the browser origin. Automation Actions call Core through
+`CITADEL_INTERNAL_BASE_URL`, which defaults to `http://127.0.0.1:8000` with this
+listener configuration. Keep `127.0.0.1` in `CITADEL_HTTP_ALLOWED_HOSTS` so that
+internal calls pass host validation; Core's private listener bindings remain in place.
+
+Create a manual Automation Action using an identity with Platform Read access:
+
+```typescript
+const result = await citadel.api.listPlatforms();
+console.log("Accessible Platforms:", result.platforms.map(platform => platform.name));
+```
+
+Run it and confirm the Platform names (or an empty list) in the Action logs.
+A console-only Action does not test this connection. For HTTPS-only Core, follow
+[Direct TLS Automation setup](/docs/operations/tls-and-secure-agent-transport#automation-api-access).

@@ -50,7 +50,7 @@ beforeEach(() => {
     },
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterAll(() => vi.unstubAllGlobals());
 
 it('preserves layout for presentation updates and ignores cancelled layout results', async () => {
   const props = { graph, onToggle: vi.fn(), onSelect: vi.fn(), reset: 0 };
@@ -77,4 +77,37 @@ it('preserves layout for presentation updates and ignores cancelled layout resul
   });
   view.unmount();
   expect(state.workers[1].terminate).toHaveBeenCalledOnce();
+});
+
+it('draws configured container connections with dashed labels and restores solid live edges without relayout', async () => {
+  const configured: NetworkGraph = {
+    ...graph,
+    nodes: [...graph.nodes, { id: 'container', kind: 'container', label: 'App', subtitle: 'Container', entries: [] }],
+    edges: [
+      { id: 'connection', source: 'network', target: 'container', saved: true, label: 'Configured · Not attached' },
+    ],
+  };
+  const props = { graph: configured, onToggle: vi.fn(), onSelect: vi.fn(), reset: 0 };
+  const view = render(<NetworkCanvas {...props} />);
+  await act(async () =>
+    state.jobs[0].resolve({
+      id: 'root',
+      children: [
+        { id: 'network', x: 12, y: 12 },
+        { id: 'container', x: 12, y: 200 },
+      ],
+    }),
+  );
+  expect(state.props).toMatchObject({
+    edges: [{ label: 'Configured · Not attached', style: { strokeDasharray: '5 5' } }],
+  });
+  view.rerender(
+    <NetworkCanvas
+      {...props}
+      graph={{ ...configured, edges: [{ ...configured.edges[0], saved: false, label: undefined }] }}
+    />,
+  );
+  expect(state.props).toMatchObject({ edges: [{ label: undefined }] });
+  expect(state.props).not.toMatchObject({ edges: [{ style: { strokeDasharray: expect.anything() } }] });
+  expect(state.jobs).toHaveLength(1);
 });

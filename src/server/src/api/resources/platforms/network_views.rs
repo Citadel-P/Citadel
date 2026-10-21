@@ -21,6 +21,12 @@ pub(crate) async fn enrich_networks(
             scope: network.scope.clone(),
             docker_node_id: network.docker_node_id.clone(),
             container_ids: network.containers.keys().cloned().collect(),
+            stack_project: network
+                .labels
+                .get("com.docker.stack.namespace")
+                .or_else(|| network.labels.get("com.docker.compose.project"))
+                .filter(|project| !project.is_empty())
+                .cloned(),
         })
         .collect();
     let usage = reader

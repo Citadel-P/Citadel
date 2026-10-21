@@ -3,8 +3,8 @@ title: "Upgrade and rollback"
 description: "Update Citadel while keeping a way to recover your accounts and settings."
 ---
 
-These steps update Core in an existing installation using published Citadel
-images. Plan for a brief interruption to the UI, API, live updates, and Core
+These steps update Core in an existing installation using a selected Citadel
+image. Plan for a brief interruption to the UI, API, live updates, and Core
 jobs while the container is replaced. Running Docker workloads normally continue.
 
 Follow the target release notes for database compatibility and any required
@@ -13,13 +13,10 @@ database baseline and may require a clean installation with a separately
 verified data import. Preserve the original database and recovery keys until
 recovery is verified.
 
-**v0.1.4 requires a fresh database when upgrading from the earlier migration
-baseline.** Its consolidated initial migration has a different checksum, so
-existing v0.1.2 and earlier databases cannot be upgraded in place. Back up the
-database, configuration, recovery keys, and workload data before installing into
-a fresh database. Recreate the resource configuration or use a separately verified
-data import; keep the original database and volumes for rollback. Do not rewrite
-the old migration journal or its checksums to bypass this check.
+Use the matching current Core, Agent, and frontend build. See
+[development database changes](/docs/reference/releases#development-database-changes)
+for baseline and recovery considerations.
+Never rewrite applied migration history or checksums to force an upgrade.
 
 ## Release notifications
 
@@ -29,7 +26,7 @@ Home and beside the sidebar version. Checks use completed public GitHub releases
 which Citadel publishes after verifying its Core and Agent images; pushing an
 image tag alone does not trigger a notification. Stable installations track stable
 releases, while development installations (`-dev.N`) track development releases.
-Publishing `0.1.4` does not produce an update notice on `0.1.4-dev.1`.
+A stable publication does not produce an update notice for the development channel.
 
 Updates remain manual. With checks disabled, follow the
 [release notes](https://github.com/Citadel-P/Citadel/releases) yourself.
@@ -91,12 +88,12 @@ responds; complete the checks below before ending maintenance.
 2. Check expected Platform and Agent connections, then open fresh container
    logs or statistics to verify live updates.
 3. Confirm that stored credentials still work, for example by syncing a known
-   Git repository when its hooks and automatic deployments are appropriate.
+   Git repository when its automatic deployment side effects are appropriate.
 4. Check important application endpoints and inspect recent **Activities** and
    **Alerts** for new failures. Review scheduled jobs as they resume.
 
-Update Agents using the generated installation commands when the release
-requires it. Check each connection after replacement; keep Agent image references
+Update Agents to the matching current build using the generated installation
+commands. Check each connection after replacement; keep Agent image references
 with the corresponding Core version. Retain the pre-upgrade backup until the
 installation and its normal operations have been verified.
 

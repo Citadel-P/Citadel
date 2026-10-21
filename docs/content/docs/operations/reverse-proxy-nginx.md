@@ -19,7 +19,7 @@ If Nginx already runs as a system service on the Docker host, use
   `./tls/fullchain.pem` and `./tls/privkey.pem`. Nginx does not obtain or renew
   certificates automatically; use your certificate provider's renewal process.
 - Choose an unused subnet. If `172.30.249.0/29` overlaps your networks, change
-  the subnet, container addresses, and `KnownProxies` together.
+  the subnet, container addresses, and `CITADEL_HTTP_TRUSTED_PROXIES` together.
 
 For automatic certificate management, see
 [Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy).
@@ -39,7 +39,7 @@ CITADEL_HTTP_LISTEN_PORT=8000
 CITADEL_EDGE_GRPC_LISTEN_PORT=8001
 CITADEL_HTTP_TRUSTED_PROXIES=172.30.249.2
 CITADEL_HTTP_FORWARDED_LIMIT=1
-CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost;127.0.0.1
 CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com
 
 CITADEL_JWT_ISSUER=https://citadel.example.com
@@ -198,7 +198,7 @@ docker compose -f docker-compose.yml -f compose.nginx.yml exec nginx nginx -s re
 3. For Edge Agents, use the Platform's generated command with
    `CITADEL_CORE_URL=https://citadel.example.com` and confirm it comes online.
 
-If Core rejects forwarded headers, check that `KnownProxies` matches Nginx's
+If Core rejects forwarded headers, check that `CITADEL_HTTP_TRUSTED_PROXIES` matches Nginx's
 address. If browser access works but Edge enrollment fails, check the service
 route and HTTP/2 listener. For TLS or upstream errors, inspect Nginx's logs:
 
@@ -208,3 +208,21 @@ docker compose -f docker-compose.yml -f compose.nginx.yml logs --tail=100 nginx
 
 See [transport troubleshooting](/docs/operations/tls-and-secure-agent-transport#troubleshooting)
 for certificate trust and hostname errors.
+
+## Check Automation API access
+
+`CITADEL_PUBLIC_URL` is the browser origin. Automation Actions call Core through
+`CITADEL_INTERNAL_BASE_URL`, which defaults to `http://127.0.0.1:8000` with this
+listener configuration. Keep `127.0.0.1` in `CITADEL_HTTP_ALLOWED_HOSTS` so that
+internal calls pass host validation; Core's private listener bindings remain in place.
+
+Create a manual Automation Action using an identity with Platform Read access:
+
+```typescript
+const result = await citadel.api.listPlatforms();
+console.log("Accessible Platforms:", result.platforms.map(platform => platform.name));
+```
+
+Run it and confirm the Platform names (or an empty list) in the Action logs.
+A console-only Action does not test this connection. For HTTPS-only Core, follow
+[Direct TLS Automation setup](/docs/operations/tls-and-secure-agent-transport#automation-api-access).

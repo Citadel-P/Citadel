@@ -157,6 +157,26 @@ pub(super) async fn verify(
         .finish_pool_test(&current, &result)
         .await
         .unwrap();
+    let unsupported = json!({"$type":"AwsEc2","region":"stored-region"});
+    for (method, path, body) in [
+        (
+            Method::POST,
+            "/api/v1/buildAgentPools".to_owned(),
+            json!({"name":"unsupported-new","enabled":true,"providerSpec":unsupported}),
+        ),
+        (
+            Method::PATCH,
+            format!("/api/v1/buildAgentPools/{id}"),
+            json!({"providerSpec":unsupported}),
+        ),
+    ] {
+        assert_eq!(
+            request(app, method, &path, Some(principal.clone()), Some(body))
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
     sqlx::query("UPDATE buildagentpools SET provider='AwsEc2',providerspec='{\"$type\":\"AwsEc2\"}' WHERE id=$1").bind(id).execute(db).await.unwrap();
     assert_eq!(
         request(app, Method::POST, &uri, Some(principal.clone()), None)
@@ -164,7 +184,39 @@ pub(super) async fn verify(
             .status(),
         StatusCode::CONFLICT
     );
-    sqlx::query("UPDATE buildagentpools SET provider='SelfManagedVm',providerspec='{\"$type\":\"SelfManagedVm\",\"connectionMode\":\"EdgeAgent\"}' WHERE id=$1").bind(id).execute(db).await.unwrap();
+    for patch in [
+        json!({"description":"retained unsupported configuration"}),
+        json!({"enabled":false}),
+    ] {
+        assert_eq!(
+            request(
+                app,
+                Method::PATCH,
+                &format!("/api/v1/buildAgentPools/{id}"),
+                Some(principal.clone()),
+                Some(patch)
+            )
+            .await
+            .status(),
+            StatusCode::OK
+        );
+    }
+    let stored = builds.store().get_pool(id).await.unwrap();
+    assert_eq!(stored.provider_spec, json!({"$type":"AwsEc2"}));
+    assert!(!stored.enabled);
+    assert_eq!(
+        request(
+            app,
+            Method::PATCH,
+            &format!("/api/v1/buildAgentPools/{id}"),
+            Some(principal.clone()),
+            Some(json!({"enabled":true}))
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    sqlx::query("UPDATE buildagentpools SET enabled=true,provider='SelfManagedVm',providerspec='{\"$type\":\"SelfManagedVm\",\"connectionMode\":\"EdgeAgent\"}' WHERE id=$1").bind(id).execute(db).await.unwrap();
     verify_shutdown_ownership(db, id, principal.actor_id).await;
 }
 
@@ -569,4 +621,102 @@ impl citadel_builds::BuildPoolChecker for WaitingChecker {
             std::future::pending().await
         })
     }
+}
+
+pub(super) async fn verify_unsupported_admission(
+    app: &Router,
+    db: &sqlx::PgPool,
+    builds: &Arc<BuildService>,
+    principal: &ActorPrincipal,
+    project_id: Uuid,
+) {
+    let response = request(
+        app,
+        Method::POST,
+        "/api/v1/buildAgentPools",
+        Some(principal.clone()),
+        Some(
+            json!({"name":format!("unsupported-admission-{project_id}"), "enabled":true,
+            "providerSpec":{"$type":"SelfManagedVm", "connectionMode":"EdgeAgent"}}),
+        ),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let pool_id = Uuid::parse_str(response_json(response).await["id"].as_str().unwrap()).unwrap();
+    let original_project = builds.store().get(project_id).await.unwrap();
+    sqlx::query("UPDATE buildagentpools SET provider='AwsEc2',providerspec='{\"$type\":\"AwsEc2\"}' WHERE id=$1").bind(pool_id).execute(db).await.unwrap();
+    sqlx::query("UPDATE buildprojects SET builderkind='BuildAgentPool',buildagentpoolid=$2,platformid=NULL WHERE id=$1").bind(project_id).bind(pool_id).execute(db).await.unwrap();
+    let project = builds.store().get(project_id).await.unwrap();
+    let before: i64 = sqlx::query_scalar("SELECT count(*) FROM buildruns WHERE buildprojectid=$1")
+        .bind(project_id)
+        .fetch_one(db)
+        .await
+        .unwrap();
+    let response = request(
+        app,
+        Method::POST,
+        &format!("/api/v1/buildProjects/{project_id}/runs"),
+        Some(principal.clone()),
+        Some(json!({"trigger":"Manual"})),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    assert!(String::from_utf8_lossy(&body).contains("self-managed"));
+    assert!(
+        builds
+            .queue_webhook(&project, "main", None)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("self-managed")
+    );
+    assert!(
+        builds
+            .ensure_execution_entitlements(&project, "Schedule")
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("self-managed")
+    );
+    let after: i64 = sqlx::query_scalar("SELECT count(*) FROM buildruns WHERE buildprojectid=$1")
+        .bind(project_id)
+        .fetch_one(db)
+        .await
+        .unwrap();
+    assert_eq!(
+        before, after,
+        "Unsupported providers must not create executable queued work"
+    );
+    assert_eq!(
+        builds
+            .store()
+            .get_pool(pool_id)
+            .await
+            .unwrap()
+            .provider_spec,
+        json!({"$type":"AwsEc2"})
+    );
+    sqlx::query(
+        "UPDATE buildprojects SET builderkind=$2,buildagentpoolid=$3,platformid=$4 WHERE id=$1",
+    )
+    .bind(project_id)
+    .bind(original_project.builder_kind)
+    .bind(original_project.build_agent_pool_id)
+    .bind(original_project.platform_id)
+    .execute(db)
+    .await
+    .unwrap();
+    assert_eq!(
+        request(
+            app,
+            Method::DELETE,
+            &format!("/api/v1/buildAgentPools/{pool_id}"),
+            Some(principal.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
 }

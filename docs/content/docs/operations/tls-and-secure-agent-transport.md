@@ -89,7 +89,7 @@ CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com
 
 CITADEL_HTTP_TRUSTED_PROXIES=172.30.0.2
 CITADEL_HTTP_FORWARDED_LIMIT=1
-CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost;127.0.0.1
 
 CITADEL_CORE_AGENT_ALLOW_INSECURE=true
 ```
@@ -161,11 +161,12 @@ CITADEL_EDGE_PORT=8443
 
 CITADEL_TRANSPORT_MODE=Direct
 CITADEL_PUBLIC_URL=https://citadel.example.com
+CITADEL_INTERNAL_BASE_URL=https://citadel.example.com
 CITADEL_HTTP_LISTEN_PORT=8000
 CITADEL_EDGE_GRPC_LISTEN_PORT=8001
 
 CITADEL_EDGE_PUBLIC_GRPC_URL=https://citadel.example.com:8443
-CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost
+CITADEL_HTTP_ALLOWED_HOSTS=citadel.example.com;localhost;127.0.0.1
 
 CITADEL_TLS_CERTIFICATE_PATH=/etc/citadel/tls/core-fullchain.pem
 CITADEL_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/core-key.pem
@@ -193,6 +194,38 @@ intermediate certificates. The private key must match it.
 The same Core certificate serves the API and Edge gRPC listeners. It must be
 valid for the hosts in both `CITADEL_PUBLIC_URL` and
 `CITADEL_EDGE_PUBLIC_GRPC_URL`.
+
+## Automation API access
+
+The browser origin (`CITADEL_PUBLIC_URL`) and Automation API origin
+(`CITADEL_INTERNAL_BASE_URL`) serve different clients. With a reverse proxy, the
+internal default is cleartext loopback on the HTTP listener port; allow
+`127.0.0.1` explicitly in `CITADEL_HTTP_ALLOWED_HOSTS`. With Direct TLS, that
+listener accepts HTTPS only, so set `CITADEL_INTERNAL_BASE_URL` explicitly to
+`https://citadel.example.com` as above. Core's container must resolve and reach
+that endpoint, and the certificate must match its hostname.
+
+Use a publicly trusted certificate with its intermediate chain for this setup.
+The Automation Deno subprocess runs with a cleared, restricted environment:
+Core's Agent CA settings do not apply, and `DENO_CERT` and
+`DENO_TLS_CA_STORE` are not forwarded to it. The shared process runner may pass
+`SSL_CERT_FILE`/`SSL_CERT_DIR`, but that does not select Deno’s system trust store;
+[Deno defaults to Mozilla roots](https://docs.deno.com/runtime/reference/env_variables/). Custom/private-CA trust for
+Automation API calls is not currently configurable through this path. Agent CA
+trust is a separate setting and does not establish Deno trust. Do not bypass
+certificate or hostname verification.
+
+After installation, run a manual Action as an identity allowed to read Platforms:
+
+```typescript
+const result = await citadel.api.listPlatforms();
+console.log("Accessible Platforms:", result.platforms.map(platform => platform.name));
+```
+
+Confirm successful API output in the Action logs, including an empty list when
+no Platforms are accessible. `400 Invalid host` indicates the internal hostname
+is absent from the allowed-host list. TLS failures require a reachable HTTPS
+origin with a matching, publicly trusted certificate and chain.
 
 ## Local development
 

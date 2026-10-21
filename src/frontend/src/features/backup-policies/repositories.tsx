@@ -686,7 +686,7 @@ function RepositoryDialog({
                 <RepositoryOperationButton
                   icon={<Scissors className="size-3.5" />}
                   label="Prune"
-                  description="Remove unreferenced repository data."
+                  description="Reclaim unreferenced data without removing snapshots. Policy retention controls snapshot expiration."
                   disabled={formDisabled || operating || editing.status !== BackupRepositoryStatus.Ready}
                   loading={pendingOperation === 'prune'}
                   onClick={() => runOperation('prune', prune, 'Repository pruned', 'Failed to prune repository.')}

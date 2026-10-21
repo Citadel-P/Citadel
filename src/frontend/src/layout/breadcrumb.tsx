@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/breadcrumb';
 import { useAppContext } from '@/lib/context/app-context';
 import { useSegmentTitle } from '@/lib/atoms';
-import { truncate } from '@/lib/truncate';
 import { capitalize } from '@/lib/utils';
 import { ReversePluralResourceMap } from '@/api/types';
 
@@ -50,7 +49,7 @@ export function useBreadcrumbItems() {
       const segment = segments[i];
       pathAcc += `/${segment}`;
 
-      if (i > 0 && segments[i - 1] == 'edit') {
+      if (segment === 'edit') {
         continue;
       }
 
@@ -65,15 +64,16 @@ export function useBreadcrumbItems() {
 
       // Resource ID -> use resource name
       if (segment === resourceId || segment === id) {
-        const name = segmentTitle?.name.startsWith('/') ? segmentTitle?.name.slice(1) : (segmentTitle?.name ?? '');
-        result.push({ title: truncate(name), link: pathAcc });
+        const name = segmentTitle?.name.replace(/^\//, '');
+        const collection = segments[i - 1] === 'edit' ? segments[i - 2] : segments[i - 1];
+        result.push({ title: name || singularizeSegment(collection ?? 'Resource'), link: pathAcc });
         continue;
       }
 
       // Static “add” -> “Add ResourceName”
       // /platforms/:id/:type/add
-      // /:type/add or /:type/edit
-      if (segment === 'add' || segment === 'edit') {
+      // /:type/add
+      if (segment === 'add') {
         const previousSegment = segments[i - 1];
         const typeStr =
           previousSegment && previousSegment !== type ? previousSegment : (type ?? previousSegment ?? 'Resource');
@@ -115,7 +115,6 @@ export function useBreadcrumbItems() {
 }
 
 export function BreadcrumbTrail({ className, compact = false }: { className?: string; compact?: boolean }) {
-  const navigate = useNavigate();
   const crumbs = useBreadcrumbItems();
   const textClassName = compact
     ? 'hover:text-primary text-xs cursor-pointer max-w-40 truncate sm:max-w-64'
@@ -131,11 +130,15 @@ export function BreadcrumbTrail({ className, compact = false }: { className?: st
           <Fragment key={i}>
             <BreadcrumbItem className={compact ? 'min-w-0' : undefined}>
               {crumb.link ? (
-                <BreadcrumbLink className={textClassName} onClick={() => navigate(crumb.link ?? '/')}>
-                  {crumb.title}
+                <BreadcrumbLink asChild className={textClassName}>
+                  <Link to={crumb.link} title={crumb.title}>
+                    {crumb.title}
+                  </Link>
                 </BreadcrumbLink>
               ) : (
-                <BreadcrumbPage className={pageClassName}>{crumb.title}</BreadcrumbPage>
+                <BreadcrumbPage className={pageClassName} title={crumb.title}>
+                  {crumb.title}
+                </BreadcrumbPage>
               )}
             </BreadcrumbItem>
 

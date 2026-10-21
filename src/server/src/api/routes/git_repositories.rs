@@ -494,7 +494,7 @@ async fn list_git_repositories(
         &headers,
     )
     .await?;
-    let authorized_repositories = api_result(
+    let records = api_result(
         state
             .git_repositories
             .list_git_repositories(principal.actor_id, principal.is_administrator())
@@ -502,42 +502,19 @@ async fn list_git_repositories(
             .map_err(metadata_error),
         &headers,
     )?;
-    // SQL has already selected the authorized IDs. Resolve their capability
-    // metadata with one batch of ACL misses, including denied entries.
-    let permission_ids = authorized_repositories
-        .iter()
-        .map(|resource| resource.id)
-        .collect::<Vec<_>>();
-    let row_permissions = if principal.is_administrator() {
-        std::collections::BTreeMap::new()
-    } else {
-        api_result(
-            state
-                .identity
-                .permissions_for_resources(&principal, ResourceType::GitRepository, &permission_ids)
-                .await,
-            &headers,
-        )?
-    };
-    let mut git_repositories = Vec::with_capacity(authorized_repositories.len());
-    for repository in authorized_repositories.into_iter().filter(|repository| {
-        filters
-            .tags
-            .iter()
-            .all(|id| repository.tags.iter().any(|tag| tag.id == *id))
-    }) {
-        let row_capabilities = git_capabilities(
-            &principal,
-            row_permissions.get(&repository.id).copied().flatten(),
-        );
-        git_repositories.push(AuthorizedGitRepositoryView {
-            repository: api_result(
-                GitRepositoryView::try_from(repository).map_err(ApiError::internal),
-                &headers,
-            )?,
-            capabilities: row_capabilities,
-        });
-    }
+    let repositories = records
+        .into_iter()
+        .filter(|repository| {
+            filters
+                .tags
+                .iter()
+                .all(|id| repository.tags.iter().any(|tag| tag.id == *id))
+        })
+        .collect();
+    let git_repositories = api_result(
+        authorized_repositories(&state.identity, &principal, repositories).await,
+        &headers,
+    )?;
     Ok(no_store(
         Json(GitRepositoriesResponse {
             git_repositories,
@@ -947,27 +924,6 @@ async fn capabilities(
         )?
     };
     Ok(git_capabilities(principal, grant))
-}
-
-fn git_capabilities(
-    principal: &ActorPrincipal,
-    grant: Option<citadel_identity::PermissionGrant>,
-) -> ResourceCapabilitiesView {
-    use citadel_git::permissions::*;
-    use citadel_primitives::{EffectivePermission, PermissionPolicy, SpecificPermissions};
-    let permission = if principal.is_administrator() {
-        EffectivePermission::Administrator
-    } else {
-        EffectivePermission::Granted {
-            level: grant.map_or(PermissionLevel::None, |grant| grant.level),
-            specifics: SpecificPermissions::EMPTY,
-        }
-    };
-    ResourceCapabilitiesView {
-        can_read: permission.allows(ReadGitRepository::REQUIREMENT),
-        can_write: permission.allows(WriteGitRepository::REQUIREMENT),
-        can_execute: permission.allows(ExecuteGitRepository::REQUIREMENT),
-    }
 }
 
 #[derive(Clone)]

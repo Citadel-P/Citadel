@@ -70,6 +70,8 @@ mod adoption;
 mod container_inspection;
 #[path = "platforms_http/container_mutations.rs"]
 mod container_mutations;
+#[path = "platforms_http/copy_eligibility.rs"]
+mod copy_eligibility;
 #[path = "platforms_http/edge.rs"]
 mod edge;
 #[path = "platforms_http/get_container.rs"]
@@ -96,6 +98,8 @@ mod realtime_generation;
 mod realtime_groups;
 #[path = "platforms_http/registry_browsing.rs"]
 mod registry_browsing;
+#[path = "platforms_http/resource_capabilities.rs"]
+mod resource_capabilities;
 #[path = "platforms_http/search.rs"]
 mod search;
 #[path = "platforms_http/statistics.rs"]

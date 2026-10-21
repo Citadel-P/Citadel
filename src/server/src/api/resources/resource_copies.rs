@@ -1,6 +1,13 @@
-//! OpenAPI schemas for transport-neutral resource copy models.
+//! Resource copy schemas and actor-specific eligibility presentation.
 #![allow(dead_code)]
+use super::{
+    deployments::views::DeploymentView, stacks::views::StackView,
+    swarm_services::views::ManagedSwarmServiceView,
+};
 use chrono::{DateTime, Utc};
+use citadel_primitives::ActorId;
+use citadel_resource_copies::{CopyEligibility, CopyEligibilityStatus, CopyKind, CopyService};
+use futures_util::{StreamExt, stream};
 use uuid::Uuid;
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
@@ -112,8 +119,8 @@ pub enum ResourceCopyEligibilityStatus {
     Unknown,
 }
 
-/// Actor-specific configuration-plus-data eligibility, included in detail reads
-/// and realtime detail snapshots. Preview and submission revalidate this hint.
+/// Actor-specific configuration-plus-data eligibility, included in list/detail reads
+/// and realtime snapshots. Preview and submission revalidate this hint.
 #[derive(serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceCopyEligibility {
@@ -122,11 +129,11 @@ pub struct ResourceCopyEligibility {
 }
 
 pub async fn eligibility(
-    service: &citadel_resource_copies::CopyService,
-    actor: citadel_primitives::ActorId,
-    kind: citadel_resource_copies::CopyKind,
+    service: &CopyService,
+    actor: ActorId,
+    kind: CopyKind,
     id: Uuid,
-) -> citadel_resource_copies::CopyEligibility {
+) -> CopyEligibility {
     match tokio::time::timeout(
         std::time::Duration::from_secs(3),
         service.eligibility(actor, kind, id),
@@ -136,8 +143,8 @@ pub async fn eligibility(
         Ok(Ok(value)) => value,
         result => {
             tracing::warn!(?kind, %id, ?result, "Unable to read resource copy eligibility");
-            citadel_resource_copies::CopyEligibility {
-                status: citadel_resource_copies::CopyEligibilityStatus::Unknown,
+            CopyEligibility {
+                status: CopyEligibilityStatus::Unknown,
                 reason: Some(
                     "Copy availability could not be checked. Refresh the resource to try again."
                         .into(),
@@ -145,6 +152,43 @@ pub async fn eligibility(
             }
         }
     }
+}
+
+// Enrich authorized list rows in place, preserving their order.
+// Each resource reuses the detail check with at most four concurrent reads.
+pub async fn enrich_deployments(
+    service: &CopyService,
+    actor: ActorId,
+    views: &mut [DeploymentView],
+) {
+    stream::iter(views)
+        .for_each_concurrent(4, |view| async move {
+            view.copy_eligibility =
+                Some(eligibility(service, actor, CopyKind::Deployment, view.id).await);
+        })
+        .await;
+}
+
+pub async fn enrich_stacks(service: &CopyService, actor: ActorId, views: &mut [StackView]) {
+    stream::iter(views)
+        .for_each_concurrent(4, |view| async move {
+            view.copy_eligibility =
+                Some(eligibility(service, actor, CopyKind::Stack, view.id).await);
+        })
+        .await;
+}
+
+pub async fn enrich_swarm_services(
+    service: &CopyService,
+    actor: ActorId,
+    views: &mut [ManagedSwarmServiceView],
+) {
+    stream::iter(views)
+        .for_each_concurrent(4, |view| async move {
+            view.copy_eligibility =
+                Some(eligibility(service, actor, CopyKind::SwarmService, view.id).await);
+        })
+        .await;
 }
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
@@ -156,7 +200,7 @@ pub enum ResourceCopyDataMode {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ResourceCopyTargetsQuery {
-    pub kind: citadel_resource_copies::CopyKind,
+    pub kind: CopyKind,
     pub source_id: Uuid,
 }
 #[derive(serde::Serialize, utoipa::ToSchema)]

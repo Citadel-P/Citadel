@@ -26,6 +26,8 @@ mod bind_mount;
 mod cross_platform_copy;
 #[path = "backup_restic_acceptance/multinode.rs"]
 mod multinode;
+#[path = "backup_restic_acceptance/prune.rs"]
+mod prune;
 #[path = "backup_restic_acceptance/resource_copy.rs"]
 mod resource_copy;
 #[path = "backup_restic_acceptance/restore_ownership.rs"]
@@ -259,6 +261,7 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         let plan = BackupSourcePlan { display_name: source.clone(), items: vec![BackupSourceItem::new(platform, source.clone(), None, None)], warnings: vec![], local_directory: None };
         store.prepare_backup_items(&claim, &plan).await.unwrap();
         let completed = executor.backup(&claim, &plan, &cancellation).await;
+        executor.repository(&repository, "Prune", "Platform", Some(platform), &cancellation).await.unwrap();
         store.finish_backup(&claim, &completed).await.unwrap();
         assert_eq!(completed.status, citadel_backups::BackupRunStatus::Succeeded, "{:?}; {:?}", completed.error_message, completed.logs);
         let persisted = PostgresBackupPersistence::new(pool.clone()).get_run(run.id).await.unwrap();

@@ -512,3 +512,52 @@ it('requires an active destination Swarm node and resets it when the platform ch
   await user.click(screen.getByRole('option', { name: 'Destination Swarm' }));
   expect(screen.getByRole('button', { name: 'Choose backups' })).toBeDisabled();
 });
+
+it('opens the data wizard from a list action and clears the request when closed', async () => {
+  const { user } = render('/stacks/edit/source/?duplicate=data&keep=value');
+  expect(await screen.findByRole('dialog', { name: 'Duplicate with data' })).toBeVisible();
+  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('WordPress-copy');
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByLabelText('Page URL')).toHaveTextContent('/stacks/edit/source/?keep=value');
+  expect(screen.getByLabelText('Page URL')).not.toHaveTextContent('duplicate=');
+  await user.click(screen.getByRole('button', { name: 'Duplicate' }));
+  await user.click(screen.getByRole('menuitem', { name: /Configuration \+ data/ }));
+  expect(await screen.findByRole('dialog', { name: 'Duplicate with data' })).toBeVisible();
+});
+
+it('does not open a requested copy wizard without write permission', () => {
+  renderCitadel(
+    <DuplicateWorkload
+      kind={ResourceCopyKind.Stack}
+      sourceId="source"
+      sourceName="WordPress"
+      configurationHref="/stacks/add?duplicateFrom=source"
+      copyEligibility={available}
+      disabled
+    />,
+    { route: '/stacks/edit/source/?duplicate=data' },
+  );
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Duplicate' })).toBeDisabled();
+});
+
+it('keeps a requested wizard open when refreshed eligibility changes during the workflow', () => {
+  const props = {
+    kind: ResourceCopyKind.Stack,
+    sourceId: 'source',
+    sourceName: 'WordPress',
+    configurationHref: '/stacks/add?duplicateFrom=source',
+  };
+  const { rerender } = renderCitadel(<DuplicateWorkload {...props} copyEligibility={available} />, {
+    route: '/stacks/edit/source/?duplicate=data',
+  });
+  expect(screen.getByRole('dialog', { name: 'Duplicate with data' })).toBeVisible();
+  rerender(
+    <DuplicateWorkload
+      {...props}
+      copyEligibility={{ status: ResourceCopyEligibilityStatus.Unavailable, reason: 'A copy is running.' }}
+    />,
+  );
+  expect(screen.getByRole('dialog', { name: 'Duplicate with data' })).toBeVisible();
+});

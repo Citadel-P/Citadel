@@ -86,7 +86,11 @@ Create a provider with:
 - `Scopes`: usually `openid profile email`
 - `Enabled`: whether users can see and use this provider on the login page
 
-Use `Test discovery` before enabling the provider. Citadel checks the issuer metadata and verifies that the provider exposes the required authorization, token, and JWKS endpoints.
+Use `Test discovery` before enabling the provider. It fetches issuer metadata
+and checks the required authorization, token, and JWKS endpoints. It does not
+validate the client ID/secret, callback registration, or claim policy. After
+saving, complete a real sign-in with an approved non-admin account; repeat this
+after client-secret rotation.
 
 Client secrets are encrypted at rest and are never shown again after saving.
 
@@ -168,16 +172,15 @@ When `Require verified email` is enabled, Citadel requires the provider to send:
 email_verified = true
 ```
 
-This affects:
-
-- auto-provisioning
-- email auto-linking
+This is checked on every new OIDC login, including previously linked accounts,
+before identity resolution.
 
 Keep this enabled unless your provider does not support the claim and you have another strong gate, such as a required group claim.
 
 ## Allowed Email Domains
 
-Allowed domains restrict who can be provisioned or linked.
+Allowed domains are checked on every new OIDC login, including previously linked
+accounts, as well as provisioning/linking.
 
 Example:
 
@@ -203,13 +206,22 @@ Required values: citadel-users
 
 Only users whose `groups` claim contains `citadel-users` pass the gate.
 
-For Keycloak, common claim names include:
+For Keycloak, configure a protocol mapper to emit a **top-level** string or
+string-array claim in the **ID token**, for example:
 
-```text
-groups
-realm_access.roles
-resource_access.<client-id>.roles
+```json
+{ "roles": ["citadel-users"] }
 ```
+
+Set **Claim name** to `roles` and **Required values** to `citadel-users`.
+Citadel performs exact top-level claim-name lookup; it does not traverse nested
+objects such as `realm_access.roles` or `resource_access.<client-id>.roles`.
+A literal top-level key containing dots is a different claim, not a nested path.
+Nested objects are ignored; there is no UserInfo fallback.
+
+Required claims, verified-email, and allowed-domain gates apply on every new
+OIDC login, even for linked accounts. Changing these gates can reject future
+logins but does not immediately revoke already-issued Citadel sessions.
 
 For Entra ID, common claim names include:
 

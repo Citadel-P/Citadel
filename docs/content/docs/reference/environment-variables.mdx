@@ -157,7 +157,7 @@ under the same data root. Offline recovery never generates replacement keys.
 | --- | --- |
 | `CITADEL_DOCKER_PATH` / `CITADEL_RESTIC_PATH` / `CITADEL_SHOUTRRR_PATH` | `docker` / `restic` / `shoutrrr` |
 | `CITADEL_DENO_PATH` | `deno` |
-| `CITADEL_INTERNAL_BASE_URL` | `http://127.0.0.1:<resolved HTTP listen port>` |
+| `CITADEL_INTERNAL_BASE_URL` | `http://127.0.0.1:<resolved HTTP listen port>`; Automation API origin, separate from the public browser URL. Allow its hostname in `CITADEL_HTTP_ALLOWED_HOSTS`. Direct TLS requires an explicit reachable HTTPS origin and a certificate trusted by Deno; [setup and trust limits](/docs/operations/tls-and-secure-agent-transport#automation-api-access). |
 | `CITADEL_GIT_KNOWN_HOSTS_PATH` | `<data root>/git-known-hosts` |
 | `CITADEL_AUTOMATIONS_WORK_DIR` / `CITADEL_AUTOMATIONS_DENO_CACHE_DIR` | `<data root>/automations/runs` / `<data root>/automations/deno-cache` |
 | `CITADEL_AUTOMATIONS_ALLOW_NET` | Optional Deno network allowlist; existing comma-separated format |

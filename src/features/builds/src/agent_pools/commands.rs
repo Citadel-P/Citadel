@@ -21,6 +21,17 @@ pub struct BuildAgentPoolConfiguration {
 
 impl BuildAgentPoolConfiguration {
     pub fn validate(&mut self) -> Result<(), BuildError> {
+        self.validate_configuration(None)
+    }
+
+    pub fn validate_update(&mut self, current: &BuildAgentPool) -> Result<(), BuildError> {
+        self.validate_configuration(Some(current))
+    }
+
+    fn validate_configuration(
+        &mut self,
+        current: Option<&BuildAgentPool>,
+    ) -> Result<(), BuildError> {
         self.name = self.name.trim().to_owned();
         if self.name.is_empty() || self.name.chars().count() > 128 {
             return Err(BuildError::Validation(
@@ -43,13 +54,16 @@ impl BuildAgentPoolConfiguration {
             .get("$type")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        if !matches!(provider, "AwsEc2" | "SelfManagedVm") {
-            return Err(BuildError::Validation(
-                "Build Agent Pool provider is unsupported.".to_owned(),
-            ));
-        }
         if provider == "SelfManagedVm" {
             pool_target(&self.provider_spec)?;
+        } else if provider != "AwsEc2"
+            || !current.is_some_and(|pool| {
+                self.provider_spec == pool.provider_spec && (!self.enabled || pool.enabled)
+            })
+        {
+            return Err(BuildError::Validation(
+                "AWS EC2 provisioning is not supported. Use a self-managed VM Build Pool.".into(),
+            ));
         }
         validate_range(
             self.max_active_builders.unwrap_or(1),

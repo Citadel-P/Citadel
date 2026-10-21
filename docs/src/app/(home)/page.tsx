@@ -19,9 +19,9 @@ import { docsAssetUrl, gitConfig } from "@/lib/shared";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "Citadel — Your Docker control plane",
+  title: "Citadel — Your containers. Under your control.",
   description:
-    "Deploy, observe, and automate Docker containers and Swarm environments with Citadel. Explore the live demo and get started with the documentation.",
+    "Deploy applications, monitor their health, manage updates, and back up and restore data across your infrastructure — from one self-hosted interface.",
 };
 
 const resources = [
@@ -82,17 +82,17 @@ export default function HomePage() {
         <div className={styles.heroGrid} aria-hidden="true" />
         <div className={styles.heroContent}>
           <p className={styles.eyebrow}>
-            <span /> Self-hosted. Built in Rust. Yours to operate.
+            <span /> Self-hosted container management
           </p>
           <h1 id="hero-title">
-            Your Docker estate.
+            Your containers.
             <br />
             <span>Under your control.</span>
           </h1>
           <p className={styles.intro}>
-            Deploy, observe, and automate containers and Swarm environments.
-            <br className={styles.desktopBreak} /> One control plane, from your
-            first host to your next cluster.
+            Deploy applications, monitor their health, manage updates, and back up
+            and restore data across your infrastructure — from one self-hosted
+            interface.
           </p>
           <div className={styles.actions}>
             <Link

@@ -180,12 +180,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
                 let arguments = match operation {
                     "Validate" | "Check" => vec!["check".into(), "--read-data-subset=1/100".into()],
                     "Initialize" => vec!["init".into()],
-                    "Prune" => vec![
-                        "forget".into(),
-                        "--prune".into(),
-                        "--keep-last".into(),
-                        "14".into(),
-                    ],
+                    "Prune" => vec!["prune".into()],
                     _ => {
                         return Err(BackupError::Validation(
                             "Backup Repository operation is invalid.".into(),
@@ -215,12 +210,7 @@ impl BackupExecutor for DockerResticBackupExecutor {
                     args.extend(["check".into(), "--read-data-subset=1/100".into()])
                 }
                 "Initialize" => args.push("init".into()),
-                "Prune" => args.extend([
-                    "forget".into(),
-                    "--prune".into(),
-                    "--keep-last".into(),
-                    "14".into(),
-                ]),
+                "Prune" => args.push("prune".into()),
                 _ => {
                     return Err(BackupError::Validation(
                         "Backup Repository operation is invalid.".into(),
@@ -336,12 +326,7 @@ impl DockerResticBackupExecutor {
                 arguments.extend(["check".into(), "--read-data-subset=1/100".into()]);
             }
             "Initialize" => arguments.push("init".into()),
-            "Prune" => arguments.extend([
-                "forget".into(),
-                "--prune".into(),
-                "--keep-last".into(),
-                "14".into(),
-            ]),
+            "Prune" => arguments.push("prune".into()),
             _ => return Err("Backup Repository operation is invalid.".into()),
         }
         let mut request = ProcessRequest::new(self.restic.clone())

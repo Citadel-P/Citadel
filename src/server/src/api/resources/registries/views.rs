@@ -32,6 +32,7 @@ pub(crate) struct RegistryConfigResponse {
     pub(crate) description: String,
     pub(crate) configuration: RegistryConfigurationView,
     pub(crate) tags: Vec<crate::api::resources::tags::views::TagSummary>,
+    pub(crate) capabilities: ResourceCapabilitiesView,
 }
 
 pub use citadel_registries::RegistryStatus;

@@ -62,7 +62,7 @@ Before installing the Agent, confirm that the Docker host has:
 * A network address reachable from Citadel Core.
 * An inbound port available for the Agent. The default is `9000`.
 
-The Citadel Agent version should match the Citadel Core version. Citadel generates the installation command using the expected image tag.
+Use the matching current Core, Agent, and frontend build. Citadel generates the installation command using the expected image tag.
 
 In the examples below, replace `AGENT_IMAGE` with the complete image address
 shown by your installation, and `...` with its current public key or enrollment
@@ -139,11 +139,25 @@ Connection mode: Inbound Agent endpoint
 Endpoint: http://<builder-host>:9001
 ```
 
-If Citadel Core is running in Docker on the same host as the build Agent, use:
+On Docker Desktop, if Core runs in Docker on the same host as the build Agent, use:
 
 ```text
 http://host.docker.internal:9001
 ```
+
+On native Linux, add a host-gateway mapping to the **Core** service and recreate
+Core with the overlay:
+
+```yaml
+services:
+  server:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+Alternatively, attach Core and the Agent to a shared Docker network and use
+`http://citadel-agent-build:9000`. Port **9001** is the published host port;
+**9000** is the Agent's container port. See [Compose networking](https://docs.docker.com/compose/how-tos/networking/).
 
 ### Edge build Agent
 
@@ -459,6 +473,10 @@ docker inspect citadel-agent --format '{{.Config.Image}}'
 
 ## Troubleshooting
 
+For **Request expired**, synchronize the Core and Agent host clocks using their
+normal time service. Signed Direct requests allow 60 seconds of clock skew.
+Correct host time before retrying; replacing signing keys does not repair clocks.
+
 ### Connection refused
 
 Citadel Core cannot establish a network connection to the Agent.
@@ -500,7 +518,7 @@ Confirm that:
 * The Agent address is reachable from Citadel Core.
 * The Agent container is running.
 * The Agent is running in regular mode.
-* The Agent and Core versions are compatible.
+* The Agent, Core, and frontend use the matching current build.
 * `CITADEL_CORE_PUBLIC_KEY` matches the current Citadel Core signing key.
 
 ### Docker operations fail

@@ -41,6 +41,13 @@ existing operation numbers, cancellation bounds, and Swarm-node allowlists.
 Older Agents omit these endpoints, so workload maps can show incomplete evidence
 until the Agent is updated; network inspection remains available.
 
+Swarm service inventory includes explicit network selections and networks reported
+in Docker's service virtual IPs, including ingress, even with zero running tasks.
+Local, Direct and Edge use the same mapping; these are service memberships, not
+container attachments. Editable/adopted service definitions retain only explicit
+network selections. The existing `network_ids` field carries this observation;
+no protocol fields or operation permissions change.
+
 ## Deployment profiles
 
 All profiles use the same Agent image. Build Pools do not have a separate transport.

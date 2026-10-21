@@ -16,7 +16,7 @@ export type MapNode = {
   network?: NetworkView;
   searchTerms?: string[];
 };
-export type MapEdge = { id: string; source: string; target: string; saved: boolean; service?: boolean };
+export type MapEdge = { id: string; source: string; target: string; saved: boolean; service?: boolean; label?: string };
 export type NetworkGraph = { nodes: MapNode[]; edges: MapEdge[]; truncated: boolean };
 export type NetworkOwner = { id: string; kind: 'Deployment' | 'Stack' | 'SwarmService' };
 
@@ -39,13 +39,13 @@ export function ownerGraph(
     JSON.stringify([a.dockerNodeId ?? null, a.id]).localeCompare(JSON.stringify([b.dockerNodeId ?? null, b.id])),
   );
   for (const network of ordered) {
-    const matching =
-      network.usage?.entries.filter(
-        (entry) =>
-          entry.workloadKind === owner.kind &&
-          entry.workloadId === owner.id &&
-          (showReferences || entry.relationship !== 'SavedReference'),
-      ) ?? [];
+    const owned =
+      network.usage?.entries.filter((entry) => entry.workloadKind === owner.kind && entry.workloadId === owner.id) ??
+      [];
+    // Prefer observed membership on this network; a saved reference must not
+    // duplicate the same workload while it is connected.
+    const observed = owned.filter((entry) => entry.relationship !== 'SavedReference');
+    const matching = observed.length || !showReferences ? observed : owned;
     if (matching.length > remaining) truncated = true;
     const entries = matching.slice(0, remaining);
     remaining -= entries.length;
@@ -291,15 +291,24 @@ export function workloadGraph(
     kind: 'container',
     label: container.containerName,
     subtitle: container.workloadName ? `${container.workloadKind} · ${container.workloadName}` : 'Container',
-    entries: [entry],
+    entries: [
+      {
+        ...container,
+        relationship: networking.endpoints.some((endpoint) => endpoint.attached === true)
+          ? NetworkRelationship.Attachment
+          : NetworkRelationship.SavedReference,
+      },
+    ],
     isStale: container.isStale,
-    searchTerms: networking.endpoints.flatMap((endpoint) => [...endpoint.aliases, ...endpoint.addresses]),
+    searchTerms: networking.endpoints.flatMap((endpoint) => [
+      ...endpoint.aliases,
+      ...(endpoint.attached === true ? endpoint.addresses : []),
+    ]),
   };
   const nodes: MapNode[] = [member];
   const edges: MapEdge[] = [];
   if (networking.mode === 'networks') {
     for (const endpoint of networking.endpoints.slice(0, MAX_MAP_ENTRIES)) {
-      if (endpoint.attached !== true) continue;
       // Never match a same-named network on another node, nor invent missing inventory.
       const network = inventory.find(
         (candidate) =>
@@ -307,19 +316,22 @@ export function workloadGraph(
           (candidate.scope === 'swarm' || (candidate.dockerNodeId ?? null) === (container.dockerNodeId ?? null)),
       );
       if (!network) continue;
+      const attached = endpoint.attached === true;
+      const containers = { ...network.containers };
+      delete containers[container.dockerContainerId];
+      if (attached) {
+        containers[container.dockerContainerId] = {
+          name: container.containerName,
+          endpointId: null,
+          macAddress: null,
+          ipV4Address: endpoint.addresses.find((address) => !address.includes(':')) ?? null,
+          ipv6Address: endpoint.addresses.find((address) => address.includes(':')) ?? null,
+        };
+      }
       const observedNetwork: NetworkView = {
         ...network,
-        inUse: true,
-        containers: {
-          ...network.containers,
-          [container.dockerContainerId]: {
-            name: container.containerName,
-            endpointId: null,
-            macAddress: null,
-            ipV4Address: endpoint.addresses.find((address) => !address.includes(':')) ?? null,
-            ipv6Address: endpoint.addresses.find((address) => address.includes(':')) ?? null,
-          },
-        },
+        inUse: attached || network.inUse,
+        containers,
         usage: {
           isPartial: true,
           truncated: network.usage?.truncated ?? false,
@@ -327,14 +339,24 @@ export function workloadGraph(
             ...(network.usage?.entries.filter(
               (value) => value.containerId !== container.containerId || value.relationship !== 'Attachment',
             ) ?? []),
-            entry,
+            ...(attached ? [entry] : []),
           ],
         },
       };
       const node = networkGraph(platformId, observedNetwork, false, new Set()).nodes[0];
       if (nodes.some((value) => value.id === node.id)) continue;
       nodes.push(node);
-      edges.push({ id: JSON.stringify([node.id, id]), source: node.id, target: id, saved: false });
+      edges.push({
+        id: JSON.stringify([node.id, id]),
+        source: node.id,
+        target: id,
+        saved: !attached,
+        label: attached
+          ? undefined
+          : endpoint.attached === false
+            ? 'Configured · Not attached'
+            : 'Attachment unconfirmed',
+      });
     }
   }
   return { nodes, edges, truncated: networking.truncated };

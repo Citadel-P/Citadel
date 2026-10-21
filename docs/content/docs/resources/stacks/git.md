@@ -44,8 +44,10 @@ policy is enabled. Start with manual deployment while you check the configuratio
 ## Review and deploy an update
 
 Use this workflow with **Disabled** or **Notify Only** update behavior and no
-deploy webhook. Repository sync runs any configured hooks and can trigger other
-Stacks whose automatic deployment policies are enabled.
+deploy webhook. Repository sync executes configured
+[On Clone / On Pull hooks](/docs/resources/git-repositories#clone-and-pull-hooks)
+on Core; generated working-tree files are not included in Stack inputs.
+It can trigger other Stacks whose automatic deployment policies are enabled.
 
 1. Commit and push the application change to the selected branch.
 2. Synchronize the repository in **Repositories** to refresh its cached source.
@@ -138,6 +140,28 @@ or env-file changes. Save the Stack before browsing the updated configuration.
 Browsing and comparison use the local Git object database. They do not
 synchronize the repository, run hooks, deploy the Stack, or change update
 state. See [Git repositories and accounts](/docs/resources/git-repositories) for content and cache limitations.
+
+## Git source requirements
+
+Normal Git Stack deployment materializes the **full committed tree** on Core,
+limited to **512 source entries/files and 12 MiB**. This applies to Local,
+Direct Agent, and Edge execution on Standalone and Swarm Platforms. Unrelated
+committed monorepo files count: Compose paths, working directory, watched paths,
+and `.dockerignore` do not narrow this snapshot. `.git` internals and untracked
+working-tree files are outside the committed tree.
+
+Committed symlinks and submodules are unsupported in this Git Stack
+materialization path. This is not a general restriction on repository browsing
+or Build workflows. Repository sync and browsing may succeed before Stack
+materialization fails. Use a smaller deployment repository when necessary;
+changing only the Compose working directory does not solve a full-tree limit.
+
+After the Git check, Core adds generated ownership content such as
+`.citadel/citadel.labels.yml`. Agents check the **complete transported bundle**
+against 512 files / 12 MiB again. Generated files consume that capacity: exactly
+512 committed files, or source near the byte limit, may pass Core's Git check
+but fail the final Agent check. Leave headroom; a repository at the numerical
+maximum is not guaranteed to deploy through every connector.
 
 ## Monorepo
 

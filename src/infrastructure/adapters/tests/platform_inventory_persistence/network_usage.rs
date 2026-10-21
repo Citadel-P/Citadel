@@ -46,6 +46,7 @@ async fn network_usage_filters_owners_and_saved_references_by_actor_and_node() {
             scope: "local".into(),
             docker_node_id: Some("node-a".into()),
             container_ids: vec!["same-runtime-id".into()],
+            stack_project: None,
         },
         NetworkUsageQuery {
             id: "cluster".into(),
@@ -53,6 +54,7 @@ async fn network_usage_filters_owners_and_saved_references_by_actor_and_node() {
             scope: "swarm".into(),
             docker_node_id: None,
             container_ids: vec!["same-runtime-id".into()],
+            stack_project: None,
         },
     ];
     let denied = reader
@@ -178,6 +180,7 @@ async fn network_usage_filters_owners_and_saved_references_by_actor_and_node() {
         scope: "local".into(),
         docker_node_id: None,
         container_ids: vec!["orphan-runtime-id".into()],
+        stack_project: None,
     }];
     for administrator in [false, true] {
         let selected = reader
@@ -238,6 +241,7 @@ async fn network_usage_filters_owners_and_saved_references_by_actor_and_node() {
         scope: "local".into(),
         docker_node_id: None,
         container_ids: (1..=51).map(|n| format!("public-{n}")).collect(),
+        stack_project: None,
     }];
     let limited = reader
         .network_usage(ActorId::new(actor), false, platform, &many)
@@ -341,6 +345,7 @@ async fn network_usage_filters_owners_and_saved_references_by_actor_and_node() {
             scope: "local".into(),
             docker_node_id: node.map(str::to_owned),
             container_ids: vec!["task-container".into()],
+            stack_project: None,
         })
         .collect();
     for id in [manager_container, worker_container] {

@@ -1404,6 +1404,7 @@ export interface AlertRuleActivitySnapshot {
 }
 
 export type AlertRuleConfig = AlertRuleInput & {
+  capabilities: null | ResourceCapabilitiesView;
   /** @format uuid */
   id: string;
   isSystem: boolean;
@@ -5662,6 +5663,7 @@ export interface RegistryActivitySnapshot {
 }
 
 export interface RegistryConfigResponse {
+  capabilities: ResourceCapabilitiesView;
   /** Public settings and credential presence; secret values are write-only. */
   configuration: RegistryConfigurationView;
   description: string;
@@ -5993,8 +5995,8 @@ export interface ResourceCapabilitiesView {
 }
 
 /**
- * Actor-specific configuration-plus-data eligibility, included in detail reads
- * and realtime detail snapshots. Preview and submission revalidate this hint.
+ * Actor-specific configuration-plus-data eligibility, included in list/detail reads
+ * and realtime snapshots. Preview and submission revalidate this hint.
  */
 export interface ResourceCopyEligibility {
   reason?: string | null;

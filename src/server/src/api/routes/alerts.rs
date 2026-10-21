@@ -833,9 +833,17 @@ async fn get_rule_config(
     )
     .await?;
     let rule = result(s.store.get_rule(id).await, &h)?;
-    Ok(no_store(
-        Json(result(AlertRuleConfig::try_from(rule), &h)?).into_response(),
-    ))
+    let mut view = result(AlertRuleConfig::try_from(rule), &h)?;
+    let permission = api_result(
+        s.identity
+            .permission_for_resource(&p, ResourceType::Alert, id)
+            .await,
+        &h,
+    )?;
+    view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
+        permission,
+    ));
+    Ok(no_store(Json(view).into_response()))
 }
 
 #[utoipa::path(

@@ -101,7 +101,7 @@ impl BuildAgentPool {
         }
         let mut input: BuildAgentPoolConfiguration = serde_json::from_value(value)
             .map_err(|_| BuildError::Validation("Invalid Build Agent Pool update.".into()))?;
-        input.validate()?;
+        input.validate_update(self)?;
         Ok(input)
     }
 }

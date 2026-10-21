@@ -21,7 +21,7 @@ import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ResourceSelectorField } from '@/components/custom/common';
-import { MonacoToArrayEditor } from '@/lib/monaco';
+import { MonacoEditor, MonacoToArrayEditor } from '@/lib/monaco';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { ResourceTagSelector } from '@/features/tags/components';
 
@@ -268,10 +268,11 @@ export const GitRepoForm = ({
             id: 'on_pull',
             label: 'On Pull',
             title: 'On Pull',
-            description: 'Execute a shell command after pulling the repo. The given Cwd is relative to repo root.',
+            description: 'Run on Core after updating an existing checkout, even when its commit is unchanged.',
             items: [
               defineField({
                 key: 'onPull.path',
+                disabled,
                 label: 'Path',
                 render: (val, set) => (
                   <FieldInput
@@ -279,7 +280,7 @@ export const GitRepoForm = ({
                     onChange={(v) =>
                       set((prev) => ({
                         onPull: {
-                          ...prev.onPull!,
+                          commands: prev.onPull?.commands ?? original.onPull?.commands ?? [],
                           path: v,
                         },
                       }))
@@ -290,23 +291,27 @@ export const GitRepoForm = ({
               }),
               defineField({
                 key: 'onPull.commands',
+                disabled,
                 label: 'Commands',
                 required: false,
-                render: (value, set) => (
-                  <MonacoToArrayEditor
-                    value={value}
-                    helperText="# Add multiple commands on new lines"
-                    language="string_list"
-                    onChange={(v: string[] | undefined) =>
-                      set((prev) => ({
-                        onPull: {
-                          ...prev.onPull!,
-                          commands: v ?? [],
-                        },
-                      }))
-                    }
-                  />
-                ),
+                render: (value, set) =>
+                  disabled ? (
+                    <MonacoEditor value={(value ?? []).join('\n')} readOnly language="string_list" />
+                  ) : (
+                    <MonacoToArrayEditor
+                      value={value}
+                      language="string_list"
+                      helperText="# Add one shell command per line"
+                      onChange={(commands) =>
+                        set((prev) => ({
+                          onPull: {
+                            path: prev.onPull?.path ?? original.onPull?.path ?? './',
+                            commands: commands ?? [],
+                          },
+                        }))
+                      }
+                    />
+                  ),
               }),
             ],
           }),
@@ -315,10 +320,11 @@ export const GitRepoForm = ({
             id: 'on_clone',
             label: 'On Clone',
             title: 'On Clone',
-            description: 'Execute a shell command after cloning the repo. The given Cwd is relative to repo root.',
+            description: 'Run on Core after a fresh clone. Commands must be safe to run again if the cache is rebuilt.',
             items: [
               defineField({
                 key: 'onClone.path',
+                disabled,
                 label: 'Path',
                 render: (val, set) => (
                   <FieldInput
@@ -326,7 +332,7 @@ export const GitRepoForm = ({
                     onChange={(v) =>
                       set((prev) => ({
                         onClone: {
-                          ...prev.onClone!,
+                          commands: prev.onClone?.commands ?? original.onClone?.commands ?? [],
                           path: v,
                         },
                       }))
@@ -337,23 +343,27 @@ export const GitRepoForm = ({
               }),
               defineField({
                 key: 'onClone.commands',
+                disabled,
                 label: 'Commands',
                 required: false,
-                render: (value, set) => (
-                  <MonacoToArrayEditor
-                    value={value}
-                    helperText="# Add multiple commands on new lines"
-                    language="string_list"
-                    onChange={(v: string[] | undefined) =>
-                      set((prev) => ({
-                        onClone: {
-                          ...prev.onClone!,
-                          commands: v ?? [],
-                        },
-                      }))
-                    }
-                  />
-                ),
+                render: (value, set) =>
+                  disabled ? (
+                    <MonacoEditor value={(value ?? []).join('\n')} readOnly language="string_list" />
+                  ) : (
+                    <MonacoToArrayEditor
+                      value={value}
+                      language="string_list"
+                      helperText="# Add one shell command per line"
+                      onChange={(commands) =>
+                        set((prev) => ({
+                          onClone: {
+                            path: prev.onClone?.path ?? original.onClone?.path ?? './',
+                            commands: commands ?? [],
+                          },
+                        }))
+                      }
+                    />
+                  ),
               }),
             ],
           }),
@@ -398,6 +408,8 @@ export const GitRepoForm = ({
       currentSyncMode,
       original.syncIntervalMinutes,
       original.defaultBranch,
+      original.onClone,
+      original.onPull,
       update.syncIntervalMinutes,
       id,
       disabled,

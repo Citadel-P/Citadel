@@ -267,6 +267,8 @@ pub(crate) fn alert_resource_path(event: &citadel_alerts::AlertEvent) -> Option<
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertRuleConfig {
+    #[schema(required = true)]
+    pub capabilities: Option<crate::api::resources::capabilities::ResourceCapabilitiesView>,
     pub id: Uuid,
     pub is_system: bool,
     #[serde(flatten)]
@@ -277,6 +279,7 @@ impl TryFrom<citadel_alerts::AlertRule> for AlertRuleConfig {
     type Error = citadel_alerts::AlertError;
     fn try_from(rule: citadel_alerts::AlertRule) -> Result<Self, Self::Error> {
         Ok(Self {
+            capabilities: None,
             id: rule.id,
             is_system: rule.audit.created_by_actor_id.value() == Uuid::from_u128(1),
             configuration: citadel_alerts::AlertRuleConfiguration::from(&rule).try_into()?,

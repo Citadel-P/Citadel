@@ -1180,6 +1180,14 @@ async fn list(
     if let Some(service) = &state.backup_coverage {
         views = service.enrich_stacks(&principal, views).await;
     }
+    if let Some(service) = &state.copy_eligibility {
+        crate::api::resources::resource_copies::enrich_stacks(
+            service,
+            principal.actor_id,
+            &mut views,
+        )
+        .await;
+    }
     Ok(no_store(
         Json(StacksView {
             stacks: views,

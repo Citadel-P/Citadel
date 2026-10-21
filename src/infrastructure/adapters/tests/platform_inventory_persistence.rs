@@ -28,6 +28,9 @@ mod container_search;
 #[path = "platform_inventory_persistence/network_usage.rs"]
 mod network_usage;
 
+#[path = "platform_inventory_persistence/network_references.rs"]
+mod network_references;
+
 #[path = "platform_inventory_persistence/health.rs"]
 mod health;
 

@@ -50,7 +50,11 @@ export function WorkloadDetails({
                 <p className="text-xs text-muted-foreground">Outside these results or unavailable in inventory</p>
               )}
               <p className="break-all font-mono text-xs text-muted-foreground">
-                {endpoint.addresses.join(' · ') || 'Address unavailable'}
+                {endpoint.attached === true
+                  ? endpoint.addresses.join(' · ') || 'Address unavailable'
+                  : endpoint.attached === false
+                    ? 'No active address'
+                    : 'Address unavailable'}
               </p>
               {!!endpoint.aliases.length && (
                 <p className="break-all text-xs text-muted-foreground">Aliases: {endpoint.aliases.join(', ')}</p>

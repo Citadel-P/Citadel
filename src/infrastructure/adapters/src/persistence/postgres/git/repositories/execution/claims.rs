@@ -48,6 +48,7 @@ LEFT JOIN gitrepositoryrefs reference
  AND reference.branch=branches.branch
 WHERE branches.branch<>'' AND repository.syncmode='PullInterval'
   AND repository.controlstate='Idle'
+  AND NOT (COALESCE(reference.status='Degraded',false) AND (COALESCE(jsonb_array_length(repository.onclone::jsonb->'commands'),0)>0 OR COALESCE(jsonb_array_length(repository.onpull::jsonb->'commands'),0)>0))
   AND (
     reference.id IS NULL OR
     reference.lastsyncedat <= CURRENT_TIMESTAMP - make_interval(mins => COALESCE(repository.syncintervalminutes,5))
@@ -99,7 +100,7 @@ impl PostgresGitRepositoryExecutionPersistence {
                 r#"
 SELECT reference.id AS referenceid, reference.branch, reference.synctrigger, reference.resolvedcommitsha, reference.lasterror,
        repository.id, repository.name, repository.url, repository.defaultbranch,
-       repository.gitaccountid, repository.syncmode, repository.syncintervalminutes,
+       repository.gitaccountid, repository.syncmode, repository.syncintervalminutes, repository.onclone, repository.onpull,
        COALESCE(repository.controltriggeredby, repository.createdbyactorid) AS actorid
 FROM gitrepositoryrefs reference
 JOIN gitrepositories repository ON repository.id=reference.gitrepositoryid
@@ -123,12 +124,12 @@ LIMIT 1
             let reference_id: Uuid = row.try_get("referenceid").map_err(storage)?;
             let repository_id: Uuid = row.try_get("id").map_err(storage)?;
             let started_at = Utc::now();
-            sqlx::query(
-                "UPDATE gitrepositoryrefs SET status='Syncing', lastsyncedat=$2 WHERE id=$1",
+            let started_at: DateTime<Utc> = sqlx::query_scalar(
+                "UPDATE gitrepositoryrefs SET status='Syncing', lastsyncedat=GREATEST($2,lastsyncedat+INTERVAL '1 microsecond') WHERE id=$1 RETURNING lastsyncedat",
             )
             .bind(reference_id)
             .bind(started_at)
-            .execute(&mut *transaction)
+            .fetch_one(&mut *transaction)
             .await
             .map_err(storage)?;
             sqlx::query(
@@ -140,6 +141,7 @@ LIMIT 1
             .await
             .map_err(storage)?;
             let claim = GitSyncClaim {
+                started_at,
                 trigger: row.try_get("synctrigger").map_err(storage)?,
                 previous_commit: row.try_get("resolvedcommitsha").map_err(storage)?,
                 previous_error: row.try_get("lasterror").map_err(storage)?,
@@ -189,20 +191,22 @@ impl PostgresGitRepositoryExecutionPersistence {
         sqlx::query(
                 r#"
 WITH candidates AS MATERIALIZED (
-  SELECT repository.id FROM gitrepositories repository
+  SELECT repository.id, (COALESCE(jsonb_array_length(repository.onclone::jsonb->'commands'),0)>0 OR COALESCE(jsonb_array_length(repository.onpull::jsonb->'commands'),0)>0) AS hooks FROM gitrepositories repository
   WHERE EXISTS (SELECT 1 FROM gitrepositoryrefs reference
                 WHERE reference.gitrepositoryid=repository.id AND reference.status='Syncing' AND reference.lastsyncedat<$1)
   ORDER BY repository.id FOR NO KEY UPDATE SKIP LOCKED LIMIT 100
 ), stale AS (
   UPDATE gitrepositoryrefs reference
-  SET status='Pending', lasterror='Previous synchronization was interrupted.'
+  SET status=CASE WHEN candidates.hooks THEN 'Degraded' ELSE 'Pending' END,
+      lasterror=CASE WHEN candidates.hooks THEN 'Synchronization interrupted. Review hook side effects and run Sync manually.' ELSE 'Previous synchronization was interrupted.' END
   FROM candidates WHERE reference.gitrepositoryid=candidates.id
     AND reference.status='Syncing' AND reference.lastsyncedat<$1
-  RETURNING reference.gitrepositoryid
+  RETURNING reference.gitrepositoryid, candidates.hooks
 )
 UPDATE gitrepositories
-SET controlstate='Queued', status='Pending', controlstartedat=NULL, rowversion=rowversion+1
-WHERE id IN (SELECT gitrepositoryid FROM stale)
+SET controlstate=CASE WHEN stale.hooks AND NOT EXISTS (SELECT 1 FROM gitrepositoryrefs pending WHERE pending.gitrepositoryid=gitrepositories.id AND pending.status='Pending') THEN 'Idle' ELSE 'Queued' END,
+    status=CASE WHEN stale.hooks THEN 'Degraded' ELSE 'Pending' END, controlstartedat=NULL, rowversion=rowversion+1
+FROM stale WHERE gitrepositories.id=stale.gitrepositoryid
 "#,
             )
             .bind(stale_before)

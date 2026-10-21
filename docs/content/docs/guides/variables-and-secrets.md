@@ -3,22 +3,29 @@ title: "Variables and secrets"
 description: "Resolve reusable variables and protected secrets into managed workloads."
 ---
 
-Citadel bindings let you attach variables and secret keys to stacks and deployments without hard-coding values in compose files or deployment forms.
+Citadel bindings let you attach variables and secret keys to Stacks, Deployments, and managed Swarm Services without hard-coding values in compose files or deployment forms.
 
 ## Supply a secret to an application
 
-1. Open the Stack or Deployment's **Bindings** tab and select **Create stored secret**.
+1. Open the Stack, Deployment, or managed Swarm Service's **Bindings** tab and select **Create stored secret**.
    Create a local secret with a descriptive name, such as `production-api-token`.
 2. Select **Add secret key**, name it `API_TOKEN`, and choose that stored secret.
    Use **Environment variable** delivery.
 3. Reference `API_TOKEN: ${API_TOKEN}` under the Compose service's `environment`,
-   or enter `API_TOKEN` in a Deployment's **Container Variables**.
+   or enter `API_TOKEN` in a Deployment's **Container Variables** or a managed
+   Swarm Service's environment-variable settings.
 4. Save and deploy. Verify the application's authenticated operation without
    printing the secret in logs or a terminal.
 
 Saving a binding does not change an existing container's environment. Reapply
 the consuming workload when you intend to use the new value. Use global bindings
 only when the value should be inherited by multiple resources.
+
+Managed [Swarm Services](/docs/resources/swarm-services) support variable and
+secret bindings delivered through environment variables. Reapply the Service to
+use changed values. Citadel bindings resolve values for the Service specification;
+they are separate from native Docker Secrets mounted into containers. The Stack
+**Mounted file** delivery limitation described below still applies.
 
 ## Variables
 

@@ -107,6 +107,10 @@ async fn native_registry_contracts_preserve_credentials_permissions_and_default_
     let read_response = request(&app, Method::GET, &cfg_path, Some(reader.clone()), None).await;
     assert_eq!(read_response.status(), StatusCode::OK);
     let public = response_json(read_response).await;
+    assert_eq!(
+        public["capabilities"],
+        json!({"canRead":true,"canWrite":false,"canExecute":false})
+    );
     assert!(public["configuration"].get("password").is_none());
     assert_eq!(public["configuration"]["hasPassword"], true);
     assert_eq!(
@@ -123,6 +127,10 @@ async fn native_registry_contracts_preserve_credentials_permissions_and_default_
     );
     let cfg =
         response_json(request(&app, Method::GET, &cfg_path, Some(admin.clone()), None).await).await;
+    assert_eq!(
+        cfg["capabilities"],
+        json!({"canRead":true,"canWrite":true,"canExecute":true})
+    );
     assert!(cfg["configuration"].get("password").is_none());
     assert_eq!(cfg["configuration"]["hasPassword"], true);
     // Editing public settings must preserve the server-side credential.

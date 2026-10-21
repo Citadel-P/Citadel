@@ -1,4 +1,6 @@
-import { Copy, Eye, Rocket, RefreshCw, Zap, Trash } from 'lucide-react';
+import { DuplicateWorkloadAction } from '@/features/resource-copies/duplicate-actions';
+import { ResourceCopyKind } from '@/api/generated/api.types';
+import { Eye, Rocket, RefreshCw, Zap, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ManagedSwarmServiceView, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder, ActionConfig } from '@/components/custom/actions-builder';
@@ -56,34 +58,9 @@ export const forceUpdateSwarmServiceAction: ActionConfig<ManagedSwarmServiceView
   },
 };
 
-export const duplicateSwarmServiceAction: ActionConfig<ManagedSwarmServiceView, any> = {
-  key: 'duplicate',
-  type: 'command',
-  icon: Copy,
-  requiredCapabilities: ['canRead', 'canWrite'],
-  useHandler: ({ resources }) => {
-    const navigate = useNavigate();
-    const service = Array.isArray(resources) ? resources[0] : resources;
-    const multiple = Array.isArray(resources) && resources.length > 1;
-    return {
-      canExecute: !!service && !multiple,
-      isPending: false,
-      run: () => {
-        if (!service || multiple) return;
-        navigate(`/platforms/${service.platformId}/services/add?duplicateFrom=${service.id}`);
-      },
-    };
-  },
-};
-
-export const {
-  dropdown: SwarmServiceDropdownActions,
-  group: SwarmServiceGroupActions,
-  info: SwarmServiceInfoActions,
-} = createActionsBuilder<ManagedSwarmServiceView>()
+const { dropdown, group, info } = createActionsBuilder<ManagedSwarmServiceView>()
   .addAction(applySwarmServiceAction)
   .addAction(forceUpdateSwarmServiceAction)
-  .addAction(duplicateSwarmServiceAction)
   .addAction({
     key: 'checkUpdates',
     type: 'command',
@@ -155,4 +132,21 @@ const getUpdateCheckDisabledReason = (
   if (service.spec.image.imageTag.includes('@')) return 'Digest-pinned images do not support image checks.';
   if (!service.appliedImageDigest) return 'Deploy this Service once so Citadel has an applied digest to compare.';
   return undefined;
+};
+
+export const SwarmServiceInfoActions = info;
+
+const { details, delete: deleteDropdown, ...primaryDropdown } = dropdown;
+
+export const SwarmServiceDropdownActions: typeof dropdown = {
+  ...primaryDropdown,
+  duplicate: ({ resource }) => (
+    <DuplicateWorkloadAction resources={resource} kind={ResourceCopyKind.SwarmService} submenu />
+  ),
+  details,
+  delete: deleteDropdown,
+};
+export const SwarmServiceGroupActions: typeof group = {
+  duplicate: ({ resources }) => <DuplicateWorkloadAction resources={resources} kind={ResourceCopyKind.SwarmService} />,
+  ...group,
 };

@@ -1,3 +1,4 @@
+mod hooks;
 pub use citadel_execution::ProcessRunner as GitProcessPort;
 use std::ffi::{OsStr, OsString};
 
@@ -96,6 +97,8 @@ pub enum GitError {
     Process(#[from] ProcessError),
     #[error("Git command failed: {0}")]
     Command(String),
+    #[error("Repository hook failed: {0}")]
+    Hook(String),
     #[error("Git returned invalid output: {0}")]
     InvalidOutput(String),
     #[error("repository cache I/O failed: {0}")]
@@ -1184,6 +1187,13 @@ mod tests {
 
     struct TestWorkspace;
     impl crate::workspace::GitWorkspacePort for TestWorkspace {
+        fn hook_directory<'a>(
+            &'a self,
+            _: &'a Path,
+            _: &'a str,
+        ) -> BoxFuture<'a, std::io::Result<std::path::PathBuf>> {
+            Box::pin(async { panic!("unexpected hook") })
+        }
         fn has_file<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, bool> {
             Box::pin(async move {
                 tokio::fs::metadata(path)

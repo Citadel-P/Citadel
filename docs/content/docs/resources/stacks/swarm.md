@@ -78,9 +78,11 @@ Stack deployment path. Use supported Compose secret references or
 environment-variable bindings; see
 [secret delivery modes](/docs/guides/variables-and-secrets#delivery-mode).
 
-For Agent and Edge Agent connections, a Git source snapshot is rejected before
-dispatch when it exceeds 512 files or 12 MiB. Reduce the Stack deployment
-source or move large application data out of the repository before retrying.
+All Git Stacks materialize the full committed tree on Core, including Local
+execution, within 512 entries/files and 12 MiB. Agents also check the final bundle
+after generated ownership files are added, so leave headroom. See
+[Git source requirements](/docs/resources/stacks/git#git-source-requirements)
+for monorepo counting, unsupported symlinks/submodules, and practical workarounds.
 
 ## Import an existing Stack or Compose project
 

@@ -252,6 +252,9 @@ pub(super) fn backup_exec(r: &ExecBinaryRequest) -> bool {
     let Some(operation) = r.cmd.get(i).map(String::as_str) else {
         return false;
     };
+    if operation == "prune" {
+        return r.cmd.len() == i + 1;
+    }
     let mut positional = Vec::new();
     let mut target = false;
     i += 1;
@@ -534,6 +537,21 @@ mod tests {
             "s3:http://fixture/bucket".into(),
         );
         assert!(backup_exec(&request));
+        let mut prune = request.clone();
+        prune.cmd = vec!["restic".into(), "prune".into()];
+        assert!(backup_exec(&prune));
+        for extra in [
+            vec!["--keep-last", "14"],
+            vec!["--prune"],
+            vec!["/source"],
+            vec!["--password-command=sh"],
+            vec!["--json"],
+        ] {
+            let mut bad = prune.clone();
+            bad.cmd.extend(extra.into_iter().map(str::to_owned));
+            assert!(!backup_exec(&bad));
+        }
+
         request.cmd.push("--password-command=sh".into());
         assert!(!backup_exec(&request));
         request.cmd.pop();

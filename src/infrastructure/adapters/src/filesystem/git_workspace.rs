@@ -48,6 +48,23 @@ impl GitStagingDirectory for Staging {
     }
 }
 impl GitWorkspacePort for LocalGitWorkspace {
+    fn hook_directory<'a>(
+        &'a self,
+        root: &'a Path,
+        relative: &'a str,
+    ) -> BoxFuture<'a, io::Result<PathBuf>> {
+        Box::pin(async move {
+            let root = tokio::fs::canonicalize(root).await?;
+            let directory = tokio::fs::canonicalize(root.join(relative)).await?;
+            if !directory.starts_with(&root) || !tokio::fs::metadata(&directory).await?.is_dir() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Hook directory must be inside the repository",
+                ));
+            }
+            Ok(directory)
+        })
+    }
     fn has_file<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, bool> {
         Box::pin(async move {
             tokio::fs::metadata(path)

@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMutate, useRead } from '@/lib/hooks';
+import { copyDataDisabledReason } from './duplicate-actions';
 import { useResourceCopyGroup } from './useResourceCopyGroup';
 import { requestErrorMessage } from '@/lib/request-error';
 import { ResourceCopyDataMode } from '@/api/generated/api.types';
@@ -58,7 +59,22 @@ export function DuplicateWorkload({
   const [params, setParams] = useSearchParams();
   const operationId = params.get('copyOperation') ?? '';
   const suggestedName = `${sourceName.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 59)}-copy`;
-  const [open, setOpen] = useState(Boolean(operationId));
+  const requested = params.get('duplicate') === 'data';
+  const [open, setDialogOpen] = useState(
+    Boolean(operationId) || (requested && !disabled && copyEligibility?.status === 'Available'),
+  );
+  function setOpen(value: boolean) {
+    setDialogOpen(value);
+    if (requested) {
+      setParams(
+        (current) => {
+          current.delete('duplicate');
+          return current;
+        },
+        { replace: true },
+      );
+    }
+  }
   const [step, setStep] = useState('configure');
   const [dataMode, setDataMode] = useState(ResourceCopyDataMode.CurrentData);
   const [consistencyAcknowledged, setConsistencyAcknowledged] = useState(false);
@@ -180,10 +196,7 @@ export function DuplicateWorkload({
     (currentData ? consistencyAcknowledged : preview.volumes.every((volume) => selections[volume.source]));
   const selectedCount = Object.keys(selections).length;
   const noCopyableVolumes = step === 'data' && preview?.volumes.length === 0;
-  const dataDisabledReason =
-    copyEligibility?.status === 'Available'
-      ? undefined
-      : (copyEligibility?.reason ?? 'Copy availability could not be checked. Refresh the resource to try again.');
+  const dataDisabledReason = copyDataDisabledReason(copyEligibility);
 
   return (
     <>

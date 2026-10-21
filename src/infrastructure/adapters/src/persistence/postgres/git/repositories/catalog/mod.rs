@@ -194,6 +194,10 @@ VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8,0,'Queued',$8,$9,$10,$11,$12,$13)
             let source_changed = old.url != updated.url
                 || old.default_branch != updated.default_branch
                 || old.git_account_id != updated.git_account_id;
+            if source_changed || old.on_clone != updated.on_clone || old.on_pull != updated.on_pull
+            {
+                ensure_not_syncing(&mut transaction, &[id]).await?;
+            }
             let affected = sqlx::query(
                 "UPDATE gitrepositories SET name=$2, description=$3, url=$4, defaultbranch=$5, gitaccountid=$6, syncmode=$7, syncintervalminutes=$8, webhook=$9, onclone=$10, onpull=$11, status=CASE WHEN $12 THEN 'Pending' ELSE status END, controlstate=CASE WHEN $12 AND controlstate<>'Processing' THEN 'Queued' ELSE controlstate END, controltriggeredby=CASE WHEN $12 THEN $13 ELSE controltriggeredby END, controlstartedat=CASE WHEN $12 AND controlstate<>'Processing' THEN NULL ELSE controlstartedat END, rowversion=rowversion+1 WHERE id=$1",
             )
@@ -258,6 +262,7 @@ ON CONFLICT(gitrepositoryid,branch) DO UPDATE SET status='Pending',lasterror=NUL
             if rows.len() != ids.len() {
                 return Err(GitRepositoryError::NotFound);
             }
+            ensure_not_syncing(&mut transaction, &ids).await?;
             sqlx::query("DELETE FROM gitrepositories WHERE id = ANY($1::uuid[])")
                 .bind(&ids)
                 .execute(&mut *transaction)
@@ -314,3 +319,16 @@ const SYNC_STATUS: &str = r#"
  FROM gitrepositoryrefs reference
  WHERE reference.gitrepositoryid=resource.id AND reference.branch=resource.defaultbranch) AS sync_status
 "#;
+
+// Hold the repository row lock before calling this, as the sync worker does.
+async fn ensure_not_syncing(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ids: &[Uuid],
+) -> Result<(), GitRepositoryError> {
+    let syncing: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM gitrepositoryrefs WHERE gitrepositoryid=ANY($1::uuid[]) AND status='Syncing')")
+        .bind(ids).fetch_one(&mut **transaction).await.map_err(database_error)?;
+    if syncing {
+        return Err(GitRepositoryError::Conflict("Wait for repository synchronization to finish before changing its source or hooks, or deleting it.".into()));
+    }
+    Ok(())
+}

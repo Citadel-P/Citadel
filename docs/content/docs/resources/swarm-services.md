@@ -70,6 +70,14 @@ need to change between replicated and global mode.
 
 ### Duplicate
 
+Copy availability is included when the resource list loads and refreshed with
+resource updates. Opening **Duplicate** does not fetch the resource details.
+
+The same **Duplicate** options are available on the resource page, in each list
+row's action menu, and in the bottom action bar when one Swarm Service is selected.
+Choosing **Configuration + data** from the list opens the copy wizard on the
+source resource's page. Unavailable data copies show a reason.
+
 **Duplicate → Configuration only** opens a prefilled form and **Review copy** reviews the
 edited values before creating an undeployed Service. Automatic updates and
 webhooks are disabled. The source Service is unchanged.

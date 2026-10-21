@@ -30,6 +30,16 @@ impl PostgresGitRepositoryExecutionPersistence {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .unwrap_or(row.try_get("defaultbranch").map_err(storage)?);
+            // Hook side effects may have happened before failure or shutdown. Only an
+            // explicit repository Sync may retry that branch after operator review.
+            if trigger != "Manual" || actor_id.value() == citadel_identity::SYSTEM_ACTOR_ID {
+                let needs_review: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM gitrepositoryrefs reference JOIN gitrepositories repository ON repository.id=reference.gitrepositoryid WHERE repository.id=$1 AND reference.branch=$2 AND reference.status='Degraded' AND (COALESCE(jsonb_array_length(repository.onclone::jsonb->'commands'),0)>0 OR COALESCE(jsonb_array_length(repository.onpull::jsonb->'commands'),0)>0))",
+                ).bind(id).bind(branch).fetch_one(&mut *transaction).await.map_err(storage)?;
+                if needs_review {
+                    return Err(GitRepositoryExecutionError::Validation("Review repository hook side effects and run Sync manually before retrying this branch.".into()));
+                }
+            }
             let currently_syncing = sqlx::query_scalar::<_, bool>(
                 "SELECT EXISTS(SELECT 1 FROM gitrepositoryrefs WHERE gitrepositoryid=$1 AND branch=$2 AND status='Syncing')",
             )
@@ -53,7 +63,7 @@ impl PostgresGitRepositoryExecutionPersistence {
             } else {
                 upsert_pending_ref(&mut transaction, id, branch, trigger).await?;
                 sqlx::query(
-                    "UPDATE gitrepositories SET status='Pending', controlstate='Queued', controltriggeredby=$2, controlstartedat=NULL, rowversion=rowversion+1 WHERE id=$1",
+                    "UPDATE gitrepositories SET status='Pending', controlstate=CASE WHEN controlstate='Processing' THEN 'Processing' ELSE 'Queued' END, controltriggeredby=$2, rowversion=rowversion+1 WHERE id=$1",
                 )
                 .bind(id)
                 .bind(actor_id.value())
