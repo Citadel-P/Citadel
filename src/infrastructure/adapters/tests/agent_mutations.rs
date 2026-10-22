@@ -10,11 +10,11 @@ use citadel_contracts::citadel::containers::v1::container_service_server::{
     ContainerService, ContainerServiceServer,
 };
 use citadel_contracts::citadel::containers::v1::{
-    ContainerIds, ContainerLogRequest, ContainerLogResponse, ContainersStatsResponse,
-    CreateContainerRequest, CreateContainerResponse, DeleteContainerRequest, ExecBinaryRequest,
-    ExecClientMessage, ExecExit, ExecOutput, ExecServerMessage, InspectContainerRequest,
-    ListContainersRequest, ListContainersResponse, StreamContainerStatsRequest,
-    StreamContainersStatsRequest, StreamType, exec_server_message,
+    ContainerIds, ContainerLogRequest, ContainerLogResponse, ContainerProcessesResponse,
+    ContainersStatsResponse, CreateContainerRequest, CreateContainerResponse,
+    DeleteContainerRequest, ExecBinaryRequest, ExecClientMessage, ExecExit, ExecOutput,
+    ExecServerMessage, InspectContainerRequest, ListContainersRequest, ListContainersResponse,
+    StreamContainerStatsRequest, StreamContainersStatsRequest, StreamType, exec_server_message,
 };
 use citadel_contracts::citadel::deployments::v1::deployment_service_server::{
     DeploymentService as AgentDeploymentService, DeploymentServiceServer,
@@ -182,6 +182,13 @@ impl ContainerService for MutationFixture {
             }),
             ..Default::default()
         }))
+    }
+
+    async fn processes(
+        &self,
+        _: Request<InspectContainerRequest>,
+    ) -> Result<Response<ContainerProcessesResponse>, Status> {
+        Err(Status::unimplemented("not used"))
     }
 
     async fn create(

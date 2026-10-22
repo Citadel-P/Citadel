@@ -11,7 +11,7 @@ Swarm-node restrictions. For image builds and local setup, see
 | Direct | Core calls the Agent's gRPC listener | Signed requests verified with `CITADEL_CORE_PUBLIC_KEY` |
 | Edge | Agent connects to Core's Edge gRPC listener | Enrollment and persisted session identity |
 
-Both transports expose the same 68 operations. Edge carries commands through
+Both transports expose the same 69 operations. Edge carries commands through
 `EdgeAgentService/Connect`, a bidirectional stream from
 `citadel.edge.v1.AgentEnvelope` to `citadel.edge.v1.CoreEnvelope`. Its protocol
 version is **2**. Command number 0 and unknown command numbers are rejected.
