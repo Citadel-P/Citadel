@@ -2,12 +2,12 @@ import { SwarmConfigView } from '@/api/generated/api.types';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { DataTable } from '@/components/ui/data-table';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 
 export const ConfigInfoTable = ({ config }: { config: SwarmConfigView }) => {
   const formatDateTime = useProfileDateTimeFormatter();
-  const columns = useMemo<ColumnDef<SwarmConfigView>[]>(
+  const columns = useMemo<ColumnDef<StockFeatures, SwarmConfigView>[]>(
     () => [
       {
         accessorKey: 'templatingDriver',

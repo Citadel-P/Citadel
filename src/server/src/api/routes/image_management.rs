@@ -34,7 +34,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Platform
 #[utoipa::path(get,path="/api/v1/images/{platformId}/{imageId}/usage",operation_id="getImageUsage",tag="Images",
     summary="List image usage",
     params(("platformId"=Uuid,Path),("imageId"=String,Path),("dockerNodeId"=Option<String>,Query),("offset"=Option<u32>,Query)),
-    responses((status=200,body=ImageUsageSchema),crate::openapi::errors::ExternalResourceErrors),security(("Bearer"=[])),
+    responses((status=200, description="Success",body=ImageUsageSchema),crate::openapi::errors::ExternalResourceErrors),security(("Bearer"=[])),
     extensions(("x-citadel-principal"=json!("actor")),("x-citadel-public"=json!(true)),("x-citadel-setup-exempt"=json!(false))))]
 async fn image_usage(
     State(state): State<PlatformsHttpState>,
@@ -85,7 +85,7 @@ async fn image_usage(
 #[utoipa::path(post,path="/api/v1/images/deletion-preview",operation_id="previewImageDeletion",tag="Images",
     summary="Preview image deletion",
     request_body=PreviewImageDeletionInput,
-    responses((status=200,body=Vec<ImageDeletionPreviewItemSchema>),crate::openapi::errors::ExternalResourceErrors),security(("Bearer"=[])),
+    responses((status=200, description="Success",body=Vec<ImageDeletionPreviewItemSchema>),crate::openapi::errors::ExternalResourceErrors),security(("Bearer"=[])),
     extensions(("x-citadel-principal"=json!("actor")),("x-citadel-public"=json!(true)),("x-citadel-setup-exempt"=json!(false))))]
 async fn preview_image_deletion(
     State(state): State<PlatformsHttpState>,
@@ -177,7 +177,7 @@ pub(super) fn normalize_ids(mut ids: Vec<String>) -> Result<Vec<String>, ApiErro
 #[utoipa::path(post,path="/api/v1/images/check-update",operation_id="checkImageUpdate",tag="Images",
     summary="Check an image tag for updates",
     request_body=CheckImageUpdateInput,
-    responses((status=200,body=ImageTagUpdateSchema),crate::openapi::errors::ExternalResourceErrors),security(("Bearer"=[])),
+    responses((status=200, description="Success",body=ImageTagUpdateSchema),crate::openapi::errors::ExternalResourceErrors),security(("Bearer"=[])),
     extensions(("x-citadel-principal"=json!("actor")),("x-citadel-public"=json!(true)),("x-citadel-setup-exempt"=json!(false))))]
 async fn check_image_update(
     State(state): State<PlatformsHttpState>,

@@ -4,7 +4,7 @@ import { healthOrder, workloadHealthStatus } from '@/features/workload-health/he
 import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
-import { ColumnDef, Row } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef, Row } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { ManagedSwarmServiceView, ResourceControlState, SwarmTaskView } from '@/api/generated/api.types';
 import { PlatformStatusCell } from '@/components/custom/common';
@@ -106,7 +106,7 @@ export const SwarmServicesTable = ({
   );
 };
 
-const createColumns = (actions: SwarmServiceActions): ColumnDef<ManagedServiceTableRow>[] => [
+const createColumns = (actions: SwarmServiceActions): ColumnDef<StockFeatures, ManagedServiceTableRow>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -207,7 +207,7 @@ const createColumns = (actions: SwarmServiceActions): ColumnDef<ManagedServiceTa
       ) : (
         <TaskHealth row={row.original} />
       ),
-    sortingFn: (a, b) =>
+    sortFn: (a, b) =>
       (isServiceRow(a.original) ? healthOrder.indexOf(workloadHealthStatus(a.original.service)) : 99) -
       (isServiceRow(b.original) ? healthOrder.indexOf(workloadHealthStatus(b.original.service)) : 99),
   },
@@ -227,7 +227,7 @@ const createColumns = (actions: SwarmServiceActions): ColumnDef<ManagedServiceTa
   },
 ];
 
-const ServiceNameCell = ({ row }: { row: Row<ManagedServiceTableRow> }) => {
+const ServiceNameCell = ({ row }: { row: Row<StockFeatures, ManagedServiceTableRow> }) => {
   if (!isServiceRow(row.original)) {
     const { platformId, task } = row.original;
     return (

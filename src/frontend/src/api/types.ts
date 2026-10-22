@@ -87,12 +87,12 @@ export type ApiFn<K extends KnownResourceName> = ApiFnMap[K];
 export type ResourceResponse<K extends KnownResourceName> = Awaited<ReturnType<ApiFn<K>>>;
 
 type NamedParameters<K extends KnownResourceName> = {
-  [I in Exclude<
-    keyof (typeof resources)[K]['params'],
-    keyof (readonly unknown[])
-  > as (typeof resources)[K]['params'][I] extends string
-    ? (typeof resources)[K]['params'][I]
-    : never]: I extends keyof Parameters<ApiFn<K>> ? Parameters<ApiFn<K>>[I] : never;
+  [
+    I in Exclude<
+      keyof (typeof resources)[K]['params'],
+      keyof (readonly unknown[])
+    > as (typeof resources)[K]['params'][I] extends string ? (typeof resources)[K]['params'][I] : never
+  ]: I extends keyof Parameters<ApiFn<K>> ? Parameters<ApiFn<K>>[I] : never;
 };
 
 /** One named argument object, ordered only at the generated-client boundary. */

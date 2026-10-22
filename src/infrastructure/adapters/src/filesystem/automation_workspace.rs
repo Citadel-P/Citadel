@@ -15,15 +15,15 @@ impl LocalAutomationWorkspace {
 }
 struct Workspace {
     directory: PathBuf,
-    script: PathBuf,
+    entrypoint: PathBuf,
     cleanup: DirectoryCleanup,
 }
 impl AutomationWorkspaceLease for Workspace {
     fn directory(&self) -> &Path {
         &self.directory
     }
-    fn script(&self) -> &Path {
-        &self.script
+    fn entrypoint(&self) -> &Path {
+        &self.entrypoint
     }
     fn cleanup(&mut self) -> BoxFuture<'_, Result<(), String>> {
         Box::pin(async move { self.cleanup.cleanup().await.map_err(|e| e.to_string()) })
@@ -66,12 +66,21 @@ impl AutomationWorkspacePort for LocalAutomationWorkspace {
             .map_err(|e| format!("Could not prepare run: {e}"))?;
             let workspace = Workspace {
                 directory: directory.into(),
-                script: directory.join("action.ts"),
+                entrypoint: directory.join("bootstrap.ts"),
                 cleanup,
             };
-            tokio::fs::write(&workspace.script, source.as_bytes())
+            tokio::fs::write(directory.join("action.ts"), source.as_bytes())
                 .await
                 .map_err(|e| format!("Could not write action: {e}"))?;
+            // Deno's initial static module graph bypasses read permissions. Only
+            // this fixed module may be the entrypoint. A computed dynamic import
+            // checks the Action AND its transitive imports against permissions.
+            tokio::fs::write(
+                &workspace.entrypoint,
+                "const action = new URL('./action.ts', import.meta.url).href;\nawait import(action);\n",
+            )
+            .await
+            .map_err(|e| format!("Could not write action bootstrap: {e}"))?;
             Ok(Box::new(workspace) as Box<dyn AutomationWorkspaceLease>)
         })
     }

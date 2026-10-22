@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { BackupCoverageStatus, ResourceBackupSummaryView } from '@/api/generated/api.types';
 import { Shield, ShieldAlert, ShieldCheck, ShieldOff } from 'lucide-react';
 import { ResourceFilterChip, ResourceFilterDropdown } from '@/components/custom/resource-filter';
@@ -126,7 +126,9 @@ export function ResourceBackupCell(value: BackupCellTarget) {
   return <ResourceBackupIndicator compact {...value} />;
 }
 
-export function backupColumn<T>(target: (row: T) => BackupCellTarget | undefined): ColumnDef<T> {
+export function backupColumn<T extends object>(
+  target: (row: T) => BackupCellTarget | undefined,
+): ColumnDef<StockFeatures, T> {
   return {
     id: 'backup',
     header: 'Backup',

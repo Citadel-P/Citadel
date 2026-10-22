@@ -2,9 +2,9 @@ import { ImageLayer, ImageInspectionView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { byteTransform } from '@/lib/bytes.helper';
 import { truncate } from '@/lib/truncate';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 
-const columns: ColumnDef<ImageLayer & { rowId: string }>[] = [
+const columns: ColumnDef<StockFeatures, ImageLayer & { rowId: string }>[] = [
   {
     accessorKey: 'stage',
     header: () => <span>Stage</span>,

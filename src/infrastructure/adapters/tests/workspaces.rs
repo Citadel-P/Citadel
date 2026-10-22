@@ -89,8 +89,16 @@ async fn automation_scripts_are_private_and_cleanup_covers_abandonment() {
         .await
         .unwrap();
     assert_eq!(
-        tokio::fs::read_to_string(workspace.script()).await.unwrap(),
+        tokio::fs::read_to_string(workspace.directory().join("action.ts"))
+            .await
+            .unwrap(),
         "short-lived credential"
+    );
+    assert_eq!(
+        tokio::fs::read_to_string(workspace.entrypoint())
+            .await
+            .unwrap(),
+        "const action = new URL('./action.ts', import.meta.url).href;\nawait import(action);\n"
     );
     #[cfg(unix)]
     {

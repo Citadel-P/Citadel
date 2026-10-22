@@ -58,9 +58,10 @@ Cleanup never prunes unrelated volumes or forcibly removes an in-use volume.
 Run `./test/scripts/Test-BuildCache.ps1` to test these safety rules without Docker.
 
 ```powershell
-# Rebuild and verify the generated Docker subset.
+# Rebuild and verify the generated Docker subset (Rust plus Java 21).
+docker build -t citadel-test-toolchain:local -f test/Dockerfile.toolchain .
 docker run --rm --mount type=bind,source=${PWD},target=/repo -w /repo `
-  rust:1.97.1-bookworm cargo run --locked -p xtask -- docker --check
+  citadel-test-toolchain:local cargo run --locked -p xtask -- docker-api --check
 
 # Format, lint, and run unit/Unix-socket compatibility tests.
 ./test/scripts/Test-Workspace.ps1

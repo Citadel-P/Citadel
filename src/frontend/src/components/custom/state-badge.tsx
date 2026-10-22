@@ -4,15 +4,7 @@ import { ReactNode } from 'react';
 import { LoaderCircle } from 'lucide-react';
 
 export type StateBadgeKind =
-  | 'activity'
-  | 'alertEvent'
-  | 'alertSeverity'
-  | 'default'
-  | 'container'
-  | 'health'
-  | 'run'
-  | 'swarmNode'
-  | 'swarmTask';
+  'activity' | 'alertEvent' | 'alertSeverity' | 'default' | 'container' | 'health' | 'run' | 'swarmNode' | 'swarmTask';
 
 const styles = {
   danger: 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300',

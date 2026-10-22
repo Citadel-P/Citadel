@@ -10,7 +10,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { GitBranch, Server } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
@@ -42,7 +42,7 @@ const columns = (
   actions: ActionMap,
   latestRuns: Map<string, BuildRunView>,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<AuthorizedProject>[] => [
+): ColumnDef<StockFeatures, AuthorizedProject>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -66,7 +66,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <BuildNameRow project={row.original} run={latestRuns.get(row.original.id)} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
     accessorKey: 'branch',
@@ -79,7 +79,7 @@ const columns = (
         </span>
       </span>
     ),
-    sortingFn: (rowA, rowB) => rowA.original.branch.localeCompare(rowB.original.branch),
+    sortFn: (rowA, rowB) => rowA.original.branch.localeCompare(rowB.original.branch),
   },
   {
     accessorKey: 'platformId',
@@ -140,7 +140,7 @@ const columns = (
         </span>
       );
     },
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       String(latestRuns.get(rowA.original.id)?.queuedAt ?? '').localeCompare(
         String(latestRuns.get(rowB.original.id)?.queuedAt ?? ''),
       ),
@@ -149,7 +149,7 @@ const columns = (
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),

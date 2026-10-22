@@ -9,10 +9,7 @@ type SetupState =
   | { status: 'error'; attempt: number; error: SetupError };
 
 type SetupAction =
-  | { type: 'PENDING' }
-  | { type: 'COMPLETE' }
-  | { type: 'ERROR'; error: SetupError }
-  | { type: 'RETRY' };
+  { type: 'PENDING' } | { type: 'COMPLETE' } | { type: 'ERROR'; error: SetupError } | { type: 'RETRY' };
 
 function reducer(state: SetupState, action: SetupAction): SetupState {
   switch (action.type) {

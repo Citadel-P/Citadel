@@ -65,7 +65,7 @@ zeroize.workspace = true
 utoipa-swagger-ui.workspace = true
 
 [dev-dependencies]
-syn = { version = "2.0.119", features = ["full", "visit"] }
+syn = { version = "3.0.9", features = ["full", "visit"] }
 sha2.workspace = true
 prost.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

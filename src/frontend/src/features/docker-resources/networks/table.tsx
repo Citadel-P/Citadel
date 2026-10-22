@@ -1,7 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { NetworkView, PlatformType } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
 import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
@@ -124,7 +124,7 @@ const columns = (
   >,
   showNode: boolean,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<NetworkView>[] => [
+): ColumnDef<StockFeatures, NetworkView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -148,7 +148,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <NetworkNameRow network={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   ...(showNode ? [createNodeResourceColumn<NetworkView>()] : []),
   {

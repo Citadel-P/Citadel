@@ -235,8 +235,8 @@ jobs:
         run: |
           set -euo pipefail
           # Match the CLI/plugin versions used by test/scripts/test-stack-runtime.sh.
-          docker_version=29.0.0
-          compose_version=v2.40.3
+          docker_version=29.9.2
+          compose_version=v5.6.1
           tools_dir=$(mktemp -d)
           trap 'rm -rf "$tools_dir"' EXIT
           curl --fail --silent --show-error --location \
@@ -266,7 +266,7 @@ jobs:
             --env POSTGRES_USER=citadel_test \
             --env POSTGRES_PASSWORD=citadel_test \
             --env POSTGRES_DB=citadel_authorization \
-            postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44 \
+            postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5 \
             -c shared_preload_libraries=pg_stat_statements
           for _ in {1..60}; do
             if docker exec "$container" pg_isready -h 127.0.0.1 -U citadel_test -d citadel_authorization; then

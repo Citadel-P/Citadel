@@ -21,10 +21,13 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
       // Monaco 0.55 broke the monaco-worker-manager/worker protocol.
       // Redirect to our patched version that is compatible with the new protocol.
-      'monaco-worker-manager/worker': path.resolve(__dirname, './src/lib/monaco/worker-manager-patch.ts'),
+      'monaco-worker-manager/worker': path.resolve(import.meta.dirname, './src/lib/monaco/worker-manager-patch.ts'),
+      // Monaco embeds an old DOMPurify copy; npm overrides cannot replace this
+      // relative import. Use a separate instance of our patched dependency.
+      './dompurify/dompurify.js': path.resolve(import.meta.dirname, './src/lib/monaco/sanitizer.ts'),
     },
   },
 });

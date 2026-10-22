@@ -606,6 +606,28 @@ async fn enqueue(
     let principal = actor(principal, &headers)?;
     authorize(&state, &principal, id, PermissionLevel::Execute, &headers).await?;
     let input = input.map(|ValidatedJson(value)| value).unwrap_or_default();
+    let draft = if let Some(code) = &input.code {
+        let current = api_result(
+            state.automation.store().get(id).await.map_err(map_error),
+            &headers,
+        )?;
+        api_result(
+            state
+                .identity
+                .ensure_run_as_allowed(
+                    &principal,
+                    citadel_primitives::ActorId::new(current.run_as_actor_id),
+                )
+                .await,
+            &headers,
+        )?;
+        Some(citadel_automation::AutomationDraft {
+            code: code.clone(),
+            expected_row_version: current.row_version,
+        })
+    } else {
+        None
+    };
     let args = match input.args_json {
         Some(Value::String(value)) => api_result(
             serde_json::from_str::<Value>(&value)
@@ -636,7 +658,7 @@ async fn enqueue(
             } else {
                 input.timeout_seconds
             },
-            input.code.as_deref(),
+            draft.as_ref(),
         )
         .await
     {

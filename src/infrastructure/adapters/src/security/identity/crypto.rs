@@ -1,6 +1,6 @@
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
-use argon2::password_hash::{PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString};
+use argon2::password_hash::{PasswordHasher as _, PasswordVerifier as _, phc::PasswordHash};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -32,10 +32,8 @@ impl Default for Argon2PasswordHasher {
     fn default() -> Self {
         let params = Params::new(19_456, 2, 1, None).expect("fixed Argon2 parameters are valid");
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-        let salt =
-            SaltString::encode_b64(&[0x5a_u8; 16]).expect("fixed dummy password salt is valid");
         let dummy_hash = argon2
-            .hash_password(b"citadel-invalid-credential", &salt)
+            .hash_password_with_salt(b"citadel-invalid-credential", &[0x5a_u8; 16])
             .expect("fixed dummy password can be hashed");
         Self {
             argon2,
@@ -48,12 +46,11 @@ impl PasswordHasher for Argon2PasswordHasher {
     fn hash(&self, password: &str) -> Result<String, IdentityError> {
         let mut salt_bytes = [0_u8; 16];
         fill(&mut salt_bytes).map_err(|_| IdentityError::Credential)?;
-        let salt = SaltString::encode_b64(&salt_bytes).map_err(|_| IdentityError::Credential)?;
-        salt_bytes.zeroize();
         let hash = self
             .argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|_| IdentityError::Credential)?;
+            .hash_password_with_salt(password.as_bytes(), &salt_bytes);
+        salt_bytes.zeroize();
+        let hash = hash.map_err(|_| IdentityError::Credential)?;
         Ok(format!("{PASSWORD_PREFIX}{hash}"))
     }
 
@@ -351,6 +348,33 @@ impl citadel_git::GitCredentialProtector for AesGcmSecretProtector {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stored_password_hashes_from_argon2_0_5_remain_compatible() {
+        // Produced with Argon2 0.5.3, the existing parameters, and a fixed fixture salt.
+        let legacy = "cit_pwd_v1$$argon2id$v=19$m=19456,t=2,p=1$WlpaWlpaWlpaWlpaWlpaWg$WDu6f9TCi6253Pzo8FjEuiBD0DwRJAsE31XRdfIA2/M";
+        let hasher = Argon2PasswordHasher::default();
+        assert!(hasher.verify("legacy-test-password", legacy));
+        assert!(!hasher.verify("different-test-password", legacy));
+        let reproduced = hasher
+            .argon2
+            .hash_password_with_salt(b"legacy-test-password", &[0x5a; 16])
+            .unwrap();
+        assert_eq!(format!("{PASSWORD_PREFIX}{reproduced}"), legacy);
+    }
+
+    #[test]
+    fn stored_secret_envelopes_from_aes_gcm_0_10_remain_compatible() {
+        // Produced with AES-GCM 0.10.3 using only fixture key/nonce/plaintext.
+        let legacy = "cit_secret_v1.AwMDAwMDAwMDAwMD.vfGMEzbFRt--wd0QmDcWYacFtJ5uoo8eSxalZcQ";
+        let protector = AesGcmSecretProtector::new(&[9; 32]).unwrap();
+        assert_eq!(
+            protector.unprotect(legacy).unwrap().as_slice(),
+            b"legacy-secret"
+        );
+        let different_key = AesGcmSecretProtector::new(&[8; 32]).unwrap();
+        assert!(different_key.unprotect(legacy).is_err());
+    }
 
     #[test]
     fn password_hashes_are_versioned_and_reject_unknown_formats() {

@@ -1,7 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { AuthorizedGitRepositoryView, GitRepositoryStatus, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Link } from 'react-router';
 import { ActionData } from '@/pages/types';
@@ -20,7 +20,7 @@ const columns = (
     React.FC<{ resource: AuthorizedGitRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<AuthorizedGitRepositoryView>[] => [
+): ColumnDef<StockFeatures, AuthorizedGitRepositoryView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -44,7 +44,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <RepoNameRow repo={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
     accessorKey: 'url',
@@ -52,7 +52,7 @@ const columns = (
     cell: ({ row }) => (
       <span className="text-[13px] text-muted-foreground truncate max-w-75 block">{row.original.url}</span>
     ),
-    sortingFn: (rowA, rowB) => rowA.original.url.localeCompare(rowB.original.url),
+    sortFn: (rowA, rowB) => rowA.original.url.localeCompare(rowB.original.url),
   },
   {
     accessorKey: 'defaultBranch',
@@ -63,13 +63,13 @@ const columns = (
     accessorKey: 'createdAt',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
+    sortFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
   },
   {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),

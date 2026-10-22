@@ -16,6 +16,10 @@ pub(super) async fn verify_request_drop_during_claim(
     .await
     .unwrap();
     let before = store.list_runs(id, 100).await.unwrap().len();
+    let draft = citadel_automation::AutomationDraft {
+        code: "await new Promise(()=>setInterval(()=>{},1000));".into(),
+        expected_row_version: store.get(id).await.unwrap().row_version,
+    };
     let mut lock = db.begin().await.unwrap();
     sqlx::query("SELECT id FROM actions WHERE id=$1 FOR UPDATE")
         .bind(id)
@@ -25,14 +29,7 @@ pub(super) async fn verify_request_drop_during_claim(
     let service = service.clone();
     let request = tokio::spawn(async move {
         service
-            .run(
-                actor,
-                id,
-                "Test",
-                &json!({}),
-                Some(30),
-                Some("await new Promise(()=>setInterval(()=>{},1000));"),
-            )
+            .run(actor, id, "Test", &json!({}), Some(30), Some(&draft))
             .await
     });
     tokio::time::timeout(Duration::from_secs(5), async {
@@ -74,15 +71,13 @@ pub(super) async fn verify(
     shutdown: &tokio_util::sync::CancellationToken,
     tasks: &citadel_runtime::DynamicTasks,
 ) {
+    let draft = citadel_automation::AutomationDraft {
+        code: "console.log('shutdown-ready'); await new Promise(()=>setInterval(()=>{},1000));"
+            .into(),
+        expected_row_version: store.get(id).await.unwrap().row_version,
+    };
     let mut progress = service
-        .run(
-            actor,
-            id,
-            "Test",
-            &json!({}),
-            None,
-            Some("console.log('shutdown-ready'); await new Promise(()=>setInterval(()=>{},1000));"),
-        )
+        .run(actor, id, "Test", &json!({}), None, Some(&draft))
         .await
         .unwrap();
     tokio::time::timeout(Duration::from_secs(10), async {

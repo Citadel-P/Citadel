@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -724,7 +724,7 @@ const QuietHoursTable = ({
     [quietHours],
   );
 
-  const columns = useMemo<ColumnDef<QuietHourRow>[]>(
+  const columns = useMemo<ColumnDef<StockFeatures, QuietHourRow>[]>(
     () => [
       {
         header: 'Name',

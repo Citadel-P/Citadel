@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { createContext, useContext, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { CartesianGrid, Scatter, ScatterChart, XAxis, YAxis } from 'recharts';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,15 @@ const markerSpacing = 14;
 
 type Point = { timestamp: number; lane: number; index: number; entry: ContainerHealthTransitionView };
 
+type PointSelection = {
+  selectedIndex: number;
+  hasSelection: boolean;
+  onChoose: (index: number) => void;
+  move: (event: KeyboardEvent<SVGGElement>, index: number) => void;
+};
+const PointSelectionContext = createContext<PointSelection | null>(null);
+const pointShape = <HealthObservationPoint />;
+
 export function ContainerHealthEvents({
   entries,
   now,
@@ -27,9 +36,13 @@ export function ContainerHealthEvents({
   const [selectedKey, setSelectedKey] = useState<string>();
   const [chartWidth, setChartWidth] = useState(600);
   const chartRef = useRef<HTMLDivElement>(null);
-  const groups = groupHealthChartPoints(
-    entries,
-    ((now - start) / 1000 / Math.max(1, chartWidth - axisWidth - rightMargin)) * markerSpacing,
+  const groups = useMemo(
+    () =>
+      groupHealthChartPoints(
+        entries,
+        ((now - start) / 1000 / Math.max(1, chartWidth - axisWidth - rightMargin)) * markerSpacing,
+      ),
+    [entries, now, start, chartWidth],
   );
   const selectedIndex = Math.max(
     0,
@@ -37,26 +50,23 @@ export function ContainerHealthEvents({
   );
   const selected = groups[selectedIndex]?.entry;
   const hasSelection = selectedKey !== undefined && groups.some((group) => group.keys.includes(selectedKey));
-  const states = [
-    ...primaryStates,
-    ...neutralStates.filter((status) => entries.some((entry) => entry.health.status === status)),
-  ];
-  const points: Point[] = groups.map(({ entry }, index) => ({
-    timestamp: entry.observedAt * 1000,
-    lane: states.indexOf(entry.health.status),
-    index,
-    entry,
-  }));
-  if (!selected) return null;
-  const tickTime = (value: number) =>
-    now - start >= 86_400_000
-      ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-      : new Date(value).toLocaleTimeString(undefined, {
-          hour: '2-digit',
-          minute: '2-digit',
-          ...(now - start < 3_600_000 ? { second: '2-digit' as const } : {}),
-          hourCycle: 'h23',
-        });
+  const states = useMemo(
+    () => [
+      ...primaryStates,
+      ...neutralStates.filter((status) => entries.some((entry) => entry.health.status === status)),
+    ],
+    [entries],
+  );
+  const points: Point[] = useMemo(
+    () =>
+      groups.map(({ entry }, index) => ({
+        timestamp: entry.observedAt * 1000,
+        lane: states.indexOf(entry.health.status),
+        index,
+        entry,
+      })),
+    [groups, states],
+  );
   const move = (event: KeyboardEvent<SVGGElement>, index: number) => {
     const next =
       event.key === 'ArrowLeft'
@@ -72,41 +82,20 @@ export function ContainerHealthEvents({
     event.preventDefault();
     event.currentTarget.ownerSVGElement?.querySelector<SVGGElement>(`[data-health-point="${next}"]`)?.focus();
   };
-  const renderPoint = (props: unknown) => {
-    const { cx, cy, payload: point } = props as { cx: number; cy: number; payload: Point };
-    const choose = () => setSelectedKey(groups[point.index].keys[0]);
+
+  // Recharts keys animation children on changed series props, even with animation disabled.
+  // Keep the chart stable during selection so keyboard focus stays on the point.
+  const chart = useMemo(() => {
+    const tickTime = (value: number) =>
+      now - start >= 86_400_000
+        ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : new Date(value).toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            ...(now - start < 3_600_000 ? { second: '2-digit' as const } : {}),
+            hourCycle: 'h23',
+          });
     return (
-      <g
-        role="button"
-        tabIndex={point.index === selectedIndex ? 0 : -1}
-        aria-pressed={hasSelection && point.index === selectedIndex}
-        aria-label={`${healthLabels[point.entry.health.status]} at ${healthTime(point.timestamp)}`}
-        data-health-point={point.index}
-        className={`group/health-point cursor-pointer outline-none ${healthTone(point.entry.health.status)}`}
-        onFocus={choose}
-        onClick={choose}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            choose();
-          } else move(event, point.index);
-        }}>
-        <circle cx={cx} cy={cy} r={10} fill="transparent" />
-        <circle
-          cx={cx}
-          cy={cy}
-          r={6.5}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1}
-          className="opacity-0 group-focus-visible/health-point:opacity-100"
-        />
-        <circle cx={cx} cy={cy} r={4.5} fill="currentColor" />
-      </g>
-    );
-  };
-  return (
-    <div ref={chartRef}>
       <ChartContainer
         config={{}}
         onChartResize={setChartWidth}
@@ -170,15 +159,27 @@ export function ContainerHealthEvents({
                   active={active}
                   hideLabel
                   className="w-72 max-w-[calc(100vw-4rem)]"
-                  payload={[{ name: 'health', dataKey: 'health', value: point.lane, payload: point }]}
+                  payload={[
+                    { graphicalItemId: 'health', name: 'health', dataKey: 'health', value: point.lane, payload: point },
+                  ]}
                   formatter={() => <HealthObservationDetails entry={point.entry} />}
                 />
               );
             }}
           />
-          <Scatter data={points} isAnimationActive={false} shape={renderPoint} activeShape={renderPoint} />
+          <Scatter data={points} isAnimationActive={false} shape={pointShape} activeShape={false} />
         </ScatterChart>
       </ChartContainer>
+    );
+  }, [now, start, states, points]);
+  if (!selected) return null;
+
+  return (
+    <div ref={chartRef}>
+      <PointSelectionContext.Provider
+        value={{ selectedIndex, hasSelection, onChoose: (index) => setSelectedKey(groups[index].keys[0]), move }}>
+        {chart}
+      </PointSelectionContext.Provider>
       {hasSelection && (
         <div
           role="status"
@@ -201,6 +202,42 @@ export function ContainerHealthEvents({
         </div>
       )}
     </div>
+  );
+}
+
+function HealthObservationPoint({ cx, cy, payload: point }: { cx?: number; cy?: number; payload?: Point }) {
+  const selection = useContext(PointSelectionContext);
+  if (!point || !selection) return null;
+  const { selectedIndex, hasSelection, onChoose, move } = selection;
+  const choose = () => onChoose(point.index);
+  return (
+    <g
+      role="button"
+      tabIndex={point.index === selectedIndex ? 0 : -1}
+      aria-pressed={hasSelection && point.index === selectedIndex}
+      aria-label={`${healthLabels[point.entry.health.status]} at ${healthTime(point.timestamp)}`}
+      data-health-point={point.index}
+      className={`group/health-point cursor-pointer outline-none ${healthTone(point.entry.health.status)}`}
+      onFocus={choose}
+      onClick={choose}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          choose();
+        } else move(event, point.index);
+      }}>
+      <circle cx={cx} cy={cy} r={10} fill="transparent" />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={6.5}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1}
+        className="opacity-0 group-focus-visible/health-point:opacity-100"
+      />
+      <circle cx={cx} cy={cy} r={4.5} fill="currentColor" />
+    </g>
   );
 }
 

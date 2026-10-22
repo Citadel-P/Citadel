@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Exercise the packaged binaries against disposable services and data.
 image="${1:-citadel-rust:local}"
-postgres_image=postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44
+postgres_image=postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
 fixture="citadel-runtime-test-$$-$RANDOM"
 core="$fixture-core"
 database="$fixture-db"

@@ -2,12 +2,15 @@ import { NetworkView, NetworkAttachmentView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { useAppContext } from '@/lib/context/app-context';
 import { truncate } from '@/lib/truncate';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Box } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
-const columns = (platformId: string | undefined, dockerNodeId?: string | null): ColumnDef<NetworkAttachmentRow>[] => [
+const columns = (
+  platformId: string | undefined,
+  dockerNodeId?: string | null,
+): ColumnDef<StockFeatures, NetworkAttachmentRow>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,

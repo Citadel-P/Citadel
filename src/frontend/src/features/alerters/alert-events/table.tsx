@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { PagedDataTable } from '@/components/custom/common';
@@ -52,7 +52,7 @@ const columns = (
     React.FC<{ resource: AlertEventView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<AlertEventView>[] => [
+): ColumnDef<StockFeatures, AlertEventView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -76,7 +76,7 @@ const columns = (
     accessorKey: 'type',
     header: ({ column }) => <SortableCell cellName="Alert Type" column={column} />,
     cell: ({ row }) => <AlertTypeCell event={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.type.localeCompare(rowB.original.type),
+    sortFn: (rowA, rowB) => rowA.original.type.localeCompare(rowB.original.type),
   },
   createResourceTargetColumn({
     id: 'target',
@@ -93,19 +93,19 @@ const columns = (
     accessorKey: 'severity',
     header: ({ column }) => <SortableCell cellName="Severity" column={column} />,
     cell: ({ row }) => <StateBadge value={row.original.severity} kind="alertSeverity" />,
-    sortingFn: (rowA, rowB) => rowA.original.severity.localeCompare(rowB.original.severity),
+    sortFn: (rowA, rowB) => rowA.original.severity.localeCompare(rowB.original.severity),
   },
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
     cell: ({ row }) => <StateBadge value={row.original.status} kind="alertEvent" />,
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
+    sortFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {
     accessorKey: 'createdAt',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
+    sortFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
   },
   {
     id: 'actions',

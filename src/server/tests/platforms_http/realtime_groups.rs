@@ -753,6 +753,42 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
             .is_err()
     );
     replace_specific_permissions(&f, &principal, vec![SpecificPermission::Terminal]).await;
+    // Terminal grants cover workloads, not Citadel's own privileged containers.
+    for (is_system, role) in [
+        (true, Some("core")),
+        (true, Some("agent")),
+        (true, Some("database")),
+        (true, None),
+        (false, Some("core")),
+    ] {
+        sqlx::query("UPDATE containers SET issystem=$2,systemrole=$3 WHERE id=$1")
+            .bind(id)
+            .bind(is_system)
+            .bind(role)
+            .execute(&f.pool)
+            .await
+            .unwrap();
+        assert!(
+            reader
+                .read(&principal, &Group::parse(&group).unwrap(), None)
+                .await
+                .is_err()
+        );
+        assert!(
+            reader
+                .read(&f.administrator, &Group::parse(&group).unwrap(), None)
+                .await
+                .is_ok()
+        );
+        for (actor, allowed) in [(&principal, false), (&f.administrator, true)] {
+            let response = send(&f, &format!("/api/v1/containers/{id}"), Some(actor.clone())).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                json_body(response).await["capabilities"]["canOpenTerminal"],
+                allowed
+            );
+        }
+    }
     let registry = f.edge.clone();
     let (session, mut commands) = registry
         .register(
@@ -802,6 +838,16 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
     let start = json!([id, "browser-session", "sh"]);
     assert!(invoke_args(&mut socket, "StartExecProcess", start.clone()).await["error"].is_string());
     assert!(commands.try_recv().is_err());
+    assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_string());
+    assert!(
+        commands.try_recv().is_err(),
+        "system container must not receive exec"
+    );
+    sqlx::query("UPDATE containers SET issystem=false,systemrole=NULL WHERE id=$1")
+        .bind(id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
     assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
     assert!(invoke_args(&mut socket, "StartExecProcess", start.clone()).await["error"].is_null());
     let command = commands.recv().await.unwrap();

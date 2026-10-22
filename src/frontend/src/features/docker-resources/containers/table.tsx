@@ -5,7 +5,7 @@ import { currentHealth } from './health';
 import { ContainerTableHealth } from './container-info/container-health-card';
 import { backupColumn, ResourceBackupCell } from '@/features/backup-policies/table-coverage';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef, Row, flexRender } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef, Row, flexRender } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   ContainerView,
@@ -138,7 +138,7 @@ const columns = (
     React.FC<{ resource: ContainerActionResource; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   platformType?: PlatformType,
-): ColumnDef<ContainerTableRow>[] => {
+): ColumnDef<StockFeatures, ContainerTableRow>[] => {
   const containerBackupColumn = backupColumn<ContainerTableRow>((row) =>
     isContainerStackGroup(row)
       ? undefined
@@ -148,7 +148,7 @@ const columns = (
           returnTo: `/platforms/${row.platformId}/containers/${row.id}`,
         },
   );
-  const result: ColumnDef<ContainerTableRow>[] = [
+  const result: ColumnDef<StockFeatures, ContainerTableRow>[] = [
     {
       id: 'select',
       header: ({ table }) => (
@@ -174,7 +174,7 @@ const columns = (
       cell: ({ row }) => (
         <ContainerNameCell row={row.original} depth={row.depth} tableRow={row} platformType={platformType} />
       ),
-      sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      sortFn: (rowA: any, rowB: any, _columnId: any): number => {
         return getDisplayName(rowB.original).localeCompare(getDisplayName(rowA.original));
       },
     },
@@ -191,7 +191,7 @@ const columns = (
     },
     {
       id: 'health',
-      sortingFn: (a, b) => healthOrder.indexOf(a.getValue('health')) - healthOrder.indexOf(b.getValue('health')),
+      sortFn: (a, b) => healthOrder.indexOf(a.getValue('health')) - healthOrder.indexOf(b.getValue('health')),
       accessorFn: (row) => (isContainerStackGroup(row) ? (row.healthSummary?.status ?? 'Unknown') : currentHealth(row)),
       header: ({ column }) => <SortableCell cellName="Health" column={column} />,
       cell: ({ row }) =>
@@ -236,7 +236,7 @@ const columns = (
                 <span className="text-sm text-muted-foreground">Manager</span>
               );
             },
-          } as ColumnDef<ContainerTableRow>,
+          } as ColumnDef<StockFeatures, ContainerTableRow>,
         ]
       : []),
     {
@@ -249,7 +249,7 @@ const columns = (
           stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
         />
       ),
-      sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      sortFn: (rowA: any, rowB: any, _columnId: any): number => {
         return toNumber(rowA.original.lastStats?.cpuUsage) < toNumber(rowB.original.lastStats?.cpuUsage) ? 1 : -1;
       },
     },
@@ -263,7 +263,7 @@ const columns = (
           stats={row.original.projectionStaleSince ? undefined : row.original.lastStats}
         />
       ),
-      sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      sortFn: (rowA: any, rowB: any, _columnId: any): number => {
         const cA = rowA.original.lastStats as ContainerStatView;
         const cB = rowB.original.lastStats as ContainerStatView;
 
@@ -313,7 +313,7 @@ const ContainerNameCell = ({
 }: {
   row: ContainerTableRow;
   depth: number;
-  tableRow: Row<ContainerTableRow>;
+  tableRow: Row<StockFeatures, ContainerTableRow>;
   platformType?: PlatformType;
 }) => {
   if (isContainerStackGroup(row)) {

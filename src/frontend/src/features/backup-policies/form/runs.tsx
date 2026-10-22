@@ -30,7 +30,7 @@ import type { DateTimeFormatter } from '@/lib/date-time';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { Ban, FileText, RotateCcw } from 'lucide-react';
@@ -258,30 +258,30 @@ const runColumns = (
   onCancel: (run: BackupRunView) => void,
   cancelPending: boolean,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<BackupRunView>[] => [
+): ColumnDef<StockFeatures, BackupRunView>[] => [
   {
     accessorKey: 'trigger',
     header: ({ column }) => <SortableCell cellName="Trigger" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.trigger}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
+    sortFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
   },
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
     cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
+    sortFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {
     accessorKey: 'items',
     header: ({ column }) => <SortableCell cellName="Sources" column={column} />,
     cell: ({ row }) => <BackupRunItemsSummary items={row.original.items} />,
-    sortingFn: (rowA, rowB) => Number(rowA.original.items?.length ?? 0) - Number(rowB.original.items?.length ?? 0),
+    sortFn: (rowA, rowB) => Number(rowA.original.items?.length ?? 0) - Number(rowB.original.items?.length ?? 0),
   },
   {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
     cell: ({ row }) => <TimestampCell value={row.original.queuedAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
+    sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
     accessorKey: 'bytesAdded',
@@ -291,13 +291,13 @@ const runColumns = (
         {Number(row.original.bytesAdded ?? 0) > 0 ? byteTransform(row.original.bytesAdded, 2) : '-'}
       </span>
     ),
-    sortingFn: (rowA, rowB) => Number(rowA.original.bytesAdded ?? 0) - Number(rowB.original.bytesAdded ?? 0),
+    sortFn: (rowA, rowB) => Number(rowA.original.bytesAdded ?? 0) - Number(rowB.original.bytesAdded ?? 0),
   },
   {
     accessorKey: 'snapshotAvailability',
     header: ({ column }) => <SortableCell cellName="Snapshot" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.snapshotAvailability}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.snapshotAvailability.localeCompare(rowB.original.snapshotAvailability),
+    sortFn: (rowA, rowB) => rowA.original.snapshotAvailability.localeCompare(rowB.original.snapshotAvailability),
   },
   {
     id: 'actions',
@@ -338,12 +338,12 @@ const restoreRunColumns = (
   onCancel: (run: BackupRestoreRunView) => void,
   cancelPending: boolean,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<BackupRestoreRunView>[] => [
+): ColumnDef<StockFeatures, BackupRestoreRunView>[] => [
   {
     accessorKey: 'targetVolumeName',
     header: ({ column }) => <SortableCell cellName="Target" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.targetHostPath ?? row.original.targetVolumeName}</span>,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.targetHostPath ?? rowA.original.targetVolumeName).localeCompare(
         rowB.original.targetHostPath ?? rowB.original.targetVolumeName,
       ),
@@ -352,7 +352,7 @@ const restoreRunColumns = (
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
     cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
+    sortFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {
     accessorKey: 'overwriteExisting',
@@ -366,13 +366,13 @@ const restoreRunColumns = (
             : 'New volume'}
       </span>
     ),
-    sortingFn: (rowA, rowB) => Number(rowA.original.overwriteExisting) - Number(rowB.original.overwriteExisting),
+    sortFn: (rowA, rowB) => Number(rowA.original.overwriteExisting) - Number(rowB.original.overwriteExisting),
   },
   {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
     cell: ({ row }) => <TimestampCell value={row.original.queuedAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
+    sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
     accessorKey: 'completedAt',
@@ -383,7 +383,7 @@ const restoreRunColumns = (
       ) : (
         <span className="text-sm text-muted-foreground">-</span>
       ),
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       String(rowA.original.completedAt ?? '').localeCompare(String(rowB.original.completedAt ?? '')),
   },
   {

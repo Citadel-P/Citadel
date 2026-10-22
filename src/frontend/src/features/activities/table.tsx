@@ -1,6 +1,6 @@
 import type { PublicActivityEventInfo, ActivityView, PagedActivityView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useActivityQuery, useTaskSheet } from '@/lib/atoms';
 import { ActorCell, PagedDataTable } from '@/components/custom/common';
@@ -42,13 +42,16 @@ export const ActivitiesTable = ({
   );
 };
 
-const columns = (displayTarget: boolean, formatDateTime: DateTimeFormatter): ColumnDef<ActivityView>[] => {
-  const cols: ColumnDef<ActivityView>[] = [
+const columns = (
+  displayTarget: boolean,
+  formatDateTime: DateTimeFormatter,
+): ColumnDef<StockFeatures, ActivityView>[] => {
+  const cols: ColumnDef<StockFeatures, ActivityView>[] = [
     {
       accessorKey: 'eventType',
       header: ({ column }) => <SortableCell cellName="Event Type" column={column} />,
       cell: ({ row }) => <EventTypeCell activity={row.original} />,
-      sortingFn: (rowA: any, rowB: any): number => rowA.original?.eventType?.localeCompare(rowB.original?.eventType),
+      sortFn: (rowA: any, rowB: any): number => rowA.original?.eventType?.localeCompare(rowB.original?.eventType),
     },
   ];
 
@@ -73,7 +76,7 @@ const columns = (displayTarget: boolean, formatDateTime: DateTimeFormatter): Col
       accessorKey: 'status',
       header: ({ column }) => <SortableCell cellName="Status" column={column} />,
       cell: ({ row }) => <StateBadge value={row.original.status} kind="activity" />,
-      sortingFn: (rowA, rowB) => (rowA.original.status! < rowB.original.status! ? 1 : -1),
+      sortFn: (rowA, rowB) => (rowA.original.status! < rowB.original.status! ? 1 : -1),
     },
     {
       accessorKey: 'createdAt',
@@ -81,13 +84,13 @@ const columns = (displayTarget: boolean, formatDateTime: DateTimeFormatter): Col
       cell: ({ row }) => {
         return <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />;
       },
-      sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
+      sortFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
     },
     {
       accessorKey: 'user',
       header: ({ column }) => <SortableCell cellName="User" column={column} />,
       cell: ({ row }) => <ActorCell type={row.original.actorType} name={row.original.actorName ?? ''} />,
-      sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
+      sortFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
     },
   );
 

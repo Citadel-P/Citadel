@@ -91,9 +91,9 @@ impl AutomationRepository for PostgresAutomationRepository {
         trigger: &'a str,
         args: &'a serde_json::Value,
         timeout_seconds: Option<i32>,
-        code: Option<&'a str>,
+        draft: Option<&'a AutomationDraft>,
     ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>> {
-        self.enqueue_for_execution_impl(actor, id, trigger, args, timeout_seconds, code)
+        self.enqueue_for_execution_impl(actor, id, trigger, args, timeout_seconds, draft)
     }
 
     fn enqueue_webhook<'a>(

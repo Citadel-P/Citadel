@@ -54,28 +54,26 @@ export function withContainerGroupHealth(containers: ContainerView[], now: numbe
       id,
       {
         ...groupHealth(containers, now),
-        members: containers.map(
-          (container): HealthMember => ({
-            containerId: container.id,
-            dockerContainerId: container.containerId,
-            platformId: container.platformId,
-            nodeId: container.dockerNodeId,
-            name: container.name,
-            service: '',
-            state: container.state,
-            available: !container.projectionStaleSince,
-            status: HealthStatus[currentHealth(container, now)],
-            observation:
-              container.health?.observedAt != null
-                ? {
-                    configuration: CheckConfiguration.Unknown,
-                    observedAt: container.health.observedAt,
-                    lastCheckAt: container.health.lastCheckAt,
-                    failingStreak: container.health.failingStreak,
-                  }
-                : undefined,
-          }),
-        ),
+        members: containers.map((container): HealthMember => ({
+          containerId: container.id,
+          dockerContainerId: container.containerId,
+          platformId: container.platformId,
+          nodeId: container.dockerNodeId,
+          name: container.name,
+          service: '',
+          state: container.state,
+          available: !container.projectionStaleSince,
+          status: HealthStatus[currentHealth(container, now)],
+          observation:
+            container.health?.observedAt != null
+              ? {
+                  configuration: CheckConfiguration.Unknown,
+                  observedAt: container.health.observedAt,
+                  lastCheckAt: container.health.lastCheckAt,
+                  failingStreak: container.health.failingStreak,
+                }
+              : undefined,
+        })),
       },
     ]),
   );

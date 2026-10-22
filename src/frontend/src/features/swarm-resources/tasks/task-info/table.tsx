@@ -1,10 +1,10 @@
 import { StateBadge } from '@/components/custom/state-badge';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { SwarmTaskInfoView } from '../hooks/useTasksGroup';
 import { Link } from 'react-router';
 
-const columns: ColumnDef<SwarmTaskInfoView>[] = [
+const columns: ColumnDef<StockFeatures, SwarmTaskInfoView>[] = [
   {
     accessorKey: 'serviceName',
     header: 'Service',

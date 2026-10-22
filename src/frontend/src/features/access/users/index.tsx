@@ -3,7 +3,7 @@ import { PagedDataTable } from '@/components/custom/common';
 import SortableCell from '@/components/custom/sortable-cell';
 import { useSelectedResources, useUserQuery } from '@/lib/atoms';
 import { ActionData, DropdownActionComponent } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -56,7 +56,7 @@ const columns = (
     string,
     React.FC<{ resource: UserView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<UserView>[] => [
+): ColumnDef<StockFeatures, UserView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -80,13 +80,13 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <UserNameRow user={row.original} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.name).localeCompare(String(rowB.original.name)),
+    sortFn: (rowA, rowB) => String(rowA.original.name).localeCompare(String(rowB.original.name)),
   },
   {
     accessorKey: 'email',
     header: ({ column }) => <SortableCell cellName="Email" column={column} />,
     cell: ({ row }) => <>{row.original.email}</>,
-    sortingFn: (rowA, rowB) => String(rowA.original.email).localeCompare(String(rowB.original.email)),
+    sortFn: (rowA, rowB) => String(rowA.original.email).localeCompare(String(rowB.original.email)),
   },
   {
     accessorKey: 'teams',

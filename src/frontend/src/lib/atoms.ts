@@ -1,6 +1,6 @@
 import { ResourceType } from '@/api/types';
 import { atom, PrimitiveAtom, useAtom } from 'jotai';
-import { atomFamily } from 'jotai/utils';
+import { atomFamily } from 'jotai-family';
 import { TaskSpec, TaskSheetState } from '@/components/custom/task-sheet';
 import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router';

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ColumnDef, Row } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef, Row } from '@tanstack/react-table';
 import { DataTable } from './data-table';
 
 type TestRow = {
@@ -8,7 +8,7 @@ type TestRow = {
   children?: TestRow[];
 };
 
-const columns: ColumnDef<TestRow>[] = [
+const columns: ColumnDef<StockFeatures, TestRow>[] = [
   {
     id: 'select',
     cell: ({ row }) => (
@@ -26,7 +26,7 @@ const columns: ColumnDef<TestRow>[] = [
   },
 ];
 
-const NameCell = ({ row }: { row: Row<TestRow> }) => (
+const NameCell = ({ row }: { row: Row<StockFeatures, TestRow> }) => (
   <div>
     {row.getCanExpand() && (
       <button type="button" onClick={row.getToggleExpandedHandler()}>

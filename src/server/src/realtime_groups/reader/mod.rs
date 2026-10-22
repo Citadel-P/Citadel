@@ -686,7 +686,13 @@ impl ApplicationGroupReader {
                         .changed_containers(e.unwrap(), id.unwrap(), &references)
                         .await?;
                     for container in &mut containers {
-                        container.capabilities = Some(capabilities);
+                        container.capabilities = Some(
+                            crate::api::resources::platforms::capabilities::container_capabilities(
+                                capabilities,
+                                container,
+                                p.is_administrator(),
+                            ),
+                        );
                     }
                     if let Some(service) = &self.backup_coverage {
                         containers = service.enrich_containers(p, containers).await;
@@ -717,7 +723,13 @@ impl ApplicationGroupReader {
                     containers
                 };
                 for container in &mut containers {
-                    container.capabilities = Some(capabilities);
+                    container.capabilities = Some(
+                        crate::api::resources::platforms::capabilities::container_capabilities(
+                            capabilities,
+                            container,
+                            p.is_administrator(),
+                        ),
+                    );
                 }
                 crate::api::resources::platforms::container_views::enrich_container_owner_names(
                     &self.platforms,
@@ -784,7 +796,13 @@ impl ApplicationGroupReader {
                         .changed_containers(e.unwrap(), id.unwrap(), &references)
                         .await?;
                     for container in &mut containers {
-                        container.capabilities = Some(capabilities);
+                        container.capabilities = Some(
+                            crate::api::resources::platforms::capabilities::container_capabilities(
+                                capabilities,
+                                container,
+                                p.is_administrator(),
+                            ),
+                        );
                     }
                     crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                     let mut result = GroupSnapshot::default();
@@ -821,7 +839,13 @@ impl ApplicationGroupReader {
                         .map(crate::api::resources::platforms::views::ContainerView::from)
                         .collect::<Vec<_>>();
                 for container in &mut containers {
-                    container.capabilities = Some(capabilities);
+                    container.capabilities = Some(
+                        crate::api::resources::platforms::capabilities::container_capabilities(
+                            capabilities,
+                            container,
+                            p.is_administrator(),
+                        ),
+                    );
                 }
                 crate::api::resources::platforms::container_views::enrich_container_owner_names(
                     &self.platforms,

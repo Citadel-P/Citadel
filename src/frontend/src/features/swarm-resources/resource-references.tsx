@@ -3,7 +3,7 @@ import type { SwarmServiceView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import type { SwarmInventoryUpdate } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Link } from 'react-router';
 import { useLiveSwarmItems } from './hooks/useSwarmResourceGroup';
 
@@ -25,7 +25,7 @@ const useReferencedServices = (resource: SwarmResourceWithReferences) => {
 
 export const ReferencingServices = ({ resource }: { resource: SwarmResourceWithReferences }) => {
   const { items, isLoading } = useReferencedServices(resource);
-  const columns = useMemo<ColumnDef<SwarmServiceView>[]>(
+  const columns = useMemo<ColumnDef<StockFeatures, SwarmServiceView>[]>(
     () => [
       {
         accessorKey: 'name',

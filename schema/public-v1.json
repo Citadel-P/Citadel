@@ -576,10 +576,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -713,10 +713,10 @@
           "actorType": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ActorType"
               },
               {
-                "$ref": "#/components/schemas/ActorType"
+                "type": "null"
               }
             ]
           },
@@ -1011,10 +1011,10 @@
               "capabilities": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/ResourceCapabilitiesView"
                   },
                   {
-                    "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                    "type": "null"
                   }
                 ]
               },
@@ -1138,10 +1138,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -1524,10 +1524,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -1633,10 +1633,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -1718,10 +1718,10 @@
           "latestRun": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/AutomationRunView"
               },
               {
-                "$ref": "#/components/schemas/AutomationRunView"
+                "type": "null"
               }
             ]
           },
@@ -1765,10 +1765,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -1804,10 +1804,10 @@
           "error": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/AutomationProgressError"
               },
               {
-                "$ref": "#/components/schemas/AutomationProgressError"
+                "type": "null"
               }
             ]
           },
@@ -1833,10 +1833,10 @@
           "status": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/AutomationRunStatus"
               },
               {
-                "$ref": "#/components/schemas/AutomationRunStatus"
+                "type": "null"
               }
             ]
           },
@@ -2014,12 +2014,8 @@
             "type": "string"
           },
           "architecture": {
-            "default": "Amd64",
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CpuArchitecture"
-              }
-            ]
+            "$ref": "#/components/schemas/CpuArchitecture",
+            "default": "Amd64"
           },
           "assignPublicIp": {
             "default": false,
@@ -2134,10 +2130,10 @@
           "lastRunStatus": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupRunStatus"
               },
               {
-                "$ref": "#/components/schemas/BackupRunStatus"
+                "type": "null"
               }
             ]
           },
@@ -2343,10 +2339,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -2413,10 +2409,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -2478,10 +2474,10 @@
           "latestRun": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupRunView"
               },
               {
-                "$ref": "#/components/schemas/BackupRunView"
+                "type": "null"
               }
             ]
           },
@@ -2525,10 +2521,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -2824,10 +2820,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -2946,10 +2942,10 @@
           "status": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupRestoreStatus"
               },
               {
-                "$ref": "#/components/schemas/BackupRestoreStatus"
+                "type": "null"
               }
             ]
           },
@@ -3265,10 +3261,10 @@
           "status": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupRunStatus"
               },
               {
-                "$ref": "#/components/schemas/BackupRunStatus"
+                "type": "null"
               }
             ]
           },
@@ -4160,10 +4156,10 @@
           "builderKind": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BuildProjectBuilderKind"
               },
               {
-                "$ref": "#/components/schemas/BuildProjectBuilderKind"
+                "type": "null"
               }
             ]
           },
@@ -4280,10 +4276,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -4458,10 +4454,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -4561,10 +4557,10 @@
           "latestRun": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BuildRunView"
               },
               {
-                "$ref": "#/components/schemas/BuildRunView"
+                "type": "null"
               }
             ]
           },
@@ -4628,10 +4624,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -5298,10 +5294,10 @@
           "result": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/HealthStatus"
               },
               {
-                "$ref": "#/components/schemas/HealthStatus"
+                "type": "null"
               }
             ]
           },
@@ -5694,30 +5690,30 @@
           "backupCoverage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
               },
               {
-                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+                "type": "null"
               }
             ]
           },
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
           "containerStat": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerStatView"
               },
               {
-                "$ref": "#/components/schemas/ContainerStatView"
+                "type": "null"
               }
             ]
           },
@@ -5747,10 +5743,10 @@
           "health": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerHealthView"
               },
               {
-                "$ref": "#/components/schemas/ContainerHealthView"
+                "type": "null"
               }
             ]
           },
@@ -5814,10 +5810,10 @@
           "systemRole": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerSystemRole"
               },
               {
-                "$ref": "#/components/schemas/ContainerSystemRole"
+                "type": "null"
               }
             ]
           }
@@ -5958,20 +5954,20 @@
           "backupCoverage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
               },
               {
-                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+                "type": "null"
               }
             ]
           },
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -5981,10 +5977,10 @@
           "deploymentView": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerDeploymentView"
               },
               {
-                "$ref": "#/components/schemas/ContainerDeploymentView"
+                "type": "null"
               }
             ]
           },
@@ -5994,10 +5990,10 @@
           "imageView": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ImageView"
               },
               {
-                "$ref": "#/components/schemas/ImageView"
+                "type": "null"
               }
             ]
           },
@@ -6079,20 +6075,20 @@
           "backupCoverage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
               },
               {
-                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+                "type": "null"
               }
             ]
           },
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -6116,10 +6112,10 @@
           "deploymentView": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerDeploymentView"
               },
               {
-                "$ref": "#/components/schemas/ContainerDeploymentView"
+                "type": "null"
               }
             ]
           },
@@ -6138,10 +6134,10 @@
           "health": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerHealthView"
               },
               {
-                "$ref": "#/components/schemas/ContainerHealthView"
+                "type": "null"
               }
             ]
           },
@@ -6152,10 +6148,10 @@
           "imageView": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ImageView"
               },
               {
-                "$ref": "#/components/schemas/ImageView"
+                "type": "null"
               }
             ]
           },
@@ -6168,10 +6164,10 @@
           "lastStats": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerStatView"
               },
               {
-                "$ref": "#/components/schemas/ContainerStatView"
+                "type": "null"
               }
             ]
           },
@@ -6246,10 +6242,10 @@
           "systemRole": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerSystemRole"
               },
               {
-                "$ref": "#/components/schemas/ContainerSystemRole"
+                "type": "null"
               }
             ]
           },
@@ -6335,10 +6331,10 @@
           "duplicateSource": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/DuplicateSourceInput"
               },
               {
-                "$ref": "#/components/schemas/DuplicateSourceInput"
+                "type": "null"
               }
             ]
           },
@@ -6478,10 +6474,10 @@
           "configFrom": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RuntimeConfigFrom"
               },
               {
-                "$ref": "#/components/schemas/RuntimeConfigFrom"
+                "type": "null"
               }
             ]
           },
@@ -6521,10 +6517,10 @@
           "ipam": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RuntimeIpam"
               },
               {
-                "$ref": "#/components/schemas/RuntimeIpam"
+                "type": "null"
               }
             ]
           },
@@ -6605,20 +6601,20 @@
           "driftPolicy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackDriftPolicy"
               },
               {
-                "$ref": "#/components/schemas/StackDriftPolicy"
+                "type": "null"
               }
             ]
           },
           "duplicateSource": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/DuplicateSourceInput"
               },
               {
-                "$ref": "#/components/schemas/DuplicateSourceInput"
+                "type": "null"
               }
             ]
           },
@@ -6686,10 +6682,10 @@
           "duplicateSource": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/DuplicateSourceInput"
               },
               {
-                "$ref": "#/components/schemas/DuplicateSourceInput"
+                "type": "null"
               }
             ]
           },
@@ -7260,10 +7256,10 @@
           "lifeCycleSpec": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/LifeCycleSpec"
               },
               {
-                "$ref": "#/components/schemas/LifeCycleSpec"
+                "type": "null"
               }
             ]
           },
@@ -7288,20 +7284,16 @@
           "resourceSpec": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceSpec"
               },
               {
-                "$ref": "#/components/schemas/ResourceSpec"
+                "type": "null"
               }
             ]
           },
           "updateBehavior": {
-            "default": "Disabled",
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/UpdateBehavior"
-              }
-            ]
+            "$ref": "#/components/schemas/UpdateBehavior",
+            "default": "Disabled"
           },
           "volumes": {
             "items": {
@@ -7336,10 +7328,10 @@
           "error": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/DeploymentApplyError"
               },
               {
-                "$ref": "#/components/schemas/DeploymentApplyError"
+                "type": "null"
               }
             ]
           },
@@ -7358,10 +7350,10 @@
           "progress": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/deployments.model.ImagePullProgress"
               },
               {
-                "$ref": "#/components/schemas/deployments.model.ImagePullProgress"
+                "type": "null"
               }
             ]
           },
@@ -7391,30 +7383,30 @@
           "autoUpdateState": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/AutoUpdateState"
               },
               {
-                "$ref": "#/components/schemas/AutoUpdateState"
+                "type": "null"
               }
             ]
           },
           "backupCoverage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
               },
               {
-                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+                "type": "null"
               }
             ]
           },
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/DeploymentCapabilities"
               },
               {
-                "$ref": "#/components/schemas/DeploymentCapabilities"
+                "type": "null"
               }
             ]
           },
@@ -7431,10 +7423,10 @@
           "copyEligibility": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceCopyEligibility"
               },
               {
-                "$ref": "#/components/schemas/ResourceCopyEligibility"
+                "type": "null"
               }
             ]
           },
@@ -7484,10 +7476,10 @@
           "latestActivityView": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/LatestActivityView"
               },
               {
-                "$ref": "#/components/schemas/LatestActivityView"
+                "type": "null"
               }
             ]
           },
@@ -7611,10 +7603,10 @@
           "image": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/DockerHubTagImage"
               },
               {
-                "$ref": "#/components/schemas/DockerHubTagImage"
+                "type": "null"
               }
             ]
           },
@@ -8567,10 +8559,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -8641,20 +8633,20 @@
           "onClone": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
           "onPull": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
@@ -8680,10 +8672,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -8734,20 +8726,20 @@
           "onClone": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
           "onPull": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
@@ -8761,10 +8753,10 @@
           "syncMode": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/GitRepositorySyncMode"
               },
               {
-                "$ref": "#/components/schemas/GitRepositorySyncMode"
+                "type": "null"
               }
             ]
           },
@@ -8787,10 +8779,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookPatch"
               },
               {
-                "$ref": "#/components/schemas/WebhookPatch"
+                "type": "null"
               }
             ]
           }
@@ -8950,10 +8942,10 @@
           "latestActivityView": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/LatestActivityView"
               },
               {
-                "$ref": "#/components/schemas/LatestActivityView"
+                "type": "null"
               }
             ]
           },
@@ -8963,20 +8955,20 @@
           "onClone": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
           "onPull": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
@@ -8996,11 +8988,11 @@
           "syncStatus": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/GitRepositorySyncStatusView",
                 "description": "Latest check of the default branch, including unchanged scheduled checks."
+              },
+              {
+                "type": "null"
               }
             ]
           },
@@ -9016,10 +9008,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -9065,10 +9057,10 @@
           "container": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/GithubContainerMetadata"
               },
               {
-                "$ref": "#/components/schemas/GithubContainerMetadata"
+                "type": "null"
               }
             ]
           }
@@ -9096,10 +9088,10 @@
           "metadata": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/GithubPackageMetadata"
               },
               {
-                "$ref": "#/components/schemas/GithubPackageMetadata"
+                "type": "null"
               }
             ]
           },
@@ -9241,10 +9233,10 @@
           "observation": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ContainerHealthObservation"
               },
               {
-                "$ref": "#/components/schemas/ContainerHealthObservation"
+                "type": "null"
               }
             ]
           },
@@ -9752,10 +9744,10 @@
               "capabilities": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/ImageCapabilitiesView"
                   },
                   {
-                    "$ref": "#/components/schemas/ImageCapabilitiesView"
+                    "type": "null"
                   }
                 ]
               },
@@ -10044,10 +10036,10 @@
           "workloadKind": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ImageWorkloadKind"
               },
               {
-                "$ref": "#/components/schemas/ImageWorkloadKind"
+                "type": "null"
               }
             ]
           },
@@ -10110,10 +10102,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ImageCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/ImageCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -10165,10 +10157,10 @@
           "registry": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ImageRegistryView"
               },
               {
-                "$ref": "#/components/schemas/ImageRegistryView"
+                "type": "null"
               }
             ]
           },
@@ -10223,10 +10215,10 @@
           "usedBy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ImageUsageSummary"
               },
               {
-                "$ref": "#/components/schemas/ImageUsageSummary"
+                "type": "null"
               }
             ]
           }
@@ -10291,10 +10283,10 @@
           "importKind": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackImportKind"
               },
               {
-                "$ref": "#/components/schemas/StackImportKind"
+                "type": "null"
               }
             ]
           },
@@ -10519,10 +10511,10 @@
           "stopSignal": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StopSignal"
               },
               {
-                "$ref": "#/components/schemas/StopSignal"
+                "type": "null"
               }
             ]
           },
@@ -10568,20 +10560,20 @@
           "backupCoverage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
               },
               {
-                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+                "type": "null"
               }
             ]
           },
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SwarmServiceCapabilities"
               },
               {
-                "$ref": "#/components/schemas/SwarmServiceCapabilities"
+                "type": "null"
               }
             ]
           },
@@ -10591,10 +10583,10 @@
           "copyEligibility": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceCopyEligibility"
               },
               {
-                "$ref": "#/components/schemas/ResourceCopyEligibility"
+                "type": "null"
               }
             ]
           },
@@ -10605,10 +10597,10 @@
           "currentOperation": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SwarmServiceOperationView"
               },
               {
-                "$ref": "#/components/schemas/SwarmServiceOperationView"
+                "type": "null"
               }
             ]
           },
@@ -10873,10 +10865,10 @@
           "workloadKind": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NetworkWorkloadKind"
               },
               {
-                "$ref": "#/components/schemas/NetworkWorkloadKind"
+                "type": "null"
               }
             ]
           },
@@ -11115,10 +11107,10 @@
           "workloadKind": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NetworkWorkloadKind"
               },
               {
-                "$ref": "#/components/schemas/NetworkWorkloadKind"
+                "type": "null"
               }
             ]
           },
@@ -11153,10 +11145,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NetworkCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/NetworkCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -11211,10 +11203,10 @@
           "ipam": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NetworkIpamView"
               },
               {
-                "$ref": "#/components/schemas/NetworkIpamView"
+                "type": "null"
               }
             ]
           },
@@ -11269,10 +11261,10 @@
           "usage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NetworkUsage"
               },
               {
-                "$ref": "#/components/schemas/NetworkUsage"
+                "type": "null"
               }
             ]
           }
@@ -11355,20 +11347,20 @@
           "onClone": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
           "onPull": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RepoCommand"
               },
               {
-                "$ref": "#/components/schemas/RepoCommand"
+                "type": "null"
               }
             ]
           },
@@ -11395,10 +11387,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           }
@@ -11457,10 +11449,10 @@
           "secretDeliveryMode": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SecretDeliveryMode"
               },
               {
-                "$ref": "#/components/schemas/SecretDeliveryMode"
+                "type": "null"
               }
             ]
           },
@@ -12082,10 +12074,10 @@
           "driftPolicy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackDriftPolicy"
               },
               {
-                "$ref": "#/components/schemas/StackDriftPolicy"
+                "type": "null"
               }
             ]
           },
@@ -12113,10 +12105,10 @@
           "stackSource": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackSource"
               },
               {
-                "$ref": "#/components/schemas/StackSource"
+                "type": "null"
               }
             ]
           }
@@ -12262,10 +12254,10 @@
           "lastRunStatus": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupRunStatus"
               },
               {
-                "$ref": "#/components/schemas/BackupRunStatus"
+                "type": "null"
               }
             ]
           },
@@ -12528,10 +12520,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -12583,10 +12575,10 @@
           "platformDescriptor": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformDescriptor"
               },
               {
-                "$ref": "#/components/schemas/PlatformDescriptor"
+                "type": "null"
               }
             ]
           },
@@ -14420,10 +14412,10 @@
               "deployment": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/DeploymentActivitySnapshot"
                   },
                   {
-                    "$ref": "#/components/schemas/DeploymentActivitySnapshot"
+                    "type": "null"
                   }
                 ]
               },
@@ -14616,10 +14608,10 @@
               "stack": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/StackActivitySnapshot"
                   },
                   {
-                    "$ref": "#/components/schemas/StackActivitySnapshot"
+                    "type": "null"
                   }
                 ]
               }
@@ -14641,20 +14633,20 @@
               "newStack": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/StackActivitySnapshot"
                   },
                   {
-                    "$ref": "#/components/schemas/StackActivitySnapshot"
+                    "type": "null"
                   }
                 ]
               },
               "oldStack": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/StackActivitySnapshot"
                   },
                   {
-                    "$ref": "#/components/schemas/StackActivitySnapshot"
+                    "type": "null"
                   }
                 ]
               },
@@ -15241,10 +15233,10 @@
               "source": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/ActivitySourceResource"
                   },
                   {
-                    "$ref": "#/components/schemas/ActivitySourceResource"
+                    "type": "null"
                   }
                 ]
               }
@@ -15738,10 +15730,10 @@
               "source": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/ActivitySourceResource"
                   },
                   {
-                    "$ref": "#/components/schemas/ActivitySourceResource"
+                    "type": "null"
                   }
                 ]
               }
@@ -16041,10 +16033,10 @@
           "error": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ImagePullError"
               },
               {
-                "$ref": "#/components/schemas/ImagePullError"
+                "type": "null"
               }
             ]
           },
@@ -16069,10 +16061,10 @@
           "progress": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/platforms.image_pull.ImagePullProgress"
               },
               {
-                "$ref": "#/components/schemas/platforms.image_pull.ImagePullProgress"
+                "type": "null"
               }
             ]
           },
@@ -16236,10 +16228,10 @@
           "$type": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RegistryKind"
               },
               {
-                "$ref": "#/components/schemas/RegistryKind"
+                "type": "null"
               }
             ]
           },
@@ -16497,10 +16489,10 @@
           "configuration": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RegistryConfigurationPatch"
               },
               {
-                "$ref": "#/components/schemas/RegistryConfigurationPatch"
+                "type": "null"
               }
             ]
           },
@@ -16525,10 +16517,10 @@
           "status": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RegistryStatus"
               },
               {
-                "$ref": "#/components/schemas/RegistryStatus"
+                "type": "null"
               }
             ]
           },
@@ -17049,10 +17041,10 @@
           "status": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupCoverageStatus"
               },
               {
-                "$ref": "#/components/schemas/BackupCoverageStatus"
+                "type": "null"
               }
             ]
           },
@@ -17126,10 +17118,10 @@
           "status": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupCoverageStatus"
               },
               {
-                "$ref": "#/components/schemas/BackupCoverageStatus"
+                "type": "null"
               }
             ]
           }
@@ -17156,10 +17148,10 @@
           "secretDeliveryMode": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SecretDeliveryMode"
               },
               {
-                "$ref": "#/components/schemas/SecretDeliveryMode"
+                "type": "null"
               }
             ]
           },
@@ -17220,10 +17212,10 @@
           "secretDeliveryMode": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SecretDeliveryMode"
               },
               {
-                "$ref": "#/components/schemas/SecretDeliveryMode"
+                "type": "null"
               }
             ]
           },
@@ -17280,10 +17272,10 @@
           "secretDeliveryMode": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SecretDeliveryMode"
               },
               {
-                "$ref": "#/components/schemas/SecretDeliveryMode"
+                "type": "null"
               }
             ]
           },
@@ -18701,10 +18693,10 @@
           "mode": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackDriftMode"
               },
               {
-                "$ref": "#/components/schemas/StackDriftMode"
+                "type": "null"
               }
             ]
           },
@@ -18841,10 +18833,10 @@
           "afterReport": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackDriftReport"
               },
               {
-                "$ref": "#/components/schemas/StackDriftReport"
+                "type": "null"
               }
             ]
           },
@@ -19027,10 +19019,10 @@
           "source": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackReleaseSource"
               },
               {
-                "$ref": "#/components/schemas/StackReleaseSource"
+                "type": "null"
               }
             ]
           },
@@ -19217,10 +19209,10 @@
                   "webhook": {
                     "oneOf": [
                       {
-                        "type": "null"
+                        "$ref": "#/components/schemas/StackWebhookConfig"
                       },
                       {
-                        "$ref": "#/components/schemas/StackWebhookConfig"
+                        "type": "null"
                       }
                     ]
                   },
@@ -19276,20 +19268,20 @@
           "postDeploy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackCommand"
               },
               {
-                "$ref": "#/components/schemas/StackCommand"
+                "type": "null"
               }
             ]
           },
           "preDeploy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackCommand"
               },
               {
-                "$ref": "#/components/schemas/StackCommand"
+                "type": "null"
               }
             ]
           },
@@ -19339,10 +19331,10 @@
           "stackStatus": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackReleaseStatus"
               },
               {
-                "$ref": "#/components/schemas/StackReleaseStatus"
+                "type": "null"
               }
             ]
           },
@@ -19413,20 +19405,20 @@
           "backupCoverage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceBackupSummaryView"
               },
               {
-                "$ref": "#/components/schemas/ResourceBackupSummaryView"
+                "type": "null"
               }
             ]
           },
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackCapabilities"
               },
               {
-                "$ref": "#/components/schemas/StackCapabilities"
+                "type": "null"
               }
             ]
           },
@@ -19436,10 +19428,10 @@
           "copyEligibility": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ResourceCopyEligibility"
               },
               {
-                "$ref": "#/components/schemas/ResourceCopyEligibility"
+                "type": "null"
               }
             ]
           },
@@ -19475,10 +19467,10 @@
           "latestActivityView": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/LatestActivityView"
               },
               {
-                "$ref": "#/components/schemas/LatestActivityView"
+                "type": "null"
               }
             ]
           },
@@ -19523,20 +19515,20 @@
           "source": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackReleaseSource"
               },
               {
-                "$ref": "#/components/schemas/StackReleaseSource"
+                "type": "null"
               }
             ]
           },
           "spec": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackSpec"
               },
               {
-                "$ref": "#/components/schemas/StackSpec"
+                "type": "null"
               }
             ]
           },
@@ -19650,10 +19642,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -19740,10 +19732,10 @@
                 "capabilities": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
                     },
                     {
-                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                      "type": "null"
                     }
                   ]
                 },
@@ -19839,10 +19831,10 @@
                 "capabilities": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
                     },
                     {
-                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                      "type": "null"
                     }
                   ]
                 },
@@ -19958,10 +19950,10 @@
                 "capabilities": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
                     },
                     {
-                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                      "type": "null"
                     }
                   ]
                 },
@@ -20083,10 +20075,10 @@
                 "capabilities": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
                     },
                     {
-                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                      "type": "null"
                     }
                   ]
                 },
@@ -20182,10 +20174,10 @@
                 "capabilities": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
                     },
                     {
-                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                      "type": "null"
                     }
                   ]
                 },
@@ -20354,10 +20346,10 @@
                 "capabilities": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
                     },
                     {
-                      "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                      "type": "null"
                     }
                   ]
                 },
@@ -20484,10 +20476,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -20645,10 +20637,10 @@
           "operation": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NodeAgentOperation"
               },
               {
-                "$ref": "#/components/schemas/NodeAgentOperation"
+                "type": "null"
               }
             ]
           },
@@ -20728,10 +20720,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -20922,10 +20914,10 @@
           "driftPolicy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackDriftPolicy"
               },
               {
-                "$ref": "#/components/schemas/StackDriftPolicy"
+                "type": "null"
               }
             ]
           },
@@ -20990,10 +20982,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -21664,10 +21656,10 @@
           "healthCheck": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SwarmServiceHealthCheck"
               },
               {
-                "$ref": "#/components/schemas/SwarmServiceHealthCheck"
+                "type": "null"
               }
             ]
           },
@@ -21717,20 +21709,20 @@
           "resources": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SwarmServiceResources"
               },
               {
-                "$ref": "#/components/schemas/SwarmServiceResources"
+                "type": "null"
               }
             ]
           },
           "restartPolicy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SwarmServiceRestartPolicy"
               },
               {
-                "$ref": "#/components/schemas/SwarmServiceRestartPolicy"
+                "type": "null"
               }
             ]
           },
@@ -21756,10 +21748,10 @@
           "updatePolicy": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SwarmServiceUpdatePolicy"
               },
               {
-                "$ref": "#/components/schemas/SwarmServiceUpdatePolicy"
+                "type": "null"
               }
             ]
           },
@@ -21772,10 +21764,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookConfig"
               },
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "type": "null"
               }
             ]
           },
@@ -21830,10 +21822,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -22037,10 +22029,10 @@
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PlatformCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/PlatformCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -22417,10 +22409,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookPatch"
               },
               {
-                "$ref": "#/components/schemas/WebhookPatch"
+                "type": "null"
               }
             ]
           }
@@ -22489,10 +22481,10 @@
           "source": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupSourceSpec"
               },
               {
-                "$ref": "#/components/schemas/BackupSourceSpec"
+                "type": "null"
               }
             ]
           },
@@ -22512,10 +22504,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookPatch"
               },
               {
-                "$ref": "#/components/schemas/WebhookPatch"
+                "type": "null"
               }
             ]
           }
@@ -22569,10 +22561,10 @@
           "spec": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupRepositorySpec"
               },
               {
-                "$ref": "#/components/schemas/BackupRepositorySpec"
+                "type": "null"
               }
             ]
           }
@@ -22640,10 +22632,10 @@
           "providerSpec": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BuildAgentPoolProviderSpec"
               },
               {
-                "$ref": "#/components/schemas/BuildAgentPoolProviderSpec"
+                "type": "null"
               }
             ]
           },
@@ -22785,10 +22777,10 @@
           "webhook": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/WebhookPatch"
               },
               {
-                "$ref": "#/components/schemas/WebhookPatch"
+                "type": "null"
               }
             ]
           }
@@ -22934,10 +22926,10 @@
           "importKind": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/StackImportKind"
               },
               {
-                "$ref": "#/components/schemas/StackImportKind"
+                "type": "null"
               }
             ]
           },
@@ -23190,20 +23182,20 @@
           "backupCoverage": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupCoverageView"
               },
               {
-                "$ref": "#/components/schemas/BackupCoverageView"
+                "type": "null"
               }
             ]
           },
           "capabilities": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/VolumeCapabilitiesView"
               },
               {
-                "$ref": "#/components/schemas/VolumeCapabilitiesView"
+                "type": "null"
               }
             ]
           },
@@ -23292,10 +23284,10 @@
           "usageData": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/VolumeUsageDataView"
               },
               {
-                "$ref": "#/components/schemas/VolumeUsageDataView"
+                "type": "null"
               }
             ]
           }
@@ -23439,12 +23431,8 @@
         "description": "Shared webhook wire configuration and defaults.",
         "properties": {
           "authScheme": {
-            "default": "GitHubHmacSha256",
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/WebhookAuthScheme"
-              }
-            ]
+            "$ref": "#/components/schemas/WebhookAuthScheme",
+            "default": "GitHubHmacSha256"
           },
           "branchFilter": {
             "default": null,
@@ -23458,12 +23446,8 @@
             "type": "boolean"
           },
           "provider": {
-            "default": "GitHub",
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/WebhookProvider"
-              }
-            ]
+            "$ref": "#/components/schemas/WebhookProvider",
+            "default": "GitHub"
           },
           "secret": {
             "default": null,
@@ -23799,10 +23783,10 @@
           "trigger": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BackupQueueTrigger"
               },
               {
-                "$ref": "#/components/schemas/BackupQueueTrigger"
+                "type": "null"
               }
             ]
           }
@@ -23847,10 +23831,10 @@
           "trigger": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/QueueBuildTrigger"
               },
               {
-                "$ref": "#/components/schemas/QueueBuildTrigger"
+                "type": "null"
               }
             ]
           }
@@ -27205,10 +27189,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RunInput"
                   },
                   {
-                    "$ref": "#/components/schemas/RunInput"
+                    "type": "null"
                   }
                 ]
               }
@@ -28054,10 +28038,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RunInput"
                   },
                   {
-                    "$ref": "#/components/schemas/RunInput"
+                    "type": "null"
                   }
                 ]
               }
@@ -29256,10 +29240,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/server.backups_http.QueueInput"
                   },
                   {
-                    "$ref": "#/components/schemas/server.backups_http.QueueInput"
+                    "type": "null"
                   }
                 ]
               }
@@ -34687,10 +34671,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/server.builds_http.QueueInput"
                   },
                   {
-                    "$ref": "#/components/schemas/server.builds_http.QueueInput"
+                    "type": "null"
                   }
                 ]
               }
@@ -37129,7 +37113,7 @@
                 }
               }
             },
-            "description": ""
+            "description": "Success"
           },
           "400": {
             "content": {
@@ -37259,7 +37243,7 @@
                 }
               }
             },
-            "description": ""
+            "description": "Success"
           },
           "400": {
             "content": {
@@ -42553,7 +42537,7 @@
                 }
               }
             },
-            "description": ""
+            "description": "Success"
           },
           "400": {
             "content": {
@@ -42685,7 +42669,7 @@
                 }
               }
             },
-            "description": ""
+            "description": "Success"
           },
           "400": {
             "content": {
@@ -43750,7 +43734,7 @@
                 }
               }
             },
-            "description": ""
+            "description": "Success"
           },
           "400": {
             "content": {
@@ -45956,7 +45940,7 @@
                 }
               }
             },
-            "description": ""
+            "description": "Success"
           },
           "400": {
             "content": {

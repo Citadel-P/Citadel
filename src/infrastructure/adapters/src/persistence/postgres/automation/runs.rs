@@ -24,6 +24,21 @@ impl PostgresAutomationRepository {
                 .map_err(storage)?
                 .ok_or(AutomationError::NotFound)?;
             let enabled: bool = action.try_get("enabled").map_err(storage)?;
+            if let EnqueueMode::Execute(Some(draft)) = mode {
+                if trigger != "Test" {
+                    return Err(AutomationError::Validation(
+                        "Draft code is only accepted for tests.".into(),
+                    ));
+                }
+                if action.try_get::<i64, _>("rowversion").map_err(storage)?
+                    != draft.expected_row_version
+                {
+                    return Err(AutomationError::Conflict(
+                        "Automation Action changed after draft authorization. Reload and retry."
+                            .into(),
+                    ));
+                }
+            }
             if let EnqueueMode::Webhook(expected) = mode {
                 let current = action
                     .try_get::<Option<sqlx::types::Json<Option<WebhookConfig>>>, _>("webhook")
@@ -44,7 +59,7 @@ impl PostgresAutomationRepository {
             let state: String = action.try_get("controlstate").map_err(storage)?;
             let run_id = Uuid::now_v7();
             let code: String = match mode {
-                EnqueueMode::Execute(Some(code)) if trigger == "Test" => code.to_owned(),
+                EnqueueMode::Execute(Some(draft)) if trigger == "Test" => draft.code.clone(),
                 _ => action.try_get("code").map_err(storage)?,
             };
             let name: String = action.try_get("name").map_err(storage)?;
@@ -117,7 +132,7 @@ impl PostgresAutomationRepository {
         trigger: &'a str,
         args: &'a serde_json::Value,
         timeout_seconds: Option<i32>,
-        code: Option<&'a str>,
+        draft: Option<&'a AutomationDraft>,
     ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>> {
         Box::pin(async move {
             self.enqueue_run(
@@ -126,7 +141,7 @@ impl PostgresAutomationRepository {
                 trigger,
                 args,
                 timeout_seconds,
-                EnqueueMode::Execute(code),
+                EnqueueMode::Execute(draft),
             )
             .await
             .map(|run| AutomationRunClaim { run })

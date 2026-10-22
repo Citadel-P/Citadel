@@ -16,8 +16,8 @@ pub use error::AutomationError;
 pub use options::AutomationOptions;
 pub use repository::AutomationRepository;
 pub use runs::{
-    AutomationProgress, AutomationProgressError, AutomationRun, AutomationRunClaim,
-    AutomationRunResult, code_hash, redact_logs,
+    AutomationDraft, AutomationProgress, AutomationProgressError, AutomationRun,
+    AutomationRunClaim, AutomationRunResult, code_hash, redact_logs,
 };
 pub use runtime::{AutomationEntitlements, AutomationRunTokenIssuer, AutomationRuntimeConfig};
 pub use service::AutomationService;

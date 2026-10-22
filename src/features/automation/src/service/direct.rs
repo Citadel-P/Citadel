@@ -7,10 +7,10 @@ impl AutomationService {
         trigger: &str,
         args: &Value,
         timeout_seconds: Option<i32>,
-        code: Option<&str>,
+        draft: Option<&AutomationDraft>,
     ) -> Result<mpsc::Receiver<AutomationProgress>, AutomationError> {
-        if let Some(code) = code
-            && (trigger != "Test" || code.trim().is_empty() || code.len() > 256 * 1024)
+        if let Some(draft) = draft
+            && (trigger != "Test" || draft.code.trim().is_empty() || draft.code.len() > 256 * 1024)
         {
             return Err(AutomationError::Validation(
                 "Draft code is only accepted for tests and must contain between 1 byte and 256 KiB.".into(),
@@ -29,7 +29,7 @@ impl AutomationService {
         let service = self.clone();
         let trigger = trigger.to_owned();
         let args = args.clone();
-        let code = code.map(str::to_owned);
+        let draft = draft.cloned();
         let (started, ready) = tokio::sync::oneshot::channel();
         // Admission precedes the durable claim. Once admitted, the process owns
         // claim completion even if the request disappears during the DB call.
@@ -45,7 +45,7 @@ impl AutomationService {
                         &trigger,
                         &args,
                         timeout_seconds,
-                        code.as_deref(),
+                        draft.as_ref(),
                     )
                     .await
                 {

@@ -18,7 +18,7 @@ import type { DateTimeFormatter } from '@/lib/date-time';
 import { useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { CalendarClock, Database, HardDrive } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
@@ -53,7 +53,7 @@ const columns = (
   >,
   formatDateTime: DateTimeFormatter,
   sourceNames: ReturnType<typeof useSourceNames>,
-): ColumnDef<BackupPolicyView>[] => [
+): ColumnDef<StockFeatures, BackupPolicyView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -77,7 +77,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <PolicyNameRow policy={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   createResourceTargetColumn({
     id: 'source',
@@ -88,13 +88,13 @@ const columns = (
     accessorKey: 'cron',
     header: ({ column }) => <SortableCell cellName="Schedule" column={column} />,
     cell: ({ row }) => <ScheduleCell policy={row.original} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.cron ?? '').localeCompare(String(rowB.original.cron ?? '')),
+    sortFn: (rowA, rowB) => String(rowA.original.cron ?? '').localeCompare(String(rowB.original.cron ?? '')),
   },
   {
     accessorKey: 'latestRun',
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
     cell: ({ row }) => <TimestampCell value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       String(getBackupPolicyLastRunAt(rowA.original) ?? '').localeCompare(
         String(getBackupPolicyLastRunAt(rowB.original) ?? ''),
       ),
@@ -103,7 +103,7 @@ const columns = (
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),

@@ -4,7 +4,7 @@ import { useAtomValue, useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useSearchParams } from 'react-router';
 import { Activity, Columns3 } from 'lucide-react';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { ResourceFilterChip, ResourceFilterDropdown } from '@/components/custom/resource-filter';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import {
@@ -105,13 +105,13 @@ export function WorkloadHealthFilter({ kind }: { kind: HealthResourceKind }) {
     </div>
   );
 }
-export function workloadHealthColumn<T extends HealthResource>(kind: HealthResourceKind): ColumnDef<T> {
+export function workloadHealthColumn<T extends HealthResource>(kind: HealthResourceKind): ColumnDef<StockFeatures, T> {
   return {
     id: 'probeHealth',
     accessorFn: (row) => workloadHealthStatus(row),
     header: ({ column }) => <SortableCell cellName="Health" column={column} />,
     cell: ({ row }) => <WorkloadHealthCard resource={row.original} kind={kind} />,
-    sortingFn: (a, b) =>
+    sortFn: (a, b) =>
       healthOrder.indexOf(workloadHealthStatus(a.original)) - healthOrder.indexOf(workloadHealthStatus(b.original)),
   };
 }

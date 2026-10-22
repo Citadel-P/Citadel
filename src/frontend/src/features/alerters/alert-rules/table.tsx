@@ -1,7 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { AlertRuleListItem } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
 import { StateBadge } from '@/components/custom/state-badge';
@@ -45,8 +45,8 @@ const columns = (
     string,
     React.FC<{ resource: AlertRuleListItem; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<AlertRuleListItem>[] => {
-  const cols: ColumnDef<AlertRuleListItem>[] = [
+): ColumnDef<StockFeatures, AlertRuleListItem>[] => {
+  const cols: ColumnDef<StockFeatures, AlertRuleListItem>[] = [
     {
       id: 'select',
       header: ({ table }) => (
@@ -70,19 +70,19 @@ const columns = (
       accessorKey: 'name',
       header: ({ column }) => <SortableCell cellName="Name" column={column} />,
       cell: ({ row }) => <RuleNameRow alertRule={row.original} />,
-      sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
+      sortFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
     },
     {
       accessorKey: 'severity',
       header: ({ column }) => <SortableCell cellName="Severity" column={column} />,
       cell: ({ row }) => <StateBadge value={row.original.severity} kind="alertSeverity" />,
-      sortingFn: (rowA: any, rowB: any): number => rowA.original?.severity?.localeCompare(rowB.original?.severity),
+      sortFn: (rowA: any, rowB: any): number => rowA.original?.severity?.localeCompare(rowB.original?.severity),
     },
     {
       accessorKey: 'conditions',
       header: ({ column }) => <SortableCell cellName="Conditions" column={column} />,
       cell: ({ row }) => <RuleConditionCell rule={row.original} />,
-      sortingFn: (rowA: any, rowB: any): number => rowA.original?.threshold?.localeCompare(rowB.original?.threshold),
+      sortFn: (rowA: any, rowB: any): number => rowA.original?.threshold?.localeCompare(rowB.original?.threshold),
     },
     {
       accessorKey: 'channels',

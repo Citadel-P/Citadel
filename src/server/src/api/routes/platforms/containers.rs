@@ -49,7 +49,11 @@ pub(super) async fn list_containers(
         &headers,
     )?;
     for container in &mut containers {
-        container.capabilities = Some(capabilities);
+        container.capabilities = Some(container_capabilities(
+            capabilities,
+            container,
+            principal.is_administrator(),
+        ));
     }
     Ok(no_store(
         Json(ContainersResponse {
@@ -105,8 +109,11 @@ pub(super) async fn get_container(
             .map_err(platform_error),
         &headers,
     )?;
-    container.capabilities =
-        Some(authorize_platform(&state, &principal, container.platform_id, &headers).await?);
+    container.capabilities = Some(container_capabilities(
+        authorize_platform(&state, &principal, container.platform_id, &headers).await?,
+        &container,
+        principal.is_administrator(),
+    ));
     Ok(no_store(Json(container).into_response()))
 }
 
@@ -417,7 +424,11 @@ pub(super) async fn read_container(
             container.runtime_data().map_err(ApiError::internal),
             &headers,
         )?;
-        data.capabilities = Some(capabilities);
+        data.capabilities = Some(container_capabilities(
+            capabilities,
+            &container,
+            principal.is_administrator(),
+        ));
         data.container_stat = None;
         if let Some(service) = &state.backup_coverage {
             data.backup_coverage = Some(
@@ -613,6 +624,9 @@ pub(super) async fn inspect_target(
     kind: ReadKind,
     capabilities: Option<PlatformCapabilitiesView>,
 ) -> HttpResult {
+    let capabilities = capabilities.map(|permission| {
+        container_capabilities(permission, &container, principal.is_administrator())
+    });
     let network_container = if matches!(kind, ReadKind::Networking) {
         let visible = api_result(
             state
@@ -1015,7 +1029,7 @@ pub(super) async fn execute(
 container_reader!(
     #[utoipa::path(get, path="/api/v1/containers/{id}/networking", operation_id="getContainerNetworking", tag="Containers",
     summary="Read observed Container networking without its configuration",
-    responses((status=200, body=crate::api::resources::platforms::networking_views::ContainerNetworkingView), crate::openapi::errors::ExternalResourceErrors),
+    responses((status=200, description="Success", body=crate::api::resources::platforms::networking_views::ContainerNetworkingView), crate::openapi::errors::ExternalResourceErrors),
     params(("id"=String, Path)), security(("Bearer"=[])),
     extensions(("x-citadel-principal"=json!("actor")), ("x-citadel-public"=json!(true)), ("x-citadel-setup-exempt"=json!(false))))]
     container_networking,
@@ -1024,7 +1038,7 @@ container_reader!(
 
 #[utoipa::path(get, path="/api/v1/containers/{id}/processes", operation_id="getContainerProcesses", tag="Containers",
     summary="Read running Container processes",
-    responses((status=200, body=crate::api::resources::platforms::descriptor_views::ContainerProcessesView), crate::openapi::errors::ExternalResourceErrors),
+    responses((status=200, description="Success", body=crate::api::resources::platforms::descriptor_views::ContainerProcessesView), crate::openapi::errors::ExternalResourceErrors),
     params(("id"=uuid::Uuid, Path)), security(("Bearer"=[])),
     extensions(("x-citadel-principal"=json!("actor")), ("x-citadel-public"=json!(true)), ("x-citadel-setup-exempt"=json!(false))))]
 pub(super) async fn container_processes(

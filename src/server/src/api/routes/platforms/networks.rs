@@ -331,7 +331,7 @@ pub(super) async fn delete_networks(
 
 #[utoipa::path(get, path="/api/v1/platforms/{id}/network-containers", operation_id="listNetworkContainers", tag="Platforms",
     summary="List authorized workload identities for the network explorer",
-    responses((status=200, body=crate::api::resources::platforms::networking_views::NetworkContainersView), crate::openapi::errors::ResourceErrors),
+    responses((status=200, description="Success", body=crate::api::resources::platforms::networking_views::NetworkContainersView), crate::openapi::errors::ResourceErrors),
     params(("id"=Uuid, Path)), security(("Bearer"=[])),
     extensions(("x-citadel-principal"=json!("actor")), ("x-citadel-public"=json!(true)), ("x-citadel-setup-exempt"=json!(false))))]
 pub(super) async fn network_containers(

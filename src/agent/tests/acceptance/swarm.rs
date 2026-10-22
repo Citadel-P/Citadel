@@ -578,7 +578,7 @@ fn volume_browsing_requires_verified_metadata_and_files() {
 #[ignore = "requires Docker; transfers a digest-pinned image into a disposable daemon"]
 async fn stages_digest_pinned_image_without_registry_digest_metadata() {
     // A small multi-platform image exercises the same archive path as a released Agent.
-    let image = "alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6";
+    let image = "alpine@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35";
     docker(&["pull", image]).await;
     let mut f = Fixture::new();
     docker(&["network", "create", &f.name]).await;

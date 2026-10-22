@@ -98,6 +98,9 @@ impl ApplicationGroupReader {
             }
             c
         };
+        if (container.is_system || container.system_role.is_some()) && !p.is_administrator() {
+            return Err(RealtimeReadError::Authorization);
+        }
         if container.projection_stale_since.is_some()
             || !container.state.eq_ignore_ascii_case("running")
         {

@@ -46,7 +46,7 @@ import { Constants } from '@/lib/constants';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useQueryClient } from '@tanstack/react-query';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, KeyRound, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -548,7 +548,7 @@ const CredentialsPanel = ({
     !token.revokedAtUtc &&
     (!token.expiresAtUtc || new Date(token.expiresAtUtc).getTime() > statusReferenceTime);
 
-  const tokenColumns = useMemo<ColumnDef<ServiceAccountTokenView>[]>(
+  const tokenColumns = useMemo<ColumnDef<StockFeatures, ServiceAccountTokenView>[]>(
     () => [
       {
         id: 'select',

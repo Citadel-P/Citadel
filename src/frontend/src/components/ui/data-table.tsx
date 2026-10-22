@@ -2,28 +2,37 @@
 // - Add className='group/rowid' to customize the copyToCliboard functionality
 // - Expose getRowId & onSelectionChange
 import {
+  StockFeatures,
   ColumnDef,
   ExpandedState,
   RowSelectionState,
   SortingState,
   flexRender,
-  getCoreRowModel,
-  getExpandedRowModel,
-  getSortedRowModel,
-  useReactTable,
+  createExpandedRowModel,
+  createSortedRowModel,
+  stockFeatures,
+  sortFns,
+  useTable,
 } from '@tanstack/react-table';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { TableSkeletonRows } from './table-skeleton';
+
+const features = {
+  ...stockFeatures,
+  sortedRowModel: createSortedRowModel(),
+  expandedRowModel: createExpandedRowModel(),
+  sortFns,
+};
 
 export interface DataTableEmptyState {
   title: string;
   description?: string;
 }
 
-interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[];
+interface DataTableProps<TData extends Identifiable> {
+  columns: ColumnDef<StockFeatures, TData>[];
   data: TData[];
   isLoading: boolean;
   getRowId?: (row: TData) => string;
@@ -36,7 +45,7 @@ interface DataTableProps<TData, TValue> {
 interface Identifiable {
   id?: string | null;
 }
-export function DataTable<TData extends Identifiable, TValue>({
+export function DataTable<TData extends Identifiable>({
   columns,
   data,
   isLoading,
@@ -46,28 +55,25 @@ export function DataTable<TData extends Identifiable, TValue>({
   enableSubRowSelection,
   onSelectionChange,
   emptyState,
-}: DataTableProps<TData, TValue>) {
+}: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const lastSelectionRef = useRef<{ ids?: string; rows?: TData[] }>({});
   const onSelectionChangeRef = useRef(onSelectionChange);
 
-  // TanStack Table intentionally exposes mutable instance methods; keep this call outside compiler memoization.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data,
     columns,
     getRowId: (row) => (getRowId ? getRowId(row) : row.id!),
     getSubRows,
     enableRowSelection: enableRowSelection ? (row) => enableRowSelection(row.original) : undefined,
     enableSubRowSelection,
-    getCoreRowModel: getCoreRowModel(),
+    autoResetExpanded: false,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onExpandedChange: setExpanded,
-    getSortedRowModel: getSortedRowModel(),
-    getExpandedRowModel: getSubRows ? getExpandedRowModel() : undefined,
     state: {
       sorting,
       rowSelection,
@@ -75,17 +81,15 @@ export function DataTable<TData extends Identifiable, TValue>({
     },
   });
 
-  const tableRef = useRef(table);
-  tableRef.current = table;
+  const selectedModelRows = table.getSelectedRowModel().flatRows;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onSelectionChangeRef.current = onSelectionChange;
   }, [onSelectionChange]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const handleSelectionChange = onSelectionChangeRef.current;
     if (handleSelectionChange) {
-      const selectedModelRows = tableRef.current.getSelectedRowModel().flatRows;
       const selectedRowIds = selectedModelRows.map((r) => r.id).join('\u001f');
       const selectedRows = selectedModelRows.map((r) => r.original);
       const lastSelection = lastSelectionRef.current;
@@ -97,7 +101,7 @@ export function DataTable<TData extends Identifiable, TValue>({
       lastSelectionRef.current = { ids: selectedRowIds, rows: selectedRows };
       handleSelectionChange(selectedRows);
     }
-  }, [rowSelection, data]);
+  }, [selectedModelRows]);
 
   return (
     <div data-slot="data-table">
