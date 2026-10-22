@@ -11,11 +11,6 @@ pub fn apply(
     let object = patch
         .as_object()
         .ok_or_else(|| BackupError::Validation("Repository patch must be an object.".into()))?;
-    let description = if object.contains_key("description") {
-        crate::policies::metadata::description_patch(patch)?.map(str::to_owned)
-    } else {
-        current.description.clone()
-    };
     let mut spec = match object.get("spec").filter(|value| !value.is_null()) {
         Some(value) => serde_json::from_value(value.clone())
             .map_err(|e| BackupError::Validation(format!("Invalid Backup Repository spec: {e}")))?,
@@ -23,8 +18,15 @@ pub fn apply(
     };
     spec.normalize();
     let mut input = BackupRepositoryConfiguration {
-        name: current.name.clone(),
-        description,
+        name: match object.get("name") {
+            None => current.name.clone(),
+            Some(Value::String(name)) => name.clone(),
+            Some(_) => {
+                return Err(BackupError::Validation(
+                    "Repository name must be a string.".into(),
+                ));
+            }
+        },
         spec,
         password_secret_id: current.password_secret_id,
     };
@@ -46,12 +48,25 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
+    #[test]
+    fn ready_repository_metadata_changes_preserve_destination_and_password() {
+        let mut current =
+            repository(json!({"$type":"FileSystem","location":"Core","path":"/backups"}));
+        current.status = crate::BackupRepositoryStatus::Ready;
+        let changed = apply(&current, &json!({"name":" renamed "})).unwrap();
+        assert_eq!(changed.name, "renamed");
+        assert_eq!(changed.spec, current.spec);
+        assert_eq!(changed.password_secret_id, current.password_secret_id);
+        for name in [Value::Null, json!(42), json!(" "), json!("x".repeat(129))] {
+            assert!(apply(&current, &json!({"name":name})).is_err());
+        }
+    }
+
     fn repository(spec: Value) -> BackupRepository {
         BackupRepository {
             id: Uuid::now_v7(),
             name: "repo".into(),
             normalized_name: "REPO".into(),
-            description: Some("old".into()),
             repository_type: spec["$type"].as_str().unwrap().into(),
             spec: serde_json::from_value(spec).unwrap(),
             password_secret_id: Uuid::now_v7(),
@@ -81,10 +96,8 @@ mod tests {
         assert!(apply(&current, &json!({"spec":{"$type":"FileSystem","location":"Core","path":"/other","platformId":null}})).is_err());
         let same = apply(&current, &json!({"spec":{"$type":"FileSystem","location":"Core","path":" /backups ","platformId":null}})).unwrap();
         assert_eq!(same.spec, current.spec);
-        assert_eq!(same.description, current.description);
-        let cleared = apply(&current, &json!({"description":null,"spec":null})).unwrap();
+        let cleared = apply(&current, &json!({"spec":null})).unwrap();
         assert_eq!(cleared.spec, current.spec);
-        assert!(cleared.description.is_none());
     }
 
     #[test]
@@ -92,7 +105,7 @@ mod tests {
         let current = repository(json!({"$type":"FileSystem","location":"Core","path":"/backups"}));
         let changed = apply(
             &current,
-            &json!({"description":" backups ","passwordSecretId":Uuid::now_v7(),"spec":{
+            &json!({"passwordSecretId":Uuid::now_v7(),"spec":{
                 "$type":"S3Compatible","endpoint":" https://s3.example.test ","bucket":" citadel ",
                 "prefix":" /prod/backups/ ","region":" eu-west-1 ",
                 "accessKeySecretId":Uuid::now_v7(),"secretKeySecretId":Uuid::now_v7()
@@ -115,7 +128,6 @@ mod tests {
             serde_json::to_value(&changed.spec).unwrap()["region"],
             "eu-west-1"
         );
-        assert_eq!(changed.description.as_deref(), Some("backups"));
         assert_eq!(changed.password_secret_id, current.password_secret_id);
     }
     #[test]

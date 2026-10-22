@@ -20,8 +20,8 @@ pub use error::BackupError;
 use futures_util::future::BoxFuture;
 pub use policies::{BackupPolicy, BackupPolicyConfiguration};
 pub use repositories::{
-    BackupRepository, BackupRepositoryConfiguration, BackupRepositoryOperationResult,
-    BackupRepositoryValidation,
+    BackupRepository, BackupRepositoryConfiguration, BackupRepositoryCredentials,
+    BackupRepositoryOperationResult, BackupRepositoryValidation,
 };
 pub use repository::{BackupPersistence, BackupRepositoryOperation};
 pub use restores::{BackupRestoreRequest, BackupRestoreRun, RestoreClaim, RestoreExecutionResult};

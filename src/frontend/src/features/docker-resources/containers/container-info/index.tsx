@@ -70,7 +70,9 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<ContainerDeta
     {
       label: 'Inspect',
       disabled: (resource: ContainerRuntimeView) => !hasCapability(resource, 'canInspect'),
-      Content: ({ resource }) => <ContainerInspect containerId={resource?.id} />,
+      Content: ({ resource }) => (
+        <ContainerInspect containerId={resource?.id} resourceId={(resource as ContainerDetailsView)?.resourceId} />
+      ),
     },
     {
       label: 'Terminal',

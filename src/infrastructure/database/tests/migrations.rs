@@ -3,6 +3,10 @@ use sqlx::{Connection, PgConnection, Row};
 
 mod parity;
 
+fn migration_count() -> usize {
+    serde_json::from_str::<serde_json::Value>(citadel_database::MIGRATION_MANIFEST_JSON).unwrap()["migrations"].as_array().unwrap().len()
+}
+
 fn database_url() -> String {
     std::env::var("CITADEL_TEST_DATABASE_URL")
         .expect("CITADEL_TEST_DATABASE_URL is required for this integration test")
@@ -23,7 +27,7 @@ async fn clean_install_restart_and_checksum_enforcement() {
             .iter()
             .map(|outcome| outcome.applied)
             .sum::<usize>(),
-        1,
+        migration_count(),
         "the advisory lock must serialize concurrent startup"
     );
 
@@ -31,7 +35,7 @@ async fn clean_install_restart_and_checksum_enforcement() {
         .await
         .expect("restart migration should be idempotent");
     assert_eq!(second.applied, 0);
-    assert_eq!(second.already_applied, 1);
+    assert_eq!(second.already_applied, migration_count());
 
     let mut connection = PgConnection::connect(&database_url).await.unwrap();
     let tables: std::collections::BTreeSet<String> = sqlx::query_scalar::<_, String>(
@@ -53,6 +57,13 @@ async fn clean_install_restart_and_checksum_enforcement() {
         tables, expected,
         "the migrated tables must match the declarative schema plus the journal"
     );
+    let description_tables: Vec<String> = sqlx::query_scalar(
+        "SELECT table_name::text FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('backuprepositories','backuppolicies') AND column_name='description' ORDER BY table_name",
+    )
+    .fetch_all(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(description_tables, vec!["backuppolicies"]);
 
     let outbox_exists: bool =
         sqlx::query_scalar("SELECT to_regclass('public.alertdeliveryoutbox') IS NOT NULL")

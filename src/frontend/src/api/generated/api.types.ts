@@ -1821,7 +1821,6 @@ export type BackupPreviewResource =
     };
 
 export interface BackupRepositoryInput {
-  description?: string | null;
   name: string;
   /** @format uuid */
   passwordSecretId: string;
@@ -1880,7 +1879,6 @@ export interface BackupRepositoryView {
   createdByActorId: string;
   /** @format uuid */
   currentRunId: string | null;
-  description: string | null;
   /** @format uuid */
   id: string;
   /** @format date-time */
@@ -2554,12 +2552,6 @@ export interface ContainerHealthView {
   status: ContainerHealthStatus;
 }
 
-export interface ContainerHistory {
-  containerId: string;
-  containerName: string;
-  stats: ContainerStatView[];
-}
-
 export interface ContainerInspectionView {
   appArmorProfile?: string | null;
   args?: string[];
@@ -2599,6 +2591,13 @@ export interface ContainerNetworkingView {
   /** @format int64 */
   observedAt: number;
   publishedPorts: PublishedPortView[];
+  truncated: boolean;
+}
+
+export interface ContainerProcessesView {
+  processes: string[][];
+  running: boolean;
+  titles: string[];
   truncated: boolean;
 }
 
@@ -6600,7 +6599,7 @@ export interface StackDuplicateDraftView {
 }
 
 export interface StackHistory {
-  containers: ContainerHistory[];
+  services: StackServiceHistory[];
 }
 
 export interface StackReconciliationAction {
@@ -6667,6 +6666,12 @@ export interface StackResultActivitySnapshot {
   containerIds?: string[] | null;
   message?: string | null;
   resourceBindings?: any;
+}
+
+export interface StackServiceHistory {
+  containerIds: string[];
+  serviceName: string;
+  stats: ContainerStatView[];
 }
 
 export type StackSpec =
@@ -7529,8 +7534,20 @@ export interface UpdateBackupPolicyInput {
   webhook?: null | WebhookPatch;
 }
 
+export interface UpdateBackupRepositoryCredentialsInput {
+  /** @format uuid */
+  accessKeySecretId: string;
+  location: BackupExecutionLocation;
+  /** @format uuid */
+  platformId?: string | null;
+  /** @format uuid */
+  secretKeySecretId: string;
+  /** @format uuid */
+  sessionTokenSecretId?: string | null;
+}
+
 export interface UpdateBackupRepositoryInput {
-  description?: string | null;
+  name?: string | null;
   spec?: null | BackupRepositorySpec;
 }
 
@@ -10170,6 +10187,39 @@ export class Api<
       }),
 
     /**
+     * @description Validates stored S3 credential references against the existing destination before saving. Requires repository Write and Execute plus Bindings Read. Destination and encryption password remain unchanged.
+     *
+     * @tags BackupRepositories
+     * @name UpdateBackupRepositoryCredentials
+     * @summary Validate and update S3 repository credentials
+     * @request POST:/api/v1/backupRepositories/{id}/credentials
+     * @secure
+     * @response `200` `BackupRepositoryView` Credentials validated and updated
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    updateBackupRepositoryCredentials: (
+      id: string,
+      data: UpdateBackupRepositoryCredentialsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<BackupRepositoryView, ProblemDetails>({
+        path: `/api/v1/backupRepositories/${id}/credentials`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
      * No description
      *
      * @tags BackupRepositories
@@ -11835,6 +11885,34 @@ export class Api<
     getContainerNetworking: (id: string, params: RequestParams = {}) =>
       this.request<ContainerNetworkingView, ProblemDetails>({
         path: `/api/v1/containers/${id}/networking`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name GetContainerProcesses
+     * @summary Read running Container processes
+     * @request GET:/api/v1/containers/{id}/processes
+     * @secure
+     * @response `200` `ContainerProcessesView`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getContainerProcesses: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerProcessesView, ProblemDetails>({
+        path: `/api/v1/containers/${id}/processes`,
         method: "GET",
         secure: true,
         format: "json",
@@ -19073,7 +19151,7 @@ export class Api<
      *
      * @tags Stacks
      * @name GetStackStats
-     * @summary Get Stack Container statistics
+     * @summary Get Stack service statistics
      * @request GET:/api/v1/stacks/{stackId}/stats
      * @secure
      * @response `200` `StackHistory` Success

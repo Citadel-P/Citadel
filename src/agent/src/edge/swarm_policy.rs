@@ -26,6 +26,7 @@ pub(super) fn allowed(kind: EdgeCommandKind) -> bool {
             | ContainerList
             | ContainerLogsStream
             | ContainerInspect
+            | ContainerProcesses
             | ContainerCreate
             | ContainerStart
             | ContainerStop

@@ -7,7 +7,6 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct BackupRepositoryInput {
     pub name: String,
-    pub description: Option<String>,
     #[schema(value_type = crate::api::resources::schema_models::backups::BackupRepositorySpecSchema)]
     pub spec: BackupRepositorySpec,
     pub password_secret_id: Uuid,
@@ -17,7 +16,6 @@ impl From<citadel_backups::BackupRepositoryConfiguration> for BackupRepositoryIn
     fn from(value: citadel_backups::BackupRepositoryConfiguration) -> Self {
         Self {
             name: value.name,
-            description: value.description,
             spec: value.spec,
             password_secret_id: value.password_secret_id,
         }
@@ -28,7 +26,6 @@ impl From<BackupRepositoryInput> for citadel_backups::BackupRepositoryConfigurat
     fn from(value: BackupRepositoryInput) -> Self {
         Self {
             name: value.name,
-            description: value.description,
             spec: value.spec,
             password_secret_id: value.password_secret_id,
         }
@@ -157,4 +154,15 @@ pub(crate) struct RunFilter {
     pub(crate) policy_id: Option<Uuid>,
     pub(crate) backup_run_id: Option<Uuid>,
     pub(crate) limit: Option<usize>,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct UpdateBackupRepositoryCredentialsInput {
+    pub(crate) access_key_secret_id: Uuid,
+    pub(crate) secret_key_secret_id: Uuid,
+    pub(crate) session_token_secret_id: Option<Uuid>,
+    #[schema(value_type = crate::api::resources::schema_models::backups::BackupExecutionLocationSchema)]
+    pub(crate) location: BackupExecutionLocation,
+    pub(crate) platform_id: Option<Uuid>,
 }

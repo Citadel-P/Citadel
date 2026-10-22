@@ -134,6 +134,42 @@ impl DockerClient {
         )
         .await
     }
+    pub async fn container_processes(
+        &self,
+        id: &str,
+    ) -> Result<citadel_platforms::containers::ContainerProcesses, DockerError> {
+        validate_identifier(id)?;
+        let response = self
+            .api_result(
+                ContainerApiClient::new(self.configuration().await?)
+                    .container_top(id, Some("-eo user,pid,ppid,time,comm"))
+                    .await,
+            )
+            .await?;
+        let rows = response.processes.unwrap_or_default();
+        Ok(citadel_platforms::containers::ContainerProcesses {
+            running: true,
+            titles: response
+                .titles
+                .unwrap_or_default()
+                .into_iter()
+                .take(5)
+                .map(|value| value.chars().take(128).collect())
+                .collect(),
+            truncated: rows.len() > 1024,
+            processes: rows
+                .into_iter()
+                .take(1024)
+                .map(|row| {
+                    row.into_iter()
+                        .take(5)
+                        .map(|value| value.chars().take(128).collect())
+                        .collect()
+                })
+                .collect(),
+        })
+    }
+
     pub async fn inspect_container(&self, id: &str) -> Result<ContainerInspect, DockerError> {
         validate_identifier(id)?;
         self.api_result(

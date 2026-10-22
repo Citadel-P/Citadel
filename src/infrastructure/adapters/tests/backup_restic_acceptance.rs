@@ -228,7 +228,7 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         }
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
         let store = PostgresBackupPersistence::new(pool.clone());
-        let mut input = BackupRepositoryConfiguration { name: format!("repo-{suffix}"), description: None, password_secret_id: secret,
+        let mut input = BackupRepositoryConfiguration { name: format!("repo-{suffix}"), password_secret_id: secret,
             spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_volume})).unwrap() };
         if let Some(endpoint) = &s3_endpoint {
             input.spec = serde_json::from_value(json!({"$type":"S3Compatible","endpoint":endpoint,"bucket":"citadel-backups","allowInsecureHttp":true,

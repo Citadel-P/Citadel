@@ -54,20 +54,28 @@ const createAction = (enabled: boolean): AuthorizedAction => ({
 });
 
 describe('AutomationActionsTable', () => {
-  it('shows the disabled state instead of a successful last-run status for a disabled action', () => {
-    renderCitadel(<AutomationActionsTable items={[createAction(false)]} actions={{}} isLoading={false} />);
+  it('shows the disabled state instead of a successful last-run status for a disabled action', async () => {
+    const { user } = renderCitadel(
+      <AutomationActionsTable items={[createAction(false)]} actions={{}} isLoading={false} />,
+    );
 
     const indicator = screen.getByRole('link', { name: 'Disabled action' }).previousElementSibling;
 
     expect(indicator).toHaveClass('bg-gray-500');
     expect(indicator).not.toHaveClass('bg-green-500');
+    await user.hover(indicator!);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Disabled');
   });
 
-  it('continues to show the last-run status for an enabled action', () => {
-    renderCitadel(<AutomationActionsTable items={[createAction(true)]} actions={{}} isLoading={false} />);
+  it('shows Enabled instead of the last-run result for an enabled action', async () => {
+    const { user } = renderCitadel(
+      <AutomationActionsTable items={[createAction(true)]} actions={{}} isLoading={false} />,
+    );
 
     const indicator = screen.getByRole('link', { name: 'Enabled action' }).previousElementSibling;
 
     expect(indicator).toHaveClass('bg-green-500');
+    await user.hover(indicator!);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Enabled');
   });
 });

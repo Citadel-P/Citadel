@@ -317,7 +317,7 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         let secret=Uuid::now_v7();
         for id in [secret,ACCESS_KEY_ID,SECRET_KEY_ID] {sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')").bind(id).bind(format!("secret-{id}")).execute(&pool).await.unwrap();}
         let actor=ActorId::new(SYSTEM_ACTOR_ID);let store=PostgresBackupPersistence::new(pool.clone());
-        let repository=store.create_repository(actor,&BackupRepositoryConfiguration {name:format!("repo-{platform}"),description:None,password_secret_id:secret,spec:serde_json::from_value(json!({"$type":"S3Compatible","endpoint":std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT").unwrap(),"bucket":"citadel-backups","allowInsecureHttp":true,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap()}).await.unwrap();
+        let repository=store.create_repository(actor,&BackupRepositoryConfiguration {name:format!("repo-{platform}"),password_secret_id:secret,spec:serde_json::from_value(json!({"$type":"S3Compatible","endpoint":std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT").unwrap(),"bucket":"citadel-backups","allowInsecureHttp":true,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap()}).await.unwrap();
         let executor=DockerResticBackupExecutor::new("/no-core-docker-allowed",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent.clone())).with_edge(registry.clone());
         let cancel=CancellationToken::new();
         executor.repository(&repository,"Initialize","Platform",Some(platform),&cancel).await.unwrap();

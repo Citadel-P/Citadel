@@ -38,7 +38,7 @@ const PONG_TIMEOUT: Duration = Duration::from_secs(15);
 
 // Four maximum-size group payloads, including the message currently being written.
 // This also bounds resource-mode snapshots; it does not retain a second payload copy.
-const OUTBOUND_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const OUTBOUND_BYTES: usize = 16 * 1024 * 1024;
 
 enum OutboundMessage {
     Frame(Message),

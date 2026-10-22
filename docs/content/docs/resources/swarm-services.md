@@ -148,6 +148,11 @@ history. Statistics are retained for seven days. Open an individual Task to
 inspect that Task's current runtime data; the Service chart is the aggregate
 across its logical replicas.
 
+Under **Inspect**, expand **Processes** and choose a running Task to see its
+container's processes on the owning Node. The same section is available in an
+individual Task's Inspect tab. Process reads require Platform Read and Inspect
+permission; the list updates live only while expanded.
+
 External tagged images support **Disabled**, **Notify only**, and **Auto
 deploy** update behavior. Disabled Services are not scanned in the background,
 but an authorized manual check remains available after the first Apply.

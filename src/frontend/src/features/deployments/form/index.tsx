@@ -453,7 +453,7 @@ const RuntimeTabs = ({
       )}
       {canInspect && (
         <TabsContent value="inspect" className="mt-2 w-full">
-          <DeploymentInspect key={deploymentId} deploymentId={deploymentId} />
+          <DeploymentInspect key={deploymentId} deploymentId={deploymentId} resourceId={deployment.containerId} />
         </TabsContent>
       )}
       {!terminalDisabled && (

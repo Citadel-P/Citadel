@@ -45,6 +45,35 @@ The S3 endpoint must be reachable from the target's backup helper, not just your
 browser or Core. Keep the repository password separately accessible for recovery;
 S3 credentials alone cannot decrypt the snapshots.
 
+### Edit a repository
+
+Open a repository from **Backups** to edit its name.
+Editing requires **Write** permission on that repository. Names must be unique
+regardless of capitalization. **Save changes** becomes available when a value changes.
+
+Once a repository is **Ready**, its destination and encryption password are locked
+and shown as readable storage details. Changing the name preserves
+its policy links and existing backups. Create another repository to use a different
+destination. Encryption-password rotation is not available in this form.
+
+To replace S3 credentials, create replacement secrets in **Bindings**, then expand
+**Update S3 credentials** in the repository editor. Select the access key, secret
+key, and optional session token, then choose **Validate and update**. This requires
+repository **Write** and **Execute** permissions and **Read** access to Bindings.
+Validation runs from Core using the existing destination and encryption password;
+Core must be able to reach the S3 endpoint. Citadel saves the new selections only
+when validation succeeds. Failed validation leaves the current selections and
+repository readiness unchanged. Updates are blocked while the repository is in use;
+retry if a concurrent edit or expired validation prevents saving.
+
+Create replacement secret entries instead of overwriting shared secret values.
+Other repositories may still use those entries. Revoke old provider credentials
+after the update and a successful backup from the intended execution location.
+
+Expand **Maintenance** to validate, check, or prune a ready repository. Save pending
+edits before running maintenance. Initialize is available for repositories that are
+not yet ready.
+
 ### 2. Create and run the policy
 
 **Add Policy** requires global **Write** permission for **Backup Policies**, granted

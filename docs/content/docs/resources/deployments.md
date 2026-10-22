@@ -362,6 +362,10 @@ Use **Logs** and **Inspect** while its container still exists and the Platform i
 reachable. Each tool requires its own permission. **Terminal** additionally
 requires a running container and no Deployment operation in progress.
 
+Expand **Processes** below the Inspect data to view the container's running
+processes. This section requires Platform Read and Inspect permission and uses
+the same cached snapshots and live updates as the [container Processes view](/docs/resources/docker/containers#processes).
+
 If the Platform is offline, live tools are unavailable. Previously loaded
 container details are marked as last known; retained statistics and **Activities**
 can still help explain the failure. Deleted containers may no longer have logs or

@@ -34,6 +34,247 @@ use uuid::Uuid;
 const TOKEN: &str = "realtime-test-token-with-at-least-32-characters";
 
 #[tokio::test]
+async fn slow_process_reads_clear_only_the_process_panel_and_recover_without_reconnecting() {
+    use citadel_server::realtime_groups::{ClientEvent, Group, GroupReadPort, GroupSnapshot};
+
+    struct Processes {
+        slow: AtomicBool,
+        allowed: AtomicBool,
+        cancelled: CancellationToken,
+    }
+    impl GroupReadPort for Processes {
+        fn read<'a>(
+            &'a self,
+            _: &'a ActorPrincipal,
+            group: &'a Group,
+            event: Option<&'a citadel_server::realtime::PublishedRuntimeEvent>,
+        ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+            Box::pin(async move {
+                if !self.allowed.load(Ordering::Acquire) {
+                    return Err(RealtimeReadError::Authorization);
+                }
+                if event.is_none() {
+                    return Ok(GroupSnapshot::default());
+                }
+                let update = if group.name.starts_with("container-processes:") {
+                    if self.slow.load(Ordering::Acquire) {
+                        // Model runtime I/O with the same cancellation-on-drop
+                        // ownership as the application process reader.
+                        let _guard = self.cancelled.clone().drop_guard();
+                        std::future::pending::<()>().await;
+                    }
+                    ClientEvent::new(
+                        "ContainerProcessesUpdated",
+                        vec![json!({"resourceId": group.id(), "data": {
+                            "running": true, "titles": ["PID"], "processes": [["42"]],
+                            "truncated": false
+                        }})],
+                    )
+                } else {
+                    ClientEvent::new("PlatformsUpdated", vec![json!({"name": "still connected"})])
+                };
+                Ok(GroupSnapshot {
+                    events: vec![update],
+                    ..Default::default()
+                })
+            })
+        }
+    }
+
+    let container = Uuid::now_v7();
+    let platform_id = Uuid::now_v7();
+    let groups = Arc::new(Processes {
+        slow: AtomicBool::new(true),
+        allowed: AtomicBool::new(true),
+        cancelled: CancellationToken::new(),
+    });
+    let shutdown = CancellationToken::new();
+    let mut settings = config();
+    // Exercise the configured deadline, not only the production default.
+    settings.subscribe_timeout = Duration::from_millis(200);
+    let service = RealtimeService::new(
+        &settings,
+        Arc::new(FakeReader {
+            platform: platform(platform_id),
+            allowed: Arc::new(AtomicBool::new(true)),
+        }),
+        Arc::new(Metrics::default()),
+        shutdown.clone(),
+    )
+    .with_groups(groups.clone());
+    let hub = service.hub();
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":TOKEN}).to_string().into())).await.unwrap();
+    assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+    for (index, group) in [
+        format!("container-processes:{container}"),
+        "platforms".into(),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let invocation = index.to_string();
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":invocation,"target":"JoinGroup","arguments":[group]}).to_string().into())).await.unwrap();
+        let completion = receive_json(&mut socket).await;
+        assert_eq!(completion["kind"], "completion");
+        assert_eq!(completion["invocationId"], invocation);
+        assert!(completion["error"].is_null());
+    }
+
+    // Both failures and subsequent recovery use the original socket/subscriptions.
+    for slow in [true, false, true] {
+        groups.slow.store(slow, Ordering::Release);
+        hub.publish_runtime_change(platform_id, "container", "update", "docker-id");
+        let processes = receive_json(&mut socket).await;
+        assert_eq!(processes["target"], "ContainerProcessesUpdated");
+        assert_eq!(
+            processes["arguments"][0]["resourceId"],
+            container.to_string()
+        );
+        let data = &processes["arguments"][0]["data"];
+        if slow {
+            assert!(data.is_null());
+            assert!(
+                groups.cancelled.is_cancelled(),
+                "timed-out runtime read must be dropped"
+            );
+        } else {
+            assert_eq!(data["processes"], json!([["42"]]));
+        }
+        let other = receive_json(&mut socket).await;
+        assert_eq!(other["target"], "PlatformsUpdated");
+        assert_eq!(other["arguments"][0]["name"], "still connected");
+    }
+
+    // A denied read must never be converted into a best-effort timeout snapshot.
+    groups.allowed.store(false, Ordering::Release);
+    hub.publish_runtime_change(platform_id, "container", "update", "docker-id");
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(2), socket.next())
+            .await
+            .unwrap(),
+        Some(Ok(Message::Close(_))) | None
+    ));
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn large_health_history_keeps_the_shared_websocket_connected() {
+    use citadel_server::realtime_groups::{ClientEvent, Group, GroupReadPort, GroupSnapshot};
+
+    struct History(Value);
+    impl GroupReadPort for History {
+        fn read<'a>(
+            &'a self,
+            _: &'a ActorPrincipal,
+            group: &'a Group,
+            _: Option<&'a citadel_server::realtime::PublishedRuntimeEvent>,
+        ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+            Box::pin(async move {
+                if group.name.starts_with("container-health:") {
+                    Ok(GroupSnapshot {
+                        events: vec![ClientEvent::new(
+                            "ReceiveContainerHealthHistory",
+                            vec![self.0.clone()],
+                        )],
+                        ..Default::default()
+                    })
+                } else {
+                    Ok(GroupSnapshot::default())
+                }
+            })
+        }
+    }
+
+    let container = Uuid::now_v7();
+    let entries: Vec<_> = (0..2_000)
+        .map(|index| {
+            json!({
+                "observedAt": 1_792_000_000 + index * 30,
+                "firstObservedAt": 1_792_000_000 + index * 30,
+                "sampleCount": 1,
+                "state": "Running",
+                "origin": "Sample",
+                "health": {
+                    "status": "Healthy",
+                    "observedAt": (1_792_000_000_i64 + index * 30) * 1_000,
+                    "lastCheckAt": null,
+                    "failingStreak": 0,
+                    "reason": "Recorded observation; not the current health result."
+                },
+                "exitCode": null,
+                "oomKilled": false
+            })
+        })
+        .collect();
+    let history = json!({"resourceId": container, "entries": entries});
+    let size = serde_json::to_vec(&history).unwrap().len();
+    assert!(size > 128 * 1024 && size < 4 * 1024 * 1024);
+    let shutdown = CancellationToken::new();
+    let service = RealtimeService::new(
+        &config(),
+        Arc::new(FakeReader {
+            platform: platform(Uuid::now_v7()),
+            allowed: Arc::new(AtomicBool::new(true)),
+        }),
+        Arc::new(Metrics::default()),
+        shutdown.clone(),
+    )
+    .with_groups(Arc::new(History(history.clone())));
+    let (address, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+            .await
+            .unwrap();
+    socket
+        .send(Message::Text(
+            json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":TOKEN})
+                .to_string().into(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+
+    // Closing/reopening details and using another group must reuse this socket.
+    let health_group = format!("container-health:{container}");
+    for (index, (target, group)) in [
+        ("JoinGroup", health_group.as_str()),
+        ("LeaveGroup", health_group.as_str()),
+        ("JoinGroup", "platforms"),
+        ("JoinGroup", health_group.as_str()),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let invocation = index.to_string();
+        socket
+            .send(Message::Text(
+                json!({"protocolVersion":1,"kind":"invoke","invocationId":invocation,"target":target,"arguments":[group]})
+                    .to_string().into(),
+            ))
+            .await
+            .unwrap();
+        let completion = receive_json(&mut socket).await;
+        assert_eq!(completion["kind"], "completion");
+        assert_eq!(completion["invocationId"], invocation);
+        assert!(completion["error"].is_null());
+        if target == "JoinGroup" && group == health_group {
+            let snapshot = receive_json(&mut socket).await;
+            assert_eq!(snapshot["target"], "ReceiveContainerHealthHistory");
+            assert_eq!(snapshot["arguments"][0], history);
+        }
+    }
+    socket.close(None).await.unwrap();
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
 async fn subscription_sequences_events_and_resynchronizes_after_reconnect() {
     let platform_id = Uuid::now_v7();
     let allowed = Arc::new(AtomicBool::new(true));

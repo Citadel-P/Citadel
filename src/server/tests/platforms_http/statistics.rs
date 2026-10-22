@@ -306,12 +306,25 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
         "managed identity survives Service replacement and rename"
     );
     let stack = Uuid::now_v7();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate) VALUES($1,$2,$3,'WebEditor','{}','{}')")
+        .bind(stack).bind(format!("swarm-history-{stack}")).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
     sqlx::query("UPDATE swarmservicestats SET swarmserviceid=NULL,stackid=$2 WHERE platformid=$1")
         .bind(f.platform_id)
         .bind(stack)
         .execute(&f.pool)
         .await
         .unwrap();
+    let response = send(
+        &f,
+        &format!("/api/v1/stacks/{stack}/stats"),
+        Some(f.administrator.clone()),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_body(response).await;
+    assert_eq!(body["services"][0]["serviceName"], "web");
+    assert_eq!(body["services"][0]["stats"][0]["cpuUsage"], 20.0);
+    assert_eq!(body["services"][0]["containerIds"], json!([]));
     let stats = reader
         .service(
             ServiceStatIdentity {
@@ -419,6 +432,8 @@ async fn service_stats_reports_missing_stale_and_fresh_node_coverage() {
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn workload_history_requires_its_own_permission_and_preserves_stack_grouping() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
+    use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat};
     use citadel_primitives::ResourceType;
     let f = fixture().await;
     let deployment = Uuid::now_v7();
@@ -449,11 +464,15 @@ async fn workload_history_requires_its_own_permission_and_preserves_stack_groupi
         // Apply the ACL change through the repository so cached permissions are invalidated.
         super::realtime_groups::replace_specific_permissions(&f, &reader, vec![]).await;
         let response = send(&f, &path, Some(reader.clone())).await;
-        if resource == "deployments" {
-            assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        } else {
-            assert_eq!(json_body(response).await["containers"], json!([]));
-        }
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            json_body(response).await[if resource == "deployments" {
+                "stats"
+            } else {
+                "services"
+            }],
+            json!([])
+        );
     }
     sqlx::query("UPDATE containers SET deploymentid=$2 WHERE id=$1")
         .bind(container)
@@ -461,11 +480,28 @@ async fn workload_history_requires_its_own_permission_and_preserves_stack_groupi
         .execute(&f.pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,10,20,2,100,3,4)").bind(Uuid::now_v7()).bind(container).bind(Utc::now().timestamp()-60).execute(&f.pool).await.unwrap();
+    let store = PostgresContainerStatsStore::new(f.pool.clone());
+    let mut sample = RuntimeContainerStat {
+        docker_container_id: "container-1".into(),
+        created: Utc::now().timestamp() - 60,
+        cpu_usage: 10.0,
+        memory_active: 20.0,
+        memory_cache: 2.0,
+        memory_limit: 100.0,
+        rx_bytes: 3.0,
+        tx_bytes: 4.0,
+    };
+    assert_eq!(
+        store
+            .persist(f.platform_id, std::slice::from_ref(&sample))
+            .await
+            .unwrap(),
+        1
+    );
     let path = format!("/api/v1/deployments/{deployment}/stats");
     let body = json_body(send(&f, &path, Some(reader.clone())).await).await;
-    assert_eq!(body["stats"][0]["containerId"], container.to_string());
-    sqlx::query("UPDATE containers SET deploymentid=NULL,stackid=$2 WHERE id=$1")
+    assert_eq!(body["stats"][0]["cpuUsage"], 10.0);
+    sqlx::query("UPDATE containers SET deploymentid=NULL,stackid=$2,composeservicename='web',composereplicanumber='1' WHERE id=$1")
         .bind(container)
         .bind(stack)
         .execute(&f.pool)
@@ -473,9 +509,28 @@ async fn workload_history_requires_its_own_permission_and_preserves_stack_groupi
         .unwrap();
     let path = format!("/api/v1/stacks/{stack}/stats");
     let body = json_body(send(&f, &path, Some(reader.clone())).await).await;
-    assert_eq!(body["containers"][0]["containerId"], "container-1");
-    assert_eq!(body["containers"][0]["containerName"], "web");
-    assert_eq!(body["containers"][0]["stats"][0]["cpuUsage"], 10.0);
+    assert_eq!(
+        body["services"][0]["stats"],
+        json!([]),
+        "reassignment must not transfer the previous owner's samples"
+    );
+    sample.created += 10;
+    sample.cpu_usage = 20.0;
+    assert_eq!(store.persist(f.platform_id, &[sample]).await.unwrap(), 1);
+    let body = json_body(send(&f, &path, Some(reader.clone())).await).await;
+    assert_eq!(body["services"][0]["containerIds"], json!(["container-1"]));
+    assert_eq!(body["services"][0]["serviceName"], "web");
+    assert_eq!(body["services"][0]["stats"][0]["cpuUsage"], 20.0);
+    let body = json_body(
+        send(
+            &f,
+            &format!("/api/v1/deployments/{deployment}/stats"),
+            Some(reader.clone()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(body["stats"][0]["cpuUsage"], 10.0);
     assert_eq!(
         send(
             &f,
@@ -642,6 +697,15 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
     use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat};
     let f = fixture().await;
     let writer = PostgresContainerStatsStore::new(f.pool.clone());
+    let deployment = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdbyactorid) VALUES($1,$2,$3,'{}','Created',$4)")
+        .bind(deployment).bind(format!("atomic-stats-{deployment}")).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE containers SET deploymentid=$2 WHERE platformid=$1")
+        .bind(f.platform_id)
+        .bind(deployment)
+        .execute(&f.pool)
+        .await
+        .unwrap();
     let container: Uuid =
         sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 LIMIT 1")
             .bind(f.platform_id)
@@ -659,15 +723,15 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
         tx_bytes: 0.0,
         created: now,
     };
-    // Duplicate conflict keys abort the write; no partial Container/Platform batch is committed.
+    // Duplicate conflict keys abort the write, including independent workload history.
     assert!(
         writer
             .persist(f.platform_id, &[sample.clone(), sample.clone()])
             .await
             .is_err()
     );
-    let counts:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM containerstats WHERE containerid=$1),(SELECT count(*) FROM platformstats WHERE platformid=$2),(SELECT count(*) FROM swarmservicestats WHERE platformid=$2)").bind(container).bind(f.platform_id).fetch_one(&f.pool).await.unwrap();
-    assert_eq!(counts, (0, 0, 0));
+    let counts:(i64,i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM containerstats WHERE containerid=$1),(SELECT count(*) FROM platformstats WHERE platformid=$2),(SELECT count(*) FROM swarmservicestats WHERE platformid=$2),(SELECT count(*) FROM workloadstats WHERE platformid=$2)").bind(container).bind(f.platform_id).fetch_one(&f.pool).await.unwrap();
+    assert_eq!(counts, (0, 0, 0, 0));
     sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT gen_random_uuid(),$1,$2::bigint-series.value,1,1,0,1,0,0 FROM generate_series(1,5001) AS series(value)").bind(container).bind(now-8*24*3600).execute(&f.pool).await.unwrap();
     writer
         .persist(f.platform_id, std::slice::from_ref(&sample))
@@ -722,6 +786,14 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
     assert_eq!(
         remaining, 1,
         "maintenance keeps the fresh sample and a subsequent upsert stays idempotent"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM workloadstats WHERE deploymentid=$1")
+            .bind(deployment)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        1
     );
     f.docker_server.abort();
     f.pool.close().await;
@@ -824,6 +896,190 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
             .await
             .status(),
         StatusCode::CONFLICT
+    );
+    f.docker_server.abort();
+    f.pool.close().await;
+    std::fs::remove_file(f.docker_socket).unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn workload_history_survives_replacement_and_keeps_service_replica_and_owner_boundaries() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::{
+        batch::PostgresStatsBatchStore, store::PostgresContainerStatsStore,
+    };
+    use citadel_platforms::{ContainerStatsStore, RuntimeContainerStat, stats_ingestion::*};
+    let f = fixture().await;
+    let writer = PostgresContainerStatsStore::new(f.pool.clone());
+    let batch = PostgresStatsBatchStore::new(f.pool.clone());
+    sqlx::query("UPDATE platforms SET connectortype='Local' WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let address: String = sqlx::query_scalar("SELECT address FROM platforms WHERE id=$1")
+        .bind(f.platform_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let scope = StatsScope {
+        platform_id: f.platform_id,
+        node_id: None,
+        connector: "Local".into(),
+        address: Some(address),
+        agent_id: None,
+        connected_at: None,
+        closed: None,
+    };
+    let deployment = Uuid::now_v7();
+    let stack = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status) VALUES($1,$2,'history',$3,'{}','Stopped')")
+        .bind(deployment).bind(f.administrator.actor_id.value()).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    for id in [stack, other] {
+        sqlx::query("INSERT INTO stacks(id,createdbyactorid,name,driftpolicy,stacksource,stackupdatestate) VALUES($1,$2,'history','{}','Compose','{}')")
+            .bind(id).bind(f.administrator.actor_id.value()).execute(&f.pool).await.unwrap();
+    }
+    let bucket = Utc::now().timestamp() / 60 * 60 - 120;
+    for (index, (dep, st, service, replica, cpu)) in [
+        (Some(deployment), None, "", "1", 10.0),
+        (Some(deployment), None, "", "1", 30.0),
+        (None, Some(stack), "web", "1", 10.0),
+        (None, Some(stack), "web", "1", 30.0),
+        (None, Some(stack), "web", "2", 50.0),
+        (None, Some(stack), "db", "1", 7.0),
+        (None, Some(other), "web", "1", 999.0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = Uuid::now_v7();
+        let docker = format!("history-{index}");
+        sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,state,created,updated,ports,deploymentid,stackid,composeservicename,composereplicanumber) VALUES($1,$2,$3,'image',$3,'Running',0,0,'{}',$4,$5,$6,$7)")
+            .bind(id).bind(f.platform_id).bind(&docker).bind(dep).bind(st).bind(service).bind(replica).execute(&f.pool).await.unwrap();
+        let sample = RuntimeContainerStat {
+            docker_container_id: docker,
+            created: bucket + index as i64 + 1,
+            cpu_usage: cpu,
+            memory_active: cpu,
+            memory_cache: 2.0,
+            memory_limit: 100.0,
+            rx_bytes: 3.0,
+            tx_bytes: 4.0,
+        };
+        if index % 2 == 0 {
+            writer
+                .persist(f.platform_id, std::slice::from_ref(&sample))
+                .await
+                .unwrap();
+            writer
+                .persist(f.platform_id, std::slice::from_ref(&sample))
+                .await
+                .unwrap();
+        } else {
+            let sample = ContainerStatsSample {
+                scope: scope.clone(),
+                sample,
+            };
+            batch
+                .persist_batch(std::slice::from_ref(&sample))
+                .await
+                .unwrap();
+            batch
+                .persist_batch(std::slice::from_ref(&sample))
+                .await
+                .unwrap();
+            let mut stale = sample.clone();
+            stale.scope.address = Some("replaced-connector".into());
+            stale.sample.cpu_usage = 9999.0;
+            assert_eq!(batch.persist_batch(&[stale]).await.unwrap().persisted, 0);
+        }
+        sqlx::query("DELETE FROM containers WHERE id=$1")
+            .bind(id)
+            .execute(&f.pool)
+            .await
+            .unwrap();
+        let raw: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM containerstats WHERE containerid=$1")
+                .bind(id)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap();
+        assert_eq!(raw, 0, "raw container history remains instance-scoped");
+    }
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM workloadstats WHERE platformid=$1")
+        .bind(f.platform_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 7, "retry does not add samples");
+    let reader = super::lookup::subject(&f).await;
+    for (resource, kind, id) in [
+        (
+            "deployments",
+            citadel_primitives::ResourceType::Deployment,
+            deployment,
+        ),
+        ("stacks", citadel_primitives::ResourceType::Stack, stack),
+    ] {
+        let path = format!("/api/v1/{resource}/{id}/stats?hours=24");
+        assert_eq!(
+            send(&f, &path, Some(reader.clone())).await.status(),
+            StatusCode::FORBIDDEN
+        );
+        super::lookup::grant(&f, reader.actor_id.value(), kind, id, 0).await;
+        let response = send(&f, &path, Some(reader.clone())).await;
+        let status = response.status();
+        let body = json_body(response).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        if resource == "deployments" {
+            assert_eq!(body["stats"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                body["stats"][0]["cpuUsage"], 20.0,
+                "replacement is not an extra replica"
+            );
+        } else {
+            let services = body["services"].as_array().unwrap();
+            assert_eq!(services.len(), 2);
+            let web = services.iter().find(|s| s["serviceName"] == "web").unwrap();
+            assert_eq!(
+                web["stats"][0]["cpuUsage"], 70.0,
+                "average replacement slot plus second replica"
+            );
+            assert_eq!(web["containerIds"], json!([]));
+            assert_eq!(
+                services.iter().find(|s| s["serviceName"] == "db").unwrap()["stats"][0]["cpuUsage"],
+                7.0
+            );
+        }
+        let empty = json_body(
+            send(
+                &f,
+                &format!(
+                    "/api/v1/{resource}/{id}/stats?from={}&to={}",
+                    bucket + 60,
+                    bucket + 90
+                ),
+                Some(reader.clone()),
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(
+            empty[if resource == "deployments" {
+                "stats"
+            } else {
+                "services"
+            }],
+            json!([]),
+            "do not fill gaps with zeroes"
+        );
+    }
+    assert_eq!(
+        send(&f, &format!("/api/v1/stacks/{other}/stats"), Some(reader))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
     );
     f.docker_server.abort();
     f.pool.close().await;

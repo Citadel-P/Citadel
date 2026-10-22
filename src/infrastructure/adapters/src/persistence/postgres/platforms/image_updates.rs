@@ -56,14 +56,28 @@ impl ImageUpdateStore for PostgresImageUpdateStore {
         image: &'a str,
         registry: &'a ImageUpdateRegistry,
         result: &'a ImageTagUpdate,
+        remember_registry: bool,
     ) -> BoxFuture<'a, Result<bool, RuntimeCapabilityError>> {
         Box::pin(async move {
             let payload = serde_json::to_value(result)
                 .map_err(|_| failure("Invalid image update observation."))?;
-            // Lock inventory identity while recording the observation. An inventory
-            // writer can then remove the tag/image; readers always join current tags.
-            let changed = sqlx::query("WITH current_image AS (SELECT id FROM images WHERE platformid=$1 AND dockerimageid=$2 AND tags::jsonb ? $3 FOR SHARE) INSERT INTO imageupdateobservations(imageid,reference,registrykey,registryrevision,attemptedat,result) SELECT id,$3,$4,$5,$6,$7 FROM current_image ON CONFLICT(imageid,reference,registrykey) DO UPDATE SET registryrevision=EXCLUDED.registryrevision,attemptedat=EXCLUDED.attemptedat,result=EXCLUDED.result WHERE imageupdateobservations.attemptedat<=EXCLUDED.attemptedat")
-                .bind(platform).bind(image).bind(&result.reference).bind(registry.id).bind(&registry.revision).bind(result.last_attempt_at).bind(payload).execute(&self.0).await.map_err(storage)?.rows_affected()>0;
+            let mut tx = self.0.begin().await.map_err(storage)?;
+            // Serialize checks and inventory writers on the image, keeping the
+            // observation fence and optional Registry association atomic.
+            let changed = sqlx::query("WITH current_image AS (SELECT id FROM images WHERE platformid=$1 AND dockerimageid=$2 AND tags::jsonb ? $3 FOR UPDATE) INSERT INTO imageupdateobservations(imageid,reference,registrykey,registryrevision,attemptedat,result) SELECT id,$3,$4,$5,$6,$7 FROM current_image ON CONFLICT(imageid,reference,registrykey) DO UPDATE SET registryrevision=EXCLUDED.registryrevision,attemptedat=EXCLUDED.attemptedat,result=EXCLUDED.result WHERE imageupdateobservations.attemptedat<=EXCLUDED.attemptedat")
+                .bind(platform).bind(image).bind(&result.reference).bind(registry.id).bind(&registry.revision).bind(result.last_attempt_at).bind(payload).execute(&mut *tx).await.map_err(storage)?.rows_affected()>0;
+            if changed
+                && remember_registry
+                && !registry.id.is_nil()
+                && matches!(
+                    result.status,
+                    ImageUpdateStatus::UpToDate | ImageUpdateStatus::UpdateAvailable
+                )
+            {
+                sqlx::query("UPDATE images SET registryid=$3,updatedat=now(),rowversion=rowversion+1 WHERE platformid=$1 AND dockerimageid=$2 AND registryid IS NULL")
+                    .bind(platform).bind(image).bind(registry.id).execute(&mut *tx).await.map_err(storage)?;
+            }
+            tx.commit().await.map_err(storage)?;
             Ok(changed)
         })
     }

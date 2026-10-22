@@ -148,13 +148,52 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         .unwrap();
     assert_eq!(
         history_snapshot.events[0].target,
-        "ReceiveContainerHealthHistory"
+        "ContainerHealthHistoryChanged"
     );
     assert_eq!(
         history_snapshot.events[0].arguments[0]["resourceId"],
         json!(id)
     );
-    assert_eq!(history_snapshot.events[0].arguments[0]["entries"], history);
+    assert_eq!(
+        history_snapshot.events[0].arguments,
+        vec![json!({"resourceId": id})]
+    );
+    let hub = citadel_server::realtime::RealtimeHub::new(
+        4,
+        Arc::new(citadel_server::metrics::Metrics::default()),
+    );
+    let mut changes = hub.subscribe();
+    hub.publish_runtime_change(
+        f.platform_id,
+        "container",
+        "health_status: unhealthy",
+        &docker_id,
+    );
+    let change = changes.recv().await.unwrap();
+    let changed = super::realtime_groups::reader(&f)
+        .read(&reader, &health_group, Some(&change))
+        .await
+        .unwrap();
+    assert_eq!(changed.events[0].target, "ContainerHealthHistoryChanged");
+    assert_eq!(
+        changed.events[0].arguments,
+        history_snapshot.events[0].arguments
+    );
+    hub.publish_runtime_change(
+        Uuid::now_v7(),
+        "container",
+        "health_status: unhealthy",
+        &docker_id,
+    );
+    let other_platform = changes.recv().await.unwrap();
+    assert!(
+        super::realtime_groups::reader(&f)
+            .read(&reader, &health_group, Some(&other_platform))
+            .await
+            .unwrap()
+            .events
+            .is_empty()
+    );
     assert!(
         requests.lock().await.is_empty(),
         "history never inspects the daemon"
@@ -646,6 +685,193 @@ async fn inspection_resolves_ui_ids_enforces_inspect_permission_and_routes_to_th
         StatusCode::CONFLICT
     );
     assert_eq!(requests.lock().await.len(), calls_before);
+    server.abort();
+    f.docker_server.abort();
+    std::fs::remove_file(socket).unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn process_snapshots_authorize_share_reads_scope_nodes_and_clear_stopped_containers() {
+    let mut f = fixture().await;
+    let id = Uuid::now_v7();
+    let docker_id = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());
+    sqlx::query("INSERT INTO containers(id,dockercontainerid,dockerimageid,name,platformid,created,updated,state,ports) VALUES($1,$2,'sha256:fixture','inspected',$3,1,1,'Running','{}')")
+        .bind(id).bind(&docker_id).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let socket = std::env::temp_dir().join(format!("inspect-{}.sock", Uuid::now_v7()));
+    let listener = UnixListener::bind(&socket).unwrap();
+    let requests = Arc::new(Mutex::new(Vec::<String>::new()));
+    let calls = requests.clone();
+    let document = Arc::new(tokio::sync::RwLock::new(
+        json!({"Titles":["USER","PID","PPID","TIME","COMMAND"],"Processes":[["root","42","1","00:00:01","server"]]}),
+    ));
+    let inspected = document.clone();
+    let docker = DockerClient::new(&socket, StdDuration::from_secs(2)).unwrap();
+    let expected = format!(
+        "GET /v1.49/containers/{docker_id}/top?ps_args=-eo+user%2Cpid%2Cppid%2Ctime%2Ccomm "
+    );
+    let server = tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 4096];
+            while !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut buffer).await.unwrap();
+                assert!(n > 0 && bytes.len() < 16384);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            let request = String::from_utf8(bytes).unwrap();
+            calls
+                .lock()
+                .await
+                .push(request.lines().next().unwrap().into());
+            let body = if request.starts_with("GET /version ") {
+                json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})
+            } else {
+                assert!(request.starts_with(&expected), "{request}");
+                inspected.read().await.clone()
+            }
+            .to_string();
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        }
+    });
+    let mut state = f.lookup_state.platforms.clone();
+    refresh_runtime(&mut state, &f, docker);
+    f.lookup_state.platforms = state.clone();
+    f.app = platforms_http::router(state);
+
+    let url = format!("/api/v1/containers/{id}/processes");
+    let reader = super::lookup::subject(&f).await;
+    let group = Group::parse(&format!("container-processes:{id}")).unwrap();
+    let realtime = super::realtime_groups::reader(&f);
+    assert_eq!(
+        send(&f, &url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, false).await;
+    assert_eq!(
+        send(&f, &url, Some(reader.clone())).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    assert!(matches!(
+        realtime.read(&reader, &group, None).await,
+        Err(RealtimeReadError::Authorization)
+    ));
+    assert!(requests.lock().await.is_empty());
+    set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, true).await;
+    let response = send(&f, &url, Some(reader.clone())).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let body = json_body(response).await;
+    assert_eq!(body["processes"][0][4], "server");
+    let count = requests.lock().await.len();
+    let joined = realtime.read(&reader, &group, None).await.unwrap();
+    assert_eq!(joined.events[0].target, "ContainerProcessesRefresh");
+    assert_eq!(
+        requests.lock().await.len(),
+        count,
+        "join uses HTTP refresh, not inspection"
+    );
+    let hub = citadel_server::realtime::RealtimeHub::new(
+        8,
+        Arc::new(citadel_server::metrics::Metrics::default()),
+    );
+    let mut changes = hub.subscribe();
+    let stats = [citadel_platforms::RuntimeContainerStat {
+        docker_container_id: docker_id.clone(),
+        memory_active: 0.,
+        memory_cache: 0.,
+        memory_limit: 0.,
+        cpu_usage: 0.,
+        rx_bytes: 0.,
+        tx_bytes: 0.,
+        created: 1,
+    }];
+    hub.publish_scoped_container_stats(f.platform_id, Some("other-node"), &stats);
+    let other_node = changes.recv().await.unwrap();
+    assert!(
+        realtime
+            .read(&reader, &group, Some(&other_node))
+            .await
+            .unwrap()
+            .events
+            .is_empty()
+    );
+    assert_eq!(requests.lock().await.len(), count);
+    hub.publish_container_stats(f.platform_id, &stats);
+    let event = changes.recv().await.unwrap();
+    assert!(group.affected_by(&event));
+    let (first, second) = tokio::join!(
+        realtime.read(&reader, &group, Some(&event)),
+        realtime.read(&f.administrator, &group, Some(&event))
+    );
+    assert_eq!(
+        first.unwrap().events[0].arguments[0]["data"]["processes"][0][4],
+        "server"
+    );
+    assert_eq!(
+        second.unwrap().events[0].target,
+        "ContainerProcessesUpdated"
+    );
+    assert_eq!(
+        requests.lock().await.len(),
+        count + 1,
+        "one read shared across authorized viewers"
+    );
+    set_inspect_access(&f, &reader, ResourceType::Platform, f.platform_id, false).await;
+    assert!(
+        matches!(
+            realtime.read(&reader, &group, Some(&event)).await,
+            Err(RealtimeReadError::Authorization)
+        ),
+        "cached snapshots never bypass revocation"
+    );
+    sqlx::query("UPDATE containers SET state='Exited' WHERE id=$1")
+        .bind(id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    hub.publish_runtime_change(f.platform_id, "container", "die", &docker_id);
+    let stopped = changes.recv().await.unwrap();
+    let value = realtime
+        .read(&f.administrator, &group, Some(&stopped))
+        .await
+        .unwrap();
+    assert_eq!(value.events[0].arguments[0]["data"]["running"], false);
+    assert_eq!(value.events[0].arguments[0]["data"]["processes"], json!([]));
+    assert_eq!(
+        requests.lock().await.len(),
+        count + 1,
+        "stopped containers do not hit Docker"
+    );
+    sqlx::query("UPDATE containers SET projectionstalesince=1 WHERE id=$1")
+        .bind(id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        send(&f, &url, Some(f.administrator.clone())).await.status(),
+        StatusCode::CONFLICT
+    );
+    hub.publish_runtime_change(f.platform_id, "container", "update", &docker_id);
+    let unavailable = changes.recv().await.unwrap();
+    let value = realtime
+        .read(&f.administrator, &group, Some(&unavailable))
+        .await
+        .unwrap();
+    assert!(
+        value.events[0].arguments[0]["data"].is_null(),
+        "runtime failure is a snapshot, not a shared-connection error"
+    );
     server.abort();
     f.docker_server.abort();
     std::fs::remove_file(socket).unwrap();

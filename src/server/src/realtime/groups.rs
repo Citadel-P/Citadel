@@ -99,7 +99,25 @@ pub(super) async fn run_group_connection(
                         loop {
                             tokio::select! {
                                 ()=cancellation.cancelled()=>return Ok(()),
-                                result=&mut read=>break result.map_err(|_|RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?,
+                                result=&mut read=>break match result {
+                                    Ok(result) => result.map_err(map_realtime_read_error)?,
+                                    Err(_) => {
+                                        // Process snapshots are best-effort live reads. Dropping
+                                        // this timed-out future cancels runtime I/O; clear only
+                                        // this panel instead of disconnecting every subscription.
+                                        // Authorization errors above still fail closed.
+                                        let super::topic::Topic::ContainerProcesses(id) = joined.group.topic() else {
+                                            return Err(RealtimeError::SubscribeTimeout);
+                                        };
+                                        crate::realtime_groups::GroupSnapshot {
+                                            events: vec![crate::realtime_groups::ClientEvent::new(
+                                                "ContainerProcessesUpdated",
+                                                vec![json!({"resourceId": id, "data": null})],
+                                            )],
+                                            ..Default::default()
+                                        }
+                                    }
+                                },
                                 Some((_,item))=state.streams.next(),if !state.streams.is_empty()=>{
                                     send_group_message(socket,service,&item.map_err(map_realtime_read_error)?).await?;
                                 }

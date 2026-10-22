@@ -59,7 +59,8 @@ pub use repository::PlatformReader;
 pub use service::PlatformReadService;
 pub use statistics::{
     ServiceStatIdentity, ServiceStatistics, ServiceTaskSample, StatisticsContainer,
-    StatisticsReader, StatisticsWorkload, StatsWindow, SwarmTaskRuntimePort, validate_running_task,
+    StatisticsReader, StatisticsWorkload, StatsWindow, SwarmTaskRuntimePort, WorkloadStatSeries,
+    validate_running_task,
 };
 pub mod runtime;
 pub use runtime::{

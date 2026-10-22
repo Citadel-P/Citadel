@@ -4,7 +4,8 @@ use sqlx::PgPool;
 // Keep the indexed bigint column uncast. EXTRACT returns numeric, which otherwise
 // makes PostgreSQL filter the retained history instead of using an index bound.
 // CEIL preserves `integer timestamp < fractional cutoff`, including whole seconds.
-const STATS_RETENTION_SQL: [&str; 3] = [
+const STATS_RETENTION_SQL: [&str; 4] = [
+    "DELETE FROM workloadstats WHERE id IN(SELECT id FROM workloadstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
     "DELETE FROM containerstats WHERE id IN(SELECT id FROM containerstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
     "DELETE FROM platformstats WHERE id IN(SELECT id FROM platformstats WHERE NOT alertpending AND created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
     "DELETE FROM swarmservicestats WHERE id IN(SELECT id FROM swarmservicestats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
@@ -194,9 +195,14 @@ mod tests {
         let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
         let mut conn = PgConnection::connect(&url).await.unwrap();
         // Session-local tables: no application data, migrations, or persistent fixtures.
-        for (table, sql) in ["containerstats", "platformstats", "swarmservicestats"]
-            .into_iter()
-            .zip(STATS_RETENTION_SQL)
+        for (table, sql) in [
+            "workloadstats",
+            "containerstats",
+            "platformstats",
+            "swarmservicestats",
+        ]
+        .into_iter()
+        .zip(STATS_RETENTION_SQL)
         {
             let mut tx = conn.begin().await.unwrap();
             tx.execute(sqlx::AssertSqlSafe(format!(

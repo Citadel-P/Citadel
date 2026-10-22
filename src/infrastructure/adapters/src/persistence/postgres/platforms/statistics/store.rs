@@ -137,6 +137,19 @@ WITH incoming AS (
         rxbytes = EXCLUDED.rxbytes,
         txbytes = EXCLUDED.txbytes
     RETURNING 1
+), persisted_workload AS (
+ INSERT INTO workloadstats(id,platformid,deploymentid,stackid,servicename,replicakey,containerid,created,memoryactive,memorycache,cpuusage,memorylimit,rxbytes,txbytes)
+ SELECT gen_random_uuid(),c.platformid,c.deploymentid,c.stackid,
+ CASE WHEN c.deploymentid IS NOT NULL THEN '' ELSE COALESCE(NULLIF(c.composeservicename,''),c.id::text) END,
+ CASE WHEN c.deploymentid IS NOT NULL THEN 'deployment'
+      WHEN c.composereplicanumber IS NOT NULL THEN 'replica:'||c.composereplicanumber
+      ELSE 'instance:'||c.id::text END,
+ c.id,s.created,s."memoryActive",s."memoryCache",s."cpuUsage",s."memoryLimit",s."rxBytes",s."txBytes"
+ FROM eligible s JOIN containers c ON c.id=s.persisted_container_id
+ WHERE NOT c.isswarmtask AND (c.deploymentid IS NOT NULL OR c.stackid IS NOT NULL)
+ ON CONFLICT(containerid,created) DO UPDATE SET
+ memoryactive=EXCLUDED.memoryactive,memorycache=EXCLUDED.memorycache,cpuusage=EXCLUDED.cpuusage,
+ memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes
 ), persisted_service AS (
     INSERT INTO swarmservicestats (
         id, platformid, dockerserviceid, dockertaskid, servicename,

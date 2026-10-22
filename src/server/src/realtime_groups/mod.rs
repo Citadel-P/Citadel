@@ -36,6 +36,19 @@ impl Group {
         self.topic.reference()
     }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if let Topic::ContainerProcesses(id) = self.topic() {
+            if let Some(patches) = event.payload["containerPatches"].as_array() {
+                return patches.iter().any(|patch| {
+                    patch["id"].as_str().and_then(|v| Uuid::parse_str(v).ok()) == Some(*id)
+                        && patch.get("state").is_some()
+                });
+            }
+            return matches!(
+                event.payload["dockerResourceType"].as_str(),
+                Some("containerStats" | "container")
+            ) || (event.resource_type == "Platform"
+                && event.event_kind == "connectionChanged");
+        }
         if let Topic::ContainerHealth(id) = self.topic() {
             // Persisted history only: telemetry and unrelated resource changes
             // must not reload it. The reader checks the owning platform/runtime ID.

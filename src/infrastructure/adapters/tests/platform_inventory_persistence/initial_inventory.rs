@@ -23,6 +23,13 @@ async fn scoped_discovery_updates_counts_without_statistics_or_created_alerts() 
         let mut container = inventory.containers[0].clone();
         container.id = format!("discovered-{index}");
         container.state = state.into();
+        container
+            .labels
+            .insert("com.docker.compose.service".into(), "web".into());
+        container.labels.insert(
+            "com.docker.compose.container-number".into(),
+            ["1", "2", "invalid", "0"][index].into(),
+        );
         containers.push(container);
     }
     let mut listener = sqlx::postgres::PgListener::connect(&url).await.unwrap();
@@ -58,6 +65,17 @@ async fn scoped_discovery_updates_counts_without_statistics_or_created_alerts() 
     assert_eq!(images as usize, inventory.images.len());
     assert_eq!(networks as usize, inventory.networks.len());
     assert_eq!(volumes as usize, inventory.volumes.len());
+    let replicas: Vec<(String, Option<String>)> = sqlx::query_as("SELECT composeservicename,composereplicanumber FROM containers WHERE platformid=$1 ORDER BY dockercontainerid")
+        .bind(platform).fetch_all(&pool).await.unwrap();
+    assert_eq!(
+        replicas,
+        vec![
+            ("web".into(), Some("1".into())),
+            ("web".into(), Some("2".into())),
+            ("web".into(), None),
+            ("web".into(), None)
+        ]
+    );
     assert!(
         !sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(SELECT 1 FROM platformstats WHERE platformid=$1)"

@@ -52,6 +52,8 @@ export function ContainerHealth({ resource }: { resource: ContainerDetailsView }
         now={now}
         isConnected={history.isConnected}
         isLoading={history.isLoading}
+        isError={history.isError}
+        onRetry={() => void history.refetch()}
         disabledReason={inactiveMessage}
       />
 

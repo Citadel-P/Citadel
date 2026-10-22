@@ -123,6 +123,8 @@ async fn mock_docker(
         "/v1.49/containers/fixture/json"=>json!({"Id":"fixture","SizeRw":9007199254740993i64,"State":{"Status":"running","Running":true,"ExitCode":0},"Config":{"Image":"redis","Env":null,"Labels":null,"ExposedPorts":{"6379/tcp":{}}},"HostConfig":{"ReadonlyRootfs":false,"Memory":0,"PortBindings":{"6379/tcp":[{"HostIp":"127.0.0.1","HostPort":"6379"}]}},"NetworkSettings":{"HairpinMode":false,"Networks":{"frontend":{"NetworkID":"net","Aliases":null,"GlobalIPv6Address":"::1"}}}}),
         "/v1.49/containers/json" if uri.contains("volume") => json!([{"Id":"web", "Names":["/web"], "Image":"alpine", "ImageID":"image", "State":"running", "NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":"net"}}}, "Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]),
         "/v1.49/containers/json"=>json!([]),
+        "/v1.49/containers/large/top"=>json!({"Titles":["USER","PID","PPID","TIME","COMMAND"],"Processes":vec![vec!["x".repeat(300); 5]; 1025]}),
+        "/v1.49/containers/fixture/top"=>json!({"Titles":["USER","PID","PPID","TIME","COMMAND"],"Processes":[["root","42","1","00:00:01","server"]]}),
         "/v1.49/volumes/data" => json!({"Name":"data", "Scope":"local", "UsageData":{"Size":42,"RefCount":0}, "ClusterVolume":{"ID":"cluster", "Version":{"Index":9007199254740993_i64}, "Spec":{"Group":"g", "AccessMode":{"Scope":"multi", "Sharing":"readonly", "Availability":"active", "Secrets":[{"Key":"key","Secret":"secret"}], "CapacityRange":{"RequiredBytes":4096}}}, "Info":{"VolumeID":"csi", "CapacityBytes":8192, "VolumeContext":{"Mixed.Key":"v"}, "AccessibleTopology":[{"Zone.Name":"z"}]}, "PublishStatus":[{"NodeID":"node", "State":"published", "PublishContext":{"Mount.Path":"/data"}}]}}),
         "/v1.49/images/json"=>json!([{"Id":"sha256:fixture","ParentId":"parent","Created":123,"RepoTags":["redis:latest"],"RepoDigests":["redis@sha256:fixture"],"Size":9876543210i64,"SharedSize":-1,"VirtualSize":9876543210i64,"Containers":2,"Labels":{"test":"yes"}}]),
         "/v1.49/images/redis/json"=>json!({"Id":"sha256:fixture","Created":"2026-01-01T00:00:00Z","Size":9876543210i64,"Os":"linux","Architecture":"amd64","Config":{"User":"1000","WorkingDir":"/data","Entrypoint":["redis-server"],"StopSignal":"SIGTERM","ExposedPorts":{"6379/tcp":{}}}}),
@@ -791,4 +793,60 @@ async fn core_image_inspection_keeps_launch_fields_with_one_inspection() {
             .count(),
         1
     );
+}
+
+#[tokio::test]
+async fn container_processes_use_signed_read_only_request() {
+    use citadel_contracts::citadel::containers::v1::*;
+    let host = Harness::start().await;
+    let mut client = container_service_client::ContainerServiceClient::new(host.channel().await);
+    assert_eq!(
+        client
+            .processes(InspectContainerRequest {
+                container_id: "fixture".into()
+            })
+            .await
+            .unwrap_err()
+            .code(),
+        tonic::Code::Unauthenticated
+    );
+    let core = AgentClient::connect(
+        &host.address,
+        AgentRequestSigner::from_bytes(&[42; 32]),
+        Duration::from_secs(5),
+        true,
+    )
+    .await
+    .unwrap();
+    let value = citadel_platforms::containers::ContainerInspectionPort::processes(
+        &core,
+        "fixture",
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert!(value.running);
+    assert_eq!(
+        value.processes[0],
+        ["root", "42", "1", "00:00:01", "server"]
+    );
+    let large = citadel_platforms::containers::ContainerInspectionPort::processes(
+        &core,
+        "large",
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert!(large.truncated);
+    assert_eq!(large.processes.len(), 1024);
+    assert!(
+        large
+            .processes
+            .iter()
+            .flatten()
+            .all(|cell| cell.chars().count() <= 128)
+    );
+    let requests = host.state.requests.lock().unwrap();
+    assert!(requests.iter().any(|(method, uri, _)| method == "GET"
+        && uri == "/v1.49/containers/fixture/top?ps_args=-eo+user%2Cpid%2Cppid%2Ctime%2Ccomm"));
 }

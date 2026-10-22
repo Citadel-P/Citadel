@@ -51,7 +51,22 @@ pub const CONTAINER_IO_CONCURRENCY: usize = 8;
 pub const MAX_CONTAINER_BATCH: usize = 100;
 pub const CONTAINER_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerProcesses {
+    pub running: bool,
+    pub titles: Vec<String>,
+    pub processes: Vec<Vec<String>>,
+    pub truncated: bool,
+}
+
 pub trait ContainerInspectionPort: Send + Sync {
+    fn processes<'a>(
+        &'a self,
+        docker_id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<ContainerProcesses, RuntimeCapabilityError>>;
+
     fn inspection<'a>(
         &'a self,
         docker_id: &'a str,

@@ -11,6 +11,20 @@ use crate::connectors::edge::EdgeRuntime;
 use citadel_docker::containers::inspection::*;
 
 impl ContainerInspectionPort for AgentClient {
+    fn processes<'a>(
+        &'a self,
+        id: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_platforms::containers::ContainerProcesses, RuntimeCapabilityError>,
+    > {
+        Box::pin(async move {
+            let value = self.container_processes(id, cancel).await?;
+            Ok(map_processes(value))
+        })
+    }
+
     fn inspection<'a>(
         &'a self,
         id: &'a str,
@@ -20,6 +34,31 @@ impl ContainerInspectionPort for AgentClient {
     }
 }
 impl ContainerInspectionPort for EdgeRuntime {
+    fn processes<'a>(
+        &'a self,
+        id: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_platforms::containers::ContainerProcesses, RuntimeCapabilityError>,
+    > {
+        Box::pin(async move {
+            let value = crate::connectors::agent::execution::unary::<
+                _,
+                citadel_contracts::citadel::containers::v1::ContainerProcessesResponse,
+            >(
+                &self.session,
+                citadel_contracts::citadel::edge::v1::EdgeCommandKind::ContainerProcesses,
+                InspectContainerRequest {
+                    container_id: id.into(),
+                },
+                cancel,
+            )
+            .await?;
+            Ok(map_processes(value))
+        })
+    }
+
     fn inspection<'a>(
         &'a self,
         id: &'a str,
@@ -46,4 +85,28 @@ fn map_agent(
     let document = serde_json::to_value(response)
         .map_err(|_| invalid("Invalid Agent inspection response."))?;
     map_inspection(document, id)
+}
+
+fn map_processes(
+    value: citadel_contracts::citadel::containers::v1::ContainerProcessesResponse,
+) -> citadel_platforms::containers::ContainerProcesses {
+    // Bound Agent responses again before they reach the shared WebSocket.
+    let cells = |values: Vec<String>| {
+        values
+            .into_iter()
+            .take(5)
+            .map(|value| value.chars().take(128).collect())
+            .collect()
+    };
+    citadel_platforms::containers::ContainerProcesses {
+        running: true,
+        titles: cells(value.titles),
+        truncated: value.truncated || value.processes.len() > 1024,
+        processes: value
+            .processes
+            .into_iter()
+            .take(1024)
+            .map(|row| cells(row.values))
+            .collect(),
+    }
 }

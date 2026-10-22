@@ -97,7 +97,6 @@ pub(super) fn map_repository(r: sqlx::postgres::PgRow) -> Result<BackupRepositor
         id: r.try_get("id").map_err(storage)?,
         name: r.try_get("name").map_err(storage)?,
         normalized_name: r.try_get("normalizedname").map_err(storage)?,
-        description: r.try_get("description").map_err(storage)?,
         repository_type: r.try_get("type").map_err(storage)?,
         spec: r
             .try_get::<sqlx::types::Json<citadel_backups::spec::BackupRepositorySpec>, _>("spec")

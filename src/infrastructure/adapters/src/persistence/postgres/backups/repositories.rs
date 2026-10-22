@@ -9,7 +9,7 @@ impl PostgresBackupPersistence {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let kind = input.spec.kind();
-            sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,description,type,spec,passwordsecretid,status,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,$7,'Unknown',$8)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(kind).bind(sqlx::types::Json(&input.spec)).bind(input.password_secret_id).bind(actor.value()).execute(&self.pool).await.map_err(storage)?;
+            sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,type,spec,passwordsecretid,status,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,'Unknown',$7)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(kind).bind(sqlx::types::Json(&input.spec)).bind(input.password_secret_id).bind(actor.value()).execute(&self.pool).await.map_err(storage)?;
             self.get_repository(id).await
         })
     }
@@ -93,9 +93,14 @@ impl PostgresBackupPersistence {
                     ));
                 }
             }
-            let row = sqlx::query("UPDATE backuprepositories SET description=$2,spec=$3,type=$4,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
-                .bind(id).bind(&input.description).bind(sqlx::types::Json(&input.spec)).bind(input.spec.kind())
-                .fetch_one(&mut *tx).await.map_err(storage)?;
+            let row = sqlx::query("UPDATE backuprepositories SET spec=$2,type=$3,name=$4,normalizedname=$5,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
+                .bind(id).bind(sqlx::types::Json(&input.spec)).bind(input.spec.kind())
+                .bind(&input.name).bind(input.name.to_uppercase())
+                .fetch_one(&mut *tx).await.map_err(|error| {
+                    if error.as_database_error().is_some_and(|error| error.is_unique_violation() && error.constraint() == Some("ix_backuprepositories_normalizedname")) {
+                        BackupError::Conflict("A Backup Repository with this name already exists.".into())
+                    } else { storage(error) }
+                })?;
             let repository = map_repository(row)?;
             coverage::changes::publish(&mut tx, None, Some(id)).await?;
             tx.commit().await.map_err(storage)?;
@@ -257,6 +262,43 @@ impl PostgresBackupPersistence {
             .await
             .map_err(storage)?;
             Ok(())
+        })
+    }
+}
+
+impl PostgresBackupPersistence {
+    pub(super) fn commit_repository_credentials_impl<'a>(
+        &'a self,
+        id: Uuid,
+        operation_id: Uuid,
+        row_version: i64,
+        credentials: &'a BackupRepositoryCredentials,
+    ) -> BoxFuture<'a, Result<BackupRepository, BackupError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let mut current = sqlx::query(
+                "SELECT * FROM backuprepositories WHERE id=$1 AND archivedat IS NULL FOR UPDATE",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(BackupError::NotFound)
+            .and_then(map_repository)?;
+            let owned: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND expiresat>CURRENT_TIMESTAMP)")
+                .bind(id).bind(operation_id).fetch_one(&mut *tx).await.map_err(storage)?;
+            if !owned || current.row_version != row_version {
+                return Err(BackupError::Conflict(
+                    "Repository changed or validation expired. Retry the credential update.".into(),
+                ));
+            }
+            credentials.apply(&mut current.spec)?;
+            let row = sqlx::query("UPDATE backuprepositories SET spec=$2,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")
+                .bind(id).bind(sqlx::types::Json(&current.spec)).fetch_one(&mut *tx).await.map_err(storage)?;
+            let repository = map_repository(row)?;
+            coverage::changes::publish(&mut tx, None, Some(id)).await?;
+            tx.commit().await.map_err(storage)?;
+            Ok(repository)
         })
     }
 }

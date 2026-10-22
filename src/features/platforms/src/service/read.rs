@@ -12,6 +12,68 @@ pub struct PlatformReadService {
 }
 
 impl PlatformReadService {
+    /// Caller must authorize Inspect on the owning Platform before this live read.
+    pub async fn container_processes(
+        &self,
+        runtime: &dyn crate::runtime_provider::PlatformRuntimeProvider,
+        container: &ContainerDetails,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<crate::containers::ContainerProcesses, RuntimeCapabilityError> {
+        if container.projection_stale_since.is_some() {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Conflict,
+                "Container inventory is stale. Refresh before inspecting.",
+                false,
+            ));
+        }
+        let platform = self
+            .get_platform(container.platform_id)
+            .await
+            .map_err(|_| {
+                RuntimeCapabilityError::new(RuntimeErrorKind::Remote, "Cannot read Platform", true)
+            })?
+            .ok_or_else(|| {
+                RuntimeCapabilityError::new(RuntimeErrorKind::NotFound, "Platform not found", false)
+            })?;
+        if platform.status != citadel_primitives::PlatformStatus::Online {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Conflict,
+                "Platform is disconnected or unavailable.",
+                true,
+            ));
+        }
+        if !container.state.eq_ignore_ascii_case("running")
+            && !container.state.eq_ignore_ascii_case("paused")
+        {
+            return Ok(crate::containers::ContainerProcesses::default());
+        }
+        static PROCESS_READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(16);
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            let _permit = tokio::select! {
+                biased;
+                () = cancel.cancelled() => return Err(RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "Process read cancelled", false)),
+                permit = PROCESS_READS.acquire() => permit.expect("process semaphore stays open"),
+            };
+            runtime
+                .container_inspection(
+                    container.platform_id,
+                    container.docker_node_id.as_deref(),
+                    cancel,
+                )
+                .await?
+                .processes(&container.container_id, cancel)
+                .await
+        })
+        .await
+        .unwrap_or_else(|_| {
+            Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Timeout,
+                "Container process read timed out.",
+                true,
+            ))
+        })
+    }
+
     pub async fn network_containers(
         &self,
         actor: ActorId,

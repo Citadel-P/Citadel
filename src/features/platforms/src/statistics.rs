@@ -76,6 +76,12 @@ pub enum StatisticsWorkload {
     Stack,
 }
 
+pub struct WorkloadStatSeries {
+    pub name: String,
+    pub container_ids: Vec<String>,
+    pub stats: Vec<ContainerStatSnapshot>,
+}
+
 pub struct ServiceTaskSample {
     pub node_id: String,
     pub container_id: Option<Uuid>,
@@ -157,11 +163,13 @@ pub trait StatisticsReader: Send + Sync {
         &'a self,
         reference: &'a str,
     ) -> BoxFuture<'a, Result<Option<StatisticsContainer>, RuntimeCapabilityError>>;
-    fn workload_containers(
+    fn workload_history(
         &self,
         workload: StatisticsWorkload,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<Option<Vec<StatisticsContainer>>, RuntimeCapabilityError>>;
+        window: StatsWindow,
+        now: i64,
+    ) -> BoxFuture<'_, Result<Option<Vec<WorkloadStatSeries>>, RuntimeCapabilityError>>;
     fn containers<'a>(
         &'a self,
         ids: &'a [Uuid],

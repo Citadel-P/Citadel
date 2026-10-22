@@ -61,6 +61,8 @@ mod alert_rule_patch;
 mod backup_completion;
 #[path = "execution_resources_http/backup_policy_metadata.rs"]
 mod backup_policy_metadata;
+#[path = "execution_resources_http/backup_repository_credentials.rs"]
+mod backup_repository_credentials;
 #[path = "execution_resources_http/backup_repository_patch.rs"]
 mod backup_repository_patch;
 #[path = "execution_resources_http/backup_summaries.rs"]
@@ -744,7 +746,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
             "/api/v1/backupRepositories",
             Some(principal.clone()),
             Some(json!({
-                "name":format!("repository-{suffix}"),"description":null,
+                "name":format!("repository-{suffix}"),
                 "spec":{"$type":"FileSystem","location":"Core","platformId":null,"path":"/tmp/citadel-backups"},
                 "passwordSecretId":fixture.secret
             })),
@@ -767,6 +769,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     .await;
     assert_eq!(validation["status"], "Ready");
     backup_repository_patch::after_ready(&app, &pool, &principal, &repository).await;
+    backup_repository_credentials::verify(&app, &pool, &principal, fixture.secret, &backups).await;
     let persisted_validation: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM backuprepositoryvalidations WHERE backuprepositoryid=$1",
     )
@@ -1489,6 +1492,10 @@ impl BackupExecutor for FakeBackupExecutor {
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<BackupLog>, BackupError>> {
         Box::pin(async move {
+            if matches!(&repository.spec, citadel_backups::spec::BackupRepositorySpec::S3Compatible { access_key_secret_id, .. } if *access_key_secret_id == Uuid::from_u128(1))
+            {
+                return Err(BackupError::External("fixture credentials rejected".into()));
+            }
             if matches!(&repository.spec, citadel_backups::spec::BackupRepositorySpec::FileSystem { path, .. } if path == "/outside-allowed-backup-path")
             {
                 return Err(BackupError::Validation(

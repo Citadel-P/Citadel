@@ -1,9 +1,11 @@
-import { AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
+import { AutomationRunStatus, AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { isFailedRunStatus } from '@/components/custom/state-badge';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
@@ -91,15 +93,12 @@ const columns = (
 ];
 
 const ActionNameRow = ({ action }: { action: AuthorizedAction }) => {
-  const status = action.enabled ? (action.latestRun?.status ?? true) : false;
-
   return (
     <div className="flex min-w-0 items-center gap-1">
       <StateIndicator
-        value={status}
+        value={action.enabled}
         isProcessing={action.controlState === ResourceControlState.Processing}
-        enableLabel={typeof status === 'boolean'}
-        kind={typeof status === 'boolean' ? undefined : 'automationActionRun'}
+        enableLabel
       />
       <Link to={`../automation/edit/${action.id}`} title={action.name} className="truncate text-sm hover:underline">
         {action.name}
@@ -124,11 +123,24 @@ const ScheduleCell = ({ action }: { action: AuthorizedAction }) => {
 const LastRunCell = ({ action }: { action: AuthorizedAction }) => {
   const run = action.latestRun;
   if (!run) return <span className="text-sm text-muted-foreground">No runs</span>;
+  const status = run.status === AutomationRunStatus.TimedOut ? 'Timed out' : run.status;
+  const iconColor = isFailedRunStatus(run.status)
+    ? 'text-red-500'
+    : run.status === AutomationRunStatus.Succeeded
+      ? 'text-green-500'
+      : 'text-muted-foreground';
 
   return (
-    <span className="inline-flex items-center gap-2 text-sm">
-      <PlayCircle className="size-3.5 text-muted-foreground" />
-      <span>{fromNow(run.queuedAt)}</span>
-    </span>
+    <div className="inline-flex items-center gap-2 text-sm">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span role="img" aria-label={`Last run: ${status}`} className="inline-flex">
+            <PlayCircle aria-hidden="true" className={`size-3.5 ${iconColor}`} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{status}</TooltipContent>
+      </Tooltip>
+      <span className="whitespace-nowrap">{fromNow(run.queuedAt)}</span>
+    </div>
   );
 };

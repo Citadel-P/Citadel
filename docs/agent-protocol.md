@@ -335,6 +335,7 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 | citadel.volumes.v1.VolumeService/Inspect | citadel.volumes.v1.InspectVolumeRequest | citadel.shared_models.v1.VolumeResponse | unary | VOLUME_INSPECT | 51 | allowed | client/finite.rs:inspect_volume | G1 |
 | citadel.volumes.v1.VolumeService/Create | citadel.volumes.v1.CreateVolumeRequest | citadel.shared_models.v1.VolumeResponse | unary | VOLUME_CREATE | 52 | restore-only | client/finite.rs:create_volume | G1 |
 | citadel.volumes.v1.VolumeService/Remove | citadel.volumes.v1.RemoveVolumeRequest | citadel.volumes.v1.RemoveVolumeResponse | unary | VOLUME_DELETE | 53 | restore-only | client/finite.rs:delete_volume | G1 |
+| citadel.containers.v1.ContainerService/Processes | citadel.containers.v1.InspectContainerRequest | citadel.containers.v1.ContainerProcessesResponse | unary | CONTAINER_PROCESSES | 118 | allowed | client/finite.rs:container_processes | G1 |
 <!-- /operations -->
 
 Container inventory observations include mount points and an explicit
@@ -366,12 +367,17 @@ and redaction; list, realtime summary, and retained health history omit this
 sensitive detail. `healthMetadataObserved` distinguishes absent metadata from a
 confirmed absent check on older Agents.
 
-The browser uses the existing `container-info` stream for current health. The
-on-demand `container-health:<container UUID>` group sends bounded persisted history
-as `ReceiveContainerHealthHistory` (`resourceId`, `entries`), including on join and
-reconnect. It requires the owning Platform's Read permission, matching the HTTP
+The browser uses the existing `container-info` stream for current health. Retained
+history loads through `GET /api/v1/containers/{id}/health-history`, independently of
+realtime availability. The on-demand `container-health:<container UUID>` group sends
+`ContainerHealthHistoryChanged` (`resourceId` only), including on join and reconnect.
+The browser refreshes the HTTP query on these notifications. If a request is already
+in flight, notifications share one follow-up read after it completes, covering the
+fetch/subscription gap without parallel requests. Failed reads expose a retry action
+and retain any previously loaded observations. The group requires the owning
+Platform's Read permission, matching the HTTP
 history endpoint; workload-only access to container-info does not grant this read.
-Committed container invalidations refresh the snapshot; statistics do not.
+Committed container invalidations notify subscribers; statistics do not.
 Neither stream performs Docker inspection or includes probe commands/output.
 Explicit probe details remain an Inspect-authorized HTTP read on user request.
 
@@ -379,7 +385,7 @@ Core stores actual periodic health observations for enabled checks at most once
 per UTC minute, in addition to immediate transitions. NoCheck, Disabled, and
 Unknown configurations do not generate periodic samples; current observations
 and configuration/lifecycle transitions remain persisted. The browser skips the
-history group for a currently confirmed NoCheck or Disabled status. Statistics, unchanged replay timestamps,
+history query and group for a currently confirmed NoCheck or Disabled status. Statistics, unchanged replay timestamps,
 and stale or future observations cannot generate periodic samples. Retention is
 seven days, up to 10,080 samples and 200 transitions per container, with the
 existing shared 100,000-record installation cap. This uses an additive Core
@@ -394,3 +400,21 @@ OOM and exit evidence. Each entry includes `sampleCount` and `firstObservedAt`
 bounds describe observations, not continuous coverage. No healthy grouping can
 absorb an unhealthy sample. Grouping occurs in the persistence reader before HTTP
 or realtime serialization; range changes in the browser need no additional reads.
+
+### Container process snapshots
+
+`ContainerService/Processes` and `CONTAINER_PROCESSES` (118) perform a bounded,
+read-only Docker process-list query on the resolved owning daemon. No caller-supplied
+`ps` arguments are accepted: fixed columns include user, host PID, parent PID,
+CPU time and executable name, excluding command arguments and environment.
+Responses contain at most 1,024 rows of five cells (128 characters per cell).
+The operation is permitted on Swarm nodes with the same routing as inspection.
+
+Core authorizes Platform Read plus Inspect for both the initial
+`GET /api/v1/containers/{id}/processes` and `container-processes:<container UUID>`.
+The group sends `ContainerProcessesRefresh` on join/reconnect and
+`ContainerProcessesUpdated` snapshots on scoped statistics and lifecycle events.
+Each event shares a bounded runtime read across authorized viewers. No subscriber
+means no process read; no process history or separate polling worker is created.
+Failed live reads send an unavailable snapshot rather than closing the shared
+connection. Revocation uses the existing authorization lease checks.

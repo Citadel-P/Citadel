@@ -187,11 +187,29 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
   const range = useStatsRange();
   const longestWindow = range.hours;
   const readArgs = useMemo(() => ({ stackId, query: range.query }), [range.query, stackId]);
-  const { data, isLoading, error } = useRead('getStackStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
-  const series = useMemo(
-    () => buildContainerSeries(data?.data?.containers ?? [], containers, range.live ? liveStats : {}),
-    [containers, data?.data?.containers, liveStats, range.live],
+  const { data, isLoading, isFetching, error, refetch } = useRead(
+    'getStackStats',
+    readArgs,
+    STREAMED_STATS_QUERY_OPTIONS,
   );
+  const bucketSeconds = statsBucketSeconds(range.bounds);
+  const series = useMemo(
+    () => buildServiceSeries(data?.data?.services ?? [], containers, range.live ? liveStats : {}, bucketSeconds),
+    [containers, data?.data?.services, liveStats, range.live, bucketSeconds],
+  );
+
+  // Replacement/scale events change membership, not the workload's history.
+  const membership = containers
+    .map((container) => container.id)
+    .sort()
+    .join(',');
+  const previousMembership = useRef(membership);
+  useEffect(() => {
+    // An in-flight response may predate the replacement; refresh after it settles.
+    if (previousMembership.current === membership || isFetching) return;
+    previousMembership.current = membership;
+    void refetch({ cancelRefetch: false });
+  }, [membership, isFetching, refetch]);
 
   useEffect(() => {
     const updates: { id: string; stat: ContainerStatView }[] = [];
@@ -384,7 +402,7 @@ const StackMetricControls = ({
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="bg-background">
-          <SelectItem value={ALL_CONTAINERS}>All containers</SelectItem>
+          <SelectItem value={ALL_CONTAINERS}>All services</SelectItem>
           {containers.map((container) => (
             <SelectItem key={container.id} value={container.id}>
               <span className="inline-flex items-center gap-2">
@@ -402,36 +420,89 @@ const StackMetricControls = ({
   );
 };
 
-const buildContainerSeries = (
-  historicalContainers: { containerId: string; containerName: string; stats: ContainerStatView[] }[],
+export const buildServiceSeries = (
+  historicalServices: { serviceName: string; containerIds: string[]; stats: ContainerStatView[] }[],
   liveContainers: ContainerRuntimeView[],
   liveStats: Record<string, ContainerStatView[]>,
-) => {
-  const byId = new Map<string, ContainerSeries>();
-
-  historicalContainers.forEach((container) => {
-    const id = normalizeDockerId(container.containerId);
-    if (!id) return;
-
-    byId.set(id, {
-      id,
-      name: getContainerLabel(container.containerName, container.containerId),
-      stats: [...(container.stats ?? [])],
-    });
-  });
-
-  liveContainers.forEach((container) => {
+  bucketSeconds: number,
+): ContainerSeries[] => {
+  const fields = uniqueFields(STACK_STAT_METRICS.flatMap((metric) => metric.summaryFields)).map((field) => ({
+    ...field,
+    aggregate: 'sum' as const,
+  }));
+  const byId = new Map(
+    historicalServices.map((service) => [
+      service.serviceName,
+      {
+        id: `service:${service.serviceName}`,
+        name: service.serviceName,
+        stats: service.stats,
+      },
+    ]),
+  );
+  const memberships = new Map(
+    historicalServices.flatMap((service) =>
+      service.containerIds.map((id) => [normalizeDockerId(id), service.serviceName] as const),
+    ),
+  );
+  const members = new Map<string, ContainerSeries[]>();
+  for (const container of liveContainers) {
+    if (container.state !== ContainerStateStatus.Running) continue;
     const id = normalizeDockerId(container.id);
-    if (!id) return;
-
-    const existing = byId.get(id);
+    if (!id) continue;
+    const service = memberships.get(id);
+    // A membership refresh will supply the authoritative service identity.
+    if (!service) continue;
+    const group = members.get(service) ?? [];
+    group.push({ id, name: container.name, stats: liveStats[id] ?? [] });
+    members.set(service, group);
+  }
+  for (const [id, group] of members) {
+    const history = byId.get(id)!;
+    const latestHistoryBucket = history.stats.reduce(
+      (latest, stat) => Math.max(latest, Math.floor(Number(stat.created) / bucketSeconds) * bucketSeconds),
+      0,
+    );
+    const reportingReplicas = new Map<number, number>();
+    for (const member of group) {
+      const buckets = new Set(
+        member.stats.map((stat) => Math.floor(Number(stat.created) / bucketSeconds) * bucketSeconds),
+      );
+      for (const bucket of buckets) reportingReplicas.set(bucket, (reportingReplicas.get(bucket) ?? 0) + 1);
+    }
+    const live = buildAggregatedMetricChartData(
+      group,
+      fields,
+      { start: 0, end: Number.MAX_SAFE_INTEGER },
+      bucketSeconds,
+    )
+      .filter(
+        (stat) =>
+          // Keep saved historical totals authoritative. A partial live observation
+          // must not replace the complete total while another replica is reporting.
+          stat.created >= latestHistoryBucket && reportingReplicas.get(stat.created) === group.length,
+      )
+      .map((stat) => ({
+        ...stat,
+        containerId: '',
+        cpuUsage: stat.cpuUsage ?? 0,
+        memoryActive: stat.memoryActive ?? 0,
+        memoryCache: stat.memoryCache ?? 0,
+        memoryLimit: stat.memoryLimit ?? 0,
+        rxBytes: stat.rxBytes ?? 0,
+        txBytes: stat.txBytes ?? 0,
+      }));
     byId.set(id, {
-      id,
-      name: getContainerLabel(container.name, container.id),
-      stats: mergeStatsByCreated(existing?.stats ?? [], liveStats[id] ?? []),
+      ...history,
+      stats: mergeStatsByCreated(
+        history.stats.map((stat) => ({
+          ...stat,
+          created: Math.floor(Number(stat.created) / bucketSeconds) * bucketSeconds,
+        })),
+        live,
+      ),
     });
-  });
-
+  }
   return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
@@ -561,11 +632,6 @@ const uniqueFields = (fields: MetricField[]) => {
     seen.add(field.key);
     return true;
   });
-};
-
-const getContainerLabel = (name: string | undefined | null, id: string) => {
-  const normalizedName = name?.replace(/^\//, '').trim();
-  return normalizedName || id.slice(0, 12);
 };
 
 const getGradientId = (metricKind: MetricConfig['kind'], key: StatField) => `${metricKind}-${key}`;

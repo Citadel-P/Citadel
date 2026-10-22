@@ -1,10 +1,11 @@
-import { BackupRepositoryView } from '@/api/generated/api.types';
+import { BackupRepositoryView, BackupRepositoryStatus } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { RequiredFormComponents, ResourceFormDataHookResult, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { BackupRepositoryInfoActions } from '../actions';
+import { RepositoryCredentials } from '../credentials';
 import { BackupRepositoryForm } from './form';
 
 export const BackupRepositoryFormComponents: RequiredFormComponents = {
@@ -18,6 +19,7 @@ export const BackupRepositoryFormComponents: RequiredFormComponents = {
     Header: {
       canEditTitle: false,
       canEditDescription: false,
+      showDescription: false,
       Indicator: ({ resource }: { resource: RequiredFormFields }) => (
         <StateIndicator variant="badge" value={(resource as BackupRepositoryView).status} />
       ),
@@ -29,7 +31,12 @@ export const BackupRepositoryFormComponents: RequiredFormComponents = {
       {
         label: 'Config',
         Content: ({ resource }: { resource: BackupRepositoryView }) => (
-          <BackupRepositoryForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />
+          <div className="space-y-6">
+            <BackupRepositoryForm mode="edit" resource={resource} disabled={!hasCapability(resource, 'canWrite')} />
+            {resource.status === BackupRepositoryStatus.Ready && resource.spec.$type === 'S3Compatible' && (
+              <RepositoryCredentials key={resource.id} repository={resource} />
+            )}
+          </div>
         ),
       },
     ],

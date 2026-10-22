@@ -38,6 +38,7 @@ pub enum Topic {
     StackLog(Uuid),
     ContainerInfo(String),
     ContainerHealth(Uuid),
+    ContainerProcesses(Uuid),
     ContainerLog(String),
     ContainerExec {
         reference: String,
@@ -76,6 +77,7 @@ impl Topic {
             ["build-agent-pools"] => Self::BuildAgentPools,
             ["alert-events"] => Self::AlertEvents,
             ["containers", id] => Self::Containers(non_nil(id)?),
+            ["container-processes", id] => Self::ContainerProcesses(non_nil(id)?),
             ["container-health", id] => Self::ContainerHealth(non_nil(id)?),
             ["images", id] => Self::Images(non_nil(id)?),
             ["docker-daemon", id] => Self::DockerDaemon(non_nil(id)?),
@@ -163,6 +165,7 @@ impl Topic {
             Self::BuildRun(_) => "build-run",
             Self::StackLog(_) => "stack-log",
             Self::ContainerInfo(_) => "container-info",
+            Self::ContainerProcesses(_) => "container-processes",
             Self::ContainerHealth(_) => "container-health",
             Self::ContainerLog(_) => "container-log",
             Self::ContainerExec { .. } => "container-exec",
@@ -173,6 +176,7 @@ impl Topic {
     pub fn id(&self) -> Option<Uuid> {
         match self {
             Self::Containers(id)
+            | Self::ContainerProcesses(id)
             | Self::ContainerHealth(id)
             | Self::Images(id)
             | Self::DockerDaemon(id)

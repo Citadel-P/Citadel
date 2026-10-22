@@ -1,49 +1,60 @@
 import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { ContainerHealthTransitionView } from '@/api/generated/api.types';
-import type { ResourceResponse } from '@/api/types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import type { RealtimeConnection } from '@/lib/realtime-connection';
 
 export function useContainerHealthHistory(resourceId: string, enabled = true) {
   const queryClient = useQueryClient();
-  // The group supplies the initial snapshot and resynchronizes after reconnect.
-  // Keep the standard query cache, but never start an HTTP read or polling timer.
-  const query = useRead('getContainerHealthHistory', { id: resourceId }, { enabled: false, staleTime: Infinity });
-  const receive = useCallback(
-    (snapshot: { resourceId: string; entries: ContainerHealthTransitionView[] }) => {
-      if (snapshot.resourceId !== resourceId) return;
-      const queryKey = ['getContainerHealthHistory', { id: resourceId }] as const;
-      void queryClient.cancelQueries({ queryKey, exact: true });
-      queryClient.setQueryData<ResourceResponse<'getContainerHealthHistory'>>(
-        queryKey,
-        (current) =>
-          ({
-            ...current,
-            data: snapshot.entries,
-          }) as ResourceResponse<'getContainerHealthHistory'>,
-      );
+  const query = useRead(
+    'getContainerHealthHistory',
+    { id: resourceId },
+    {
+      enabled: !!resourceId && enabled,
+      meta: { suppressErrorToast: true },
     },
-    [queryClient, resourceId],
+  );
+  const receive = useCallback(
+    async (notification: { resourceId: string }) => {
+      if (notification.resourceId !== resourceId || !enabled) return;
+      const filter = {
+        queryKey: ['getContainerHealthHistory', { id: resourceId }],
+        exact: true,
+        type: 'active' as const,
+      };
+      // An in-flight response can predate this notification. Let it finish, then
+      // fetch again. Concurrent notifications share both requests instead of
+      // repeatedly cancelling them. Inactive/disabled queries never refetch.
+      if (queryClient.isFetching(filter)) {
+        await queryClient.refetchQueries(filter, { cancelRefetch: false });
+      }
+      await queryClient.invalidateQueries(filter, { cancelRefetch: false });
+    },
+    [queryClient, resourceId, enabled],
   );
   const setupEventListeners = useCallback(
     (connection: RealtimeConnection) => {
-      connection.on('ReceiveContainerHealthHistory', receive);
+      connection.on('ContainerHealthHistoryChanged', receive);
     },
     [receive],
   );
   const removeEventListeners = useCallback(
     (connection: RealtimeConnection) => {
-      connection.off('ReceiveContainerHealthHistory', receive);
+      connection.off('ContainerHealthHistoryChanged', receive);
     },
     [receive],
   );
-  const { isConnected, isLoading } = useRealtimeGroup({
+  const { isConnected } = useRealtimeGroup({
     groupName: `container-health:${resourceId}`,
     setupEventListeners,
     removeEventListeners,
     skip: !resourceId || !enabled,
   });
-  return { entries: query.data?.data, isConnected, isLoading: !query.data && (isLoading || isConnected) };
+  return {
+    entries: query.data?.data,
+    isConnected,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }

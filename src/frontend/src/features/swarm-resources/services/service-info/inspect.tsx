@@ -1,9 +1,9 @@
 import { ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { useRead } from '@/lib/hooks';
-import { MonacoEditor } from '@/lib/monaco';
-import { serializeData } from '@/lib/utils';
+import { InspectionPanel } from '@/components/custom/inspection-panel';
 import { SwarmServiceInfoView } from '../hooks/useServicesGroup';
+import { ServiceProcesses } from './processes';
 
 type InspectableService = Pick<SwarmServiceInfoView, 'id' | 'platformId'>;
 
@@ -18,21 +18,14 @@ export const ServiceInspect = ({ service }: { service: InspectableService }) => 
     );
   }
 
-  const value = query.isLoading
-    ? '// Loading service inspection data...'
-    : query.data?.data
-      ? serializeData(query.data.data, 'json')
-      : '// No service inspection data available';
   return (
-    <div className="w-full flex-1 overflow-hidden rounded-md border bg-slate-50 dark:bg-zinc-950">
-      <MonacoEditor
-        value={value}
-        language="json"
-        filename={`inspect-service-${service.id}.json`}
-        className="mx-0 my-0 min-h-150"
-        readOnly
-        folding
-      />
-    </div>
+    <InspectionPanel
+      data={query.data?.data}
+      isLoading={query.isLoading}
+      filename={`inspect-service-${service.id}.json`}
+      loadingMessage="// Loading service inspection data..."
+      noDataMessage="// No service inspection data available">
+      <ServiceProcesses platformId={service.platformId} serviceId={service.id} />
+    </InspectionPanel>
   );
 };

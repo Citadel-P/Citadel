@@ -155,6 +155,25 @@ impl container_service_server::ContainerService for Runtime {
         }
         Ok(Response::new(()))
     }
+    async fn processes(
+        &self,
+        r: Request<InspectContainerRequest>,
+    ) -> Result<Response<ContainerProcessesResponse>, Status> {
+        let value = self
+            .docker
+            .container_processes(&r.into_inner().container_id)
+            .await
+            .map_err(docker_error)?;
+        Ok(Response::new(ContainerProcessesResponse {
+            titles: value.titles,
+            processes: value
+                .processes
+                .into_iter()
+                .map(|values| ContainerProcessRow { values })
+                .collect(),
+            truncated: value.truncated,
+        }))
+    }
     async fn inspect(
         &self,
         r: Request<InspectContainerRequest>,

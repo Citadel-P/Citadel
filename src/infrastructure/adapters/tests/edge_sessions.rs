@@ -612,3 +612,68 @@ async fn node_routing_is_exact_and_rejects_manager_commands() {
         .is_ok()
     );
 }
+
+#[tokio::test]
+async fn process_snapshot_routes_to_exact_swarm_node_and_cancels_on_drop() {
+    use citadel_contracts::citadel::containers::v1::{
+        ContainerProcessRow, ContainerProcessesResponse, InspectContainerRequest,
+    };
+    use citadel_platforms::containers::ContainerInspectionPort;
+    let registry = EdgeRegistry::default();
+    let platform = Uuid::now_v7();
+    let (session, mut outbound) = registry
+        .register(
+            EdgeTarget::node(platform, "worker-1".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let (_, mut other) = registry
+        .register(
+            EdgeTarget::node(platform, "worker-2".into()),
+            Uuid::now_v7(),
+        )
+        .unwrap();
+    let runtime = EdgeRuntime {
+        session: session.clone(),
+    };
+    let cancel = CancellationToken::new();
+    let (result, ()) = tokio::join!(runtime.processes("task-container", &cancel), async {
+        let envelope = outbound.recv().await.unwrap();
+        let id = Uuid::parse_str(&envelope.command_id).unwrap();
+        let Some(core_envelope::Body::Command(command)) = envelope.body else {
+            panic!("command")
+        };
+        assert_eq!(command.node_id, "worker-1");
+        assert_eq!(command.kind, EdgeCommandKind::ContainerProcesses as i32);
+        assert_eq!(
+            InspectContainerRequest::decode(command.payload.as_slice())
+                .unwrap()
+                .container_id,
+            "task-container"
+        );
+        session.output(
+            id,
+            ContainerProcessesResponse {
+                titles: vec!["PID".into()],
+                processes: vec![ContainerProcessRow {
+                    values: vec!["42".into()],
+                }],
+                truncated: false,
+            }
+            .encode_to_vec(),
+        );
+        session.complete(id, true);
+    });
+    assert_eq!(result.unwrap().processes, vec![vec!["42"]]);
+    assert!(other.try_recv().is_err());
+    let pending = runtime.processes("task-container", &cancel);
+    tokio::pin!(pending);
+    tokio::select! { result = &mut pending => panic!("unexpected {result:?}"), _ = outbound.recv() => {} }
+    cancel.cancel();
+    assert!(pending.await.is_err());
+    let cancelled = outbound.recv().await.unwrap();
+    assert!(matches!(
+        cancelled.body,
+        Some(core_envelope::Body::CancelCommand(_))
+    ));
+}

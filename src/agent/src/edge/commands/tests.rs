@@ -60,6 +60,10 @@ impl Harness {
                             created.lock().unwrap().push(body.clone());
                             Json(json!({"Name":body["Name"],"Driver":"local","Mountpoint":"/volume","Labels":body["Labels"],"Options":{},"Scope":"local"})).into_response()
                         }
+                        "/v1.49/containers/fixture/top" => {
+                            assert_eq!(request.uri().query(), Some("ps_args=-eo+user%2Cpid%2Cppid%2Ctime%2Ccomm"));
+                            Json(json!({"Titles":["USER","PID","PPID","TIME","COMMAND"],"Processes":[["root","42","1","00:00:01","server"]]})).into_response()
+                        }
                         "/v1.49/containers/failure/json" => (axum::http::StatusCode::NOT_FOUND, Json(json!({"message":"Container fixture is missing"}))).into_response(),
                         "/v1.49/containers/pending/json" => {
                             tokio::time::sleep(Duration::from_secs(30)).await;
@@ -202,7 +206,7 @@ async fn every_generated_command_reaches_its_protobuf_decoder() {
             count += 1;
         }
     }
-    assert_eq!(count, 68);
+    assert_eq!(count, 69);
     assert_eq!(h.calls.load(Ordering::SeqCst), 0);
 }
 
@@ -1005,4 +1009,35 @@ async fn approve_exec(listener: &tokio::net::TcpListener) {
     let (mut socket, _) = listener.accept().await.unwrap();
     assert!(request(&mut socket).await.0.contains("/exec/approval/json"));
     respond(&mut socket, r#"{"Running":false,"ExitCode":0}"#).await;
+}
+
+#[tokio::test]
+async fn process_snapshot_uses_read_only_edge_dispatch() {
+    let h = Harness::new().await;
+    let (mut commands, mut receiver) = h.commands();
+    start(
+        &mut commands,
+        h.command(
+            EdgeCommandKind::ContainerProcesses,
+            InspectContainerRequest {
+                container_id: "fixture".into(),
+            },
+        ),
+    )
+    .await;
+    finish(&mut commands).await;
+    let messages = take(&mut receiver);
+    assert_eq!(messages.len(), 2);
+    let Some(AgentBody::CommandOutput(value)) = &messages[0].body else {
+        panic!("output")
+    };
+    let value = ContainerProcessesResponse::decode(value.payload.as_slice()).unwrap();
+    assert_eq!(
+        value.processes[0].values,
+        ["root", "42", "1", "00:00:01", "server"]
+    );
+    assert!(!value.truncated);
+    assert!(super::super::swarm_policy::allowed(
+        EdgeCommandKind::ContainerProcesses
+    ));
 }

@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { History, Radio } from 'lucide-react';
 import type { ContainerHealthTransitionView } from '@/api/generated/api.types';
 import { StatsRangePicker } from '@/components/custom/stats-range-picker';
+import { Button } from '@/components/ui/button';
 import { resolveStatsRange, type StatsRange } from '@/lib/stats-range';
 import { ContainerHealthEvents } from './container-health-events';
 
@@ -10,12 +11,16 @@ export function ContainerHealthHistory({
   now,
   isConnected = true,
   isLoading = false,
+  isError = false,
+  onRetry,
   disabledReason,
 }: {
   entries: ContainerHealthTransitionView[];
   now: number;
   isConnected?: boolean;
   isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   disabledReason?: string;
 }) {
   const captionId = useId();
@@ -68,14 +73,16 @@ export function ContainerHealthHistory({
             </h2>
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
               <Radio className="size-3" aria-hidden="true" />
-              {isConnected ? 'Live' : 'Reconnecting'}
+              {isError ? 'Unavailable' : isConnected ? 'Live' : 'Reconnecting'}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
             <span>
               {isLoading
                 ? 'Loading observations…'
-                : `${count} recorded ${count === 1 ? 'observation' : 'observations'}`}
+                : isError && !entries.length
+                  ? 'History unavailable'
+                  : `${count} recorded ${count === 1 ? 'observation' : 'observations'}`}
             </span>{' '}
             · Local time
           </p>
@@ -86,8 +93,22 @@ export function ContainerHealthHistory({
         <p role="status" className="border-b bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
           {entries.length
             ? 'Connection interrupted. Saved observations remain available.'
-            : 'Connection interrupted. Waiting to reconnect.'}
+            : 'Live updates are unavailable. History can still be loaded.'}
         </p>
+      )}
+      {isError && (
+        <div role="alert" className="flex items-center justify-between gap-3 border-b px-4 py-3 text-sm">
+          <span>
+            {entries.length
+              ? 'Could not refresh health history. Saved observations are shown.'
+              : 'Could not load health history.'}
+          </span>
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Retry
+            </Button>
+          )}
+        </div>
       )}
       {isLoading ? (
         <p role="status" className="py-12 text-center text-sm text-muted-foreground">
@@ -95,13 +116,13 @@ export function ContainerHealthHistory({
         </p>
       ) : records.length ? (
         <ContainerHealthEvents entries={records} now={bounds.to * 1000} start={bounds.from * 1000} />
-      ) : (
+      ) : !isError ? (
         <div className="flex min-h-44 flex-col items-center justify-center gap-2 px-4 py-8 text-center text-muted-foreground">
           <History className="mb-1 size-5" aria-hidden="true" />
           <p className="text-sm">No observations in this time range.</p>
           <p className="text-xs">Try a longer range or wait for the next observation.</p>
         </div>
-      )}
+      ) : null}
       <figcaption id={captionId} className="border-t bg-muted/10 px-4 py-2.5 text-xs text-muted-foreground">
         Hover for details · Select a point to inspect · Arrow keys to navigate
       </figcaption>

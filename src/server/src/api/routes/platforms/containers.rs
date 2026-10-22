@@ -1021,3 +1021,46 @@ container_reader!(
     container_networking,
     Networking
 );
+
+#[utoipa::path(get, path="/api/v1/containers/{id}/processes", operation_id="getContainerProcesses", tag="Containers",
+    summary="Read running Container processes",
+    responses((status=200, body=crate::api::resources::platforms::descriptor_views::ContainerProcessesView), crate::openapi::errors::ExternalResourceErrors),
+    params(("id"=uuid::Uuid, Path)), security(("Bearer"=[])),
+    extensions(("x-citadel-principal"=json!("actor")), ("x-citadel-public"=json!(true)), ("x-citadel-setup-exempt"=json!(false))))]
+pub(super) async fn container_processes(
+    State(state): State<PlatformsHttpState>,
+    AuthenticatedActor(principal): AuthenticatedActor,
+    ApiPath(id): ApiPath<Uuid>,
+    headers: HeaderMap,
+) -> HttpResult {
+    let container = required(
+        state
+            .platforms
+            .get_container(id)
+            .await
+            .map_err(platform_error),
+        &headers,
+    )?;
+    let capabilities =
+        authorize_platform(&state, &principal, container.platform_id, &headers).await?;
+    if !capabilities.can_inspect {
+        return api_result(Err(ApiError::Forbidden), &headers);
+    }
+    let cancel = CancellationToken::new();
+    let _guard = cancel.clone().drop_guard();
+    match state
+        .platforms
+        .container_processes(state.runtime.as_ref(), &container, &cancel)
+        .await
+    {
+        Ok(value) => Ok(no_store(
+            Json(
+                crate::api::resources::platforms::descriptor_views::ContainerProcessesView::from(
+                    value,
+                ),
+            )
+            .into_response(),
+        )),
+        Err(error) => Ok(runtime_error_response(error, &headers)),
+    }
+}

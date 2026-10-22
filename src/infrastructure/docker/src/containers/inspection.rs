@@ -8,6 +8,23 @@ use serde_json::{Map, Value};
 use tokio_util::sync::CancellationToken;
 
 impl ContainerInspectionPort for DockerClient {
+    fn processes<'a>(
+        &'a self,
+        id: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_platforms::containers::ContainerProcesses, RuntimeCapabilityError>,
+    > {
+        Box::pin(async move {
+            tokio::select! {
+                biased;
+                () = cancel.cancelled() => Err(RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "operation cancelled", false)),
+                result = self.container_processes(id) => result.map_err(crate::client::runtime::normalize_docker_error),
+            }
+        })
+    }
+
     fn inspection<'a>(
         &'a self,
         id: &'a str,

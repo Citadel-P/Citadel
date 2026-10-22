@@ -487,19 +487,55 @@ async fn image_update_checks_are_fresh_metadata_only_and_list_payload_is_authori
         .register(EdgeTarget::platform(f.platform_id), Uuid::now_v7())
         .unwrap();
     let input = json!({"platformId":f.platform_id,"dockerImageId":image,"registryId":Uuid::from_u128(0x100),"reference":"nginx:17"});
-    let mut last_success = Value::Null;
-    for (config, status) in [
-        (image.clone(), "UpToDate"),
-        (format!("sha256:{}", "b".repeat(64)), "UpdateAvailable"),
-        (String::new(), "Unknown"),
+    let checker = super::lookup::subject(&f).await;
+    let puller = super::lookup::subject(&f).await;
+    for (principal, specific) in [
+        (&checker, 0),
+        (&puller, citadel_primitives::SpecificPermission::Pull as i32),
     ] {
+        super::lookup::grant(
+            &f,
+            principal.actor_id.value(),
+            citadel_primitives::ResourceType::Platform,
+            f.platform_id,
+            specific,
+        )
+        .await;
+        super::lookup::grant(
+            &f,
+            principal.actor_id.value(),
+            citadel_primitives::ResourceType::Registry,
+            Uuid::from_u128(0x100),
+            0,
+        )
+        .await;
+    }
+    let mut last_success = Value::Null;
+    for (config, status, principal, remembers) in [
+        (String::new(), "Unknown", &f.administrator, false),
+        (image.clone(), "UpToDate", &checker, false),
+        (image.clone(), "UpToDate", &puller, true),
+        (
+            format!("sha256:{}", "b".repeat(64)),
+            "UpdateAvailable",
+            &f.administrator,
+            true,
+        ),
+        (String::new(), "Unknown", &f.administrator, false),
+    ] {
+        sqlx::query("UPDATE images SET registryid=NULL WHERE platformid=$1 AND dockerimageid=$2")
+            .bind(f.platform_id)
+            .bind(&image)
+            .execute(&f.pool)
+            .await
+            .unwrap();
         let expected = if config.is_empty() { 2 } else { 3 };
         let (response, ()) = tokio::join!(
             send_json(
                 &f,
                 Method::POST,
                 "/api/v1/images/check-update",
-                f.administrator.clone(),
+                principal.clone(),
                 input.clone()
             ),
             async {
@@ -560,7 +596,7 @@ async fn image_update_checks_are_fresh_metadata_only_and_list_payload_is_authori
         assert_eq!(body["status"], status, "{body}");
         if status == "Unknown" {
             assert_eq!(body["lastSuccessAt"], last_success);
-            assert_eq!(body["isStale"], true);
+            assert_eq!(body["isStale"], !last_success.is_null());
         } else {
             last_success = body["lastSuccessAt"].clone();
         }
@@ -579,6 +615,20 @@ async fn image_update_checks_are_fresh_metadata_only_and_list_payload_is_authori
             .iter()
             .find(|row| row["dockerImageId"] == image)
             .unwrap();
+        let associated: Option<Uuid> = sqlx::query_scalar(
+            "SELECT registryid FROM images WHERE platformid=$1 AND dockerimageid=$2",
+        )
+        .bind(f.platform_id)
+        .bind(&image)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        assert_eq!(associated, remembers.then_some(Uuid::from_u128(0x100)));
+        assert_eq!(
+            row["registry"].is_null(),
+            !remembers,
+            "the next table read must expose the saved Registry: {row}"
+        );
         assert_eq!(row["updates"][0]["status"], status);
         assert_eq!(row["updates"][1]["reference"], "nginx:stable");
         assert_eq!(row["updates"][1]["status"], "NotChecked");
@@ -891,6 +941,7 @@ async fn no_op_pull_refreshes_cached_status_and_metadata_failure_does_not_fail_t
                                     reference: "nginx:17",
                                 },
                                 Uuid::from_u128(0x100),
+                                false,
                                 &cancel,
                             )
                             .await
@@ -1057,6 +1108,7 @@ async fn containerd_image_checks_compare_platform_content_and_fence_missing_iden
                     reference: "nginx:17",
                 },
                 Uuid::from_u128(0x100),
+                false,
                 &cancel,
             ),
             async {

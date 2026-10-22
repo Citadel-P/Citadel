@@ -69,34 +69,33 @@ export function prepareFeatures({
     });
   });
   routes[`/networks/${platformId}`] = { networks, capabilities: caps };
-  snapshots[`container-health:${containers[0].id}`] = {
-    target: "ReceiveContainerHealthHistory",
-    arguments: [
-      {
-        resourceId: containers[0].id,
-        entries: Array.from({ length: 60 }, (_, i) => {
-          const observedAt = capturedAt / 1000 - (59 - i) * 60;
-          const status = i >= 22 && i < 30 ? "Unhealthy" : "Healthy";
-          return fixture("ContainerHealthTransitionView", {
-            observedAt,
-            firstObservedAt: observedAt,
-            sampleCount: 1,
-            state: "Running",
-            origin: "Inspection",
-            health: fixture("ContainerHealthView", {
-              status,
-              reason:
-                status === "Healthy"
-                  ? "Health check is passing."
-                  : "Health check failed.",
-              observedAt: observedAt * 1000,
-              lastCheckAt: new Date(observedAt * 1000).toISOString(),
-              failingStreak: status === "Unhealthy" ? i - 21 : 0,
-            }),
-          });
+  routes[`/containers/${containers[0].id}/health-history`] = Array.from(
+    { length: 60 },
+    (_, i) => {
+      const observedAt = capturedAt / 1000 - (59 - i) * 60;
+      const status = i >= 22 && i < 30 ? "Unhealthy" : "Healthy";
+      return fixture("ContainerHealthTransitionView", {
+        observedAt,
+        firstObservedAt: observedAt,
+        sampleCount: 1,
+        state: "Running",
+        origin: "Inspection",
+        health: fixture("ContainerHealthView", {
+          status,
+          reason:
+            status === "Healthy"
+              ? "Health check is passing."
+              : "Health check failed.",
+          observedAt: observedAt * 1000,
+          lastCheckAt: new Date(observedAt * 1000).toISOString(),
+          failingStreak: status === "Unhealthy" ? i - 21 : 0,
         }),
-      },
-    ],
+      });
+    },
+  );
+  snapshots[`container-health:${containers[0].id}`] = {
+    target: "ContainerHealthHistoryChanged",
+    arguments: [{ resourceId: containers[0].id }],
   };
   const volumeName = "storefront_uploads";
   routes[`/volumes/${platformId}/${volumeName}`] = fixture("VolumeView", {

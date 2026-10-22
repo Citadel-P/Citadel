@@ -10,7 +10,7 @@ use uuid::Uuid;
 pub struct UpdateBackupRepositoryInput {
     #[serde(default, skip_serializing_if = "PatchField::is_missing")]
     #[schema(value_type = Option<String>, required = false)]
-    description: PatchField<String>,
+    name: PatchField<String>,
     #[serde(default, skip_serializing_if = "PatchField::is_missing")]
     #[schema(value_type = Option<crate::api::resources::schema_models::backups::BackupRepositorySpecSchema>, required = false)]
     spec: PatchField<BackupRepositorySpec>,

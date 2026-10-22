@@ -7,6 +7,11 @@ A Stack manages an application described by one or more Compose files. On a
 Docker Standalone Platform it runs as a Compose project; on a Swarm Platform
 it runs as a native Docker Stack.
 
+In **Inspect**, expand **Processes** below the inspection data. For a Standalone
+Stack, it follows the selected container. For a Swarm Stack, select a Service and
+then choose a running Task inside Processes. Process reads require Platform Read
+and Inspect permission and use the [container Processes view](/docs/resources/docker/containers#processes).
+
 ## Health
 
 The **Health** icon in the table and beside **Backup** summarizes current

@@ -198,6 +198,7 @@ const EditFormContent = ({
         type={type}
         canEditTitle={canWrite && Header.canEditTitle !== false}
         canEditDescription={canWrite && Header.canEditDescription !== false}
+        showDescription={Header.showDescription}
         item={item}
         Indicator={Header.Indicator}
         Tags={Header.Tags}
@@ -245,6 +246,7 @@ type EditHeaderProps<T> = {
   type: ResourceType;
   canEditTitle?: boolean;
   canEditDescription?: boolean;
+  showDescription?: boolean;
   item: T;
   Indicator: React.ComponentType<{ resource: T }>;
   Tags?: React.ComponentType<{ resource: T }>;
@@ -257,6 +259,7 @@ const EditHeader = <T extends RequiredFormFields>({
   type,
   canEditTitle = true,
   canEditDescription = true,
+  showDescription = true,
   item,
   Indicator,
   Tags,
@@ -280,11 +283,13 @@ const EditHeader = <T extends RequiredFormFields>({
             onSave={onRename}
             status={<Indicator resource={item} />}
           />
-          <EditableDescription
-            readOnly={!canEditDescription}
-            value={item.description ?? ''}
-            onSave={onChangeDescription}
-          />
+          {showDescription && (
+            <EditableDescription
+              readOnly={!canEditDescription}
+              value={item.description ?? ''}
+              onSave={onChangeDescription}
+            />
+          )}
           {Tags && (
             <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
               <Tags resource={item} />

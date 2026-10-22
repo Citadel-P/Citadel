@@ -28,9 +28,9 @@ use crate::{
                 UpdateSwarmNodesAvailabilityInput, UpdateSwarmResourceLabelsInput, VolumeFilters,
             },
             views::{
-                ContainerHistory, ContainerView, ContainersResponse, History, ImagesResponse,
-                NetworkView, NetworksResponse, PlatformCapabilitiesView, PlatformView,
-                PlatformsResponse, StackHistory, SwarmConfigView, SwarmItemsResponse,
+                ContainerView, ContainersResponse, History, ImagesResponse, NetworkView,
+                NetworksResponse, PlatformCapabilitiesView, PlatformView, PlatformsResponse,
+                StackHistory, StackServiceHistory, SwarmConfigView, SwarmItemsResponse,
                 SwarmNetworkView, SwarmNodeView, SwarmSecretView, SwarmServiceView, SwarmTaskView,
                 TaskHistory, TaskTerminalView, VolumeCapabilitiesView, VolumeView, VolumesResponse,
             },
@@ -173,6 +173,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Platform
         .normalized_routes(utoipa_axum::routes!(list_containers))
         .normalized_routes(utoipa_axum::routes!(get_container))
         .normalized_routes(utoipa_axum::routes!(container_health_history))
+        .normalized_routes(utoipa_axum::routes!(container_processes))
         .normalized_routes(utoipa_axum::routes!(start))
         .normalized_routes(utoipa_axum::routes!(stop))
         .normalized_routes(utoipa_axum::routes!(restart))

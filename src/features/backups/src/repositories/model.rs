@@ -5,7 +5,6 @@ pub struct BackupRepository {
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
-    pub description: Option<String>,
     pub repository_type: String,
     pub spec: crate::spec::BackupRepositorySpec,
     pub password_secret_id: Uuid,

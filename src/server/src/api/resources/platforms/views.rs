@@ -999,15 +999,15 @@ pub(crate) struct TaskHistory {
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ContainerHistory {
-    pub(crate) container_id: String,
-    pub(crate) container_name: String,
+pub(crate) struct StackServiceHistory {
+    pub(crate) service_name: String,
+    pub(crate) container_ids: Vec<String>,
     pub(crate) stats: Vec<crate::api::resources::platforms::views::ContainerStatView>,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub(crate) struct StackHistory {
-    pub(crate) containers: Vec<ContainerHistory>,
+    pub(crate) services: Vec<StackServiceHistory>,
 }
 
 /// Public installation instructions. The signing private key never enters this model.

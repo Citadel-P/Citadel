@@ -677,7 +677,7 @@ WITH incoming AS (
         id, platformid, dockercontainerid, name, dockerimageid, created, state,
         controlstate, updated, stack, issystem, systemrole,
         hascitadelownershiplabels, isswarmtask, ports, mounts, rowversion,
-        projectionobservedat, dockernodeid, stackid, deploymentid, imageid, health, composeservicename)
+        projectionobservedat, dockernodeid, stackid, deploymentid, imageid, health, composeservicename, composereplicanumber)
     SELECT gen_random_uuid(), $1, incoming.id, incoming.name,
            CASE WHEN NOT $5::boolean AND incoming."imageId" = ''
                 THEN incoming.image ELSE incoming."imageId" END,
@@ -685,7 +685,9 @@ WITH incoming AS (
            incoming."isSystem", incoming."systemRole",
            incoming."hasCitadelOwnershipLabels", incoming."isSwarmTask",
            COALESCE(incoming.ports, '[]'::jsonb)::json, incoming.mounts, 0, $3, $4,
-           release.stackid, deployment.id, image.id, NULLIF(incoming.health, 'null'::jsonb), incoming.labels->>'com.docker.compose.service'
+           release.stackid, deployment.id, image.id, NULLIF(incoming.health, 'null'::jsonb), incoming.labels->>'com.docker.compose.service',
+           CASE WHEN incoming.labels->>'com.docker.compose.container-number' ~ '^[1-9][0-9]*$'
+                THEN incoming.labels->>'com.docker.compose.container-number' END
     FROM incoming
     LEFT JOIN images image
       ON image.platformid=$1 AND image.dockerimageid=CASE WHEN NOT $5::boolean AND incoming."imageId"='' THEN incoming.image ELSE incoming."imageId" END
@@ -719,6 +721,7 @@ WITH incoming AS (
         mounts = EXCLUDED.mounts,
         health = EXCLUDED.health,
         composeservicename = EXCLUDED.composeservicename,
+        composereplicanumber = EXCLUDED.composereplicanumber,
         stackid = CASE WHEN containers.deploymentid IS NULL
             THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
         deploymentid = CASE WHEN containers.stackid IS NULL
@@ -731,14 +734,14 @@ WITH incoming AS (
       AND (containers.name, containers.dockerimageid, containers.state, containers.stack,
            containers.issystem, containers.systemrole, containers.hascitadelownershiplabels,
            containers.isswarmtask, containers.mounts, containers.ports::jsonb, containers.stackid, containers.deploymentid,
-           containers.projectionstalesince, containers.projectionstalereason, containers.imageid, containers.health, containers.composeservicename)
+           containers.projectionstalesince, containers.projectionstalereason, containers.imageid, containers.health, containers.composeservicename, containers.composereplicanumber)
           IS DISTINCT FROM
           (EXCLUDED.name, EXCLUDED.dockerimageid, EXCLUDED.state, EXCLUDED.stack,
            EXCLUDED.issystem, EXCLUDED.systemrole, EXCLUDED.hascitadelownershiplabels,
            EXCLUDED.isswarmtask, EXCLUDED.mounts, EXCLUDED.ports::jsonb,
            CASE WHEN containers.deploymentid IS NULL THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
            CASE WHEN containers.stackid IS NULL THEN COALESCE(containers.deploymentid, EXCLUDED.deploymentid) ELSE containers.deploymentid END,
-           NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid), EXCLUDED.health, EXCLUDED.composeservicename)
+           NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid), EXCLUDED.health, EXCLUDED.composeservicename, EXCLUDED.composereplicanumber)
     RETURNING dockercontainerid
 ), deleted AS (
 DELETE FROM containers container
