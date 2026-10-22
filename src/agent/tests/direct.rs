@@ -313,7 +313,7 @@ async fn every_direct_rpc_is_registered_and_requires_authentication() {
             count += 1;
         }
     }
-    assert_eq!(count, 68);
+    assert_eq!(count, 69);
     assert_eq!(host.state.calls.load(Ordering::SeqCst), 0);
 }
 
