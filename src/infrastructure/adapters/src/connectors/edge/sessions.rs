@@ -527,6 +527,7 @@ fn node_command_allowed(kind: EdgeCommandKind) -> bool {
             | ContainerList
             | ContainerLogsStream
             | ContainerInspect
+            | ContainerProcesses
             | ContainerCreate
             | ContainerStart
             | ContainerStop

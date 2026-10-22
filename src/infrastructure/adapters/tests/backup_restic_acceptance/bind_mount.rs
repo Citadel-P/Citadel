@@ -41,7 +41,7 @@ async fn bind_mount_directory_and_file_round_trip_with_overwrite_guards() {
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
         let store = PostgresBackupPersistence::new(pool.clone());
         let repository = store.create_repository(actor, &BackupRepositoryConfiguration {
-            name: format!("bind-repo-{suffix}"), description: None, password_secret_id: secret,
+            name: format!("bind-repo-{suffix}"), password_secret_id: secret,
             spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_volume})).unwrap(),
         }).await.unwrap();
         let executor = DockerResticBackupExecutor::new("docker", IMAGE, Arc::new(Password), 256 * 1024, pool.clone());

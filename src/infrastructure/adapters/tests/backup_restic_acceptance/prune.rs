@@ -20,7 +20,7 @@ async fn repository_prune_preserves_all_snapshots_and_policy_retention_stays_sco
             .bind(secret).bind(format!("prune-{secret}")).execute(&pool).await.unwrap();
         let store = PostgresBackupPersistence::new(pool.clone());
         let repository = store.create_repository(actor, &BackupRepositoryConfiguration {
-            name: format!("prune-{}", Uuid::now_v7()), description: None, password_secret_id: secret,
+            name: format!("prune-{}", Uuid::now_v7()), password_secret_id: secret,
             spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Core","path":root.join("repository")})).unwrap(),
         }).await.unwrap();
         let executor = DockerResticBackupExecutor::new("must-not-run-docker", IMAGE, Arc::new(Password), 1024 * 1024, pool.clone()).with_restic(restic.clone());

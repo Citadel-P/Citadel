@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { ReactNode } from 'react';
+import { ContainerProcesses } from './container-processes';
+import { RuntimeProcesses } from './runtime-processes';
 import { useRead } from '@/lib/hooks';
-import { MonacoEditor } from '@/lib/monaco';
+import { InspectionPanel } from '@/components/custom/inspection-panel';
 import { KnownResourceName } from '@/api/types';
-import { serializeData } from '@/lib/utils';
 
 type InspectProps = {
   readKey: KnownResourceName;
@@ -12,6 +13,7 @@ type InspectProps = {
   filename?: string | undefined;
   loadingMessage?: string;
   noDataMessage?: string;
+  children?: ReactNode;
 };
 
 function Inspect({
@@ -22,55 +24,71 @@ function Inspect({
   filename,
   loadingMessage = '// Loading container inspection data...',
   noDataMessage = '// No data available',
+  children,
 }: InspectProps) {
   const readArgs = stackId && containerId ? { stackId, containerId } : { id };
   const { data, isSuccess, isLoading } = useRead(readKey, readArgs as any);
 
-  const code = useMemo(() => {
-    if (isSuccess && data?.data != null) {
-      return serializeData(data.data, 'json');
-    }
-
-    if (isLoading) return loadingMessage;
-
-    return noDataMessage;
-  }, [isLoading, isSuccess, data, loadingMessage, noDataMessage]);
-
   return (
-    <div className="flex-1 w-full border rounded-md overflow-hidden bg-slate-50 dark:bg-zinc-950">
-      <MonacoEditor
-        value={code}
-        language="json"
-        filename={filename}
-        className="my-0 mx-0 min-h-150"
-        readOnly={true}
-        folding={true}
-      />
-    </div>
+    <InspectionPanel
+      data={isSuccess ? data?.data : undefined}
+      isLoading={isLoading}
+      filename={filename}
+      loadingMessage={loadingMessage}
+      noDataMessage={noDataMessage}>
+      {children}
+    </InspectionPanel>
   );
 }
 
-export const ContainerInspect = ({ containerId }: { containerId: string | undefined }) => {
-  return <Inspect readKey="inspectContainer" id={containerId} filename={`inspect-${containerId}.json`} />;
+export const ContainerInspect = ({
+  containerId,
+  resourceId,
+}: {
+  containerId: string | undefined;
+  resourceId?: string;
+}) => {
+  return (
+    <Inspect readKey="inspectContainer" id={containerId} filename={`inspect-${containerId}.json`}>
+      {resourceId && <ContainerProcesses key={resourceId} resourceId={resourceId} />}
+    </Inspect>
+  );
 };
 
-export const DeploymentInspect = ({ deploymentId }: { deploymentId: string | undefined }) => {
-  return <Inspect readKey="inspectDeployment" id={deploymentId} filename={`inspect-${deploymentId}.json`} />;
+export const DeploymentInspect = ({
+  deploymentId,
+  resourceId,
+}: {
+  deploymentId: string | undefined;
+  resourceId?: string | null;
+}) => {
+  return (
+    <Inspect readKey="inspectDeployment" id={deploymentId} filename={`inspect-${deploymentId}.json`}>
+      {resourceId && <ContainerProcesses key={resourceId} resourceId={resourceId} />}
+    </Inspect>
+  );
 };
 
 export const StackInspect = ({
   stackId,
   containerId,
+  platformId,
+  dockerNodeId,
 }: {
   stackId: string | undefined;
   containerId: string | undefined;
+  platformId: string;
+  dockerNodeId?: string | null;
 }) => {
   return (
     <Inspect
       readKey="inspectStackContainer"
       stackId={stackId}
       containerId={containerId}
-      filename={`inspect-${stackId}-${containerId}.json`}
-    />
+      filename={`inspect-${stackId}-${containerId}.json`}>
+      {containerId && (
+        <RuntimeProcesses platformId={platformId} containerId={containerId} dockerNodeId={dockerNodeId} />
+      )}
+    </Inspect>
   );
 };

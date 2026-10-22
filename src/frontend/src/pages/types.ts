@@ -73,6 +73,7 @@ export interface RequiredFormComponents<T = any> {
     Header: {
       canEditTitle?: boolean;
       canEditDescription?: boolean;
+      showDescription?: boolean;
       Indicator: React.FC<{ resource: T }>;
       Tags?: React.FC<{ resource: T }>;
       ActionButtons: React.FC<{ resource: T }>;

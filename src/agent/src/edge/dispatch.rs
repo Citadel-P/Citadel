@@ -56,6 +56,7 @@ pub(super) async fn execute(
         ContainerList => unary!(ContainerService, list),
         ContainerLogsStream => stream!(ContainerService, stream_container_logs),
         ContainerInspect => unary!(ContainerService, inspect),
+        ContainerProcesses => unary!(ContainerService, processes),
         ContainerCreate => unary!(ContainerService, create),
         ContainerStart => unary!(ContainerService, start),
         ContainerStop => unary!(ContainerService, stop),

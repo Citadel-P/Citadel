@@ -33,7 +33,6 @@ export const BackupRepositoryComponents: RequiredComponents<BackupRepositoryView
     return items.filter(
       (repository) =>
         repository.name.toLowerCase().includes(value) ||
-        repository.description?.toLowerCase().includes(value) ||
         repository.type.toLowerCase().includes(value) ||
         JSON.stringify(repository.spec).toLowerCase().includes(value),
     );

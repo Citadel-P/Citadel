@@ -57,6 +57,13 @@ exact tag and an authorized matching Registry. Checks fetch metadata only; they
 do not download layers or redeploy workloads. Opening the table does not contact
 registries. A manual check requests a fresh observation.
 
+If the image has no associated Registry, a successful manual check remembers
+your selection when you have the Platform's **Pull** permission. Future checks
+and **Pull latest** can reuse it. Failed or inconclusive checks do not save the
+selection, and checking with another Registry does not replace an existing
+association. Read-only users can check for updates without changing the image's
+Registry.
+
 Citadel automatically checks tagged images on online standalone hosts every two
 hours. A background scan runs every minute to pick up newly inventoried images
 and tags, including images pulled by Deployments or Stacks. Large inventories

@@ -13,6 +13,7 @@ use citadel_swarm_services::SwarmServiceRepository;
 use std::sync::Arc;
 
 mod logs;
+mod processes;
 mod runtime;
 mod terminal;
 #[cfg(test)]
@@ -377,6 +378,9 @@ impl ApplicationGroupReader {
             self.log_targets(p, g).await?;
             return Ok(GroupSnapshot::default());
         }
+        if let Topic::ContainerProcesses(id) = g.topic() {
+            return self.processes(p, *id, e, lease).await;
+        }
         if let Topic::ContainerHealth(id) = g.topic() {
             let container = self
                 .platforms
@@ -406,13 +410,9 @@ impl ApplicationGroupReader {
             {
                 return Ok(GroupSnapshot::default());
             }
-            let entries = self.platforms.container_health_history(*id).await.map_err(failure)?
-                .into_iter().map(crate::api::resources::platforms::health_views::ContainerHealthTransitionView::from)
-                .collect::<Vec<_>>();
-            return event(
-                "ReceiveContainerHealthHistory",
-                json!({"resourceId": id, "entries": entries}),
-            );
+            // History is an HTTP read. Joining (including after reconnect) also
+            // invalidates it to cover changes between the GET and subscription.
+            return event("ContainerHealthHistoryChanged", json!({"resourceId": id}));
         }
         use ResourceType::*;
         let id = g.id();

@@ -12,10 +12,7 @@ fn backup_patch_preserves_omitted_and_null_values() {
         json!({"spec":null,"description":null,"passwordSecretId":"ignored"}),
     )
     .unwrap();
-    assert_eq!(
-        serde_json::to_value(patch).unwrap(),
-        json!({"spec":null,"description":null})
-    );
+    assert_eq!(serde_json::to_value(patch).unwrap(), json!({"spec":null}));
 }
 
 #[test]
@@ -73,7 +70,6 @@ fn repository_view_checks_persisted_configuration_and_status() {
         id,
         name: "backup".into(),
         normalized_name: "BACKUP".into(),
-        description: None,
         repository_type: "FileSystem".into(),
         spec: serde_json::from_value(
             json!({"$type":"FileSystem","location":"Core","path":"/backups"}),
@@ -99,6 +95,7 @@ fn repository_view_checks_persisted_configuration_and_status() {
     let view = super::views::BackupRepositoryView::try_from(repository.clone()).unwrap();
     let wire = serde_json::to_value(view).unwrap();
     assert_eq!(wire["status"], "Ready");
+    assert!(wire.get("description").is_none());
     assert_eq!(wire["spec"]["$type"], "FileSystem");
     assert!(wire["spec"].get("type").is_none());
     repository.status = citadel_backups::BackupRepositoryStatus::Unavailable;

@@ -26,6 +26,13 @@ pub trait BackupPersistence: Send + Sync {
         id: Uuid,
         patch: &'a Value,
     ) -> BoxFuture<'a, Result<BackupRepository, BackupError>>;
+    fn commit_repository_credentials<'a>(
+        &'a self,
+        id: Uuid,
+        operation_id: Uuid,
+        row_version: i64,
+        credentials: &'a BackupRepositoryCredentials,
+    ) -> BoxFuture<'a, Result<BackupRepository, BackupError>>;
     fn archive_repository(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>>;
     fn record_repository_operation<'a>(
         &'a self,

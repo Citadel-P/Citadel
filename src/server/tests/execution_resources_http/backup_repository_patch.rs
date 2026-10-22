@@ -20,24 +20,35 @@ pub(super) async fn before_ready(
                 Method::PATCH,
                 &path,
                 principal,
-                Some(json!({"description":"updated repository"}))
+                Some(json!({"name":"unauthorized rename"}))
             )
             .await
             .status(),
             expected
         );
     }
-    // BackupEndpointTests' description-only patch must not erase the destination.
-    let response = request(app, Method::PATCH, &path, Some(admin.clone()), Some(json!({"description":" updated repository ","passwordSecretId":Uuid::now_v7(),"name":"ignored"}))).await;
+    // Renaming must not erase the destination or replace the encryption password.
+    let updated_name = format!("updated repository {id}");
+    let response = request(
+        app,
+        Method::PATCH,
+        &path,
+        Some(admin.clone()),
+        Some(json!({"name":format!(" {updated_name} "),"passwordSecretId":Uuid::now_v7()})),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let updated = response_json(response).await;
-    assert_eq!(updated["description"], "updated repository");
+    assert!(updated.get("description").is_none());
     assert_eq!(updated["spec"], repository["spec"]);
     assert_eq!(updated["passwordSecretId"], repository["passwordSecretId"]);
-    assert_eq!(updated["name"], repository["name"]);
+    assert_eq!(updated["name"], updated_name);
     for patch in [
         json!([]),
-        json!({"description":true}),
+        json!({"name":null}),
+        json!({"name":42}),
+        json!({"name":" "}),
+        json!({"name":"x".repeat(129)}),
         json!({"spec":{"$type":"FileSystem","location":"Unknown","path":"/tmp/backups"}}),
         json!({"spec":{"$type":"S3Compatible","bucketLookup":"Unknown"}}),
         json!({"spec":{"$type":"FileSystem","path":""}}),
@@ -71,20 +82,15 @@ pub(super) async fn before_ready(
             Method::PATCH,
             &path,
             Some(admin.clone()),
-            Some(json!({"spec":spec,"description":"must not persist"}))
+            Some(json!({"spec":spec,"name":"must not persist"}))
         )
         .await
         .status(),
         StatusCode::CONFLICT
     );
     assert_eq!(
-        store
-            .get_repository(repo_id)
-            .await
-            .unwrap()
-            .description
-            .as_deref(),
-        Some("updated repository")
+        store.get_repository(repo_id).await.unwrap().name,
+        updated_name
     );
     store
         .release_repository_operation(repo_id, operation)
@@ -101,7 +107,7 @@ pub(super) async fn before_ready(
     assert_eq!(changed.status(), StatusCode::OK);
     let changed = response_json(changed).await;
     assert_eq!(changed["spec"]["path"], "/tmp/changed-backups");
-    assert_eq!(changed["description"], "updated repository");
+    assert_eq!(changed["name"], updated_name);
     let mut denied = repository["spec"].clone();
     denied["path"] = json!("/outside-allowed-backup-path");
     assert_eq!(
@@ -209,30 +215,85 @@ pub(super) async fn after_ready(
             Method::PATCH,
             &path,
             Some(admin.clone()),
-            Some(json!({"spec":spec,"description":"must roll back"}))
+            Some(json!({"spec":spec,"name":"must roll back"}))
         )
         .await
         .status(),
         StatusCode::BAD_REQUEST
     );
-    let stored: (Value, Option<String>) =
-        sqlx::query_as("SELECT spec,description FROM backuprepositories WHERE id=$1")
+    let stored: (Value, String) =
+        sqlx::query_as("SELECT spec,name FROM backuprepositories WHERE id=$1")
             .bind(Uuid::parse_str(id).unwrap())
             .fetch_one(pool)
             .await
             .unwrap();
     assert_eq!(stored.0, repository["spec"]);
-    assert_eq!(stored.1.as_deref(), Some("updated repository"));
+    assert_eq!(stored.1, before.name);
     let same = request(
         app,
         Method::PATCH,
         &path,
         Some(admin.clone()),
-        Some(json!({"spec":repository["spec"],"description":null})),
+        Some(json!({"spec":repository["spec"]})),
     )
     .await;
     assert_eq!(same.status(), StatusCode::OK);
-    assert!(response_json(same).await["description"].is_null());
+    assert!(response_json(same).await.get("description").is_none());
+    let renamed_name = format!("Renamed repository {id}");
+    let other_name = format!("Other repository {id}");
+    let renamed = request(
+        app,
+        Method::PATCH,
+        &path,
+        Some(admin.clone()),
+        Some(json!({"name":format!(" {renamed_name} ")})),
+    )
+    .await;
+    assert_eq!(renamed.status(), StatusCode::OK);
+    let renamed = response_json(renamed).await;
+    assert_eq!(renamed["name"], renamed_name);
+    assert_eq!(renamed["id"], repository["id"]);
+    assert_eq!(renamed["spec"], repository["spec"]);
+    assert_eq!(renamed["passwordSecretId"], repository["passwordSecretId"]);
+    assert_eq!(renamed["status"], "Ready");
+    let normalized: String =
+        sqlx::query_scalar("SELECT normalizedname FROM backuprepositories WHERE id=$1")
+            .bind(repo_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(normalized, renamed_name.to_uppercase());
+    let duplicate = request(app, Method::POST, "/api/v1/backupRepositories", Some(admin.clone()),
+        Some(json!({"name":other_name,"passwordSecretId":repository["passwordSecretId"],"spec":repository["spec"]}))).await;
+    assert_eq!(duplicate.status(), StatusCode::OK);
+    let duplicate_id = response_json(duplicate).await["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let conflict = request(
+        app,
+        Method::PATCH,
+        &path,
+        Some(admin.clone()),
+        Some(json!({"name":other_name.to_uppercase()})),
+    )
+    .await;
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+    let unchanged = store.get_repository(repo_id).await.unwrap();
+    assert_eq!(unchanged.name, renamed_name);
+    assert_eq!(unchanged.spec, before.spec);
+    assert_eq!(
+        request(
+            app,
+            Method::DELETE,
+            &format!("/api/v1/backupRepositories/{duplicate_id}"),
+            Some(admin.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
     assert_eq!(
         request(
             app,

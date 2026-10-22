@@ -41,6 +41,16 @@ impl BackupPersistence for Store {
     ) -> BoxFuture<'a, Result<BackupRepository, BackupError>> {
         self.inner.update_repository(id, patch)
     }
+    fn commit_repository_credentials<'a>(
+        &'a self,
+        id: Uuid,
+        operation_id: Uuid,
+        row_version: i64,
+        credentials: &'a BackupRepositoryCredentials,
+    ) -> BoxFuture<'a, Result<BackupRepository, BackupError>> {
+        self.inner
+            .commit_repository_credentials(id, operation_id, row_version, credentials)
+    }
     fn archive_repository(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>> {
         self.inner.archive_repository(id)
     }

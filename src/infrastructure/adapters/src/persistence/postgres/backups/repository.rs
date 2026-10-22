@@ -58,6 +58,16 @@ impl BackupPersistence for PostgresBackupPersistence {
         self.update_repository_impl(id, patch)
     }
 
+    fn commit_repository_credentials<'a>(
+        &'a self,
+        id: Uuid,
+        operation_id: Uuid,
+        row_version: i64,
+        credentials: &'a BackupRepositoryCredentials,
+    ) -> BoxFuture<'a, Result<BackupRepository, BackupError>> {
+        self.commit_repository_credentials_impl(id, operation_id, row_version, credentials)
+    }
+
     fn archive_repository(&self, id: Uuid) -> BoxFuture<'_, Result<(), BackupError>> {
         self.archive_repository_impl(id)
     }

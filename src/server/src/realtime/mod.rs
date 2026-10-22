@@ -31,7 +31,10 @@ const PAYLOAD_SCHEMA_VERSION: u16 = 1;
 const PLATFORM_RESOURCE_TYPE: &str = "Platform";
 const MAX_CLIENT_MESSAGE_BYTES: usize = 16 * 1024;
 const WRITE_BUFFER_BYTES: usize = 16 * 1024;
-const MAX_WRITE_BUFFER_BYTES: usize = 128 * 1024;
+// Tungstenite checks the entire frame against this ceiling before writing it,
+// even for a fast client. Allow every message admitted by the outbound budget,
+// plus framing and buffered control messages; the queue still bounds slow peers.
+const MAX_WRITE_BUFFER_BYTES: usize = connection::OUTBOUND_BYTES + WRITE_BUFFER_BYTES;
 
 #[derive(Clone)]
 pub struct RealtimeService {

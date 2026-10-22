@@ -46,20 +46,20 @@ export const ContainerStatsCharts = ({ resource, query, liveStats }: StatsPanelP
   );
 };
 
-const useLiveStats = (resource: ContainerRuntimeView | undefined) => {
+const useLiveStats = (resource: ContainerRuntimeView | undefined, historyId = resource?.id) => {
   const [liveStats, setLiveStats] = useState<Omit<ContainerStatView, 'containerId'>[]>([]);
   const lastStatRef = useRef<ContainerStatView | undefined>(resource?.containerStat);
-  const resourceIdRef = useRef<string | undefined>(resource?.id);
+  const resourceIdRef = useRef<string | undefined>(historyId);
 
   useEffect(() => {
-    if (resourceIdRef.current === resource?.id) {
+    if (resourceIdRef.current === historyId) {
       return;
     }
 
-    resourceIdRef.current = resource?.id;
+    resourceIdRef.current = historyId;
     setLiveStats([]);
     lastStatRef.current = resource?.containerStat;
-  }, [resource?.containerStat, resource?.id]);
+  }, [resource?.containerStat, historyId]);
 
   useEffect(() => {
     const stat = resource?.containerStat;
@@ -97,10 +97,20 @@ const useContainerStatsWindow = (containerId: string | undefined): StatsQuerySta
   };
 };
 
-const useDeploymentStatsWindow = (deploymentId: string): StatsQueryState => {
+const useDeploymentStatsWindow = (deploymentId: string, containerId: string | undefined): StatsQueryState => {
   const range = useStatsRange();
   const readArgs = useMemo(() => ({ id: deploymentId, query: range.query }), [deploymentId, range.query]);
-  const { data, isLoading, error } = useRead('getDeploymentStats', readArgs, STREAMED_STATS_QUERY_OPTIONS);
+  const { data, isLoading, isFetching, error, refetch } = useRead(
+    'getDeploymentStats',
+    readArgs,
+    STREAMED_STATS_QUERY_OPTIONS,
+  );
+  const previousContainer = useRef(containerId);
+  useEffect(() => {
+    if (previousContainer.current === containerId || isFetching) return;
+    previousContainer.current = containerId;
+    void refetch({ cancelRefetch: false });
+  }, [containerId, isFetching, refetch]);
 
   return {
     baseStats: data?.data?.stats ?? [],
@@ -124,8 +134,8 @@ export const DeploymentStats = ({
   resource: ContainerRuntimeView | undefined;
   deploymentId: string;
 }) => {
-  const liveStats = useLiveStats(resource);
-  const query = useDeploymentStatsWindow(deploymentId);
+  const liveStats = useLiveStats(resource, deploymentId);
+  const query = useDeploymentStatsWindow(deploymentId, resource?.id);
 
   return <ContainerStatsCharts resource={resource} query={query} liveStats={liveStats} />;
 };

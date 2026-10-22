@@ -206,6 +206,18 @@ not import HTTP route modules, request states or HTTP error rendering, execute S
 or select Local, Direct and Edge transports itself. WebSocket upgrades remain in
 realtime; HTTP mutation-notification middleware lives in
 `api/mutation_notifications.rs` and calls the existing realtime publication boundary.
+The WebSocket write buffer accommodates the bounded outbound queue's largest
+message, including framing overhead. Group snapshots remain capped at 4 MiB;
+large supported snapshots must not disconnect the shared connection and force other
+resource subscriptions to reload. Container process lists load through HTTP and
+refresh only for subscribed Inspect viewers on the existing scoped statistics/state
+events. Each event shares one bounded runtime read per container after actor-specific
+authorization. A process event read that exceeds the configured realtime read timeout
+is cancelled and clears only that process panel; other subscriptions stay connected.
+Authorization failures still fail closed. Process snapshots are transient; no database
+history or separate polling worker is involved. Health history loads through its HTTP query;
+the authenticated health group sends small invalidation notifications on join,
+reconnect and committed changes, rather than carrying the retained records.
 
 ## Composition and lifecycle
 
@@ -247,6 +259,13 @@ Repeated health observations and obsolete Edge sessions do not emit transitions.
 Listener reconnects and subscriber lag trigger a resync of both resource types.
 This bounded stream is for notifications; durable activities and alert work remain
 in PostgreSQL. Adding a subscriber does not require wiring callbacks into stores.
+
+Workload statistics snapshot ownership when samples are admitted. Deployment and
+standalone Stack samples are stored transactionally in `workloadstats`, independently
+of the container projection; Swarm keeps its existing `swarmservicestats` history.
+Queries use the Deployment ID or Stack ID plus service and replica identity, never
+an unscoped container name. The same seven-day bounded retention applies to both.
+Raw container statistics remain tied to their individual container projection.
 
 ## Runtime routing and observations
 

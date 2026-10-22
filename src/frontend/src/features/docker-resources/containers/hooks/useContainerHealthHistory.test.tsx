@@ -21,65 +21,158 @@ beforeEach(() => {
 });
 function Probe({ id = 'one', enabled = true }: { id?: string; enabled?: boolean }) {
   const history = useContainerHealthHistory(id, enabled);
-  return <pre data-testid="history">{JSON.stringify(history)}</pre>;
+  return (
+    <>
+      <pre data-testid="history">{JSON.stringify(history)}</pre>
+      <button onClick={() => void history.refetch()}>Retry</button>
+    </>
+  );
 }
 function subscribe() {
   const on = vi.fn();
   const off = vi.fn();
   const connection = { on, off } as unknown as RealtimeConnection;
   realtime.options!.setupEventListeners(connection);
-  expect(on).toHaveBeenCalledWith('ReceiveContainerHealthHistory', expect.any(Function));
-  return { receive: on.mock.calls[0][1], off, connection };
+  expect(on).toHaveBeenCalledWith('ContainerHealthHistoryChanged', expect.any(Function));
+  return { receive: on.mock.calls[0][1] as (notification: { resourceId: string }) => Promise<void>, off, connection };
 }
-const snapshot = (resourceId = 'one', status = 'Healthy') => ({
-  resourceId,
-  entries: [
-    { observedAt: 1234, state: 'Running', origin: 'Inspection', health: { status, reason: 'Recorded change' } },
-  ],
+const entries = (status = 'Healthy') => [
+  { observedAt: 1234, state: 'Running', origin: 'Inspection', health: { status, reason: 'Recorded change' } },
+];
+const endpoint = 'http://localhost/api/v1/containers/:id/health-history';
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
+
+it('loads history once through HTTP even without a realtime connection', async () => {
+  realtime.connected = false;
+  const requests = vi.fn(() => HttpResponse.json(entries()));
+  server.use(http.get(endpoint, requests));
+  const { rerender } = renderCitadel(<Probe />);
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Healthy'));
+  expect(screen.getByTestId('history')).toHaveTextContent('"isConnected":false');
+  expect(screen.getByTestId('history')).toHaveTextContent('"isLoading":false');
+  rerender(<Probe />);
+  expect(requests).toHaveBeenCalledTimes(1);
 });
 
-it('skips the realtime history group while disabled and resumes when enabled', () => {
+it('skips reads and subscriptions while disabled or without an ID', async () => {
+  const requests = vi.fn(() => HttpResponse.json(entries()));
+  server.use(http.get(endpoint, requests));
   const { rerender } = renderCitadel(<Probe enabled={false} />);
   expect(realtime.options?.skip).toBe(true);
+  expect(requests).not.toHaveBeenCalled();
+  rerender(<Probe id="" />);
+  expect(realtime.options?.skip).toBe(true);
+  expect(requests).not.toHaveBeenCalled();
   rerender(<Probe />);
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Healthy'));
   expect(realtime.options?.skip).toBe(false);
   rerender(<Probe enabled={false} />);
   expect(realtime.options?.skip).toBe(true);
+  await act(async () => subscribe().receive({ resourceId: 'one' }));
+  expect(requests).toHaveBeenCalledTimes(1);
 });
 
-it('receives initial history, updates and reconnect snapshots without HTTP requests', async () => {
-  const requests = vi.fn(() => HttpResponse.json([]));
-  server.use(http.get('http://localhost/api/v1/containers/:id/health-history', requests));
+it('refreshes on change and reconnect notifications and removes its listener', async () => {
+  let records = entries();
+  const requests = vi.fn(() => HttpResponse.json(records));
+  server.use(http.get(endpoint, requests));
   const { rerender } = renderCitadel(<Probe />);
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Healthy'));
   expect(realtime.options?.groupName).toBe('container-health:one');
   const { receive, off, connection } = subscribe();
-  await act(async () => receive(snapshot()));
-  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Healthy'));
-  await act(async () => receive(snapshot('one', 'Unhealthy')));
+  records = entries('Unhealthy');
+  await act(async () => receive({ resourceId: 'one' }));
   await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Unhealthy'));
   realtime.connected = false;
   rerender(<Probe />);
-  expect(screen.getByTestId('history')).toHaveTextContent('"isConnected":false');
   expect(screen.getByTestId('history')).toHaveTextContent('Unhealthy');
   realtime.connected = true;
   rerender(<Probe />);
-  await act(async () => receive({ resourceId: 'one', entries: [] }));
+  records = [];
+  // Rejoining sends the same invalidation to recover records missed offline.
+  await act(async () => receive({ resourceId: 'one' }));
   await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('"entries":[]'));
-  expect(requests).not.toHaveBeenCalled();
+  expect(requests).toHaveBeenCalledTimes(3);
   realtime.options!.removeEventListeners!(connection);
-  expect(off).toHaveBeenCalledWith('ReceiveContainerHealthHistory', receive);
+  expect(off).toHaveBeenCalledWith('ContainerHealthHistoryChanged', receive);
 });
 
-it('isolates containers and ignores snapshots for other resources', async () => {
+it('coalesces notifications during the first GET into one follow-up without losing updates', async () => {
+  const first = deferred();
+  let reads = 0;
+  const requests = vi.fn(async () => {
+    const initial = ++reads === 1;
+    if (initial) await first.promise;
+    return HttpResponse.json(entries(initial ? 'Healthy' : 'Unhealthy'));
+  });
+  server.use(http.get(endpoint, requests));
+  renderCitadel(<Probe />);
+  await waitFor(() => expect(requests).toHaveBeenCalledTimes(1));
+  const { receive } = subscribe();
+  const notifications = Array.from({ length: 10 }, () => receive({ resourceId: 'one' }));
+  expect(requests).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    first.resolve();
+    await Promise.all(notifications);
+  });
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Unhealthy'));
+  expect(requests).toHaveBeenCalledTimes(2);
+});
+
+it('isolates resource changes and ignores notifications for another container', async () => {
+  const requests = vi.fn((id: unknown) => HttpResponse.json(entries(id === 'one' ? 'Healthy' : 'Starting')));
+  server.use(http.get(endpoint, ({ params }) => requests(params.id)));
   const { rerender } = renderCitadel(<Probe />);
-  const first = subscribe();
-  await act(async () => first.receive(snapshot()));
   await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Healthy'));
+  const old = subscribe();
   rerender(<Probe id="two" />);
   expect(screen.getByTestId('history')).not.toHaveTextContent('Healthy');
-  const second = subscribe();
-  await act(async () => second.receive(snapshot('one')));
-  expect(screen.getByTestId('history')).not.toHaveTextContent('Healthy');
-  await act(async () => second.receive(snapshot('two', 'Starting')));
   await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Starting'));
+  const current = subscribe();
+  await act(async () => {
+    await current.receive({ resourceId: 'one' });
+    await old.receive({ resourceId: 'one' });
+  });
+  expect(requests).toHaveBeenCalledTimes(2);
+  expect(screen.getByTestId('history')).toHaveTextContent('Starting');
+});
+
+it.each(['disable', 'unmount'] as const)('does not start a queued refresh after %s', async (action) => {
+  const pending = deferred();
+  const requests = vi.fn(async () => {
+    await pending.promise;
+    return HttpResponse.json(entries());
+  });
+  server.use(http.get(endpoint, requests));
+  const view = renderCitadel(<Probe />);
+  await waitFor(() => expect(requests).toHaveBeenCalledTimes(1));
+  const refresh = subscribe().receive({ resourceId: 'one' });
+  if (action === 'disable') view.rerender(<Probe enabled={false} />);
+  else view.unmount();
+  await act(async () => {
+    pending.resolve();
+    await refresh;
+  });
+  expect(requests).toHaveBeenCalledTimes(1);
+});
+
+it('reports failed HTTP reads, supports retry, and retains data after a failed refresh', async () => {
+  let fail = true;
+  server.use(http.get(endpoint, () => (fail ? new HttpResponse(null, { status: 503 }) : HttpResponse.json(entries()))));
+  const { user } = renderCitadel(<Probe />);
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('"isError":true'));
+  expect(screen.getByTestId('history')).toHaveTextContent('"isLoading":false');
+  fail = false;
+  await user.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('Healthy'));
+  fail = true;
+  await act(async () => subscribe().receive({ resourceId: 'one' }));
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('"isError":true'));
+  expect(screen.getByTestId('history')).toHaveTextContent('Healthy');
 });

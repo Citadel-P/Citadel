@@ -53,7 +53,6 @@ export const createS3Spec = (): Extract<BackupRepositorySpec, { $type: 'S3Compat
 
 export const createDefaultInput = (): BackupRepositoryFormInput => ({
   name: '',
-  description: null,
   passwordSecretId: '',
   spec: createFileSystemSpec(),
 });
@@ -117,7 +116,7 @@ export function BackupRepositoryForm({
     basePath: 'backup-repositories',
     entityName: 'Backup repository',
     onCreate: (payload) => createBackupRepository({ data: toCreateInput(payload) }),
-    onUpdate: (payload) => updateBackupRepository({ id: id!, data: toUpdateInput(payload) } as any),
+    onUpdate: (payload) => updateBackupRepository({ id: id!, data: toUpdateInput(payload, resource!) } as any),
     onRefresh: () => {
       localStorage.removeItem(`backup-repository:${id ?? 'new'}`);
       queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
@@ -141,23 +140,20 @@ export function BackupRepositoryForm({
             id: 'details',
             label: 'Details',
             items: [
-              ...(mode === 'add'
-                ? [
-                    defineField<BackupRepositoryFormInput, 'name'>({
-                      key: 'name',
-                      label: 'Name',
-                      required: true,
-                      description: 'Unique name for this repository.',
-                      render: (value, set) => (
-                        <FieldInput
-                          value={value ?? ''}
-                          placeholder="daily-core-backups"
-                          onChange={(name) => set({ name })}
-                        />
-                      ),
-                    }),
-                  ]
-                : []),
+              defineField<BackupRepositoryFormInput, 'name'>({
+                key: 'name',
+                label: 'Name',
+                required: true,
+                description: 'Unique name for this repository.',
+                render: (value, set) => (
+                  <FieldInput
+                    value={value ?? ''}
+                    disabled={disabled}
+                    placeholder="daily-core-backups"
+                    onChange={(name) => set({ name })}
+                  />
+                ),
+              }),
             ],
           }),
           defineGroupField<BackupRepositoryFormInput>({
@@ -413,7 +409,7 @@ export function BackupRepositoryForm({
         ],
       }),
     }),
-    [fileSystemSpec.platformId, id, mode, resource?.status, selectedLocation, selectedType, specDisabled],
+    [disabled, fileSystemSpec.platformId, id, mode, resource?.status, selectedLocation, selectedType, specDisabled],
   );
 
   return (
@@ -521,17 +517,20 @@ export function mergeSpec(original: BackupRepositorySpec, update?: BackupReposit
 export function toCreateInput(payload: BackupRepositoryFormInput): BackupRepositoryInput {
   return {
     name: payload.name,
-    description: payload.description ?? null,
     passwordSecretId: payload.passwordSecretId,
     spec: normalizeSpec(payload.spec),
   };
 }
 
-export function toUpdateInput(payload: BackupRepositoryFormInput): UpdateBackupRepositoryInput {
-  return {
-    description: payload.description ?? null,
-    spec: normalizeSpec(payload.spec),
-  };
+export function toUpdateInput(
+  payload: BackupRepositoryFormInput,
+  original: BackupRepositoryFormInput,
+): UpdateBackupRepositoryInput {
+  const patch: UpdateBackupRepositoryInput = {};
+  if (payload.name.trim() !== original.name.trim()) patch.name = payload.name.trim();
+  const spec = normalizeSpec(payload.spec);
+  if (JSON.stringify(spec) !== JSON.stringify(normalizeSpec(original.spec))) patch.spec = spec;
+  return patch;
 }
 
 export function normalizeSpec(spec: BackupRepositorySpec): BackupRepositorySpec {

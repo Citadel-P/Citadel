@@ -278,3 +278,21 @@ it('keeps saved observations visible during reconnection', () => {
   expect(screen.getByRole('button', { name: /^Unhealthy at/ })).toBeVisible();
   expect(screen.getByRole('status')).toHaveTextContent('Saved observations remain available');
 });
+
+it('shows a retryable read error instead of an empty history', async () => {
+  const retry = vi.fn();
+  render(<ContainerHealthHistory entries={[]} now={now} isError onRetry={retry} />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Could not load health history.');
+  expect(screen.queryByText('No observations in this time range.')).not.toBeInTheDocument();
+  expect(screen.queryByText('Live')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(retry).toHaveBeenCalledOnce();
+});
+
+it('keeps the last observations visible when a refresh fails', () => {
+  render(<ContainerHealthHistory entries={[transition(now, Status.Healthy)]} now={now} isError />);
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Could not refresh health history. Saved observations are shown.',
+  );
+  expect(screen.getByRole('button', { name: /^Healthy at/ })).toBeVisible();
+});

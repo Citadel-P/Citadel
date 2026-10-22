@@ -52,7 +52,8 @@ import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TabsWithActions as Tabs, TabActionsSlot } from '@/components/custom/tab-actions';
 import { StackLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { StackInspect } from '@/features/docker-resources/containers/container-info/container-inspect';
-import { StackExec, TerminalTargetSelect } from '@/features/docker-resources/containers/container-info/container-exec';
+import { StackExec } from '@/features/docker-resources/containers/container-info/container-exec';
+import { RuntimeTargetSelect } from '@/components/custom/runtime-target-select';
 import { StackStats } from '@/features/docker-resources/containers/container-info/stack-stats';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -956,7 +957,13 @@ const StackContainerInspect = ({
           onValueChange={onSelectContainer}
         />
       </div>
-      <StackInspect key={`${stackId}-${selectedContainer.id}`} stackId={stackId} containerId={selectedContainer.id} />
+      <StackInspect
+        key={`${stackId}-${selectedContainer.id}`}
+        stackId={stackId}
+        containerId={selectedContainer.id}
+        platformId={selectedContainer.platformId}
+        dockerNodeId={selectedContainer.dockerNodeId}
+      />
     </div>
   );
 };
@@ -1012,7 +1019,7 @@ const StackTerminalContainerSelect = ({
   onSelectContainer: (containerId: string) => void;
 }) => {
   return (
-    <TerminalTargetSelect
+    <RuntimeTargetSelect
       value={selectedContainer.id}
       options={containers.map((container) => ({
         value: container.id,

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { SwarmTaskView } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import Loader from '@/components/ui/loader';
-import { TerminalTargetSelect } from '@/features/docker-resources/containers/container-info/container-exec';
+import { RuntimeTargetSelect } from '@/components/custom/runtime-target-select';
 import { TaskTerminal } from '@/features/swarm-resources/tasks/task-info/terminal';
 import { getTaskName } from '@/lib/utils';
 
@@ -31,7 +31,7 @@ export const ServiceTerminal = ({ platformId, tasks, tasksLoading }: ServiceTerm
 
   const hasTerminalPermission = runningTasks.some(canOpenTerminal);
   const taskSelect = (
-    <TerminalTargetSelect
+    <RuntimeTargetSelect
       value={selectedTask?.id}
       options={runningTasks.map((task) => {
         const permitted = canOpenTerminal(task);

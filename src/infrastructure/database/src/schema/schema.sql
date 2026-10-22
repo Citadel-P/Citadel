@@ -1052,7 +1052,6 @@ CREATE TABLE backuprepositories (
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     createdbyactorid uuid NOT NULL,
     currentrunid uuid,
-    description text,
     lastcheckedat timestamp with time zone,
     lastprunedat timestamp with time zone,
     name text NOT NULL,
@@ -1167,6 +1166,7 @@ CREATE TABLE stackwebhookdeployqueue (
 
 CREATE TABLE containers (
     id uuid NOT NULL,
+    composereplicanumber text,
     mounts jsonb,
     containeroperationid uuid,
     controlstartedat bigint,
@@ -1334,6 +1334,29 @@ CREATE TABLE containerstats (
     CONSTRAINT pk_containerstats PRIMARY KEY (id),
     CONSTRAINT fk_containerstats_containers_containerid FOREIGN KEY (containerid) REFERENCES containers (id) ON DELETE CASCADE
 );
+
+-- Workload history survives deletion of individual container projections.
+CREATE TABLE workloadstats (
+    id uuid PRIMARY KEY,
+    platformid uuid NOT NULL REFERENCES platforms(id) ON DELETE CASCADE,
+    deploymentid uuid REFERENCES deployments(id) ON DELETE CASCADE,
+    stackid uuid REFERENCES stacks(id) ON DELETE CASCADE,
+    servicename text NOT NULL,
+    replicakey text NOT NULL,
+    containerid uuid NOT NULL,
+    created bigint NOT NULL,
+    cpuusage double precision NOT NULL,
+    memoryactive double precision NOT NULL,
+    memorycache double precision NOT NULL,
+    memorylimit double precision NOT NULL,
+    rxbytes double precision NOT NULL,
+    txbytes double precision NOT NULL,
+    CONSTRAINT ck_workloadstats_owner CHECK ((deploymentid IS NOT NULL)::integer + (stackid IS NOT NULL)::integer = 1),
+    CONSTRAINT uq_workloadstats_container_created UNIQUE(containerid,created)
+);
+CREATE INDEX ix_workloadstats_created ON workloadstats(created);
+CREATE INDEX ix_workloadstats_deployment_created ON workloadstats(deploymentid,created) WHERE deploymentid IS NOT NULL;
+CREATE INDEX ix_workloadstats_stack_service_created ON workloadstats(stackid,servicename,created) WHERE stackid IS NOT NULL;
 
 CREATE TABLE backupruns (
     id uuid NOT NULL,

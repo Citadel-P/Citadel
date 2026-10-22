@@ -6,7 +6,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "edge_agent_service.proto",
             include_str!("../proto/edge_agent_service.proto"),
-            "f3280c2f341ad5860ed5b34f2e4371356052aa1b66204957e6f0de177efaff32",
+            "4f75ebca064a13cb2ba07d5570dc7da21512c7f7e4a2a43888f61298ad7f2726",
         ),
         (
             "shared_models.proto",
@@ -21,7 +21,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "container_service.proto",
             include_str!("../proto/container_service.proto"),
-            "5b408a811393f13cc2257c32888c8228dbc923efb6860a23ab792776530a97a9",
+            "57fe33f22bf8afafd764500c389cbb4e0a7284175f789279c392cc45e4d43934",
         ),
         (
             "deployment_service.proto",

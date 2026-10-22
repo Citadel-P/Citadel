@@ -14,6 +14,7 @@ service ContainerService {
   rpc Restart (ContainerIds) returns (google.protobuf.Empty);
   rpc Delete (DeleteContainerRequest) returns (google.protobuf.Empty);
   rpc Inspect (InspectContainerRequest) returns (citadel.shared_models.v1.InspectContainerResponse);
+  rpc Processes (InspectContainerRequest) returns (ContainerProcessesResponse);
   rpc Create (CreateContainerRequest) returns (CreateContainerResponse);
 
   rpc Exec (stream ExecClientMessage) returns (stream ExecServerMessage);
@@ -192,4 +193,12 @@ enum RestartPolicy {
     ALWAYS = 2;
     ON_FAILURE = 3;
     UNLESS_STOPPED = 4;
+}
+
+// Fixed columns; command names only, never environment or command arguments.
+message ContainerProcessRow { repeated string values = 1; }
+message ContainerProcessesResponse {
+  repeated string titles = 1;
+  repeated ContainerProcessRow processes = 2;
+  bool truncated = 3;
 }

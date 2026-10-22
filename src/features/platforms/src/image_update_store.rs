@@ -32,11 +32,14 @@ pub trait ImageUpdateStore: Send + Sync {
         registries: &'a [Uuid],
     ) -> BoxFuture<'a, Result<Vec<StoredImageUpdate>, RuntimeCapabilityError>>;
     /// Fences older attempts and references no longer present in the inventory.
+    /// When authorized, atomically associates a successful check's Registry with
+    /// an unassociated image. Never replaces an existing association.
     fn save<'a>(
         &'a self,
         platform: Uuid,
         image: &'a str,
         registry: &'a ImageUpdateRegistry,
         result: &'a ImageTagUpdate,
+        remember_registry: bool,
     ) -> BoxFuture<'a, Result<bool, RuntimeCapabilityError>>;
 }

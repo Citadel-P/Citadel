@@ -199,6 +199,7 @@ impl ImageUpdateService {
                     reference,
                 },
                 &registry,
+                false,
                 cancel,
             )
             .await?;
@@ -253,12 +254,15 @@ impl ImageUpdateService {
         }).collect())
     }
 
+    /// Remember an explicitly selected Registry only when the caller can pull
+    /// images. Read-only callers can still refresh comparison metadata.
     pub async fn check(
         &self,
         actor: ActorId,
         admin: bool,
         target: ImageUpdateTarget<'_>,
         registry_id: Uuid,
+        remember_registry: bool,
         cancel: &CancellationToken,
     ) -> Result<ImageTagUpdate, RuntimeCapabilityError> {
         let registry = self
@@ -273,7 +277,7 @@ impl ImageUpdateService {
                     "The selected Registry is not available.",
                 )
             })?;
-        self.check_resolved(actor, admin, target, &registry, cancel)
+        self.check_resolved(actor, admin, target, &registry, remember_registry, cancel)
             .await
     }
 
@@ -339,6 +343,7 @@ impl ImageUpdateService {
                 reference,
             },
             &registry,
+            false,
             cancel,
         )
         .await?;
@@ -351,6 +356,7 @@ impl ImageUpdateService {
         admin: bool,
         target: ImageUpdateTarget<'_>,
         registry: &ImageUpdateRegistry,
+        remember_registry: bool,
         cancel: &CancellationToken,
     ) -> Result<ImageTagUpdate, RuntimeCapabilityError> {
         let ImageUpdateTarget {
@@ -537,7 +543,13 @@ impl ImageUpdateService {
         }
         if self
             .store
-            .save(platform, &location.docker_image_id, registry, &result)
+            .save(
+                platform,
+                &location.docker_image_id,
+                registry,
+                &result,
+                remember_registry,
+            )
             .await?
             && let Some(on_change) = &self.on_change
         {

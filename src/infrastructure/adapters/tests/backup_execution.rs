@@ -82,7 +82,6 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let store = PostgresBackupPersistence::new(pool.clone()).with_lease_options(60, 90, 30);
     let mut repository_input = BackupRepositoryConfiguration {
         name: format!("backup-repository-{}", Uuid::now_v7().simple()),
-        description: None,
         spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Core","platformId":null,"path":"/tmp/citadel-backups"})).unwrap(),
         password_secret_id: secret,
     };

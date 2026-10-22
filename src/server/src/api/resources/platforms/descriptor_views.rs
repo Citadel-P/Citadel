@@ -234,3 +234,22 @@ mod tests {
         }
     }
 }
+
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerProcessesView {
+    pub running: bool,
+    pub titles: Vec<String>,
+    pub processes: Vec<Vec<String>>,
+    pub truncated: bool,
+}
+impl From<citadel_platforms::containers::ContainerProcesses> for ContainerProcessesView {
+    fn from(value: citadel_platforms::containers::ContainerProcesses) -> Self {
+        Self {
+            running: value.running,
+            titles: value.titles,
+            processes: value.processes,
+            truncated: value.truncated,
+        }
+    }
+}

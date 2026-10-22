@@ -2625,12 +2625,6 @@
       },
       "BackupRepositoryInput": {
         "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "name": {
             "type": "string"
           },
@@ -2862,12 +2856,6 @@
               "null"
             ]
           },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -2919,7 +2907,6 @@
           "id",
           "name",
           "normalizedName",
-          "description",
           "type",
           "spec",
           "passwordSecretId",
@@ -5428,28 +5415,6 @@
         ],
         "type": "object"
       },
-      "ContainerHistory": {
-        "properties": {
-          "containerId": {
-            "type": "string"
-          },
-          "containerName": {
-            "type": "string"
-          },
-          "stats": {
-            "items": {
-              "$ref": "#/components/schemas/ContainerStatView"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "containerId",
-          "containerName",
-          "stats"
-        ],
-        "type": "object"
-      },
       "ContainerInspectionView": {
         "additionalProperties": {},
         "properties": {
@@ -5665,6 +5630,38 @@
           "endpoints",
           "publishedPorts",
           "observedAt",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "ContainerProcessesView": {
+        "properties": {
+          "processes": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "running",
+          "titles",
+          "processes",
           "truncated"
         ],
         "type": "object"
@@ -18776,15 +18773,15 @@
       },
       "StackHistory": {
         "properties": {
-          "containers": {
+          "services": {
             "items": {
-              "$ref": "#/components/schemas/ContainerHistory"
+              "$ref": "#/components/schemas/StackServiceHistory"
             },
             "type": "array"
           }
         },
         "required": [
-          "containers"
+          "services"
         ],
         "type": "object"
       },
@@ -19099,6 +19096,31 @@
           },
           "resourceBindings": {}
         },
+        "type": "object"
+      },
+      "StackServiceHistory": {
+        "properties": {
+          "containerIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "stats": {
+            "items": {
+              "$ref": "#/components/schemas/ContainerStatView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "serviceName",
+          "containerIds",
+          "stats"
+        ],
         "type": "object"
       },
       "StackSource": {
@@ -22500,9 +22522,45 @@
         },
         "type": "object"
       },
+      "UpdateBackupRepositoryCredentialsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "accessKeySecretId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/BackupExecutionLocation"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secretKeySecretId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sessionTokenSecretId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "accessKeySecretId",
+          "secretKeySecretId",
+          "location"
+        ],
+        "type": "object"
+      },
       "UpdateBackupRepositoryInput": {
         "properties": {
-          "description": {
+          "name": {
             "type": [
               "string",
               "null"
@@ -30235,6 +30293,137 @@
         "x-citadel-setup-exempt": false
       }
     },
+    "/api/v1/backupRepositories/{id}/credentials": {
+      "post": {
+        "description": "Validates stored S3 credential references against the existing destination before saving. Requires repository Write and Execute plus Bindings Read. Destination and encryption password remain unchanged.",
+        "operationId": "updateBackupRepositoryCredentials",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBackupRepositoryCredentialsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupRepositoryView"
+                }
+              }
+            },
+            "description": "Credentials validated and updated"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Validate and update S3 repository credentials",
+        "tags": [
+          "BackupRepositories"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
     "/api/v1/backupRepositories/{id}/initialize": {
       "post": {
         "operationId": "initializeBackupRepository",
@@ -37039,6 +37228,136 @@
           }
         ],
         "summary": "Read observed Container networking without its configuration",
+        "tags": [
+          "Containers"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/containers/{id}/processes": {
+      "get": {
+        "operationId": "getContainerProcesses",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerProcessesView"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Read running Container processes",
         "tags": [
           "Containers"
         ],
@@ -58925,7 +59244,7 @@
             "Bearer": []
           }
         ],
-        "summary": "Get Stack Container statistics",
+        "summary": "Get Stack service statistics",
         "tags": [
           "Stacks"
         ],

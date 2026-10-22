@@ -150,7 +150,7 @@ async fn stack_preview_and_execution_discover_owned_physical_mounts_without_save
     .unwrap();
     let store = PostgresBackupPersistence::new(pool.clone());
     let repository = store.create_repository(actor, &BackupRepositoryConfiguration {
-        name: format!("discovery-{platform}"), description: None, password_secret_id: secret,
+        name: format!("discovery-{platform}"), password_secret_id: secret,
         spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Core","path":"/tmp/disposable-backups"})).unwrap(),
     }).await.unwrap();
     let operation = Uuid::now_v7();

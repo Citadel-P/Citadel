@@ -260,11 +260,11 @@ with a disposable PostgreSQL fixture as described in [test/README.md](../test/RE
 
 ## Database schema changes
 
-The current checkout consolidates migrations `0001`–`0006` into a single
-`0001_initial.sql` for fresh databases. Its checksum differs from earlier
-development catalogs, so it cannot upgrade databases initialized with a different
-applied migration checksum. Existing storage must be preserved; this consolidation does not
-authorize resetting databases or rewriting their migration journals.
+The fresh-install catalog contains a single `0001_initial.sql`, including workload
+statistics storage. This baseline replaces the separate workload migration and
+requires a newly created database. It cannot upgrade a database that recorded
+the previous `0001` or `0002` checksums. Recreating a database is a separate,
+explicit operator action; the development task never resets storage.
 
 Preserve applied migrations, including `0001_initial.sql`. Add each schema
 change as the next numbered SQL migration under `src/infrastructure/database/generated/`.

@@ -35,6 +35,25 @@ second bounds `from` and `to`. Omitting `to` uses the current time. Existing
 `hours=24|48|72` requests remain supported, and omitting all range parameters
 keeps the API's 24-hour default. Do not combine range formats.
 
+## History across deployments
+
+Deployment statistics follow the Deployment ID across container replacements.
+Stack charts group history by Compose service within the Stack, and Swarm
+service history survives task replacement and scaling. Replacements in the same
+known replica slot share a time bucket; separate replicas contribute to the
+service total. Unknown replica identities stay separate.
+
+Workload samples are retained for seven days independently of current container
+inventory. History remains readable during a replacement when no container is
+present. A newly created workload starts its own history even if it reuses a name.
+Individual container charts still describe only that container instance.
+Missing observations remain gaps.
+
+Compose replica continuity uses the replica number reported by Docker. Samples
+without that identity keep their original instance identity. Live Stack totals
+wait for readings from every running replica in the time bucket; partial live
+readings do not replace a complete saved total.
+
 ## Investigate resource pressure
 
 1. Open the affected Platform and check that it is connected and receiving

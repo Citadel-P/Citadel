@@ -549,7 +549,7 @@ async fn image_update_observations_fence_old_checks_and_tag_moves() {
     };
     assert!(
         store
-            .save(platform, &image, &registry, &update)
+            .save(platform, &image, &registry, &update, false)
             .await
             .unwrap()
     );
@@ -557,10 +557,16 @@ async fn image_update_observations_fence_old_checks_and_tag_moves() {
     update.last_attempt_at = Some(now - chrono::Duration::seconds(10));
     assert!(
         !store
-            .save(platform, &image, &registry, &update)
+            .save(platform, &image, &registry, &update, true)
             .await
             .unwrap()
     );
+    let association: Option<Uuid> = sqlx::query_scalar("SELECT registryid FROM images WHERE id=$1")
+        .bind(image_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(association, None);
     let images = vec![image.clone()];
     assert!(
         store.load(platform, &images, &[]).await.unwrap().is_empty(),
@@ -577,7 +583,7 @@ async fn image_update_observations_fence_old_checks_and_tag_moves() {
     citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore(
         pool.clone(),
     )
-    .persist_pull(platform, Some(registry.id), &pulled)
+    .persist_pull(platform, None, &pulled)
     .await
     .unwrap();
     let visible = store.load(platform, &images, &[registry.id]).await.unwrap();
@@ -587,21 +593,33 @@ async fn image_update_observations_fence_old_checks_and_tag_moves() {
     update.last_attempt_at = Some(now);
     assert!(
         !store
-            .save(platform, &image, &registry, &update)
+            .save(platform, &image, &registry, &update, true)
             .await
             .unwrap(),
         "a pre-pull check cannot resurrect old metadata"
     );
+    let association: Option<Uuid> = sqlx::query_scalar("SELECT registryid FROM images WHERE id=$1")
+        .bind(image_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(association, None);
     update.last_attempt_at = Some(Utc::now());
     assert!(
         store
-            .save(platform, &image, &registry, &update)
+            .save(platform, &image, &registry, &update, true)
             .await
             .unwrap()
     );
+    let association: Option<Uuid> = sqlx::query_scalar("SELECT registryid FROM images WHERE id=$1")
+        .bind(image_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(association, Some(registry.id));
     // An image losing its tag must neither expose its old status nor accept an
     // in-flight check completion for that tag.
-    sqlx::query("UPDATE images SET tags='[]' WHERE id=$1")
+    sqlx::query("UPDATE images SET tags='[]',registryid=NULL WHERE id=$1")
         .bind(image_id)
         .execute(&pool)
         .await
@@ -609,7 +627,7 @@ async fn image_update_observations_fence_old_checks_and_tag_moves() {
     update.last_attempt_at = Some(now + chrono::Duration::seconds(1));
     assert!(
         !store
-            .save(platform, &image, &registry, &update)
+            .save(platform, &image, &registry, &update, true)
             .await
             .unwrap()
     );
@@ -620,6 +638,12 @@ async fn image_update_observations_fence_old_checks_and_tag_moves() {
             .unwrap()
             .is_empty()
     );
+    let association: Option<Uuid> = sqlx::query_scalar("SELECT registryid FROM images WHERE id=$1")
+        .bind(image_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(association, None);
     sqlx::query("DELETE FROM images WHERE id=$1")
         .bind(image_id)
         .execute(&pool)
@@ -632,4 +656,105 @@ async fn image_update_observations_fence_old_checks_and_tag_moves() {
             .await
             .unwrap();
     assert_eq!(remaining, 0);
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn image_update_registry_association_requires_success_and_preserves_concurrent_choices() {
+    use citadel_adapters::persistence::postgres::platforms::image_updates::PostgresImageUpdateStore;
+    use citadel_platforms::image_update_store::ImageUpdateStore;
+    use citadel_platforms::image_updates::{
+        ImageTagUpdate, ImageUpdateRegistry, ImageUpdateStatus,
+    };
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+    let registry = ImageUpdateRegistry {
+        id: Uuid::from_u128(0x100),
+        host: "docker.io".into(),
+        revision: "one".into(),
+    };
+    let other = ImageUpdateRegistry {
+        id: Uuid::now_v7(),
+        ..registry.clone()
+    };
+    sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) SELECT $1,configuration,createdbyactorid,$1::text,registryhost,status FROM registries WHERE id=$2")
+        .bind(other.id).bind(registry.id).execute(&pool).await.unwrap();
+    let store = PostgresImageUpdateStore(pool.clone());
+    for (status, remember, expected) in [
+        (ImageUpdateStatus::UpToDate, false, false),
+        (ImageUpdateStatus::CheckFailed, true, false),
+        (ImageUpdateStatus::Unknown, true, false),
+        (ImageUpdateStatus::NotChecked, true, false),
+        (ImageUpdateStatus::NotApplicable, true, false),
+        (ImageUpdateStatus::UpToDate, true, true),
+        (ImageUpdateStatus::UpdateAvailable, true, true),
+    ] {
+        let id = Uuid::now_v7();
+        let image = format!("sha256:{id}");
+        sqlx::query("INSERT INTO images(id,dockerimageid,name,platformid,createdat,tags) VALUES($1,$2,'nginx',$3,now(),'[\"nginx:17\"]')")
+            .bind(id).bind(&image).bind(platform).execute(&pool).await.unwrap();
+        let now = Utc::now();
+        let update = ImageTagUpdate {
+            reference: "nginx:17".into(),
+            registry_id: Some(registry.id),
+            status,
+            reason: None,
+            last_attempt_at: Some(now),
+            last_success_at: Some(now),
+            local_config_digest: None,
+            remote_config_digest: None,
+            remote_manifest_digest: None,
+            is_stale: false,
+        };
+        assert!(
+            store
+                .save(platform, &image, &registry, &update, remember)
+                .await
+                .unwrap()
+        );
+        let association: Option<Uuid> =
+            sqlx::query_scalar("SELECT registryid FROM images WHERE id=$1")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(association, expected.then_some(registry.id), "{status:?}");
+
+        // Competing successful checks can both save observations, but only one
+        // may associate an image; an established association must remain intact.
+        let success = ImageTagUpdate {
+            status: ImageUpdateStatus::UpToDate,
+            last_attempt_at: Some(Utc::now()),
+            ..update
+        };
+        let other_success = ImageTagUpdate {
+            registry_id: Some(other.id),
+            ..success.clone()
+        };
+        let (first, second) = tokio::join!(
+            store.save(platform, &image, &registry, &success, true),
+            store.save(platform, &image, &other, &other_success, true),
+        );
+        assert!(first.unwrap());
+        assert!(second.unwrap());
+        let (association, version): (Option<Uuid>, i64) =
+            sqlx::query_as("SELECT registryid,rowversion FROM images WHERE id=$1")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(version, 1, "only the first association changes the image");
+        if expected {
+            assert_eq!(association, Some(registry.id));
+        } else {
+            assert!(association == Some(registry.id) || association == Some(other.id));
+        }
+    }
 }

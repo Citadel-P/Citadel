@@ -111,7 +111,7 @@ Use **Clear observation selection** to dismiss them. Nearby observations with th
 same health and container state share a marker when space is limited; its hover
 card shows their count and time span. Failures and different exit or OOM results
 remain separate. Choose a shorter range to see more detail, and use arrow keys to
-navigate markers. Changing the range uses the existing realtime snapshot without
+navigate markers. Changing the range uses the loaded history without
 extra HTTP requests.
 Chart and detail timestamps use local time. Gaps and grouped results do not
 establish continuous health or uptime.
@@ -121,8 +121,11 @@ establish continuous health or uptime.
 This example shows a recovered container: the current check is healthy, while
 the history preserves the earlier unhealthy observations.
 
-Current health and saved history update automatically through Citadel's realtime
-connection while the details are open. Expand **Probe details** to fetch Docker's
+History loads when details open, even if the realtime connection is unavailable.
+Realtime notifications refresh saved history as observations change and after
+reconnecting. If a read fails, use **Retry**; any previously loaded observations
+remain visible. Current health continues to update through the realtime connection.
+Expand **Probe details** to fetch Docker's
 recent results and effective check configuration on demand, with Inspect permission.
 This section starts collapsed; opening it loads a snapshot that is not continuously refreshed.
 Viewing health never runs a
@@ -211,3 +214,26 @@ owning [Service](/docs/resources/swarm-services) or [Stack](/docs/resources/stac
 For Swarm logs, terminals, and statistics on other Nodes, check
 [Cluster node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage).
 If an action is disabled, see [troubleshooting](/docs/operations/troubleshooting#an-action-is-unavailable).
+
+### Processes
+
+Expand **Processes** under **Inspect** to see the running container's user, host
+PID, parent PID, CPU time and executable name. Command arguments are omitted.
+This read requires the Platform's Inspect permission.
+
+The same section appears below inspection data for Deployments, Stack containers,
+Swarm Services and individual Tasks. Stack container selection follows the current
+Inspect target. For a Swarm Service, choose a running Task in **Processes** to view
+that Task's container on its owning Node. Workload access alone does not grant
+Platform Read or Inspect permission.
+
+The initial snapshot loads through HTTP. While expanded, the list updates through
+realtime on the existing statistics interval (`CITADEL_STATS_POLL_INTERVAL_SECONDS`).
+Closing the section stops process reads. Reopening within 30 seconds of the latest
+snapshot reuses it without another HTTP request. Snapshots stay in memory for up to
+five minutes after closing; older snapshots refresh when reopened.
+If a snapshot cannot be loaded, **Retry**
+requests it again. Reconnecting fetches a fresh snapshot. Stopped containers show an
+empty state. Process history is not stored, and snapshots are limited to 1,024 rows.
+This uses Docker's process-list API on Linux, including Local, Direct and Edge
+connections and the owning node of Swarm containers.

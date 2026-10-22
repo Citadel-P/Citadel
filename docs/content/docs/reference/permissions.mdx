@@ -68,6 +68,11 @@ resource has `canWrite: true`. This means the user can edit that resource but
 cannot create a new one. Top-level capabilities are not a summary of permissions
 on the returned resources.
 
+Updating S3 repository credentials requires **Write** and **Execute** on the
+repository, plus **Read** on **Bindings** to select stored secrets. Validation
+through a Platform also requires **Execute** on that Platform. Name and description
+edits continue to require only repository **Write**.
+
 ## Additive access
 
 Citadel combines direct Roles, enabled Team grants, and resource-specific access.

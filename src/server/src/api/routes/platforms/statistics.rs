@@ -362,7 +362,7 @@ pub(super) async fn deployment(
     path = "/api/v1/stacks/{stackId}/stats",
     operation_id = "getStackStats",
     tag = "Stacks",
-    summary = "Get Stack Container statistics",
+    summary = "Get Stack service statistics",
     responses(
         (status = 200, description = "Success", body = StackHistory, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -420,41 +420,27 @@ pub(super) async fn workload(
         StatisticsWorkload::Stack => {}
     }
     let store = &state.statistics;
-    let containers = match store.workload_containers(workload, id).await {
-        Ok(containers) => required(Ok(containers), &headers)?,
-        Err(error) => return Ok(runtime_error_response(error, &headers)),
-    };
-    if matches!(workload, StatisticsWorkload::Deployment) && containers.is_empty() {
-        return api_result(Err(ApiError::NotFound), &headers);
-    }
-    let ids: Vec<_> = containers.iter().map(|c| c.id).collect();
-    let stats = match store
-        .containers(&ids, window, chrono::Utc::now().timestamp())
+    let series = match store
+        .workload_history(workload, id, window, chrono::Utc::now().timestamp())
         .await
     {
-        Ok(stats) => stats,
+        Ok(series) => required(Ok(series), &headers)?,
         Err(error) => return Ok(runtime_error_response(error, &headers)),
     };
     if matches!(workload, StatisticsWorkload::Deployment) {
+        let stats = series
+            .into_iter()
+            .flat_map(|series| series.stats)
+            .collect::<Vec<_>>();
         return Ok(no_store(Json(History { stats }).into_response()));
     }
-    let mut grouped = std::collections::HashMap::<_, Vec<_>>::new();
-    for sample in stats {
-        grouped.entry(sample.container_id).or_default().push(sample);
-    }
-    let containers = containers
+    let services = series
         .into_iter()
-        .filter(|c| !c.docker_id.is_empty())
-        .map(|c| ContainerHistory {
-            container_id: c.docker_id,
-            container_name: c.name,
-            stats: grouped
-                .remove(&c.id)
-                .unwrap_or_default()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+        .map(|series| StackServiceHistory {
+            service_name: series.name,
+            container_ids: series.container_ids,
+            stats: series.stats.into_iter().map(Into::into).collect(),
         })
         .collect();
-    Ok(no_store(Json(StackHistory { containers }).into_response()))
+    Ok(no_store(Json(StackHistory { services }).into_response()))
 }

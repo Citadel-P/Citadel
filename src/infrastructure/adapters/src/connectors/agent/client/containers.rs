@@ -4,6 +4,31 @@ use citadel_contracts::citadel::{
 };
 
 impl AgentClient {
+    pub async fn container_processes(
+        &self,
+        id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::containers::v1::ContainerProcessesResponse,
+        RuntimeCapabilityError,
+    > {
+        self.retry_unary(cancellation, || async {
+            let request = self.signer.sign(
+                InspectContainerRequest {
+                    container_id: id.into(),
+                },
+                "/citadel.containers.v1.ContainerService/Processes",
+                Some(self.operation_timeout),
+            )?;
+            self.container_client()
+                .processes(request)
+                .await
+                .map(|response| response.into_inner())
+                .map_err(normalize_status)
+        })
+        .await
+    }
+
     pub async fn inspect_container(
         &self,
         id: &str,

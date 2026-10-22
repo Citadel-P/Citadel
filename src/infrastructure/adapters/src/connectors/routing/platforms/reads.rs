@@ -10,6 +10,21 @@ use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 
 impl ContainerInspectionPort for Runtime<'_> {
+    fn processes<'a>(
+        &'a self,
+        id: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_platforms::containers::ContainerProcesses, RuntimeCapabilityError>,
+    > {
+        match self {
+            Runtime::Local(runtime) => ContainerInspectionPort::processes(*runtime, id, cancel),
+            Runtime::Agent(runtime) => ContainerInspectionPort::processes(runtime, id, cancel),
+            Runtime::Edge(runtime) => ContainerInspectionPort::processes(runtime, id, cancel),
+        }
+    }
+
     fn inspection<'a>(
         &'a self,
         id: &'a str,

@@ -188,7 +188,7 @@ async fn check_image_update(
     let principal = api_result(require_actor(principal), &headers)?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     let ids = api_result(normalize_ids(vec![input.docker_image_id]), &headers)?;
-    authorize_platform_level(
+    let capabilities = authorize_platform_level(
         &state,
         &principal,
         input.platform_id,
@@ -218,6 +218,7 @@ async fn check_image_update(
                 reference: &input.reference,
             },
             input.registry_id,
+            capabilities.can_pull,
             &cancel,
         )
         .await

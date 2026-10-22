@@ -1,4 +1,5 @@
-//! Raw committed rows shared for one published event only. Callers authorize
+//! Reads shared for one published event only, including transient process snapshots.
+//! Callers authorize
 //! before reading and construct actor-specific views after reading.
 use super::{PublishedRuntimeEvent, RealtimeReadError};
 use citadel_platforms::{ContainerDetails, ImageDetails, PlatformDetails, PlatformReadService};
@@ -8,6 +9,10 @@ use uuid::Uuid;
 
 #[derive(Debug, Default)]
 pub(crate) struct CommittedReads {
+    pub(crate) processes: tokio::sync::Mutex<
+        std::collections::BTreeMap<Uuid, std::sync::Arc<OnceCell<serde_json::Value>>>,
+    >,
+
     identities: OnceCell<Vec<citadel_platforms::ContainerIdentity>>,
     telemetry: OnceCell<Option<citadel_platforms::PlatformTelemetryContext>>,
     platform: OnceCell<Option<PlatformDetails>>,

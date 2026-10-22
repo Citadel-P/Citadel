@@ -59,6 +59,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BackupsH
         .normalized_routes(utoipa_axum::routes!(create_repository))
         .normalized_routes(utoipa_axum::routes!(get_repository))
         .normalized_routes(utoipa_axum::routes!(update_repository))
+        .normalized_routes(utoipa_axum::routes!(update_repository_credentials))
         .normalized_routes(utoipa_axum::routes!(archive_repository))
         .normalized_routes(utoipa_axum::routes!(validate_repository))
         .normalized_routes(utoipa_axum::routes!(initialize_repository))
@@ -994,6 +995,95 @@ async fn update_repository(
                 &h,
             )?)
             .map_err(ApiError::internal),
+            &h,
+        )?)
+        .into_response(),
+    ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/backupRepositories/{id}/credentials",
+    operation_id = "updateBackupRepositoryCredentials",
+    tag = "BackupRepositories",
+    summary = "Validate and update S3 repository credentials",
+    description = "Validates stored S3 credential references against the existing destination before saving. Requires repository Write and Execute plus Bindings Read. Destination and encryption password remain unchanged.",
+    request_body = UpdateBackupRepositoryCredentialsInput,
+    responses(
+        (status = 200, description = "Credentials validated and updated", body = BackupRepositoryView),
+        crate::openapi::errors::ResourceMutationErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn update_repository_credentials(
+    State(s): State<BackupsHttpState>,
+    p: Option<Extension<ActorPrincipal>>,
+    ApiPath(id): ApiPath<Uuid>,
+    h: HeaderMap,
+    ValidatedJson(input): ValidatedJson<UpdateBackupRepositoryCredentialsInput>,
+) -> HttpResult {
+    let p = actor(p, &h)?;
+    for permission in [PermissionLevel::Write, PermissionLevel::Execute] {
+        auth(
+            &s,
+            &p,
+            ResourceType::BackupRepository,
+            permission,
+            Some(id),
+            &h,
+        )
+        .await?;
+    }
+    auth(
+        &s,
+        &p,
+        ResourceType::Binding,
+        PermissionLevel::Read,
+        None,
+        &h,
+    )
+    .await?;
+    let location = RepositoryLocationInput {
+        location: input.location,
+        platform_id: input.platform_id,
+    };
+    validate_repository_location(&location, &h)?;
+    if let Some(platform_id) = location.platform_id {
+        auth(
+            &s,
+            &p,
+            ResourceType::Platform,
+            PermissionLevel::Execute,
+            Some(platform_id),
+            &h,
+        )
+        .await?;
+    }
+    let credentials = citadel_backups::BackupRepositoryCredentials {
+        access_key_secret_id: input.access_key_secret_id,
+        secret_key_secret_id: input.secret_key_secret_id,
+        session_token_secret_id: input.session_token_secret_id,
+    };
+    let repository = result(
+        s.backups
+            .update_repository_credentials(
+                id,
+                &credentials,
+                match location.location {
+                    BackupExecutionLocation::Core => "Core",
+                    BackupExecutionLocation::Platform => "Platform",
+                },
+                location.platform_id,
+                &s.cancellation.child_token(),
+            )
+            .await,
+        &h,
+    )?;
+    Ok(no_store(
+        Json(api_result(
+            BackupRepositoryView::try_from(repository).map_err(ApiError::internal),
             &h,
         )?)
         .into_response(),

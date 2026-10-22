@@ -228,7 +228,13 @@ test('workload health details follow real probe changes without restarting or fe
     expect(bounds).not.toBeNull();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.width).toBeLessThanOrEqual(390);
-    expect(healthRequests).toEqual([]);
+    expect(healthRequests.length).toBeGreaterThan(0);
+    expect(healthRequests.every((url) => url.includes('/health-history'))).toBe(
+      true,
+    );
+    await expect(
+      dialog.getByRole('button', { name: /^Unhealthy at/ }).first(),
+    ).toBeVisible();
     const after = JSON.parse(await runInDockerDaemon('inspect', dockerId))[0];
     expect(after.State.StartedAt).toBe(initial.State.StartedAt);
     expect(after.RestartCount).toBe(initial.RestartCount);

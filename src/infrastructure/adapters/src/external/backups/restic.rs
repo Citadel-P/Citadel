@@ -2471,7 +2471,6 @@ mod tests {
             id: Uuid::now_v7(),
             name: "test".into(),
             normalized_name: "test".into(),
-            description: None,
             repository_type: "FileSystem".into(),
             spec: serde_json::from_value(
                 serde_json::json!({"$type":"FileSystem","location":"Core","path":"../outside"}),

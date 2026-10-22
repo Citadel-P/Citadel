@@ -8,6 +8,7 @@ import {
   LookupResourceType,
   PlatformView,
   ResourceControlState,
+  ResourceType,
 } from '@/api/generated/api.types';
 import { IntegrationAddCard, IntegrationCard, ResourceSelectorField } from '@/components/custom/common';
 import { DropdownActionButton, RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -23,7 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { useMutate } from '@/lib/hooks';
+import { useMutate, useRead } from '@/lib/hooks';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
@@ -34,12 +35,15 @@ import {
   Eye,
   FolderLock,
   LoaderCircle,
+  LockKeyhole,
+  ChevronDown,
   Plus,
   RefreshCw,
   Scissors,
 } from 'lucide-react';
 import { type Dispatch, type ReactNode, type SetStateAction, useState } from 'react';
 import { toast } from 'sonner';
+import { RepositoryCredentials } from '../backup-repositories/credentials';
 import { BackupRepositoryDropdownActions } from '../backup-repositories/actions';
 import { destinationText } from '../backup-repositories/table';
 import {
@@ -344,13 +348,24 @@ function RepositoryDialog({
   const check = useMutate('checkBackupRepository');
   const prune = useMutate('pruneBackupRepository');
   const [pendingOperation, setPendingOperation] = useState<RepositoryOperation | null>(null);
+  const [updatingCredentials, setUpdatingCredentials] = useState(false);
   const saving = create.isPending || update.isPending;
   const operating =
-    pendingOperation !== null || validate.isPending || initialize.isPending || check.isPending || prune.isPending;
+    updatingCredentials ||
+    pendingOperation !== null ||
+    validate.isPending ||
+    initialize.isPending ||
+    check.isPending ||
+    prune.isPending;
 
   const selectedType = (input.spec?.$type ?? BackupRepositoryType.FileSystem) as BackupRepositoryType;
   const formDisabled = editing ? !(editing.capabilities?.canWrite ?? true) : false;
-  const specDisabled = formDisabled || editing?.status === BackupRepositoryStatus.Ready;
+  const ready = editing?.status === BackupRepositoryStatus.Ready;
+  const specDisabled = formDisabled || ready;
+  const patch = editing
+    ? toUpdateInput(ready ? { ...input, spec: editing.spec } : input, getInitialInput(editing))
+    : undefined;
+  const hasChanges = !editing || Object.keys(patch ?? {}).length > 0;
   const isS3 = selectedType === BackupRepositoryType.S3Compatible;
   const s3Spec = input.spec as Extract<BackupRepositorySpec, { $type: 'S3Compatible' }>;
   const fileSystemSpec = input.spec as Extract<BackupRepositorySpec, { $type: 'FileSystem' }>;
@@ -368,6 +383,7 @@ function RepositoryDialog({
     }));
 
   const save = async () => {
+    if (saving || operating || formDisabled || !hasChanges) return;
     const error = validateRepositoryInput(input, editing);
     if (error) {
       toast.error(error);
@@ -376,7 +392,7 @@ function RepositoryDialog({
 
     try {
       if (editing) {
-        await update.mutateAsync({ id: editing.id, data: toUpdateInput(input) } as any);
+        await update.mutateAsync({ id: editing.id, data: patch! } as any);
         toast.success('Repository updated successfully');
         onOpenChange(false);
       } else {
@@ -402,8 +418,7 @@ function RepositoryDialog({
     successMessage: string,
     _failureMessage: string,
   ) => {
-    if (!editing || operating || (operation === 'initialize' && editing.status === BackupRepositoryStatus.Ready))
-      return;
+    if (!editing || operating || saving || hasChanges || formDisabled || (operation === 'initialize' && ready)) return;
 
     setPendingOperation(operation);
     try {
@@ -418,294 +433,422 @@ function RepositoryDialog({
     }
   };
 
-  const title = editing ? 'Edit Backup Repository' : 'Add Backup Repository';
+  const title = editing ? (formDisabled ? 'Backup Repository' : 'Edit Backup Repository') : 'Add Backup Repository';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!updatingCredentials) onOpenChange(next);
+      }}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto sm:max-w-175"
+        className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-175"
         onInteractOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
+        <DialogHeader className="border-b px-6 py-5 pr-12 text-left">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {editing
-              ? 'Update repository settings and maintenance configuration.'
+              ? 'Manage repository details, storage and maintenance.'
               : 'Create an encrypted destination that backup policies can use.'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 py-2">
-          <div className="grid gap-4 md:grid-cols-2">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
+          {formDisabled && (
+            <p role="status" className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+              You have read-only access to this repository. Write permission is required to make changes.
+            </p>
+          )}
+          <section aria-label="Repository details" className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">Details</h3>
+              {editing && <StateIndicator variant="badge" value={editing.status} />}
+            </div>
             <div className="space-y-2">
-              <Label>Name</Label>
+              <Label htmlFor="repository-name">Name</Label>
               <FieldInput
+                id="repository-name"
                 className="max-w-full"
                 value={input.name ?? ''}
-                disabled={!!editing || formDisabled}
+                disabled={formDisabled || saving || updatingCredentials}
                 placeholder="daily-core-backups"
                 onChange={(name) => setInput((current) => ({ ...current, name }))}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <RepositoryTypeSelector
-                value={selectedType}
-                disabled={specDisabled}
-                onChange={(type) =>
-                  setInput((current) => ({
-                    ...current,
-                    spec: type === BackupRepositoryType.S3Compatible ? createS3Spec() : createFileSystemSpec(),
-                  }))
-                }
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Password Secret</Label>
-            <SecretSelector
-              value={input.passwordSecretId}
-              disabled={!!editing || formDisabled}
-              targetResourceId={editing?.id}
-              onChange={(passwordSecretId) =>
-                setInput((current) => ({
-                  ...current,
-                  passwordSecretId: passwordSecretId ?? '',
-                }))
-              }
-            />
-          </div>
-
-          {specDisabled && (
-            <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-              Ready repository destinations are locked. Create a new repository when the destination must change.
-            </div>
-          )}
-
-          {!isS3 ? (
-            <div className="space-y-5">
+          </section>
+          {ready && editing ? (
+            <ReadyRepositoryDetails repository={editing} />
+          ) : (
+            <section aria-label="Repository storage" className="space-y-5 border-t pt-5">
+              <h3 className="text-sm font-semibold">Storage & encryption</h3>
               <div className="space-y-2">
-                <Label>Location</Label>
-                <ItemSelector
-                  className="max-w-full"
-                  collection={fileSystemLocationOptions}
-                  value={fileSystemLocation}
-                  disabled={specDisabled}
-                  onChange={(location: BackupExecutionLocation) =>
-                    setSpec({
-                      location,
-                      platformId:
-                        location === BackupExecutionLocation.Platform ? (fileSystemSpec.platformId ?? null) : null,
-                    })
+                <Label>Type</Label>
+                <RepositoryTypeSelector
+                  value={selectedType}
+                  disabled={specDisabled || saving}
+                  onChange={(type) =>
+                    setInput((current) => ({
+                      ...current,
+                      spec: type === BackupRepositoryType.S3Compatible ? createS3Spec() : createFileSystemSpec(),
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Password Secret</Label>
+                <SecretSelector
+                  value={input.passwordSecretId}
+                  disabled={!!editing || formDisabled}
+                  targetResourceId={editing?.id}
+                  onChange={(passwordSecretId) =>
+                    setInput((current) => ({
+                      ...current,
+                      passwordSecretId: passwordSecretId ?? '',
+                    }))
                   }
                 />
               </div>
 
-              {fileSystemLocation === BackupExecutionLocation.Platform && (
-                <div className="space-y-2">
-                  <Label>Platform</Label>
-                  <ResourceSelectorField
-                    targetType={LookupResourceType.Platform}
-                    selected={fileSystemSpec.platformId ?? undefined}
-                    disabled={specDisabled}
-                    onSelect={(platform: PlatformView | undefined) => setSpec({ platformId: platform?.id ?? null })}
-                    placeholder="Select Platform"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The backup repository is stored on this platform host. Use this for regular or edge agent filesystem
-                    backups.
-                  </p>
-                </div>
+              {editing && (
+                <p className="text-xs text-muted-foreground">
+                  The encryption password is fixed after creation. Changing the selected secret does not rotate the
+                  repository password.
+                </p>
               )}
 
-              <div className="space-y-2">
-                <Label>Repository Path</Label>
-                <FieldInput
-                  className="max-w-full"
-                  value={fileSystemSpec.path ?? ''}
-                  disabled={specDisabled}
-                  placeholder={fileSystemLocation === BackupExecutionLocation.Core ? 'daily/core' : '/srv/backups'}
-                  onChange={(path) => setSpec({ path })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {fileSystemLocation === BackupExecutionLocation.Core
-                    ? 'Relative paths are created under the configured Core backup repository root.'
-                    : 'Use a host path that exists on the selected platform or can be created by the backup runner.'}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Endpoint</Label>
-                  <FieldInput
-                    className="max-w-full"
-                    value={s3Spec.endpoint ?? ''}
-                    disabled={specDisabled}
-                    placeholder="https://s3.example.com"
-                    onChange={(endpoint) => setSpec({ endpoint })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Bucket</Label>
-                  <FieldInput
-                    className="max-w-full"
-                    value={s3Spec.bucket ?? ''}
-                    disabled={specDisabled}
-                    placeholder="citadel-backups"
-                    onChange={(bucket) => setSpec({ bucket })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Prefix</Label>
-                  <FieldInput
-                    className="max-w-full"
-                    value={s3Spec.prefix ?? ''}
-                    disabled={specDisabled}
-                    placeholder="production/core"
-                    onChange={(prefix) => setSpec({ prefix: prefix || null })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Region</Label>
-                  <FieldInput
-                    className="max-w-full"
-                    value={s3Spec.region ?? ''}
-                    disabled={specDisabled}
-                    placeholder="us-east-1"
-                    onChange={(region) => setSpec({ region: region || null })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Bucket Lookup</Label>
-                  <ItemSelector
-                    className="max-w-full"
-                    collection={bucketLookupOptions}
-                    value={s3Spec.bucketLookup ?? S3BucketLookup.Auto}
-                    disabled={specDisabled}
-                    onChange={(bucketLookup: S3BucketLookup) => setSpec({ bucketLookup })}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="allow-insecure-http">Allow Insecure HTTP</Label>
-                    <p className="text-xs text-muted-foreground">Allow plain HTTP endpoints for local object stores.</p>
+              {!isS3 ? (
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <Label>Location</Label>
+                    <ItemSelector
+                      className="max-w-full"
+                      collection={fileSystemLocationOptions}
+                      value={fileSystemLocation}
+                      disabled={specDisabled}
+                      onChange={(location: BackupExecutionLocation) =>
+                        setSpec({
+                          location,
+                          platformId:
+                            location === BackupExecutionLocation.Platform ? (fileSystemSpec.platformId ?? null) : null,
+                        })
+                      }
+                    />
                   </div>
-                  <FieldSwitch
-                    id="allow-insecure-http"
-                    checked={s3Spec.allowInsecureHttp ?? false}
-                    disabled={specDisabled}
-                    onChange={(allowInsecureHttp) => setSpec({ allowInsecureHttp })}
-                  />
-                </div>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Access Key Secret</Label>
-                  <SecretSelector
-                    value={s3Spec.accessKeySecretId}
-                    disabled={specDisabled}
-                    targetResourceId={editing?.id}
-                    onChange={(accessKeySecretId) => setSpec({ accessKeySecretId: accessKeySecretId ?? '' })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Secret Key Secret</Label>
-                  <SecretSelector
-                    value={s3Spec.secretKeySecretId}
-                    disabled={specDisabled}
-                    targetResourceId={editing?.id}
-                    onChange={(secretKeySecretId) => setSpec({ secretKeySecretId: secretKeySecretId ?? '' })}
-                  />
-                </div>
-              </div>
+                  {fileSystemLocation === BackupExecutionLocation.Platform && (
+                    <div className="space-y-2">
+                      <Label>Platform</Label>
+                      <ResourceSelectorField
+                        targetType={LookupResourceType.Platform}
+                        selected={fileSystemSpec.platformId ?? undefined}
+                        disabled={specDisabled}
+                        onSelect={(platform: PlatformView | undefined) => setSpec({ platformId: platform?.id ?? null })}
+                        placeholder="Select Platform"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The backup repository is stored on this platform host. Use this for regular or edge agent
+                        filesystem backups.
+                      </p>
+                    </div>
+                  )}
 
-              <div className="space-y-2">
-                <Label>Session Token Secret</Label>
-                <SecretSelector
-                  value={s3Spec.sessionTokenSecretId}
-                  allowNone
-                  disabled={specDisabled}
-                  targetResourceId={editing?.id}
-                  onChange={(sessionTokenSecretId) => setSpec({ sessionTokenSecretId })}
-                />
-              </div>
-            </div>
+                  <div className="space-y-2">
+                    <Label>Repository Path</Label>
+                    <FieldInput
+                      className="max-w-full"
+                      value={fileSystemSpec.path ?? ''}
+                      disabled={specDisabled}
+                      placeholder={fileSystemLocation === BackupExecutionLocation.Core ? 'daily/core' : '/srv/backups'}
+                      onChange={(path) => setSpec({ path })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {fileSystemLocation === BackupExecutionLocation.Core
+                        ? 'Relative paths are created under the configured Core backup repository root.'
+                        : 'Use a host path that exists on the selected platform or can be created by the backup runner.'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Endpoint</Label>
+                      <FieldInput
+                        className="max-w-full"
+                        value={s3Spec.endpoint ?? ''}
+                        disabled={specDisabled}
+                        placeholder="https://s3.example.com"
+                        onChange={(endpoint) => setSpec({ endpoint })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Bucket</Label>
+                      <FieldInput
+                        className="max-w-full"
+                        value={s3Spec.bucket ?? ''}
+                        disabled={specDisabled}
+                        placeholder="citadel-backups"
+                        onChange={(bucket) => setSpec({ bucket })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Prefix</Label>
+                      <FieldInput
+                        className="max-w-full"
+                        value={s3Spec.prefix ?? ''}
+                        disabled={specDisabled}
+                        placeholder="production/core"
+                        onChange={(prefix) => setSpec({ prefix: prefix || null })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Region</Label>
+                      <FieldInput
+                        className="max-w-full"
+                        value={s3Spec.region ?? ''}
+                        disabled={specDisabled}
+                        placeholder="us-east-1"
+                        onChange={(region) => setSpec({ region: region || null })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Bucket Lookup</Label>
+                      <ItemSelector
+                        className="max-w-full"
+                        collection={bucketLookupOptions}
+                        value={s3Spec.bucketLookup ?? S3BucketLookup.Auto}
+                        disabled={specDisabled}
+                        onChange={(bucketLookup: S3BucketLookup) => setSpec({ bucketLookup })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="allow-insecure-http">Allow Insecure HTTP</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Allow plain HTTP endpoints for local object stores.
+                        </p>
+                      </div>
+                      <FieldSwitch
+                        id="allow-insecure-http"
+                        checked={s3Spec.allowInsecureHttp ?? false}
+                        disabled={specDisabled}
+                        onChange={(allowInsecureHttp) => setSpec({ allowInsecureHttp })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Access Key Secret</Label>
+                      <SecretSelector
+                        value={s3Spec.accessKeySecretId}
+                        disabled={specDisabled}
+                        targetResourceId={editing?.id}
+                        onChange={(accessKeySecretId) => setSpec({ accessKeySecretId: accessKeySecretId ?? '' })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Secret Key Secret</Label>
+                      <SecretSelector
+                        value={s3Spec.secretKeySecretId}
+                        disabled={specDisabled}
+                        targetResourceId={editing?.id}
+                        onChange={(secretKeySecretId) => setSpec({ secretKeySecretId: secretKeySecretId ?? '' })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Session Token Secret</Label>
+                    <SecretSelector
+                      value={s3Spec.sessionTokenSecretId}
+                      allowNone
+                      disabled={specDisabled}
+                      targetResourceId={editing?.id}
+                      onChange={(sessionTokenSecretId) => setSpec({ sessionTokenSecretId })}
+                    />
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {ready && editing?.spec.$type === 'S3Compatible' && (
+            <RepositoryCredentials
+              key={editing.id}
+              repository={editing}
+              disabled={hasChanges || saving || (operating && !updatingCredentials)}
+              onPendingChange={setUpdatingCredentials}
+              onUpdated={(repository) => {
+                setEditing(repository);
+                setInput(getInitialInput(repository));
+              }}
+            />
           )}
 
           {editing && (
-            <div className="rounded-lg border bg-muted/10 p-4">
-              <div className="mb-3 flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <StateIndicator value={editing.status} />
-                  Repository setup
+            <details className="group rounded-lg border">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                Maintenance
+                <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+              </summary>
+              <div className="space-y-3 border-t p-4">
+                {hasChanges && (
+                  <p className="text-xs text-muted-foreground">Save your changes before running maintenance.</p>
+                )}
+                <div className="mb-3 flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <StateIndicator value={editing.status} />
+                    Repository status
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Initialize a new empty destination once. Validate an existing Restic repository before using it.
+                    Check and prune are maintenance actions for ready repositories.
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Initialize a new empty destination once. Validate an existing Restic repository before using it. Check
-                  and prune are maintenance actions for ready repositories.
-                </p>
-              </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <RepositoryOperationButton
-                  icon={<CheckCircle2 className="size-3.5" />}
-                  label="Validate"
-                  description="Confirm Citadel can access this repository."
-                  disabled={formDisabled || operating}
-                  loading={pendingOperation === 'validate'}
-                  onClick={() =>
-                    runOperation('validate', validate, 'Repository validated', 'Failed to validate repository.')
-                  }
-                />
-                <RepositoryOperationButton
-                  icon={<DatabaseBackup className="size-3.5" />}
-                  label="Initialize"
-                  description="Create the Restic repository in an empty destination."
-                  disabled={formDisabled || operating || editing.status === BackupRepositoryStatus.Ready}
-                  loading={pendingOperation === 'initialize'}
-                  onClick={() =>
-                    runOperation('initialize', initialize, 'Repository initialized', 'Failed to initialize repository.')
-                  }
-                />
-                <RepositoryOperationButton
-                  icon={<RefreshCw className="size-3.5" />}
-                  label="Check"
-                  description="Verify repository integrity."
-                  disabled={formDisabled || operating || editing.status !== BackupRepositoryStatus.Ready}
-                  loading={pendingOperation === 'check'}
-                  onClick={() => runOperation('check', check, 'Repository checked', 'Failed to check repository.')}
-                />
-                <RepositoryOperationButton
-                  icon={<Scissors className="size-3.5" />}
-                  label="Prune"
-                  description="Reclaim unreferenced data without removing snapshots. Policy retention controls snapshot expiration."
-                  disabled={formDisabled || operating || editing.status !== BackupRepositoryStatus.Ready}
-                  loading={pendingOperation === 'prune'}
-                  onClick={() => runOperation('prune', prune, 'Repository pruned', 'Failed to prune repository.')}
-                />
+                <div className={cn('grid gap-2 sm:grid-cols-2', ready ? 'lg:grid-cols-3' : 'lg:grid-cols-4')}>
+                  <RepositoryOperationButton
+                    icon={<CheckCircle2 className="size-3.5" />}
+                    label="Validate"
+                    description="Confirm Citadel can access this repository."
+                    disabled={formDisabled || operating || saving || hasChanges}
+                    loading={pendingOperation === 'validate'}
+                    onClick={() =>
+                      runOperation('validate', validate, 'Repository validated', 'Failed to validate repository.')
+                    }
+                  />
+                  {!ready && (
+                    <RepositoryOperationButton
+                      icon={<DatabaseBackup className="size-3.5" />}
+                      label="Initialize"
+                      description="Create the Restic repository in an empty destination."
+                      disabled={
+                        formDisabled ||
+                        operating ||
+                        saving ||
+                        hasChanges ||
+                        editing.status === BackupRepositoryStatus.Ready
+                      }
+                      loading={pendingOperation === 'initialize'}
+                      onClick={() =>
+                        runOperation(
+                          'initialize',
+                          initialize,
+                          'Repository initialized',
+                          'Failed to initialize repository.',
+                        )
+                      }
+                    />
+                  )}
+                  <RepositoryOperationButton
+                    icon={<RefreshCw className="size-3.5" />}
+                    label="Check"
+                    description="Verify repository integrity."
+                    disabled={
+                      formDisabled ||
+                      operating ||
+                      saving ||
+                      hasChanges ||
+                      editing.status !== BackupRepositoryStatus.Ready
+                    }
+                    loading={pendingOperation === 'check'}
+                    onClick={() => runOperation('check', check, 'Repository checked', 'Failed to check repository.')}
+                  />
+                  <RepositoryOperationButton
+                    icon={<Scissors className="size-3.5" />}
+                    label="Prune"
+                    description="Reclaim unreferenced data without removing snapshots. Policy retention controls snapshot expiration."
+                    disabled={
+                      formDisabled ||
+                      operating ||
+                      saving ||
+                      hasChanges ||
+                      editing.status !== BackupRepositoryStatus.Ready
+                    }
+                    loading={pendingOperation === 'prune'}
+                    onClick={() => runOperation('prune', prune, 'Repository pruned', 'Failed to prune repository.')}
+                  />
+                </div>
               </div>
-            </div>
+            </details>
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
+        <DialogFooter className="border-t bg-muted/20 px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || updatingCredentials}>
+            {formDisabled ? 'Close' : 'Cancel'}
           </Button>
-          <Button onClick={save} disabled={saving || formDisabled}>
-            Save {saving && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
-          </Button>
+          {!formDisabled && (
+            <Button onClick={save} disabled={saving || operating || !hasChanges}>
+              {editing ? 'Save changes' : 'Create repository'}{' '}
+              {saving && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ReadyRepositoryDetails({ repository }: { repository: BackupRepositoryView }) {
+  const { data, isLoading } = useRead('listSecretDefinitions', {
+    query: { targetResourceType: ResourceType.BackupRepository, targetResourceId: repository.id },
+  });
+  const secretName = (id?: string | null) =>
+    !id
+      ? 'None'
+      : (data?.data.secrets.find((secret) => secret.id === id)?.name ??
+        (isLoading ? 'Loading…' : 'Stored secret unavailable'));
+  const spec = repository.spec;
+  const fields: [string, string][] =
+    spec.$type === 'S3Compatible'
+      ? [
+          ['Type', 'S3 compatible'],
+          ['Endpoint', spec.endpoint],
+          ['Bucket', spec.bucket],
+          ['Prefix', spec.prefix || 'Bucket root'],
+          ['Region', spec.region || 'Default'],
+          ['Bucket lookup', spec.bucketLookup || 'Auto'],
+          ['Insecure HTTP', spec.allowInsecureHttp ? 'Allowed' : 'Disabled'],
+          ['Access key secret', secretName(spec.accessKeySecretId)],
+          ['Secret key secret', secretName(spec.secretKeySecretId)],
+          ['Session token secret', secretName(spec.sessionTokenSecretId)],
+        ]
+      : [
+          ['Type', 'Filesystem'],
+          ['Location', spec.location || 'Core'],
+          ...(spec.platformId ? [['Platform', spec.platformId] as [string, string]] : []),
+          ['Repository path', spec.path],
+        ];
+  fields.push(['Encryption password secret', secretName(repository.passwordSecretId)]);
+  return (
+    <section aria-label="Repository storage" className="space-y-4 rounded-lg border bg-muted/20 p-4">
+      <div className="flex items-start gap-3">
+        <LockKeyhole aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Storage & encryption</h3>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            This repository is ready. Its destination and selected secrets are locked to keep existing backups
+            accessible. The name can still be updated with Write permission.
+          </p>
+        </div>
+      </div>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-4 border-t pt-4 sm:grid-cols-2">
+        {fields.map(([label, value]) => (
+          <div key={label} className="min-w-0 space-y-1">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="text-sm wrap-anywhere">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
@@ -746,14 +889,13 @@ function getInitialInput(repository: BackupRepositoryView): BackupRepositoryForm
   return {
     ...repository,
     name: repository.name,
-    description: repository.description ?? null,
     passwordSecretId: repository.passwordSecretId,
     spec: repository.spec,
   };
 }
 
 function validateRepositoryInput(input: BackupRepositoryFormInput, editing: BackupRepositoryView | null) {
-  if (!editing && !input.name.trim()) return 'Repository name is required.';
+  if (!input.name.trim()) return 'Repository name is required.';
   if (!editing && !input.passwordSecretId) return 'Password secret is required.';
 
   if (input.spec.$type === 'S3Compatible') {

@@ -1,7 +1,7 @@
 use citadel_platforms::{
     ContainerStatSnapshot, PlatformStatSnapshot, RuntimeCapabilityError, RuntimeErrorKind,
     ServiceStatIdentity, ServiceTaskSample, StatisticsContainer, StatisticsReader,
-    StatisticsWorkload, StatsWindow,
+    StatisticsWorkload, StatsWindow, WorkloadStatSeries,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use sqlx::{PgPool, Row, postgres::PgRow};
@@ -113,41 +113,60 @@ impl StatisticsReader for PostgresStatisticsReader {
         }
         .boxed()
     }
-    fn workload_containers(
+    fn workload_history(
         &self,
         workload: StatisticsWorkload,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<Option<Vec<StatisticsContainer>>, RuntimeCapabilityError>> {
+        window: StatsWindow,
+        now: i64,
+    ) -> BoxFuture<'_, Result<Option<Vec<WorkloadStatSeries>>, RuntimeCapabilityError>> {
         async move {
-            let (exists, query) = match workload {
-                StatisticsWorkload::Deployment => (
-                    "SELECT EXISTS(SELECT 1 FROM deployments WHERE id=$1)",
-                    "SELECT id,platformid,dockercontainerid,name FROM containers WHERE deploymentid=$1 ORDER BY created DESC,id DESC LIMIT 1",
-                ),
-                StatisticsWorkload::Stack => (
-                    "SELECT EXISTS(SELECT 1 FROM stacks WHERE id=$1)",
-                    "SELECT id,platformid,dockercontainerid,name FROM containers WHERE stackid=$1 ORDER BY id LIMIT 501",
-                ),
+            let deployment = matches!(workload, StatisticsWorkload::Deployment);
+            let exists = if deployment {
+                "SELECT EXISTS(SELECT 1 FROM deployments WHERE id=$1)"
+            } else {
+                "SELECT EXISTS(SELECT 1 FROM stacks WHERE id=$1)"
             };
-            if !sqlx::query_scalar::<_, bool>(exists)
-                .bind(id)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(storage)?
-            {
+            if !sqlx::query_scalar::<_, bool>(exists).bind(id).fetch_one(&self.pool).await.map_err(storage)? {
                 return Ok(None);
             }
-            let rows = sqlx::query(query)
-                .bind(id)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?;
-            if rows.len() > 500 {
-                return Err(capacity("Statistics request exceeds 500 Containers"));
+            let rows = sqlx::query(include_str!("workload_history.sql"))
+                .bind(id).bind(deployment).bind(window.since(now)).bind(window.until(now))
+                .bind(window.bucket_seconds()).fetch_all(&self.pool).await.map_err(storage)?;
+            if rows.len() > 65_536 {
+                return Err(capacity("Workload history exceeds 65536 samples; choose a shorter range."));
             }
-            Ok(Some(rows.into_iter().map(map_identity).collect::<Result<_, _>>()?))
-        }
-        .boxed()
+            let mut series = std::collections::BTreeMap::<String, WorkloadStatSeries>::new();
+            for row in rows {
+                let name: String = row.try_get("servicename").map_err(storage)?;
+                series.entry(name.clone()).or_insert_with(|| WorkloadStatSeries {
+                    name, container_ids: vec![], stats: vec![],
+                }).stats.push(map_container(row)?);
+            }
+            // Current membership is used only to merge live samples in the UI.
+            // Historical identity comes from the owner recorded with each sample.
+            let current = sqlx::query(r#"SELECT DISTINCT c.dockercontainerid,
+                CASE WHEN $2 THEN '' ELSE COALESCE(s.name,NULLIF(c.composeservicename,''),c.id::text) END AS servicename
+                FROM containers c
+                LEFT JOIN swarmtaskprojections t ON c.isswarmtask AND t.platformid=c.platformid AND t.dockercontainerid=c.dockercontainerid
+                    AND t.dockernodeid=COALESCE(c.dockernodeid,(SELECT platformdescriptor::jsonb->>'nodeID' FROM platforms WHERE id=c.platformid))
+                LEFT JOIN swarmserviceprojections s ON s.platformid=t.platformid AND s.dockerserviceid=t.dockerserviceid
+                WHERE ($2 AND c.deploymentid=$1) OR (NOT $2 AND (c.stackid=$1 OR s.stackid=$1))
+                LIMIT 501"#).bind(id).bind(deployment).fetch_all(&self.pool).await.map_err(storage)?;
+            if current.len() > 500 {
+                return Err(capacity("Statistics request exceeds 500 workload series or Containers"));
+            }
+            for row in current {
+                let name: String = row.try_get("servicename").map_err(storage)?;
+                series.entry(name.clone()).or_insert_with(|| WorkloadStatSeries {
+                    name, container_ids: vec![], stats: vec![],
+                }).container_ids.push(row.try_get("dockercontainerid").map_err(storage)?);
+            }
+            if series.len() > 500 {
+                return Err(capacity("Statistics request exceeds 500 workload series or Containers"));
+            }
+            Ok(Some(series.into_values().collect()))
+        }.boxed()
     }
     fn containers<'a>(
         &'a self,

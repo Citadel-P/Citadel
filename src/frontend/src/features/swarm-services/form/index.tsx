@@ -23,9 +23,10 @@ import { ResourceBindingsTab } from '@/components/custom/resource-bindings-tab';
 import { ActivitiesTab } from '@/features/activities';
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TabsWithActions as Tabs, TabActionsSlot } from '@/components/custom/tab-actions';
-import { MonacoEditor } from '@/lib/monaco';
+import { InspectionPanel } from '@/components/custom/inspection-panel';
 import { useRead } from '@/lib/hooks';
 import { TasksTable } from '@/features/swarm-resources/tasks/table';
+import { ServiceProcesses } from '@/features/swarm-resources/services/service-info/processes';
 import { useServiceTasksGroup } from '@/features/swarm-resources/tasks/hooks/useTasksGroup';
 import { Button } from '@/components/ui/button';
 import {
@@ -344,12 +345,11 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
           <ServiceTerminal platformId={resource.platformId} tasks={tasks} tasksLoading={taskGroup.isLoading} />
         </TabsContent>
         <TabsContent value="inspect" className="mt-2">
-          <MonacoEditor
-            value={JSON.stringify(inspectQuery.data?.data ?? {}, null, 2)}
-            language="json"
-            readOnly
-            minHeight={320}
-          />
+          <InspectionPanel data={inspectQuery.data?.data ?? {}} minHeight={320}>
+            {canInspect && resource.dockerServiceId && (
+              <ServiceProcesses platformId={resource.platformId} serviceId={resource.dockerServiceId} />
+            )}
+          </InspectionPanel>
         </TabsContent>
         <TabsContent value="stats" className="mt-2">
           {resource.dockerServiceId && (

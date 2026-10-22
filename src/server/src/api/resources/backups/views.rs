@@ -18,8 +18,6 @@ pub struct BackupRepositoryView {
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
-    #[schema(required = true)]
-    pub description: Option<String>,
     #[serde(rename = "type")]
     pub repository_type: BackupRepositoryType,
     #[schema(value_type = crate::api::resources::schema_models::backups::BackupRepositorySpecSchema)]
@@ -53,7 +51,6 @@ impl TryFrom<citadel_backups::BackupRepository> for BackupRepositoryView {
             id: value.id,
             name: value.name,
             normalized_name: value.normalized_name,
-            description: value.description,
             repository_type: serde_json::from_value(value.repository_type.into())?,
             spec: value.spec,
             password_secret_id: value.password_secret_id,
