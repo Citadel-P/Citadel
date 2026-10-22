@@ -367,7 +367,7 @@ mod tests {
             assert_eq!(allowed(kind), columns[7] != "denied", "{kind:?}");
             count += 1;
         }
-        assert_eq!(count, 68);
+        assert_eq!(count, 69);
         assert!(!allowed(EdgeCommandKind::Unspecified));
     }
     #[test]
