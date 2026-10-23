@@ -37,6 +37,7 @@ describe('Platform creation form', () => {
     expect(requestBody).toEqual({
       name: 'local-docker',
       address: null,
+      agentId: null,
       description: null,
       type: PlatformType.Docker,
       connectorType: PlatformConnectorType.Local,
