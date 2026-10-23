@@ -41,6 +41,57 @@ impl Database {
     }
 }
 
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
+async fn initial_baseline_includes_alert_ordering_and_restart_preserves_cooldown_and_history() {
+    let database = Database::create().await;
+    let mut connection = PgConnection::connect(&database.url).await.unwrap();
+    let installed = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!(installed.applied, super::migration_count());
+    assert_eq!(installed.already_applied, 0);
+    let rule: Uuid = sqlx::query_scalar(
+        "SELECT id FROM alertrules WHERE type='DeploymentImageUpdateAvailable' LIMIT 1",
+    )
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    let resource = Uuid::now_v7();
+    let never_triggered = Uuid::now_v7();
+    sqlx::query("INSERT INTO alertrulestates(alertruleid,resourceid,consecutivematches,createdbyactorid,lasttriggeredat,lastobservedat) VALUES($1,$2,7,'00000000-0000-0000-0000-000000000001','2026-10-23T10:00:00Z','2026-10-23T11:00:00Z'),($1,$3,2,'00000000-0000-0000-0000-000000000001',NULL,NULL)")
+        .bind(rule).bind(resource).bind(never_triggered).execute(&mut connection).await.unwrap();
+    let event = Uuid::now_v7();
+    sqlx::query("INSERT INTO alertevents(id,alertruleid,type,severity,info,resourceid,resourcename,resourcetype,deduplicationkey,openincidentkey,acknowledgedat,acknowledgedbyactorid) VALUES($1,$2,'DeploymentImageUpdateAvailable','Info','{\"LatestImage\":\"sha256:pending\"}',$3,'upgrade-fixture','Deployment','pending','pending','2026-10-23T10:01:00Z','00000000-0000-0000-0000-000000000001')")
+        .bind(event).bind(rule).bind(resource).execute(&mut connection).await.unwrap();
+    let before: serde_json::Value =
+        sqlx::query_scalar("SELECT row_to_json(e) FROM alertevents e WHERE id=$1")
+            .bind(event)
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+
+    let restarted = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!(restarted.applied, 0);
+    assert_eq!(restarted.already_applied, super::migration_count());
+    let state: (bool, bool, i32) = sqlx::query_as("SELECT lastobservedat='2026-10-23T11:00:00Z'::timestamptz,lasttriggeredat='2026-10-23T10:00:00Z'::timestamptz,consecutivematches FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2")
+        .bind(rule).bind(resource).fetch_one(&mut connection).await.unwrap();
+    assert_eq!(state, (true, true, 7));
+    let unobserved: bool = sqlx::query_scalar("SELECT lastobservedat IS NULL AND lasttriggeredat IS NULL AND consecutivematches=2 FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2")
+        .bind(rule).bind(never_triggered).fetch_one(&mut connection).await.unwrap();
+    assert!(unobserved);
+    let after: serde_json::Value =
+        sqlx::query_scalar("SELECT row_to_json(e) FROM alertevents e WHERE id=$1")
+            .bind(event)
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(
+        before, after,
+        "restart must preserve the acknowledged open alert"
+    );
+    connection.close().await.unwrap();
+    database.close().await;
+}
+
 // PreReleaseUpgradeTests.FailingMigration_ShouldRollbackSchemaAndRemainUnjournaled.
 // The Rust journal deliberately retains bounded failed-attempt diagnostics;
 // unlike DbUp, it must have no *completed* entry, not no diagnostic row.

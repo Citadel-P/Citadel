@@ -321,6 +321,18 @@ jobs:
               cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
             )
           done
+          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_alert_updates
+          (
+            export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_alert_updates"
+            for test_name in \
+              update_resolution::supersession::unchanged_update_rechecks_fence_delayed_targets_across_restart_without_extending_cooldown \
+              update_resolution::supersession::update_targets_supersede_atomically_after_cooldown_and_preserve_acknowledgments \
+              update_resolution::supersession::update_recheck_repairs_existing_open_targets_without_replacing_current_or_other_incidents \
+              update_resolution::supersession::update_supersession_rolls_back_with_delivery_failure_and_retries_durably; do
+              cargo test --locked --workspace --test alert_persistence "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+            done
+            cargo test --locked --workspace --test alert_persistence update_resolution:: -- --ignored --test-threads=1
+          )
           # Inventory changes other fixture connectors: isolate these library tests,
           # and keep execution serial. This does not replace platforms_http above.
           docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_runtime_platforms

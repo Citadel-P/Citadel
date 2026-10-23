@@ -174,6 +174,13 @@ selector before executing it, so a renamed test cannot silently run zero tests:
 - `alert_persistence::durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure`
   keeps durable observation consumer/receipt coverage on a separate fresh execution
   database, so unrelated queued observations cannot affect its receipt counts.
+- `alert_persistence::update_resolution` runs on another fresh execution database.
+  It covers verified update recovery and supersession of pending targets, including
+  cooldown, concurrent detection, stale observations, acknowledgment preservation,
+  existing overlapping alerts, and transactional rollback on delivery-queue failure.
+  Unchanged and cooldown-suppressed rechecks retain observation ordering across
+  restart without extending cooldown; baseline coverage verifies the observation
+  timestamp is available and restart preserves alert history and cooldown.
 - Server **library** tests
   `workers::platforms::state_delta_tests::lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_container_scoped`,
   `workers::platforms::state_delta_tests::local_and_direct_bursts_commit_once_and_publish_six_ids`,

@@ -278,7 +278,12 @@ function TaskAlertEventLayout({ alertEventId }: { alertEventId: string }) {
         </SheetDescription>
       </SheetHeader>
 
-      <div className="p-4 pt-0 pb-2">
+      <div className="space-y-4 p-4 pt-0 pb-2">
+        {event.resolutionNote && (
+          <DetailSection title="Resolution" icon={NotepadText}>
+            <p className="text-sm whitespace-pre-wrap break-words">{event.resolutionNote}</p>
+          </DetailSection>
+        )}
         <MonacoEditor
           value={serializeData(data!.data.info)}
           filename={`alert-event-info-${event.id}.json`}

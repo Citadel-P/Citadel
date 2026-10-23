@@ -8,6 +8,9 @@ use citadel_stacks::{
     ImageUpdateState, RecreateStackOnNewImageState, StackRepository, StackUpdateState,
 };
 
+#[path = "update_supersession.rs"]
+mod supersession;
+
 struct Fixture {
     pool: sqlx::PgPool,
     alerts: PostgresAlertRepository,
@@ -115,6 +118,46 @@ impl Fixture {
         }
         panic!("observation queue did not drain");
     }
+    // Recovery must still handle overlapping events persisted before supersession
+    // was introduced. Seed those through the low-level event API so these tests
+    // retain their exact-target and partial-apply coverage independently.
+    async fn historical_event(
+        &self,
+        previous: &citadel_alerts::AlertEvent,
+        component: &str,
+        info: serde_json::Value,
+    ) -> (citadel_alerts::AlertEvent, AlertObservation) {
+        let observation = AlertObservation {
+            alert_type: previous.alert_type.clone(),
+            resource_id: previous.resource_id.unwrap(),
+            resource_name: previous.resource_name.clone(),
+            resource_type: previous.resource_type.clone(),
+            deduplication_component: component.into(),
+            observed_at: Utc::now(),
+            value: None,
+            matched: true,
+            info: info.clone(),
+        };
+        let event = self
+            .alerts
+            .raise(&NewAlertEvent {
+                alert_rule_id: previous.alert_rule_id,
+                alert_type: previous.alert_type.clone(),
+                severity: previous.severity,
+                info,
+                resource_id: previous.resource_id,
+                resource_name: previous.resource_name.clone(),
+                resource_type: previous.resource_type.clone(),
+                deduplication_key: format!(
+                    "{}:{}:{component}",
+                    previous.alert_rule_id, observation.resource_id
+                ),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        (event, observation)
+    }
     async fn resolved(&self, id: Uuid, expected: bool) {
         let event = self.alerts.get_event(id).await.unwrap();
         assert_eq!(event.resolved_at.is_some(), expected);
@@ -170,12 +213,7 @@ async fn stack_update_resolution_is_durable_exact_and_does_not_reopen() {
         )
         .await;
     let (newer, newer_observation) = f
-        .event(
-            stack.id,
-            "StackImageUpdateAvailable",
-            "target-newer",
-            target("sha256:newer", "sha256:newer"),
-        )
+        .historical_event(&old, "target-newer", target("sha256:newer", "sha256:newer"))
         .await;
     let (failed, _) = f
         .event(stack.id, "StackAutoDeployFailed", "failed", json!({}))
@@ -305,12 +343,7 @@ async fn deployment_apply_resolves_only_its_installed_digest() {
         )
         .await;
     let (newer, _) = f
-        .event(
-            deployment.id,
-            "DeploymentImageUpdateAvailable",
-            "sha256:newer",
-            json!({"LatestImage":"sha256:newer"}),
-        )
+        .historical_event(&old, "sha256:newer", json!({"LatestImage":"sha256:newer"}))
         .await;
     let claim = deployments
         .claim_apply(f.actor, true, deployment.id)
@@ -400,12 +433,7 @@ async fn git_apply_resolves_matching_commit_but_not_newer_or_failed_update() {
         )
         .await;
     let (newer, _) = f
-        .event(
-            stack.id,
-            "StackGitUpdateAvailable",
-            "commit-b",
-            json!({"RemoteCommitSha":"b".repeat(40)}),
-        )
+        .historical_event(&old, "commit-b", json!({"RemoteCommitSha":"b".repeat(40)}))
         .await;
     let claim = stacks
         .claim_apply(f.actor, true, stack.id, None, None)

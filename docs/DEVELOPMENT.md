@@ -289,11 +289,12 @@ currently configured.
 
 ## Database schema changes
 
-The fresh-install catalog contains a single `0001_initial.sql`, including workload
-statistics storage. This baseline replaces the separate workload migration and
-requires a newly created database. It cannot upgrade a database that recorded
-the previous `0001` or `0002` checksums. Recreating a database is a separate,
-explicit operator action; the development task never resets storage.
+The migration catalog contains a single consolidated `0001_initial.sql`, including
+workload statistics storage and alert observation ordering. This baseline replaces
+the separate workload migration and requires a newly created database. It cannot
+upgrade a database that recorded the previous `0001` or `0002` checksums.
+Recreating a database is a separate, explicit operator action; the development
+task never resets storage.
 
 Preserve applied migrations, including `0001_initial.sql`. Add each schema
 change as the next numbered SQL migration under `src/infrastructure/database/generated/`.

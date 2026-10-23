@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { History, Radio } from 'lucide-react';
+import { History } from 'lucide-react';
 import type { ContainerHealthTransitionView } from '@/api/generated/api.types';
 import { StatsRangePicker } from '@/components/custom/stats-range-picker';
 import { Button } from '@/components/ui/button';
@@ -72,8 +72,7 @@ export function ContainerHealthHistory({
               Health history
             </h2>
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Radio className="size-3" aria-hidden="true" />
-              {isError ? 'Unavailable' : isConnected ? 'Live' : 'Reconnecting'}
+              {isError ? 'Unavailable' : isConnected ? '' : 'Reconnecting'}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">

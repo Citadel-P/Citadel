@@ -804,6 +804,7 @@ CREATE TABLE alertrulestates (
     createdat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     createdbyactorid uuid NOT NULL,
     lasttriggeredat timestamp with time zone,
+    lastobservedat timestamp with time zone,
     CONSTRAINT pk_alertrulestates PRIMARY KEY (alertruleid, resourceid),
     CONSTRAINT fk_alertrulestates_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
     CONSTRAINT fk_alertrulestates_alertrules_alertruleid FOREIGN KEY (alertruleid) REFERENCES alertrules (id) ON DELETE CASCADE
