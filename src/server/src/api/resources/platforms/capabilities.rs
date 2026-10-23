@@ -43,6 +43,17 @@ pub(crate) fn platform_capabilities(
     }
 }
 
+/// A platform Terminal grant does not delegate access to Citadel's own processes.
+pub(crate) fn container_capabilities(
+    mut permission: PlatformCapabilitiesView,
+    container: &super::views::ContainerView,
+    is_administrator: bool,
+) -> PlatformCapabilitiesView {
+    permission.can_open_terminal &=
+        is_administrator || (!container.is_system && container.system_role.is_none());
+    permission
+}
+
 pub(crate) fn permission_for(
     permissions: &std::collections::BTreeMap<Uuid, EffectivePlatformPermission>,
     id: Uuid,

@@ -16,7 +16,7 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { getSwarmTaskIdFromContainerName, getTaskName } from '@/lib/utils';
 import { useSelectedResources } from '@/lib/atoms';
 import { DropdownActionComponent } from '@/pages/types';
-import { CellContext, ColumnDef, Row } from '@tanstack/react-table';
+import { StockFeatures, CellContext, ColumnDef, Row } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router';
@@ -44,7 +44,7 @@ type ServiceTableRow = ServiceRow | TaskRow;
 
 const isServiceRow = (row: ServiceTableRow): row is ServiceRow => row.kind === 'service';
 
-const ServiceHealthCell = ({ row }: CellContext<ServiceTableRow, unknown>) => {
+const ServiceHealthCell = ({ row }: CellContext<StockFeatures, ServiceTableRow, unknown>) => {
   const { healthResource, platformId } = row.original;
   if (!healthResource) return null;
   return isServiceRow(row.original) ? (
@@ -93,8 +93,8 @@ export const ServicesTable = ({
   const getSubRows = useCallback((row: ServiceTableRow) => (isServiceRow(row) ? row.tasks : undefined), []);
   const taskContainersById = useMemo(() => mapTaskContainers(items, taskContainers), [items, taskContainers]);
   const serviceStatsById = useMemo(() => mapServiceStats(items, taskContainersById), [items, taskContainersById]);
-  const columns = useMemo<ColumnDef<ServiceTableRow>[]>(() => {
-    const allColumns: ColumnDef<ServiceTableRow>[] = [
+  const columns = useMemo<ColumnDef<StockFeatures, ServiceTableRow>[]>(() => {
+    const allColumns: ColumnDef<StockFeatures, ServiceTableRow>[] = [
       {
         id: 'select',
         header: ({ table }) => (
@@ -319,7 +319,7 @@ const aggregateTaskStats = (
   );
 };
 
-const ServiceNameCell = ({ row, platformId }: { row: Row<ServiceTableRow>; platformId: string }) => {
+const ServiceNameCell = ({ row, platformId }: { row: Row<StockFeatures, ServiceTableRow>; platformId: string }) => {
   if (!isServiceRow(row.original)) {
     const task = row.original.task;
     return (

@@ -112,10 +112,13 @@ impl AutomationService {
             Err(error) => return AutomationRunResult::failed(None, error),
         };
         let directory = workspace.directory();
-        let script = workspace.script();
+        let script = workspace.entrypoint();
         let mut args = vec![
             OsString::from("run"),
             OsString::from("--no-prompt"),
+            // Do not discover operator/parent-workspace configuration or locks.
+            OsString::from("--no-config"),
+            OsString::from("--no-lock"),
             OsString::from(format!("--allow-read={}", directory.display())),
             OsString::from(format!("--allow-write={}", directory.display())),
             OsString::from("--allow-env=NO_COLOR,DENO_DIR"),

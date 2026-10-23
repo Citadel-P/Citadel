@@ -6,7 +6,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { fromNow } from '@/lib/dayjs.helper';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { subscribeTagPageActions, TagPageAction } from './actions';
 import { TagFormDialog } from './dialogs';
@@ -52,7 +52,7 @@ const columns = (
     string,
     React.FC<{ resource: TagView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<TagView>[] => [
+): ColumnDef<StockFeatures, TagView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -76,26 +76,25 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <TagName tag={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
     accessorKey: 'color',
     header: ({ column }) => <SortableCell cellName="Color Name" column={column} />,
     cell: ({ row }) => <span className="text-[13px]">{getTagColorLabel(row.original.color)}</span>,
-    sortingFn: (rowA, rowB) =>
-      getTagColorLabel(rowA.original.color).localeCompare(getTagColorLabel(rowB.original.color)),
+    sortFn: (rowA, rowB) => getTagColorLabel(rowA.original.color).localeCompare(getTagColorLabel(rowB.original.color)),
   },
   {
     accessorKey: 'usageCount',
     header: ({ column }) => <SortableCell cellName="Usage" column={column} />,
     cell: ({ row }) => <span className="text-[13px] tabular-nums">{row.original.usageCount}</span>,
-    sortingFn: (rowA, rowB) => Number(rowA.original.usageCount) - Number(rowB.original.usageCount),
+    sortFn: (rowA, rowB) => Number(rowA.original.usageCount) - Number(rowB.original.usageCount),
   },
   {
     accessorKey: 'updatedAt',
     header: ({ column }) => <SortableCell cellName="Updated" column={column} />,
     cell: ({ row }) => <span className="text-[13px]">{fromNow(row.original.updatedAt)}</span>,
-    sortingFn: (rowA, rowB) => String(rowA.original.updatedAt).localeCompare(String(rowB.original.updatedAt)),
+    sortFn: (rowA, rowB) => String(rowA.original.updatedAt).localeCompare(String(rowB.original.updatedAt)),
   },
   {
     id: 'actions',

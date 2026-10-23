@@ -14,7 +14,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Cpu, Server } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
@@ -40,7 +40,7 @@ export function BuildPoolsTable({
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 }
 
-const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnDef<AuthorizedPool>[] => [
+const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnDef<StockFeatures, AuthorizedPool>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -64,13 +64,13 @@ const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnD
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <BuildPoolNameRow pool={row.original} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
     accessorKey: 'provider',
     header: ({ column }) => <SortableCell cellName="Provider" column={column} />,
     cell: ({ row }) => <ProviderCell pool={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.provider.localeCompare(rowB.original.provider),
+    sortFn: (rowA, rowB) => rowA.original.provider.localeCompare(rowB.original.provider),
   },
   {
     accessorKey: 'capacity',
@@ -81,13 +81,13 @@ const columns = (actions: ActionMap, formatDateTime: DateTimeFormatter): ColumnD
         {row.original.maxActiveBuilders} active
       </span>
     ),
-    sortingFn: (rowA, rowB) => Number(rowA.original.maxActiveBuilders) - Number(rowB.original.maxActiveBuilders),
+    sortFn: (rowA, rowB) => Number(rowA.original.maxActiveBuilders) - Number(rowB.original.maxActiveBuilders),
   },
   {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),

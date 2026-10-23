@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { getTaskName } from '@/lib/utils';
-import { ColumnDef, Row } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef, Row } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -56,7 +56,7 @@ export const NodesTable = ({
     [items],
   );
   const getSubRows = useCallback((row: NodeTableRow) => (isNodeRow(row) ? row.tasks : undefined), []);
-  const columns = useMemo<ColumnDef<NodeTableRow>[]>(
+  const columns = useMemo<ColumnDef<StockFeatures, NodeTableRow>[]>(
     () => [
       {
         id: 'select',
@@ -174,7 +174,7 @@ export const NodesTable = ({
   );
 };
 
-const NodeNameCell = ({ row, platformId }: { row: Row<NodeTableRow>; platformId: string }) => {
+const NodeNameCell = ({ row, platformId }: { row: Row<StockFeatures, NodeTableRow>; platformId: string }) => {
   if (!isNodeRow(row.original)) {
     const task = row.original.task;
     return (

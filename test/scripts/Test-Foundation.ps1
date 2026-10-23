@@ -1,5 +1,5 @@
 param(
-    [string]$PostgresImage = 'postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44'
+    [string]$PostgresImage = 'postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,9 +11,12 @@ $network = "citadel-rust-foundation-$suffix"
 $postgres = "citadel-rust-foundation-postgres-$suffix"
 $server = "citadel-rust-foundation-server-$suffix"
 $databaseUrl = "postgres://citadel_foundation:citadel_foundation@${postgres}:5432/citadel_foundation"
-$rustImage = 'rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97'
+$rustImage = "${buildCacheVolume}:toolchain"
 
 try {
+    & docker build --tag $rustImage --file (Join-Path $repoRoot 'test/Dockerfile.toolchain') $repoRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Could not build the Rust/Java test toolchain.' }
+
     & docker network create $network | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the foundation test network.' }
 
@@ -131,7 +134,7 @@ try {
         --volume "${buildCacheVolume}:/source/target" `
         --workdir /source `
         $rustImage `
-        sh -c 'cargo run --locked -p xtask -- database verify && cargo run --locked -p xtask -- docker --check && cargo run --locked -p xtask -- openapi --check'
+        sh -c 'cargo run --locked -p xtask -- database verify && cargo run --locked -p xtask -- docker-api --check && cargo run --locked -p xtask -- openapi --check'
     if ($LASTEXITCODE -ne 0) { throw 'A generated foundation artifact is stale.' }
 }
 finally {
@@ -146,4 +149,5 @@ finally {
         & docker network rm $network | Out-Null
     }
     Remove-CitadelBuildCache -Name $buildCacheVolume
+    & docker image rm $rustImage | Out-Null
 }

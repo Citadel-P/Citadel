@@ -18,7 +18,7 @@ try {
         --volume 'citadel-rust-cargo-git:/usr/local/cargo/git' `
         --volume "${buildCacheVolume}:/repo/target" `
         --workdir /repo `
-        rust:1.97.1-bookworm `
+        rust:1.99.1-bookworm `
         cargo test --locked -p citadel-adapters --test authorized_read -- --ignored --exact actor_authorized_platform_read_preserves_direct_and_team_scope
     if ($LASTEXITCODE -ne 0) { throw 'Actor-authorized PostgreSQL fixture failed.' }
 }

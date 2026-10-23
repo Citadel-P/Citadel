@@ -2,7 +2,7 @@ param(
     [string]$WorkspaceContainer = 'citadel_devcontainer-workspace-1',
     [string]$Network = 'citadel_devcontainer_default',
     [string]$CoreImage = 'citadel-rust-execution:local',
-    [string]$PostgresImage = 'postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44'
+    [string]$PostgresImage = 'postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5'
 )
 
 $ErrorActionPreference = 'Stop'

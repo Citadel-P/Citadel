@@ -415,6 +415,12 @@ mod tests {
                     })
                     .collect();
                 assert_eq!(actual, expected, "{id}");
+                for (status, response) in operation.value["responses"].as_object().unwrap() {
+                    assert!(
+                        response.get("$ref").is_some() || response["description"].is_string(),
+                        "{id}: response {status} requires a description"
+                    );
+                }
             }
         }
     }

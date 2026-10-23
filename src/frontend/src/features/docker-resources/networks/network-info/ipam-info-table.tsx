@@ -1,9 +1,9 @@
 import { NetworkIpamView, RuntimeIpamConfig } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 
-const columns: ColumnDef<IpamSubnetRow>[] = [
+const columns: ColumnDef<StockFeatures, IpamSubnetRow>[] = [
   {
     accessorKey: 'subnet',
     header: () => <span>Subnet</span>,

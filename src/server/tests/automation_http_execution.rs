@@ -37,6 +37,8 @@ mod lifecycle;
 mod drafts;
 #[path = "automation_http_execution/patches.rs"]
 mod patches;
+#[path = "automation_http_execution/security.rs"]
+mod security;
 #[path = "automation_http_execution/webhooks.rs"]
 mod webhooks;
 
@@ -324,6 +326,7 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     );
     let draft_action = create(&app, &admin, "console.log('disabled test');", false, 10).await;
     drafts::verify(&app, &db, &admin, &store, &draft_action).await;
+    security::verify(&app, &db, &admin, &store, &root).await;
 
     let action = create(
         &app,

@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -33,7 +33,7 @@ const columns = (
     string,
     React.FC<{ resource: OidcProviderView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<OidcProviderView>[] => [
+): ColumnDef<StockFeatures, OidcProviderView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -57,25 +57,25 @@ const columns = (
     accessorKey: 'displayName',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <ProviderNameRow provider={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.displayName.localeCompare(rowB.original.displayName),
+    sortFn: (rowA, rowB) => rowA.original.displayName.localeCompare(rowB.original.displayName),
   },
   {
     accessorKey: 'issuer',
     header: ({ column }) => <SortableCell cellName="Issuer" column={column} />,
     cell: ({ row }) => <span className="block max-w-85 truncate text-[13px]">{row.original.issuer}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.issuer.localeCompare(rowB.original.issuer),
+    sortFn: (rowA, rowB) => rowA.original.issuer.localeCompare(rowB.original.issuer),
   },
   {
     accessorKey: 'clientId',
     header: ({ column }) => <SortableCell cellName="Client ID" column={column} />,
     cell: ({ row }) => <span className="block max-w-60 truncate text-[13px]">{row.original.clientId}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.clientId.localeCompare(rowB.original.clientId),
+    sortFn: (rowA, rowB) => rowA.original.clientId.localeCompare(rowB.original.clientId),
   },
   {
     accessorKey: 'scopes',
     header: ({ column }) => <SortableCell cellName="Scopes" column={column} />,
     cell: ({ row }) => <span className="block max-w-64 truncate text-[13px]">{row.original.scopes}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.scopes.localeCompare(rowB.original.scopes),
+    sortFn: (rowA, rowB) => rowA.original.scopes.localeCompare(rowB.original.scopes),
   },
   {
     id: 'actions',

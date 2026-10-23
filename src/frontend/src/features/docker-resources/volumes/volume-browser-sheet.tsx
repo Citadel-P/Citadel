@@ -206,16 +206,14 @@ function VolumeTree({
         { signal },
       );
       return {
-        entries: response.data.entries.map(
-          (entry): BrowserEntry => ({
-            name: entry.name,
-            path: entry.path,
-            type: mapVolumeEntryType(entry.type),
-            size: entry.size,
-            secondaryText: entry.linkTarget,
-            metadataText: entry.modifiedAt ? formatDateTime(entry.modifiedAt) : null,
-          }),
-        ),
+        entries: response.data.entries.map((entry): BrowserEntry => ({
+          name: entry.name,
+          path: entry.path,
+          type: mapVolumeEntryType(entry.type),
+          size: entry.size,
+          secondaryText: entry.linkTarget,
+          metadataText: entry.modifiedAt ? formatDateTime(entry.modifiedAt) : null,
+        })),
         isTruncated: response.data.isTruncated,
       };
     },

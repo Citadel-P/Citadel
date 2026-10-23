@@ -103,7 +103,9 @@ describe('resource read failures', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load this resource');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Deployment overview' })).not.toBeInTheDocument();
-    await (await import('@testing-library/user-event')).default
+    await (
+      await import('@testing-library/user-event')
+    ).default
       .setup()
       .click(screen.getByRole('button', { name: 'Retry' }));
     expect(refetch).toHaveBeenCalledOnce();

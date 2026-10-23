@@ -4,7 +4,7 @@ import { ImageUsedBy } from './used-by';
 import { DataTable } from '@/components/ui/data-table';
 import { ImageView, PlatformType, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef, type CellContext } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef, type CellContext } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
 import { useMemo, useState } from 'react';
@@ -93,7 +93,7 @@ export const ImagesTable = ({
   );
 };
 
-const ImageUpdateStatusCell = ({ row }: CellContext<ImageView, unknown>) => (
+const ImageUpdateStatusCell = ({ row }: CellContext<StockFeatures, ImageView, unknown>) => (
   <ImageUpdateStatus updates={row.original.updates} />
 );
 
@@ -105,7 +105,7 @@ const columns = (
   formatDateTime: DateTimeFormatter,
   showNode: boolean,
   onReference: (image: ImageView, kind: ImageReferenceAction) => void,
-): ColumnDef<ImageView>[] => [
+): ColumnDef<StockFeatures, ImageView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -129,7 +129,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
     cell: ({ row }) => <ImageNameRow image={row.original} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
+    sortFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   ...(showNode ? [createNodeResourceColumn<ImageView>()] : []),
   {
@@ -160,21 +160,20 @@ const columns = (
     accessorKey: 'registry',
     header: ({ column }) => <SortableCell cellName="Registry" column={column} />,
     cell: ({ row }) => <RegistryDisplay registry={row.original.registry ?? undefined} />,
-    sortingFn: (rowA: any, rowB: any): number =>
-      rowA.original.registry?.name?.localeCompare(rowB.original.registry?.name),
+    sortFn: (rowA: any, rowB: any): number => rowA.original.registry?.name?.localeCompare(rowB.original.registry?.name),
   },
   {
     id: 'created',
     accessorKey: 'createdAt',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => (rowA.original.createdAt < rowB.original.createdAt ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.createdAt < rowB.original.createdAt ? 1 : -1),
   },
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
     cell: ({ row }) => <span className="">{byteTransform(row.original.size, 2)}</span>,
-    sortingFn: (rowA, rowB) => (rowA.original.size < rowB.original.size ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.size < rowB.original.size ? 1 : -1),
   },
   {
     id: 'actions',

@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { KeyRound, Variable } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -51,7 +51,7 @@ const columns = ({
     string,
     React.FC<{ resource: ResourceBindingView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
-}): ColumnDef<ResourceBindingView>[] => [
+}): ColumnDef<StockFeatures, ResourceBindingView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -75,13 +75,13 @@ const columns = ({
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <NameCell entry={row.original} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA: any, rowB: any): number => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
     accessorKey: 'kind',
     header: ({ column }) => <SortableCell cellName="Type" column={column} />,
     cell: ({ row }) => <KindBadge kind={row.original.kind} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original.kind.localeCompare(rowB.original.kind),
+    sortFn: (rowA: any, rowB: any): number => rowA.original.kind.localeCompare(rowB.original.kind),
   },
   {
     accessorKey: 'value',

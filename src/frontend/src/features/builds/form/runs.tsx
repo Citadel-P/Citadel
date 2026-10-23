@@ -10,7 +10,7 @@ import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { parseCitadelDate } from '@/lib/date-time';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import {
@@ -264,18 +264,18 @@ const runColumns = (
   onCancel: (run: BuildRunView) => void,
   cancelPending: boolean,
   formatDateTime: ReturnType<typeof useProfileDateTimeFormatter>,
-): ColumnDef<BuildRunView>[] => [
+): ColumnDef<StockFeatures, BuildRunView>[] => [
   {
     accessorKey: 'trigger',
     header: ({ column }) => <SortableCell cellName="Trigger" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.trigger}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
+    sortFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
   },
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
     cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
+    sortFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {
     accessorKey: 'resolvedCommitSha',
@@ -295,13 +295,13 @@ const runColumns = (
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
     cell: ({ row }) => <TimestampCell value={row.original.queuedAt} formatDateTime={formatDateTime} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
+    sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
     accessorKey: 'exitCode',
     header: ({ column }) => <SortableCell cellName="Exit" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.exitCode ?? '-'}</span>,
-    sortingFn: (rowA, rowB) => Number(rowA.original.exitCode ?? -1) - Number(rowB.original.exitCode ?? -1),
+    sortFn: (rowA, rowB) => Number(rowA.original.exitCode ?? -1) - Number(rowB.original.exitCode ?? -1),
   },
   {
     id: 'actions',

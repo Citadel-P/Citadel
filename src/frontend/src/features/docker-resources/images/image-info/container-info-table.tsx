@@ -2,10 +2,10 @@ import { ImageContainer, ImageInspectionView, PlatformView } from '@/api/generat
 import { useAppContext } from '@/lib/context/app-context';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { DockerContainerCell, DockerNetworksCell, DockerVolumesCell } from '@/components/custom/common';
 
-const columns = (currentPlatform: PlatformView | undefined): ColumnDef<ImageContainer>[] => [
+const columns = (currentPlatform: PlatformView | undefined): ColumnDef<StockFeatures, ImageContainer>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,

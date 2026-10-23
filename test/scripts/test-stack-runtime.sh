@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-docker_version="29.0.0"
-compose_version="v2.40.3"
+docker_version="29.9.2"
+compose_version="v5.6.1"
 tools_dir="$(mktemp -d)"
 trap 'rm -rf "$tools_dir"' EXIT
 

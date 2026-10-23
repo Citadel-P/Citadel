@@ -1,7 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { BackupCoverageStatus, VolumeView, PlatformType } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMemo, useState } from 'react';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -55,7 +55,7 @@ const columns = (
   >,
   onBrowse: (volume: VolumeView) => void,
   showNode: boolean,
-): ColumnDef<VolumeView>[] => [
+): ColumnDef<StockFeatures, VolumeView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -79,38 +79,38 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <VolumeNameRow volume={row.original} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
+    sortFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   ...(showNode ? [createNodeResourceColumn<VolumeView>()] : []),
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => <span className="">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>,
-    sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
     accessorKey: 'backupCoverage.status',
     header: ({ column }) => <SortableCell cellName="Backup" column={column} />,
     cell: ({ row }) => <BackupCoverageBadge volume={row.original} />,
-    sortingFn: (rowA, rowB) => backupCoverageRank(rowA.original) - backupCoverageRank(rowB.original),
+    sortFn: (rowA, rowB) => backupCoverageRank(rowA.original) - backupCoverageRank(rowB.original),
   },
   {
     accessorKey: 'driver',
     header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
     cell: ({ row }) => <span className="">{row.original.driver}</span>,
-    sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
     accessorKey: 'scope',
     header: ({ column }) => <SortableCell cellName="Scope" column={column} />,
     cell: ({ row }) => <span className="">{row.original.scope}</span>,
-    sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
     cell: ({ row }) => <span className="">{byteTransform(row.original.usageData?.size, 2)}</span>,
-    sortingFn: (rowA, rowB) => {
+    sortFn: (rowA, rowB) => {
       const sizeA = rowA.original.usageData?.size ?? 0;
       const sizeB = rowB.original.usageData?.size ?? 0;
       return sizeA < sizeB ? 1 : -1;

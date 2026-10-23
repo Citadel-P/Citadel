@@ -6,7 +6,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { fromNow } from '@/lib/dayjs.helper';
 import { useMutate, useRead } from '@/lib/hooks';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, FileText } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -79,7 +79,7 @@ const runColumns = (
   onSelectLog: (id: string) => void,
   onCancel: (run: AutomationRunView) => void,
   cancelPending: boolean,
-): ColumnDef<AutomationRunView>[] => [
+): ColumnDef<StockFeatures, AutomationRunView>[] => [
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
@@ -93,31 +93,31 @@ const runColumns = (
         {row.original.status}
       </span>
     ),
-    sortingFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
+    sortFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
   },
   {
     accessorKey: 'trigger',
     header: ({ column }) => <SortableCell cellName="Trigger" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.trigger}</span>,
-    sortingFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
+    sortFn: (rowA, rowB) => rowA.original.trigger.localeCompare(rowB.original.trigger),
   },
   {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
     cell: ({ row }) => <span className="text-sm">{fromNow(row.original.queuedAt)}</span>,
-    sortingFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
+    sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
     accessorKey: 'durationMs',
     header: ({ column }) => <SortableCell cellName="Duration" column={column} />,
     cell: ({ row }) => <span className="text-sm">{formatDuration(row.original.durationMs)}</span>,
-    sortingFn: (rowA, rowB) => Number(rowA.original.durationMs ?? 0) - Number(rowB.original.durationMs ?? 0),
+    sortFn: (rowA, rowB) => Number(rowA.original.durationMs ?? 0) - Number(rowB.original.durationMs ?? 0),
   },
   {
     accessorKey: 'exitCode',
     header: ({ column }) => <SortableCell cellName="Exit" column={column} />,
     cell: ({ row }) => <span className="text-sm">{row.original.exitCode ?? '-'}</span>,
-    sortingFn: (rowA, rowB) => Number(rowA.original.exitCode ?? -1) - Number(rowB.original.exitCode ?? -1),
+    sortFn: (rowA, rowB) => Number(rowA.original.exitCode ?? -1) - Number(rowB.original.exitCode ?? -1),
   },
   {
     id: 'actions',

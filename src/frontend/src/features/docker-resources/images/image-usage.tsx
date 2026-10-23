@@ -1,7 +1,7 @@
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
@@ -27,7 +27,7 @@ function referenceDescription(entry: ImageUsageEntry) {
 function ImageUsageTable({ usage }: { usage: ImageUsageView }) {
   const formatDateTime = useProfileDateTimeFormatter();
   type Row = ImageUsageEntry & { id: string };
-  const columns: ColumnDef<Row>[] = [
+  const columns: ColumnDef<StockFeatures, Row>[] = [
     {
       accessorKey: 'workloadName',
       header: 'Name',

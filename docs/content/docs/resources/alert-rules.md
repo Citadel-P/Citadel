@@ -47,7 +47,7 @@ The provider setup below explains where to obtain each destination URL. See
 | --- | --- |
 | Active | The event is open and has not been acknowledged. |
 | Acknowledged | Someone has acknowledged it; investigation or recovery may still be needed. |
-| Resolved | The event was closed manually or by a recovery observation. |
+| Resolved | The event was closed manually, by a recovery observation, or by a superseding update alert. |
 
 Acknowledge and Resolve update the alert record; they do not restart workloads,
 retry failed jobs, or change a rule. For monitored conditions such as Platform
@@ -62,6 +62,23 @@ to match. Failed updates, incomplete image updates, and alerts for a newer pendi
 target remain open. The resolver is **System**, with the note “Update applied successfully.”;
 the workload activity retains the user who performed the update. Resolved events
 remain in history, and manual resolution is still available.
+
+When a different image digest, set of Stack image updates, or Git commit becomes
+available for the same rule and resource, Citadel closes the older update alerts
+as **System** when the replacement passes the rule's cooldown and other conditions.
+The resolution note says “Superseded by a newer available update” and includes the
+replacement alert ID. This means the pending target changed; it does not mean an
+update was installed. The replacement and the closures are saved together.
+
+Repeated detection of the same open target keeps its alert and acknowledgment,
+without another notification. On an eligible recheck, older open targets are also
+closed if the matching alert already exists. Separate failed-operation alerts
+remain open. Manually resolving an update alert does not suppress future detection
+of an update that is still pending.
+
+Processed update observations retain their latest observation time even when
+they repeat an open target or are suppressed by cooldown. Older delayed observations
+cannot supersede that newer evidence. Rechecks do not restart the cooldown timer.
 
 Use [Platform monitoring](/docs/operations/platform-monitoring) to investigate
 capacity alerts and [Troubleshooting](/docs/operations/troubleshooting) for

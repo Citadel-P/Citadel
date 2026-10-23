@@ -6,7 +6,7 @@ import { StateBadge } from '@/components/custom/state-badge';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { getSwarmTaskIdFromContainerName, getTaskName } from '@/lib/utils';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router';
 
@@ -35,8 +35,8 @@ export const TasksTable = ({
     }
     return result;
   }, [taskContainers]);
-  const columns = useMemo<ColumnDef<SwarmTaskView>[]>(() => {
-    const result: ColumnDef<SwarmTaskView>[] = [
+  const columns = useMemo<ColumnDef<StockFeatures, SwarmTaskView>[]>(() => {
+    const result: ColumnDef<StockFeatures, SwarmTaskView>[] = [
       {
         accessorKey: 'name',
         header: ({ column }) => <SortableCell cellName="Task" column={column} />,

@@ -42,7 +42,7 @@ impl PostgresAlertRepository {
             .await
             .map_err(storage)?;
         let state = sqlx::query(
-            "SELECT consecutivematches,lasttriggeredat FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2",
+            "SELECT consecutivematches,lasttriggeredat,lastobservedat FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2",
         )
         .bind(rule.id)
         .bind(observation.resource_id)
@@ -61,6 +61,20 @@ impl PostgresAlertRepository {
             .transpose()
             .map_err(storage)?
             .flatten();
+        let update_available =
+            citadel_alerts::update_resolution::is_update_available(&observation.alert_type);
+        let last_observed = state
+            .as_ref()
+            .map(|row| row.try_get::<Option<DateTime<Utc>>, _>("lastobservedat"))
+            .transpose()
+            .map_err(storage)?
+            .flatten();
+        // Rechecks and suppressed observations also fence delayed targets. Keep
+        // their timestamp independent of lasttriggeredat, which owns cooldown.
+        if update_available && last_observed.is_some_and(|last| observation.observed_at < last) {
+            transaction.commit().await.map_err(storage)?;
+            return Ok(None);
+        }
         let deduplication_key = format!(
             "{}:{}:{}",
             rule.id, observation.resource_id, observation.deduplication_component
@@ -87,12 +101,13 @@ impl PostgresAlertRepository {
             return Ok(None);
         }
         let next_consecutive = consecutive.saturating_add(1);
-        sqlx::query("INSERT INTO alertrulestates(alertruleid,resourceid,consecutivematches,createdbyactorid,lasttriggeredat) VALUES($1,$2,$3,$4,$5) ON CONFLICT(alertruleid,resourceid) DO UPDATE SET consecutivematches=EXCLUDED.consecutivematches")
+        sqlx::query("INSERT INTO alertrulestates(alertruleid,resourceid,consecutivematches,createdbyactorid,lasttriggeredat,lastobservedat) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(alertruleid,resourceid) DO UPDATE SET consecutivematches=EXCLUDED.consecutivematches,lastobservedat=EXCLUDED.lastobservedat")
             .bind(rule.id)
             .bind(observation.resource_id)
             .bind(next_consecutive)
             .bind(rule.audit.created_by_actor_id.value())
             .bind(last_triggered)
+            .bind(update_available.then_some(observation.observed_at))
             .execute(&mut *transaction)
             .await
             .map_err(storage)?;
@@ -122,8 +137,22 @@ impl PostgresAlertRepository {
             .fetch_optional(&mut *transaction)
             .await
             .map_err(storage)?;
+        let superseded = if update_available {
+            super::update_resolution::supersede_pending(
+                &mut transaction,
+                rule.id,
+                observation,
+                &deduplication_key,
+            )
+            .await?
+        } else {
+            false
+        };
         if inserted.is_none() {
             transaction.commit().await.map_err(storage)?;
+            if superseded {
+                self.changed();
+            }
             return Ok(None);
         }
         sqlx::query(

@@ -59,7 +59,7 @@ pub trait AutomationRepository: Send + Sync {
         trigger: &'a str,
         args: &'a Value,
         timeout_seconds: Option<i32>,
-        code: Option<&'a str>,
+        draft: Option<&'a AutomationDraft>,
     ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>>;
     fn enqueue_webhook<'a>(
         &'a self,

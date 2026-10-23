@@ -46,6 +46,20 @@ async fn task_inspection_and_terminal_preserve_permissions_node_identity_and_red
     let terminal = json_body(terminal).await;
     assert_eq!(status, StatusCode::OK, "{terminal}");
     assert_eq!(terminal, json!({"dockerContainerId":"container-1"}));
+    // Task terminals use the same management-container guard as direct terminals.
+    use citadel_server::realtime_groups::{Group, GroupReadPort};
+    let group = Group::parse(&format!("swarm-task-exec:{}:task-1:fixture", f.platform_id)).unwrap();
+    let groups = super::realtime_groups::reader(&f);
+    sqlx::query("UPDATE containers SET dockernodeid='node-1',issystem=true,systemrole='core' WHERE platformid=$1")
+        .bind(f.platform_id).execute(&f.pool).await.unwrap();
+    assert!(groups.read(&reader, &group, None).await.is_err());
+    assert!(groups.read(&f.administrator, &group, None).await.is_ok());
+    sqlx::query("UPDATE containers SET issystem=false,systemrole=NULL WHERE platformid=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    assert!(groups.read(&reader, &group, None).await.is_ok());
     assert_eq!(
         send(&f, &format!("{base}/inspect"), Some(reader.clone()))
             .await

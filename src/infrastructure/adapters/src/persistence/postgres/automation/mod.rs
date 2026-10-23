@@ -14,8 +14,8 @@ mod scheduling;
 use chrono::{DateTime, Utc};
 
 use citadel_automation::{
-    AutomationAction, AutomationActionConfiguration, AutomationError, AutomationRepository,
-    AutomationRun, AutomationRunClaim, AutomationRunResult, code_hash,
+    AutomationAction, AutomationActionConfiguration, AutomationDraft, AutomationError,
+    AutomationRepository, AutomationRun, AutomationRunClaim, AutomationRunResult, code_hash,
 };
 
 use citadel_activities::{ActivityEvent, ActivityEventInfo};
@@ -31,6 +31,6 @@ use uuid::Uuid;
 
 enum EnqueueMode<'a> {
     Queue,
-    Execute(Option<&'a str>),
+    Execute(Option<&'a AutomationDraft>),
     Webhook(&'a WebhookConfig),
 }

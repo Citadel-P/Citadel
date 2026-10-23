@@ -35,7 +35,7 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { ActivityAlertZone } from '@/components/custom/task-sheet';
 import { useStackInfoGroup } from './hooks/useStackInfoGroup';
 import { DataTable } from '@/components/ui/data-table';
-import { CellContext, ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, CellContext, ColumnDef } from '@tanstack/react-table';
 import { ReactNode, useMemo, useState } from 'react';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
@@ -528,7 +528,7 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
   const releases = data?.data.releases ?? [];
   const canRollback = hasCapability(stack, 'canApply') && stack.controlState !== ResourceControlState.Processing;
 
-  const columns = useMemo<ColumnDef<StackReleaseView>[]>(
+  const columns = useMemo<ColumnDef<StockFeatures, StackReleaseView>[]>(
     () => [
       {
         accessorKey: 'version',
@@ -1127,7 +1127,7 @@ const getStackContainerLabel = (container: ContainerRuntimeView) => {
 
 type StackContainerRow = ContainerRuntimeView & { healthResource: StackView };
 
-const StackContainerHealthCell = ({ row }: CellContext<StackContainerRow, unknown>) => (
+const StackContainerHealthCell = ({ row }: CellContext<StockFeatures, StackContainerRow, unknown>) => (
   <WorkloadContainerHealthCard resource={row.original.healthResource} container={row.original} />
 );
 
@@ -1151,7 +1151,7 @@ const StackContainersTable = ({
   return <DataTable columns={columns} data={rows} isLoading={isLoading} />;
 };
 
-const getStackContainerColumns = (platformId?: string): ColumnDef<StackContainerRow>[] => [
+const getStackContainerColumns = (platformId?: string): ColumnDef<StockFeatures, StackContainerRow>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,

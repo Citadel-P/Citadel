@@ -3,7 +3,7 @@ import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
 import { AutoUpdateStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -56,7 +56,7 @@ const columns = (
     string,
     React.FC<{ resource: DeploymentView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<DeploymentView>[] => [
+): ColumnDef<StockFeatures, DeploymentView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -80,7 +80,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <DeploymentNameRow deployment={row.original} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
+    sortFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
     accessorKey: 'image',
@@ -99,13 +99,13 @@ const columns = (
         </div>
       );
     },
-    sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
   },
   {
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
     cell: ({ row }) => <DeploymentUpdateStatusCell deployment={row.original} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.autoUpdateState?.status ?? AutoUpdateStatus.Unknown)! <
       (rowB.original.autoUpdateState?.status ?? AutoUpdateStatus.Unknown)!
         ? 1
@@ -121,13 +121,13 @@ const columns = (
         name={row.original.platformName ?? ''}
       />
     ),
-    sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
   },
   {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),

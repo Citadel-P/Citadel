@@ -258,13 +258,43 @@ CI runs generation verification, TypeScript, lint, formatting and tests. The ima
 build also runs lint. For Swarm projection changes, run the focused server tests
 with a disposable PostgreSQL fixture as described in [test/README.md](../test/README.md).
 
+### Dependency security updates
+
+Audit both lockfiles and packaged runtime tools when updating dependencies:
+
+```bash
+cargo audit --file Cargo.lock
+npm audit --prefix src/frontend
+npm audit --prefix docs
+npm audit --prefix test/e2e
+npm run test:monaco --prefix src/frontend
+trivy image --scanners vuln citadel-core:acceptance
+trivy image --scanners vuln citadel-agent:local
+```
+
+Monaco embeds its own DOMPurify source. The frontend's Vite alias replaces that
+import with an isolated instance of the patched npm dependency, preserving
+Monaco's hook lifecycle. The production builds run `test:monaco` to check the
+actual module graph and sanitized editor markup; updating the npm override alone
+does not replace Monaco's embedded copy.
+
+Keep Core and Agent image pins aligned, and update PostgreSQL pins in deployment
+and disposable test fixtures together while retaining the database major version.
+The Core installer upgrades inherited Alpine packages as well as installing its
+tools. Run the runtime and Agent image checks after changing these dependencies.
+Scanning an upstream image can still report dependencies with no patched release
+or unreachable functions. Record those separately from fixes; do not suppress
+findings globally or replace official tools with untested forks. Rust's audit policy is in `.cargo/audit.toml`; no vulnerability exceptions are
+currently configured.
+
 ## Database schema changes
 
-The fresh-install catalog contains a single `0001_initial.sql`, including workload
-statistics storage. This baseline replaces the separate workload migration and
-requires a newly created database. It cannot upgrade a database that recorded
-the previous `0001` or `0002` checksums. Recreating a database is a separate,
-explicit operator action; the development task never resets storage.
+The migration catalog contains a single consolidated `0001_initial.sql`, including
+workload statistics storage and alert observation ordering. This baseline replaces
+the separate workload migration and requires a newly created database. It cannot
+upgrade a database that recorded the previous `0001` or `0002` checksums.
+Recreating a database is a separate, explicit operator action; the development
+task never resets storage.
 
 Preserve applied migrations, including `0001_initial.sql`. Add each schema
 change as the next numbered SQL migration under `src/infrastructure/database/generated/`.

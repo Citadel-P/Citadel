@@ -1,12 +1,12 @@
-import { Column } from '@tanstack/react-table';
+import { StockFeatures, Column } from '@tanstack/react-table';
 import { ArrowUpDown } from 'lucide-react';
 
-interface SortButtonProps<T> {
+interface SortButtonProps<T extends object> {
   cellName: string;
-  column: Column<T, unknown>;
+  column: Column<StockFeatures, T, unknown>;
 }
 
-const SortableCell = <T,>({ column, cellName }: SortButtonProps<T>) => {
+const SortableCell = <T extends object>({ column, cellName }: SortButtonProps<T>) => {
   return (
     <div className="flex justify-between group">
       <span>{cellName}</span>

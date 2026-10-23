@@ -9,7 +9,7 @@ import {
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
-import { CellContext, ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, CellContext, ColumnDef } from '@tanstack/react-table';
 import { Clock, Server, Info } from 'lucide-react';
 import { DetailFacts, DetailSection } from '@/components/custom/resource-detail';
 import Loader from '@/components/ui/loader';
@@ -78,10 +78,13 @@ const StatusCell = ({
 };
 
 // A module-level cell preserves popover/dialog state when realtime data changes.
-const ContainerHealthCell = ({ row }: CellContext<ContainerInfoRow, unknown>) => row.original.health;
+const ContainerHealthCell = ({ row }: CellContext<StockFeatures, ContainerInfoRow, unknown>) => row.original.health;
 
-const getColumns = (displayOptions: DisplayOptions, showHealth: boolean): ColumnDef<ContainerInfoRow>[] => {
-  const cols: ColumnDef<ContainerInfoRow>[] = [];
+const getColumns = (
+  displayOptions: DisplayOptions,
+  showHealth: boolean,
+): ColumnDef<StockFeatures, ContainerInfoRow>[] => {
+  const cols: ColumnDef<StockFeatures, ContainerInfoRow>[] = [];
 
   if (displayOptions.DisplayContainerName) {
     cols.push({
@@ -106,7 +109,7 @@ const getColumns = (displayOptions: DisplayOptions, showHealth: boolean): Column
     });
   }
 
-  const coreCols: ColumnDef<ContainerInfoRow>[] = [
+  const coreCols: ColumnDef<StockFeatures, ContainerInfoRow>[] = [
     {
       accessorKey: 'image',
       header: () => <span>Image</span>,

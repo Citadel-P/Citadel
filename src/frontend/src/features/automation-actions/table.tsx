@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { fromNow } from '@/lib/dayjs.helper';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { CalendarClock, PlayCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
@@ -38,7 +38,7 @@ const columns = (
     string,
     React.FC<{ resource: AuthorizedAction; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<AuthorizedAction>[] => [
+): ColumnDef<StockFeatures, AuthorizedAction>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -62,26 +62,26 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <ActionNameRow action={row.original} />,
-    sortingFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
+    sortFn: (rowA, rowB) => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
     accessorKey: 'schedule',
     header: ({ column }) => <SortableCell cellName="Schedule" column={column} />,
     cell: ({ row }) => <ScheduleCell action={row.original} />,
-    sortingFn: (rowA, rowB) => Number(rowA.original.scheduleEnabled) - Number(rowB.original.scheduleEnabled),
+    sortFn: (rowA, rowB) => Number(rowA.original.scheduleEnabled) - Number(rowB.original.scheduleEnabled),
   },
   {
     accessorKey: 'latestRun',
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
     cell: ({ row }) => <LastRunCell action={row.original} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       String(rowA.original.latestRun?.queuedAt ?? '').localeCompare(String(rowB.original.latestRun?.queuedAt ?? '')),
   },
   {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),

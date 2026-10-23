@@ -1,5 +1,5 @@
 param(
-    [string]$PostgresImage = 'postgres@sha256:a1d02e4bd40c94d3bf2bdd3678c137388e76d9efcd23c285e9429d336a834b44',
+    [string]$PostgresImage = 'postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5',
     [switch]$RunSwarmLifecycle
 )
 
@@ -11,7 +11,7 @@ $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 12)
 $network = "citadel-rust-workload-stack-$suffix"
 $postgres = "citadel-rust-workload-stack-postgres-$suffix"
 $database = 'citadel_workload_stack'
-$rustImage = 'rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97'
+$rustImage = 'rust@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8'
 $databaseUrl = "postgres://citadel_workload_stack:citadel_workload_stack@${postgres}:5432/$database"
 
 function Invoke-RustTest {

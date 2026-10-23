@@ -58,9 +58,10 @@ Cleanup never prunes unrelated volumes or forcibly removes an in-use volume.
 Run `./test/scripts/Test-BuildCache.ps1` to test these safety rules without Docker.
 
 ```powershell
-# Rebuild and verify the generated Docker subset.
+# Rebuild and verify the generated Docker subset (Rust plus Java 21).
+docker build -t citadel-test-toolchain:local -f test/Dockerfile.toolchain .
 docker run --rm --mount type=bind,source=${PWD},target=/repo -w /repo `
-  rust:1.97.1-bookworm cargo run --locked -p xtask -- docker --check
+  citadel-test-toolchain:local cargo run --locked -p xtask -- docker-api --check
 
 # Format, lint, and run unit/Unix-socket compatibility tests.
 ./test/scripts/Test-Workspace.ps1
@@ -173,6 +174,13 @@ selector before executing it, so a renamed test cannot silently run zero tests:
 - `alert_persistence::durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure`
   keeps durable observation consumer/receipt coverage on a separate fresh execution
   database, so unrelated queued observations cannot affect its receipt counts.
+- `alert_persistence::update_resolution` runs on another fresh execution database.
+  It covers verified update recovery and supersession of pending targets, including
+  cooldown, concurrent detection, stale observations, acknowledgment preservation,
+  existing overlapping alerts, and transactional rollback on delivery-queue failure.
+  Unchanged and cooldown-suppressed rechecks retain observation ordering across
+  restart without extending cooldown; baseline coverage verifies the observation
+  timestamp is available and restart preserves alert history and cooldown.
 - Server **library** tests
   `workers::platforms::state_delta_tests::lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_container_scoped`,
   `workers::platforms::state_delta_tests::local_and_direct_bursts_commit_once_and_publish_six_ids`,

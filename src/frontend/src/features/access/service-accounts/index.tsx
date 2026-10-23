@@ -8,7 +8,7 @@ import { useSelectedResources, useUserQuery } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { ActionData, DropdownActionComponent } from '@/pages/types';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
@@ -99,7 +99,7 @@ const buildColumns = (
     React.FC<{ resource: ServiceAccountView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<ServiceAccountView>[] => [
+): ColumnDef<StockFeatures, ServiceAccountView>[] => [
   {
     id: 'select',
     header: ({ table }) => (

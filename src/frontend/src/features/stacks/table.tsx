@@ -12,7 +12,7 @@ import {
   StackView,
 } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
@@ -70,7 +70,7 @@ const columns = (
     string,
     React.FC<{ resource: StackView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<StackView>[] => [
+): ColumnDef<StockFeatures, StackView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -94,7 +94,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <StackNameRow stack={row.original} />,
-    sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
+    sortFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
     accessorKey: 'status',
@@ -110,13 +110,13 @@ const columns = (
     accessorKey: 'source',
     header: ({ column }) => <SortableCell cellName="Source" column={column} />,
     cell: ({ row }) => <StackSourceCell stack={row.original} />,
-    sortingFn: (rowA, rowB) => getStackSourceLabel(rowA.original).localeCompare(getStackSourceLabel(rowB.original)),
+    sortFn: (rowA, rowB) => getStackSourceLabel(rowA.original).localeCompare(getStackSourceLabel(rowB.original)),
   },
   {
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
     cell: ({ row }) => <StackUpdateStatusCell stack={row.original} />,
-    sortingFn: (rowA, rowB) => getStackUpdateStatus(rowA.original).localeCompare(getStackUpdateStatus(rowB.original)),
+    sortFn: (rowA, rowB) => getStackUpdateStatus(rowA.original).localeCompare(getStackUpdateStatus(rowB.original)),
   },
 
   {
@@ -129,13 +129,13 @@ const columns = (
         name={row.original.platformName ?? ''}
       />
     ),
-    sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
+    sortFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
   },
   {
     accessorKey: 'tags',
     header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
     cell: ({ row }) => <TagChips tags={row.original.tags} />,
-    sortingFn: (rowA, rowB) =>
+    sortFn: (rowA, rowB) =>
       (rowA.original.tags?.map((tag) => tag.name).join(',') ?? '').localeCompare(
         rowB.original.tags?.map((tag) => tag.name).join(',') ?? '',
       ),

@@ -28,7 +28,7 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { useMeasuredWidth, useRead } from '@/lib/hooks';
 import { truncate } from '@/lib/truncate';
 import { cn, filterBySplit, formatId, normalizeDockerId, toFixedNumber } from '@/lib/utils';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import {
   ArrowRight,
   ArrowUpCircle,
@@ -1039,8 +1039,8 @@ export const FilterBar = ({ children }: { children: React.ReactNode }) => {
   return <div className={filterBarClassName}>{children}</div>;
 };
 
-type PagedDataTableProps<TData extends { id?: string | null }, TValue> = {
-  columns: ColumnDef<TData, TValue>[];
+type PagedDataTableProps<TData extends { id?: string | null }> = {
+  columns: ColumnDef<StockFeatures, TData>[];
   data: TData[];
   isLoading: boolean;
   query: { page: number; pageSize: number };
@@ -1052,7 +1052,7 @@ type PagedDataTableProps<TData extends { id?: string | null }, TValue> = {
   enableRowSelection?: (row: TData) => boolean;
 };
 
-export function PagedDataTable<TData extends { id?: string | null }, TValue>({
+export function PagedDataTable<TData extends { id?: string | null }>({
   columns,
   data,
   isLoading,
@@ -1063,7 +1063,7 @@ export function PagedDataTable<TData extends { id?: string | null }, TValue>({
   onSelectionChange,
   getRowId,
   enableRowSelection,
-}: PagedDataTableProps<TData, TValue>) {
+}: PagedDataTableProps<TData>) {
   const tableTopRef = useRef<HTMLDivElement | null>(null);
   const totalPages = Math.max(1, Math.ceil(Number(totalCount ?? 0) / query.pageSize));
 

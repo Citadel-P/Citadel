@@ -2,7 +2,7 @@
 use crate::api::error::runtime_error_response;
 use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use crate::api::resources::platforms::capabilities::{
-    permission_for, platform_capabilities, resource_capabilities,
+    container_capabilities, permission_for, platform_capabilities, resource_capabilities,
 };
 use crate::api::resources::platforms::container_views::{
     ContainerRuntimeListView, ContainerRuntimeView, ContainerSummaryView,

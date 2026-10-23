@@ -4,11 +4,11 @@ import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Link } from 'react-router';
 import { DockerContainerCell, DockerImageCell, DockerNetworksCell } from '@/components/custom/common';
 
-const columns = (currentPlatform: PlatformView | undefined): ColumnDef<VolumeContainerView>[] => [
+const columns = (currentPlatform: PlatformView | undefined): ColumnDef<StockFeatures, VolumeContainerView>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,

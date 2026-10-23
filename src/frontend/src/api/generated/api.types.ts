@@ -1302,7 +1302,7 @@ export interface AlertChannelInput {
 
 export interface AlertChannelView {
   alertDestination: AlertDestination;
-  capabilities: null | ResourceCapabilitiesView;
+  capabilities: ResourceCapabilitiesView | null;
   /** @format date-time */
   createdAt: string;
   /** @format uuid */
@@ -1332,7 +1332,7 @@ export interface AlertEventView {
   /** @format uuid */
   actorId: string | null;
   actorName: string | null;
-  actorType: null | ActorType;
+  actorType: ActorType | null;
   /** @format uuid */
   alertRuleId: string;
   /** @format date-time */
@@ -1404,7 +1404,7 @@ export interface AlertRuleActivitySnapshot {
 }
 
 export type AlertRuleConfig = AlertRuleInput & {
-  capabilities: null | ResourceCapabilitiesView;
+  capabilities: ResourceCapabilitiesView | null;
   /** @format uuid */
   id: string;
   isSystem: boolean;
@@ -1432,7 +1432,7 @@ export type AlertRuleListItem = AlertRuleView & {
 };
 
 export interface AlertRuleView {
-  capabilities: null | ResourceCapabilitiesView;
+  capabilities: ResourceCapabilitiesView | null;
   channelIds: string[];
   /** @format int32 */
   cooldownSeconds: number | null;
@@ -1456,7 +1456,7 @@ export interface AlertRuleView {
 }
 
 export interface ApplicationInfoView {
-  availableUpdate?: null | AvailableUpdate;
+  availableUpdate?: AvailableUpdate | null;
   informationalVersion: string;
   name: string;
   realtimeTransport: string;
@@ -1533,7 +1533,7 @@ export interface AutomationActionActivitySnapshot {
   scheduleTimeZone: string;
   /** @format int32 */
   timeoutSeconds: number;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
 }
 
 export interface AutomationActionDuplicateDraftView {
@@ -1558,7 +1558,7 @@ export interface AutomationActionInput {
   tagIds?: string[];
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
 }
 
 export interface AutomationActionRunLogsView {
@@ -1584,7 +1584,7 @@ export interface AutomationActionView {
   id: string;
   /** @format date-time */
   lastScheduledRunAt: string | null;
-  latestRun: null | AutomationRunView;
+  latestRun: AutomationRunView | null;
   name: string;
   /** @format int64 */
   rowVersion: number;
@@ -1598,16 +1598,16 @@ export interface AutomationActionView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: null | WebhookConfig;
+  webhook: WebhookConfig | null;
 }
 
 export interface AutomationProgress {
-  error: null | AutomationProgressError;
+  error: AutomationProgressError | null;
   errorMessage: string | null;
   progressMessage: string | null;
   /** @format uuid */
   runId: string | null;
-  status: null | AutomationRunStatus;
+  status: AutomationRunStatus | null;
   stream: string | null;
 }
 
@@ -1694,7 +1694,7 @@ export interface BackupCoverageView {
   lastRunAt?: string | null;
   /** @format uuid */
   lastRunId?: string | null;
-  lastRunStatus?: null | BackupRunStatus;
+  lastRunStatus?: BackupRunStatus | null;
   /** @format date-time */
   lastSuccessfulRunAt?: string | null;
   /** @format date-time */
@@ -1749,7 +1749,7 @@ export interface BackupPolicyInput {
   timeZone?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
 }
 
 export interface BackupPolicyReference {
@@ -1767,7 +1767,7 @@ export interface BackupPolicyView {
   archivedAt: string | null;
   /** @format uuid */
   backupRepositoryId: string;
-  capabilities: null | ResourceCapabilitiesView;
+  capabilities: ResourceCapabilitiesView | null;
   controlState: ResourceControlState;
   /** @format date-time */
   createdAt: string;
@@ -1786,7 +1786,7 @@ export interface BackupPolicyView {
   keepLastSuccessful: number;
   /** @format date-time */
   lastScheduledRunAt: string | null;
-  latestRun: null | BackupRunView;
+  latestRun: BackupRunView | null;
   name: string;
   normalizedName: string;
   /** @format int64 */
@@ -1800,7 +1800,7 @@ export interface BackupPolicyView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: null | WebhookConfig;
+  webhook: WebhookConfig | null;
 }
 
 export type BackupPreviewResource =
@@ -1869,7 +1869,7 @@ export interface BackupRepositoryValidationView {
 export interface BackupRepositoryView {
   /** @format date-time */
   archivedAt: string | null;
-  capabilities: null | ResourceCapabilitiesView;
+  capabilities: ResourceCapabilitiesView | null;
   /** @format int64 */
   controlStartedAt: number | null;
   controlState: ResourceControlState;
@@ -1904,7 +1904,7 @@ export interface BackupRestoreRunStreamItem {
   message?: string | null;
   /** @format uuid */
   restoreRunId: string;
-  status?: null | BackupRestoreStatus;
+  status?: BackupRestoreStatus | null;
   stream?: string | null;
 }
 
@@ -1974,7 +1974,7 @@ export interface BackupRunStreamItem {
   message?: string | null;
   /** @format uuid */
   runId: string;
-  status?: null | BackupRunStatus;
+  status?: BackupRunStatus | null;
   stream?: string | null;
 }
 
@@ -2207,7 +2207,7 @@ export interface BuildPlatformSnapshot {
   address: string | null;
   /** @format uuid */
   buildAgentPoolId: string | null;
-  builderKind: null | BuildProjectBuilderKind;
+  builderKind: BuildProjectBuilderKind | null;
   /** @format uuid */
   id: string | null;
   name: string | null;
@@ -2240,7 +2240,7 @@ export interface BuildProjectActivitySnapshot {
   target?: string | null;
   /** @format int32 */
   timeoutSeconds: number;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
 }
 
 export interface BuildProjectDuplicateDraftView {
@@ -2277,7 +2277,7 @@ export interface BuildProjectInput {
   target?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
 }
 
 export interface BuildProjectView {
@@ -2307,7 +2307,7 @@ export interface BuildProjectView {
   /** @format uuid */
   id: string;
   imageRepository: string;
-  latestRun: null | BuildRunView;
+  latestRun: BuildRunView | null;
   name: string;
   normalizedName: string;
   /** @format uuid */
@@ -2326,7 +2326,7 @@ export interface BuildProjectView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: null | WebhookConfig;
+  webhook: WebhookConfig | null;
 }
 
 export interface BuildRunView {
@@ -2514,7 +2514,7 @@ export interface ContainerHealthObservation {
   oomKilled?: boolean | null;
   /** @format int64 */
   restartCount?: number | null;
-  result?: null | HealthStatus;
+  result?: HealthStatus | null;
   startedAt?: string | null;
 }
 
@@ -2606,9 +2606,9 @@ export interface ContainerRuntimeListView {
 }
 
 export interface ContainerRuntimeView {
-  backupCoverage?: null | ResourceBackupSummaryView;
-  capabilities: null | PlatformCapabilitiesView;
-  containerStat: null | ContainerStatView;
+  backupCoverage?: ResourceBackupSummaryView | null;
+  capabilities: PlatformCapabilitiesView | null;
+  containerStat: ContainerStatView | null;
   controlState: ResourceControlState;
   /** @format int64 */
   created: number;
@@ -2616,7 +2616,7 @@ export interface ContainerRuntimeView {
   deploymentId: string | null;
   dockerNodeId: string | null;
   hasCitadelOwnershipLabels: boolean;
-  health?: null | ContainerHealthView;
+  health?: ContainerHealthView | null;
   /** Docker container ID; the statistics containerId is Citadel's database UUID. */
   id: string;
   image: string;
@@ -2631,7 +2631,7 @@ export interface ContainerRuntimeView {
   /** @format uuid */
   stackId: string | null;
   state: ContainerStateStatus;
-  systemRole: null | ContainerSystemRole;
+  systemRole: ContainerSystemRole | null;
 }
 
 export interface ContainerStatSnapshot {
@@ -2673,12 +2673,12 @@ export interface ContainerStatView {
 }
 
 export interface ContainerSummaryView {
-  backupCoverage?: null | ResourceBackupSummaryView;
-  capabilities: null | PlatformCapabilitiesView;
+  backupCoverage?: ResourceBackupSummaryView | null;
+  capabilities: PlatformCapabilitiesView | null;
   containerId: string;
-  deploymentView: null | ContainerDeploymentView;
+  deploymentView: ContainerDeploymentView | null;
   finishedAt: string;
-  imageView: null | ImageView;
+  imageView: ImageView | null;
   name: string;
   networks: Record<string, string>;
   /** @format uuid */
@@ -2691,25 +2691,25 @@ export interface ContainerSummaryView {
 }
 
 export interface ContainerView {
-  backupCoverage?: null | ResourceBackupSummaryView;
-  capabilities: null | PlatformCapabilitiesView;
+  backupCoverage?: ResourceBackupSummaryView | null;
+  capabilities: PlatformCapabilitiesView | null;
   containerId: string;
   controlState: ResourceControlState;
   /** @format int64 */
   created: number;
   /** @format uuid */
   deploymentId: string | null;
-  deploymentView?: null | ContainerDeploymentView;
+  deploymentView?: ContainerDeploymentView | null;
   dockerImageId: string;
   dockerNodeId: string | null;
   hasCitadelOwnershipLabels: boolean;
-  health?: null | ContainerHealthView;
+  health?: ContainerHealthView | null;
   /** @format uuid */
   id: string;
-  imageView?: null | ImageView;
+  imageView?: ImageView | null;
   isSwarmTask: boolean;
   isSystem: boolean;
-  lastStats: null | ContainerStatView;
+  lastStats: ContainerStatView | null;
   name: string;
   nodeHostname: string | null;
   /** Names of owning workloads this actor may read. Never derived from Docker labels. */
@@ -2726,7 +2726,7 @@ export interface ContainerView {
   /** @format uuid */
   stackId: string | null;
   state: ContainerStateStatus;
-  systemRole: null | ContainerSystemRole;
+  systemRole: ContainerSystemRole | null;
   /** @format int64 */
   updated: number;
 }
@@ -2743,7 +2743,7 @@ export interface Count {
 
 export interface CreateDeploymentInput {
   description?: string | null;
-  duplicateSource?: null | DuplicateSourceInput;
+  duplicateSource?: DuplicateSourceInput | null;
   name: string;
   /** @format uuid */
   platformId: string;
@@ -2802,14 +2802,14 @@ export interface CreateRoleRequest {
 
 export interface CreateRuntimeNetwork {
   attachable?: boolean | null;
-  configFrom?: null | RuntimeConfigFrom;
+  configFrom?: RuntimeConfigFrom | null;
   configOnly?: boolean | null;
   driver: string;
   enableIPv4?: boolean | null;
   enableIPv6?: boolean | null;
   ingress?: boolean | null;
   internal?: boolean | null;
-  ipam?: null | RuntimeIpam;
+  ipam?: RuntimeIpam | null;
   labels?: Record<string, string>;
   name: string;
   options?: Record<string, string>;
@@ -2841,8 +2841,8 @@ export interface CreateServiceAccountTokenRequest {
 
 export interface CreateStackInput {
   description?: string | null;
-  driftPolicy?: null | StackDriftPolicy;
-  duplicateSource?: null | DuplicateSourceInput;
+  driftPolicy?: StackDriftPolicy | null;
+  duplicateSource?: DuplicateSourceInput | null;
   name: string;
   /** @format uuid */
   platformId: string;
@@ -2859,7 +2859,7 @@ export interface CreateSwarmMaterialInput {
 
 export interface CreateSwarmServiceInput {
   description?: string | null;
-  duplicateSource?: null | DuplicateSourceInput;
+  duplicateSource?: DuplicateSourceInput | null;
   name: string;
   /** @format uuid */
   platformId: string;
@@ -3078,33 +3078,33 @@ export interface DeploymentSpec {
   environmentVariables?: string[] | null;
   image: DeploymentImageInfo;
   labels?: Record<string, string> | null;
-  lifeCycleSpec?: null | LifeCycleSpec;
+  lifeCycleSpec?: LifeCycleSpec | null;
   networks?: string[] | null;
   ports?: string[] | null;
-  resourceSpec?: null | ResourceSpec;
+  resourceSpec?: ResourceSpec | null;
   /** @default "Disabled" */
   updateBehavior?: UpdateBehavior;
   volumes?: string[] | null;
 }
 
 export interface DeploymentStreamItem {
-  error?: null | DeploymentApplyError;
+  error?: DeploymentApplyError | null;
   errorMessage?: string | null;
   id?: string | null;
-  progress?: null | DeploymentsModelImagePullProgress;
+  progress?: DeploymentsModelImagePullProgress | null;
   progressMessage?: string | null;
   status?: string | null;
   stream?: string | null;
 }
 
 export interface DeploymentView {
-  autoUpdateState?: null | AutoUpdateState;
-  backupCoverage?: null | ResourceBackupSummaryView;
-  capabilities?: null | DeploymentCapabilities;
+  autoUpdateState?: AutoUpdateState | null;
+  backupCoverage?: ResourceBackupSummaryView | null;
+  capabilities?: DeploymentCapabilities | null;
   /** @format uuid */
   containerId?: string | null;
   controlState: ResourceControlState;
-  copyEligibility?: null | ResourceCopyEligibility;
+  copyEligibility?: ResourceCopyEligibility | null;
   /** @format date-time */
   createdAt: string;
   /** @format uuid */
@@ -3117,7 +3117,7 @@ export interface DeploymentView {
   /** @format uuid */
   imageId?: string | null;
   imageName?: string | null;
-  latestActivityView?: null | LatestActivityView;
+  latestActivityView?: LatestActivityView | null;
   name: string;
   /** @format uuid */
   platformId: string;
@@ -3156,7 +3156,7 @@ export interface DockerHubTag {
   fullSize?: number | null;
   /** @format int64 */
   id?: number | null;
-  image?: null | DockerHubTagImage;
+  image?: DockerHubTagImage | null;
   lastPulled?: string | null;
   lastUpdated?: string | null;
   name?: string | null;
@@ -3335,11 +3335,11 @@ export interface GitAccountInput {
 }
 
 export interface GitAccountPatch {
-  authType?: null | GitAuthType;
-  configuration?: null | GitAuthConfiguration;
+  authType?: GitAuthType | null;
+  configuration?: GitAuthConfiguration | null;
   domain?: string | null;
   name?: string | null;
-  transport?: null | GitTransport;
+  transport?: GitTransport | null;
 }
 
 export interface GitAccountView {
@@ -3468,7 +3468,7 @@ export interface GitRepositoryActivitySnapshot {
   syncIntervalMinutes?: number | null;
   syncMode: string;
   url: string;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
 }
 
 export interface GitRepositoryBranchResponse {
@@ -3488,14 +3488,14 @@ export interface GitRepositoryConfigResponse {
   /** @format uuid */
   id: string;
   name: string;
-  onClone: null | RepoCommand;
-  onPull: null | RepoCommand;
+  onClone: RepoCommand | null;
+  onPull: RepoCommand | null;
   /** @format int32 */
   syncIntervalMinutes: number | null;
   syncMode: GitRepositorySyncMode;
   tags: ResourcesTagsTagSummary[];
   url: string;
-  webhook: null | WebhookConfig;
+  webhook: WebhookConfig | null;
 }
 
 export interface GitRepositoryPatch {
@@ -3504,14 +3504,14 @@ export interface GitRepositoryPatch {
   /** @format uuid */
   gitAccountId?: string | null;
   name?: string | null;
-  onClone?: null | RepoCommand;
-  onPull?: null | RepoCommand;
+  onClone?: RepoCommand | null;
+  onPull?: RepoCommand | null;
   /** @format int32 */
   syncIntervalMinutes?: number | null;
-  syncMode?: null | GitRepositorySyncMode;
+  syncMode?: GitRepositorySyncMode | null;
   tagIds?: string[] | null;
   url?: string | null;
-  webhook?: null | WebhookPatch;
+  webhook?: WebhookPatch | null;
 }
 
 export interface GitRepositoryRefView {
@@ -3554,19 +3554,19 @@ export interface GitRepositoryView {
   gitAccountId: string | null;
   /** @format uuid */
   id: string;
-  latestActivityView: null | LatestActivityView;
+  latestActivityView: LatestActivityView | null;
   name: string;
-  onClone: null | RepoCommand;
-  onPull: null | RepoCommand;
+  onClone: RepoCommand | null;
+  onPull: RepoCommand | null;
   status: GitRepositoryStatus;
   /** @format int32 */
   syncIntervalMinutes: number | null;
   syncMode: GitRepositorySyncMode;
   /** Latest check of the default branch, including unchanged scheduled checks. */
-  syncStatus: null | GitRepositorySyncStatusView;
+  syncStatus: GitRepositorySyncStatusView | null;
   tags: ResourcesTagsTagSummary[];
   url: string;
-  webhook: null | WebhookConfig;
+  webhook: WebhookConfig | null;
 }
 
 export interface GithubContainerMetadata {
@@ -3574,7 +3574,7 @@ export interface GithubContainerMetadata {
 }
 
 export interface GithubPackageMetadata {
-  container?: null | GithubContainerMetadata;
+  container?: GithubContainerMetadata | null;
 }
 
 export interface GithubPackageVersion {
@@ -3582,7 +3582,7 @@ export interface GithubPackageVersion {
   htmlUrl?: string | null;
   /** @format int64 */
   id: number;
-  metadata?: null | GithubPackageMetadata;
+  metadata?: GithubPackageMetadata | null;
   name: string;
   packageHtmlUrl?: string | null;
   updatedAt?: string | null;
@@ -3602,10 +3602,10 @@ export interface GlobalSearchItem {
   /** @format uuid */
   id: string;
   name: string;
-  parent?: null | GlobalSearchParent;
+  parent?: GlobalSearchParent | null;
   resourceType: GlobalSearchResourceType;
   secondaryText?: string | null;
-  status?: null | GlobalSearchStatus;
+  status?: GlobalSearchStatus | null;
 }
 
 export interface GlobalSearchParent {
@@ -3652,7 +3652,7 @@ export interface HealthMember {
   dockerContainerId?: string | null;
   name: string;
   nodeId?: string | null;
-  observation?: null | ContainerHealthObservation;
+  observation?: ContainerHealthObservation | null;
   /** @format uuid */
   platformId: string;
   service: string;
@@ -3786,7 +3786,7 @@ export interface ImageInspection {
 }
 
 export type ImageInspectionView = ImageInspection & {
-  capabilities?: null | ImageCapabilitiesView;
+  capabilities?: ImageCapabilitiesView | null;
   updates: ImageTagUpdate[];
 };
 
@@ -3862,7 +3862,7 @@ export interface ImageUsageEntry {
   relationship: ImageRelationship;
   /** @format uuid */
   workloadId?: string | null;
-  workloadKind?: null | ImageWorkloadKind;
+  workloadKind?: ImageWorkloadKind | null;
   workloadName?: string | null;
   workloadStatus?: string | null;
 }
@@ -3892,7 +3892,7 @@ export interface ImageUsageSummary {
 }
 
 export interface ImageView {
-  capabilities: null | ImageCapabilitiesView;
+  capabilities: ImageCapabilitiesView | null;
   contentIdentity: string | null;
   controlState: ResourceControlState;
   /** @format date-time */
@@ -3907,7 +3907,7 @@ export interface ImageView {
   nodeHostname: string | null;
   /** @format uuid */
   platformId: string;
-  registry?: null | ImageRegistryView;
+  registry?: ImageRegistryView | null;
   /** @format uuid */
   registryId: string | null;
   repoDigests: string[] | null;
@@ -3918,7 +3918,7 @@ export interface ImageView {
   /** @format date-time */
   updatedAt: string | null;
   updates?: ImageTagUpdate[] | null;
-  usedBy?: null | ImageUsageSummary;
+  usedBy?: ImageUsageSummary | null;
 }
 
 export interface ImagesResponse {
@@ -3928,7 +3928,7 @@ export interface ImagesResponse {
 
 export interface ImportRequest {
   description?: string | null;
-  importKind?: null | StackImportKind;
+  importKind?: StackImportKind | null;
   importSensitiveEnvironmentAsSecrets?: boolean;
   name: string;
   previewFingerprint: string;
@@ -4042,7 +4042,7 @@ export interface LicenseView {
 
 export interface LifeCycleSpec {
   restartPolicy?: ContainerRestartPolicy;
-  stopSignal?: null | StopSignal;
+  stopSignal?: StopSignal | null;
   /** @format int32 */
   stopTimeout?: number | null;
 }
@@ -4072,13 +4072,13 @@ export interface LookupResourceInfo {
 export interface ManagedSwarmServiceView {
   appliedImageDigest: string | null;
   autoUpdateState: AutoUpdateState;
-  backupCoverage?: null | ResourceBackupSummaryView;
-  capabilities: null | SwarmServiceCapabilities;
+  backupCoverage?: ResourceBackupSummaryView | null;
+  capabilities: SwarmServiceCapabilities | null;
   controlState: ResourceControlState;
-  copyEligibility?: null | ResourceCopyEligibility;
+  copyEligibility?: ResourceCopyEligibility | null;
   /** @format date-time */
   createdAt: string;
-  currentOperation: null | SwarmServiceOperationView;
+  currentOperation: SwarmServiceOperationView | null;
   description: string | null;
   /** @format int32 */
   desiredTaskCount: number | null;
@@ -4160,7 +4160,7 @@ export interface NetworkContainer {
   isStale: boolean;
   /** @format uuid */
   workloadId?: string | null;
-  workloadKind?: null | NetworkWorkloadKind;
+  workloadKind?: NetworkWorkloadKind | null;
   workloadName?: string | null;
   workloadProcessing: boolean;
   workloadStatus?: string | null;
@@ -4213,7 +4213,7 @@ export interface NetworkUsageEntry {
   serviceName?: string | null;
   /** @format uuid */
   workloadId?: string | null;
-  workloadKind?: null | NetworkWorkloadKind;
+  workloadKind?: NetworkWorkloadKind | null;
   workloadName?: string | null;
   workloadProcessing: boolean;
   workloadStatus?: string | null;
@@ -4221,7 +4221,7 @@ export interface NetworkUsageEntry {
 
 export interface NetworkView {
   attachable: boolean;
-  capabilities: null | NetworkCapabilitiesView;
+  capabilities: NetworkCapabilitiesView | null;
   configFrom: string | null;
   configOnly: boolean;
   containers: Record<string, NetworkAttachmentView>;
@@ -4234,7 +4234,7 @@ export interface NetworkView {
   inUse: boolean;
   ingress: boolean;
   internal: boolean;
-  ipam: null | NetworkIpamView;
+  ipam: NetworkIpamView | null;
   isStale: boolean;
   isSystem: boolean;
   labels: Record<string, string>;
@@ -4244,7 +4244,7 @@ export interface NetworkView {
   peers: NetworkPeerView[];
   scope: string;
   staleReason: string | null;
-  usage?: null | NetworkUsage;
+  usage?: NetworkUsage | null;
 }
 
 export interface NetworksResponse {
@@ -4258,14 +4258,14 @@ export interface NewGitRepository {
   /** @format uuid */
   gitAccountId?: string | null;
   name: string;
-  onClone?: null | RepoCommand;
-  onPull?: null | RepoCommand;
+  onClone?: RepoCommand | null;
+  onPull?: RepoCommand | null;
   /** @format int32 */
   syncIntervalMinutes?: number | null;
   syncMode?: GitRepositorySyncMode;
   tagIds?: string[];
   url: string;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
 }
 
 export interface NewRegistry {
@@ -4281,7 +4281,7 @@ export interface NewRegistry {
 export interface NewResourceBinding {
   kind: ResourceBindingKind;
   name: string;
-  secretDeliveryMode?: null | SecretDeliveryMode;
+  secretDeliveryMode?: SecretDeliveryMode | null;
   /** @format uuid */
   secretId?: string | null;
   targetPath?: string | null;
@@ -4461,7 +4461,7 @@ export interface PagedResultServiceAccountTokenView {
     name: string;
     /** @format date-time */
     revokedAtUtc: string | null;
-    revokedByActorId: null | ActorId;
+    revokedByActorId: ActorId | null;
   }[];
   /** @format int64 */
   page: number;
@@ -4629,14 +4629,14 @@ export interface PatchRolePermissionsRequest {
 
 export interface PatchStackInput {
   description?: string | null;
-  driftPolicy?: null | StackDriftPolicy;
+  driftPolicy?: StackDriftPolicy | null;
   name?: string | null;
   /** @format uuid */
   platformId?: string | null;
   /** @format int64 */
   rowVersion?: number | null;
   spec?: any;
-  stackSource?: null | StackSource;
+  stackSource?: StackSource | null;
 }
 
 export interface PatchStackMetadataInput {
@@ -4651,13 +4651,13 @@ export interface PatchTeamRequest {
 }
 
 export interface PatchUserPreferencesRequest {
-  contentLayout?: null | UserContentLayout;
-  dateTimeFormat?: null | UserDateTimeFormat;
-  density?: null | UserUiDensity;
-  font?: null | UserUiFont;
-  radius?: null | UserUiRadius;
-  theme?: null | UserTheme;
-  themeColor?: null | UserThemeColor;
+  contentLayout?: UserContentLayout | null;
+  dateTimeFormat?: UserDateTimeFormat | null;
+  density?: UserUiDensity | null;
+  font?: UserUiFont | null;
+  radius?: UserUiRadius | null;
+  theme?: UserTheme | null;
+  themeColor?: UserThemeColor | null;
   timeZone?: string | null;
 }
 
@@ -4717,7 +4717,7 @@ export interface PlatformBackupSummary {
   enabledPolicyCount: number;
   /** @format date-time */
   lastRunAt?: string | null;
-  lastRunStatus?: null | BackupRunStatus;
+  lastRunStatus?: BackupRunStatus | null;
   /** @format uuid */
   platformId: string;
   /** @format int32 */
@@ -4782,7 +4782,7 @@ export interface PlatformStatView {
 export interface PlatformView {
   address: string;
   agentVersion: string | null;
-  capabilities: null | PlatformCapabilitiesView;
+  capabilities: PlatformCapabilitiesView | null;
   clusterId: string | null;
   connectorType: PlatformConnectorType;
   /** @format int64 */
@@ -4800,7 +4800,7 @@ export interface PlatformView {
   name: string;
   /** @format int32 */
   networkCount: number;
-  platformDescriptor: null | PlatformDescriptor;
+  platformDescriptor: PlatformDescriptor | null;
   pruneHistoricalSwarmTaskContainers: boolean;
   serverVersion: string | null;
   /** @format int64 */
@@ -5235,7 +5235,7 @@ export type PublicActivityEventInfo =
     }
   | {
       $type: "DeploymentApplied";
-      deployment?: null | DeploymentActivitySnapshot;
+      deployment?: DeploymentActivitySnapshot | null;
       result: DeploymentResultActivitySnapshot;
     }
   | {
@@ -5276,12 +5276,12 @@ export type PublicActivityEventInfo =
   | {
       $type: "StackApplied";
       result: StackResultActivitySnapshot;
-      stack?: null | StackActivitySnapshot;
+      stack?: StackActivitySnapshot | null;
     }
   | {
       $type: "StackRollback";
-      newStack?: null | StackActivitySnapshot;
-      oldStack?: null | StackActivitySnapshot;
+      newStack?: StackActivitySnapshot | null;
+      oldStack?: StackActivitySnapshot | null;
       result: StackResultActivitySnapshot;
     }
   | {
@@ -5416,7 +5416,7 @@ export type PublicActivityEventInfo =
   | {
       $type: "ActionCreated";
       action: AutomationActionActivitySnapshot;
-      source?: null | ActivitySourceResource;
+      source?: ActivitySourceResource | null;
     }
   | {
       $type: "ActionUpdated";
@@ -5540,7 +5540,7 @@ export type PublicActivityEventInfo =
   | {
       $type: "BuildCreated";
       build: BuildProjectActivitySnapshot;
-      source?: null | ActivitySourceResource;
+      source?: ActivitySourceResource | null;
     }
   | {
       $type: "BuildUpdated";
@@ -5613,11 +5613,11 @@ export interface PullImageInput {
 export interface PullImageStreamItem {
   digest?: string | null;
   dockerImageId?: string | null;
-  error?: null | ImagePullError;
+  error?: ImagePullError | null;
   errorMessage?: string | null;
   from?: string | null;
   id?: string | null;
-  progress?: null | PlatformsImagePullImagePullProgress;
+  progress?: PlatformsImagePullImagePullProgress | null;
   progressMessage?: string | null;
   status?: string | null;
   stream?: string | null;
@@ -5676,7 +5676,7 @@ export interface RegistryConfigResponse {
 
 /** Partial provider settings; omission preserves a value and null removes it. */
 export interface RegistryConfigurationPatch {
-  $type?: null | RegistryKind;
+  $type?: RegistryKind | null;
   accessKey?: string | null;
   authEnabled?: boolean | null;
   authenticationRequired?: boolean | null;
@@ -5729,11 +5729,11 @@ export type RegistryConfigurationView =
     };
 
 export interface RegistryPatch {
-  configuration?: null | RegistryConfigurationPatch;
+  configuration?: RegistryConfigurationPatch | null;
   description?: string | null;
   name?: string | null;
   registryHost?: string | null;
-  status?: null | RegistryStatus;
+  status?: RegistryStatus | null;
   tagIds?: string[] | null;
 }
 
@@ -5925,7 +5925,7 @@ export interface ResourceBackupSummaryView {
   platformId: string;
   policies: BackupPolicyReference[];
   reasons: BackupCoverageReason[];
-  status?: null | BackupCoverageStatus;
+  status?: BackupCoverageStatus | null;
   unavailable: boolean;
   volumes: ResourceBackupVolumeView[];
   warnings: string[];
@@ -5940,7 +5940,7 @@ export interface ResourceBackupVolumeView {
   name: string;
   nodeHostname?: string | null;
   policies: BackupPolicyReference[];
-  status?: null | BackupCoverageStatus;
+  status?: BackupCoverageStatus | null;
 }
 
 export interface ResourceBindingInput {
@@ -5948,7 +5948,7 @@ export interface ResourceBindingInput {
   id: string;
   kind: ResourceBindingKind;
   name: string;
-  secretDeliveryMode?: null | SecretDeliveryMode;
+  secretDeliveryMode?: SecretDeliveryMode | null;
   /** @format uuid */
   secretId?: string | null;
   targetPath?: string | null;
@@ -5959,7 +5959,7 @@ export interface ResourceBindingSnapshot {
   kind: ResourceBindingKind;
   name: string;
   scope: ResourceBindingScope;
-  secretDeliveryMode?: null | SecretDeliveryMode;
+  secretDeliveryMode?: SecretDeliveryMode | null;
   /** @format uuid */
   secretId?: string | null;
   targetPath?: string | null;
@@ -5975,7 +5975,7 @@ export interface ResourceBindingView {
   /** @format uuid */
   resourceId: string | null;
   scope: ResourceBindingScope;
-  secretDeliveryMode: null | SecretDeliveryMode;
+  secretDeliveryMode: SecretDeliveryMode | null;
   /** @format uuid */
   secretId: string | null;
   targetPath: string | null;
@@ -6035,7 +6035,7 @@ export interface ResourceCopyProgress {
 
 export interface ResourceCopyRequest {
   consistencyAcknowledged?: boolean | null;
-  dataMode?: null | ResourceCopyDataMode;
+  dataMode?: ResourceCopyDataMode | null;
   destinationNodeId?: string | null;
   /** @format uuid */
   destinationPlatformId?: string | null;
@@ -6366,7 +6366,7 @@ export interface ServiceAccountTokenView {
   name: string;
   /** @format date-time */
   revokedAtUtc: string | null;
-  revokedByActorId: null | ActorId;
+  revokedByActorId: ActorId | null;
 }
 
 export interface ServiceAccountTokensResponse {
@@ -6578,7 +6578,7 @@ export interface StackDriftPolicyInput {
   autoResumePausedContainers?: boolean | null;
   autoStartStoppedContainers?: boolean | null;
   markDegraded?: boolean | null;
-  mode?: null | StackDriftMode;
+  mode?: StackDriftMode | null;
   removeExtraContainers?: boolean | null;
 }
 
@@ -6612,7 +6612,7 @@ export interface StackReconciliationAction {
 
 export interface StackReconciliationResult {
   actions: StackReconciliationAction[];
-  afterReport: null | StackDriftReport;
+  afterReport: StackDriftReport | null;
   beforeReport: StackDriftReport;
   /** @format uuid */
   stackId: string;
@@ -6650,7 +6650,7 @@ export interface StackReleaseView {
   platformName?: string | null;
   platformStatus: PlatformStatus;
   resourceBindings?: ResourceBindingSnapshot[] | null;
-  source?: null | StackReleaseSource;
+  source?: StackReleaseSource | null;
   spec: StackSpec;
   /** @format uuid */
   stackId: string;
@@ -6691,7 +6691,7 @@ export type StackSpec =
       gitRepoId: string;
       updateBehavior?: StackUpdateBehavior;
       watchPaths?: string[];
-      webhook?: null | StackWebhookConfig;
+      webhook?: StackWebhookConfig | null;
       workingDirectory?: string | null;
     } & {
       $type: "Git";
@@ -6701,8 +6701,8 @@ export interface StackSpecCommon {
   buildImageBindings?: StackBuildImageBinding[];
   destroyBeforeDeploy?: boolean;
   envFilePath?: string | null;
-  postDeploy?: null | StackCommand;
-  preDeploy?: null | StackCommand;
+  postDeploy?: StackCommand | null;
+  preDeploy?: StackCommand | null;
   projectName?: string | null;
   /** @format uuid */
   registryId?: string | null;
@@ -6714,7 +6714,7 @@ export interface StackStreamItem {
   message?: string | null;
   progressMessage?: string | null;
   severity?: string | null;
-  stackStatus?: null | StackReleaseStatus;
+  stackStatus?: StackReleaseStatus | null;
   type: StackApplyEventType;
 }
 
@@ -6730,10 +6730,10 @@ export type StackUpdateState =
     };
 
 export interface StackView {
-  backupCoverage?: null | ResourceBackupSummaryView;
-  capabilities: null | StackCapabilities;
+  backupCoverage?: ResourceBackupSummaryView | null;
+  capabilities: StackCapabilities | null;
   controlState: ResourceControlState;
-  copyEligibility?: null | ResourceCopyEligibility;
+  copyEligibility?: ResourceCopyEligibility | null;
   /** @format date-time */
   createdAt: string;
   /** @format uuid */
@@ -6746,7 +6746,7 @@ export interface StackView {
   hasCopiedStorage: boolean;
   /** @format uuid */
   id: string;
-  latestActivityView: null | LatestActivityView;
+  latestActivityView: LatestActivityView | null;
   name: string;
   /** @format uuid */
   platformId: string | null;
@@ -6757,8 +6757,8 @@ export interface StackView {
   resourceBindings: ResourceBindingSnapshot[] | null;
   /** @format int64 */
   rowVersion: number;
-  source: null | StackReleaseSource;
-  spec: null | StackSpec;
+  source: StackReleaseSource | null;
+  spec: StackSpec | null;
   stackSource: StackSource;
   stackUpdateState: StackUpdateState;
   status: StackReleaseStatus;
@@ -6780,7 +6780,7 @@ export interface StartProfileMfaSetupInput {
 }
 
 export interface SwarmConfigView {
-  capabilities: null | PlatformCapabilitiesView;
+  capabilities: PlatformCapabilitiesView | null;
   /** @format date-time */
   createdAt: string | null;
   id: string;
@@ -6801,7 +6801,7 @@ export interface SwarmConfigView {
 export interface SwarmItemsResponseSwarmConfigView {
   capabilities: PlatformCapabilitiesView;
   items: {
-    capabilities: null | PlatformCapabilitiesView;
+    capabilities: PlatformCapabilitiesView | null;
     /** @format date-time */
     createdAt: string | null;
     id: string;
@@ -6823,7 +6823,7 @@ export interface SwarmItemsResponseSwarmConfigView {
 export interface SwarmItemsResponseSwarmNetworkView {
   capabilities: PlatformCapabilitiesView;
   items: {
-    capabilities: null | PlatformCapabilitiesView;
+    capabilities: PlatformCapabilitiesView | null;
     /** @format date-time */
     createdAt: string | null;
     driver: string;
@@ -6850,7 +6850,7 @@ export interface SwarmItemsResponseSwarmNodeView {
     address: string;
     architecture: string;
     availability: string;
-    capabilities: null | PlatformCapabilitiesView;
+    capabilities: PlatformCapabilitiesView | null;
     /** @format date-time */
     createdAt: string | null;
     /** @format int32 */
@@ -6880,7 +6880,7 @@ export interface SwarmItemsResponseSwarmNodeView {
 export interface SwarmItemsResponseSwarmSecretView {
   capabilities: PlatformCapabilitiesView;
   items: {
-    capabilities: null | PlatformCapabilitiesView;
+    capabilities: PlatformCapabilitiesView | null;
     /** @format date-time */
     createdAt: string | null;
     driver: string | null;
@@ -6902,7 +6902,7 @@ export interface SwarmItemsResponseSwarmSecretView {
 export interface SwarmItemsResponseSwarmServiceView {
   capabilities: PlatformCapabilitiesView;
   items: {
-    capabilities: null | PlatformCapabilitiesView;
+    capabilities: PlatformCapabilitiesView | null;
     configIds: string[];
     /** @format date-time */
     createdAt: string | null;
@@ -6940,7 +6940,7 @@ export interface SwarmItemsResponseSwarmServiceView {
 export interface SwarmItemsResponseSwarmTaskView {
   capabilities: PlatformCapabilitiesView;
   items: {
-    capabilities: null | PlatformCapabilitiesView;
+    capabilities: PlatformCapabilitiesView | null;
     /** @format date-time */
     createdAt: string | null;
     desiredState: string;
@@ -6970,7 +6970,7 @@ export interface SwarmItemsResponseSwarmTaskView {
 }
 
 export interface SwarmNetworkView {
-  capabilities: null | PlatformCapabilitiesView;
+  capabilities: PlatformCapabilitiesView | null;
   /** @format date-time */
   createdAt: string | null;
   driver: string;
@@ -7014,7 +7014,7 @@ export interface SwarmNodeAgentCoverage {
   nodes: NodeAgentCoverage[];
   /** @min 0 */
   offlineNodes: number;
-  operation?: null | NodeAgentOperation;
+  operation?: NodeAgentOperation | null;
   reasons: string[];
   /** @min 0 */
   staleNodes: number;
@@ -7037,7 +7037,7 @@ export interface SwarmNodeView {
   address: string;
   architecture: string;
   availability: string;
-  capabilities: null | PlatformCapabilitiesView;
+  capabilities: PlatformCapabilitiesView | null;
   /** @format date-time */
   createdAt: string | null;
   /** @format int32 */
@@ -7093,7 +7093,7 @@ export interface SwarmOverviewView {
 }
 
 export interface SwarmPreflightInput {
-  driftPolicy?: null | StackDriftPolicy;
+  driftPolicy?: StackDriftPolicy | null;
   name: string;
   /** @format uuid */
   platformId: string;
@@ -7111,7 +7111,7 @@ export interface SwarmQuorumView {
 }
 
 export interface SwarmSecretView {
-  capabilities: null | PlatformCapabilitiesView;
+  capabilities: PlatformCapabilitiesView | null;
   /** @format date-time */
   createdAt: string | null;
   driver: string | null;
@@ -7288,7 +7288,7 @@ export interface SwarmServiceSpec {
   command?: string[];
   configs?: SwarmServiceConfigReference[];
   environment?: string[];
-  healthCheck?: null | SwarmServiceHealthCheck;
+  healthCheck?: SwarmServiceHealthCheck | null;
   image: SwarmServiceImageInfo;
   labels?: Record<string, string>;
   mounts?: SwarmServiceMount[];
@@ -7297,16 +7297,16 @@ export interface SwarmServiceSpec {
   ports?: SwarmServicePort[];
   /** @format int32 */
   replicas?: number | null;
-  resources?: null | SwarmServiceResources;
-  restartPolicy?: null | SwarmServiceRestartPolicy;
+  resources?: SwarmServiceResources | null;
+  restartPolicy?: SwarmServiceRestartPolicy | null;
   schedulingMode?: SchedulingMode;
   secrets?: SwarmServiceSecretReference[];
   /** @format int64 */
   stopGracePeriodNanoseconds?: number | null;
   updateBehavior?: UpdateBehavior;
-  updatePolicy?: null | SwarmServiceUpdatePolicy;
+  updatePolicy?: SwarmServiceUpdatePolicy | null;
   user?: string | null;
-  webhook?: null | WebhookConfig;
+  webhook?: WebhookConfig | null;
   workingDirectory?: string | null;
 }
 
@@ -7320,7 +7320,7 @@ export interface SwarmServiceUpdatePolicy {
 }
 
 export interface SwarmServiceView {
-  capabilities: null | PlatformCapabilitiesView;
+  capabilities: PlatformCapabilitiesView | null;
   configIds: string[];
   /** @format date-time */
   createdAt: string | null;
@@ -7367,7 +7367,7 @@ export interface SwarmStackCompatibilityReport {
 }
 
 export interface SwarmTaskView {
-  capabilities: null | PlatformCapabilitiesView;
+  capabilities: PlatformCapabilitiesView | null;
   /** @format date-time */
   createdAt: string | null;
   desiredState: string;
@@ -7509,7 +7509,7 @@ export interface UpdateAutomationActionInput {
   scheduleTimeZone?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | WebhookPatch;
+  webhook?: WebhookPatch | null;
 }
 
 export interface UpdateAutomationActionMetadata {
@@ -7527,11 +7527,11 @@ export interface UpdateBackupPolicyInput {
   keepLastSuccessful?: number | null;
   /** @format uuid */
   runAsActorId?: string | null;
-  source?: null | BackupSourceSpec;
+  source?: BackupSourceSpec | null;
   timeZone?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | WebhookPatch;
+  webhook?: WebhookPatch | null;
 }
 
 export interface UpdateBackupRepositoryCredentialsInput {
@@ -7548,7 +7548,7 @@ export interface UpdateBackupRepositoryCredentialsInput {
 
 export interface UpdateBackupRepositoryInput {
   name?: string | null;
-  spec?: null | BackupRepositorySpec;
+  spec?: BackupRepositorySpec | null;
 }
 
 export interface UpdateBuildAgentPoolInput {
@@ -7564,7 +7564,7 @@ export interface UpdateBuildAgentPoolInput {
   maxActiveBuilders?: number | null;
   /** @format int32 */
   maximumInstanceLifetimeSeconds?: number | null;
-  providerSpec?: null | BuildAgentPoolProviderSpec;
+  providerSpec?: BuildAgentPoolProviderSpec | null;
   /** @format int32 */
   provisioningTimeoutSeconds?: number | null;
   /** @format int32 */
@@ -7598,7 +7598,7 @@ export interface UpdateBuildProjectInput {
   target?: string | null;
   /** @format int32 */
   timeoutSeconds?: number | null;
-  webhook?: null | WebhookPatch;
+  webhook?: WebhookPatch | null;
 }
 
 export interface UpdateCurrentProfileRequest {
@@ -7699,7 +7699,7 @@ export interface UsersResponse {
 }
 
 export interface ValidateImportRequest {
-  importKind?: null | StackImportKind;
+  importKind?: StackImportKind | null;
   name: string;
   spec: StackSpec;
   stackSource: StackSource;
@@ -7768,8 +7768,8 @@ export interface VolumeUsageDataView {
 }
 
 export interface VolumeView {
-  backupCoverage?: null | BackupCoverageView;
-  capabilities: null | VolumeCapabilitiesView;
+  backupCoverage?: BackupCoverageView | null;
+  capabilities: VolumeCapabilitiesView | null;
   clusterVolume: any;
   containers: VolumeContainerView[];
   contentAccessAllowed: boolean | null;
@@ -7787,7 +7787,7 @@ export interface VolumeView {
   scope: string;
   staleReason: string | null;
   status: Record<string, string>;
-  usageData: null | VolumeUsageDataView;
+  usageData: VolumeUsageDataView | null;
 }
 
 export interface VolumesResponse {
@@ -7938,7 +7938,7 @@ export interface ServerBackupsHttpLogs {
 }
 
 export interface ServerBackupsHttpQueueInput {
-  trigger?: null | BackupQueueTrigger;
+  trigger?: BackupQueueTrigger | null;
 }
 
 export interface ServerBackupsHttpRuns {
@@ -7952,7 +7952,7 @@ export interface ServerBuildsHttpLogs {
 }
 
 export interface ServerBuildsHttpQueueInput {
-  trigger?: null | QueueBuildTrigger;
+  trigger?: QueueBuildTrigger | null;
 }
 
 export interface ServerBuildsHttpRuns {
@@ -9413,7 +9413,7 @@ export class Api<
      */
     runAutomationAction: (
       id: string,
-      data: null | RunInput,
+      data: RunInput | null,
       params: RequestParams = {},
     ) =>
       this.request<AutomationProgress[], ProblemDetails>({
@@ -9633,7 +9633,7 @@ export class Api<
      */
     testAutomationAction: (
       id: string,
-      data: null | RunInput,
+      data: RunInput | null,
       params: RequestParams = {},
     ) =>
       this.request<AutomationProgress[], ProblemDetails>({
@@ -9940,7 +9940,7 @@ export class Api<
      */
     queueBackupRun: (
       id: string,
-      data: null | ServerBackupsHttpQueueInput,
+      data: ServerBackupsHttpQueueInput | null,
       params: RequestParams = {},
     ) =>
       this.request<BackupRunView, ProblemDetails>({
@@ -11303,7 +11303,7 @@ export class Api<
      */
     queueBuildRun: (
       id: string,
-      data: null | ServerBuildsHttpQueueInput,
+      data: ServerBuildsHttpQueueInput | null,
       params: RequestParams = {},
     ) =>
       this.request<BuildRunView, ProblemDetails>({
@@ -11871,7 +11871,7 @@ export class Api<
      * @summary Read observed Container networking without its configuration
      * @request GET:/api/v1/containers/{id}/networking
      * @secure
-     * @response `200` `ContainerNetworkingView`
+     * @response `200` `ContainerNetworkingView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -11899,7 +11899,7 @@ export class Api<
      * @summary Read running Container processes
      * @request GET:/api/v1/containers/{id}/processes
      * @secure
-     * @response `200` `ContainerProcessesView`
+     * @response `200` `ContainerProcessesView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13383,7 +13383,7 @@ export class Api<
      * @summary Check an image tag for updates
      * @request POST:/api/v1/images/check-update
      * @secure
-     * @response `200` `ImageTagUpdate`
+     * @response `200` `ImageTagUpdate` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13416,7 +13416,7 @@ export class Api<
      * @summary Preview image deletion
      * @request POST:/api/v1/images/deletion-preview
      * @secure
-     * @response `200` `(ImageDeletionPreviewItem)[]`
+     * @response `200` `(ImageDeletionPreviewItem)[]` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -13665,7 +13665,7 @@ export class Api<
      * @summary List image usage
      * @request GET:/api/v1/images/{platformId}/{imageId}/usage
      * @secure
-     * @response `200` `ImageUsage`
+     * @response `200` `ImageUsage` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -14653,7 +14653,7 @@ export class Api<
      * @summary List authorized workload identities for the network explorer
      * @request GET:/api/v1/platforms/{id}/network-containers
      * @secure
-     * @response `200` `NetworkContainersView`
+     * @response `200` `NetworkContainersView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -16930,7 +16930,7 @@ export class Api<
      * @name PreviewResourceCopy
      * @request POST:/api/v1/resource-copies/preview
      * @secure
-     * @response `200` `ResourceCopyPreview`
+     * @response `200` `ResourceCopyPreview` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -16961,7 +16961,7 @@ export class Api<
      * @name GetResourceCopyTargets
      * @request GET:/api/v1/resource-copies/targets
      * @secure
-     * @response `200` `ResourceCopyTargets`
+     * @response `200` `ResourceCopyTargets` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -16995,7 +16995,7 @@ export class Api<
      * @name GetResourceCopy
      * @request GET:/api/v1/resource-copies/{id}
      * @secure
-     * @response `200` `ResourceCopyProgress`
+     * @response `200` `ResourceCopyProgress` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -17021,7 +17021,7 @@ export class Api<
      * @name CancelResourceCopy
      * @request POST:/api/v1/resource-copies/{id}/cancel
      * @secure
-     * @response `200` `ResourceCopyProgress`
+     * @response `200` `ResourceCopyProgress` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -17047,7 +17047,7 @@ export class Api<
      * @name CleanupResourceCopy
      * @request POST:/api/v1/resource-copies/{id}/cleanup
      * @secure
-     * @response `200` `ResourceCopyProgress`
+     * @response `200` `ResourceCopyProgress` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -17073,7 +17073,7 @@ export class Api<
      * @name StartResourceCopy
      * @request POST:/api/v1/resource-copies/{id}/start
      * @secure
-     * @response `200` `ResourceCopyProgress`
+     * @response `200` `ResourceCopyProgress` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden

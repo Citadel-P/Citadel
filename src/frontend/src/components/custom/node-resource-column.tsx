@@ -1,4 +1,4 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useNavigate, useParams } from 'react-router';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -11,11 +11,11 @@ export type NodeScopedResource = {
   staleReason?: string | null;
 };
 
-export const createNodeResourceColumn = <T extends NodeScopedResource>(): ColumnDef<T> => ({
+export const createNodeResourceColumn = <T extends NodeScopedResource>(): ColumnDef<StockFeatures, T> => ({
   accessorKey: 'nodeHostname',
   header: ({ column }) => <SortableCell cellName="Node" column={column} />,
   cell: ({ row }) => <NodeResourceCell resource={row.original} />,
-  sortingFn: (rowA, rowB) =>
+  sortFn: (rowA, rowB) =>
     (rowA.original.nodeHostname ?? rowA.original.dockerNodeId ?? '').localeCompare(
       rowB.original.nodeHostname ?? rowB.original.dockerNodeId ?? '',
     ),

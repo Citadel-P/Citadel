@@ -9,7 +9,7 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { useSelectedResources } from '@/lib/atoms';
 import { DropdownActionComponent } from '@/pages/types';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router';
 import { displayList } from '../shared';
@@ -29,7 +29,7 @@ export const ConfigsTable = ({
   const [, setSelectedResources] = useSelectedResources<SwarmConfigView>('Config');
   const [editing, setEditing] = useState<SwarmConfigView | null>(null);
   const formatDateTime = useProfileDateTimeFormatter();
-  const columns = useMemo<ColumnDef<SwarmConfigView>[]>(
+  const columns = useMemo<ColumnDef<StockFeatures, SwarmConfigView>[]>(
     () => [
       {
         id: 'select',

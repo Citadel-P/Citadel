@@ -119,6 +119,9 @@ fn restore_parameter_defaults(api: &mut OpenApi) {
         .flatten()
         {
             for parameter in op.parameters.iter_mut().flatten() {
+                let RefOr::T(parameter) = parameter else {
+                    continue;
+                };
                 let default = parameter
                     .extensions
                     .as_mut()

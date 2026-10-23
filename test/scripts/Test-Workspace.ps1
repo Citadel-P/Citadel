@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'BuildCache.ps1')
 $buildCacheVolume = New-CitadelBuildCacheName
+$toolchainImage = "${buildCacheVolume}:toolchain"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $mount = "type=bind,source=$repoRoot,target=/repo"
@@ -11,11 +12,14 @@ $dockerArgs = @(
     '--volume', 'citadel-rust-cargo-git:/usr/local/cargo/git',
     '--volume', "${buildCacheVolume}:/repo/target",
     '--workdir', '/repo',
-    'rust:1.97.1-bookworm'
+    $toolchainImage
 )
 
 try {
-    & docker @dockerArgs cargo run --locked -p xtask -- docker --check
+    & docker build --tag $toolchainImage --file (Join-Path $repoRoot 'test/Dockerfile.toolchain') $repoRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Could not build the Rust/Java test toolchain.' }
+
+    & docker @dockerArgs cargo run --locked -p xtask -- docker-api --check
     if ($LASTEXITCODE -ne 0) { throw 'Docker subset verification failed.' }
 
     & docker @dockerArgs cargo fmt --all --check
@@ -29,4 +33,5 @@ try {
 }
 finally {
     Remove-CitadelBuildCache -Name $buildCacheVolume
+    & docker image rm $toolchainImage | Out-Null
 }

@@ -26,10 +26,7 @@ const invalidateBackupRepositoryQueries = async (queryClient: ReturnType<typeof 
 const useRepositoryOperation = (
   resources: BackupRepositoryView | BackupRepositoryView[],
   mutationKey:
-    | 'validateBackupRepository'
-    | 'initializeBackupRepository'
-    | 'checkBackupRepository'
-    | 'pruneBackupRepository',
+    'validateBackupRepository' | 'initializeBackupRepository' | 'checkBackupRepository' | 'pruneBackupRepository',
   successMessage: string,
 ) => {
   const { selected, multiSelect } = singleSelection(resources);

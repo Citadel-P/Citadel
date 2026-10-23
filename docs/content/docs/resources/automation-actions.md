@@ -210,6 +210,11 @@ Testing does not save draft code. Save the reviewed version before a normal Run,
 schedule, or webhook should use it. A disabled Action can still be tested, so
 disabling it is not a way to make tests read-only.
 
+Testing unsaved code also requires permission to use the saved **Run as**
+identity: your own User, a Service Account you can **Use**, or administrator
+access. Execute access alone still permits running the saved code. If the Action
+changes while a draft is being authorized, reload it and retry the test.
+
 ## Manual Run
 
 Use `Run` to queue a normal manual run.
@@ -405,6 +410,10 @@ execution does not depend on a human account. See
 ## Safety Notes
 
 Actions are TypeScript scripts, not shell scripts.
+
+Each run has a private temporary workspace. File imports, including imports from
+other modules, are restricted to that workspace by Deno's runtime permissions.
+Workspace files are removed after the run.
 
 Actions cannot:
 

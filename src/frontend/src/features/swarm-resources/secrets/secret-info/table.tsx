@@ -2,12 +2,12 @@ import { SwarmSecretView } from '@/api/generated/api.types';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { DataTable } from '@/components/ui/data-table';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 
 export const SecretInfoTable = ({ secret }: { secret: SwarmSecretView }) => {
   const formatDateTime = useProfileDateTimeFormatter();
-  const columns = useMemo<ColumnDef<SwarmSecretView>[]>(
+  const columns = useMemo<ColumnDef<StockFeatures, SwarmSecretView>[]>(
     () => [
       { accessorKey: 'driver', header: 'Driver', cell: ({ row }) => row.original.driver ?? 'Swarm' },
       { accessorKey: 'versionIndex', header: 'Version' },

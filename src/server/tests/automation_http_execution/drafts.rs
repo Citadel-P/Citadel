@@ -114,6 +114,21 @@ pub(super) async fn verify(
         )
         .await
         .unwrap();
+    let before = store.list_runs(id, 100).await.unwrap().len();
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            &path,
+            Some(writer.clone()),
+            Some(json!({"code": code}))
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN,
+        "Execute must not delegate editing code under another User's identity"
+    );
+    assert_eq!(store.list_runs(id, 100).await.unwrap().len(), before);
     let response = request(app, Method::POST, &path, Some(writer), None).await;
     let status = response.status();
     let tested = body(response).await;

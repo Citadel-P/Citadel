@@ -4,10 +4,13 @@ import { http, HttpResponse } from 'msw';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { ImageReferenceButton, ImageReferenceDropdown, type ImageReferenceTarget } from './reference-actions';
-const { openTask } = vi.hoisted(() => ({ openTask: vi.fn() }));
+const { openTask, platform } = vi.hoisted(() => ({
+  openTask: vi.fn(),
+  platform: { id: 'platform-1', name: 'Production host', capabilities: { canRead: true, canPull: true } },
+}));
 vi.mock('@/lib/context/app-context', () => ({
   useAppContext: () => ({
-    currentPlatform: { id: 'platform-1', name: 'Production host', capabilities: { canRead: true, canPull: true } },
+    currentPlatform: platform,
   }),
 }));
 vi.mock('@/lib/atoms', () => ({
@@ -45,6 +48,8 @@ const image: ImageReferenceTarget = {
 };
 beforeEach(() => {
   openTask.mockClear();
+  platform.id = 'platform-1';
+  platform.capabilities.canPull = true;
   server.use(http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({})));
 });
 it('checks the selected tag without dispatching a pull or a workload command', async () => {
@@ -87,6 +92,95 @@ it('checks the selected tag without dispatching a pull or a workload command', a
   });
   expect(openTask).not.toHaveBeenCalled();
 });
+it('offers an explicit pull of the checked tag and Registry after finding an update', async () => {
+  server.use(
+    http.post('http://localhost/api/v1/images/check-update', () =>
+      HttpResponse.json({ reference: 'nginx:17', registryId: 'registry-1', status: 'UpdateAvailable', isStale: false }),
+    ),
+  );
+  const { user } = renderCitadel(
+    <ImageReferenceButton resources={[{ ...image, tags: ['nginx:17', 'nginx:latest'] }]} kind="check" />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Check for updates' }));
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.queryByRole('button', { name: 'Pull latest' })).not.toBeInTheDocument();
+  await user.click(dialog.getByRole('combobox', { name: 'Image tag' }));
+  await user.click(screen.getByRole('option', { name: 'nginx:17' }));
+  await user.click(dialog.getByRole('combobox', { name: 'Registry' }));
+  await user.click(dialog.getByRole('button', { name: 'Check for updates' }));
+  const pull = await dialog.findByRole('button', { name: 'Pull latest' });
+  expect(openTask).not.toHaveBeenCalled();
+  await user.click(pull);
+  expect(openTask).toHaveBeenCalledExactlyOnceWith({
+    kind: 'pull',
+    payload: {
+      platformId: 'platform-1',
+      sourceImageId: image.dockerImageId,
+      imageTag: 'nginx:17',
+      registryId: 'registry-1',
+    },
+  });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it.each(['image permission', 'platform permission', 'stale result', 'up to date', 'failed check'])(
+  'does not allow pulling the update with %s',
+  async (condition) => {
+    if (condition === 'platform permission') platform.capabilities.canPull = false;
+    server.use(
+      http.post('http://localhost/api/v1/images/check-update', () =>
+        HttpResponse.json({
+          reference: 'nginx:17',
+          status:
+            condition === 'up to date' ? 'UpToDate' : condition === 'failed check' ? 'CheckFailed' : 'UpdateAvailable',
+          isStale: condition === 'stale result',
+        }),
+      ),
+    );
+    const { user } = renderCitadel(
+      <ImageReferenceButton
+        resources={[
+          condition === 'image permission'
+            ? { ...image, capabilities: { ...image.capabilities!, canPull: false } }
+            : image,
+        ]}
+        kind="check"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Check for updates' }));
+    const dialog = within(screen.getByRole('dialog'));
+    await user.click(dialog.getByRole('combobox', { name: 'Registry' }));
+    await user.click(dialog.getByRole('button', { name: 'Check for updates' }));
+    await dialog.findByRole('heading', { name: 'Check result' });
+    const pull = dialog.queryByRole('button', { name: 'Pull latest' });
+    if (condition.endsWith('permission')) expect(pull).toBeDisabled();
+    else expect(pull).not.toBeInTheDocument();
+    expect(openTask).not.toHaveBeenCalled();
+  },
+);
+
+it('clears the pull action when the checked tag selection changes', async () => {
+  server.use(
+    http.post('http://localhost/api/v1/images/check-update', () =>
+      HttpResponse.json({ reference: 'nginx:17', status: 'UpdateAvailable', isStale: false }),
+    ),
+  );
+  const { user } = renderCitadel(
+    <ImageReferenceButton resources={[{ ...image, tags: ['nginx:17', 'nginx:latest'] }]} kind="check" />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Check for updates' }));
+  const dialog = within(screen.getByRole('dialog'));
+  await user.click(dialog.getByRole('combobox', { name: 'Image tag' }));
+  await user.click(screen.getByRole('option', { name: 'nginx:17' }));
+  await user.click(dialog.getByRole('combobox', { name: 'Registry' }));
+  await user.click(dialog.getByRole('button', { name: 'Check for updates' }));
+  expect(await dialog.findByRole('button', { name: 'Pull latest' })).toBeEnabled();
+  await user.click(dialog.getByRole('combobox', { name: 'Image tag' }));
+  await user.click(screen.getByRole('option', { name: 'nginx:latest' }));
+  expect(dialog.queryByRole('button', { name: 'Pull latest' })).not.toBeInTheDocument();
+  expect(openTask).not.toHaveBeenCalled();
+});
+
 it('requires a tag choice and prefills the existing pull task without replacing it with latest', async () => {
   const { user } = renderCitadel(
     <ImageReferenceButton resources={[{ ...image, tags: ['nginx:17', 'nginx:latest'] }]} kind="pull" />,

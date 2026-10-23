@@ -23,9 +23,9 @@
     "env:vault:down": "docker compose -f compose.yml --profile vault down --volumes --remove-orphans"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.12.1",
-    "@playwright/test": "1.62.0",
-    "@types/node": "26.1.1",
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
     "typescript": "7.0.2"
   }
 }

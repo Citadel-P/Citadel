@@ -14,7 +14,7 @@ ENV VITE_CITADEL_BUILD_SHA="${SOURCE_REVISION}" \
     VITE_CITADEL_SOURCE_REPOSITORY_URL="${VITE_CITADEL_SOURCE_REPOSITORY_URL}"
 RUN npm run build:image
 
-FROM rust@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS rust-source
+FROM rust@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8 AS rust-source
 
 WORKDIR /source
 ARG VERSION
@@ -49,15 +49,16 @@ RUN --mount=type=cache,id=citadel-rust-registry,target=/usr/local/cargo/registry
     cargo build --locked --release -p citadel-server --bin citadel-server \
     && cp target/release/citadel-server /tmp/citadel-server
 
-FROM docker.io/library/docker@sha256:f7d048590d889e00868920f658e807ecbc4ef662d51c9af67eb5534a447d58d6 AS docker-cli
+# Docker 29.9.2, Buildx 0.38.1 and Compose 5.6.1 (patched Go runtime).
+FROM docker.io/library/docker@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb AS docker-cli
 # Strip tools before copying them so the runtime never stores their larger originals.
 RUN apk add --no-cache binutils \
     && strip --strip-unneeded /usr/local/bin/docker \
         /usr/local/libexec/docker/cli-plugins/docker-compose
 
-# Deno 2.9.6 on Alpine 3.24 includes isolated glibc libraries for Deno and Core.
+# Deno 2.9.8 on Alpine 3.24 includes isolated glibc libraries for Deno and Core.
 # Keep the GNU Rust build compatible with locally built development binaries.
-FROM docker.io/denoland/deno@sha256:aa665f8777136863b5b8a0445a5cdfccff8103b5f40c9a877de5276b04facb1e AS runtime-base
+FROM docker.io/denoland/deno@sha256:75749604f68aea01d39bead15fd1c86343639e44eb8c58ab051da8a924799d01 AS runtime-base
 
 WORKDIR /app
 COPY LICENSE /app/LICENSE

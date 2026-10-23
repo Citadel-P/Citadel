@@ -3,7 +3,7 @@ import { ActionData, DropdownActionComponent } from '@/pages/types';
 import { useSelectedResources, useTeamQuery } from '@/lib/atoms';
 import { useMemo } from 'react';
 import { PagedDataTable } from '@/components/custom/common';
-import { ColumnDef } from '@tanstack/react-table';
+import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -56,7 +56,7 @@ const columns = (
     string,
     React.FC<{ resource: TeamView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
-): ColumnDef<TeamView>[] => [
+): ColumnDef<StockFeatures, TeamView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -80,7 +80,7 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => <UserNameRow team={row.original} />,
-    sortingFn: (rowA, rowB) => String(rowA.original.name).localeCompare(String(rowB.original.name)),
+    sortFn: (rowA, rowB) => String(rowA.original.name).localeCompare(String(rowB.original.name)),
   },
   {
     accessorKey: 'members',

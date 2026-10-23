@@ -44,18 +44,16 @@ describe('Sidebar license link', () => {
   beforeEach(() => {
     mocks.isAdministrator = false;
     mocks.availableUpdate = undefined;
-    vi.mocked(window.matchMedia).mockImplementation(
-      (query: string): MediaQueryList => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      }),
-    );
+    vi.mocked(window.matchMedia).mockImplementation((query: string): MediaQueryList => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
   });
 
   it('shows the license edition without a link to non-administrators', () => {

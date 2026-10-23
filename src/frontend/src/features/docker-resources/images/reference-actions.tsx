@@ -57,7 +57,7 @@ function useImagePullAction() {
   const canPull = currentPlatform?.capabilities?.canRead === true && currentPlatform.capabilities.canPull;
   return {
     canPull,
-    start(image: ImageReferenceTarget, reference: string) {
+    start(image: ImageReferenceTarget, reference: string, registryId?: string) {
       if (!canPull || !currentPlatform?.id || unavailable(image, 'pull') || !imageTags(image).includes(reference))
         return;
       open({
@@ -66,6 +66,7 @@ function useImagePullAction() {
           platformId: currentPlatform.id,
           sourceImageId: image.dockerImageId,
           imageTag: reference,
+          ...(registryId ? { registryId } : {}),
         },
       });
     },
@@ -291,6 +292,18 @@ export function ImageReferenceDialog({
                     />
                     {check.isPending ? 'Checking…' : result ? 'Check again' : 'Check for updates'}
                   </Button>
+                  {result?.status === 'UpdateAvailable' && !result.isStale && (
+                    <Button
+                      disabled={check.isPending || !pull.canPull || unavailable(image, 'pull')}
+                      onClick={() => {
+                        if (changed || check.isPending) return;
+                        pull.start(image, reference, registry?.id);
+                        onClose();
+                      }}>
+                      <Download className="size-4" aria-hidden="true" />
+                      Pull latest
+                    </Button>
+                  )}
                 </DialogFooter>
               </>
             )}

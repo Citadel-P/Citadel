@@ -771,7 +771,7 @@ const DiskChartState = ({ compact, title, children }: { compact: boolean; title:
 );
 
 const formatPercent = (value: number) => `${toFixedNumber(value, undefined, 2)}%`;
-const formatTooltipLabel = (_: unknown, payload: any[]) => {
+const formatTooltipLabel = (_: unknown, payload: readonly any[]) => {
   const created = Number(payload.at(0)?.payload?.created ?? 0);
   return created ? dayjs(created * 1000).format('MMM D, h:mm:ss A') : '-';
 };

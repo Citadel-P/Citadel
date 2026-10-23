@@ -173,6 +173,10 @@ The selected shell must exist in the image. If `bash` fails, disconnect and try
 container, so its files and commands are those supplied by that image. Terminal
 process cleanup requires `/bin/sh`, `sleep`, and readable Linux `/proc` process metadata.
 
+Terminals for Citadel system containers, including Core, database, and Agent
+containers, require administrator access. A workload or Platform Terminal grant
+does not grant shell access to these management containers.
+
 Disconnecting, closing the terminal view, or losing the browser connection ends
 the terminal's shell and processes in its session. The application container keeps
 running. Sessions also disconnect after **15 minutes without terminal input or

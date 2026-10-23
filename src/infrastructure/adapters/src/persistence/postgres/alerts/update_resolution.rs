@@ -2,6 +2,41 @@
 use super::*;
 use citadel_alerts::update_resolution::{AppliedStackImage, VerifiedUpdate, is_update_available};
 
+/// Called under the rule/resource lock, after cooldown and target deduplication.
+/// Retain the matching event (and its acknowledgment), also repairing older open
+/// targets left by previous evaluations. Creation, closure and delivery enqueue
+/// share the caller's transaction; a failure leaves the previous incident open.
+pub(super) async fn supersede_pending(
+    tx: &mut Transaction<'_, Postgres>,
+    rule: Uuid,
+    observation: &AlertObservation,
+    key: &str,
+) -> Result<bool, AlertError> {
+    let changed = sqlx::query(
+        r#"WITH current AS (
+    SELECT id FROM alertevents WHERE openincidentkey=$1 AND resolvedat IS NULL FOR UPDATE
+)
+UPDATE alertevents previous
+SET resolvedat=CURRENT_TIMESTAMP,
+    resolvedbyactorid='00000000-0000-0000-0000-000000000001',
+    resolutionnote='Superseded by a newer available update (alert ' || current.id::text || ').',
+    updatedat=CURRENT_TIMESTAMP,openincidentkey=NULL
+FROM current
+WHERE previous.alertruleid=$2 AND previous.resourceid=$3
+  AND previous.type=$4 AND previous.resourcetype=$5
+  AND previous.resolvedat IS NULL AND previous.id<>current.id"#,
+    )
+    .bind(key)
+    .bind(rule)
+    .bind(observation.resource_id)
+    .bind(&observation.alert_type)
+    .bind(&observation.resource_type)
+    .execute(&mut **tx)
+    .await
+    .map_err(storage)?;
+    Ok(changed.rows_affected() > 0)
+}
+
 pub(crate) fn stack_images(state: &citadel_stacks::StackUpdateState) -> VerifiedUpdate {
     let (citadel_stacks::StackUpdateState::Git {
         recreate_stack_on_new_image_state,
