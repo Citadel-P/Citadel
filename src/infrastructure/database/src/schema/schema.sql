@@ -2396,6 +2396,7 @@ CREATE TABLE secretusegrants (
     resourceid uuid NOT NULL,
     PRIMARY KEY(secretid, scope, resourceid)
 );
+-- BEGIN RESTORE SECRET USE GRANTS
 INSERT INTO secretusegrants SELECT DISTINCT secretid, scope, COALESCE(resourceid, '00000000-0000-0000-0000-000000000000'::uuid)
 FROM resourcebindings WHERE secretid IS NOT NULL ON CONFLICT DO NOTHING;
 INSERT INTO secretusegrants SELECT passwordsecretid, 'BackupRepository', id FROM backuprepositories ON CONFLICT DO NOTHING;
@@ -2408,3 +2409,4 @@ WHERE EXISTS (SELECT 1 FROM secretdefinitions WHERE id=(secret->>'secretId')::uu
 -- External definitions are created by the global binding administrator.
 INSERT INTO secretusegrants SELECT id, 'Global', '00000000-0000-0000-0000-000000000000'::uuid
 FROM secretdefinitions WHERE providertype='VaultCompatibleKvV2' ON CONFLICT DO NOTHING;
+-- END RESTORE SECRET USE GRANTS

@@ -1,8 +1,8 @@
 use sqlx::PgPool;
 
 #[tokio::test]
-#[ignore = "requires empty disposable CITADEL_UPGRADE_DATABASE_URL"]
-async fn secret_grants_backfill_existing_uses_without_exposing_unbound_secrets() {
+#[ignore = "requires empty disposable CITADEL_UPGRADE_DATABASE_URL; rehearses baseline restoration"]
+async fn baseline_restoration_backfills_secret_grants_without_exposing_unbound_secrets() {
     let pool = PgPool::connect(&std::env::var("CITADEL_UPGRADE_DATABASE_URL").unwrap())
         .await
         .unwrap();
@@ -32,10 +32,17 @@ async fn secret_grants_backfill_existing_uses_without_exposing_unbound_secrets()
             ('70000000-0000-0000-0000-000000000001','main','10000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000001','fixture','fixture','FIXTURE',
             '50000000-0000-0000-0000-000000000001','[{"secretId":"20000000-0000-0000-0000-000000000005","name":"token"}]');
     "#).execute(&pool).await.unwrap();
-    sqlx::raw_sql(include_str!("../generated/0002_secret_use_grants.sql"))
-        .execute(&pool)
-        .await
-        .unwrap();
+    let baseline = include_str!("../generated/0001_initial.sql");
+    let backfill = baseline
+        .split_once("-- BEGIN RESTORE SECRET USE GRANTS\n")
+        .unwrap()
+        .1
+        .split_once("-- END RESTORE SECRET USE GRANTS")
+        .unwrap()
+        .0;
+    sqlx::raw_sql(backfill).execute(&pool).await.unwrap();
+    // A resumed restore must not duplicate or broaden the derived grants.
+    sqlx::raw_sql(backfill).execute(&pool).await.unwrap();
     let grants: Vec<(String, String, String)> = sqlx::query_as(
         "SELECT secretid::text,scope,resourceid::text FROM secretusegrants ORDER BY secretid,scope",
     )
