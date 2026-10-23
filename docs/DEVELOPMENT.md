@@ -312,9 +312,6 @@ separate disposable databases. `refresh-baseline` is only for an unpublished
 baseline; it is not an upgrade path. Never rewrite applied migration journals or
 checksums to suppress an `AppliedChecksum` error.
 
-For the explicit demo/preview data conversion associated with the 0.1.1 baseline,
-see [the offline maintenance procedure](baseline-conversion-0.1.1.md).
-
 ## Agent development
 
 Core and all Agent profiles use the same Cargo workspace. Build the Agent image:
