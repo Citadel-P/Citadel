@@ -125,7 +125,11 @@ pub trait BackupSourcePlanner: Send + Sync {
 }
 
 pub trait BackupSecretResolver: Send + Sync {
-    fn resolve(&self, id: Uuid) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BackupError>>;
+    fn resolve(
+        &self,
+        id: Uuid,
+        repository_id: Uuid,
+    ) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BackupError>>;
 }
 
 pub trait BackupRunAuthorizer: Send + Sync {

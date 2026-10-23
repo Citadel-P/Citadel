@@ -111,3 +111,72 @@ impl From<GitAuthConfiguration> for citadel_git::GitAuthConfiguration {
         }
     }
 }
+
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[serde(tag = "$type", deny_unknown_fields)]
+pub enum GitAuthConfigurationPatch {
+    Basic {
+        #[serde(default)]
+        #[schema(value_type = String, required = false)]
+        username: citadel_primitives::FieldUpdate<String>,
+        #[serde(default)]
+        #[schema(value_type = String, required = false)]
+        password: citadel_primitives::FieldUpdate<String>,
+    },
+    Token {
+        #[serde(default)]
+        #[schema(value_type = String, required = false)]
+        token: citadel_primitives::FieldUpdate<String>,
+    },
+    SshKey {
+        #[serde(default)]
+        #[schema(value_type = String, required = false)]
+        username: citadel_primitives::FieldUpdate<String>,
+        #[serde(rename = "privateKey")]
+        #[serde(default)]
+        #[schema(value_type = String, required = false)]
+        private_key: citadel_primitives::FieldUpdate<String>,
+        #[serde(default)]
+        #[schema(value_type = Option<String>, required = false)]
+        passphrase: citadel_primitives::FieldUpdate<Option<String>>,
+    },
+}
+
+impl From<GitAuthConfigurationPatch> for citadel_git::GitAuthConfigurationPatch {
+    fn from(value: GitAuthConfigurationPatch) -> Self {
+        match value {
+            GitAuthConfigurationPatch::Basic { username, password } => {
+                Self::Basic { username, password }
+            }
+            GitAuthConfigurationPatch::Token { token } => Self::Token { token },
+            GitAuthConfigurationPatch::SshKey {
+                username,
+                private_key,
+                passphrase,
+            } => Self::SshKey {
+                username,
+                private_key,
+                passphrase,
+            },
+        }
+    }
+}
+impl From<citadel_git::GitAuthConfigurationPatch> for GitAuthConfigurationPatch {
+    fn from(value: citadel_git::GitAuthConfigurationPatch) -> Self {
+        match value {
+            citadel_git::GitAuthConfigurationPatch::Basic { username, password } => {
+                Self::Basic { username, password }
+            }
+            citadel_git::GitAuthConfigurationPatch::Token { token } => Self::Token { token },
+            citadel_git::GitAuthConfigurationPatch::SshKey {
+                username,
+                private_key,
+                passphrase,
+            } => Self::SshKey {
+                username,
+                private_key,
+                passphrase,
+            },
+        }
+    }
+}

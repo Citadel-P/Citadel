@@ -116,6 +116,8 @@ pub(super) async fn validate_binding_references(
     tx: &mut Transaction<'_, Postgres>,
     kind: ResourceBindingKind,
     secret: Option<Uuid>,
+    scope: ResourceBindingScope,
+    resource_id: Option<Uuid>,
 ) -> Result<(), BindingError> {
     if kind == ResourceBindingKind::Secret {
         let Some(id) = secret else {
@@ -123,16 +125,14 @@ pub(super) async fn validate_binding_references(
                 "Secret binding requires a Secret.".into(),
             ));
         };
-        if !sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM secretdefinitions WHERE id=$1)",
+        super::access::authorize_and_grant(
+            tx,
+            id,
+            scope.as_database_str(),
+            resource_id.unwrap_or_default(),
+            None,
         )
-        .bind(id)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(storage)?
-        {
-            return Err(BindingError::Validation("Secret does not exist.".into()));
-        }
+        .await?;
     }
     Ok(())
 }

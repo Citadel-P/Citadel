@@ -41,7 +41,9 @@ impl ImageService for BuildHost {
                 .to_bytes()
                 .unwrap()
         };
-        let mut signed = bytes("x-timestamp-bin").to_vec();
+        let mut signed = b"citadel-direct-v2\0".to_vec();
+        signed.extend_from_slice(&bytes("x-audience-sha256-bin"));
+        signed.extend_from_slice(&bytes("x-timestamp-bin"));
         signed.extend_from_slice(&bytes("x-nonce-bin"));
         signed.extend_from_slice(b"/citadel.images.v1.ImageService/CheckBuildHost");
         signed.extend_from_slice(&Sha256::digest([]));
@@ -228,7 +230,10 @@ async fn signed_pool_check_uses_selected_endpoint_and_never_replays_authenticati
             .docker_version,
         "28.0.0"
     );
-    let selected = client.for_address(&second, &cancellation).await.unwrap();
+    let selected = client
+        .for_address(&second, uuid::Uuid::now_v7(), &cancellation)
+        .await
+        .unwrap();
     assert_eq!(
         selected
             .check_build_host(&cancellation)
@@ -257,7 +262,12 @@ async fn signed_pool_check_uses_selected_endpoint_and_never_replays_authenticati
     );
     assert_eq!(second_calls.load(Ordering::SeqCst), 2);
     cancellation.cancel();
-    assert!(client.for_address(&second, &cancellation).await.is_err());
+    assert!(
+        client
+            .for_address(&second, uuid::Uuid::now_v7(), &cancellation)
+            .await
+            .is_err()
+    );
     assert!(selected.check_build_host(&cancellation).await.is_err());
     assert_eq!(second_calls.load(Ordering::SeqCst), 2);
     first_stop.cancel();

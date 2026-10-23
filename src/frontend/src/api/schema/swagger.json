@@ -625,6 +625,10 @@
       "AgentSetupView": {
         "description": "Public installation instructions. The signing private key never enters this model.",
         "properties": {
+          "agentId": {
+            "format": "uuid",
+            "type": "string"
+          },
           "agentImage": {
             "type": "string"
           },
@@ -648,6 +652,7 @@
           }
         },
         "required": [
+          "agentId",
           "hubPublicKey",
           "environment",
           "agentImage",
@@ -1944,7 +1949,7 @@
           "webhook": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "$ref": "#/components/schemas/WebhookView"
               },
               {
                 "type": "null"
@@ -2715,7 +2720,7 @@
           "webhook": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "$ref": "#/components/schemas/WebhookView"
               },
               {
                 "type": "null"
@@ -4818,7 +4823,7 @@
           "webhook": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "$ref": "#/components/schemas/WebhookView"
               },
               {
                 "type": "null"
@@ -6743,6 +6748,14 @@
         "additionalProperties": false,
         "properties": {
           "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agentId": {
+            "description": "UUID from Agent setup. Required for Direct Agent registration.",
+            "format": "uuid",
             "type": [
               "string",
               "null"
@@ -8924,7 +8937,7 @@
             "$ref": "#/components/schemas/GitAuthType"
           },
           "configuration": {
-            "$ref": "#/components/schemas/GitAuthConfiguration"
+            "$ref": "#/components/schemas/GitAuthMetadataView"
           },
           "domain": {
             "type": "string"
@@ -8992,7 +9005,7 @@
           "configuration": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/GitAuthConfiguration"
+                "$ref": "#/components/schemas/GitAuthConfigurationPatch"
               },
               {
                 "type": "null"
@@ -9151,6 +9164,104 @@
             "type": "object"
           }
         ]
+      },
+      "GitAuthConfigurationPatch": {
+        "oneOf": [
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "Basic"
+                ],
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "Token"
+                ],
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "SshKey"
+                ],
+                "type": "string"
+              },
+              "passphrase": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "privateKey": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "$type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "GitAuthMetadataView": {
+        "properties": {
+          "hasPassphrase": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "hasPassword": {
+            "type": "boolean"
+          },
+          "hasPrivateKey": {
+            "type": "boolean"
+          },
+          "hasToken": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "hasPassword",
+          "hasToken",
+          "hasPrivateKey"
+        ],
+        "type": "object"
       },
       "GitAuthType": {
         "enum": [
@@ -9601,7 +9712,7 @@
           "webhook": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "$ref": "#/components/schemas/WebhookView"
               },
               {
                 "type": "null"
@@ -9937,7 +10048,7 @@
           "webhook": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WebhookConfig"
+                "$ref": "#/components/schemas/WebhookView"
               },
               {
                 "type": "null"
@@ -12058,7 +12169,7 @@
             ]
           },
           "spec": {
-            "$ref": "#/components/schemas/SwarmServiceSpec"
+            "$ref": "#/components/schemas/SwarmServiceSpecView"
           },
           "synchronizationState": {
             "$ref": "#/components/schemas/SwarmServiceSynchronizationState"
@@ -15180,6 +15291,30 @@
       },
       "ProfileMfaRecoveryCodesView": {
         "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recoveryCodes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "recoveryCodes"
+        ],
+        "type": "object"
+      },
+      "ProfileMfaSetupCompleteView": {
+        "properties": {
+          "accessToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -21938,7 +22073,7 @@
             "type": "integer"
           },
           "spec": {
-            "$ref": "#/components/schemas/StackSpec"
+            "$ref": "#/components/schemas/StackSpecView"
           },
           "stackSource": {
             "$ref": "#/components/schemas/StackSource"
@@ -22536,7 +22671,7 @@
             ]
           },
           "spec": {
-            "$ref": "#/components/schemas/StackSpec"
+            "$ref": "#/components/schemas/StackSpecView"
           },
           "stackId": {
             "format": "uuid",
@@ -22810,6 +22945,133 @@
         },
         "type": "object"
       },
+      "StackSpecView": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StackSpecCommon"
+              },
+              {
+                "properties": {
+                  "composeFile": {
+                    "type": "string"
+                  },
+                  "updateBehavior": {
+                    "$ref": "#/components/schemas/StackUpdateBehavior"
+                  }
+                },
+                "required": [
+                  "composeFile",
+                  "updateBehavior"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "$type": {
+                    "enum": [
+                      "WebEditor"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "$type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StackSpecCommon"
+              },
+              {
+                "properties": {
+                  "additionalEnvFileFromRepo": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "commitSha": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "composeEnvFilesFromRepo": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "composePaths": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "gitRepoId": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "updateBehavior": {
+                    "$ref": "#/components/schemas/StackUpdateBehavior"
+                  },
+                  "watchPaths": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "webhook": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/StackWebhookView"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "workingDirectory": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "gitRepoId",
+                  "branch",
+                  "updateBehavior"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "$type": {
+                    "enum": [
+                      "Git"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "$type"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
       "StackStreamItem": {
         "properties": {
           "exitCode": {
@@ -23034,7 +23296,7 @@
           "spec": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/StackSpec"
+                "$ref": "#/components/schemas/StackSpecView"
               },
               {
                 "type": "null"
@@ -23103,6 +23365,24 @@
                 "type": "boolean"
               }
             },
+            "type": "object"
+          }
+        ]
+      },
+      "StackWebhookView": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WebhookView"
+          },
+          {
+            "properties": {
+              "forceDeploy": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "forceDeploy"
+            ],
             "type": "object"
           }
         ]
@@ -25304,6 +25584,162 @@
         ],
         "type": "object"
       },
+      "SwarmServiceSpecView": {
+        "properties": {
+          "arguments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "command": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configs": {
+            "items": {
+              "$ref": "#/components/schemas/SwarmServiceConfigReference"
+            },
+            "type": "array"
+          },
+          "environment": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "healthCheck": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SwarmServiceHealthCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "image": {
+            "$ref": "#/components/schemas/SwarmServiceImageInfo"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "mounts": {
+            "items": {
+              "$ref": "#/components/schemas/SwarmServiceMount"
+            },
+            "type": "array"
+          },
+          "networkIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "placementConstraints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/SwarmServicePort"
+            },
+            "type": "array"
+          },
+          "replicas": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "resources": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SwarmServiceResources"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "restartPolicy": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SwarmServiceRestartPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedulingMode": {
+            "$ref": "#/components/schemas/SchedulingMode"
+          },
+          "secrets": {
+            "items": {
+              "$ref": "#/components/schemas/SwarmServiceSecretReference"
+            },
+            "type": "array"
+          },
+          "stopGracePeriodNanoseconds": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/UpdateBehavior"
+          },
+          "updatePolicy": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SwarmServiceUpdatePolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "user": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WebhookView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workingDirectory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "type": "object"
+      },
       "SwarmServiceSynchronizationState": {
         "enum": [
           "NeverApplied",
@@ -27480,6 +27916,36 @@
           "status",
           "requestId",
           "reason"
+        ],
+        "type": "object"
+      },
+      "WebhookView": {
+        "description": "Public webhook metadata. The credential is accepted only by mutation inputs.",
+        "properties": {
+          "authScheme": {
+            "$ref": "#/components/schemas/WebhookAuthScheme"
+          },
+          "branchFilter": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "hasSecret": {
+            "type": "boolean"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/WebhookProvider"
+          }
+        },
+        "required": [
+          "enabled",
+          "provider",
+          "authScheme",
+          "hasSecret"
         ],
         "type": "object"
       },
@@ -38201,6 +38667,116 @@
           }
         ],
         "summary": "Update Build Agent Pool metadata",
+        "tags": [
+          "BuildAgentPools"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/buildAgentPools/{id}/agent/setup": {
+      "get": {
+        "operationId": "getBuildAgentPoolAgentSetup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSetupView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Direct Build Agent installation instructions",
         "tags": [
           "BuildAgentPools"
         ],
@@ -52249,6 +52825,18 @@
     "/api/v1/platforms/agent/setup": {
       "get": {
         "operationId": "getAgentSetup",
+        "parameters": [
+          {
+            "description": "Stable Platform or Build Pool ID; generated when omitted",
+            "in": "query",
+            "name": "agentId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -60542,11 +61130,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileMfaRecoveryCodesView"
+                  "$ref": "#/components/schemas/ProfileMfaSetupCompleteView"
                 }
               }
             },
-            "description": "Success"
+            "description": "Success",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Replaces the current refresh token without extending session expiry.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {

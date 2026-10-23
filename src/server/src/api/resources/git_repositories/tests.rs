@@ -184,8 +184,8 @@ fn repository_schemas_derive_from_native_contracts() {
     for (field, contract) in [
         ("NewGitRepository", "WebhookConfig"),
         ("GitRepositoryPatch", "WebhookPatch"),
-        ("GitRepositoryConfigResponse", "WebhookConfig"),
-        ("GitRepositoryView", "WebhookConfig"),
+        ("GitRepositoryConfigResponse", "WebhookView"),
+        ("GitRepositoryView", "WebhookView"),
     ] {
         assert!(
             schemas[field]["properties"]["webhook"]

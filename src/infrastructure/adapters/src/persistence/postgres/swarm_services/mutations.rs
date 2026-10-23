@@ -432,6 +432,14 @@ pub(crate) async fn create_in_transaction(
         .bind(spec).bind(desired).bind(actor_id.value()).bind(now).execute(&mut **tx).await.map_err(database_error)?;
     replace_tags(tx, id, actor_id, &input.tag_ids).await?;
     if let Some(source) = &duplicate {
+        crate::persistence::postgres::bindings::access::copy_grants(
+            tx,
+            "SwarmService",
+            source.resource_id,
+            id,
+        )
+        .await
+        .map_err(|error| SwarmServiceError::Validation(error.to_string()))?;
         sqlx::query("INSERT INTO resourcebindings(id,createdat,kind,name,resourceid,scope,secretdeliverymode,secretid,targetpath,updatedat,value) SELECT gen_random_uuid(),CURRENT_TIMESTAMP,kind,name,$2,'SwarmService',secretdeliverymode,secretid,targetpath,CURRENT_TIMESTAMP,value FROM resourcebindings WHERE scope='SwarmService' AND resourceid=$1")
             .bind(source.resource_id).bind(id).execute(&mut **tx).await.map_err(database_error)?;
     }

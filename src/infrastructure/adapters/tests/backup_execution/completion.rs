@@ -137,8 +137,10 @@ impl BackupPersistence for Store {
         actor: ActorId,
         policy_id: Uuid,
         trigger: &str,
+        expected_row_version: Option<i64>,
     ) -> BoxFuture<'_, Result<BackupRun, BackupError>> {
-        self.inner.enqueue_backup(actor, policy_id, trigger)
+        self.inner
+            .enqueue_backup(actor, policy_id, trigger, expected_row_version)
     }
     fn enqueue_webhook<'a>(
         &'a self,
@@ -523,7 +525,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
                     .id
             } else {
                 store
-                    .enqueue_backup(actor, policy.id, "Manual")
+                    .enqueue_backup(actor, policy.id, "Manual", None)
                     .await
                     .unwrap()
                     .id

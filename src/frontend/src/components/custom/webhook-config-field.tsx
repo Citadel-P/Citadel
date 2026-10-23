@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { CheckCheck, Clipboard, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 
-type WebhookConfigValue = WebhookConfig | StackWebhookConfig;
+type WebhookConfigValue = (WebhookConfig | StackWebhookConfig) & { hasSecret?: boolean };
 type WebhookCommonConfig = Pick<WebhookConfig, 'enabled' | 'provider' | 'authScheme' | 'secret' | 'branchFilter'>;
 type NormalizedWebhookConfig = Required<Pick<WebhookCommonConfig, 'enabled' | 'provider' | 'authScheme'>> &
   Pick<WebhookCommonConfig, 'secret' | 'branchFilter'>;
@@ -119,6 +119,9 @@ export function WebhookConfigField({
   const [copiedUrl, copyUrl] = useCopyToClipboard(3000);
 
   const patch = (partial: Partial<WebhookCommonConfig>) => {
+    if (partial.enabled && !value?.hasSecret && !value?.secret?.trim() && !partial.secret?.trim()) {
+      partial = { ...partial, secret: generateSecret() };
+    }
     onChange({
       ...(value ?? {}),
       ...partial,
@@ -131,10 +134,7 @@ export function WebhookConfigField({
     patch({
       provider: nextProvider,
       authScheme: defaultAuthScheme(nextProvider),
-      secret:
-        nextProvider === WebhookProvider.Generic && !normalized.secret?.trim()
-          ? generateSecret()
-          : normalized.secret || null,
+      ...(value?.hasSecret || normalized.secret?.trim() ? {} : { secret: generateSecret() }),
     });
   };
 
@@ -204,12 +204,13 @@ export function WebhookConfigField({
             description={
               provider === WebhookProvider.Generic
                 ? 'Required shared secret for the CI system or external caller. This is not a Citadel user access token.'
-                : 'Optional shared secret configured in the Git provider. Leave empty to accept unsigned webhook deliveries.'
+                : 'Required shared secret configured in the Git provider. Unsigned deliveries are rejected.'
             }
             className={'pt-3 border-t'}>
             <div className="flex max-w-140 flex-col gap-2 sm:flex-row">
               <FieldInput
                 className="font-mono text-xs"
+                placeholder={value?.hasSecret ? 'Saved secret — enter a replacement' : 'Webhook secret'}
                 value={secret ?? undefined}
                 disabled={disabled || enableDisabled}
                 onChange={(next) => patch({ secret: next || null })}

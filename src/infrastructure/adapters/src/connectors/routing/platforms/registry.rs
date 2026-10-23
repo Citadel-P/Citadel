@@ -96,7 +96,7 @@ impl PlatformRuntimeRegistry {
                     .or_else(|| {
                         self.base
                             .as_ref()
-                            .and_then(|base| match base.at_address(&address) {
+                            .and_then(|base| match base.at_address(&address, id) {
                                 Ok(client) => Some(Arc::new(client)),
                                 Err(error) => {
                                     tracing::warn!(%error, %id, "Platform Agent address rejected");

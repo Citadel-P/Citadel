@@ -9,7 +9,20 @@ impl PostgresBackupPersistence {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let kind = input.spec.kind();
-            sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,type,spec,passwordsecretid,status,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,'Unknown',$7)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(kind).bind(sqlx::types::Json(&input.spec)).bind(input.password_secret_id).bind(actor.value()).execute(&self.pool).await.map_err(storage)?;
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            for secret in input.secret_ids() {
+                crate::persistence::postgres::bindings::access::authorize_and_grant(
+                    &mut tx,
+                    secret,
+                    "BackupRepository",
+                    id,
+                    Some(actor),
+                )
+                .await
+                .map_err(|error| BackupError::Validation(error.to_string()))?;
+            }
+            sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,type,spec,passwordsecretid,status,createdbyactorid) VALUES($1,$2,$3,$4,$5,$6,'Unknown',$7)").bind(id).bind(&input.name).bind(input.name.to_uppercase()).bind(kind).bind(sqlx::types::Json(&input.spec)).bind(input.password_secret_id).bind(actor.value()).execute(&mut *tx).await.map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
             self.get_repository(id).await
         })
     }
@@ -84,6 +97,17 @@ impl PostgresBackupPersistence {
             .ok_or(BackupError::NotFound)
             .and_then(map_repository)?;
             let input = repository_patch::apply(&current, patch)?;
+            for secret in input.secret_ids() {
+                crate::persistence::postgres::bindings::access::authorize_and_grant(
+                    &mut tx,
+                    secret,
+                    "BackupRepository",
+                    id,
+                    None,
+                )
+                .await
+                .map_err(|error| BackupError::Validation(error.to_string()))?;
+            }
             if input.spec != current.spec {
                 let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND expiresat>CURRENT_TIMESTAMP)")
                     .bind(id).fetch_one(&mut *tx).await.map_err(storage)?;
@@ -291,6 +315,24 @@ impl PostgresBackupPersistence {
                 return Err(BackupError::Conflict(
                     "Repository changed or validation expired. Retry the credential update.".into(),
                 ));
+            }
+            for secret in [
+                Some(credentials.access_key_secret_id),
+                Some(credentials.secret_key_secret_id),
+                credentials.session_token_secret_id,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                crate::persistence::postgres::bindings::access::authorize_and_grant(
+                    &mut tx,
+                    secret,
+                    "BackupRepository",
+                    id,
+                    None,
+                )
+                .await
+                .map_err(|error| BackupError::Validation(error.to_string()))?;
             }
             credentials.apply(&mut current.spec)?;
             let row = sqlx::query("UPDATE backuprepositories SET spec=$2,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE id=$1 RETURNING *")

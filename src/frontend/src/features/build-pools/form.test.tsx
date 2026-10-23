@@ -62,3 +62,26 @@ it('preserves saved unsupported provider data while disabling an existing pool',
   await waitFor(() => expect(payload?.enabled).toBe(false));
   expect(payload).not.toHaveProperty('providerSpec');
 });
+
+it('loads the install command for the saved inbound pool identity', async () => {
+  const id = '7fb4c244-485a-4b80-9611-b29e456adf65';
+  const setup = vi.fn(() =>
+    HttpResponse.json({
+      agentId: id,
+      dockerRunCommand: `docker run -e CITADEL_AGENT_ID=${id} agent`,
+    }),
+  );
+  server.use(http.get(`http://localhost/api/v1/buildAgentPools/${id}/agent/setup`, setup));
+  const resource = {
+    id,
+    name: 'builder',
+    enabled: true,
+    providerSpec: { $type: 'SelfManagedVm', connectionMode: 'InboundAgent', endpoint: 'http://localhost:9001' },
+    capabilities: { canRead: true, canWrite: true },
+  } as unknown as AuthorizedPool;
+  const Content = BuildPoolFormComponents.EditForm!.Tabs[0].Content;
+  renderCitadel(<Content resource={resource as any} />);
+  await waitFor(() => expect(setup).toHaveBeenCalledOnce());
+  expect(screen.getByRole('heading', { name: 'Agent Setup' })).toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: /Agent ID/ })).not.toBeInTheDocument();
+});

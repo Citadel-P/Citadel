@@ -5,7 +5,7 @@ fn rotation_persists_restricted_key_and_updates_every_signer_clone() {
     let root = std::env::temp_dir().join(format!("citadel-key-{}", uuid::Uuid::now_v7()));
     let path = root.join("signing-key");
     let signer = AgentRequestSigner::load_or_create(&path).unwrap();
-    let clone = signer.clone();
+    let clone = signer.clone().for_agent(uuid::Uuid::now_v7());
     let previous = signer.public_key_base64();
     let public = signer.rotate().unwrap();
     assert_ne!(public, previous);
@@ -23,7 +23,9 @@ fn rotation_persists_restricted_key_and_updates_every_signer_clone() {
         .unwrap()
         .to_bytes()
         .unwrap();
-    let mut payload = 1_i64.to_le_bytes().to_vec();
+    let mut payload = b"citadel-direct-v2\0".to_vec();
+    payload.extend_from_slice(&clone.audience);
+    payload.extend_from_slice(&1_i64.to_le_bytes());
     payload.extend_from_slice(&[0; 16]);
     payload.extend_from_slice(b"/test");
     payload.extend_from_slice(&Sha256::digest([]));
@@ -111,4 +113,41 @@ fn concurrent_rotations_leave_disk_and_all_clones_on_the_same_key() {
     assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
     fs::remove_file(path).unwrap();
     fs::remove_dir(root).unwrap();
+}
+
+#[tokio::test]
+async fn recipient_identity_is_independent_of_address() {
+    let first_id = uuid::Uuid::now_v7();
+    let second_id = uuid::Uuid::now_v7();
+    let signer = AgentRequestSigner::from_bytes(&[42; 32]);
+    let base = AgentClient::lazy(
+        "http://localhost:9001",
+        signer,
+        Duration::from_secs(2),
+        true,
+    )
+    .unwrap();
+    let first = base.at_address("http://localhost:9001", first_id).unwrap();
+    let second = base.at_address("http://localhost:9001", second_id).unwrap();
+    assert_ne!(first.signer.audience, second.signer.audience);
+    let moved = first
+        .at_address("https://different-network.test:9000", first_id)
+        .unwrap();
+    assert_eq!(first.signer.audience, moved.signer.audience);
+    let rebound = first
+        .at_address("http://localhost:9001", second_id)
+        .unwrap();
+    assert_eq!(second.signer.audience, rebound.signer.audience);
+    let first_request = first
+        .signer
+        .sign_with((), "/test", None, 1, [0; 16])
+        .unwrap();
+    let second_request = second
+        .signer
+        .sign_with((), "/test", None, 1, [0; 16])
+        .unwrap();
+    assert_ne!(
+        first_request.metadata().get_bin("x-signature-bin"),
+        second_request.metadata().get_bin("x-signature-bin")
+    );
 }

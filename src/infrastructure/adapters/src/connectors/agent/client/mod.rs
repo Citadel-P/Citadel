@@ -219,11 +219,17 @@ pub struct AgentBinaryExecOutput {
 
 #[derive(Clone)]
 pub struct AgentRequestSigner {
+    audience: [u8; 32],
     key: std::sync::Arc<std::sync::RwLock<SigningKey>>,
     path: Option<std::sync::Arc<std::path::PathBuf>>,
 }
 
 impl AgentRequestSigner {
+    pub fn for_agent(mut self, agent_id: uuid::Uuid) -> Self {
+        self.audience = Sha256::digest(agent_id.to_string().as_bytes()).into();
+        self
+    }
+
     /// Initialize the instance identity once, publishing only a fully written key.
     /// Existing or malformed files are never replaced automatically.
     pub fn load_or_create(path: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
@@ -286,6 +292,7 @@ impl AgentRequestSigner {
         let key = SigningKey::from_bytes(&key_bytes);
         key_bytes.fill(0);
         Ok(Self {
+            audience: [0; 32],
             key: std::sync::Arc::new(std::sync::RwLock::new(key)),
             path: Some(std::sync::Arc::new(path.to_owned())),
         })
@@ -294,6 +301,7 @@ impl AgentRequestSigner {
     #[must_use]
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
         Self {
+            audience: [0; 32],
             key: std::sync::Arc::new(std::sync::RwLock::new(SigningKey::from_bytes(bytes))),
             path: None,
         }
@@ -390,6 +398,8 @@ impl AgentRequestSigner {
     ) -> Result<Request<T>, RuntimeCapabilityError> {
         let body_hash = Sha256::digest(message.encode_to_vec());
         let mut payload = Vec::with_capacity(8 + nonce.len() + method.len() + body_hash.len());
+        payload.extend_from_slice(b"citadel-direct-v2\0");
+        payload.extend_from_slice(&self.audience);
         payload.extend_from_slice(&timestamp.to_le_bytes());
         payload.extend_from_slice(&nonce);
         payload.extend_from_slice(method.as_bytes());
@@ -405,6 +415,7 @@ impl AgentRequestSigner {
         if let Some(timeout) = timeout {
             request.set_timeout(timeout);
         }
+        insert_binary(&mut request, "x-audience-sha256-bin", &self.audience)?;
         insert_binary(&mut request, "x-timestamp-bin", &timestamp.to_le_bytes())?;
         insert_binary(&mut request, "x-nonce-bin", &nonce)?;
         insert_binary(&mut request, "x-content-sha256-bin", &body_hash)?;
@@ -513,16 +524,19 @@ impl AgentClient {
     pub async fn for_address(
         &self,
         address: &str,
+        agent_id: uuid::Uuid,
         cancellation: &CancellationToken,
     ) -> Result<Self, RuntimeCapabilityError> {
         if cancellation.is_cancelled() {
             return Err(cancelled_error());
         }
         let address = validate_address(address, self.allow_insecure)?;
-        if self.address == address {
+        if self.address == address
+            && self.signer.audience == Sha256::digest(agent_id.to_string().as_bytes()).as_slice()
+        {
             return Ok(self.clone());
         }
-        let mut client = self.at_address(&address)?;
+        let mut client = self.at_address(&address, agent_id)?;
         let endpoint = agent_endpoint(
             &address,
             self.operation_timeout,
@@ -551,10 +565,16 @@ impl AgentClient {
 
     /// Resolve a persisted Platform address without opening a second eager connection.
     /// RPC deadlines still bound the lazy connection; unchanged addresses reuse their channel.
-    pub fn at_address(&self, address: &str) -> Result<Self, RuntimeCapabilityError> {
+    pub fn at_address(
+        &self,
+        address: &str,
+        agent_id: uuid::Uuid,
+    ) -> Result<Self, RuntimeCapabilityError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::AgentConnect.start();
         let address = validate_address(address, self.allow_insecure)?;
-        if self.address == address {
+        if self.address == address
+            && self.signer.audience == Sha256::digest(agent_id.to_string().as_bytes()).as_slice()
+        {
             return Ok(self.clone());
         }
         let endpoint = agent_endpoint(
@@ -565,7 +585,7 @@ impl AgentClient {
         citadel_runtime::runtime_metrics::RuntimeWork::AgentChannelCreated.units(1);
         Ok(Self {
             channel: endpoint.connect_lazy(),
-            signer: self.signer.clone(),
+            signer: self.signer.clone().for_agent(agent_id),
             operation_timeout: self.operation_timeout,
             address,
             allow_insecure: self.allow_insecure,
@@ -2825,7 +2845,7 @@ mod tests {
     }
 
     #[test]
-    fn signs_the_exact_dotnet_payload_shape() {
+    fn signs_the_versioned_target_bound_payload() {
         let signer = AgentRequestSigner::from_bytes(&[7; 32]);
         let nonce = [9; 16];
         let timestamp = 1_725_000_000_i64;
@@ -2834,6 +2854,8 @@ mod tests {
             .unwrap();
         let body_hash = Sha256::digest([]);
         let mut expected = Vec::new();
+        expected.extend_from_slice(b"citadel-direct-v2\0");
+        expected.extend_from_slice(&signer.audience);
         expected.extend_from_slice(&timestamp.to_le_bytes());
         expected.extend_from_slice(&nonce);
         expected.extend_from_slice(PLATFORM_INFO_METHOD.as_bytes());

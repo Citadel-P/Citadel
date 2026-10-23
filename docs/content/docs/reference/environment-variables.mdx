@@ -193,7 +193,7 @@ under the same data root. Offline recovery never generates replacement keys.
 | `CITADEL_EDGE_AGENT_NODE_AGENT_LIMIT_MEMORY_BYTES` / `CITADEL_EDGE_AGENT_NODE_AGENT_PIDS_LIMIT` | `536870912` bytes / `256` processes |
 
 Direct Agent containers require `CITADEL_CORE_PUBLIC_KEY`, the base64 Ed25519 public
-key emitted by Core setup. Edge mode does not read that Direct-only setting.
+key emitted by Core setup, and `CITADEL_AGENT_ID`, the Platform or dedicated Build Pool UUID included automatically in its setup command. The ID stays the same when the network address changes. Edge mode does not read these Direct-only settings.
 Agent-owned `CITADEL_AGENT_*` and Edge profile settings are unchanged; use the
 [Direct](/docs/operations/agent) and [Edge](/docs/operations/edge-agent)
 setup guides for their generated configuration.

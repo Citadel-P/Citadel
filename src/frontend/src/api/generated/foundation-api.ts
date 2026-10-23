@@ -129,6 +129,7 @@ export const foundationOperations = {
   getBackupRunEvents: { method: 'GET', path: '/api/v1/backupRuns/{id}/events' },
   getBackupRunLogs: { method: 'GET', path: '/api/v1/backupRuns/{id}/logs' },
   getBuildAgentPool: { method: 'GET', path: '/api/v1/buildAgentPools/{id}' },
+  getBuildAgentPoolAgentSetup: { method: 'GET', path: '/api/v1/buildAgentPools/{id}/agent/setup' },
   getBuildAgentPoolEdgeStatus: { method: 'GET', path: '/api/v1/buildAgentPools/{id}/edge/status' },
   getBuildAgentPoolTags: { method: 'GET', path: '/api/v1/buildAgentPools/{id}/tags' },
   getBuildProject: { method: 'GET', path: '/api/v1/buildProjects/{id}' },

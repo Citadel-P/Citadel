@@ -36,7 +36,7 @@ impl PlatformManagementRuntime for PlatformManagementRuntimeAdapter {
                         )
                     })?;
                     agent
-                        .for_address(input.address.as_deref().unwrap_or_default(), cancel)
+                        .for_address(input.address.as_deref().unwrap_or_default(), id, cancel)
                         .await?
                         .get_info(cancel)
                         .await

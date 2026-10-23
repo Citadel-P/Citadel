@@ -310,6 +310,10 @@ impl OidcService {
         Ok(self.protocol.discover(&issuer).await?.into())
     }
 
+    pub fn browser_cookie_name(state: &str) -> String {
+        format!("citadel_oidc_{}", hash_opaque_value(state))
+    }
+
     pub async fn begin_login(
         &self,
         provider_id: Uuid,
@@ -333,6 +337,7 @@ impl OidcService {
         .ok_or_else(|| IdentityError::Validation("Return URL is invalid.".to_owned()))?;
         let discovery = self.protocol.discover(provider.issuer()).await?;
         let state = opaque_value(32)?;
+        let browser_token = opaque_value(32)?;
         let nonce = opaque_value(32)?;
         let code_verifier = opaque_value(64)?;
         let authorization_url = build_authorization_url(
@@ -349,7 +354,9 @@ impl OidcService {
                 OidcLoginState {
                     id: Uuid::now_v7(),
                     provider_id,
-                    state_hash: hash_opaque_value(&state),
+                    state_hash: hash_opaque_value(&format!(
+                        "{provider_id}:{state}:{browser_token}"
+                    )),
                     nonce,
                     code_verifier,
                     return_url,
@@ -359,7 +366,11 @@ impl OidcService {
                 now,
             )
             .await?;
-        Ok(OidcLoginStart { authorization_url })
+        Ok(OidcLoginStart {
+            authorization_url,
+            state,
+            browser_token,
+        })
     }
 
     pub async fn complete_login(
@@ -367,11 +378,15 @@ impl OidcService {
         provider_id: Uuid,
         code: &str,
         state_value: &str,
+        browser_token: &str,
         redirect_uri: &str,
         metadata: SessionMetadata,
     ) -> Result<OidcLoginComplete, IdentityError> {
         validate_id(provider_id)?;
-        if code.trim().is_empty() || state_value.trim().is_empty() {
+        if code.trim().is_empty()
+            || state_value.trim().is_empty()
+            || browser_token.trim().is_empty()
+        {
             return Err(IdentityError::Validation(
                 "Missing OIDC callback parameters.".to_owned(),
             ));
@@ -385,7 +400,9 @@ impl OidcService {
             .ok_or(IdentityError::NotFound)?;
         let login_state = self
             .store
-            .consume_login_state(&hash_opaque_value(state_value))
+            .consume_login_state(&hash_opaque_value(&format!(
+                "{provider_id}:{state_value}:{browser_token}"
+            )))
             .await?
             .filter(|state| state.provider_id == provider_id && state.expires_at > self.clock.now())
             .ok_or_else(|| {

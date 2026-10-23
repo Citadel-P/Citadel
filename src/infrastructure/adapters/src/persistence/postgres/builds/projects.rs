@@ -31,6 +31,44 @@ impl PostgresBuildRepository {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            for secret in input.build_secrets.as_deref().unwrap_or(&[]) {
+                // The create route authorizes Read on duplicate_source_id. Only
+                // credentials actually referenced by that source may travel with it.
+                if let Some(source) = input.duplicate_source_id {
+                    let referenced: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM buildprojects, jsonb_array_elements(buildsecrets) item WHERE id=$1 AND (item->>'secretId')::uuid=$2)")
+                        .bind(source).bind(secret.secret_id).fetch_one(&mut *transaction).await.map_err(storage)?;
+                    if referenced {
+                        crate::persistence::postgres::bindings::access::authorize_and_grant(
+                            &mut transaction,
+                            secret.secret_id,
+                            "Build",
+                            source,
+                            None,
+                        )
+                        .await
+                        .map_err(|error| BuildError::Validation(error.to_string()))?;
+                        crate::persistence::postgres::bindings::access::grant(
+                            &mut transaction,
+                            secret.secret_id,
+                            citadel_bindings::SecretUseScope::Resource {
+                                resource_type: ResourceType::Build,
+                                resource_id: id,
+                            },
+                        )
+                        .await
+                        .map_err(|error| BuildError::Validation(error.to_string()))?;
+                    }
+                }
+                crate::persistence::postgres::bindings::access::authorize_and_grant(
+                    &mut transaction,
+                    secret.secret_id,
+                    "Build",
+                    id,
+                    Some(actor),
+                )
+                .await
+                .map_err(|error| BuildError::Validation(error.to_string()))?;
+            }
             let source = if let Some(source_id) = input.duplicate_source_id {
                 let name: Option<String> = sqlx::query_scalar(
                     "SELECT name FROM buildprojects WHERE id=$1 AND archivedat IS NULL FOR SHARE",
@@ -153,6 +191,17 @@ impl PostgresBuildRepository {
     ) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            for secret in input.build_secrets.as_deref().unwrap_or(&[]) {
+                crate::persistence::postgres::bindings::access::authorize_and_grant(
+                    &mut tx,
+                    secret.secret_id,
+                    "Build",
+                    current.id,
+                    Some(actor),
+                )
+                .await
+                .map_err(|error| BuildError::Validation(error.to_string()))?;
+            }
             let row = sqlx::query("UPDATE buildprojects SET name=$3,normalizedname=$4,description=$5,enabled=$6,gitrepositoryid=$7,branch=$8,contextpath=$9,dockerfilepath=$10,target=$11,buildargs=$12,buildsecrets=$13,builderkind=$14,platformid=$15,buildagentpoolid=$16,registryid=$17,imagerepository=$18,tagtemplates=$19,webhook=$20,timeoutseconds=$21,retentionruncount=$22,pushtoregistry=$23,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND archivedat IS NULL AND controlstate='Idle' RETURNING *")
                 .bind(current.id).bind(current.row_version).bind(&input.name).bind(input.name.to_uppercase()).bind(&input.description).bind(input.enabled)
                 .bind(input.git_repository_id).bind(&input.branch).bind(&input.context_path).bind(&input.dockerfile_path).bind(&input.target)

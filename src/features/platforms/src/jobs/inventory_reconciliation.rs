@@ -227,6 +227,7 @@ mod tests {
                 &self,
                 _: PlatformConnectorType,
                 _: &str,
+                _: uuid::Uuid,
             ) -> Result<Arc<dyn crate::PlatformInfoPort>, PlatformRegistrationError> {
                 Ok(self.0.clone())
             }
@@ -267,6 +268,7 @@ mod tests {
             .create(
                 citadel_primitives::ActorId::new(Uuid::now_v7()),
                 CreatePlatformInput {
+                    agent_id: None,
                     name: "fixture".into(),
                     address: None,
                     description: None,

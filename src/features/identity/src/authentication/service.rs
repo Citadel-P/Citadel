@@ -701,6 +701,37 @@ impl IdentityService {
         })
     }
 
+    /// Replace an existing browser session without extending its absolute lifetime.
+    pub async fn prepare_session_replacement(
+        &self,
+        user: &UserAuthentication,
+        session_id: Uuid,
+    ) -> Result<PreparedSession, IdentityError> {
+        let original = self
+            .store
+            .list_active_sessions(user.user_id, self.clock.now())
+            .await?
+            .into_iter()
+            .find(|session| session.id == session_id)
+            .ok_or(IdentityError::InvalidCredentials)?;
+        let mut prepared = self.prepare_session(
+            user,
+            SessionMetadata {
+                user_agent: original.user_agent,
+                ip_address: original.ip_address,
+            },
+        )?;
+        prepared.session.created_at = original.created_at;
+        prepared.session.expires_at = original.expires_at;
+        prepared.tokens.refresh_expires_at = original.expires_at;
+        prepared.tokens.refresh_token = self.tokens.encode_refresh(&RefreshTokenClaims {
+            session_id: prepared.session.id,
+            issued_at: original.created_at,
+            expires_at: original.expires_at,
+        })?;
+        Ok(prepared)
+    }
+
     pub async fn persist_prepared_session(
         &self,
         prepared: &PreparedSession,

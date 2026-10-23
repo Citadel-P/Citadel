@@ -239,6 +239,17 @@ impl BackupSourceSpec {
         Ok(())
     }
 
+    pub fn requires_administrator(&self) -> bool {
+        match self {
+            Self::CitadelSystem {} => true,
+            Self::DockerVolume { .. }
+            | Self::BindMount { .. }
+            | Self::Stack { .. }
+            | Self::Deployment { .. }
+            | Self::SwarmService { .. } => false,
+        }
+    }
+
     pub fn resource(&self) -> Option<(citadel_primitives::ResourceType, Uuid)> {
         use citadel_primitives::ResourceType;
         match self {

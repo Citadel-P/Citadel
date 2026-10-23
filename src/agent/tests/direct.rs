@@ -32,6 +32,7 @@ struct DockerState {
     registry_headers: Mutex<Vec<String>>,
 }
 struct Harness {
+    id: String,
     address: String,
     state: Arc<DockerState>,
     stop: CancellationToken,
@@ -43,6 +44,7 @@ impl Drop for Harness {
 }
 impl Harness {
     async fn start() -> Self {
+        let id = uuid::Uuid::now_v7().to_string();
         let state = Arc::new(DockerState::default());
         let daemon = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let daemon_address = daemon.local_addr().unwrap();
@@ -57,7 +59,11 @@ impl Harness {
                 .await
                 .unwrap();
         });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let mut config = AgentConfig::from_lookup(|name| match name {
+            "CITADEL_AGENT_ID" => Some(id.clone()),
             "CITADEL_CORE_PUBLIC_KEY" => {
                 Some(STANDARD.encode(SigningKey::from_bytes(&[42; 32]).verifying_key().as_bytes()))
             }
@@ -65,11 +71,12 @@ impl Harness {
             _ => None,
         })
         .unwrap();
-        config.port = 0;
+        config.port = port;
         let agent = Agent::bind(config).await.unwrap();
         let address = format!("http://127.0.0.1:{}", agent.local_addr().unwrap().port());
         tokio::spawn(agent.serve(stop.clone()));
         Self {
+            id,
             address,
             state,
             stop,
@@ -143,13 +150,28 @@ async fn mock_docker(
     Json(result).into_response()
 }
 
-fn signed<T: Message>(message: T, method: &str, nonce: [u8; 16]) -> tonic::Request<T> {
+fn signed<T: Message>(
+    audience: &str,
+    message: T,
+    method: &str,
+    nonce: [u8; 16],
+) -> tonic::Request<T> {
     let timestamp = chrono::Utc::now().timestamp().to_le_bytes();
     let hash = Sha256::digest(message.encode_to_vec());
-    let payload = [&timestamp[..], &nonce, method.as_bytes(), &hash].concat();
+    let audience = Sha256::digest(audience.as_bytes());
+    let payload = [
+        b"citadel-direct-v2\0".as_slice(),
+        &audience,
+        &timestamp[..],
+        &nonce,
+        method.as_bytes(),
+        &hash,
+    ]
+    .concat();
     let signature = SigningKey::from_bytes(&[42; 32]).sign(&payload).to_bytes();
     let mut request = tonic::Request::new(message);
     for (name, bytes) in [
+        ("x-audience-sha256-bin", &audience[..]),
         ("x-timestamp-bin", &timestamp[..]),
         ("x-nonce-bin", &nonce),
         ("x-content-sha256-bin", &hash),
@@ -167,7 +189,7 @@ async fn core_client_can_create_a_volume_with_maps_without_reserialization_failu
     let host = Harness::start().await;
     let client = AgentClient::connect(
         &host.address,
-        AgentRequestSigner::from_bytes(&[42; 32]),
+        AgentRequestSigner::from_bytes(&[42; 32]).for_agent(host.id.parse().unwrap()),
         Duration::from_secs(5),
         true,
     )
@@ -209,6 +231,7 @@ async fn unsigned_tampered_and_cross_method_requests_never_reach_docker() {
         tonic::Code::Unauthenticated
     );
     let request = signed(
+        &host.id,
         CreateVolumeRequest::default(),
         "/citadel.volumes.v1.VolumeService/Inspect",
         [1; 16],
@@ -218,6 +241,7 @@ async fn unsigned_tampered_and_cross_method_requests_never_reach_docker() {
         tonic::Code::Unauthenticated
     );
     let mut request = signed(
+        &host.id,
         CreateVolumeRequest::default(),
         "/citadel.volumes.v1.VolumeService/Create",
         [2; 16],
@@ -240,12 +264,12 @@ async fn replay_is_shared_between_requests_and_services() {
     };
     let path = "/citadel.volumes.v1.VolumeService/Create";
     client
-        .create(signed(request.clone(), path, [5; 16]))
+        .create(signed(&host.id, request.clone(), path, [5; 16]))
         .await
         .unwrap();
     assert_eq!(
         client
-            .create(signed(request, path, [5; 16]))
+            .create(signed(&host.id, request, path, [5; 16]))
             .await
             .unwrap_err()
             .code(),
@@ -256,6 +280,7 @@ async fn replay_is_shared_between_requests_and_services() {
             host.channel().await,
         );
     let request = signed(
+        &host.id,
         citadel_contracts::citadel::networks::v1::ListNetworksRequest::default(),
         "/citadel.networks.v1.NetworkService/List",
         [5; 16],
@@ -324,6 +349,7 @@ async fn container_inspection_preserves_nulls_false_zero_large_numbers_and_netwo
     let mut client = container_service_client::ContainerServiceClient::new(host.channel().await);
     let r = client
         .inspect(signed(
+            &host.id,
             InspectContainerRequest {
                 container_id: "fixture".into(),
             },
@@ -382,6 +408,7 @@ async fn deployment_apply_passes_wire_resources_and_observes_the_started_contain
     };
     let result = client
         .apply(signed(
+            &host.id,
             r,
             "/citadel.deployments.v1.DeploymentService/Apply",
             [12; 16],
@@ -411,6 +438,7 @@ async fn image_inspection_history_build_host_and_pull_failures_round_trip() {
     let mut client = image_service_client::ImageServiceClient::new(host.channel().await);
     let list = client
         .list(signed(
+            &host.id,
             ListImagesRequest {},
             "/citadel.images.v1.ImageService/List",
             [21; 16],
@@ -423,6 +451,7 @@ async fn image_inspection_history_build_host_and_pull_failures_round_trip() {
     assert_eq!(list.images[0].size, 9876543210.0);
     let result = client
         .inspect(signed(
+            &host.id,
             InspectImageRequest { id: "redis".into() },
             "/citadel.images.v1.ImageService/Inspect",
             [22; 16],
@@ -446,6 +475,7 @@ async fn image_inspection_history_build_host_and_pull_failures_round_trip() {
     );
     let result = client
         .check_build_host(signed(
+            &host.id,
             (),
             "/citadel.images.v1.ImageService/CheckBuildHost",
             [23; 16],
@@ -457,6 +487,7 @@ async fn image_inspection_history_build_host_and_pull_failures_round_trip() {
     assert_eq!(result.build_kit_version, "v0.20.0");
     let mut stream = client
         .pull(signed(
+            &host.id,
             PullImageRequest {
                 from_image: "redis".into(),
                 ..Default::default()
@@ -491,6 +522,7 @@ async fn swarm_config_bytes_and_64_bit_versions_survive_metadata_updates() {
     let mut client = swarm_service_client::SwarmServiceClient::new(host.channel().await);
     let result = client
         .get_config_data(signed(
+            &host.id,
             InspectSwarmConfigRequest {
                 config_id: "config".into(),
             },
@@ -508,6 +540,7 @@ async fn swarm_config_bytes_and_64_bit_versions_survive_metadata_updates() {
     };
     client
         .update_config_labels(signed(
+            &host.id,
             r,
             "/citadel.swarm.v1.SwarmService/UpdateConfigLabels",
             [32; 16],
@@ -523,6 +556,7 @@ async fn swarm_config_bytes_and_64_bit_versions_survive_metadata_updates() {
     assert_eq!(
         client
             .update_node(signed(
+                &host.id,
                 r,
                 "/citadel.swarm.v1.SwarmService/UpdateNode",
                 [33; 16]
@@ -547,6 +581,7 @@ async fn request_deadline_interrupts_docker_and_releases_the_call() {
     use citadel_contracts::citadel::containers::v1::*;
     let host = Harness::start().await;
     let mut r = signed(
+        &host.id,
         ContainerIds {
             ids: vec!["slow".into()],
         },
@@ -583,6 +618,7 @@ async fn duplex_open_is_authenticated_and_must_be_the_first_message() {
     let mut client = container_service_client::ContainerServiceClient::new(host.channel().await);
     let first = ExecClientMessage::default();
     let metadata = signed(
+        &host.id,
         first.clone(),
         "/citadel.containers.v1.ContainerService/Exec",
         [51; 16],
@@ -622,6 +658,7 @@ async fn swarm_mutations_forward_registry_auth_and_preserve_unknown_live_fields(
     };
     let created = client
         .create_service(signed(
+            &host.id,
             r,
             "/citadel.swarm.v1.SwarmService/CreateService",
             [61; 16],
@@ -640,6 +677,7 @@ async fn swarm_mutations_forward_registry_auth_and_preserve_unknown_live_fields(
     };
     client
         .update_service(signed(
+            &host.id,
             r,
             "/citadel.swarm.v1.SwarmService/UpdateService",
             [62; 16],
@@ -667,7 +705,7 @@ async fn oversized_and_incomplete_openings_do_not_reach_docker() {
     let host = Harness::start().await;
     let client = reqwest::Client::new();
     let path = "/citadel.volumes.v1.VolumeService/Create";
-    let headers = signed(CreateVolumeRequest::default(), path, [71; 16])
+    let headers = signed(&host.id, CreateVolumeRequest::default(), path, [71; 16])
         .metadata()
         .clone()
         .into_headers();
@@ -704,6 +742,7 @@ async fn container_batch_attempts_each_id_and_reports_partial_failure() {
     };
     let error = client
         .start(signed(
+            &host.id,
             request,
             "/citadel.containers.v1.ContainerService/Start",
             [81; 16],
@@ -730,7 +769,7 @@ async fn core_volume_inspection_keeps_cluster_metadata_and_attached_container_po
     let host = Harness::start().await;
     let client = AgentClient::connect(
         &host.address,
-        AgentRequestSigner::from_bytes(&[42; 32]),
+        AgentRequestSigner::from_bytes(&[42; 32]).for_agent(host.id.parse().unwrap()),
         Duration::from_secs(5),
         true,
     )
@@ -769,7 +808,7 @@ async fn core_image_inspection_keeps_launch_fields_with_one_inspection() {
     let host = Harness::start().await;
     let client = AgentClient::connect(
         &host.address,
-        AgentRequestSigner::from_bytes(&[42; 32]),
+        AgentRequestSigner::from_bytes(&[42; 32]).for_agent(host.id.parse().unwrap()),
         Duration::from_secs(5),
         true,
     )
@@ -812,7 +851,7 @@ async fn container_processes_use_signed_read_only_request() {
     );
     let core = AgentClient::connect(
         &host.address,
-        AgentRequestSigner::from_bytes(&[42; 32]),
+        AgentRequestSigner::from_bytes(&[42; 32]).for_agent(host.id.parse().unwrap()),
         Duration::from_secs(5),
         true,
     )
@@ -849,4 +888,32 @@ async fn container_processes_use_signed_read_only_request() {
     let requests = host.state.requests.lock().unwrap();
     assert!(requests.iter().any(|(method, uri, _)| method == "GET"
         && uri == "/v1.49/containers/fixture/top?ps_args=-eo+user%2Cpid%2Cppid%2Ctime%2Ccomm"));
+}
+
+#[tokio::test]
+async fn captured_request_for_another_agent_is_rejected_before_docker() {
+    let a = Harness::start().await;
+    let b = Harness::start().await;
+    let path = "/citadel.volumes.v1.VolumeService/Create";
+    let message = CreateVolumeRequest {
+        name: "target-bound".into(),
+        ..Default::default()
+    };
+    let mut first = VolumeServiceClient::new(a.channel().await);
+    let mut second = VolumeServiceClient::new(b.channel().await);
+    first
+        .create(signed(&a.id, message.clone(), path, [91; 16]))
+        .await
+        .unwrap();
+    let replay = signed(&a.id, message.clone(), path, [91; 16]);
+    assert_eq!(
+        second.create(replay).await.unwrap_err().code(),
+        tonic::Code::Unauthenticated
+    );
+    assert_eq!(b.state.calls.load(Ordering::SeqCst), 0);
+    second
+        .create(signed(&b.id, message, path, [91; 16]))
+        .await
+        .unwrap();
+    assert_eq!(b.state.created.lock().unwrap().len(), 1);
 }

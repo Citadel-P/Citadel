@@ -120,7 +120,8 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, project: &str) 
         .await,
     )
     .await;
-    assert_eq!(updated["webhook"], hook);
+    let public_hook = json!({"enabled":false,"provider":"Generic","authScheme":"BearerToken","hasSecret":false,"branchFilter":"main"});
+    assert_eq!(updated["webhook"], public_hook);
     let omitted = response_json(
         request(
             app,
@@ -132,7 +133,7 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, project: &str) 
         .await,
     )
     .await;
-    assert_eq!(omitted["webhook"], hook);
+    assert_eq!(omitted["webhook"], public_hook);
     let rotated = response_json(
         request(
             app,
@@ -145,6 +146,8 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, project: &str) 
     )
     .await;
     assert_eq!(rotated["webhook"]["enabled"], true);
+    assert_eq!(rotated["webhook"]["hasSecret"], true);
+    assert!(rotated["webhook"].get("secret").is_none());
     assert_eq!(rotated["webhook"]["provider"], "Generic");
     assert_eq!(rotated["webhook"]["authScheme"], "BearerToken");
     assert_eq!(rotated["webhook"]["branchFilter"], "main");

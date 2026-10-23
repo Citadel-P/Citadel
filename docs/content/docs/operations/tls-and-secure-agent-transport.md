@@ -255,7 +255,8 @@ certificate variables. To require encrypted connections instead, set
 `CITADEL_CORE_AGENT_ALLOW_INSECURE=false` on Core and configure direct TLS on the
 Agent's existing port `9000`.
 
-Example Agent environment:
+Copy `<generated-agent-id>` from this Platform’s Agent Setup command. Keep the
+same ID when changing its address or certificates. Example Agent environment:
 
 ```dotenv
 CITADEL_AGENT_TLS_MODE=Direct
@@ -263,6 +264,7 @@ CITADEL_AGENT_PORT=9000
 CITADEL_AGENT_TLS_CERTIFICATE_PATH=/etc/citadel/tls/agent-fullchain.pem
 CITADEL_AGENT_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/agent-key.pem
 CITADEL_CORE_PUBLIC_KEY=the-public-key-shown-by-citadel
+CITADEL_AGENT_ID=<generated-agent-id>
 ```
 
 Mount the files and publish the Agent. Replace `AGENT_IMAGE` with the complete
@@ -284,6 +286,7 @@ docker run -d \
   -e CITADEL_AGENT_TLS_CERTIFICATE_PATH=/etc/citadel/tls/agent-fullchain.pem \
   -e CITADEL_AGENT_TLS_PRIVATE_KEY_PATH=/etc/citadel/tls/agent-key.pem \
   -e CITADEL_CORE_PUBLIC_KEY="..." \
+  -e CITADEL_AGENT_ID="<generated-agent-id>" \
   AGENT_IMAGE
 ```
 
@@ -509,3 +512,5 @@ it needs no matching `add_header` directives for them. See Nginx's
 [response header forwarding](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_hide_header)
 and [add_header](https://nginx.org/en/docs/http/ngx_http_headers_module.html#add_header)
 documentation.
+
+Cookie-based logout requires an `Origin` matching the configured public origin or an explicitly allowed CORS origin. Requests with a missing or foreign Origin are rejected before revoking the session, including when secure cookies use `SameSite=None`. API clients that use the refresh cookie must supply the trusted Origin on logout. An explicitly configured Host allowlist is enforced even when TLS mode is Disabled.

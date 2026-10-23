@@ -18,6 +18,8 @@ async fn repository_prune_preserves_all_snapshots_and_policy_retention_stays_sco
         let secret = Uuid::now_v7();
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')")
             .bind(secret).bind(format!("prune-{secret}")).execute(&pool).await.unwrap();
+        // This fixture explicitly supplies shared credentials for its backup repositories.
+        sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000') ON CONFLICT DO NOTHING").bind(secret).execute(&pool).await.unwrap();
         let store = PostgresBackupPersistence::new(pool.clone());
         let repository = store.create_repository(actor, &BackupRepositoryConfiguration {
             name: format!("prune-{}", Uuid::now_v7()), password_secret_id: secret,
@@ -45,7 +47,7 @@ async fn repository_prune_preserves_all_snapshots_and_policy_retention_stays_sco
         let unrelated: BTreeSet<_> = before.iter().filter(|s| s["tags"].as_array().unwrap().contains(&json!(other_tag))).map(|s|s["id"].as_str().unwrap().to_owned()).collect();
         executor.repository(&repository, "Prune", "Core", None, &cancel).await.unwrap();
         assert_eq!(ids(&before), ids(&snapshots(&restic, &root).await), "Prune must not expire snapshots, including policies retaining more than 14");
-        let run = store.enqueue_backup(actor, policy.id, "Manual").await.unwrap();
+        let run = store.enqueue_backup(actor, policy.id, "Manual", None).await.unwrap();
         let claim = store.claim_backup(Utc::now() - chrono::Duration::hours(1)).await.unwrap().unwrap();
         assert_eq!(claim.run.id, run.id);
         let result = executor.backup(&claim, &BackupSourcePlan {

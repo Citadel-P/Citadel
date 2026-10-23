@@ -1474,7 +1474,7 @@ function normalizeWebhook(webhook: WebhookConfig | null | undefined): WebhookCon
 
   return {
     ...webhook,
-    secret: webhook.secret?.trim() || null,
+    ...(webhook.secret === undefined ? {} : { secret: webhook.secret?.trim() || null }),
     branchFilter: webhook.branchFilter?.trim() || null,
   };
 }

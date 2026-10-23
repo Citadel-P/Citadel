@@ -282,7 +282,7 @@ function GitAccountsSection() {
             <DialogTitle>{editing ? 'Edit' : 'Add'} Git Account</DialogTitle>
             <DialogDescription>
               {editing
-                ? 'Update your Git account credentials.'
+                ? 'Saved credentials are never displayed. Unchanged fields keep their saved values; enter a replacement to rotate a credential.'
                 : 'Connect a new Git account for repository authentication.'}
             </DialogDescription>
           </DialogHeader>

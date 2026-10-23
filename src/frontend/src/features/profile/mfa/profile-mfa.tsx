@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { FormEvent, ReactNode, useState } from 'react';
 import { toast } from 'sonner';
+import { useAuthContext } from '@/features/auth/auth-context';
 import { RecoveryCodesPanel, TotpSetupPanel } from '@/features/auth/mfa/components';
 
 type SetupState =
@@ -33,6 +34,7 @@ type SetupState =
 
 export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword: boolean }) {
   const queryClient = useQueryClient();
+  const { completeLogin } = useAuthContext();
   const statusQuery = useRead('getProfileMfaStatus');
   const startSetup = useMutate('startProfileMfaSetup');
   const confirmSetup = useMutate('confirmProfileMfaSetup');
@@ -156,6 +158,7 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
         }}
         onSubmitCode={async (code) => {
           const response = await confirmSetup.mutateAsync({ data: { code } });
+          if (response.data.accessToken) completeLogin(response.data.accessToken);
           setSetup({ step: 'recovery', codes: [...response.data.recoveryCodes] });
           await refreshStatus();
           toast.success('Two-factor authentication enabled.');

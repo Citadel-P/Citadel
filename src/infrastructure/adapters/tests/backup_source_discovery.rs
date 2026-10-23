@@ -148,6 +148,8 @@ async fn stack_preview_and_execution_discover_owned_physical_mounts_without_save
     .execute(&pool)
     .await
     .unwrap();
+    // This fixture explicitly supplies shared credentials for its backup repositories.
+    sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000') ON CONFLICT DO NOTHING").bind(secret).execute(&pool).await.unwrap();
     let store = PostgresBackupPersistence::new(pool.clone());
     let repository = store.create_repository(actor, &BackupRepositoryConfiguration {
         name: format!("discovery-{platform}"), password_secret_id: secret,
@@ -206,7 +208,7 @@ async fn stack_preview_and_execution_discover_owned_physical_mounts_without_save
         .await
         .unwrap();
     let run = store
-        .enqueue_backup(actor, policy.id, "Manual")
+        .enqueue_backup(actor, policy.id, "Manual", None)
         .await
         .unwrap();
     let mut claim = BackupClaim {

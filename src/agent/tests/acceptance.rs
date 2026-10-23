@@ -589,6 +589,7 @@ async fn start_core(f: &mut Fixture, core: &str) -> (String, String) {
 async fn exercise(f: &mut Fixture, core: String, agent: String) {
     let (public_key, core_url) = start_core(f, &core).await;
     f.daemon("direct-daemon").await;
+    let agent_id = Uuid::now_v7();
     let wrong_key =
         citadel_adapters::connectors::agent::client::AgentRequestSigner::from_bytes(&[9; 32])
             .public_key_base64();
@@ -598,6 +599,8 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
             "-e",
             &format!("CITADEL_CORE_PUBLIC_KEY={wrong_key}"),
             "-e",
+            &format!("CITADEL_AGENT_ID={agent_id}"),
+            "-e",
             "DOCKER_HOST=tcp://direct-daemon:2375",
             "--health-interval=1s",
             &agent,
@@ -605,13 +608,15 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
     )
     .await;
     f.agent_ready("invalid").await;
-    let (status, problem) = f.request(Method::POST, "/api/v1/platforms", Some(json!({"name":"invalid-agent", "address":"http://invalid:9000", "type":"Docker", "connectorType":"Agent", "tagIds":[]}))).await;
+    let (status, problem) = f.request(Method::POST, "/api/v1/platforms", Some(json!({"name":"invalid-agent", "address":"http://invalid:9000", "type":"Docker", "connectorType":"Agent", "agentId":agent_id, "tagIds":[]}))).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{problem}");
     f.run(
         "direct",
         &[
             "-e",
             &format!("CITADEL_CORE_PUBLIC_KEY={public_key}"),
+            "-e",
+            &format!("CITADEL_AGENT_ID={agent_id}"),
             "-e",
             "DOCKER_HOST=tcp://direct-daemon:2375",
             "--health-interval=1s",
@@ -620,7 +625,7 @@ async fn exercise(f: &mut Fixture, core: String, agent: String) {
     )
     .await;
     f.agent_ready("direct").await;
-    let platform = f.api(Method::POST, "/api/v1/platforms", Some(json!({"name":"acceptance-direct", "address":"http://direct:9000", "type":"Docker", "connectorType":"Agent", "tagIds":[]}))).await;
+    let platform = f.api(Method::POST, "/api/v1/platforms", Some(json!({"name":"acceptance-direct", "address":"http://direct:9000", "type":"Docker", "connectorType":"Agent", "agentId":agent_id, "tagIds":[]}))).await;
     let direct_id = platform["id"].as_str().unwrap().to_owned();
     assert_eq!(platform["status"], "Online");
     assert!(!platform["agentVersion"].as_str().unwrap().is_empty());

@@ -160,7 +160,7 @@ impl BuildExecutor for PlatformBuildExecutor {
                         )),
                     },
                     citadel_builds::BuildPoolTarget::Inbound(endpoint) => match &self.agent {
-                        Some(agent) => match agent.for_address(&endpoint, cancellation).await {
+                        Some(agent) => match agent.for_address(&endpoint, id, cancellation).await {
                             Ok(agent) => agent.execute(claim, logs, cancellation).await,
                             Err(error) => failed(error),
                         },
@@ -197,12 +197,11 @@ impl BuildExecutor for PlatformBuildExecutor {
             match connector.as_str() {
                 "Local" => self.local.execute(claim, logs, cancellation).await,
                 "Agent" => match &self.agent {
-                    Some(agent)
-                        if agent.address().is_some_and(|configured| {
-                            configured.trim_end_matches('/') == address.trim_end_matches('/')
-                        }) =>
-                    {
-                        agent.execute(claim, logs, cancellation).await
+                    Some(agent) => {
+                        match agent.for_address(&address, platform_id, cancellation).await {
+                            Ok(agent) => agent.execute(claim, logs, cancellation).await,
+                            Err(error) => failed(error),
+                        }
                     }
                     _ => failed(BuildFailure::Validation(
                         "The configured Agent Build transport is unavailable.".to_owned(),
@@ -239,6 +238,7 @@ impl AgentDockerBuildExecutor {
     async fn for_address(
         &self,
         endpoint: &str,
+        agent_id: uuid::Uuid,
         cancellation: &CancellationToken,
     ) -> Result<Self, BuildFailure> {
         let BuildTransport::Direct(client) = &self.client else {
@@ -247,7 +247,7 @@ impl AgentDockerBuildExecutor {
             ));
         };
         let client = client
-            .for_address(endpoint, cancellation)
+            .for_address(endpoint, agent_id, cancellation)
             .await
             .map_err(|error| BuildFailure::Validation(error.to_string()))?;
         Ok(Self::new(
@@ -290,13 +290,6 @@ impl AgentDockerBuildExecutor {
             maximum_log_bytes: maximum_log_bytes.max(1024),
         }
     }
-    fn address(&self) -> Option<&str> {
-        match &self.client {
-            BuildTransport::Direct(client) => Some(client.address()),
-            BuildTransport::Edge(_) => None,
-        }
-    }
-
     async fn execute_inner(
         &self,
         claim: &BuildClaim,
@@ -340,7 +333,7 @@ impl AgentDockerBuildExecutor {
         for secret in &claim.project.build_secrets {
             let value = self
                 .secrets
-                .resolve(secret.secret_id)
+                .resolve(secret.secret_id, claim.project.id)
                 .await
                 .map_err(|error| BuildFailure::Validation(error.to_string()))?;
             secrets.push((secret.id.clone(), value.to_string()));
@@ -569,7 +562,7 @@ impl LocalDockerBuildExecutor {
             for secret in &claim.project.build_secrets {
                 let value = self
                     .secrets
-                    .resolve(secret.secret_id)
+                    .resolve(secret.secret_id, claim.project.id)
                     .await
                     .map_err(|error| BuildFailure::Validation(error.to_string()))?;
                 secrets.push((secret.id.clone(), value));

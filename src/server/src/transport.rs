@@ -272,6 +272,17 @@ async fn security_middleware(
         .and_then(|value| value.to_str().ok())
         .unwrap_or("unknown")
         .to_owned();
+    if request.method() == Method::POST
+        && request.uri().path().trim_end_matches('/') == "/api/v1/authentication/logout"
+        && !trusted_browser_origin(&state.transport, &request)
+    {
+        return problem(
+            StatusCode::FORBIDDEN,
+            "Invalid origin",
+            "Logout requires a trusted Origin.",
+            request_id,
+        );
+    }
     if !allowed_host(&state.transport, &request) {
         return problem(
             StatusCode::BAD_REQUEST,
@@ -347,7 +358,7 @@ async fn security_middleware(
 }
 
 fn allowed_host(transport: &TransportConfig, request: &Request<Body>) -> bool {
-    if transport.mode == TransportMode::Disabled {
+    if transport.mode == TransportMode::Disabled && transport.allowed_hosts.is_empty() {
         return true;
     }
     let Some(host) = request
@@ -364,6 +375,19 @@ fn allowed_host(transport: &TransportConfig, request: &Request<Body>) -> bool {
         .allowed_hosts
         .iter()
         .any(|allowed| allowed.eq_ignore_ascii_case(authority.host()))
+}
+
+fn trusted_browser_origin(transport: &TransportConfig, request: &Request<Body>) -> bool {
+    let mut origins = request.headers().get_all(axum::http::header::ORIGIN).iter();
+    let Some(origin) = origins.next().and_then(|value| value.to_str().ok()) else {
+        return false;
+    };
+    origins.next().is_none()
+        && (origin == transport.public_url.origin().ascii_serialization()
+            || transport
+                .cors_origins
+                .iter()
+                .any(|allowed| allowed == origin))
 }
 
 fn trusted_forwarding(transport: &TransportConfig, request: &Request<Body>) -> bool {
@@ -1062,5 +1086,61 @@ mod tests {
             openapi_enabled: false,
             static_root: None,
         }
+    }
+
+    #[tokio::test]
+    async fn logout_requires_a_trusted_origin_before_dispatch() {
+        let readiness = Arc::new(Readiness::default());
+        readiness.set(true, true);
+        readiness.set_setup(true);
+        let app = secure_router(
+            Router::new().route(
+                "/api/v1/authentication/logout",
+                axum::routing::post(|| async { StatusCode::NO_CONTENT }),
+            ),
+            &fixture_transport(),
+            readiness,
+        )
+        .unwrap();
+        for (origin, expected) in [
+            (None, StatusCode::FORBIDDEN),
+            (Some("https://evil.test"), StatusCode::FORBIDDEN),
+            (Some("null"), StatusCode::FORBIDDEN),
+            (Some("http://localhost:8000"), StatusCode::NO_CONTENT),
+        ] {
+            let mut request = Request::builder()
+                .method(Method::POST)
+                .uri("/api/v1/authentication/logout")
+                .header("Cookie", "refresh_token=fixture");
+            if let Some(origin) = origin {
+                request = request.header("Origin", origin);
+            }
+            let response = app
+                .clone()
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected);
+        }
+    }
+
+    #[test]
+    fn explicitly_configured_hosts_apply_in_disabled_tls_mode() {
+        let mut transport = fixture_transport();
+        transport.allowed_hosts = vec!["localhost".into()];
+        assert!(!allowed_host(
+            &transport,
+            &Request::builder()
+                .header("Host", "evil.test")
+                .body(Body::empty())
+                .unwrap()
+        ));
+        assert!(allowed_host(
+            &transport,
+            &Request::builder()
+                .header("Host", "localhost:8000")
+                .body(Body::empty())
+                .unwrap()
+        ));
     }
 }

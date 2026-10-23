@@ -721,3 +721,9 @@ Backup schedules and webhook-triggered backup execution require Team's
 `Automated Operations` capability. If the capability becomes unavailable,
 configured triggers remain stored but pause. Manual backup and restore remain
 available.
+
+Citadel system backups export control-plane data and recovery keys. Creating,
+changing or manually queueing a system backup requires an administrator. Workers
+also require the current run-as identity to be an administrator before creating
+the bundle, including scheduled and webhook runs. Delegated workload-backup
+permissions do not grant control-plane export access.

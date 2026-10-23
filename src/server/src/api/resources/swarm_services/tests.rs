@@ -144,3 +144,17 @@ fn swarm_contracts_are_native_and_describe_real_progress_and_warning_shapes() {
         );
     }
 }
+
+#[test]
+fn service_read_and_draft_specifications_redact_webhook_secrets() {
+    let domain: citadel_swarm_services::SwarmServiceSpec = spec().into();
+    let read = super::spec_view::SwarmServiceSpecView::try_from(domain).unwrap();
+    for value in [
+        serde_json::to_value(read).unwrap(),
+        serde_json::to_value(spec()).unwrap(),
+    ] {
+        assert_eq!(value["webhook"]["hasSecret"], true);
+        assert!(value["webhook"].get("secret").is_none());
+        assert!(!value.to_string().contains("test-secret"));
+    }
+}

@@ -1,7 +1,7 @@
+use crate::api::resources::webhooks::views::WebhookView;
 use crate::api::resources::{builds::spec::*, capabilities::ResourceCapabilitiesView};
 use chrono::{DateTime, Utc};
 use citadel_primitives::ResourceControlState;
-use citadel_primitives::WebhookConfig;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -34,8 +34,8 @@ pub struct BuildProjectView {
     pub registry_id: Option<Uuid>,
     pub image_repository: String,
     pub tag_templates: Vec<String>,
-    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
-    pub webhook: Option<WebhookConfig>,
+    #[schema(required = true, value_type = Option<crate::api::resources::webhooks::views::WebhookView>)]
+    pub webhook: Option<WebhookView>,
     pub timeout_seconds: i32,
     pub retention_run_count: i32,
     #[schema(required = true)]
@@ -85,7 +85,7 @@ impl TryFrom<citadel_builds::BuildProject> for BuildProjectView {
             registry_id: value.registry_id,
             image_repository: value.image_repository,
             tag_templates: value.tag_templates,
-            webhook: value.webhook,
+            webhook: value.webhook.map(Into::into),
             timeout_seconds: value.timeout_seconds,
             retention_run_count: value.retention_run_count,
             current_run_id: value.current_run_id,

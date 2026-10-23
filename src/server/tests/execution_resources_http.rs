@@ -1,3 +1,5 @@
+#[path = "execution_resources_http/system_backup_authorization.rs"]
+mod system_backup_authorization;
 use axum::{
     Router,
     body::{Body, to_bytes},
@@ -232,6 +234,11 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         ),
         realtime: None,
     })))
+    .layer(axum::Extension(citadel_server::api::routes::platforms::AgentSetupContext {
+        signer: Arc::new(citadel_adapters::connectors::agent::client::AgentRequestSigner::from_bytes(&[42; 32])),
+        image: "citadel-agent:test".into(),
+        requires_tls: false,
+    }))
     .layer(axum::Extension(hub.clone()))
     .layer(axum::Extension(
         citadel_server::api::resources::platforms::edge::EdgeHttpContext {
@@ -1184,7 +1191,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         &app,
         Method::GET,
         &format!("/api/v1/backupRuns/{}/logs", run["id"].as_str().unwrap()),
-        Some(principal),
+        Some(principal.clone()),
         None,
     )
     .await;
@@ -1193,6 +1200,14 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         response_json(logs_response).await["logs"],
         "fixture source unavailable"
     );
+    system_backup_authorization::verify(
+        &app,
+        &pool,
+        identity.clone(),
+        &principal,
+        Uuid::parse_str(repository_id).unwrap(),
+    )
+    .await;
     cancellation.cancel();
     build_tasks
         .drain(std::time::Duration::from_secs(5))
@@ -1288,6 +1303,12 @@ async fn seed_dependencies(pool: &sqlx::PgPool, actor: ActorId) -> FixtureIds {
     .execute(pool)
     .await
     .unwrap();
+    sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global',$2)")
+        .bind(ids.secret)
+        .bind(Uuid::nil())
+        .execute(pool)
+        .await
+        .unwrap();
     ids
 }
 

@@ -8,7 +8,7 @@ Swarm-node restrictions. For image builds and local setup, see
 
 | Transport | Connection | Authentication |
 | --- | --- | --- |
-| Direct | Core calls the Agent's gRPC listener | Signed requests verified with `CITADEL_CORE_PUBLIC_KEY` |
+| Direct | Core calls the Agent's gRPC listener | Signed requests verified with `CITADEL_CORE_PUBLIC_KEY` and a configured target audience |
 | Edge | Agent connects to Core's Edge gRPC listener | Enrollment and persisted session identity |
 
 Both transports expose the same 69 operations. Edge carries commands through
@@ -75,6 +75,7 @@ Read configuration once at startup. Docker can load the templates with
 | CITADEL_AGENT_MODE | case-insensitive `edge` selects Edge; otherwise Direct; whitespace is not trimmed | all |
 | CITADEL_AGENT_PORT | 9000 when absent/blank; otherwise integer 1–65535 | all; health listener in Edge |
 | CITADEL_CORE_PUBLIC_KEY | required base64 raw Ed25519 public key | Direct |
+| CITADEL_AGENT_ID | required nonzero Platform or Build Pool UUID from the generated setup command | Direct |
 | CITADEL_AGENT_TLS_MODE | Disabled; accepts Disabled or Direct after trimming, case-insensitive; reject numeric/unknown values | Direct |
 | CITADEL_AGENT_TLS_CERTIFICATE_PATH | required for Direct TLS; reject when TLS disabled | Direct |
 | CITADEL_AGENT_TLS_PRIVATE_KEY_PATH | required for Direct TLS; reject when TLS disabled | Direct |
@@ -418,3 +419,29 @@ Each event shares a bounded runtime read across authorized viewers. No subscribe
 means no process read; no process history or separate polling worker is created.
 Failed live reads send an unavailable snapshot rather than closing the shared
 connection. Revocation uses the existing authorization lease checks.
+
+### Direct request audience and admission
+
+Direct Agents require `CITADEL_AGENT_ID`, the nonzero Platform or dedicated Build
+Pool UUID from Citadel's generated install command. Core binds requests to the ID
+of the authorized resource, independently of its network address. Agent startup
+parses and canonicalizes its configured UUID; request headers cannot select the
+recipient's identity. The audience is the canonical lowercase hyphenated UUID.
+
+For new Direct Platforms, the form generates a UUID once and keeps it in the form
+draft, includes it in setup requests, and submits it as `agentId` on creation.
+Registration uses it as the Platform ID and authenticates the initial handshake
+with that ID. API clients can obtain an ID from the setup endpoint instead.
+Existing Platforms and saved Build Pools use their persisted IDs. Key rotation
+and address changes retain the resource ID. Distinct Agents must not share IDs.
+Edge enrollment and session identity are unchanged.
+
+The signed preimage is `citadel-direct-v2\0 || SHA256(audience) || timestamp_le ||
+nonce || method_path || SHA256(opening_protobuf)`. The audience hash travels in
+`x-audience-sha256-bin`. Missing or mismatched audiences are rejected. There is no
+fallback to messages without an audience.
+
+The Agent verifies the audience, timestamp and signature before polling a request
+body. At most eight opening requests share admission, each bounded to 16 MiB plus
+the framing header and ten seconds. Cancellation and timeout release admission.
+Body integrity is then checked and the nonce consumed atomically before dispatch.

@@ -37,15 +37,27 @@ impl Drop for Cleanup {
         }
     }
 }
-fn sign<T: Message>(v: T, path: &str) -> Request<T> {
+fn sign<T: Message>(audience: &str, v: T, path: &str) -> Request<T> {
     let time = chrono::Utc::now().timestamp().to_le_bytes();
     let nonce = *uuid::Uuid::now_v7().as_bytes();
     let hash = Sha256::digest(v.encode_to_vec());
+    let audience = Sha256::digest(audience.as_bytes());
     let signature = SigningKey::from_bytes(&[42; 32])
-        .sign(&[&time[..], &nonce, path.as_bytes(), &hash].concat())
+        .sign(
+            &[
+                b"citadel-direct-v2\0".as_slice(),
+                &audience,
+                &time[..],
+                &nonce,
+                path.as_bytes(),
+                &hash,
+            ]
+            .concat(),
+        )
         .to_bytes();
     let mut r = Request::new(v);
     for (k, v) in [
+        ("x-audience-sha256-bin", &audience[..]),
         ("x-timestamp-bin", &time[..]),
         ("x-nonce-bin", &nonce),
         ("x-content-sha256-bin", &hash),
@@ -64,7 +76,11 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
         prefix: prefix.clone(),
         stop: stop.clone(),
     };
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
     let mut config = AgentConfig::from_lookup(|key| match key {
+        "CITADEL_AGENT_ID" => Some("7fb4c244-485a-4b80-9611-b29e456adf65".into()),
         "CITADEL_CORE_PUBLIC_KEY" => {
             Some(STANDARD.encode(SigningKey::from_bytes(&[42; 32]).verifying_key().as_bytes()))
         }
@@ -72,13 +88,14 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
         _ => None,
     })
     .unwrap();
-    config.port = 0;
+    config.port = port;
     let agent = Agent::bind(config).await.unwrap();
     let address = format!("http://127.0.0.1:{}", agent.local_addr().unwrap().port());
     tokio::spawn(agent.serve(stop));
     let core = AgentClient::connect(
         &address,
-        AgentRequestSigner::from_bytes(&[42; 32]),
+        AgentRequestSigner::from_bytes(&[42; 32])
+            .for_agent("7fb4c244-485a-4b80-9611-b29e456adf65".parse().unwrap()),
         Duration::from_secs(30),
         true,
     )
@@ -86,7 +103,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     .unwrap();
     let info = core.get_info(&CancellationToken::new()).await.unwrap();
     assert!(!info.daemon_id.is_empty());
-    let channel = Channel::from_shared(address)
+    let channel = Channel::from_shared(address.clone())
         .unwrap()
         .connect()
         .await
@@ -94,6 +111,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     let mut volumes = volume_service_client::VolumeServiceClient::new(channel.clone());
     let volume = volumes
         .create(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             CreateVolumeRequest {
                 name: prefix.clone(),
                 driver: "local".into(),
@@ -107,6 +125,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     assert_eq!(volume.name, prefix);
     volumes
         .inspect(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             InspectVolumeRequest {
                 name: prefix.clone(),
             },
@@ -117,6 +136,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     let mut networks = network_service_client::NetworkServiceClient::new(channel.clone());
     let network = networks
         .create(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             CreateNetworkRequest {
                 name: prefix.clone(),
                 driver: Some("bridge".into()),
@@ -129,6 +149,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
         .into_inner();
     networks
         .inspect(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             InspectNetworkRequest {
                 id: network.id.clone(),
             },
@@ -139,6 +160,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     let mut containers = container_service_client::ContainerServiceClient::new(channel.clone());
     let created = containers
         .create(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             CreateContainerRequest {
                 name: prefix.clone(),
                 image_id: "redis:latest".into(),
@@ -157,6 +179,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     let id = created.container_id;
     containers
         .start(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             ContainerIds {
                 ids: vec![id.clone()],
             },
@@ -166,6 +189,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
         .unwrap();
     let inspect = containers
         .inspect(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             InspectContainerRequest {
                 container_id: id.clone(),
             },
@@ -177,6 +201,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     assert_eq!(inspect.state.unwrap().running, Some(true));
     let mut exec = containers
         .exec_binary(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             ExecBinaryRequest {
                 container_id: id.clone(),
                 cmd: vec![
@@ -224,9 +249,13 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
             tty: true,
         })),
     };
-    let metadata = sign(open.clone(), "/citadel.containers.v1.ContainerService/Exec")
-        .metadata()
-        .clone();
+    let metadata = sign(
+        "7fb4c244-485a-4b80-9611-b29e456adf65",
+        open.clone(),
+        "/citadel.containers.v1.ContainerService/Exec",
+    )
+    .metadata()
+    .clone();
     let mut input = Request::new(futures_util::stream::iter([
         open,
         ExecClientMessage {
@@ -266,6 +295,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
         if binary {
             let stream = containers
                 .exec_binary(sign(
+                    "7fb4c244-485a-4b80-9611-b29e456adf65",
                     ExecBinaryRequest {
                         container_id: id.clone(),
                         cmd: vec!["sleep".into(), "300".into()],
@@ -322,6 +352,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     let mut events = core.stream_daemon_events(&cancel).await.unwrap();
     containers
         .pause(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             ContainerIds {
                 ids: vec![id.clone()],
             },
@@ -331,6 +362,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
         .unwrap();
     containers
         .unpause(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             ContainerIds {
                 ids: vec![id.clone()],
             },
@@ -351,6 +383,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     drop(events);
     let mut logs = containers
         .stream_container_logs(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             ContainerLogRequest {
                 container_id: id,
                 follow: Some(false),
@@ -369,6 +402,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     let mut images = image_service_client::ImageServiceClient::new(channel.clone());
     let inspect = images
         .inspect(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             InspectImageRequest {
                 id: "redis:latest".into(),
             },
@@ -382,6 +416,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
     let mut deployment = deployment_service_client::DeploymentServiceClient::new(channel);
     let result = deployment
         .apply(sign(
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
             ApplyDeploymentRequest {
                 image_id: "redis:latest".into(),
                 name: format!("{prefix}-deployment"),

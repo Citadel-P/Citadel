@@ -107,7 +107,7 @@ impl MfaService {
         principal: &ActorPrincipal,
         input: ConfirmProfileMfaSetupInput,
         refresh_token: Option<&str>,
-    ) -> Result<ProfileMfaRecoveryCodesDetails, IdentityError> {
+    ) -> Result<(ProfileMfaRecoveryCodesDetails, Option<SessionTokens>), IdentityError> {
         validate_totp_code(&input.code)?;
         let now = self.clock.now();
         let user = self
@@ -140,6 +140,13 @@ impl MfaService {
             .identity
             .resolve_current_session(user.user_id, refresh_token)
             .await?;
+        let replacement_session = match current_session_id {
+            Some(id) => Some(self.identity.prepare_session_replacement(&user, id).await?),
+            None => None,
+        };
+        let tokens = replacement_session
+            .as_ref()
+            .map(|session| session.tokens.clone());
         let activity = user_activity(
             &user,
             user.actor_id,
@@ -153,6 +160,7 @@ impl MfaService {
                 settings,
                 recovery_codes: hashed,
                 current_session_id,
+                replacement_session,
                 activity,
                 now,
             })
@@ -160,10 +168,13 @@ impl MfaService {
         {
             return Err(invalid_setup());
         }
-        Ok(ProfileMfaRecoveryCodesDetails {
-            enabled: true,
-            recovery_codes: plaintext,
-        })
+        Ok((
+            ProfileMfaRecoveryCodesDetails {
+                enabled: true,
+                recovery_codes: plaintext,
+            },
+            tokens,
+        ))
     }
 
     pub async fn mandatory_setup(

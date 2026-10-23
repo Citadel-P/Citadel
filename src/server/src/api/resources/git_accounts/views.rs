@@ -37,7 +37,7 @@ pub struct GitAccountConfigView {
     pub domain: String,
     pub transport: GitTransport,
     pub auth_type: GitAuthType,
-    pub configuration: GitAuthConfiguration,
+    pub configuration: GitAuthMetadataView,
 }
 
 impl From<citadel_git::GitAccountConfiguration> for GitAccountConfigView {
@@ -91,5 +91,26 @@ mod tests {
         assert_eq!(wire["createdByActorId"], serde_json::json!(actor));
         assert_eq!(wire["createdAt"], serde_json::json!(created_at));
         assert!(wire.get("audit").is_none());
+    }
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GitAuthMetadataView {
+    pub username: Option<String>,
+    pub has_password: bool,
+    pub has_token: bool,
+    pub has_private_key: bool,
+    pub has_passphrase: Option<bool>,
+}
+impl From<citadel_git::GitAuthMetadata> for GitAuthMetadataView {
+    fn from(value: citadel_git::GitAuthMetadata) -> Self {
+        Self {
+            username: value.username,
+            has_password: value.has_password,
+            has_token: value.has_token,
+            has_private_key: value.has_private_key,
+            has_passphrase: value.has_passphrase,
+        }
     }
 }

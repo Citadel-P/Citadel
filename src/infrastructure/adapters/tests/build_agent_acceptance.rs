@@ -22,7 +22,11 @@ const REGISTRY: &str =
     "registry@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373";
 struct NoSecrets;
 impl BuildSecretResolver for NoSecrets {
-    fn resolve(&self, _: Uuid) -> BoxFuture<'_, Result<Zeroizing<String>, BuildError>> {
+    fn resolve(
+        &self,
+        _: Uuid,
+        _build_id: Uuid,
+    ) -> BoxFuture<'_, Result<Zeroizing<String>, BuildError>> {
         Box::pin(async { panic!("The fixture references no secrets") })
     }
 }
@@ -145,8 +149,8 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
             }).await.unwrap();
             None
         } else {
-        let mut key=[0;32];getrandom::fill(&mut key).unwrap();let signer=AgentRequestSigner::from_bytes(&key);key.fill(0);
-        command("docker",&["run","--detach","--name",&agent_name,"--network",&network,"--volume",&mount,"--env",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image]).await;
+        let mut key=[0;32];getrandom::fill(&mut key).unwrap();let signer=AgentRequestSigner::from_bytes(&key).for_agent(platform);key.fill(0);
+        command("docker",&["run","--detach","--name",&agent_name,"--network",&network,"--volume",&mount,"--env",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"--env",&format!("CITADEL_AGENT_ID={platform}"),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image]).await;
         Some(tokio::time::timeout(Duration::from_secs(45),async {
             loop {
                 if let Ok(client)=AgentClient::connect(&address,signer.clone(),Duration::from_secs(10),true).await && client.handshake(&cancel).await.is_ok() { break client; }

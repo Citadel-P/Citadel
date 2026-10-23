@@ -6,6 +6,7 @@ pub struct ProfileEnrollmentCommit {
     pub settings: UserMfaSettings,
     pub recovery_codes: Vec<UserMfaRecoveryCode>,
     pub current_session_id: Option<Uuid>,
+    pub replacement_session: Option<PreparedSession>,
     pub activity: ActivityEvent,
     pub now: DateTime<Utc>,
 }

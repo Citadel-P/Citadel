@@ -462,6 +462,16 @@ impl ContainerAdoptionPort for PostgresContainerAdoption {
                 let secret_name = format!("ADOPTED_{}_{secret_id}", &name[..name.len().min(80)]);
                 sqlx::query("INSERT INTO secretdefinitions(id,name,providertype,createdat,updatedat) VALUES($1,$2,'InternalEncrypted',$3,$3)").bind(secret_id).bind(secret_name).bind(now).execute(&mut *tx).await.map_err(database_error)?;
                 sqlx::query("INSERT INTO internalsecretvalues(secretid,encryptedvalue,createdat,updatedat) VALUES($1,$2,$3,$3)").bind(secret_id).bind(value).bind(now).execute(&mut *tx).await.map_err(storage)?;
+                crate::persistence::postgres::bindings::access::grant(
+                    &mut tx,
+                    secret_id,
+                    citadel_bindings::SecretUseScope::Resource {
+                        resource_type: citadel_primitives::ResourceType::Deployment,
+                        resource_id: deployment_id,
+                    },
+                )
+                .await
+                .map_err(|error| DeploymentError::Validation(error.to_string()))?;
                 sqlx::query("INSERT INTO resourcebindings(id,name,kind,scope,resourceid,secretid,secretdeliverymode,createdat,updatedat) VALUES($1,$2,'Secret','Deployment',$3,$4,'EnvironmentVariable',$5,$5)").bind(Uuid::now_v7()).bind(name).bind(deployment_id).bind(secret_id).bind(now).execute(&mut *tx).await.map_err(database_error)?;
             }
             sqlx::query(

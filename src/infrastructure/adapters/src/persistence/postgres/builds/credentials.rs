@@ -33,10 +33,14 @@ impl PostgresBuildSecretResolver {
 }
 
 impl BuildSecretResolver for PostgresBuildSecretResolver {
-    fn resolve(&self, secret_id: Uuid) -> BoxFuture<'_, Result<Zeroizing<String>, BuildError>> {
+    fn resolve(
+        &self,
+        secret_id: Uuid,
+        build_id: Uuid,
+    ) -> BoxFuture<'_, Result<Zeroizing<String>, BuildError>> {
         Box::pin(async move {
             self.resolver
-                .resolve(secret_id)
+                .resolve(secret_id, "Build", build_id)
                 .await
                 .map_err(|error| BuildError::Validation(error.to_string()))
         })

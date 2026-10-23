@@ -8,7 +8,7 @@ use crate::{
             TestOidcDiscoveryRequest,
         },
         routes::authentication::{
-            require_human_administrator, session_metadata, with_refresh_cookie,
+            cookie, require_human_administrator, session_metadata, with_refresh_cookie,
         },
     },
     openapi::router::OpenApiRouterExt,
@@ -122,7 +122,12 @@ async fn begin_login(
         )
         .await
     {
-        Ok(login) => redirect(login.authorization_url, &headers),
+        Ok(login) => correlation_cookie(
+            redirect(login.authorization_url, &headers),
+            &login.state,
+            Some(&login.browser_token),
+            state.secure_cookies,
+        ),
         Err(error) => error_response(error, &headers),
     }
 }
@@ -153,10 +158,16 @@ async fn complete_login(
         Err(error) => return invalid_query(error, &headers),
     };
     if let Some(error) = query.error.filter(|value| !value.trim().is_empty()) {
-        return error_response(
+        let response = error_response(
             IdentityError::Validation(query.error_description.unwrap_or(error)),
             &headers,
         );
+        return match query.state.as_deref() {
+            Some(login_state) => {
+                correlation_cookie(response, login_state, None, state.secure_cookies)
+            }
+            None => response,
+        };
     }
     let (Some(code), Some(login_state)) = (query.code.as_deref(), query.state.as_deref()) else {
         return error_response(
@@ -165,12 +176,20 @@ async fn complete_login(
         );
     };
     let redirect_uri = callback_url(&state.public_url, provider_id);
-    match state
+    let name = correlation_cookie_name(login_state);
+    let Some(browser_token) = cookie(&headers, &name) else {
+        return error_response(
+            IdentityError::Validation("OIDC browser correlation is missing.".into()),
+            &headers,
+        );
+    };
+    let response = match state
         .oidc
         .complete_login(
             provider_id,
             code,
             login_state,
+            browser_token,
             redirect_uri.as_str(),
             session_metadata(&headers, ConnectInfo(address)),
         )
@@ -183,7 +202,33 @@ async fn complete_login(
             state.secure_cookies,
         ),
         Err(error) => error_response(error, &headers),
+    };
+    correlation_cookie(response, login_state, None, state.secure_cookies)
+}
+
+fn correlation_cookie_name(state: &str) -> String {
+    OidcService::browser_cookie_name(state)
+}
+
+fn correlation_cookie(
+    mut response: Response,
+    state: &str,
+    token: Option<&str>,
+    secure: bool,
+) -> Response {
+    let name = correlation_cookie_name(state);
+    let age = if token.is_some() { 600 } else { 0 };
+    let secure = if secure { "; Secure" } else { "" };
+    let value = format!(
+        "{name}={}; Path=/api/v1/authentication/oidc; Max-Age={age}; HttpOnly; SameSite=Lax{secure}",
+        token.unwrap_or_default()
+    );
+    if let Ok(value) = HeaderValue::from_str(&value) {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, value);
     }
+    response
 }
 
 #[utoipa::path(

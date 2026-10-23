@@ -77,6 +77,37 @@ pub async fn verify(
     assert!(store.get(id).await.unwrap().webhook.is_none());
     let config = json!({"enabled":true,"provider":"Generic","authScheme":"BearerToken","secret":"fixture-webhook-secret"});
     set_config(db, id, &config).await;
+    let reader = actor(db, false).await;
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourcetype,resourceid,permissionlevel,specificpermissions) VALUES($1,$2,$3,$4,1,0)")
+        .bind(Uuid::now_v7()).bind(reader.actor_id.value()).bind(citadel_primitives::ResourceType::AutomationAction as i32).bind(id).execute(db).await.unwrap();
+    for principal in [&reader, admin] {
+        let response = request(
+            app,
+            Method::GET,
+            &format!("/api/v1/automation/actions/{id}"),
+            Some(principal.clone()),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let view = body(response).await;
+        assert_eq!(view["webhook"]["hasSecret"], true);
+        assert!(view["webhook"].get("secret").is_none());
+        assert!(!view.to_string().contains("fixture-webhook-secret"));
+    }
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            &format!("/api/v1/automation/actions/{id}/run"),
+            Some(reader),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+
     let url = format!("/listener/generic/automation-action/{id}/run");
 
     for token in [None, Some("Bearer wrong"), Some("Bearer ")] {
@@ -215,17 +246,46 @@ pub async fn verify(
     let github = json!({"enabled":true,"provider":"GitHub","authScheme":"GitHubHmacSha256","branchFilter":"main"});
     set_config(db, id, &github).await;
     let github_url = format!("/listener/github/action/{id}/run");
-    for (event, payload) in [
-        ("push", r#"{"ref":"refs/heads/other"}"#),
-        ("push", "{}"),
-        ("ping", "{}"),
+    assert_eq!(
+        send(app, &github_url, None, Body::from("{}"), &[])
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let github = json!({"enabled":true,"provider":"GitHub","authScheme":"GitHubHmacSha256","secret":"github-test","branchFilter":"main"});
+    set_config(db, id, &github).await;
+    assert_eq!(
+        send(app, &github_url, None, Body::from("{}"), &[])
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    for (event, payload, signature) in [
+        (
+            "push",
+            r#"{"ref":"refs/heads/other"}"#,
+            "sha256=6d6609fc0cc83d2970dbcb114b4114db074131fbc92ab13467140cdf0bdd9d00",
+        ),
+        (
+            "push",
+            r#"{}"#,
+            "sha256=4544ae2577704593977ab92f113139147574814c1df16a49995229f3dcc5be2b",
+        ),
+        (
+            "ping",
+            r#"{}"#,
+            "sha256=4544ae2577704593977ab92f113139147574814c1df16a49995229f3dcc5be2b",
+        ),
     ] {
         let response = send(
             app,
             &github_url,
             None,
             Body::from(payload),
-            &[("x-github-event", event)],
+            &[
+                ("x-github-event", event),
+                ("x-hub-signature-256", signature),
+            ],
         )
         .await;
         assert_eq!(response.status(), StatusCode::ACCEPTED);

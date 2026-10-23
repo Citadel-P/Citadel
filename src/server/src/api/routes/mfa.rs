@@ -285,7 +285,7 @@ async fn start_profile_setup(
     summary = "Complete MFA setup",
     request_body = ConfirmProfileMfaSetupInput,
     responses(
-        (status = 200, description = "Success", body = crate::api::resources::mfa::views::ProfileMfaRecoveryCodesView, content_type = "application/json"),
+        (status = 200, description = "Success", body = crate::api::resources::mfa::views::ProfileMfaSetupCompleteView, content_type = "application/json", headers(("Set-Cookie" = String, description = "Replaces the current refresh token without extending session expiry."))),
         crate::openapi::errors::AccessErrors
     ),
     security(("Bearer" = [])),
@@ -316,10 +316,27 @@ async fn confirm_profile_setup(
         .confirm_profile_setup(&principal, input, current_refresh_token(&headers))
         .await
     {
-        Ok(view) => no_store(
-            Json(crate::api::resources::mfa::views::ProfileMfaRecoveryCodesView::from(view))
+        Ok((view, session)) => {
+            let response = no_store(
+                Json(
+                    crate::api::resources::mfa::views::ProfileMfaSetupCompleteView {
+                        enabled: view.enabled,
+                        recovery_codes: view.recovery_codes,
+                        access_token: session.as_ref().map(|session| session.access_token.clone()),
+                    },
+                )
                 .into_response(),
-        ),
+            );
+            match session {
+                Some(session) => with_refresh_cookie(
+                    response,
+                    &session.refresh_token,
+                    session.refresh_expires_at,
+                    state.secure_cookies,
+                ),
+                None => response,
+            }
+        }
         Err(error) => error_response(error, &headers),
     }
 }

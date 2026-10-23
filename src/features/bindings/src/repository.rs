@@ -34,14 +34,14 @@ pub trait BindingRepository: Send + Sync {
 
     fn list_secret_definitions<'a>(
         &'a self,
-        scope: Option<ResourceBindingScope>,
-        resource_id: Option<Uuid>,
+        scope: SecretUseScope,
     ) -> BoxFuture<'a, Result<Vec<SecretDefinition>, BindingError>>;
 
     fn create_internal_secret<'a>(
         &'a self,
         name: &'a str,
         protected_value: &'a str,
+        scope: SecretUseScope,
     ) -> BoxFuture<'a, Result<SecretDefinition, BindingError>>;
 
     fn create_external_secret<'a>(

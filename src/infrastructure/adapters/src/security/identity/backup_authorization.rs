@@ -41,6 +41,11 @@ impl IdentityBackupRunAuthorizer {
         source: &citadel_backups::spec::BackupSourceSpec,
     ) -> Result<(), BackupError> {
         source.validate()?;
+        if source.requires_administrator() && !principal.is_administrator() {
+            return Err(BackupError::Validation(
+                "Citadel system backups require an administrator run-as identity.".into(),
+            ));
+        }
         let resource = source.resource();
         if let Some((resource_type, resource_id)) = resource {
             self.authorize_resource(

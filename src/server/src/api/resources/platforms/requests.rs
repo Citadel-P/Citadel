@@ -198,6 +198,8 @@ impl From<citadel_platforms::PlatformConnectorType> for PlatformConnectorType {
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatePlatformInput {
+    /// UUID from Agent setup. Required for Direct Agent registration.
+    pub agent_id: Option<Uuid>,
     pub name: String,
     pub address: Option<String>,
     pub description: Option<String>,
@@ -215,6 +217,7 @@ pub struct CreatePlatformInput {
 impl From<CreatePlatformInput> for citadel_platforms::CreatePlatformInput {
     fn from(value: CreatePlatformInput) -> Self {
         Self {
+            agent_id: value.agent_id,
             name: value.name,
             address: value.address,
             description: value.description,
@@ -229,6 +232,7 @@ impl From<CreatePlatformInput> for citadel_platforms::CreatePlatformInput {
 impl From<citadel_platforms::CreatePlatformInput> for CreatePlatformInput {
     fn from(value: citadel_platforms::CreatePlatformInput) -> Self {
         Self {
+            agent_id: value.agent_id,
             name: value.name,
             address: value.address,
             description: value.description,
@@ -722,4 +726,10 @@ impl From<citadel_platforms::PlatformKind> for PlatformType {
             citadel_platforms::PlatformKind::DockerSwarm => Self::DockerSwarm,
         }
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct AgentSetupQuery {
+    pub agent_id: Option<Uuid>,
 }

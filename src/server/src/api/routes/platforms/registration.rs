@@ -1,11 +1,14 @@
 use super::*;
 
+use crate::api::resources::platforms::requests::AgentSetupQuery;
+
 #[utoipa::path(
     get,
     path = "/api/v1/platforms/agent/setup",
     operation_id = "getAgentSetup",
     tag = "Platforms",
     summary = "Get regular Agent setup instructions",
+    params(("agentId" = Option<Uuid>, Query, description = "Stable Platform or Build Pool ID; generated when omitted")),
     responses(
         (status = 200, description = "Success", body = crate::api::resources::platforms::views::AgentSetupView, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
@@ -14,6 +17,7 @@ use super::*;
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 pub(super) async fn get_agent_setup(
+    ApiQuery(query): ApiQuery<AgentSetupQuery>,
     State(state): State<PlatformsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     setup: Option<Extension<Arc<crate::api::resources::platforms::views::AgentSetupView>>>,
@@ -26,26 +30,54 @@ pub(super) async fn get_agent_setup(
             .ok_or(ApiError::Unauthenticated),
         &headers,
     )?;
-    api_result(
-        state
-            .identity
-            .authorize(
-                &principal,
-                ResourceType::Platform,
-                PermissionLevel::Write,
-                None,
-            )
-            .await,
-        &headers,
-    )?;
+    let authorization = match query.agent_id {
+        Some(id) => {
+            state
+                .identity
+                .authorize_resource(
+                    &principal,
+                    ResourceType::Platform,
+                    id,
+                    PermissionLevel::Write,
+                    None,
+                )
+                .await
+        }
+        None => {
+            state
+                .identity
+                .authorize(
+                    &principal,
+                    ResourceType::Platform,
+                    PermissionLevel::Write,
+                    None,
+                )
+                .await
+        }
+    };
+    api_result(authorization, &headers)?;
     let Extension(setup) = api_result(
         setup.ok_or_else(|| ApiError::Storage("Agent setup is not configured.".into())),
         &headers,
     )?;
-    if let Some(Extension(live)) = live {
-        return Ok(no_store(Json(live.view()).into_response()));
+    let agent_id = query.agent_id.unwrap_or_else(Uuid::now_v7);
+    if agent_id.is_nil() {
+        return Err(crate::api::error::HttpError::from_parts(
+            ApiError::Validation("Agent ID must be nonzero.".into()),
+            &headers,
+        ));
     }
-    Ok(no_store(Json(setup.as_ref()).into_response()))
+    let template = live.map_or_else(|| setup.as_ref().clone(), |Extension(live)| live.view());
+    let instructions = citadel_platforms::agent_setup::AgentSetupInstructions::for_agent(
+        template.hub_public_key,
+        template.agent_image,
+        template.requires_tls,
+        agent_id,
+    );
+    Ok(no_store(
+        Json(crate::api::resources::platforms::views::AgentSetupView::from(instructions))
+            .into_response(),
+    ))
 }
 
 #[utoipa::path(

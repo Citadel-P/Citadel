@@ -36,13 +36,24 @@ impl SwarmServiceService {
         actor_id: ActorId,
         administrator: bool,
         id: Uuid,
-        input: UpdateSwarmService,
+        mut input: UpdateSwarmService,
     ) -> Result<AuthorizedResource<crate::SwarmService>, SwarmServiceError> {
-        input.spec.validate()?;
         let current = self
             .store
             .get_authorized(actor_id, administrator, id)
             .await?;
+        // Full specification updates never require reading back the saved credential.
+        // Removing the webhook (null) clears it; an empty supplied secret is deliberate.
+        if let Some(webhook) = &mut input.spec.webhook
+            && webhook.secret.is_none()
+        {
+            webhook.secret = current
+                .spec
+                .webhook
+                .as_ref()
+                .and_then(|saved| saved.secret.clone());
+        }
+        input.spec.validate()?;
         if current.spec.scheduling_mode != input.spec.scheduling_mode
             && current.applied_image_digest.is_some()
         {

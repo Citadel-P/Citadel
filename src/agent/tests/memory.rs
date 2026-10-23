@@ -147,6 +147,7 @@ impl Process {
             .env("TOKIO_WORKER_THREADS", "2")
             .env("RUST_LOG", "warn")
             .env("CITADEL_AGENT_PORT", port.to_string())
+            .env("CITADEL_AGENT_ID", "7fb4c244-485a-4b80-9611-b29e456adf65")
             .env("DOCKER_HOST", &f.docker)
             .env(
                 "CITADEL_CORE_PUBLIC_KEY",
@@ -219,11 +220,23 @@ fn signed<T: Message>(value: T, method: &str) -> Request<T> {
     let time = chrono::Utc::now().timestamp().to_le_bytes();
     let nonce = *Uuid::now_v7().as_bytes();
     let hash = Sha256::digest(value.encode_to_vec());
+    let audience = Sha256::digest(b"7fb4c244-485a-4b80-9611-b29e456adf65");
     let signature = SigningKey::from_bytes(&[42; 32])
-        .sign(&[&time[..], &nonce, method.as_bytes(), &hash].concat())
+        .sign(
+            &[
+                b"citadel-direct-v2\0".as_slice(),
+                &audience,
+                &time[..],
+                &nonce,
+                method.as_bytes(),
+                &hash,
+            ]
+            .concat(),
+        )
         .to_bytes();
     let mut request = Request::new(value);
     for (key, value) in [
+        ("x-audience-sha256-bin", &audience[..]),
         ("x-timestamp-bin", &time[..]),
         ("x-nonce-bin", &nonce[..]),
         ("x-content-sha256-bin", &hash[..]),

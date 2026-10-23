@@ -9,6 +9,23 @@ pub struct BackupRepositoryConfiguration {
 }
 
 impl BackupRepositoryConfiguration {
+    pub fn secret_ids(&self) -> Vec<Uuid> {
+        let mut ids = vec![self.password_secret_id];
+        if let crate::spec::BackupRepositorySpec::S3Compatible {
+            access_key_secret_id,
+            secret_key_secret_id,
+            session_token_secret_id,
+            ..
+        } = &self.spec
+        {
+            ids.extend([*access_key_secret_id, *secret_key_secret_id]);
+            ids.extend(*session_token_secret_id);
+        }
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
     pub fn validate(&mut self) -> Result<(), BackupError> {
         validate_name(&mut self.name, "Backup Repository")?;
         if self.password_secret_id.is_nil() {

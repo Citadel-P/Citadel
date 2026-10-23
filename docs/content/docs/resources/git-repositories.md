@@ -31,6 +31,8 @@ synchronization. Review any configured commands before saving or synchronizing.
 
 A Git account represents credentials for one Git host or domain.
 
+Saved credentials are write-only, including for administrators. Configuration reads return the saved username and credential presence indicators, including for existing accounts. Omitting a credential on update preserves it; supplying a replacement rotates it. Required passwords, tokens and private keys cannot be cleared while keeping their authentication type. An SSH passphrase can be explicitly cleared with `null`.
+
 Create an account from the Repositories page, in the **Git Accounts** section, and choose:
 
 - Name: a recognizable label for the credentials.

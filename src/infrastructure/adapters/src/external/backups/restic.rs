@@ -1686,7 +1686,7 @@ impl DockerResticBackupExecutor {
             .agent
             .as_ref()
             .ok_or_else(|| "The configured Agent backup transport is unavailable.".to_owned())?
-            .at_address(&address)
+            .at_address(&address, platform_id)
             .map_err(|error| error.message)?;
         if let Some(expected_node) = node_id {
             let info = agent
@@ -1826,7 +1826,7 @@ impl DockerResticBackupExecutor {
             (
                 "RESTIC_PASSWORD".to_owned(),
                 self.secrets
-                    .resolve(repository.password_secret_id)
+                    .resolve(repository.password_secret_id, repository.id)
                     .await
                     .map_err(|error| error.to_string())?
                     .to_string(),
@@ -1840,7 +1840,7 @@ impl DockerResticBackupExecutor {
             environment.insert(
                 key.to_owned(),
                 self.secrets
-                    .resolve(id)
+                    .resolve(id, repository.id)
                     .await
                     .map_err(|error| error.to_string())?
                     .to_string(),
@@ -1850,7 +1850,7 @@ impl DockerResticBackupExecutor {
             environment.insert(
                 "AWS_SESSION_TOKEN".to_owned(),
                 self.secrets
-                    .resolve(id)
+                    .resolve(id, repository.id)
                     .await
                     .map_err(|error| error.to_string())?
                     .to_string(),
@@ -1865,7 +1865,7 @@ impl DockerResticBackupExecutor {
     ) -> Result<(Vec<OsString>, Vec<(OsString, OsString)>), String> {
         let password = self
             .secrets
-            .resolve(repo.password_secret_id)
+            .resolve(repo.password_secret_id, repo.id)
             .await
             .map_err(|e| e.to_string())?;
         let mut args = vec![
@@ -1914,12 +1914,20 @@ impl DockerResticBackupExecutor {
                     (*access_key_secret_id, "AWS_ACCESS_KEY_ID"),
                     (*secret_key_secret_id, "AWS_SECRET_ACCESS_KEY"),
                 ] {
-                    let secret = self.secrets.resolve(id).await.map_err(|e| e.to_string())?;
+                    let secret = self
+                        .secrets
+                        .resolve(id, repo.id)
+                        .await
+                        .map_err(|e| e.to_string())?;
                     args.extend(["--env".into(), key.into()]);
                     env.push((key.into(), OsString::from(secret.as_str())));
                 }
                 if let Some(id) = *session_token_secret_id {
-                    let secret = self.secrets.resolve(id).await.map_err(|e| e.to_string())?;
+                    let secret = self
+                        .secrets
+                        .resolve(id, repo.id)
+                        .await
+                        .map_err(|e| e.to_string())?;
                     args.extend(["--env".into(), "AWS_SESSION_TOKEN".into()]);
                     env.push(("AWS_SESSION_TOKEN".into(), OsString::from(secret.as_str())));
                 }
@@ -1934,7 +1942,7 @@ impl DockerResticBackupExecutor {
     ) -> Result<(OsString, Vec<(OsString, OsString)>), String> {
         let password = self
             .secrets
-            .resolve(repository.password_secret_id)
+            .resolve(repository.password_secret_id, repository.id)
             .await
             .map_err(|error| error.to_string())?;
         let mut environment = vec![("RESTIC_PASSWORD".into(), OsString::from(password.as_str()))];
@@ -1964,7 +1972,7 @@ impl DockerResticBackupExecutor {
                 ] {
                     let value = self
                         .secrets
-                        .resolve(id)
+                        .resolve(id, repository.id)
                         .await
                         .map_err(|error| error.to_string())?;
                     environment.push((key.into(), OsString::from(value.as_str())));
@@ -1972,7 +1980,7 @@ impl DockerResticBackupExecutor {
                 if let Some(id) = *session_token_secret_id {
                     let value = self
                         .secrets
-                        .resolve(id)
+                        .resolve(id, repository.id)
                         .await
                         .map_err(|error| error.to_string())?;
                     environment.push(("AWS_SESSION_TOKEN".into(), OsString::from(value.as_str())));
@@ -2446,6 +2454,7 @@ mod tests {
             fn resolve(
                 &self,
                 _: Uuid,
+                _repository_id: Uuid,
             ) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BackupError>> {
                 panic!("Rejected paths must not resolve secrets or run Restic")
             }

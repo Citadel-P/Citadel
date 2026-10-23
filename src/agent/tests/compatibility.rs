@@ -27,15 +27,27 @@ use uuid::Uuid;
 const PASSWORD: &str = "compatibility-password";
 const SECRET: &str = "compatibility-build-secret";
 
-fn sign<T: Message>(value: T, path: &'static str) -> Request<T> {
+fn sign<T: Message>(audience: &str, value: T, path: &'static str) -> Request<T> {
     let time = chrono::Utc::now().timestamp().to_le_bytes();
     let nonce = *Uuid::now_v7().as_bytes();
     let hash = Sha256::digest(value.encode_to_vec());
+    let audience = Sha256::digest(audience.as_bytes());
     let signature = SigningKey::from_bytes(&[42; 32])
-        .sign(&[&time[..], &nonce, path.as_bytes(), &hash].concat())
+        .sign(
+            &[
+                b"citadel-direct-v2\0".as_slice(),
+                &audience,
+                &time[..],
+                &nonce,
+                path.as_bytes(),
+                &hash,
+            ]
+            .concat(),
+        )
         .to_bytes();
     let mut request = Request::new(value);
     for (key, value) in [
+        ("x-audience-sha256-bin", &audience[..]),
         ("x-timestamp-bin", &time[..]),
         ("x-nonce-bin", &nonce),
         ("x-content-sha256-bin", &hash),
@@ -49,7 +61,7 @@ fn sign<T: Message>(value: T, path: &'static str) -> Request<T> {
 }
 
 enum Wire {
-    Direct(Channel),
+    Direct(Channel, String),
     Edge(Arc<EdgeSession>),
 }
 impl Wire {
@@ -64,12 +76,12 @@ impl Wire {
         R: Message + Default + Send + Sync + 'static,
     {
         match self {
-            Self::Direct(channel) => {
+            Self::Direct(channel, audience) => {
                 let mut client = tonic::client::Grpc::new(channel.clone());
                 client.ready().await.unwrap();
                 client
                     .server_streaming(
-                        sign(value, path),
+                        sign(audience, value, path),
                         axum::http::uri::PathAndQuery::from_static(path),
                         tonic_prost::ProstCodec::default(),
                     )
@@ -96,12 +108,12 @@ impl Wire {
         R: Message + Default + Send + Sync + 'static,
     {
         match self {
-            Self::Direct(channel) => {
+            Self::Direct(channel, audience) => {
                 let mut client = tonic::client::Grpc::new(channel.clone());
                 client.ready().await.unwrap();
                 client
                     .unary(
-                        sign(value, path),
+                        sign(audience, value, path),
                         axum::http::uri::PathAndQuery::from_static(path),
                         tonic_prost::ProstCodec::default(),
                     )
@@ -236,6 +248,7 @@ async fn start_agent(values: &HashMap<&str, String>) -> (tokio::process::Child, 
     let address = format!("http://127.0.0.1:{port}");
     let mut child = tokio::process::Command::new("/app/citadel-agent")
         .envs(values)
+        .env("CITADEL_AGENT_ID", "7fb4c244-485a-4b80-9611-b29e456adf65")
         .env("CITADEL_AGENT_PORT", port.to_string())
         .kill_on_drop(true)
         .spawn()
@@ -329,6 +342,10 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
             None
         };
         let mut values = HashMap::from([
+            (
+                "CITADEL_AGENT_ID",
+                "7fb4c244-485a-4b80-9611-b29e456adf65".into(),
+            ),
             ("DOCKER_HOST", docker_host.clone()),
             (
                 "CITADEL_CORE_PUBLIC_KEY",
@@ -363,7 +380,8 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
         let wire = if profile == "direct" {
             let client = AgentClient::connect(
                 &address,
-                AgentRequestSigner::from_bytes(&[42; 32]),
+                AgentRequestSigner::from_bytes(&[42; 32])
+                    .for_agent("7fb4c244-485a-4b80-9611-b29e456adf65".parse().unwrap()),
                 Duration::from_secs(30),
                 true,
             )
@@ -378,11 +396,12 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
                     .available
             );
             Wire::Direct(
-                Channel::from_shared(address)
+                Channel::from_shared(address.clone())
                     .unwrap()
                     .connect()
                     .await
                     .unwrap(),
+                "7fb4c244-485a-4b80-9611-b29e456adf65".into(),
             )
         } else {
             let first = current_session(&registry, &target, None).await;

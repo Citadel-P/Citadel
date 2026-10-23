@@ -29,6 +29,7 @@ import { CheckCheck, Clipboard, KeyRound, Loader2, PlugZap, RefreshCw, Server, S
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  createAgentId,
   createDefaultPlatformInput,
   platformToFormInput,
   PlatformFormInput,
@@ -73,9 +74,12 @@ export const PlatformForm = ({
   resource?: PlatformView;
   disabled?: boolean;
 }) => {
-  const [update, setUpdate] = useState<Partial<PlatformFormInput>>({});
+  const [newAgentId] = useState(createAgentId);
+  const [update, setUpdate] = useState<Partial<PlatformFormInput>>(() =>
+    mode === 'add' ? { agentId: newAgentId } : {},
+  );
   const queryClient = useQueryClient();
-  const { data: platformsData } = useRead('listPlatforms');
+  const { data: platformsData, isLoading: isPlatformsLoading } = useRead('listPlatforms');
   const rotateAgentHubKeyMutation = useMutate('rotateAgentHubKey');
   const { mutateAsync: rotateAgentHubKeyAsync, isPending: isRotatingAgentHubKey } = rotateAgentHubKeyMutation;
   const localPlatformExists = useMemo(
@@ -112,9 +116,14 @@ export const PlatformForm = ({
   const isEdge = connectorType === PlatformConnectorType.EdgeAgent;
   const platformType = createdPlatform?.type ?? update.type ?? original.type ?? PlatformType.Docker;
   const isSwarm = platformType === PlatformType.DockerSwarm;
-  const { data: agentSetupData, isLoading: isAgentSetupLoading } = useRead('getAgentSetup', undefined, {
-    enabled: isAgent,
-  });
+  const agentId = createdPlatform?.id ?? resource?.id ?? update.agentId ?? newAgentId;
+  const { data: agentSetupData, isLoading: isAgentSetupLoading } = useRead(
+    'getAgentSetup',
+    { query: { agentId } },
+    {
+      enabled: isAgent,
+    },
+  );
   const agentSetup: AgentSetupView | undefined = agentSetupData?.data;
   const isEdit = mode === 'edit';
   const formDisabled = disabled || Boolean(createdPlatform);
@@ -123,7 +132,10 @@ export const PlatformForm = ({
   const dockerCommand = enrollment?.instructions.dockerRunCommand ?? '';
   const rotateAgentHubKey = useCallback(async () => {
     await rotateAgentHubKeyAsync({});
-    await queryClient.invalidateQueries({ queryKey: ['getAgentSetup'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['getAgentSetup'] }),
+      queryClient.invalidateQueries({ queryKey: ['getBuildAgentPoolAgentSetup'] }),
+    ]);
     toast.success('Agent public key rotated', {
       description: 'Restart every regular Agent with the new public key before using those platforms.',
     });
@@ -302,17 +314,21 @@ export const PlatformForm = ({
                         />
                       ),
                     }),
-                    defineField<PlatformFormInput, 'agentDockerCommand'>({
-                      key: 'agentDockerCommand',
+                    defineField<PlatformFormInput, 'agentId'>({
+                      key: 'agentId',
                       label: 'Docker Command',
                       description: agentSetup?.requiresTls
-                        ? 'Replace the TLS host path in this command template, then run it on the Docker host.'
-                        : 'Run this command on the Docker host, then enter the host address above.',
+                        ? 'Replace the TLS host path, then run this command on the Docker host. The Agent ID is already configured.'
+                        : 'Run this command on the Docker host. Citadel has already configured its unique Agent ID.',
                       disabled: false,
                       ignoreFormDisabled: true,
                       hideValidationMessage: true,
-                      render: () => (
-                        <SetupCommandEditor value={agentSetup?.dockerRunCommand ?? ''} filename="citadel-agent.sh" />
+                      render: (_value, set) => (
+                        <SetupCommandEditor
+                          value={agentSetup?.dockerRunCommand ?? ''}
+                          filename="citadel-agent.sh"
+                          onCopy={() => set({ agentId })}
+                        />
                       ),
                     }),
                   ],
@@ -375,6 +391,7 @@ export const PlatformForm = ({
       }),
     }),
     [
+      agentId,
       agentSetup?.dockerRunCommand,
       agentSetup?.hubPublicKey,
       agentSetup?.requiresTls,
@@ -401,6 +418,9 @@ export const PlatformForm = ({
     ],
   );
 
+  // Resolve the default connector before FormShell validates/restores a draft.
+  if (isPlatformsLoading) return <p role="status">Loading platforms...</p>;
+
   return (
     <div className="flex flex-col gap-6">
       {validationErrors && <AlertMessage type="warning">{validationErrors}</AlertMessage>}
@@ -415,7 +435,7 @@ export const PlatformForm = ({
           // Creating Local changes the list's default to Agent before navigation.
           // Preserve the submitted connector across realtime/cache updates.
           setUpdate((prev) => ({ ...prev, connectorType: input.connectorType ?? PlatformConnectorType.Local }));
-          return save(input);
+          return save({ ...input, agentId });
         }}
         pending={isPending}
         disabled={formDisabled}
@@ -542,7 +562,7 @@ const CopyableInput = ({ value, placeholder }: { value: string; placeholder?: st
   );
 };
 
-const SetupCommandEditor = ({ value, filename }: { value: string; filename: string }) => {
+const SetupCommandEditor = ({ value, filename, onCopy }: { value: string; filename: string; onCopy?: () => void }) => {
   const [copied, copy] = useCopyToClipboard(3000);
   const isCopied = copied === value;
 
@@ -553,7 +573,12 @@ const SetupCommandEditor = ({ value, filename }: { value: string; filename: stri
         size="icon-xs"
         variant="outline"
         className="absolute right-5 top-4 z-10 bg-background/80"
-        onClick={() => value && copy(value)}
+        onClick={() => {
+          if (!value) return;
+          // Persist the ID through FormShell before copying even an otherwise empty draft.
+          onCopy?.();
+          void copy(value);
+        }}
         disabled={!value}>
         {isCopied ? <CheckCheck className="size-3 text-green-500" /> : <Clipboard className="size-3" />}
         <span className="sr-only">Copy docker command</span>

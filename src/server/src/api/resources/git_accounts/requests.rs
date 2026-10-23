@@ -43,7 +43,7 @@ pub struct GitAccountPatch {
     pub domain: Option<String>,
     pub transport: Option<GitTransport>,
     pub auth_type: Option<GitAuthType>,
-    pub configuration: Option<GitAuthConfiguration>,
+    pub configuration: Option<GitAuthConfigurationPatch>,
 }
 
 impl From<citadel_git::UpdateGitAccount> for GitAccountPatch {

@@ -118,7 +118,10 @@ Use this when you want builds to run on a separate builder host or in a separate
 
 Use inbound mode when Citadel Core can reach the builder host over the network.
 
-Start a dedicated build Agent with its own container name and host port:
+Save the Build Pool first, then open its configuration and copy its Agent Setup
+command. Citadel fills in the ID and public key automatically. For a dedicated
+builder, adjust the container name and published port as needed. The equivalent
+manual template is:
 
 ```bash
 docker run -d \
@@ -127,10 +130,11 @@ docker run -d \
   -p 9001:9000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e CITADEL_CORE_PUBLIC_KEY="..." \
+  -e CITADEL_AGENT_ID="<generated-agent-id>" \
   AGENT_IMAGE
 ```
 
-Then create a Build Pool in Citadel:
+Use these settings when creating the Build Pool:
 
 ```text
 Build Pools -> Add Build Pool
@@ -223,7 +227,7 @@ http://docker-host.internal.example:9000
 When `Agent` is selected, Citadel displays an **Agent setup** section containing:
 
 * The Citadel Core public key
-* A generated Docker installation command
+* A Docker installation command with its unique Agent ID already filled in
 * The expected Agent image version
 
 Run the generated installation command on the Docker host, then save the platform.
@@ -251,6 +255,7 @@ docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /:/host:ro \
   -e CITADEL_CORE_PUBLIC_KEY="..." \
+  -e CITADEL_AGENT_ID="<generated-agent-id>" \
   AGENT_IMAGE
 ```
 
@@ -299,6 +304,7 @@ services:
       - "9000:9000"
     environment:
       CITADEL_CORE_PUBLIC_KEY: "..."
+      CITADEL_AGENT_ID: "<generated-agent-id>"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /:/host:ro
@@ -564,3 +570,16 @@ Copy the latest installation command from the platform setup section and recreat
 
 For the supported direct TLS setup and private-CA trust, see
 [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport).
+
+Citadel automatically includes `CITADEL_AGENT_ID` in each Direct Agent install
+command. This UUID identifies the Platform or dedicated Build Pool independently
+of its network address. Keep it when restarting the Agent or changing its address;
+use a separate setup command for each Platform or Build Pool. Requests signed for
+a different ID are rejected, even when Agents have identical addresses on separate
+networks. Edge Agents use enrollment and do not need this setting.
+
+For an existing Platform, copy the command from its Agent Setup section. For an
+inbound Build Pool, save the pool first, then open its configuration to copy the
+command. API clients may obtain a generated `agentId` from
+`GET /api/v1/platforms/agent/setup` and submit it with Direct Platform creation.
+Existing Platform and Build Pool IDs are preserved.

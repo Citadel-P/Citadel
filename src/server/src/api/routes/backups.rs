@@ -681,6 +681,9 @@ async fn authorize_policy_dependencies(
     input: &BackupPolicyConfiguration,
     headers: &HeaderMap,
 ) -> HttpResult<()> {
+    if input.source.requires_administrator() && !principal.is_administrator() {
+        return api_result(Err(ApiError::Forbidden), headers);
+    }
     auth(
         state,
         principal,
@@ -1757,6 +1760,10 @@ async fn enqueue_backup(
         h,
     )
     .await?;
+    let policy = result(s.backups.store().get_policy(id).await, h)?;
+    if policy.source.requires_administrator() && !p.is_administrator() {
+        return api_result(Err(ApiError::Forbidden), h);
+    }
     let trigger = input.trigger.unwrap_or_default().as_str();
     if trigger != "Manual" {
         result(s.backups.ensure_automated_operations().await, h)?;
@@ -1764,7 +1771,7 @@ async fn enqueue_backup(
     let run = result(
         s.backups
             .store()
-            .enqueue_backup(p.actor_id, id, trigger)
+            .enqueue_backup(p.actor_id, id, trigger, Some(policy.row_version))
             .await,
         h,
     )?;

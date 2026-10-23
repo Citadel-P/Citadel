@@ -142,7 +142,11 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         Arc::new(AesGcmSecretProtector::new(&[17_u8; 32]).unwrap()),
     );
     let secret = service
-        .create_internal_secret(&format!("secret-{suffix}"), "not-plain-text")
+        .create_internal_secret(
+            &format!("secret-{suffix}"),
+            "not-plain-text",
+            citadel_bindings::SecretUseScope::Global,
+        )
         .await
         .unwrap();
     let encrypted: String =

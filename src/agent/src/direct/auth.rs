@@ -22,16 +22,27 @@ use tonic::{Status, metadata::MetadataMap};
 const CLOCK_SKEW: i64 = 60;
 const NONCE_CAPACITY: usize = 65_536;
 
+// Only constructed after the recipient, method and signature have been verified.
+struct VerifiedOpening {
+    timestamp: i64,
+    nonce: [u8; 16],
+    hash: [u8; 32],
+}
+
 pub struct Verifier {
     key: VerifyingKey,
+    audience: [u8; 32],
+    openings: std::sync::Arc<tokio::sync::Semaphore>,
     shutdown: tokio_util::sync::CancellationToken,
     nonces: Mutex<HashMap<[u8; 16], i64>>,
 }
 
 impl Verifier {
-    pub fn new(key: VerifyingKey) -> Self {
+    pub fn new(key: VerifyingKey, audience: &str) -> Self {
         Self {
             key,
+            audience: Sha256::digest(audience.as_bytes()).into(),
+            openings: std::sync::Arc::new(tokio::sync::Semaphore::new(8)),
             shutdown: tokio_util::sync::CancellationToken::new(),
             nonces: Mutex::new(HashMap::new()),
         }
@@ -42,6 +53,43 @@ impl Verifier {
         self
     }
 
+    fn verify_header(
+        &self,
+        metadata: &MetadataMap,
+        method: &str,
+        now: i64,
+    ) -> Result<VerifiedOpening, Status> {
+        let audience = binary::<32>(metadata, "x-audience-sha256-bin")?;
+        if !bool::from(audience.ct_eq(&self.audience)) {
+            return Err(Status::unauthenticated("Wrong Agent audience"));
+        }
+        let timestamp = binary::<8>(metadata, "x-timestamp-bin")?;
+        let nonce = binary::<16>(metadata, "x-nonce-bin")?;
+        let hash = binary::<32>(metadata, "x-content-sha256-bin")?;
+        let signature = binary::<64>(metadata, "x-signature-bin")?;
+        if i64::from_le_bytes(timestamp).abs_diff(now) > CLOCK_SKEW as u64 {
+            return Err(Status::unauthenticated("Request expired"));
+        }
+        let signed = [
+            b"citadel-direct-v2\0".as_slice(),
+            &audience,
+            &timestamp,
+            &nonce,
+            method.as_bytes(),
+            &hash,
+        ]
+        .concat();
+        self.key
+            .verify_strict(&signed, &Signature::from_bytes(&signature))
+            .map_err(|_| Status::unauthenticated("Invalid signature"))?;
+        Ok(VerifiedOpening {
+            timestamp: i64::from_le_bytes(timestamp),
+            nonce,
+            hash,
+        })
+    }
+
+    #[cfg(test)]
     fn verify(
         &self,
         metadata: &MetadataMap,
@@ -49,25 +97,23 @@ impl Verifier {
         body: &[u8],
         now: i64,
     ) -> Result<(), Status> {
-        let timestamp = binary::<8>(metadata, "x-timestamp-bin")?;
-        let nonce = binary::<16>(metadata, "x-nonce-bin")?;
-        let hash = binary::<32>(metadata, "x-content-sha256-bin")?;
-        let signature = binary::<64>(metadata, "x-signature-bin")?;
-        let time = i64::from_le_bytes(timestamp);
+        let opening = self.verify_header(metadata, method, now)?;
+        self.verify_body(opening, body, now)
+    }
+
+    fn verify_body(&self, opening: VerifiedOpening, body: &[u8], now: i64) -> Result<(), Status> {
+        let VerifiedOpening {
+            timestamp: time,
+            nonce,
+            hash,
+        } = opening;
+        // Receiving the opening body may take long enough for the signature to expire.
         if time.abs_diff(now) > CLOCK_SKEW as u64 {
             return Err(Status::unauthenticated("Request expired"));
         }
         if !bool::from(Sha256::digest(body).as_slice().ct_eq(&hash)) {
             return Err(Status::unauthenticated("Payload hash mismatch"));
         }
-        let mut signed = Vec::with_capacity(56 + method.len());
-        signed.extend_from_slice(&timestamp);
-        signed.extend_from_slice(&nonce);
-        signed.extend_from_slice(method.as_bytes());
-        signed.extend_from_slice(&hash);
-        self.key
-            .verify_strict(&signed, &Signature::from_bytes(&signature))
-            .map_err(|_| Status::unauthenticated("Invalid signature"))?;
         let mut nonces = self
             .nonces
             .lock()
@@ -178,11 +224,14 @@ async fn authenticated(
 ) -> Result<Request, Status> {
     let (parts, body) = request.into_parts();
     let metadata = MetadataMap::from_headers(parts.headers.clone());
-    // Reject malformed metadata before waiting for a potentially idle body.
-    binary::<8>(&metadata, "x-timestamp-bin")?;
-    binary::<16>(&metadata, "x-nonce-bin")?;
-    binary::<32>(&metadata, "x-content-sha256-bin")?;
-    binary::<64>(&metadata, "x-signature-bin")?;
+    // Reject unauthenticated callers without polling their body. The permit also
+    // bounds signature verification work and aggregate opening-frame memory.
+    let _permit = verifier
+        .openings
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| Status::resource_exhausted("Too many opening requests"))?;
+    let verified = verifier.verify_header(&metadata, parts.uri.path(), unix_time()?)?;
     let mut stream = body.into_data_stream();
     let mut opening = BytesMut::new();
     let size = tokio::time::timeout(std::time::Duration::from_secs(10), async {
@@ -207,20 +256,27 @@ async fn authenticated(
                 .await
                 .ok_or_else(|| Status::unauthenticated("Missing signed opening message"))?
                 .map_err(|_| Status::cancelled("Request body disconnected"))?;
+            if opening.len().saturating_add(chunk.len()) > super::MAX_MESSAGE_BYTES + 5 {
+                return Err(Status::resource_exhausted("Opening request exceeds 16 MiB"));
+            }
             opening.extend_from_slice(&chunk);
         }
     })
     .await
     .map_err(|_| Status::deadline_exceeded("Opening message timed out"))??;
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| Status::internal("System clock unavailable"))?
-        .as_secs() as i64;
-    verifier.verify(&metadata, parts.uri.path(), &opening[5..5 + size], now)?;
+    let now = unix_time()?;
+    verifier.verify_body(verified, &opening[5..5 + size], now)?;
     let restored =
         futures_util::stream::once(async move { Ok::<_, axum::Error>(opening.freeze()) })
             .chain(stream);
     Ok(Request::from_parts(parts, Body::from_stream(restored)))
+}
+
+fn unix_time() -> Result<i64, Status> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| Status::internal("System clock unavailable"))?
+        .as_secs() as i64)
 }
 
 #[cfg(test)]
@@ -233,9 +289,19 @@ mod tests {
         let key = SigningKey::from_bytes(&[42; 32]);
         let timestamp = timestamp.to_le_bytes();
         let hash = Sha256::digest(body);
-        let payload = [&timestamp[..], &nonce, method.as_bytes(), &hash].concat();
+        let audience = Sha256::digest(b"7fb4c244-485a-4b80-9611-b29e456adf65");
+        let payload = [
+            b"citadel-direct-v2\0".as_slice(),
+            &audience,
+            &timestamp[..],
+            &nonce,
+            method.as_bytes(),
+            &hash,
+        ]
+        .concat();
         let mut metadata = MetadataMap::new();
         for (name, bytes) in [
+            ("x-audience-sha256-bin", &audience[..]),
             ("x-timestamp-bin", &timestamp[..]),
             ("x-nonce-bin", &nonce),
             ("x-content-sha256-bin", &hash),
@@ -246,7 +312,10 @@ mod tests {
         metadata
     }
     fn verifier() -> Verifier {
-        Verifier::new(SigningKey::from_bytes(&[42; 32]).verifying_key())
+        Verifier::new(
+            SigningKey::from_bytes(&[42; 32]).verifying_key(),
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
+        )
     }
 
     #[test]
@@ -271,8 +340,26 @@ mod tests {
                 .code(),
             tonic::Code::Unauthenticated
         );
-        let other = Verifier::new(SigningKey::from_bytes(&[43; 32]).verifying_key());
+        let other = Verifier::new(
+            SigningKey::from_bytes(&[43; 32]).verifying_key(),
+            "7fb4c244-485a-4b80-9611-b29e456adf65",
+        );
         assert!(other.verify(&metadata, method, b"payload", 1000).is_err());
+    }
+
+    #[test]
+    fn opening_expiry_is_rechecked_after_body_arrives_without_consuming_nonce() {
+        let verifier = verifier();
+        let metadata = signed(b"payload", "/call", 1000, [1; 16]);
+        let opening = verifier.verify_header(&metadata, "/call", 1060).unwrap();
+        assert_eq!(
+            verifier
+                .verify_body(opening, b"payload", 1061)
+                .unwrap_err()
+                .code(),
+            tonic::Code::Unauthenticated
+        );
+        assert!(verifier.nonces.lock().unwrap().is_empty());
     }
 
     #[test]
@@ -346,5 +433,120 @@ mod tests {
             tonic::Code::ResourceExhausted
         );
         assert_eq!(v.nonces.lock().unwrap().len(), NONCE_CAPACITY);
+    }
+
+    #[test]
+    fn requests_are_bound_to_one_agent_audience() {
+        let m = signed(b"payload", "/call", 1000, [7; 16]);
+        assert!(verifier().verify(&m, "/call", b"payload", 1000).is_ok());
+        let other = Verifier::new(
+            SigningKey::from_bytes(&[42; 32]).verifying_key(),
+            "155a8aba-dfbb-4e56-a70a-2ad16a084b92",
+        );
+        assert!(other.verify(&m, "/call", b"payload", 1000).is_err());
+        let mut missing = m.clone();
+        missing.remove_bin("x-audience-sha256-bin");
+        assert!(
+            verifier()
+                .verify(&missing, "/call", b"payload", 1000)
+                .is_err()
+        );
+        let mut changed = m;
+        changed.insert_bin(
+            "x-audience-sha256-bin",
+            MetadataValue::from_bytes(&Sha256::digest(b"155a8aba-dfbb-4e56-a70a-2ad16a084b92")),
+        );
+        assert!(other.verify(&changed, "/call", b"payload", 1000).is_err());
+    }
+
+    #[tokio::test]
+    async fn invalid_or_expired_headers_never_poll_the_body_and_admission_is_bounded() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let v = Arc::new(verifier());
+        for expired in [false, true] {
+            let mut m = signed(
+                b"{}",
+                "/call",
+                unix_time().unwrap() - if expired { 61 } else { 0 },
+                [7; 16],
+            );
+            if !expired {
+                m.insert_bin("x-signature-bin", MetadataValue::from_bytes(&[0; 64]));
+            }
+            let polls = Arc::new(AtomicUsize::new(0));
+            let count = polls.clone();
+            let body = Body::from_stream(futures_util::stream::once(async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Ok::<_, std::io::Error>(bytes::Bytes::from_static(b"\0\0\0\0\x02{}"))
+            }));
+            let mut request = Request::builder().uri("/call").body(body).unwrap();
+            *request.headers_mut() = m.into_headers();
+            assert_eq!(
+                authenticated(v.clone(), request).await.unwrap_err().code(),
+                tonic::Code::Unauthenticated
+            );
+            assert_eq!(polls.load(Ordering::SeqCst), 0);
+            assert_eq!(v.openings.available_permits(), 8);
+        }
+        let permits = v.openings.clone().acquire_many_owned(8).await.unwrap();
+        let mut request = Request::builder().uri("/call").body(Body::empty()).unwrap();
+        *request.headers_mut() =
+            signed(b"{}", "/call", unix_time().unwrap(), [7; 16]).into_headers();
+        assert_eq!(
+            authenticated(v.clone(), request).await.unwrap_err().code(),
+            tonic::Code::ResourceExhausted
+        );
+        drop(permits);
+        let mut request = Request::builder().uri("/call").body(Body::empty()).unwrap();
+        *request.headers_mut() =
+            signed(b"{}", "/call", unix_time().unwrap(), [7; 16]).into_headers();
+        assert!(authenticated(v.clone(), request).await.is_err());
+        assert_eq!(v.openings.available_permits(), 8);
+    }
+    #[tokio::test(start_paused = true)]
+    async fn opening_timeout_oversize_and_cancellation_release_capacity() {
+        use std::sync::Arc;
+        let v = Arc::new(verifier());
+        let request = |body| {
+            let mut request = Request::builder().uri("/call").body(body).unwrap();
+            *request.headers_mut() =
+                signed(b"{}", "/call", unix_time().unwrap(), [8; 16]).into_headers();
+            request
+        };
+        let pending = || {
+            Body::from_stream(futures_util::stream::pending::<
+                Result<bytes::Bytes, std::io::Error>,
+            >())
+        };
+        let task = tokio::spawn(authenticated(v.clone(), request(pending())));
+        tokio::task::yield_now().await;
+        assert_eq!(v.openings.available_permits(), 7);
+        tokio::time::advance(std::time::Duration::from_secs(11)).await;
+        assert_eq!(
+            task.await.unwrap().unwrap_err().code(),
+            tonic::Code::DeadlineExceeded
+        );
+        assert_eq!(v.openings.available_permits(), 8);
+        let task = tokio::spawn(authenticated(v.clone(), request(pending())));
+        tokio::task::yield_now().await;
+        assert_eq!(v.openings.available_permits(), 7);
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert_eq!(v.openings.available_permits(), 8);
+        let oversized = Body::from(vec![0; super::super::MAX_MESSAGE_BYTES + 6]);
+        assert_eq!(
+            authenticated(v.clone(), request(oversized))
+                .await
+                .unwrap_err()
+                .code(),
+            tonic::Code::ResourceExhausted
+        );
+        assert_eq!(v.openings.available_permits(), 8);
+        let valid = Body::from(bytes::Bytes::from_static(b"\0\0\0\0\x02{}"));
+        assert!(authenticated(v.clone(), request(valid)).await.is_ok());
+        assert_eq!(v.openings.available_permits(), 8);
     }
 }

@@ -22,6 +22,14 @@ pub(super) async fn verify(
     .execute(pool)
     .await
     .unwrap();
+    sqlx::query(
+        "INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'BackupRepository',$2)",
+    )
+    .bind(new_secret)
+    .bind(id)
+    .execute(pool)
+    .await
+    .unwrap();
     let input = json!({"accessKeySecretId":new_secret,"secretKeySecretId":new_secret,"sessionTokenSecretId":null,"location":"Core","platformId":null});
     for (actor, status) in [
         (None, StatusCode::UNAUTHORIZED),

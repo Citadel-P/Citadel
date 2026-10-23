@@ -320,6 +320,12 @@ mod tests {
             let doc = serde_json::to_value(document(public)).unwrap();
             let schemas = &doc["components"]["schemas"];
             assert_eq!(schemas["WebhookConfig"], native);
+            assert!(schemas["WebhookView"]["properties"].get("secret").is_none());
+            assert!(
+                schemas["WebhookView"]["properties"]
+                    .get("hasSecret")
+                    .is_some()
+            );
             assert_eq!(
                 enum_values(&native["properties"]["provider"], schemas),
                 Some(&json!(["GitHub", "GitLab", "Generic"]))
@@ -336,7 +342,7 @@ mod tests {
             for (owner, contract) in [
                 ("AutomationActionInput", "WebhookConfig"),
                 ("UpdateAutomationActionInput", "WebhookPatch"),
-                ("AutomationActionView", "WebhookConfig"),
+                ("AutomationActionView", "WebhookView"),
             ] {
                 let webhook = &schemas[owner]["properties"]["webhook"];
                 let alternatives = webhook["oneOf"].as_array().unwrap();

@@ -69,6 +69,7 @@ impl Agent {
             AgentMode::Direct(direct) => health_router().merge(crate::direct::router(
                 self.components.docker,
                 direct.hub_public_key,
+                &direct.audience,
                 cancellation.clone(),
                 self.config.runtime_container,
             )),

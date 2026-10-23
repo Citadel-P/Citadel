@@ -60,10 +60,11 @@ impl Runtime {
 pub fn router(
     docker: DockerClient,
     key: VerifyingKey,
+    audience: &str,
     shutdown: CancellationToken,
     runtime_container: Option<String>,
 ) -> Router {
-    let verifier = auth::Verifier::new(key).with_shutdown(shutdown.clone());
+    let verifier = auth::Verifier::new(key, audience).with_shutdown(shutdown.clone());
     let runtime = Runtime::new(docker, shutdown, runtime_container);
     tonic::service::Routes::new(citadel_contracts::citadel::containers::v1::container_service_server::ContainerServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::platforms::v1::platform_service_server::PlatformServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))

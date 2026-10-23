@@ -72,6 +72,8 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     .execute(&pool)
     .await
     .unwrap();
+    // This fixture explicitly supplies shared credentials for its backup repositories.
+    sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000') ON CONFLICT DO NOTHING").bind(secret).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(platform)
         .bind(format!("backup-platform-{}", platform.simple()))
@@ -250,11 +252,11 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             .unwrap();
     assert!(!rolled_back_activity);
     let first = store
-        .enqueue_backup(actor, policies[0].id, "Manual")
+        .enqueue_backup(actor, policies[0].id, "Manual", None)
         .await
         .unwrap();
     let _second = store
-        .enqueue_backup(actor, policies[1].id, "Manual")
+        .enqueue_backup(actor, policies[1].id, "Manual", None)
         .await
         .unwrap();
     assert_eq!(
@@ -745,7 +747,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
                 }
                 _ => {
                     store
-                        .enqueue_backup(actor, policies[0].id, trigger)
+                        .enqueue_backup(actor, policies[0].id, trigger, None)
                         .await
                         .unwrap();
                 }
@@ -1001,6 +1003,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
         fn resolve(
             &self,
             _: Uuid,
+            _repository_id: Uuid,
         ) -> BoxFuture<'_, Result<Zeroizing<String>, citadel_backups::BackupError>> {
             Box::pin(async { Ok(Zeroizing::new("fixture-password".into())) })
         }

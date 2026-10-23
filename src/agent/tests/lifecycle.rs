@@ -13,6 +13,10 @@ fn settings(edge: bool) -> BTreeMap<String, String> {
         "CITADEL_CORE_PUBLIC_KEY".into(),
         STANDARD.encode(SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes()),
     )]);
+    values.insert(
+        "CITADEL_AGENT_ID".into(),
+        "7fb4c244-485a-4b80-9611-b29e456adf65".into(),
+    );
     if edge {
         values.insert("CITADEL_AGENT_MODE".into(), "edge".into());
         values.insert("CITADEL_CORE_URL".into(), "https://core.example.com".into());

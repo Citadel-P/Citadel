@@ -48,6 +48,11 @@ After your password is accepted:
 
 Citadel then enables two-factor authentication and shows recovery codes.
 
+Completing optional two-factor setup replaces the current browser session and signs
+out other sessions. The replacement keeps the original session expiry, so enabling
+MFA does not extend the sign-in period. Previously copied access and refresh tokens
+from that session no longer authenticate.
+
 ## Save Recovery Codes
 
 Recovery codes let you sign in if you lose access to your authenticator app.

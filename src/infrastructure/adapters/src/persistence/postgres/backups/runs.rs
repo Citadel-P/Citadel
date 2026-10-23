@@ -8,11 +8,19 @@ impl PostgresBackupPersistence {
         policy_id: Uuid,
         trigger: &str,
         expected_webhook: Option<&'a citadel_primitives::WebhookConfig>,
+        expected_row_version: Option<i64>,
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>> {
         let trigger = trigger.to_owned();
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let p=sqlx::query("SELECT p.name,p.source,p.backuprepositoryid,p.enabled,p.controlstate,p.runasactorid,p.webhook,r.type FROM backuppolicies p JOIN backuprepositories r ON r.id=p.backuprepositoryid WHERE p.id=$1 AND p.archivedat IS NULL AND r.archivedat IS NULL FOR UPDATE OF p,r").bind(policy_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BackupError::NotFound)?;
+            let p=sqlx::query("SELECT p.rowversion,p.name,p.source,p.backuprepositoryid,p.enabled,p.controlstate,p.runasactorid,p.webhook,r.type FROM backuppolicies p JOIN backuprepositories r ON r.id=p.backuprepositoryid WHERE p.id=$1 AND p.archivedat IS NULL AND r.archivedat IS NULL FOR UPDATE OF p,r").bind(policy_id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(BackupError::NotFound)?;
+            if let Some(expected) = expected_row_version
+                && p.try_get::<i64, _>("rowversion").map_err(storage)? != expected
+            {
+                return Err(BackupError::Conflict(
+                    "Backup Policy changed after authorization; retry the request.".into(),
+                ));
+            }
             if let Some(expected) = expected_webhook {
                 let current = p.try_get::<Option<sqlx::types::Json<Option<citadel_primitives::WebhookConfig>>>, _>("webhook").map_err(storage)?.and_then(|v| v.0);
                 if current.as_ref() != Some(expected) {
@@ -109,8 +117,9 @@ impl PostgresBackupPersistence {
         actor: ActorId,
         policy_id: Uuid,
         trigger: &str,
+        expected_row_version: Option<i64>,
     ) -> BoxFuture<'_, Result<BackupRun, BackupError>> {
-        self.enqueue_run(actor, policy_id, trigger, None)
+        self.enqueue_run(actor, policy_id, trigger, None, expected_row_version)
     }
 }
 
@@ -125,6 +134,7 @@ impl PostgresBackupPersistence {
             policy_id,
             "Webhook",
             Some(expected_webhook),
+            None,
         )
     }
 }
