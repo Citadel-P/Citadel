@@ -21,6 +21,7 @@ pub enum AgentMode {
 }
 
 pub struct DirectConfig {
+    pub audience: String,
     pub hub_public_key: VerifyingKey,
     pub tls: Option<DirectTls>,
 }
@@ -142,6 +143,17 @@ impl DirectConfig {
                 "must be a valid Ed25519 public key",
             )
         })?;
+        let audience = required(lookup, "CITADEL_AGENT_ID")?
+            .parse::<uuid::Uuid>()
+            .ok()
+            .filter(|id| !id.is_nil())
+            .ok_or_else(|| {
+                invalid(
+                    "CITADEL_AGENT_ID",
+                    "must be the nonzero UUID from Citadel's Agent setup command",
+                )
+            })?
+            .to_string();
         let mode = optional(lookup, "CITADEL_AGENT_TLS_MODE").unwrap_or_else(|| "Disabled".into());
         let certificate = optional(lookup, "CITADEL_AGENT_TLS_CERTIFICATE_PATH");
         let private_key = optional(lookup, "CITADEL_AGENT_TLS_PRIVATE_KEY_PATH");
@@ -179,6 +191,7 @@ impl DirectConfig {
             ));
         };
         Ok(Self {
+            audience,
             hub_public_key,
             tls,
         })

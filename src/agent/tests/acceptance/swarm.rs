@@ -254,11 +254,15 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
             json!({"name":role,"type":"DockerSwarm","connectorType":connector,"tagIds":[]});
         let platform;
         if connector == "Agent" {
+            let agent_id = Uuid::now_v7();
+            body["agentId"] = json!(agent_id);
             f.run(
                 role,
                 &[
                     "-e",
                     &format!("CITADEL_CORE_PUBLIC_KEY={public_key}"),
+                    "-e",
+                    &format!("CITADEL_AGENT_ID={agent_id}"),
                     "-e",
                     "DOCKER_HOST=tcp://swarm-manager:2375",
                     "--health-interval=1s",

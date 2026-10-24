@@ -38,4 +38,28 @@ describe('WebhookConfigField', () => {
     expect(inputs[1]).toHaveValue(`${window.location.origin}/listener/generic/swarm-service/service-id/update`);
     expect(screen.getAllByRole('combobox')[0]).toHaveTextContent('Generic / CI');
   });
+  it('generates a required secret when enabling GitHub and preserves a saved secret on metadata edits', async () => {
+    const changes = vi.fn();
+    const { user, unmount } = renderCitadel(
+      <WebhookConfigField resourceType="repo" execution="pull" value={{ enabled: false }} onChange={changes} />,
+    );
+    await user.click(screen.getByRole('switch'));
+    expect(changes).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: true, secret: expect.stringMatching(/^[a-f0-9]{64}$/) }),
+    );
+    unmount();
+    changes.mockClear();
+    renderCitadel(
+      <WebhookConfigField
+        resourceType="repo"
+        execution="pull"
+        value={{ enabled: true, hasSecret: true }}
+        onChange={changes}
+      />,
+    );
+    expect(screen.getByPlaceholderText('Saved secret — enter a replacement')).toHaveValue('');
+    await user.click(screen.getByRole('switch'));
+    expect(changes).toHaveBeenLastCalledWith({ enabled: false, hasSecret: true });
+    expect(changes.mock.calls[0][0]).not.toHaveProperty('secret');
+  });
 });

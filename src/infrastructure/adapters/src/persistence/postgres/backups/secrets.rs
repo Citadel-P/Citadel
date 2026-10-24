@@ -29,10 +29,14 @@ impl PostgresBackupSecretResolver {
 }
 
 impl BackupSecretResolver for PostgresBackupSecretResolver {
-    fn resolve(&self, id: Uuid) -> BoxFuture<'_, Result<Zeroizing<String>, BackupError>> {
+    fn resolve(
+        &self,
+        id: Uuid,
+        repository_id: Uuid,
+    ) -> BoxFuture<'_, Result<Zeroizing<String>, BackupError>> {
         Box::pin(async move {
             self.resolver
-                .resolve(id)
+                .resolve(id, "BackupRepository", repository_id)
                 .await
                 .map_err(|error| BackupError::Validation(error.to_string()))
         })

@@ -201,7 +201,7 @@ impl Cluster {
         }
         let mut key = [0; 32];
         getrandom::fill(&mut key).unwrap();
-        let signer = AgentRequestSigner::from_bytes(&key);
+        let signer = AgentRequestSigner::from_bytes(&key).for_agent(platform);
         key.fill(0);
         docker(
             &[
@@ -217,6 +217,8 @@ impl Cluster {
                 &format!("CITADEL_CORE_PUBLIC_KEY={}", signer.public_key_base64()),
                 "--env",
                 "CITADEL_AGENT_TLS_MODE=Disabled",
+                "--env",
+                &format!("CITADEL_AGENT_ID={platform}"),
                 &image,
             ],
             None,
@@ -315,14 +317,16 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         }
         volume_content::verify(&cluster,&pool,&agent,platform,&nodes,&registry,source).await;
         let secret=Uuid::now_v7();
-        for id in [secret,ACCESS_KEY_ID,SECRET_KEY_ID] {sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')").bind(id).bind(format!("secret-{id}")).execute(&pool).await.unwrap();}
+        for id in [secret,ACCESS_KEY_ID,SECRET_KEY_ID] {sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')").bind(id).bind(format!("secret-{id}")).execute(&pool).await.unwrap();
+        // This fixture explicitly supplies shared credentials for its backup repositories.
+        sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000') ON CONFLICT DO NOTHING").bind(id).execute(&pool).await.unwrap();}
         let actor=ActorId::new(SYSTEM_ACTOR_ID);let store=PostgresBackupPersistence::new(pool.clone());
         let repository=store.create_repository(actor,&BackupRepositoryConfiguration {name:format!("repo-{platform}"),password_secret_id:secret,spec:serde_json::from_value(json!({"$type":"S3Compatible","endpoint":std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT").unwrap(),"bucket":"citadel-backups","allowInsecureHttp":true,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap()}).await.unwrap();
         let executor=DockerResticBackupExecutor::new("/no-core-docker-allowed",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent.clone())).with_edge(registry.clone());
         let cancel=CancellationToken::new();
         executor.repository(&repository,"Initialize","Platform",Some(platform),&cancel).await.unwrap();
         let mut input=BackupPolicyConfiguration {name:format!("policy-{platform}"),description:None,source:serde_json::from_value(json!({"$type":"DockerVolume","platformId":platform,"dockerNodeId":nodes[1],"volumeName":source})).unwrap(),backup_repository_id:repository.id,enabled:true,cron:None,time_zone:None,webhook:None,keep_last_successful:Some(2),timeout_seconds:Some(120),alert_on_failure:false,run_as_actor_id:None,tag_ids:vec![]};input.validate(actor).unwrap();
-        let policy=store.create_policy(actor,&input).await.unwrap();let run=store.enqueue_backup(actor,policy.id,"Manual").await.unwrap();
+        let policy=store.create_policy(actor,&input).await.unwrap();let run=store.enqueue_backup(actor,policy.id, "Manual", None).await.unwrap();
         let claim=store.claim_backup(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();
         assert_eq!(run.id,claim.run.id);
         let plan=PostgresBackupSourcePlanner::new(pool.clone()).plan(&claim,&cancel).await.unwrap();

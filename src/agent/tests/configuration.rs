@@ -6,10 +6,16 @@ use citadel_agent::config::{AgentConfig, AgentMode, DockerEndpoint, EdgeProfile}
 use ed25519_dalek::SigningKey;
 
 fn direct() -> BTreeMap<String, String> {
-    BTreeMap::from([(
-        "CITADEL_CORE_PUBLIC_KEY".into(),
-        STANDARD.encode(SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes()),
-    )])
+    BTreeMap::from([
+        (
+            "CITADEL_CORE_PUBLIC_KEY".into(),
+            STANDARD.encode(SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes()),
+        ),
+        (
+            "CITADEL_AGENT_ID".into(),
+            "7fb4c244-485a-4b80-9611-b29e456adf65".into(),
+        ),
+    ])
 }
 
 fn edge() -> BTreeMap<String, String> {
@@ -317,4 +323,37 @@ fn template_values(template: &str) -> BTreeMap<String, String> {
         .filter_map(|line| line.split_once('='))
         .map(|(key, value)| (key.into(), value.into()))
         .collect()
+}
+
+#[test]
+fn direct_agent_id_is_required_and_canonicalized() {
+    let mut values = direct();
+    values.remove("CITADEL_AGENT_ID");
+    assert!(parse(&values).is_err());
+    for audience in [
+        "",
+        "00000000-0000-0000-0000-000000000000",
+        "https://example.test/path",
+        "https://user@example.test",
+        "ftp://example.test",
+        "https://example.test?target=other",
+    ] {
+        values.insert("CITADEL_AGENT_ID".into(), audience.into());
+        assert!(parse(&values).is_err(), "{audience}");
+    }
+    values.insert(
+        "CITADEL_AGENT_ID".into(),
+        "7FB4C244-485A-4B80-9611-B29E456ADF65".into(),
+    );
+    let AgentMode::Direct(config) = parse(&values).unwrap().mode else {
+        panic!("Direct")
+    };
+    assert_eq!(config.audience, "7fb4c244-485a-4b80-9611-b29e456adf65");
+}
+
+#[test]
+fn edge_does_not_require_or_read_direct_agent_identity() {
+    let mut values = edge();
+    values.insert("CITADEL_AGENT_ID".into(), "not-a-uuid".into());
+    assert!(matches!(parse(&values).unwrap().mode, AgentMode::Edge(_)));
 }

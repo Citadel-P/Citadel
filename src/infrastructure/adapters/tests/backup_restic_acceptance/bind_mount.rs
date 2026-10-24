@@ -38,6 +38,8 @@ async fn bind_mount_directory_and_file_round_trip_with_overwrite_guards() {
             .bind(platform).bind(format!("bind-{suffix}")).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')")
             .bind(secret).bind(format!("bind-{suffix}")).execute(&pool).await.unwrap();
+        // This fixture explicitly supplies shared credentials for its backup repositories.
+        sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000') ON CONFLICT DO NOTHING").bind(secret).execute(&pool).await.unwrap();
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
         let store = PostgresBackupPersistence::new(pool.clone());
         let repository = store.create_repository(actor, &BackupRepositoryConfiguration {
@@ -92,7 +94,7 @@ async fn bind_mount_directory_and_file_round_trip_with_overwrite_guards() {
             };
             configuration.validate(actor).unwrap();
             let policy = store.create_policy(actor, &configuration).await.unwrap();
-            let run = store.enqueue_backup(actor, policy.id, "Manual").await.unwrap();
+            let run = store.enqueue_backup(actor, policy.id, "Manual", None).await.unwrap();
             let claim = store.claim_backup(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();
             use citadel_docker::client::DockerClient;
 use citadel_adapters::connectors::edge::EdgeRegistry;

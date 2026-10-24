@@ -40,7 +40,11 @@ enum Transport {
 }
 struct Password;
 impl BackupSecretResolver for Password {
-    fn resolve(&self, id: Uuid) -> BoxFuture<'_, Result<Zeroizing<String>, BackupError>> {
+    fn resolve(
+        &self,
+        id: Uuid,
+        _repository_id: Uuid,
+    ) -> BoxFuture<'_, Result<Zeroizing<String>, BackupError>> {
         Box::pin(async move {
             Ok(Zeroizing::new(
                 match id {
@@ -183,8 +187,8 @@ use citadel_adapters::connectors::agent::client::AgentRequestSigner;
             let image=std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap();
             let network=std::env::var("CITADEL_TEST_AGENT_NETWORK").unwrap();
             let mut key=[0;32];getrandom::fill(&mut key).unwrap();
-            let signer=AgentRequestSigner::from_bytes(&key);key.fill(0);
-            docker(&["run","--detach","--name",&agent_name,"--network",&network,"--mount","type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock","--env",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
+            let signer=AgentRequestSigner::from_bytes(&key).for_agent(platform);key.fill(0);
+            docker(&["run","--detach","--name",&agent_name,"--network",&network,"--mount","type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock","--env",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"--env",&format!("CITADEL_AGENT_ID={platform}"),"--env","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
             let address=format!("http://{agent_name}:9000");
             let deadline=tokio::time::Instant::now()+Duration::from_secs(30);
             let client=loop {
@@ -220,10 +224,14 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         }
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')")
             .bind(secret).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
+        // This fixture explicitly supplies shared credentials for its backup repositories.
+        sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000') ON CONFLICT DO NOTHING").bind(secret).execute(&pool).await.unwrap();
         if s3_endpoint.is_some() {
             for id in [ACCESS_KEY_ID, SECRET_KEY_ID] {
                 sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted') ON CONFLICT(id) DO NOTHING")
                     .bind(id).bind(format!("acceptance-credential-{id}")).execute(&pool).await.unwrap();
+        // This fixture explicitly supplies shared credentials for its backup repositories.
+        sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000') ON CONFLICT DO NOTHING").bind(id).execute(&pool).await.unwrap();
             }
         }
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
@@ -255,7 +263,7 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
             run_as_actor_id: None, tag_ids: vec![] };
         policy.validate(actor).unwrap();
         let policy = store.create_policy(actor, &policy).await.unwrap();
-        let run = store.enqueue_backup(actor, policy.id, "Manual").await.unwrap();
+        let run = store.enqueue_backup(actor, policy.id, "Manual", None).await.unwrap();
         let claim = store.claim_backup(Utc::now() - chrono::Duration::hours(1)).await.unwrap().unwrap();
         assert_eq!(claim.run.id, run.id, "use a dedicated acceptance database");
         let plan = BackupSourcePlan { display_name: source.clone(), items: vec![BackupSourceItem::new(platform, source.clone(), None, None)], warnings: vec![], local_directory: None };

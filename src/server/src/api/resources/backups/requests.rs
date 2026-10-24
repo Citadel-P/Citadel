@@ -44,6 +44,7 @@ pub struct BackupPolicyInput {
     pub cron: Option<String>,
     pub time_zone: Option<String>,
     #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    #[serde(serialize_with = "crate::api::resources::webhooks::views::serialize_optional")]
     pub webhook: Option<WebhookConfig>,
     pub keep_last_successful: Option<i32>,
     pub timeout_seconds: Option<i32>,

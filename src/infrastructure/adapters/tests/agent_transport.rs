@@ -274,13 +274,16 @@ async fn persisted_agent_address_rebinds_without_sending_to_the_startup_endpoint
     )
     .await
     .unwrap();
-    let rebound = base.at_address(&new_address).unwrap();
+    let rebound = base.at_address(&new_address, uuid::Uuid::now_v7()).unwrap();
     assert_eq!(base.address(), old_address);
     assert_eq!(rebound.address(), new_address);
     rebound.get_info(&CancellationToken::new()).await.unwrap();
     assert_eq!(old_attempts.load(Ordering::Relaxed), 0);
     assert_eq!(new_attempts.load(Ordering::Relaxed), 2);
-    assert!(base.at_address("file:///var/run/docker.sock").is_err());
+    assert!(
+        base.at_address("file:///var/run/docker.sock", uuid::Uuid::now_v7())
+            .is_err()
+    );
     old_stop.cancel();
     new_stop.cancel();
 }
@@ -438,23 +441,23 @@ async fn private_ca_is_required_preserved_on_retarget_and_checks_the_hostname() 
     )
     .unwrap();
     assert!(untrusted.get_info(&CancellationToken::new()).await.is_err());
-    let trusted = base.at_address(&address).unwrap();
+    let trusted = base.at_address(&address, uuid::Uuid::now_v7()).unwrap();
     trusted.get_info(&CancellationToken::new()).await.unwrap();
-    base.for_address(&address, &CancellationToken::new())
+    base.for_address(&address, uuid::Uuid::now_v7(), &CancellationToken::new())
         .await
         .unwrap()
         .get_info(&CancellationToken::new())
         .await
         .unwrap();
     assert!(
-        base.at_address(&format!("https://127.0.0.1:{port}"))
+        base.at_address(&format!("https://127.0.0.1:{port}"), uuid::Uuid::now_v7())
             .unwrap()
             .get_info(&CancellationToken::new())
             .await
             .is_err()
     );
     assert!(
-        base.at_address(&format!("http://localhost:{port}"))
+        base.at_address(&format!("http://localhost:{port}"), uuid::Uuid::now_v7())
             .is_err()
     );
     stop.cancel();

@@ -78,11 +78,14 @@ impl StackBindingResolverPort for PostgresStackBindingResolver {
                             "Secret binding '{name}' has no Secret reference."
                         ))
                     })?;
-                    self.secrets.resolve(secret_id).await.map_err(|error| {
-                        StackError::Validation(format!(
-                            "Secret '{name}' could not be resolved: {error}"
-                        ))
-                    })?
+                    self.secrets
+                        .resolve(secret_id, "Stack", stack_id)
+                        .await
+                        .map_err(|error| {
+                            StackError::Validation(format!(
+                                "Secret '{name}' could not be resolved: {error}"
+                            ))
+                        })?
                 } else {
                     Zeroizing::new(
                         row.try_get::<Option<String>, _>("value")

@@ -78,6 +78,9 @@ schema_model! {
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
     #[schema(as = WebhookPatch)]
     pub struct WebhookPatchSchema {
+        #[serde(default, skip_serializing)]
+        #[schema(read_only)]
+        pub has_secret: Option<bool>,
         #[serde(default, skip_serializing_if = "citadel_primitives::FieldUpdate::is_missing")]
         # [schema (value_type = bool, required = false)]
         pub enabled: citadel_primitives::FieldUpdate<bool>,

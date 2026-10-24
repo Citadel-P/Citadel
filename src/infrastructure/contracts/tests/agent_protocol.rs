@@ -166,7 +166,11 @@ fn deployment_templates_preserve_transport_and_pool_selection() {
         inbound, build,
         "inbound Build Pool uses the same Direct runtime"
     );
-    assert_eq!(inbound.len(), 1);
+    assert_eq!(inbound.len(), 2);
+    assert_eq!(
+        inbound["CITADEL_AGENT_ID"],
+        "replace-with-generated-agent-id"
+    );
     assert_eq!(
         inbound["CITADEL_CORE_PUBLIC_KEY"],
         "replace-with-citadel-core-hub-public-key"
@@ -181,6 +185,7 @@ fn deployment_templates_preserve_transport_and_pool_selection() {
         assert!(values["CITADEL_CORE_URL"].starts_with("https://citadel.example.com"));
         assert!(values["CITADEL_EDGE_ENROLLMENT_TOKEN"].starts_with("replace-with-"));
         assert!(!values.contains_key("CITADEL_CORE_PUBLIC_KEY"));
+        assert!(!values.contains_key("CITADEL_AGENT_ID"));
     }
     assert!(!edge.contains_key("CITADEL_EDGE_AGENT_PROFILE"));
     assert_eq!(edge_build["CITADEL_EDGE_AGENT_PROFILE"], "edge-build-agent");

@@ -190,6 +190,22 @@ impl MfaStore for PostgresMfaStore {
         Box::pin(async move {
             let authorization = Mutation::enter(&self.pool).await;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
+            lock_user(&mut transaction, commit.settings.user_id).await?;
+            // Validate the old session under the same transaction as enrollment and
+            // replacement. A concurrent logout must never resurrect a session.
+            if let (Some(current), Some(replacement)) =
+                (commit.current_session_id, &commit.replacement_session)
+            {
+                let valid: Option<Uuid> = sqlx::query_scalar("DELETE FROM refreshtokens WHERE id=$1 AND userid=$2 AND createdat=$3 AND expiresat=$4 AND expiresat>$5 RETURNING id")
+                    .bind(current).bind(commit.settings.user_id)
+                    .bind(replacement.session.created_at).bind(replacement.session.expires_at)
+                    .bind(commit.now).fetch_optional(&mut *transaction).await.map_err(storage)?;
+                if valid.is_none() {
+                    return Ok(false);
+                }
+            } else if commit.current_session_id.is_some() || commit.replacement_session.is_some() {
+                return Ok(false);
+            }
             if !consume_setup_session(
                 &mut transaction,
                 commit.setup_session_id,
@@ -208,12 +224,16 @@ impl MfaStore for PostgresMfaStore {
                 &commit.recovery_codes,
             )
             .await?;
-            revoke_other_sessions(
-                &mut transaction,
-                commit.settings.user_id,
-                commit.current_session_id,
-            )
-            .await?;
+            revoke_other_sessions(&mut transaction, commit.settings.user_id, None).await?;
+            if let Some(replacement) = &commit.replacement_session {
+                insert_session(
+                    &mut transaction,
+                    &replacement.session,
+                    replacement.expected_password_hash.as_deref(),
+                    MAXIMUM_SESSIONS_PER_USER,
+                )
+                .await?;
+            }
             insert_activity(&mut transaction, &commit.activity).await?;
             authorization
                 .commit(transaction, Impact::Users(vec![commit.settings.user_id]))

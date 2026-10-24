@@ -65,6 +65,8 @@ impl PlatformConnectorType {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatePlatformInput {
+    /// UUID from Agent setup. Required for Direct Agent registration.
+    pub agent_id: Option<Uuid>,
     pub name: String,
     pub address: Option<String>,
     pub description: Option<String>,
@@ -120,6 +122,7 @@ pub trait PlatformRegistrationRuntime: Send + Sync {
         &self,
         connector_type: PlatformConnectorType,
         address: &str,
+        agent_id: Uuid,
     ) -> Result<Arc<dyn crate::PlatformInfoPort>, PlatformRegistrationError>;
 }
 
@@ -171,7 +174,15 @@ impl PlatformRegistrationService {
         cancellation: &CancellationToken,
     ) -> Result<Uuid, PlatformRegistrationError> {
         let input = validate(input)?;
-        let id = Uuid::now_v7();
+        let id = if input.connector_type == PlatformConnectorType::Agent {
+            input.agent_id.filter(|id| !id.is_nil()).ok_or_else(|| {
+                PlatformRegistrationError::Validation(
+                    "Agent ID from the setup command is required.".into(),
+                )
+            })?
+        } else {
+            Uuid::now_v7()
+        };
         if input.connector_type == PlatformConnectorType::EdgeAgent {
             return self.store.create_pending_edge(actor_id, id, &input).await;
         }
@@ -189,7 +200,7 @@ impl PlatformRegistrationService {
                 "A supported Platform connector type is required.".to_owned(),
             ));
         }
-        let runtime = self.runtime.info_for(input.connector_type, &address)?;
+        let runtime = self.runtime.info_for(input.connector_type, &address, id)?;
         let mut info = runtime.get_info(cancellation).await?;
         validate_platform_type(input.platform_type, info.swarm.as_ref())?;
         normalize_daemon_id(&mut info)?;
@@ -422,6 +433,7 @@ mod tests {
     #[test]
     fn rejects_invalid_names_before_opening_a_runtime() {
         let result = validate(CreatePlatformInput {
+            agent_id: None,
             name: "bad name".to_owned(),
             address: None,
             description: None,
@@ -479,6 +491,7 @@ mod tests {
     #[test]
     fn unsupported_platform_types_are_validation_failures() {
         let result = validate(CreatePlatformInput {
+            agent_id: None,
             name: "kubernetes".to_owned(),
             address: None,
             description: None,

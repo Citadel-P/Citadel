@@ -94,9 +94,9 @@ Supported authentication formats:
 - GitLab legacy token
 - Generic shared secret (sent in the `Authorization: Bearer` header)
 
-When a secret is configured, Citadel validates the provider signature or token before dispatching the webhook.
+Every enabled webhook requires a nonempty secret. Citadel validates the provider signature or token before dispatching the webhook.
 
-GitHub and GitLab-compatible configurations may accept unsigned deliveries when their secret is empty. Generic / CI webhooks always require a non-empty shared secret. This credential is scoped to the configured webhook and is not a Citadel user access token.
+Unsigned deliveries are rejected for every provider, including previously saved empty-secret configurations. This credential is scoped to the configured webhook and is not a Citadel user access token.
 
 It is also not a Citadel Service Account token. A webhook shared secret only
 authenticates delivery to that one listener; it does not receive roles, Team
@@ -403,3 +403,13 @@ Provider cannot reach Citadel:
 - Confirm `/listener/*` is reachable from the provider.
 - Confirm reverse proxy routing allows POST requests to `/listener/*`.
 - Confirm request bodies up to 1 MB are allowed.
+
+### Saved webhook credentials
+
+Read, configuration and realtime responses expose `hasSecret`, never the saved
+secret. The editor displays a newly generated or entered secret so you can copy it
+to the sender before saving. To obtain another value later, rotate the secret and
+update the sender. Omitted secret fields preserve the saved value; clearing a secret
+while its webhook remains enabled is rejected.
+
+For full Swarm service specification updates, an omitted or null webhook secret preserves the saved credential. Remove the webhook with `webhook: null` to clear it, or supply a replacement secret to rotate it. Stack and other resource patches preserve omitted secret fields; explicit null clears them. Enabled webhooks cannot have an empty secret.

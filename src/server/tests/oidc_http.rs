@@ -321,7 +321,32 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
     let callback_uri = format!(
         "/api/v1/authentication/oidc/{provider_id}/callback?code=accepted&state={state}&session_state=keycloak-session&iss=http%3A%2F%2Fkeycloak%3A18080%2Frealms%2Fcitadel-e2e"
     );
-    let callback = send(&fixture.app, Method::GET, &callback_uri, None, None).await;
+    let browser_cookie = correlation_cookie(&start);
+    let unbound = send(&fixture.app, Method::GET, &callback_uri, None, None).await;
+    assert_eq!(unbound.status(), StatusCode::BAD_REQUEST);
+    assert!(cookie_pair(&unbound, "refresh_token").is_none());
+    let other_start = begin_login(&fixture.app, provider_id, "/other").await;
+    let other_cookie = correlation_cookie(&other_start);
+    let swapped = send_cookie(
+        &fixture.app,
+        Method::GET,
+        &callback_uri,
+        None,
+        None,
+        &other_cookie,
+    )
+    .await;
+    assert_eq!(swapped.status(), StatusCode::BAD_REQUEST);
+    assert!(cookie_pair(&swapped, "refresh_token").is_none());
+    let callback = send_cookie(
+        &fixture.app,
+        Method::GET,
+        &callback_uri,
+        None,
+        None,
+        &browser_cookie,
+    )
+    .await;
     assert_eq!(callback.status(), StatusCode::FOUND);
     assert_eq!(location(&callback), "/after-login");
     let refresh_cookie = cookie_pair(&callback, "refresh_token").unwrap();
@@ -355,7 +380,15 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
     .unwrap();
     assert_eq!(linked_user_id, fixture.principal.subject_id);
 
-    let replay = send(&fixture.app, Method::GET, &callback_uri, None, None).await;
+    let replay = send_cookie(
+        &fixture.app,
+        Method::GET,
+        &callback_uri,
+        None,
+        None,
+        &browser_cookie,
+    )
+    .await;
     assert_eq!(replay.status(), StatusCode::BAD_REQUEST);
 
     let actor_id: Uuid = sqlx::query_scalar("SELECT actorid FROM users WHERE id = $1")
@@ -376,7 +409,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         .unwrap()
         .1
         .into_owned();
-    let disabled_callback = send(
+    let disabled_callback = send_cookie(
         &fixture.app,
         Method::GET,
         &format!(
@@ -384,6 +417,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         ),
         None,
         None,
+        &correlation_cookie(&disabled_start),
     )
     .await;
     assert_eq!(disabled_callback.status(), StatusCode::UNAUTHORIZED);
@@ -413,7 +447,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         .unwrap()
         .1
         .into_owned();
-    let claim_callback = send(
+    let claim_callback = send_cookie(
         &fixture.app,
         Method::GET,
         &format!(
@@ -421,6 +455,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         ),
         None,
         None,
+        &correlation_cookie(&claim_start),
     )
     .await;
     assert_eq!(claim_callback.status(), StatusCode::BAD_REQUEST);
@@ -448,7 +483,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         .execute(&fixture.pool)
         .await
         .unwrap();
-    let expired_callback = send(
+    let expired_callback = send_cookie(
         &fixture.app,
         Method::GET,
         &format!(
@@ -456,6 +491,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         ),
         None,
         None,
+        &correlation_cookie(&expired_start),
     )
     .await;
     assert_eq!(expired_callback.status(), StatusCode::BAD_REQUEST);
@@ -471,8 +507,23 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
     let concurrent_callback = format!(
         "/api/v1/authentication/oidc/{provider_id}/callback?code=accepted&state={concurrent_state}"
     );
-    let first = send(&fixture.app, Method::GET, &concurrent_callback, None, None);
-    let second = send(&fixture.app, Method::GET, &concurrent_callback, None, None);
+    let concurrent_cookie = correlation_cookie(&concurrent_start);
+    let first = send_cookie(
+        &fixture.app,
+        Method::GET,
+        &concurrent_callback,
+        None,
+        None,
+        &concurrent_cookie,
+    );
+    let second = send_cookie(
+        &fixture.app,
+        Method::GET,
+        &concurrent_callback,
+        None,
+        None,
+        &concurrent_cookie,
+    );
     let (first, second) = tokio::join!(first, second);
     assert_eq!(
         [first.status(), second.status()]
@@ -504,7 +555,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         .unwrap()
         .1
         .into_owned();
-    let provisioned_callback = send(
+    let provisioned_callback = send_cookie(
         &fixture.app,
         Method::GET,
         &format!(
@@ -512,6 +563,7 @@ async fn oidc_endpoints_preserve_admin_login_link_provision_and_replay_semantics
         ),
         None,
         None,
+        &correlation_cookie(&provisioned_start),
     )
     .await;
     assert_eq!(provisioned_callback.status(), StatusCode::FOUND);
@@ -552,7 +604,7 @@ WHERE login.providerid = $1 AND login.subject = 'provisioned-subject' AND ar.rol
         .unwrap()
         .1
         .into_owned();
-    let closed_callback = send(
+    let closed_callback = send_cookie(
         &fixture.app,
         Method::GET,
         &format!(
@@ -560,6 +612,7 @@ WHERE login.providerid = $1 AND login.subject = 'provisioned-subject' AND ar.rol
         ),
         None,
         None,
+        &correlation_cookie(&closed_start),
     )
     .await;
     assert_eq!(closed_callback.status(), StatusCode::NOT_FOUND);
@@ -870,4 +923,18 @@ fn cookie_pair(response: &Response<Body>, name: &str) -> Option<String> {
 
 async fn json_body(response: Response<Body>) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+}
+
+fn correlation_cookie(response: &Response<Body>) -> String {
+    response
+        .headers()
+        .get_all(axum::http::header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find(|value| value.starts_with("citadel_oidc_"))
+        .expect("OIDC start must set its browser correlation cookie")
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned()
 }

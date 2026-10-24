@@ -160,3 +160,11 @@ impl From<citadel_identity::ProfileMfaRecoveryCodesDetails> for ProfileMfaRecove
         }
     }
 }
+
+#[derive(Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileMfaSetupCompleteView {
+    pub enabled: bool,
+    pub recovery_codes: Vec<String>,
+    pub access_token: Option<String>,
+}

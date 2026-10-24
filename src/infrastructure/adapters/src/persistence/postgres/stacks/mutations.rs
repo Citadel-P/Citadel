@@ -704,6 +704,9 @@ pub(super) async fn copy_duplicate(
     {
         return Err(StackError::NotFound);
     }
+    crate::persistence::postgres::bindings::access::copy_grants(tx, "Stack", id, target)
+        .await
+        .map_err(|error| StackError::Validation(error.to_string()))?;
     sqlx::query("INSERT INTO resourcebindings(id,name,kind,scope,value,secretid,secretdeliverymode,targetpath,resourceid,createdat,updatedat) SELECT gen_random_uuid(),name,kind,scope,value,secretid,secretdeliverymode,targetpath,$2,$3,$3 FROM resourcebindings WHERE resourceid=$1").bind(id).bind(target).bind(Utc::now()).execute(&mut **tx).await.map_err(storage)?;
     Ok(())
 }

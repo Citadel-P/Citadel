@@ -308,7 +308,7 @@ describe('SwarmServiceForm', () => {
           enabled: true,
           provider: WebhookProvider.Generic,
           authScheme: WebhookAuthScheme.BearerToken,
-          secret: 'shared-secret',
+          hasSecret: true,
         },
       },
     } as ManagedSwarmServiceView;

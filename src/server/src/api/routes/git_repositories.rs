@@ -619,7 +619,7 @@ async fn get_git_repository_config(
             git_account_id: repository.git_account_id,
             sync_mode: repository.sync_mode.into(),
             sync_interval_minutes: repository.sync_interval_minutes,
-            webhook: repository.webhook,
+            webhook: repository.webhook.map(Into::into),
             on_clone: repository.on_clone.map(|v| v.into()),
             on_pull: repository.on_pull.map(|v| v.into()),
             tags: repository.tags.into_iter().map(Into::into).collect(),

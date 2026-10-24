@@ -1,7 +1,7 @@
 use super::spec::{AutomationRunStatus, AutomationRunTrigger};
+use crate::api::resources::webhooks::views::WebhookView;
 use chrono::{DateTime, Utc};
 use citadel_primitives::ResourceControlState;
-use citadel_primitives::WebhookConfig;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -19,8 +19,8 @@ pub struct AutomationActionView {
     #[schema(required = true)]
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: String,
-    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
-    pub webhook: Option<WebhookConfig>,
+    #[schema(required = true, value_type = Option<crate::api::resources::webhooks::views::WebhookView>)]
+    pub webhook: Option<WebhookView>,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,
@@ -52,7 +52,7 @@ impl TryFrom<citadel_automation::AutomationAction> for AutomationActionView {
             schedule_enabled: value.schedule_enabled,
             schedule_cron: value.schedule_cron,
             schedule_time_zone: value.schedule_time_zone,
-            webhook: value.webhook,
+            webhook: value.webhook.map(Into::into),
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,
             run_as_actor_id: value.run_as_actor_id,

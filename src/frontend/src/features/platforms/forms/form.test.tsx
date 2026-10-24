@@ -77,7 +77,11 @@ describe('Platform connector setup requests', () => {
       act(() => queryClient.setQueryData(['listPlatforms', {}], { data: { platforms: [localPlatform] } }));
       await waitFor(() => expect(screen.getByTestId('default-connector')).toHaveTextContent('Agent'));
       expect(screen.getByTestId('connector')).toHaveTextContent('Local');
-      expect(queryClient.getQueryState(['getAgentSetup', {}])?.fetchStatus).toBe('idle');
+      expect(
+        queryClient
+          .getQueriesData({ queryKey: ['getAgentSetup'] })
+          .every(([key]) => queryClient.getQueryState(key)?.fetchStatus === 'idle'),
+      ).toBe(true);
     } finally {
       finishCreate();
     }

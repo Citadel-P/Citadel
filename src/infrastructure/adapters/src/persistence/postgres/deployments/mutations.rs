@@ -325,6 +325,14 @@ pub(super) async fn copy_bindings(
     source_id: Uuid,
     destination_id: Uuid,
 ) -> Result<(), DeploymentError> {
+    crate::persistence::postgres::bindings::access::copy_grants(
+        tx,
+        "Deployment",
+        source_id,
+        destination_id,
+    )
+    .await
+    .map_err(|error| DeploymentError::Validation(error.to_string()))?;
     sqlx::query(
         r#"INSERT INTO resourcebindings(
                id,createdat,kind,name,resourceid,scope,secretdeliverymode,secretid,targetpath,updatedat,value)

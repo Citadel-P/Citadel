@@ -31,7 +31,14 @@ impl BindingRepository for PostgresBindingRepository {
                 .ok_or_else(|| BindingError::Validation("Binding scope is required.".into()))?;
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             ensure_binding_scope_exists_tx(&mut transaction, scope, binding.resource_id).await?;
-            validate_binding_references(&mut transaction, binding.kind, binding.secret_id).await?;
+            validate_binding_references(
+                &mut transaction,
+                binding.kind,
+                binding.secret_id,
+                scope,
+                binding.resource_id,
+            )
+            .await?;
             sqlx::query(r#"INSERT INTO resourcebindings
                 (id,name,kind,scope,resourceid,value,secretid,secretdeliverymode,targetpath,createdat,updatedat)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)"#)
@@ -54,7 +61,14 @@ impl BindingRepository for PostgresBindingRepository {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             ensure_binding_scope_exists_tx(&mut transaction, scope, resource_id).await?;
-            validate_binding_references(&mut transaction, binding.kind, binding.secret_id).await?;
+            validate_binding_references(
+                &mut transaction,
+                binding.kind,
+                binding.secret_id,
+                scope,
+                resource_id,
+            )
+            .await?;
             let affected = sqlx::query(
                 r#"UPDATE resourcebindings SET name=$4,kind=$5,value=$6,
                 secretid=$7,secretdeliverymode=$8,targetpath=$9,updatedat=$10
@@ -106,39 +120,12 @@ impl BindingRepository for PostgresBindingRepository {
 
     fn list_secret_definitions<'a>(
         &'a self,
-        scope: Option<ResourceBindingScope>,
-        resource_id: Option<Uuid>,
+        scope: citadel_bindings::SecretUseScope,
     ) -> BoxFuture<'a, Result<Vec<SecretDefinition>, BindingError>> {
         Box::pin(async move {
-            if scope.is_some() != resource_id.is_some() {
-                return Err(BindingError::Validation(
-                    "scope and resourceId must be provided together.".into(),
-                ));
-            }
-            let rows = if let (Some(scope), Some(resource_id)) = (scope, resource_id) {
-                sqlx::query(
-                    r#"SELECT DISTINCT secret.* FROM secretdefinitions secret
-                    JOIN resourcebindings binding ON binding.secretid=secret.id
-                    WHERE (binding.scope='Global' AND binding.resourceid IS NULL)
-                       OR (binding.scope=$1 AND binding.resourceid=$2)
-                    ORDER BY secret.name, secret.id"#,
-                )
-                .bind(scope.as_database_str())
-                .bind(resource_id)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?
-            } else {
-                sqlx::query(
-                    r#"SELECT DISTINCT secret.* FROM secretdefinitions secret
-                    JOIN resourcebindings binding ON binding.secretid=secret.id
-                    WHERE binding.scope='Global' AND binding.resourceid IS NULL
-                    ORDER BY secret.name, secret.id"#,
-                )
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?
-            };
+            let (scope, resource) = super::access::database_parts(scope)?;
+            let rows = sqlx::query("SELECT secret.* FROM secretdefinitions secret WHERE EXISTS(SELECT 1 FROM secretusegrants use_grant WHERE use_grant.secretid=secret.id AND ((use_grant.scope='Global' AND use_grant.resourceid='00000000-0000-0000-0000-000000000000') OR (use_grant.scope=$1 AND use_grant.resourceid=$2))) ORDER BY secret.name,secret.id")
+                .bind(scope).bind(resource).fetch_all(&self.pool).await.map_err(storage)?;
             rows.into_iter().map(map_secret_definition).collect()
         })
     }
@@ -147,6 +134,7 @@ impl BindingRepository for PostgresBindingRepository {
         &'a self,
         name: &'a str,
         protected_value: &'a str,
+        scope: citadel_bindings::SecretUseScope,
     ) -> BoxFuture<'a, Result<SecretDefinition, BindingError>> {
         Box::pin(async move {
             let id = Uuid::now_v7();
@@ -156,6 +144,7 @@ impl BindingRepository for PostgresBindingRepository {
                 .bind(id).bind(name).bind(now).execute(&mut *transaction).await.map_err(database_error)?;
             sqlx::query("INSERT INTO internalsecretvalues (secretid,encryptedvalue,createdat,updatedat) VALUES ($1,$2,$3,$3)")
                 .bind(id).bind(protected_value).bind(now).execute(&mut *transaction).await.map_err(storage)?;
+            super::access::grant(&mut transaction, id, scope).await?;
             transaction.commit().await.map_err(storage)?;
             get_secret_definition(&self.pool, id).await
         })
@@ -168,18 +157,26 @@ impl BindingRepository for PostgresBindingRepository {
         Box::pin(async move {
             let id = Uuid::now_v7();
             let now = Utc::now();
+            let mut transaction = self.pool.begin().await.map_err(storage)?;
             let affected=sqlx::query(r#"INSERT INTO secretdefinitions
                 (id,name,providertype,providerid,externalpath,externalkey,externalversion,createdat,updatedat)
                 SELECT $1,$2,'VaultCompatibleKvV2',$3,$4,$5,$6,$7,$7
                 WHERE EXISTS (SELECT 1 FROM secretproviders WHERE id=$3)"#)
                 .bind(id).bind(input.name.trim()).bind(input.provider_id).bind(input.external_path.trim())
                 .bind(input.external_key.trim()).bind(input.external_version).bind(now)
-                .execute(&self.pool).await.map_err(database_error)?.rows_affected();
+                .execute(&mut *transaction).await.map_err(database_error)?.rows_affected();
             if affected == 0 {
                 return Err(BindingError::Validation(
                     "Secret provider does not exist.".into(),
                 ));
             }
+            super::access::grant(
+                &mut transaction,
+                id,
+                citadel_bindings::SecretUseScope::Global,
+            )
+            .await?;
+            transaction.commit().await.map_err(storage)?;
             get_secret_definition(&self.pool, id).await
         })
     }

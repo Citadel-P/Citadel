@@ -135,8 +135,11 @@ fn authentication_urls_and_mfa_cookie_identifiers_are_not_debug_output() {
     };
     assert!(!format!("{setup:?} {challenge:?} {action:?} {verify:?}").contains(&id.to_string()));
     let start = OidcLoginStart {
+        state: "SYNTHETIC_STATE".into(),
+        browser_token: "SYNTHETIC_BROWSER_TOKEN".into(),
         authorization_url: "https://issuer.test?state=SYNTHETIC_STATE".into(),
     };
     assert!(!format!("{start:?}").contains("SYNTHETIC_STATE"));
     assert!(start.authorization_url.contains("SYNTHETIC_STATE"));
+    assert!(!format!("{start:?}").contains("SYNTHETIC_BROWSER_TOKEN"));
 }

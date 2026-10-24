@@ -39,7 +39,7 @@ impl BuildPoolChecker for AgentBuildPoolChecker {
                         BuildError::Validation("Signed Agent transport is not configured.".into())
                     })?;
                     let client = configured
-                        .for_address(&endpoint, cancellation)
+                        .for_address(&endpoint, pool.id, cancellation)
                         .await
                         .map_err(|error| BuildError::Validation(error.to_string()))?;
                     client.check_build_host(cancellation).await

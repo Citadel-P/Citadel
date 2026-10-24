@@ -4,8 +4,8 @@ mod cli;
 pub mod repositories;
 pub use accounts::{
     CreateGitAccount, GitAccount, GitAccountConfiguration, GitAccountError, GitAccountRepository,
-    GitAccountService, GitAuthConfiguration, GitAuthType, GitCredentialProtector, GitTransport,
-    StoredGitAccount, UpdateGitAccount,
+    GitAccountService, GitAuthConfiguration, GitAuthConfigurationPatch, GitAuthMetadata,
+    GitAuthType, GitCredentialProtector, GitTransport, StoredGitAccount, UpdateGitAccount,
 };
 pub use cli::{
     GitBlob, GitChangedPath, GitChangedPathListing, GitChangedPathStatus, GitCli, GitEntryType,

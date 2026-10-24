@@ -18,3 +18,5 @@ mod repository;
 pub use repository::PostgresBindingRepository;
 
 pub mod secret_resolver;
+
+pub(crate) mod access;

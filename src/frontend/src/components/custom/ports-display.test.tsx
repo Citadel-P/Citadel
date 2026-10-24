@@ -18,7 +18,7 @@ it('renders published ports from the Citadel contract and opens the port link', 
   );
   expect(screen.getAllByRole('button', { name: '8080' })).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: '8080' }));
-  expect(open).toHaveBeenCalledWith('http://localhost:8080', '_blank');
+  expect(open).toHaveBeenCalledWith('http://localhost:8080', '_blank', 'noopener,noreferrer');
   open.mockRestore();
 });
 

@@ -47,9 +47,19 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
     let workload = format!("citadel-acceptance-terminal-{suffix}");
     let mut key = [0; 32];
     getrandom::fill(&mut key).unwrap();
-    let signer = AgentRequestSigner::from_bytes(&key);
+    let agent_id = Uuid::now_v7();
+    let signer = AgentRequestSigner::from_bytes(&key).for_agent(agent_id);
     key.fill(0);
     let public_key = format!("CITADEL_CORE_PUBLIC_KEY={}", signer.public_key_base64());
+    let host_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let host_port = host_listener.local_addr().unwrap().port();
+    let address = if std::env::var_os("CITADEL_TEST_AGENT_FROM_HOST").is_some() {
+        format!("http://127.0.0.1:{host_port}")
+    } else {
+        format!("http://{agent}:9000")
+    };
+    drop(host_listener);
+
     let result = AssertUnwindSafe(async {
         docker(&[
             "run",
@@ -59,11 +69,13 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
             "--network",
             &network,
             "--publish",
-            "127.0.0.1::9000",
+            &format!("127.0.0.1:{host_port}:9000"),
             "--mount",
             "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock",
             "--env",
             &public_key,
+            "--env",
+            &format!("CITADEL_AGENT_ID={agent_id}"),
             "--env",
             "CITADEL_AGENT_TLS_MODE=Disabled",
             &image,
@@ -86,12 +98,6 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
         ])
         .await;
         let id = String::from_utf8(id).unwrap().trim().to_owned();
-        let address = if std::env::var_os("CITADEL_TEST_AGENT_FROM_HOST").is_some() {
-            let binding = docker(&["port", &agent, "9000/tcp"]).await;
-            format!("http://{}", String::from_utf8(binding).unwrap().trim())
-        } else {
-            format!("http://{agent}:9000")
-        };
         let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
         let client = loop {
             if let Ok(client) =
@@ -112,7 +118,7 @@ async fn published_agent_authenticates_bounded_logs_and_interactive_terminal() {
         };
         let bad = AgentClient::connect(
             &address,
-            AgentRequestSigner::from_bytes(&[9; 32]),
+            AgentRequestSigner::from_bytes(&[9; 32]).for_agent(agent_id),
             Duration::from_secs(3),
             true,
         )

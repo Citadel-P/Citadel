@@ -60,6 +60,7 @@ impl SecretService {
         &self,
         name: &str,
         value: &str,
+        scope: SecretUseScope,
     ) -> Result<SecretDefinition, BindingError> {
         validate_name(name, "Secret")?;
         if value.is_empty() || value.len() > 256 * 1024 {
@@ -69,7 +70,7 @@ impl SecretService {
         }
         let protected = self.protector.protect(value.as_bytes())?;
         self.store
-            .create_internal_secret(name.trim(), &protected)
+            .create_internal_secret(name.trim(), &protected, scope)
             .await
     }
 

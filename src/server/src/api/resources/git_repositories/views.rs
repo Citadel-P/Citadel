@@ -1,4 +1,5 @@
 use crate::api::error::ApiError;
+use crate::api::resources::webhooks::views::WebhookView;
 use crate::api::resources::{
     activities::views::LatestActivityView,
     capabilities::ResourceCapabilitiesView,
@@ -11,7 +12,6 @@ use chrono::{DateTime, Utc};
 use citadel_git::RemoteBranch;
 use citadel_identity::{ActorPrincipal, IdentityService};
 use citadel_primitives::ResourceControlState;
-use citadel_primitives::WebhookConfig;
 use citadel_primitives::{PermissionLevel, ResourceType};
 use serde::Serialize;
 use uuid::Uuid;
@@ -297,8 +297,8 @@ pub struct GitRepositoryView {
     pub sync_mode: GitRepositorySyncMode,
     #[schema(required = true)]
     pub sync_interval_minutes: Option<i32>,
-    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
-    pub webhook: Option<WebhookConfig>,
+    #[schema(required = true, value_type = Option<crate::api::resources::webhooks::views::WebhookView>)]
+    pub webhook: Option<WebhookView>,
     #[schema(required = true)]
     pub on_clone: Option<RepoCommand>,
     #[schema(required = true)]
@@ -330,7 +330,7 @@ impl TryFrom<citadel_git::GitRepository> for GitRepositoryView {
             git_account_id: value.git_account_id,
             sync_mode: value.sync_mode.into(),
             sync_interval_minutes: value.sync_interval_minutes,
-            webhook: value.webhook,
+            webhook: value.webhook.map(Into::into),
             on_clone: value.on_clone.map(|v| v.into()),
             on_pull: value.on_pull.map(|v| v.into()),
             status: value.status,
@@ -404,8 +404,8 @@ pub(crate) struct GitRepositoryConfigResponse {
     pub(crate) sync_mode: GitRepositorySyncMode,
     #[schema(required = true)]
     pub(crate) sync_interval_minutes: Option<i32>,
-    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
-    pub(crate) webhook: Option<WebhookConfig>,
+    #[schema(required = true, value_type = Option<crate::api::resources::webhooks::views::WebhookView>)]
+    pub(crate) webhook: Option<WebhookView>,
     #[schema(required = true)]
     pub(crate) on_clone: Option<RepoCommand>,
     #[schema(required = true)]

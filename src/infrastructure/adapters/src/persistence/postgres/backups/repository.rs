@@ -163,8 +163,9 @@ impl BackupPersistence for PostgresBackupPersistence {
         actor: ActorId,
         policy_id: Uuid,
         trigger: &str,
+        expected_row_version: Option<i64>,
     ) -> BoxFuture<'_, Result<BackupRun, BackupError>> {
-        self.enqueue_backup_impl(actor, policy_id, trigger)
+        self.enqueue_backup_impl(actor, policy_id, trigger, expected_row_version)
     }
 
     fn enqueue_webhook<'a>(

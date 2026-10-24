@@ -84,3 +84,14 @@ pub struct SecretProvider {
     pub mount_path: String,
     pub created_at: DateTime<Utc>,
 }
+
+/// Scope authorized by Core before a Secret is created; never supplied as a raw client grant.
+#[derive(Debug, Clone, Copy)]
+pub enum SecretUseScope {
+    Global,
+    Resource {
+        resource_type: citadel_primitives::ResourceType,
+        resource_id: Uuid,
+    },
+    Creator(citadel_primitives::ActorId),
+}

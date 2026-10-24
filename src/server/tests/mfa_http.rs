@@ -113,6 +113,18 @@ async fn mfa_endpoints_preserve_login_enrollment_recovery_replay_and_reset_seman
 
     let enrollment_login = login(&fixture.app, &fixture.principal.name).await;
     let refresh = cookie_value(&enrollment_login, REFRESH_COOKIE).unwrap();
+    let old_access = json_body(enrollment_login).await["accessToken"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let old_session = fixture
+        .identity
+        .list_active_sessions(fixture.principal.subject_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .max_by_key(|session| session.created_at)
+        .unwrap();
     let confirmed = send_json(
         &fixture.app,
         Method::POST,
@@ -123,7 +135,67 @@ async fn mfa_endpoints_preserve_login_enrollment_recovery_replay_and_reset_seman
     )
     .await;
     assert_eq!(confirmed.status(), StatusCode::OK);
-    let recovery_codes = json_body(confirmed).await["recoveryCodes"]
+    let rotated = cookie_value(&confirmed, REFRESH_COOKIE).unwrap();
+    assert_ne!(rotated, refresh);
+    let confirmed = json_body(confirmed).await;
+    let access = confirmed["accessToken"].as_str().unwrap();
+    assert!(
+        fixture
+            .identity
+            .authenticate_bearer(&old_access)
+            .await
+            .is_err()
+    );
+    assert!(fixture.identity.authenticate_bearer(access).await.is_ok());
+    assert!(
+        fixture
+            .identity
+            .refresh(
+                refresh.split_once('=').unwrap().1,
+                citadel_identity::SessionMetadata {
+                    user_agent: None,
+                    ip_address: None
+                }
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        fixture
+            .identity
+            .refresh(
+                rotated.split_once('=').unwrap().1,
+                citadel_identity::SessionMetadata {
+                    user_agent: None,
+                    ip_address: None
+                }
+            )
+            .await
+            .is_ok()
+    );
+    let sessions = fixture
+        .identity
+        .list_active_sessions(fixture.principal.subject_id)
+        .await
+        .unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_ne!(sessions[0].id, old_session.id);
+    assert_eq!(sessions[0].created_at, old_session.created_at);
+    assert_eq!(sessions[0].expires_at, old_session.expires_at);
+    // Replaying enrollment cannot mint another session or replace the recovery codes.
+    let replay = send_json(
+        &fixture.app,
+        Method::POST,
+        "/api/v1/profile/mfa/setup/confirm",
+        json!({"code":"111111"}),
+        Some(fixture.principal.clone()),
+        Some(&rotated),
+    )
+    .await;
+    assert_eq!(replay.status(), StatusCode::BAD_REQUEST);
+    assert!(cookie_value(&replay, REFRESH_COOKIE).is_none());
+    assert!(fixture.identity.authenticate_bearer(access).await.is_ok());
+    let recovery_codes = confirmed["recoveryCodes"]
         .as_array()
         .unwrap()
         .iter()

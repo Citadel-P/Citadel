@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSetupInstructions {
+    pub agent_id: uuid::Uuid,
     pub hub_public_key: String,
     pub environment: BTreeMap<String, String>,
     pub agent_image: String,
@@ -14,8 +15,23 @@ pub struct AgentSetupInstructions {
 
 impl AgentSetupInstructions {
     pub fn new(hub_public_key: String, agent_image: String, requires_tls: bool) -> Self {
+        Self::for_agent(
+            hub_public_key,
+            agent_image,
+            requires_tls,
+            uuid::Uuid::now_v7(),
+        )
+    }
+
+    pub fn for_agent(
+        hub_public_key: String,
+        agent_image: String,
+        requires_tls: bool,
+        agent_id: uuid::Uuid,
+    ) -> Self {
         let mut environment =
             BTreeMap::from([("CITADEL_CORE_PUBLIC_KEY".into(), hub_public_key.clone())]);
+        environment.insert("CITADEL_AGENT_ID".into(), agent_id.to_string());
         if requires_tls {
             environment.extend([
                 ("CITADEL_AGENT_TLS_MODE".into(), "Direct".into()),
@@ -48,6 +64,7 @@ impl AgentSetupInstructions {
         lines.push(format!("  \"{}\"", quote(&agent_image)));
         let docker_run_command = lines.join(" \\\n");
         Self {
+            agent_id,
             hub_public_key,
             environment,
             agent_image,

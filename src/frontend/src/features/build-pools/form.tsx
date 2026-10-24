@@ -257,6 +257,18 @@ function BuildPoolForm({
     },
   );
   const edgeStatus = edgeStatusData?.data;
+  const { data: directSetup } = useRead(
+    'getBuildAgentPoolAgentSetup',
+    { id: resource?.id ?? '' },
+    {
+      enabled:
+        mode === 'edit' &&
+        Boolean(resource?.id) &&
+        provider === BuildAgentPoolProvider.SelfManagedVm &&
+        !isEdgePool &&
+        !disabled,
+    },
+  );
   const regenerateEnrollment = useCallback(async () => {
     if (!id) return;
     const result = await createEdgeEnrollment.mutateAsync({ id });
@@ -390,6 +402,33 @@ function BuildPoolForm({
                 disabled,
               )
             : awsEc2Fields(awsSpec, setAwsSpec, true),
+          ...(provider === BuildAgentPoolProvider.SelfManagedVm && !isEdgePool
+            ? [
+                defineGroupField<BuildPoolInput>({
+                  id: 'direct-agent-setup',
+                  label: 'Agent Setup',
+                  description:
+                    mode === 'add'
+                      ? 'Save this pool, then open its configuration to copy the Agent install command.'
+                      : 'Run this command on the builder. Its unique Agent ID is already configured. Adjust the published port and TLS paths for this host.',
+                  items: directSetup?.data
+                    ? [
+                        defineField({
+                          id: 'direct-agent-command',
+                          key: 'providerSpec',
+                          label: 'Docker Command',
+                          render: () => (
+                            <SetupCommandEditor
+                              value={directSetup.data.dockerRunCommand}
+                              filename="citadel-build-agent.sh"
+                            />
+                          ),
+                        }),
+                      ]
+                    : [],
+                }),
+              ]
+            : []),
         ],
       }),
       Limits: defineSection<BuildPoolInput>({
@@ -442,6 +481,8 @@ function BuildPoolForm({
     }),
     [
       awsSpec,
+      directSetup,
+      isEdgePool,
       createEdgeEnrollment.isPending,
       disabled,
       edgeStatus,

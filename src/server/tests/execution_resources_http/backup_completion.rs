@@ -476,7 +476,7 @@ pub(super) async fn verify_streams(
         .bind(policy_uuid).execute(pool).await.unwrap();
     let legacy = backups
         .store()
-        .enqueue_backup(admin.actor_id, policy_uuid, "Manual")
+        .enqueue_backup(admin.actor_id, policy_uuid, "Manual", None)
         .await
         .unwrap();
     backups

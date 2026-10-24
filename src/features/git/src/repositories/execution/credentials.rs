@@ -12,7 +12,7 @@ impl GitRepositoryExecutionService {
         };
         let account = self
             .accounts
-            .get_config(account_id)
+            .credentials(account_id)
             .await
             .map_err(|_| GitRepositoryExecutionError::Credential)?;
         let ssh_username = match &account.configuration {

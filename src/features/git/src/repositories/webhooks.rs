@@ -84,7 +84,7 @@ pub fn authenticate_webhook(
                 .is_some_and(|value| fixed_time(value.as_bytes(), secret.as_bytes()))
         }
         WebhookAuthScheme::GitLabSignedToken => validate_gitlab_signed(headers, body, secret),
-        WebhookAuthScheme::GitHubHmacSha256 if secret.is_empty() => true,
+        WebhookAuthScheme::GitHubHmacSha256 if secret.trim().is_empty() => false,
         WebhookAuthScheme::GitHubHmacSha256 => {
             let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
                 .map_err(|_| WebhookError::Authentication)?;
@@ -360,14 +360,20 @@ mod tests {
 
     #[test]
     fn provider_events_do_not_dispatch_deleted_branches_tags_or_non_push_events() {
-        let config = webhook("GitHub", "GitHubHmacSha256", "");
+        let config = webhook("GitHub", "GitHubHmacSha256", "key");
         for body in [
             br#"{"ref":"refs/heads/main","deleted":true}"#.as_slice(),
             br#"{"ref":"refs/tags/main"}"#,
             b"{}",
         ] {
+            let mut mac = Hmac::<Sha256>::new_from_slice(b"key").unwrap();
+            mac.update(body);
+            let headers = vec![(
+                "x-hub-signature-256".into(),
+                format!("sha256={}", hex_lower(&mac.finalize().into_bytes())),
+            )];
             assert!(
-                evaluate_webhook(&config, "github", &[], body)
+                evaluate_webhook(&config, "github", &headers, body)
                     .unwrap()
                     .is_some()
             );
@@ -438,6 +444,21 @@ mod tests {
                 "https://example.test/other-team/repo.git",
                 &payload
             ));
+        }
+    }
+
+    #[test]
+    fn enabled_webhooks_fail_closed_without_a_secret_even_for_persisted_records() {
+        for secret in [None, Some("".into()), Some("   ".into())] {
+            let hook = WebhookConfig {
+                enabled: true,
+                secret,
+                ..Default::default()
+            };
+            assert!(hook.validate().is_err());
+            assert!(active_webhook(Some(&hook)).is_err());
+            assert!(authenticate_webhook(&hook, &[], b"{}").is_err());
+            assert!(evaluate_webhook(&hook, "GitHub", &[], b"{}").is_err());
         }
     }
 }

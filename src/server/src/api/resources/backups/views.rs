@@ -1,12 +1,12 @@
 use super::spec::*;
 use crate::api::resources::capabilities::ResourceCapabilitiesView;
+use crate::api::resources::webhooks::views::WebhookView;
 use crate::api::{error::ApiError, resource_access::capabilities_from_permission};
 use chrono::{DateTime, Utc};
 use citadel_identity::{ActorPrincipal, IdentityService};
 use citadel_primitives::PlatformStatus;
 use citadel_primitives::ResourceControlState;
 use citadel_primitives::ResourceType;
-use citadel_primitives::WebhookConfig;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -90,8 +90,8 @@ pub struct BackupPolicyView {
     pub cron: Option<String>,
     #[schema(required = true)]
     pub time_zone: Option<String>,
-    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
-    pub webhook: Option<WebhookConfig>,
+    #[schema(required = true, value_type = Option<crate::api::resources::webhooks::views::WebhookView>)]
+    pub webhook: Option<WebhookView>,
     pub keep_last_successful: i32,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
@@ -128,7 +128,7 @@ impl TryFrom<citadel_backups::BackupPolicy> for BackupPolicyView {
             enabled: value.enabled,
             cron: value.cron,
             time_zone: value.time_zone,
-            webhook: value.webhook,
+            webhook: value.webhook.map(Into::into),
             keep_last_successful: value.keep_last_successful,
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,

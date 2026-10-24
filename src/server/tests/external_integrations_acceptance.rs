@@ -194,6 +194,7 @@ async fn forgejo_push_applies_git_stack_with_vault_secret_and_redacted_audit() {
         let secret = Uuid::now_v7();
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype,providerid,externalpath,externalkey,externalversion) VALUES($1,$2,'VaultCompatibleKvV2',$3,'citadel/acceptance','api_key',1)")
             .bind(secret).bind(secret.to_string()).bind(provider.id).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global','00000000-0000-0000-0000-000000000000')").bind(secret).execute(&pool).await.unwrap();
         let stacks = Arc::new(StackService::new(
 Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),Arc::new(PostgresStackRepository::new(pool.clone())),
             Arc::new(StackRuntimeRouter::new(pool.clone(),docker.clone(),None)),

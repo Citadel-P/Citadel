@@ -55,6 +55,8 @@ pub struct OidcDiscoveryDetails {
 #[derive(Clone, PartialEq, Eq)]
 pub struct OidcLoginStart {
     pub authorization_url: String,
+    pub state: String,
+    pub browser_token: String,
 }
 
 #[derive(Debug, Clone)]

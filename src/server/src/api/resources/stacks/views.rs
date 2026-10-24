@@ -21,8 +21,8 @@ pub struct StackReleaseView {
     #[schema(value_type = crate::api::resources::schema_models::stacks::StackReleaseStatusSchema)]
     pub status: StackReleaseStatus,
     pub version: String,
-    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
-    pub spec: StackSpec,
+    #[schema(value_type = crate::api::resources::stacks::spec_view::StackSpecView)]
+    pub spec: super::spec_view::StackSpecView,
     #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackReleaseSourceSchema>)]
     pub source: Option<StackReleaseSource>,
     pub resource_bindings: Option<Vec<ResourceBindingSnapshot>>,
@@ -46,7 +46,7 @@ impl TryFrom<citadel_stacks::StackRelease> for StackReleaseView {
             platform_id: value.platform_id,
             status: value.status,
             version: value.version,
-            spec: value.spec,
+            spec: value.spec.into(),
             source: value.source,
             resource_bindings: value
                 .resource_bindings
@@ -124,8 +124,8 @@ pub struct StackView {
     pub has_copied_storage: bool,
     #[schema(required = true)]
     pub version: Option<String>,
-    #[schema(required = true, value_type = Option<crate::api::resources::schema_models::stacks::StackSpecSchema>)]
-    pub spec: Option<StackSpec>,
+    #[schema(required = true, value_type = Option<crate::api::resources::stacks::spec_view::StackSpecView>)]
+    pub spec: Option<super::spec_view::StackSpecView>,
     #[schema(required = true, value_type = Option<crate::api::resources::schema_models::stacks::StackReleaseSourceSchema>)]
     pub source: Option<StackReleaseSource>,
     #[schema(required = true)]
@@ -167,7 +167,7 @@ impl TryFrom<AuthorizedResource<citadel_stacks::Stack>> for StackView {
             has_copied_storage: value.has_copied_storage,
             platform_id: value.platform_id,
             version: value.version,
-            spec: value.spec,
+            spec: value.spec.map(Into::into),
             source: value.source,
             resource_bindings: value
                 .resource_bindings
@@ -208,8 +208,8 @@ pub struct StackConfigView {
     pub description: Option<String>,
     #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub stack_source: StackSource,
-    #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
-    pub spec: StackSpec,
+    #[schema(value_type = crate::api::resources::stacks::spec_view::StackSpecView)]
+    pub spec: super::spec_view::StackSpecView,
     #[schema(value_type = crate::api::resources::schema_models::stacks::StackUpdateStateSchema)]
     pub stack_update_state: StackUpdateState,
     #[schema(value_type = crate::api::resources::schema_models::stacks::StackDriftPolicySchema)]
@@ -226,7 +226,7 @@ impl From<citadel_stacks::StackConfig> for StackConfigView {
             platform_type: value.platform_type.into(),
             description: value.description,
             stack_source: value.stack_source,
-            spec: value.spec,
+            spec: value.spec.into(),
             stack_update_state: value.stack_update_state,
             drift_policy: value.drift_policy,
             row_version: value.row_version,

@@ -19,6 +19,7 @@ pub(super) async fn verify(
     verify_capabilities(app, db, principal, id).await;
     verify_edits(app, db, builds, principal, id).await;
     verify_health_persistence(db, builds, id).await;
+    verify_direct_setup(app, db, principal, id).await;
     let uri = format!("/api/v1/buildAgentPools/{id}/test");
     assert_eq!(
         request(app, Method::POST, &uri, None, None).await.status(),
@@ -719,4 +720,57 @@ pub(super) async fn verify_unsupported_admission(
         .status(),
         StatusCode::NO_CONTENT
     );
+}
+
+async fn verify_direct_setup(
+    app: &Router,
+    db: &sqlx::PgPool,
+    principal: &ActorPrincipal,
+    id: Uuid,
+) {
+    let uri = format!("/api/v1/buildAgentPools/{id}/agent/setup");
+    assert_eq!(
+        request(app, Method::GET, &uri, None, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let mut denied = principal.clone();
+    denied.roles.clear();
+    denied.actor_id = ActorId::new(Uuid::now_v7());
+    assert_eq!(
+        request(app, Method::GET, &uri, Some(denied), None)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    // Edge Pools use enrollment, never a Direct installation command.
+    assert_eq!(
+        request(app, Method::GET, &uri, Some(principal.clone()), None)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let original: Value =
+        sqlx::query_scalar("SELECT providerspec FROM buildagentpools WHERE id=$1")
+            .bind(id)
+            .fetch_one(db)
+            .await
+            .unwrap();
+    sqlx::query("UPDATE buildagentpools SET providerspec=$2 WHERE id=$1").bind(id).bind(json!({"$type":"SelfManagedVm","connectionMode":"InboundAgent","endpoint":"http://localhost:9001"})).execute(db).await.unwrap();
+    let response = request(app, Method::GET, &uri, Some(principal.clone()), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let setup = response_json(response).await;
+    assert_eq!(setup["agentId"], id.to_string());
+    assert_eq!(setup["environment"]["CITADEL_AGENT_ID"], id.to_string());
+    assert!(
+        setup["dockerRunCommand"]
+            .as_str()
+            .unwrap()
+            .contains(&id.to_string())
+    );
+    sqlx::query("UPDATE buildagentpools SET providerspec=$2 WHERE id=$1")
+        .bind(id)
+        .bind(original)
+        .execute(db)
+        .await
+        .unwrap();
 }

@@ -290,11 +290,19 @@ currently configured.
 ## Database schema changes
 
 The migration catalog contains a single consolidated `0001_initial.sql`, including
-workload statistics storage and alert observation ordering. This baseline replaces
+workload statistics storage, alert observation ordering, and secret-use grants. This baseline replaces
 the separate workload migration and requires a newly created database. It cannot
 upgrade a database that recorded the previous `0001` or `0002` checksums.
 Recreating a database is a separate, explicit operator action; the development
 task never resets storage.
+
+For an explicitly authorized pre-release baseline reset, restore captured product
+records into a fresh database while retaining its new migration journal and the
+original encryption/signing keys. If the capture predates `secretusegrants`, run
+the baseline's marked `RESTORE SECRET USE GRANTS` block after loading records;
+otherwise retain captured grants exactly, including revocations. Rehearse the
+import before cutover. Normal deployments must continue to preserve applied
+migration checksums.
 
 Preserve applied migrations, including `0001_initial.sql`. Add each schema
 change as the next numbered SQL migration under `src/infrastructure/database/generated/`.

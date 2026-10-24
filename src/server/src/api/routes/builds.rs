@@ -80,6 +80,7 @@ pub(crate) fn documented_pool_routes() -> utoipa_axum::router::OpenApiRouter<Bui
         .normalized_routes(utoipa_axum::routes!(list_pools))
         .normalized_routes(utoipa_axum::routes!(create_pool))
         .normalized_routes(utoipa_axum::routes!(get_pool))
+        .normalized_routes(utoipa_axum::routes!(pool_agent_setup))
         .normalized_routes(utoipa_axum::routes!(update_pool))
         .normalized_routes(utoipa_axum::routes!(rename_pool))
         .normalized_routes(utoipa_axum::routes!(update_pool_metadata))
@@ -1535,5 +1536,67 @@ async fn duplicate_draft(
             draft,
         })
         .into_response(),
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/buildAgentPools/{id}/agent/setup",
+    operation_id = "getBuildAgentPoolAgentSetup",
+    tag = "BuildAgentPools",
+    summary = "Get Direct Build Agent installation instructions",
+    responses(
+        (status = 200, description = "Success", body = crate::api::resources::platforms::views::AgentSetupView),
+        crate::openapi::errors::ResourceErrors
+    ),
+    params(("id" = uuid::Uuid, Path)),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn pool_agent_setup(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    ApiPath(id): ApiPath<Uuid>,
+    setup: Option<Extension<crate::api::routes::platforms::AgentSetupContext>>,
+    headers: HeaderMap,
+) -> HttpResult {
+    let principal = actor(principal, &headers)?;
+    authorize_for(
+        &state,
+        &principal,
+        ResourceType::BuildAgentPool,
+        id,
+        PermissionLevel::Write,
+        &headers,
+    )
+    .await?;
+    let pool = api_result(
+        state.builds.store().get_pool(id).await.map_err(map_error),
+        &headers,
+    )?;
+    if !matches!(
+        citadel_builds::pool_target(&pool.provider_spec),
+        Ok(citadel_builds::BuildPoolTarget::Inbound(_))
+    ) {
+        return api_result(
+            Err(ApiError::Validation(
+                "Direct Agent setup requires an inbound Build Pool.".into(),
+            )),
+            &headers,
+        );
+    }
+    let Extension(setup) = api_result(
+        setup.ok_or_else(|| ApiError::Storage("Agent setup is not configured.".into())),
+        &headers,
+    )?;
+    let instructions = citadel_platforms::agent_setup::AgentSetupInstructions::for_agent(
+        setup.signer.public_key_base64(),
+        setup.image,
+        setup.requires_tls,
+        id,
+    );
+    Ok(no_store(
+        Json(crate::api::resources::platforms::views::AgentSetupView::from(instructions))
+            .into_response(),
     ))
 }

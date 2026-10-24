@@ -98,13 +98,31 @@ async fn internal_and_vault_kv_v2_secrets_resolve_without_disclosing_stored_toke
     sqlx::query("INSERT INTO secretdefinitions(id,name,providertype,providerid,externalpath,externalkey,externalversion) VALUES($1,$2,'VaultCompatibleKvV2',$3,'apps/citadel','TOKEN',1)")
         .bind(external_id).bind(format!("EXTERNAL_{}", external_id.simple())).bind(provider_id).execute(&pool).await.unwrap();
 
+    for id in [internal_id, external_id] {
+        sqlx::query(
+            "INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global',$2)",
+        )
+        .bind(id)
+        .bind(Uuid::nil())
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
     let resolver = PostgresSecretValueResolver::new(pool.clone(), protector.clone()).unwrap();
     assert_eq!(
-        resolver.resolve(internal_id).await.unwrap().as_str(),
+        resolver
+            .resolve(internal_id, "Global", Uuid::nil())
+            .await
+            .unwrap()
+            .as_str(),
         "internal-value"
     );
     assert_eq!(
-        resolver.resolve(external_id).await.unwrap().as_str(),
+        resolver
+            .resolve(external_id, "Global", Uuid::nil())
+            .await
+            .unwrap()
+            .as_str(),
         "external-value"
     );
     let stored: serde_json::Value = serde_json::from_str(

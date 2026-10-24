@@ -58,6 +58,7 @@ pub struct SwarmServiceSpec {
     #[schema(value_type = Option<crate::api::resources::schema_models::swarm_services::SwarmServiceUpdatePolicySchema>)]
     pub update_policy: Option<SwarmServiceUpdatePolicy>,
     #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    #[serde(serialize_with = "crate::api::resources::webhooks::views::serialize_optional")]
     pub webhook: Option<WebhookConfig>,
 }
 

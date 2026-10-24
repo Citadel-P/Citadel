@@ -32,7 +32,8 @@ impl GitAccountService {
 
     pub async fn get_config(&self, id: Uuid) -> Result<GitAccountConfiguration, GitAccountError> {
         let account = self.store.get(id).await?;
-        let configuration = self.unprotect(&account.protected_configuration)?;
+        let configuration =
+            GitAuthMetadata::from_configuration(&self.unprotect(&account.protected_configuration)?);
         Ok(GitAccountConfiguration {
             id: account.id,
             name: account.name,
@@ -40,6 +41,18 @@ impl GitAccountService {
             transport: account.transport,
             auth_type: account.auth_type,
             configuration,
+        })
+    }
+
+    pub(crate) async fn credentials(
+        &self,
+        id: Uuid,
+    ) -> Result<super::read_models::GitAccountCredentials, GitAccountError> {
+        let account = self.store.get(id).await?;
+        Ok(super::read_models::GitAccountCredentials {
+            domain: account.domain,
+            transport: account.transport,
+            configuration: self.unprotect(&account.protected_configuration)?,
         })
     }
 
@@ -79,7 +92,10 @@ impl GitAccountService {
             domain: patch.domain.unwrap_or_else(|| current.domain.clone()),
             transport: patch.transport.unwrap_or(current.transport),
             auth_type: patch.auth_type.unwrap_or(current.auth_type),
-            configuration: patch.configuration.unwrap_or(current_configuration),
+            configuration: patch.configuration.map_or_else(
+                || current_configuration.clone(),
+                |patch| patch.apply(current_configuration.clone()),
+            ),
         };
         input.validate()?;
         let account = StoredGitAccount {
@@ -236,8 +252,9 @@ mod tests {
         let config = service.get_config(created.id).await.unwrap();
         assert_eq!(
             config.configuration,
-            GitAuthConfiguration::Token {
-                token: "secret-token".to_owned()
+            GitAuthMetadata {
+                has_token: true,
+                ..GitAuthMetadata::default()
             }
         );
     }
@@ -270,7 +287,16 @@ mod tests {
         assert_eq!(updated.transport, GitTransport::Https);
         assert_eq!(updated.auth_type, GitAuthType::Token);
         assert_eq!(
-            service.get_config(created.id).await.unwrap().configuration,
+            service
+                .unprotect(
+                    &service
+                        .store
+                        .get(created.id)
+                        .await
+                        .unwrap()
+                        .protected_configuration
+                )
+                .unwrap(),
             GitAuthConfiguration::Token {
                 token: "secret-token".to_owned()
             }
@@ -306,5 +332,121 @@ mod tests {
             input.validate(),
             Err(GitAccountError::Validation(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn config_reads_derive_metadata_from_credentials_without_a_second_copy() {
+        let store = Arc::new(MemoryStore::default());
+        let service = GitAccountService::new(store.clone(), Arc::new(ReversingProtector));
+        for configuration in [
+            GitAuthConfiguration::Basic {
+                username: "saved-user".into(),
+                password: "sentinel-password".into(),
+            },
+            GitAuthConfiguration::SshKey {
+                username: "saved-user".into(),
+                private_key: "sentinel-private-key".into(),
+                passphrase: Some("sentinel-passphrase".into()),
+            },
+        ] {
+            let mut input = token_input("unused");
+            let ssh = matches!(configuration, GitAuthConfiguration::SshKey { .. });
+            input.auth_type = if ssh {
+                GitAuthType::SshKey
+            } else {
+                GitAuthType::Basic
+            };
+            input.transport = if ssh {
+                GitTransport::Ssh
+            } else {
+                GitTransport::Https
+            };
+            input.configuration = configuration;
+            let account = service
+                .create(ActorId::new(Uuid::now_v7()), input)
+                .await
+                .unwrap();
+            let metadata = service.get_config(account.id).await.unwrap().configuration;
+            assert_eq!(metadata.username.as_deref(), Some("saved-user"));
+            assert_eq!(metadata.has_password, !ssh);
+            assert_eq!(metadata.has_private_key, ssh);
+            assert_eq!(metadata.has_passphrase, ssh.then_some(true));
+            assert!(
+                !serde_json::to_string(&metadata)
+                    .unwrap()
+                    .contains("sentinel-")
+            );
+            {
+                let mut accounts = store.accounts.lock().unwrap();
+                let saved = accounts
+                    .iter_mut()
+                    .find(|saved| saved.id == account.id)
+                    .unwrap();
+                assert!(saved.protected_configuration.get("metadata").is_none());
+                // Records written with the previous metadata copy remain readable;
+                // the encrypted configuration is authoritative even if that copy is stale.
+                saved.protected_configuration["metadata"] = json!({"username":"stale-user"});
+            }
+            assert_eq!(
+                service.get_config(account.id).await.unwrap().configuration,
+                metadata
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reads_redact_secrets_and_nested_updates_preserve_omitted_values() {
+        let store = Arc::new(MemoryStore::default());
+        let service = GitAccountService::new(store.clone(), Arc::new(ReversingProtector));
+        let account = service
+            .create(ActorId::new(Uuid::now_v7()), token_input("sentinel-secret"))
+            .await
+            .unwrap();
+        let metadata = service.get_config(account.id).await.unwrap();
+        assert!(metadata.configuration.has_token);
+        assert!(
+            !serde_json::to_string(&metadata.configuration)
+                .unwrap()
+                .contains("sentinel-secret")
+        );
+        service
+            .update(
+                account.id,
+                serde_json::from_value(json!({"configuration":{"$type":"Token"}})).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            service.credentials(account.id).await.unwrap().configuration,
+            GitAuthConfiguration::Token {
+                token: "sentinel-secret".into()
+            }
+        );
+        service
+            .update(
+                account.id,
+                serde_json::from_value(
+                    json!({"configuration":{"$type":"Token","token":"rotated"}}),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            service.credentials(account.id).await.unwrap().configuration,
+            GitAuthConfiguration::Token {
+                token: "rotated".into()
+            }
+        );
+        assert!(
+            service
+                .update(
+                    account.id,
+                    serde_json::from_value(json!({"configuration":{"$type":"Token","token":""}}))
+                        .unwrap()
+                )
+                .await
+                .is_err()
+        );
     }
 }

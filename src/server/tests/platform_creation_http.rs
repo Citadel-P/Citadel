@@ -136,6 +136,7 @@ impl PlatformRegistrationRuntime for StaticRegistrationRuntime {
         &self,
         connector_type: PlatformConnectorType,
         address: &str,
+        _agent_id: Uuid,
     ) -> Result<Arc<dyn citadel_platforms::PlatformInfoPort>, PlatformRegistrationError> {
         self.selections
             .lock()
@@ -326,6 +327,7 @@ async fn create_platform_enforces_authorization_and_commits_metadata_before_inve
 
     // The unchanged Platform form requests this endpoint after creation. It
     // must not touch Docker, rotate keys or expose private signing material.
+    let mut setup_ids = Vec::new();
     for _ in 0..2 {
         let setup = agent_setup_request(&app, Some(administrator.clone())).await;
         assert_eq!(setup.status(), StatusCode::OK);
@@ -337,6 +339,19 @@ async fn create_platform_enforces_authorization_and_commits_metadata_before_inve
         );
         let data: Value =
             serde_json::from_slice(&to_bytes(setup.into_body(), 64 * 1024).await.unwrap()).unwrap();
+        let agent_id = Uuid::parse_str(data["agentId"].as_str().unwrap()).unwrap();
+        assert!(!agent_id.is_nil());
+        assert_eq!(
+            data["environment"]["CITADEL_AGENT_ID"],
+            agent_id.to_string()
+        );
+        assert!(
+            data["dockerRunCommand"]
+                .as_str()
+                .unwrap()
+                .contains(&agent_id.to_string())
+        );
+        setup_ids.push(agent_id);
         assert_eq!(data["hubPublicKey"], public_key);
         assert_eq!(data["environment"]["CITADEL_CORE_PUBLIC_KEY"], public_key);
         assert_eq!(data["agentImage"], "citadel-agent:test");
@@ -349,6 +364,19 @@ async fn create_platform_enforces_authorization_and_commits_metadata_before_inve
         );
         assert!(!data.to_string().contains("PRIVATE_KEY="));
     }
+    assert_ne!(setup_ids[0], setup_ids[1]);
+    let mut repeat = Request::builder()
+        .uri(format!(
+            "/api/v1/platforms/agent/setup?agentId={}",
+            setup_ids[0]
+        ))
+        .body(Body::empty())
+        .unwrap();
+    repeat.extensions_mut().insert(administrator.clone());
+    let response = app.clone().oneshot(repeat).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let repeated = response_json(response).await;
+    assert_eq!(repeated["agentId"], setup_ids[0].to_string());
     assert_eq!(runtime.inventory.calls.load(Ordering::Relaxed), 1);
     let activity_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM activityevents WHERE resourceid=$1 AND eventtype='PlatformCreated' AND status='Success'",
@@ -419,6 +447,7 @@ async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
     let harness = harness(StaticInfo::standalone(format!("daemon-{suffix}"))).await;
     let tag_id = seed_tag(&harness.pool, &suffix).await;
     let mut events = harness.realtime.subscribe();
+    let agent_id = Uuid::now_v7();
 
     let response = request(
         &harness.app,
@@ -428,7 +457,7 @@ async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
             "address": format!("{address}/"),
             "description": "Remote Docker agent",
             "type": "Docker",
-            "connectorType": "Agent",
+            "agentId": agent_id, "connectorType": "Agent",
             "tagIds": [tag_id]
         }),
     )
@@ -437,6 +466,7 @@ async fn agent_platform_creation_persists_tags_transport_and_realtime_change() {
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = response_json(response).await;
     let platform_id = Uuid::parse_str(response_body["id"].as_str().unwrap()).unwrap();
+    assert_eq!(platform_id, agent_id);
     let persisted: (String, String, i64, i64, i64) = sqlx::query_as(
         r#"SELECT address, connectortype,
                   (SELECT COUNT(*) FROM images WHERE platformid=platforms.id),
@@ -479,7 +509,7 @@ async fn swarm_manager_creation_persists_cluster_metadata_without_inline_invento
             "name": name,
             "address": format!("https://manager-{suffix}.example.test:5001"),
             "type": "DockerSwarm",
-            "connectorType": "Agent"
+            "agentId": Uuid::now_v7(), "connectorType": "Agent"
         }),
     )
     .await;
@@ -615,7 +645,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let first = request(
         &duplicate_harness.app,
         Some(duplicate_harness.administrator.clone()),
-        json!({"name":first_name,"address":address,"type":"Docker","connectorType":"Agent"}),
+        json!({"name":first_name,"address":address,"type":"Docker","agentId":Uuid::now_v7(),"connectorType":"Agent"}),
     )
     .await;
     assert_eq!(first.status(), StatusCode::OK);
@@ -629,7 +659,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let duplicate_address = request(
         &duplicate_harness.app,
         Some(duplicate_harness.administrator.clone()),
-        json!({"name":format!("address-{suffix}"),"address":address,"type":"Docker","connectorType":"Agent"}),
+        json!({"name":format!("address-{suffix}"),"address":address,"type":"Docker","agentId":Uuid::now_v7(),"connectorType":"Agent"}),
     )
     .await;
     assert_eq!(duplicate_address.status(), StatusCode::CONFLICT);
@@ -646,7 +676,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let duplicate_daemon = request(
         &duplicate_harness.app,
         Some(duplicate_harness.administrator),
-        json!({"name":format!("daemon-{suffix}"),"address":format!("https://second-{suffix}.example.test:5001"),"type":"Docker","connectorType":"Agent"}),
+        json!({"name":format!("daemon-{suffix}"),"address":format!("https://second-{suffix}.example.test:5001"),"type":"Docker","agentId":Uuid::now_v7(),"connectorType":"Agent"}),
     )
     .await;
     assert_eq!(duplicate_daemon.status(), StatusCode::CONFLICT);
@@ -674,7 +704,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let response = request(
         &first_cluster.app,
         Some(first_cluster.administrator.clone()),
-        json!({"name":format!("cluster-a-{suffix}"),"address":format!("https://cluster-a-{suffix}.example.test"),"type":"DockerSwarm","connectorType":"Agent"}),
+        json!({"name":format!("cluster-a-{suffix}"),"address":format!("https://cluster-a-{suffix}.example.test"),"type":"DockerSwarm","agentId":Uuid::now_v7(),"connectorType":"Agent"}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -689,7 +719,7 @@ async fn platform_creation_rejects_address_daemon_and_cluster_duplicates() {
     let response = request(
         &second_cluster.app,
         Some(second_cluster.administrator),
-        json!({"name":format!("cluster-b-{suffix}"),"address":format!("https://cluster-b-{suffix}.example.test"),"type":"DockerSwarm","connectorType":"Agent"}),
+        json!({"name":format!("cluster-b-{suffix}"),"address":format!("https://cluster-b-{suffix}.example.test"),"type":"DockerSwarm","agentId":Uuid::now_v7(),"connectorType":"Agent"}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::CONFLICT);
@@ -712,7 +742,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
             "name": name,
             "address": format!("https://invalid-tag-{suffix}.example.test"),
             "type": "Docker",
-            "connectorType": "Agent",
+            "agentId": Uuid::now_v7(), "connectorType": "Agent",
             "tagIds": [Uuid::now_v7()]
         }),
     )
@@ -735,7 +765,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
         "name": rollback_name,
         "address": format!("https://rollback-{suffix}.example.test"),
         "type": "Docker",
-        "connectorType": "Agent"
+        "agentId": Uuid::now_v7(), "connectorType": "Agent"
     }))
     .unwrap();
     let error = rollback_service
@@ -754,7 +784,7 @@ async fn platform_creation_rolls_back_invalid_tags_and_serializes_competing_crea
         "name": format!("race-{suffix}"),
         "address": format!("https://race-{suffix}.example.test"),
         "type": "Docker",
-        "connectorType": "Agent"
+        "agentId": Uuid::now_v7(), "connectorType": "Agent"
     });
     let (left, right) = tokio::join!(
         request(
@@ -786,7 +816,7 @@ async fn platform_patch_reports_json_field_errors_without_writes() {
         json!({
             "name":format!("validation-{suffix}"),
             "address":format!("https://validation-{suffix}.example.test:5001"),
-            "type":"Docker", "connectorType":"Agent"
+            "type":"Docker", "agentId":Uuid::now_v7(),"connectorType":"Agent"
         }),
     )
     .await;
@@ -946,7 +976,7 @@ fn agent_input(name: &str, platform_type: &str) -> Value {
         "name": name,
         "address": format!("https://{name}.example.test:5001"),
         "type": platform_type,
-        "connectorType": "Agent"
+        "agentId": Uuid::now_v7(), "connectorType": "Agent"
     })
 }
 

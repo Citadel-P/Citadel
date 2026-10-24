@@ -54,7 +54,11 @@ enum Command {
         private_key_path: std::path::PathBuf,
     },
     /// Verify signed Agent handshake, reads, streams, cancellation, and Local equivalence.
-    AgentSmoke,
+    AgentSmoke {
+        /// Platform or Build Pool UUID from the Agent setup command.
+        #[arg(long)]
+        agent_id: Uuid,
+    },
     /// Probe an already-running server without curl in the image.
     Healthcheck {
         #[arg(long)]
@@ -109,7 +113,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             Ok(())
         }
-        Command::AgentSmoke => agent_smoke(Config::from_env()?).await,
+        Command::AgentSmoke { agent_id } => agent_smoke(Config::from_env()?, agent_id).await,
         Command::Healthcheck { url } => {
             let mut client = reqwest::Client::builder().timeout(Duration::from_secs(2));
             let url = match url {
@@ -241,7 +245,10 @@ async fn docker_smoke(
     Ok(())
 }
 
-async fn agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Error>> {
+async fn agent_smoke(config: Config, agent_id: Uuid) -> Result<(), Box<dyn std::error::Error>> {
+    if agent_id.is_nil() {
+        return Err("--agent-id must be the nonzero UUID from Agent setup".into());
+    }
     let agent_config = config
         .agent
         .as_ref()
@@ -253,7 +260,7 @@ async fn agent_smoke(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let agent = AgentClient::lazy(
         &agent_config.address,
-        AgentRequestSigner::from_file(&agent_config.private_key_path)?,
+        AgentRequestSigner::from_file(&agent_config.private_key_path)?.for_agent(agent_id),
         agent_config.operation_timeout,
         agent_config.allow_insecure,
     )?

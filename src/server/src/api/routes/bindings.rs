@@ -511,7 +511,7 @@ async fn list_secrets(
         state
             .secrets
             .store()
-            .list_secret_definitions(query.scope.map(Into::into), query.resource_id)
+            .list_secret_definitions(secret_creation_scope(&query, principal.actor_id))
             .await
             .map_err(metadata_error),
         &headers,
@@ -557,11 +557,17 @@ async fn create_internal_secret(
 ) -> HttpResult {
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
     let Query(query) = query;
-    secret_scope_authorization(&state, principal, &query, PermissionLevel::Write, &headers).await?;
+    let principal =
+        secret_scope_authorization(&state, principal, &query, PermissionLevel::Write, &headers)
+            .await?;
     let secret = api_result(
         state
             .secrets
-            .create_internal_secret(&input.name, &input.value)
+            .create_internal_secret(
+                &input.name,
+                &input.value,
+                secret_creation_scope(&query, principal.actor_id),
+            )
             .await
             .map_err(metadata_error),
         &headers,
@@ -1086,4 +1092,36 @@ fn path_value<T>(path: Result<Path<T>, PathRejection>, headers: &HeaderMap) -> H
         path.map_err(|error| crate::api::error::ApiError::Validation(error.to_string())),
         headers,
     )
+}
+
+fn secret_creation_scope(
+    query: &SecretScopeQuery,
+    actor: citadel_primitives::ActorId,
+) -> citadel_bindings::SecretUseScope {
+    use citadel_bindings::SecretUseScope;
+    if let Some(resource_type) = query.target_resource_type {
+        return query
+            .target_resource_id
+            .map_or(SecretUseScope::Creator(actor), |resource_id| {
+                SecretUseScope::Resource {
+                    resource_type,
+                    resource_id,
+                }
+            });
+    }
+    match (query.scope, query.resource_id) {
+        (Some(ResourceBindingScope::Stack), Some(resource_id)) => SecretUseScope::Resource {
+            resource_type: ResourceType::Stack,
+            resource_id,
+        },
+        (Some(ResourceBindingScope::Deployment), Some(resource_id)) => SecretUseScope::Resource {
+            resource_type: ResourceType::Deployment,
+            resource_id,
+        },
+        (Some(ResourceBindingScope::SwarmService), Some(resource_id)) => SecretUseScope::Resource {
+            resource_type: ResourceType::SwarmService,
+            resource_id,
+        },
+        _ => SecretUseScope::Global,
+    }
 }

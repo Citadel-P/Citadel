@@ -221,7 +221,9 @@ impl ContainerService for MutationFixture {
                 .map_err(|_| Status::unauthenticated("invalid header"))
         };
         assert_eq!(header("x-content-sha256-bin")?.as_ref(), hash.as_slice());
-        let mut payload = header("x-timestamp-bin")?.to_vec();
+        let mut payload = b"citadel-direct-v2\0".to_vec();
+        payload.extend_from_slice(&header("x-audience-sha256-bin")?);
+        payload.extend_from_slice(&header("x-timestamp-bin")?);
         payload.extend_from_slice(&header("x-nonce-bin")?);
         payload.extend_from_slice(b"/citadel.containers.v1.ContainerService/Exec");
         payload.extend_from_slice(&hash);

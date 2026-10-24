@@ -405,3 +405,17 @@ Use the stack or deployment `Bindings` tab for resource-specific values and over
 Resource tabs list only resource-specific entries. Global entries are inherited automatically at deploy time and remain searchable on **Settings → Bindings**.
 
 Use the stack `Config` tab to reference keys in compose content, for example `${IMAGE_TAG}` or `${POSTGRES_PASSWORD}`.
+
+### Secret use authorization
+
+A secret UUID does not grant permission to use it. Citadel persists the scope in
+which a secret was created and checks that scope when attaching and resolving it.
+Global secrets remain available for intended inheritance. Secrets created for an
+existing resource can be used only in that resource or through an authorized copy.
+Secrets created before a new Build or Backup Repository exists are owned by their
+creator; attachment establishes the destination grant atomically.
+
+The upgrade preserves existing resource-bound uses. Previously unbound internal
+secrets have no provable owner and receive no implicit global grant; recreate them
+in the intended scope if needed. Existing references cannot establish that their
+original attachment was authorized, so review suspicious pre-upgrade bindings.

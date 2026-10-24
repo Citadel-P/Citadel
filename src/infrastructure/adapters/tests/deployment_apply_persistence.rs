@@ -373,6 +373,14 @@ async fn binding_resolution_uses_resource_precedence_and_keeps_secrets_masked() 
     .execute(&pool)
     .await
     .unwrap();
+    sqlx::query(
+        "INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Deployment',$2)",
+    )
+    .bind(secret_id)
+    .bind(deployment_id)
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query("INSERT INTO internalsecretvalues(secretid,encryptedvalue) VALUES($1,$2)")
         .bind(secret_id)
         .bind(envelope)

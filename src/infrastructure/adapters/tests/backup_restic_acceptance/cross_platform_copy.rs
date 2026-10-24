@@ -40,9 +40,10 @@ pub(super) async fn verify(
         docker(&["save","-o",archive.to_str().unwrap(),&image,IMAGE],None).await;
         docker(&["cp",archive.to_str().unwrap(),&format!("{daemon}:/root/helper.tar")],None).await;
         docker(&["exec",&daemon,"docker","load","-i","/root/helper.tar"],None).await;
+        let target=Uuid::now_v7();
         let mut key=[0;32];getrandom::fill(&mut key).unwrap();
-        let signer=AgentRequestSigner::from_bytes(&key);key.fill(0);
-        docker(&["run","-d","--name",&agent_name,"--network",&network,"-v",&format!("{socket}:/var/run"),"-e",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"-e","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
+        let signer=AgentRequestSigner::from_bytes(&key).for_agent(target);key.fill(0);
+        docker(&["run","-d","--name",&agent_name,"--network",&network,"-v",&format!("{socket}:/var/run"),"-e",&format!("CITADEL_CORE_PUBLIC_KEY={}",signer.public_key_base64()),"-e",&format!("CITADEL_AGENT_ID={target}"),"-e","CITADEL_AGENT_TLS_MODE=Disabled",&image],None).await;
         let address=format!("http://{agent_name}:9000");
         let deadline=tokio::time::Instant::now()+Duration::from_secs(30);
         let agent=loop {
@@ -52,7 +53,7 @@ pub(super) async fn verify(
             tokio::time::sleep(Duration::from_millis(250)).await;
         };
         let actor=super::resource_copy::administrator(pool).await;
-        let target=Uuid::now_v7();
+
         sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Agent',0,0,0,$1::text,0,'{\"$type\":\"Docker\"}','Online',0)").bind(target).bind(&address).execute(pool).await.unwrap();
         let source_platform=run.items[0].platform_id;
         let volume=&run.items[0].volume_name;

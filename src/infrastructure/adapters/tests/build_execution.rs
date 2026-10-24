@@ -580,8 +580,14 @@ async fn build_secret_resolver_decrypts_internal_values_without_persisting_plain
         .await
         .unwrap();
 
+    sqlx::query("INSERT INTO secretusegrants(secretid,scope,resourceid) VALUES($1,'Global',$2)")
+        .bind(secret_id)
+        .bind(Uuid::nil())
+        .execute(&pool)
+        .await
+        .unwrap();
     let resolver = PostgresBuildSecretResolver::new(pool.clone(), protector).unwrap();
-    let resolved = resolver.resolve(secret_id).await.unwrap();
+    let resolved = resolver.resolve(secret_id, Uuid::nil()).await.unwrap();
     assert_eq!(resolved.as_str(), "build-secret-value");
     let stored: String =
         sqlx::query_scalar("SELECT encryptedvalue FROM internalsecretvalues WHERE secretid=$1")

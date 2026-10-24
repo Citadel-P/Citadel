@@ -13,6 +13,7 @@ pub trait BuildSecretResolver: Send + Sync {
     fn resolve(
         &self,
         secret_id: Uuid,
+        build_id: Uuid,
     ) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BuildError>>;
 }
 

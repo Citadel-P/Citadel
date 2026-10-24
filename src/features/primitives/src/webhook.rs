@@ -51,6 +51,14 @@ pub struct WebhookConfig {
 
 impl WebhookConfig {
     pub fn validate(&self) -> Result<(), &'static str> {
+        if self.enabled
+            && self
+                .secret
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err("An enabled Webhook requires a secret.");
+        }
         if self.secret.as_ref().is_some_and(|value| value.len() > 256)
             || self
                 .branch_filter
@@ -92,6 +100,8 @@ impl WebhookConfig {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WebhookPatch {
+    #[serde(default, skip_serializing)]
+    pub has_secret: Option<bool>,
     #[serde(default, skip_serializing_if = "crate::FieldUpdate::is_missing")]
     pub enabled: crate::FieldUpdate<bool>,
     #[serde(default, skip_serializing_if = "crate::FieldUpdate::is_missing")]

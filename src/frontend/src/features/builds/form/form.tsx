@@ -1058,7 +1058,7 @@ function normalizeWebhook(webhook: WebhookConfig | undefined | null): WebhookCon
 
   return {
     ...webhook,
-    secret: webhook.secret?.trim() || null,
+    ...(webhook.secret === undefined ? {} : { secret: webhook.secret?.trim() || null }),
     branchFilter: webhook.branchFilter?.trim() || null,
   };
 }

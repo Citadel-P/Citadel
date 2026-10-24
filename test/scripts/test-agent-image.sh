@@ -44,7 +44,7 @@ printf 'disposable-image-test' > "$tls_dir/bootstrap"
 for profile in direct tls edge edge-build-agent swarm-node; do
   name="$fixture-$profile"
   containers+=("$name")
-  args=(--env CITADEL_AGENT_PORT=9107 --env "CITADEL_CORE_PUBLIC_KEY=$hub_key")
+  args=(--env CITADEL_AGENT_ID=7fb4c244-485a-4b80-9611-b29e456adf65 --env CITADEL_AGENT_PORT=9107 --env "CITADEL_CORE_PUBLIC_KEY=$hub_key")
   case "$profile" in
     tls)
       args+=(--mount "type=bind,src=$tls_dir,dst=/tls,readonly"

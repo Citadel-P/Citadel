@@ -1286,6 +1286,8 @@ export interface AdoptionSource {
 
 /** Public installation instructions. The signing private key never enters this model. */
 export interface AgentSetupView {
+  /** @format uuid */
+  agentId: string;
   agentImage: string;
   dockerRunCommand: string;
   environment: Record<string, string>;
@@ -1598,7 +1600,7 @@ export interface AutomationActionView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: WebhookConfig | null;
+  webhook: WebhookView | null;
 }
 
 export interface AutomationProgress {
@@ -1800,7 +1802,7 @@ export interface BackupPolicyView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: WebhookConfig | null;
+  webhook: WebhookView | null;
 }
 
 export type BackupPreviewResource =
@@ -2326,7 +2328,7 @@ export interface BuildProjectView {
   timeoutSeconds: number;
   /** @format date-time */
   updatedAt: string;
-  webhook: WebhookConfig | null;
+  webhook: WebhookView | null;
 }
 
 export interface BuildRunView {
@@ -2787,6 +2789,11 @@ export interface CreateOidcProviderRequest {
 
 export interface CreatePlatformInput {
   address?: string | null;
+  /**
+   * UUID from Agent setup. Required for Direct Agent registration.
+   * @format uuid
+   */
+  agentId?: string | null;
   connectorType?: PlatformConnectorType;
   description?: string | null;
   name: string;
@@ -3318,7 +3325,7 @@ export interface ExternalSecretPatch {
 
 export interface GitAccountConfigView {
   authType: GitAuthType;
-  configuration: GitAuthConfiguration;
+  configuration: GitAuthMetadataView;
   domain: string;
   /** @format uuid */
   id: string;
@@ -3336,7 +3343,7 @@ export interface GitAccountInput {
 
 export interface GitAccountPatch {
   authType?: GitAuthType | null;
-  configuration?: GitAuthConfiguration | null;
+  configuration?: GitAuthConfigurationPatch | null;
   domain?: string | null;
   name?: string | null;
   transport?: GitTransport | null;
@@ -3376,6 +3383,31 @@ export type GitAuthConfiguration =
       privateKey: string;
       username: string;
     };
+
+export type GitAuthConfigurationPatch =
+  | {
+      $type: "Basic";
+      password?: string;
+      username?: string;
+    }
+  | {
+      $type: "Token";
+      token?: string;
+    }
+  | {
+      $type: "SshKey";
+      passphrase?: string | null;
+      privateKey?: string;
+      username?: string;
+    };
+
+export interface GitAuthMetadataView {
+  hasPassphrase?: boolean | null;
+  hasPassword: boolean;
+  hasPrivateKey: boolean;
+  hasToken: boolean;
+  username?: string | null;
+}
 
 export interface GitChangedPath {
   path: string;
@@ -3495,7 +3527,7 @@ export interface GitRepositoryConfigResponse {
   syncMode: GitRepositorySyncMode;
   tags: ResourcesTagsTagSummary[];
   url: string;
-  webhook: WebhookConfig | null;
+  webhook: WebhookView | null;
 }
 
 export interface GitRepositoryPatch {
@@ -3566,7 +3598,7 @@ export interface GitRepositoryView {
   syncStatus: GitRepositorySyncStatusView | null;
   tags: ResourcesTagsTagSummary[];
   url: string;
-  webhook: WebhookConfig | null;
+  webhook: WebhookView | null;
 }
 
 export interface GithubContainerMetadata {
@@ -4099,7 +4131,7 @@ export interface ManagedSwarmServiceView {
   rowVersion: number;
   /** @format int32 */
   runningTaskCount: number | null;
-  spec: SwarmServiceSpec;
+  spec: SwarmServiceSpecView;
   synchronizationState: SwarmServiceSynchronizationState;
   tags: ResourcesTagsTagSummary[];
   tasks: any[] | null;
@@ -4854,6 +4886,12 @@ export interface ProblemDetails {
 }
 
 export interface ProfileMfaRecoveryCodesView {
+  enabled: boolean;
+  recoveryCodes: string[];
+}
+
+export interface ProfileMfaSetupCompleteView {
+  accessToken?: string | null;
   enabled: boolean;
   recoveryCodes: string[];
 }
@@ -6520,7 +6558,7 @@ export interface StackConfigView {
   platformType: PlatformType;
   /** @format int64 */
   rowVersion: number;
-  spec: StackSpec;
+  spec: StackSpecView;
   stackSource: StackSource;
   stackUpdateState: StackUpdateState;
 }
@@ -6651,7 +6689,7 @@ export interface StackReleaseView {
   platformStatus: PlatformStatus;
   resourceBindings?: ResourceBindingSnapshot[] | null;
   source?: StackReleaseSource | null;
-  spec: StackSpec;
+  spec: StackSpecView;
   /** @format uuid */
   stackId: string;
   status: StackReleaseStatus;
@@ -6708,6 +6746,29 @@ export interface StackSpecCommon {
   registryId?: string | null;
 }
 
+export type StackSpecView =
+  | (StackSpecCommon & {
+      composeFile: string;
+      updateBehavior: StackUpdateBehavior;
+    } & {
+      $type: "WebEditor";
+    })
+  | (StackSpecCommon & {
+      additionalEnvFileFromRepo?: string[];
+      branch: string;
+      commitSha?: string | null;
+      composeEnvFilesFromRepo?: string[];
+      composePaths?: string[];
+      /** @format uuid */
+      gitRepoId: string;
+      updateBehavior: StackUpdateBehavior;
+      watchPaths?: string[];
+      webhook?: StackWebhookView | null;
+      workingDirectory?: string | null;
+    } & {
+      $type: "Git";
+    });
+
 export interface StackStreamItem {
   /** @format int32 */
   exitCode?: number | null;
@@ -6758,7 +6819,7 @@ export interface StackView {
   /** @format int64 */
   rowVersion: number;
   source: StackReleaseSource | null;
-  spec: StackSpec | null;
+  spec: StackSpecView | null;
   stackSource: StackSource;
   stackUpdateState: StackUpdateState;
   status: StackReleaseStatus;
@@ -6768,6 +6829,10 @@ export interface StackView {
 
 export type StackWebhookConfig = WebhookConfig & {
   forceDeploy?: boolean;
+};
+
+export type StackWebhookView = WebhookView & {
+  forceDeploy: boolean;
 };
 
 export interface StacksView {
@@ -7310,6 +7375,33 @@ export interface SwarmServiceSpec {
   workingDirectory?: string | null;
 }
 
+export interface SwarmServiceSpecView {
+  arguments?: string[];
+  command?: string[];
+  configs?: SwarmServiceConfigReference[];
+  environment?: string[];
+  healthCheck?: SwarmServiceHealthCheck | null;
+  image: SwarmServiceImageInfo;
+  labels?: Record<string, string>;
+  mounts?: SwarmServiceMount[];
+  networkIds?: string[];
+  placementConstraints?: string[];
+  ports?: SwarmServicePort[];
+  /** @format int32 */
+  replicas?: number | null;
+  resources?: SwarmServiceResources | null;
+  restartPolicy?: SwarmServiceRestartPolicy | null;
+  schedulingMode?: SchedulingMode;
+  secrets?: SwarmServiceSecretReference[];
+  /** @format int64 */
+  stopGracePeriodNanoseconds?: number | null;
+  updateBehavior?: UpdateBehavior;
+  updatePolicy?: SwarmServiceUpdatePolicy | null;
+  user?: string | null;
+  webhook?: WebhookView | null;
+  workingDirectory?: string | null;
+}
+
 export interface SwarmServiceUpdatePolicy {
   /** @format int64 */
   delayNanoseconds?: number | null;
@@ -7847,6 +7939,15 @@ export interface WebhookResponse {
   /** @format uuid */
   requestId: string;
   status: string;
+}
+
+/** Public webhook metadata. The credential is accepted only by mutation inputs. */
+export interface WebhookView {
+  authScheme: WebhookAuthScheme;
+  branchFilter?: string | null;
+  enabled: boolean;
+  hasSecret: boolean;
+  provider: WebhookProvider;
 }
 
 export interface WorkloadHealth {
@@ -10878,6 +10979,32 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildAgentPools
+     * @name GetBuildAgentPoolAgentSetup
+     * @summary Get Direct Build Agent installation instructions
+     * @request GET:/api/v1/buildAgentPools/{id}/agent/setup
+     * @secure
+     * @response `200` `AgentSetupView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getBuildAgentPoolAgentSetup: (id: string, params: RequestParams = {}) =>
+      this.request<AgentSetupView, ProblemDetails>({
+        path: `/api/v1/buildAgentPools/${id}/agent/setup`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -14385,10 +14512,20 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
-    getAgentSetup: (params: RequestParams = {}) =>
+    getAgentSetup: (
+      query?: {
+        /**
+         * Stable Platform or Build Pool ID; generated when omitted
+         * @format uuid
+         */
+        agentId?: string;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<AgentSetupView, ProblemDetails>({
         path: `/api/v1/platforms/agent/setup`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
@@ -16473,7 +16610,7 @@ export class Api<
      * @summary Complete MFA setup
      * @request POST:/api/v1/profile/mfa/setup/confirm
      * @secure
-     * @response `200` `ProfileMfaRecoveryCodesView` Success
+     * @response `200` `ProfileMfaSetupCompleteView` Success
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -16485,7 +16622,7 @@ export class Api<
       data: ConfirmProfileMfaSetupInput,
       params: RequestParams = {},
     ) =>
-      this.request<ProfileMfaRecoveryCodesView, ProblemDetails>({
+      this.request<ProfileMfaSetupCompleteView, ProblemDetails>({
         path: `/api/v1/profile/mfa/setup/confirm`,
         method: "POST",
         body: data,

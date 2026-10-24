@@ -44,7 +44,7 @@ export function PortsDisplay({
               key={`${port.containerPort}:${port.hostPort}`}
               type="button"
               className="inline-flex min-w-0 items-center gap-1.5 hover:underline"
-              onClick={() => window.open(port.url, '_blank')}>
+              onClick={() => window.open(port.url, '_blank', 'noopener,noreferrer')}>
               <EthernetPort width={14} height={14} className="shrink-0 text-primary" />
               <span className="truncate">{port.hostPort}</span>
             </button>
@@ -58,7 +58,7 @@ export function PortsDisplay({
             <button
               type="button"
               className="flex items-center gap-1 text-left hover:underline"
-              onClick={() => window.open(port.url, '_blank')}>
+              onClick={() => window.open(port.url, '_blank', 'noopener,noreferrer')}>
               <Link width={12} height={10} className="shrink-0" /> {port.url}
             </button>
             {port.bindings.map((binding) => (

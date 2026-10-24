@@ -92,6 +92,7 @@ pub trait BackupPersistence: Send + Sync {
         actor: ActorId,
         policy_id: Uuid,
         trigger: &str,
+        expected_row_version: Option<i64>,
     ) -> BoxFuture<'_, Result<BackupRun, BackupError>>;
     fn enqueue_webhook<'a>(
         &'a self,

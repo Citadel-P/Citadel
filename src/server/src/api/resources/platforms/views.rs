@@ -1014,6 +1014,7 @@ pub(crate) struct StackHistory {
 #[derive(Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSetupView {
+    pub agent_id: Uuid,
     pub hub_public_key: String,
     pub environment: BTreeMap<String, String>,
     pub agent_image: String,
@@ -1024,6 +1025,7 @@ pub struct AgentSetupView {
 impl From<AgentSetupView> for citadel_platforms::agent_setup::AgentSetupInstructions {
     fn from(value: AgentSetupView) -> Self {
         Self {
+            agent_id: value.agent_id,
             hub_public_key: value.hub_public_key,
             environment: value.environment,
             agent_image: value.agent_image,
@@ -1036,6 +1038,7 @@ impl From<AgentSetupView> for citadel_platforms::agent_setup::AgentSetupInstruct
 impl From<citadel_platforms::agent_setup::AgentSetupInstructions> for AgentSetupView {
     fn from(value: citadel_platforms::agent_setup::AgentSetupInstructions) -> Self {
         Self {
+            agent_id: value.agent_id,
             hub_public_key: value.hub_public_key,
             environment: value.environment,
             agent_image: value.agent_image,

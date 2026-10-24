@@ -15,6 +15,7 @@ pub struct CreateStackInput {
     #[schema(value_type = crate::api::resources::schema_models::stacks::StackSourceSchema)]
     pub stack_source: StackSource,
     #[schema(value_type = crate::api::resources::schema_models::stacks::StackSpecSchema)]
+    #[serde(serialize_with = "super::spec_view::serialize")]
     pub spec: StackSpec,
     #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackDriftPolicySchema>)]
     pub drift_policy: Option<StackDriftPolicy>,

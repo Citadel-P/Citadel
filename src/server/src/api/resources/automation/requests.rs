@@ -17,6 +17,7 @@ pub struct AutomationActionInput {
     pub schedule_cron: Option<String>,
     pub schedule_time_zone: Option<String>,
     #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    #[serde(serialize_with = "crate::api::resources::webhooks::views::serialize_optional")]
     pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,

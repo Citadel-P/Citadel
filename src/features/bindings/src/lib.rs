@@ -6,6 +6,7 @@ mod model;
 pub use model::{
     BindingValidation, ResourceBinding, ResourceBindingKind, ResourceBindingScope,
     ResourceBindings, SecretDefinition, SecretDeliveryMode, SecretProvider, SecretProviderType,
+    SecretUseScope,
 };
 mod commands;
 pub use commands::{

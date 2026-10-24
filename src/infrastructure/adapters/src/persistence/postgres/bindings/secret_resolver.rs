@@ -152,7 +152,12 @@ impl PostgresSecretValueResolver {
         })
     }
 
-    pub async fn resolve(&self, secret_id: Uuid) -> Result<Zeroizing<String>, SecretValueError> {
+    pub async fn resolve(
+        &self,
+        secret_id: Uuid,
+        scope: &str,
+        resource_id: Uuid,
+    ) -> Result<Zeroizing<String>, SecretValueError> {
         let row = sqlx::query(
             r#"SELECT secret.name,secret.providertype,secret.externalpath,secret.externalkey,
                       secret.externalversion,internal.encryptedvalue,
@@ -160,9 +165,11 @@ impl PostgresSecretValueResolver {
                FROM secretdefinitions secret
                LEFT JOIN internalsecretvalues internal ON internal.secretid=secret.id
                LEFT JOIN secretproviders provider ON provider.id=secret.providerid
-               WHERE secret.id=$1"#,
+               WHERE secret.id=$1 AND EXISTS (
+                   SELECT 1 FROM secretusegrants use_grant WHERE use_grant.secretid=secret.id
+                   AND ((use_grant.scope='Global' AND use_grant.resourceid='00000000-0000-0000-0000-000000000000') OR (use_grant.scope=$2 AND use_grant.resourceid=$3)))"#,
         )
-        .bind(secret_id)
+        .bind(secret_id).bind(scope).bind(resource_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(storage)?

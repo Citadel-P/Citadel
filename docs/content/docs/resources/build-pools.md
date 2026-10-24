@@ -27,9 +27,12 @@ For a self-managed VM pool, choose one connection mode.
 
 ### Inbound Agent endpoint
 
-Use this when Citadel Core can reach the builder host directly. Run a dedicated Citadel Agent on the builder host:
+Use this when Citadel Core can reach the builder host directly. Save the pool first,
+then copy the Agent Setup command from its configuration and run it on the builder.
+Citadel fills in its unique ID and public key automatically.
 
-Replace `AGENT_IMAGE` with the image address expected by your Core version and
+The following manual template is equivalent; copy `<generated-agent-id>` from
+the pool’s setup command. Replace `AGENT_IMAGE` with the image address expected by your Core version and
 `...` with Core's current `CITADEL_CORE_PUBLIC_KEY`, as described in
 [regular Agent setup](/docs/operations/agent#requirements). The HTTP example
 below is for a trusted private network; use
@@ -43,10 +46,11 @@ docker run -d \
   -p 9001:9000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e CITADEL_CORE_PUBLIC_KEY="..." \
+  -e CITADEL_AGENT_ID="<generated-agent-id>" \
   AGENT_IMAGE
 ```
 
-Then create the pool:
+Use these settings when creating the pool:
 
 ```text
 Build Pools -> Add Build Pool
@@ -127,3 +131,16 @@ and output image; the pool supplies the execution host.
 
 If a build cannot start, check the pool's connection and Docker capability status,
 then see [Build Project troubleshooting](/docs/resources/builds#troubleshooting).
+
+Citadel automatically includes `CITADEL_AGENT_ID` in each Direct Agent install
+command. This UUID identifies the Platform or dedicated Build Pool independently
+of its network address. Keep it when restarting the Agent or changing its address;
+use a separate setup command for each Platform or Build Pool. Requests signed for
+a different ID are rejected, even when Agents have identical addresses on separate
+networks. Edge Agents use enrollment and do not need this setting.
+
+For an existing Platform, copy the command from its Agent Setup section. For an
+inbound Build Pool, save the pool first, then open its configuration to copy the
+command. API clients may obtain a generated `agentId` from
+`GET /api/v1/platforms/agent/setup` and submit it with Direct Platform creation.
+Existing Platform and Build Pool IDs are preserved.

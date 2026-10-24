@@ -706,10 +706,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .await,
     )
     .await;
-    assert_eq!(
-        git_account_config["configuration"]["token"],
-        "execution-secret-token"
-    );
+    assert_eq!(git_account_config["configuration"]["hasToken"], true);
     let ssh_patch = response_json(
         request(
             &app,
@@ -744,8 +741,8 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             )
             .await,
         )
-        .await["configuration"]["privateKey"],
-        "-----BEGIN OPENSSH PRIVATE KEY-----patched"
+        .await["configuration"]["hasPrivateKey"],
+        true
     );
     assert_eq!(
         request(
@@ -820,8 +817,8 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     )
     .await;
     assert_eq!(
-        preserved_git_account_config["configuration"]["token"],
-        "execution-secret-token"
+        preserved_git_account_config["configuration"]["hasToken"],
+        true
     );
     assert_eq!(
         request(
@@ -1113,6 +1110,22 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(visible_git_accounts.len(), 1);
     assert_eq!(visible_git_accounts[0]["id"], git_account_id);
     assert_eq!(visible_git_accounts[0]["capabilities"]["canRead"], true);
+    let reader_config = response_json(
+        request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/gitAccounts/{git_account_id}/_cfg"),
+            Some(resource_actor.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(reader_config["configuration"]["hasToken"], true);
+    assert!(reader_config["configuration"].get("token").is_none());
+    assert!(reader_config["configuration"].get("password").is_none());
+    assert!(reader_config["configuration"].get("privateKey").is_none());
+
     assert_eq!(
         request(
             &app,

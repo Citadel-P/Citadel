@@ -1,5 +1,5 @@
 use crate::api::resources::capabilities::ResourceCapabilitiesView;
-use crate::api::resources::swarm_services::spec::*;
+use crate::api::resources::swarm_services::spec_view::SwarmServiceSpecView;
 use crate::api::resources::tags::views::TagSummary;
 use crate::api::resources::{
     common::DuplicateSourceInput, swarm_services::requests::CreateSwarmServiceInput,
@@ -86,7 +86,7 @@ pub struct ManagedSwarmServiceView {
     pub docker_name: String,
     #[schema(required = true)]
     pub docker_service_id: Option<String>,
-    pub spec: SwarmServiceSpec,
+    pub spec: SwarmServiceSpecView,
     #[schema(value_type = crate::api::resources::schema_models::swarm_services::SwarmServiceHealthSchema)]
     pub health: SwarmServiceHealth,
     #[schema(value_type = crate::api::resources::schema_models::swarm_services::SwarmServiceSynchronizationStateSchema)]

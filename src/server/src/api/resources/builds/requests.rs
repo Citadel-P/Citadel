@@ -26,6 +26,7 @@ pub struct BuildProjectInput {
     pub image_repository: String,
     pub tag_templates: Option<Vec<String>>,
     #[schema(value_type = Option<crate::api::resources::schema_models::primitives::WebhookConfigSchema>)]
+    #[serde(serialize_with = "crate::api::resources::webhooks::views::serialize_optional")]
     pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub retention_run_count: Option<i32>,
