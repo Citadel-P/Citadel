@@ -4,7 +4,11 @@ import { render, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import {
+  ApplyDeploymentInput,
   ApplyStackInput,
+  DeploymentStreamItem,
+  PullImageInput,
+  PullImageStreamItem,
   StackApplyEventType,
   StackStreamItem,
   SwarmServiceProgressItem,
@@ -18,6 +22,8 @@ const stackRequest: ApplyStackInput = {
   id: '00000000-0000-0000-0000-000000000001',
   recreate: false,
 };
+const deploymentRequest: ApplyDeploymentInput = { id: '00000000-0000-0000-0000-000000000002' };
+const imageRequest: PullImageInput = { platformId: 'platform-1', imageTag: 'nginx:alpine' };
 
 function StackProgressProbe() {
   const state = useStreamProgress<ApplyStackInput, StackStreamItem>({
@@ -61,7 +67,64 @@ function SwarmServiceProgressProbe() {
   );
 }
 
+function PullProgressProbe({ resource }: { resource: 'deployments' | 'images' }) {
+  const state = useStreamProgress<ApplyDeploymentInput | PullImageInput, DeploymentStreamItem | PullImageStreamItem>({
+    endpoint: resource === 'images' ? 'api/v1/images/pull' : 'api/v1/deployments/apply',
+    request: resource === 'images' ? imageRequest : deploymentRequest,
+    successMessage: 'Deployment applied successfully',
+    errorMessageDefault: 'Failed to deploy',
+    getError: (item) => item.errorMessage,
+  });
+
+  return (
+    <>
+      <div data-testid="status">{state.status}</div>
+      <div data-testid="logs">{state.logs.map((log) => log.message).join('\n')}</div>
+    </>
+  );
+}
+
 describe('useStreamProgress', () => {
+  it.each([
+    { resource: 'deployments' as const, status: 'success' },
+    { resource: 'deployments' as const, status: 'error' },
+    { resource: 'images' as const, status: 'success' },
+    { resource: 'images' as const, status: 'error' },
+  ])('ignores idle $resource keepalives and preserves $status results', async ({ resource, status }) => {
+    const encoder = new TextEncoder();
+    let output: ReadableStreamDefaultController<Uint8Array>;
+    server.use(
+      http.post(
+        resource === 'images' ? 'http://localhost/api/v1/images/pull' : 'http://localhost/api/v1/deployments/apply',
+        () =>
+          new HttpResponse(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                output = controller;
+                controller.enqueue(encoder.encode('[\n{"progressMessage":"Pulling image"}'));
+              },
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          ),
+      ),
+    );
+    const view = renderCitadel(<PullProgressProbe resource={resource} />);
+    await waitFor(() => expect(view.getByTestId('logs')).toHaveTextContent('Pulling image'));
+    for (let i = 0; i < 9; i++) output!.enqueue(encoder.encode('\n'));
+    expect(view.getByTestId('status')).toHaveTextContent('pending');
+    expect(view.getByTestId('logs').textContent).toBe('Pulling image');
+    output!.enqueue(
+      encoder.encode(
+        status === 'success' ? ',{"progressMessage":"Pull completed."}]' : ',{"errorMessage":"Image pull failed."}]',
+      ),
+    );
+    output!.close();
+    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent(status));
+    expect(view.getByTestId('logs').textContent).toBe(
+      status === 'success' ? 'Pulling image\nPull completed.' : 'Pulling image\nImage pull failed.',
+    );
+  });
+
   it('does not toast a connection failure when Strict Mode restarts a successful stack stream', async () => {
     const notice = vi.spyOn(toast, 'error').mockImplementation(() => 'unused');
     server.use(
@@ -140,7 +203,7 @@ describe('useStreamProgress', () => {
     expect(view.queryByText(/Pulling image/)).not.toBeInTheDocument();
   });
 
-  it('shows live chunks before completion and clears unfinished activity on completion', async () => {
+  it('ignores Stack keepalives, shows live chunks and clears unfinished activity on completion', async () => {
     const encoder = new TextEncoder();
     let output: ReadableStreamDefaultController<Uint8Array>;
     server.use(
@@ -162,6 +225,7 @@ describe('useStreamProgress', () => {
     );
     const view = renderCitadel(<StackProgressProbe />);
     await waitFor(() => expect(view.getByText('Creating network demo-app_default...')).toBeVisible());
+    for (let i = 0; i < 9; i++) output!.enqueue(encoder.encode('\n'));
     expect(view.getByTestId('status')).toHaveTextContent('pending');
     output!.enqueue(
       encoder.encode(
@@ -342,7 +406,7 @@ describe('useStreamProgress', () => {
     expect(view.queryByText('Creating container application...')).not.toBeInTheDocument();
   });
 
-  it('finishes when a terminal item arrives even if the server leaves the response stream open', async () => {
+  it('ignores Swarm keepalives and finishes on completion even if the response stream stays open', async () => {
     const encoder = new TextEncoder();
     server.use(
       http.post(
@@ -351,6 +415,8 @@ describe('useStreamProgress', () => {
           new HttpResponse(
             new ReadableStream({
               start(controller) {
+                controller.enqueue(encoder.encode('[\n'));
+                for (let i = 0; i < 9; i++) controller.enqueue(encoder.encode('\n'));
                 controller.enqueue(
                   encoder.encode(
                     JSON.stringify({

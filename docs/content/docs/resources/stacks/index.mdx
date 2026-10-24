@@ -55,6 +55,15 @@ changes already accepted by the daemon or stop the deployed application containe
 Closing the browser does not cancel a claimed Stack operation; check its operation
 history before retrying.
 
+The **Logs** tab follows replacement containers during redeployment. A container
+being removed ends only that container's stream; logs from other members continue,
+and the replacement appears after inventory updates. Permission or connection
+failures still stop the subscription and show an error.
+
+Deploy and rollback progress stays connected during quiet periods, such as long
+image pulls, with keepalive data that does not add log entries. A connection
+error alone does not mean the Stack operation failed; check its status and history.
+
 ## Choose the source
 
 | Source | Use it when |

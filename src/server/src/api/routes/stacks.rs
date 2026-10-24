@@ -18,15 +18,11 @@ use crate::{
 
 use axum::{
     Json, Router,
-    body::Body,
     extract::{
         Extension, Path, Query, State,
         rejection::{JsonRejection, PathRejection, QueryRejection},
     },
-    http::{
-        HeaderMap, HeaderValue, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_TYPE},
-    },
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 
@@ -297,18 +293,47 @@ state_action!(
 );
 
 fn progress_response(
-    mut receiver: tokio::sync::mpsc::Receiver<citadel_stacks::StackProgressItem>,
+    receiver: tokio::sync::mpsc::Receiver<citadel_stacks::StackProgressItem>,
 ) -> axum::response::Response {
-    let stream = async_stream::stream! {yield Ok::<_,std::convert::Infallible>(bytes::Bytes::from_static(b"["));let mut first=true;while let Some(item)=receiver.recv().await{if !first{yield Ok(bytes::Bytes::from_static(b","));}first=false;if let Ok(value)=serde_json::to_vec(&StackStreamItem::from(item)){yield Ok(bytes::Bytes::from(value));}}yield Ok(bytes::Bytes::from_static(b"]"));};
-    let mut response = Body::from_stream(stream).into_response();
-    response.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static("application/json; charset=utf-8"),
-    );
-    response
-        .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
+    use futures_util::StreamExt;
+    crate::api::progress::json_response(
+        tokio_stream::wrappers::ReceiverStream::new(receiver).map(StackStreamItem::from),
+    )
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+    use citadel_stacks::{StackProgressItem, StackReleaseStatus};
+    use futures_util::StreamExt;
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_apply_and_rollback_progress_preserves_terminal_status() {
+        for status in [StackReleaseStatus::Healthy, StackReleaseStatus::Failed] {
+            let (sender, receiver) = tokio::sync::mpsc::channel(1);
+            let response = progress_response(receiver);
+            assert_eq!(response.headers()["x-accel-buffering"], "no");
+            let mut stream = response.into_body().into_data_stream();
+            let mut body = stream.next().await.unwrap().unwrap().to_vec();
+            for _ in 0..9 {
+                let started = tokio::time::Instant::now();
+                let chunk = stream.next().await.unwrap().unwrap();
+                assert_eq!(chunk.as_ref(), b"\n");
+                assert_eq!(started.elapsed(), std::time::Duration::from_secs(15));
+                body.extend_from_slice(&chunk);
+            }
+            let terminal = StackProgressItem::completed(status, "Finished");
+            sender.send(terminal.clone()).await.unwrap();
+            drop(sender);
+            while let Some(chunk) = stream.next().await {
+                body.extend_from_slice(&chunk.unwrap());
+            }
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+                serde_json::json!([StackStreamItem::from(terminal)])
+            );
+        }
+    }
 }
 
 async fn actor_and_id<P: PermissionPolicy>(

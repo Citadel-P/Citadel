@@ -14,15 +14,11 @@ use crate::{
 
 use axum::{
     Json, Router,
-    body::Body,
     extract::{
         Extension, Path, State,
         rejection::{JsonRejection, PathRejection},
     },
-    http::{
-        HeaderMap, HeaderValue, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_TYPE},
-    },
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 
@@ -70,18 +66,68 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<SwarmSer
 }
 
 fn progress_response(
-    mut receiver: tokio::sync::mpsc::Receiver<citadel_swarm_services::SwarmServiceProgressItem>,
+    receiver: tokio::sync::mpsc::Receiver<citadel_swarm_services::SwarmServiceProgressItem>,
 ) -> axum::response::Response {
-    let stream = async_stream::stream! {yield Ok::<_,std::convert::Infallible>(bytes::Bytes::from_static(b"["));let mut first=true;while let Some(item)=receiver.recv().await{if !first{yield Ok(bytes::Bytes::from_static(b","));}first=false;match serde_json::to_vec(&SwarmServiceProgressItem::from(item)){Ok(value)=>yield Ok(bytes::Bytes::from(value)),Err(error)=>{tracing::error!(%error,"failed to serialize Swarm Service progress");break;}}}yield Ok(bytes::Bytes::from_static(b"]"));};
-    let mut response = Body::from_stream(stream).into_response();
-    response.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static("application/json; charset=utf-8"),
-    );
-    response
-        .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
+    use futures_util::StreamExt;
+    crate::api::progress::json_response(
+        tokio_stream::wrappers::ReceiverStream::new(receiver).map(SwarmServiceProgressItem::from),
+    )
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+    use citadel_swarm_services::SwarmServiceProgressItem as Progress;
+    use futures_util::StreamExt;
+
+    #[tokio::test(start_paused = true)]
+    async fn quiet_rollouts_keep_alive_and_preserve_completion_warning_and_failure() {
+        let service = Uuid::now_v7();
+        let operation = Uuid::now_v7();
+        for terminal in [
+            Progress::completed(service, operation, "Rollout completed."),
+            Progress::failed(service, Some(operation), "Rollout failed."),
+            Progress {
+                is_warning: true,
+                ..Progress::completed(service, operation, "Image status refresh failed.")
+            },
+        ] {
+            let expected =
+                serde_json::to_value(SwarmServiceProgressItem::from(terminal.clone())).unwrap();
+            let (sender, receiver) = tokio::sync::mpsc::channel(1);
+            let response = progress_response(receiver);
+            assert_eq!(response.headers()["x-accel-buffering"], "no");
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            assert_eq!(
+                response.headers()["content-type"],
+                "application/json; charset=utf-8"
+            );
+            let mut stream = response.into_body().into_data_stream();
+            let mut body = stream.next().await.unwrap().unwrap().to_vec();
+            for _ in 0..9 {
+                let started = tokio::time::Instant::now();
+                let chunk = stream.next().await.unwrap().unwrap();
+                assert_eq!(chunk.as_ref(), b"\n");
+                assert_eq!(started.elapsed(), std::time::Duration::from_secs(15));
+                body.extend_from_slice(&chunk);
+            }
+            sender.send(terminal).await.unwrap();
+            // Completion is delivered without waiting for the producer to close.
+            body.extend_from_slice(&stream.next().await.unwrap().unwrap());
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&body[1..]).unwrap(),
+                expected
+            );
+            drop(sender);
+            while let Some(chunk) = stream.next().await {
+                body.extend_from_slice(&chunk.unwrap());
+            }
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+                serde_json::json!([expected])
+            );
+        }
+    }
 }
 
 async fn authorize<P: PermissionPolicy>(

@@ -347,6 +347,12 @@ output and error. If you have closed it, open the Deployment's **Activities** ta
 or the main **Activities** page and select the failed **Deployment Applied** event.
 The event details show the recorded configuration and failure message.
 
+An image pull can take several minutes without a new progress message. Citadel
+sends keepalive data during quiet periods to keep the progress connection active;
+these do not appear as log entries. Closing the sheet or losing the browser
+connection does not cancel an accepted deployment. If the connection fails,
+check the Deployment's status and **Activities** before retrying.
+
 ![Deployment Applied activity details showing the configured image and a manifest unknown failure for a missing image tag](/screenshots/deployment-failure-details.png)
 
 This demo failure refers to `nginx:demo-missing`. Compare the image reference in

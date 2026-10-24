@@ -19,6 +19,11 @@ version is **2**. Command number 0 and unknown command numbers are rejected.
 The Agent runs without PostgreSQL. It maps requests onto shared Docker and
 external-tool implementations; Core owns persisted resource and user state.
 
+Container log streaming reports a deleted, dead, or removing container as
+`NotFound` over both Direct and Edge. Core uses that typed result to retire a
+replaced Stack member's log stream while retaining the Stack subscription.
+Other log errors keep their existing classification; no wire fields change.
+
 ## Image metadata comparisons
 
 `DistributionInspect` accepts an optional target OS/architecture/variant. With that

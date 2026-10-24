@@ -13,10 +13,31 @@ impl ContainerLogPort for crate::client::DockerClient {
                 biased;
                 ()=cancel.cancelled()=>Err(cancelled()),
                 result=tokio::time::timeout(self.request_timeout(),self.open_logs(id,cancel))=>
-                    result.map_err(|_|failure("Opening container logs timed out."))?.map_err(crate::client::runtime::normalize_docker_error),
+                    result.map_err(|_|failure("Opening container logs timed out."))?.map_err(normalize_container_log_error),
             }
         })
     }
+}
+
+/// Recognize only Docker's specific container-removal conflict. Agent callers
+/// retain their existing authentication and transport mappings for other errors.
+pub fn is_container_log_removal_conflict(error: &crate::client::DockerError) -> bool {
+    matches!(error, crate::client::DockerError::Api { status, message }
+        if *status == reqwest::StatusCode::CONFLICT
+            && serde_json::from_str::<serde_json::Value>(message).ok()
+                .is_some_and(|value| value["message"].as_str()
+                    == Some("can not get logs from container which is dead or marked for removal")))
+}
+
+fn normalize_container_log_error(error: crate::client::DockerError) -> RuntimeCapabilityError {
+    if is_container_log_removal_conflict(&error) {
+        return RuntimeCapabilityError::new(
+            RuntimeErrorKind::NotFound,
+            "The container was removed or is being removed.",
+            false,
+        );
+    }
+    crate::client::runtime::normalize_docker_error(error)
 }
 
 impl LogReadPort for crate::client::DockerClient {
@@ -142,6 +163,42 @@ pub fn decode_frames(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn removal_conflict_is_missing_without_hiding_other_failures() {
+        for (status, message, expected) in [
+            (
+                reqwest::StatusCode::NOT_FOUND,
+                "No such container: old",
+                RuntimeErrorKind::NotFound,
+            ),
+            (
+                reqwest::StatusCode::CONFLICT,
+                "can not get logs from container which is dead or marked for removal",
+                RuntimeErrorKind::NotFound,
+            ),
+            (
+                reqwest::StatusCode::CONFLICT,
+                "another conflict",
+                RuntimeErrorKind::Conflict,
+            ),
+            (
+                reqwest::StatusCode::BAD_REQUEST,
+                "configured logging driver does not support reading",
+                RuntimeErrorKind::InvalidRequest,
+            ),
+            (
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                "daemon unavailable",
+                RuntimeErrorKind::Unavailable,
+            ),
+        ] {
+            let error = normalize_container_log_error(crate::client::DockerError::Api {
+                status,
+                message: serde_json::json!({"message":message}).to_string(),
+            });
+            assert_eq!(error.kind, expected);
+        }
+    }
     use bytes::Bytes;
 
     #[tokio::test]

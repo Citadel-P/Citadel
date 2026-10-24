@@ -280,7 +280,13 @@ impl container_service_server::ContainerService for Runtime {
                 &cancel,
             )
             .await
-            .map_err(docker_error)?;
+            .map_err(|error| {
+                if citadel_docker::containers::logs::is_container_log_removal_conflict(&error) {
+                    Status::not_found("The container was removed or is being removed.")
+                } else {
+                    docker_error(error)
+                }
+            })?;
         Ok(Response::new(Box::pin(async_stream::try_stream! {
             let _guard=guard;
             while let Some(log)=logs.next().await {yield ContainerLogResponse {log:log.map_err(runtime_error)?};}
