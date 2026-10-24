@@ -214,8 +214,8 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 421);
-        assert_eq!(operations(&public), 316);
+        assert_eq!(operations(&full), 422);
+        assert_eq!(operations(&public), 317);
         for doc in [&full, &public] {
             let refresh = &doc["paths"]["/api/v1/platforms/{platformId}/swarm/refresh"]["post"];
             assert_eq!(refresh["operationId"], "refreshSwarmInventory");
@@ -230,6 +230,11 @@ mod tests {
                     "/api/v1/backupRepositories/{id}/credentials",
                     "post",
                     "updateBackupRepositoryCredentials",
+                ),
+                (
+                    "/api/v1/buildAgentPools/{id}/agent/setup",
+                    "get",
+                    "getBuildAgentPoolAgentSetup",
                 ),
             ] {
                 let operation = &doc["paths"][path][method];

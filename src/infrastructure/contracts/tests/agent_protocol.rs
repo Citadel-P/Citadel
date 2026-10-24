@@ -167,7 +167,10 @@ fn deployment_templates_preserve_transport_and_pool_selection() {
         "inbound Build Pool uses the same Direct runtime"
     );
     assert_eq!(inbound.len(), 2);
-    assert_eq!(inbound["CITADEL_AGENT_ID"], "replace-with-generated-agent-id");
+    assert_eq!(
+        inbound["CITADEL_AGENT_ID"],
+        "replace-with-generated-agent-id"
+    );
     assert_eq!(
         inbound["CITADEL_CORE_PUBLIC_KEY"],
         "replace-with-citadel-core-hub-public-key"
