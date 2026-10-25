@@ -2047,7 +2047,7 @@ impl DockerResticBackupExecutor {
     ) -> Result<citadel_execution::ProcessOutput, String> {
         let mut request =
             ProcessRequest::new(self.docker.clone())
-                .args(args)
+                .args(&args)
                 .limits(ProcessLimits {
                     timeout,
                     maximum_stdout_bytes: self.maximum_output,
@@ -2064,7 +2064,7 @@ impl DockerResticBackupExecutor {
         if output.succeeded() {
             Ok(output)
         } else {
-            Err(redact(&String::from_utf8_lossy(&output.stderr)))
+            Err(docker_failure_message(&args, &output.stderr))
         }
     }
     async fn run_observed(
@@ -2173,6 +2173,38 @@ impl DockerResticBackupExecutor {
             &CancellationToken::new(),
         )
         .await;
+    }
+}
+
+fn docker_failure_message(args: &[OsString], stderr: &[u8]) -> String {
+    let details = redact(&String::from_utf8_lossy(stderr));
+    let repository_mount_denied = args.first().is_some_and(|arg| arg == "run")
+        && args.windows(2).any(|pair| {
+            if pair[0] != "--volume" {
+                return false;
+            }
+            let Some(path) = pair[1]
+                .to_str()
+                .and_then(|mount| mount.strip_suffix(":/repository"))
+            else {
+                return false;
+            };
+            let prefix = format!("docker: Error response from daemon: error while creating mount source path '{path}':");
+            details.lines().any(|line| {
+                line.starts_with(&prefix) && line.ends_with("permission denied")
+            })
+        });
+    if repository_mount_denied {
+        format!(
+            "Docker cannot access the backup repository folder on the Docker host. \
+             Check the repository's host path and the Docker daemon's filesystem permissions. \
+             A folder inside the Citadel Core container is not automatically available to backup helpers; \
+             its storage must also be mounted into the helper. \
+             Use a host-accessible filesystem repository or an S3-compatible repository.\n\n\
+             Docker details:\n{details}"
+        )
+    } else {
+        details
     }
 }
 
@@ -2447,6 +2479,63 @@ fn validate_bind_repository(repository: &BackupRepository, path: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repository_mount_permission_error_explains_host_paths_and_preserves_redacted_details() {
+        let args = ["run", "--volume", "/app/data/daily backups:/repository"].map(OsString::from);
+        let docker_error = "docker: Error response from daemon: error while creating mount source path '/app/data/daily backups': mkdir /app: permission denied";
+        let stderr = format!(
+            "Pull complete\n{docker_error}\npassword=never-expose\nRun 'docker run --help' for more information"
+        );
+        let message = docker_failure_message(&args, stderr.as_bytes());
+        assert!(
+            message.starts_with(
+                "Docker cannot access the backup repository folder on the Docker host."
+            )
+        );
+        assert!(message.contains("filesystem permissions"));
+        assert!(message.contains("inside the Citadel Core container"));
+        assert!(message.contains("S3-compatible repository"));
+        assert!(message.contains(docker_error));
+        assert!(message.contains("Docker details:\nPull complete"));
+        assert!(message.contains("[redacted]"));
+        assert!(!message.contains("never-expose"));
+    }
+
+    #[test]
+    fn repository_mount_hint_does_not_mask_source_or_unrelated_failures() {
+        let args = [
+            "run",
+            "--volume",
+            "/backups:/repository",
+            "--volume",
+            "/source:/data:ro",
+        ]
+        .map(OsString::from);
+        for stderr in [
+            "docker: Error response from daemon: error while creating mount source path '/source': mkdir /source: permission denied",
+            "docker: Error response from daemon: error while creating mount source path '/backups-other': mkdir /backups-other: permission denied",
+            "docker: Error response from daemon: error while creating mount source path '/backups': no space left on device",
+            "permission denied while trying to connect to the Docker daemon socket",
+            "Fatal: repository does not exist",
+        ] {
+            assert_eq!(docker_failure_message(&args, stderr.as_bytes()), stderr);
+        }
+        let stderr = "docker: Error response from daemon: error while creating mount source path '/backups': mkdir /backups: permission denied";
+        assert_eq!(docker_failure_message(&[], stderr.as_bytes()), stderr);
+        assert_eq!(
+            docker_failure_message(
+                &[
+                    "inspect".into(),
+                    "--volume".into(),
+                    "/backups:/repository".into()
+                ],
+                stderr.as_bytes()
+            ),
+            stderr
+        );
+    }
+
     #[tokio::test]
     async fn core_repository_paths_are_validated_before_secrets_or_process_execution() {
         struct NoSecrets;

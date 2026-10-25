@@ -379,6 +379,12 @@ After creating a repository:
 
 A backup policy defines what to back up, where to store it, and when it should run.
 
+The indicator beside the policy name shows whether the policy is **Enabled** or
+**Disabled**. The **Last Run** column shows the latest run's timestamp and result:
+green for success, red for failure, and orange for success with warnings. Hover
+over the run icon to read its status. Policies that have never run show
+**No runs**.
+
 The policy's **Run As** identity supplies permissions for scheduled and
 webhook-triggered runs. Choose an enabled User or, preferably for unattended
 operation, a least-privileged Service Account. Manual runs use the
@@ -701,6 +707,7 @@ name: identical names on different Nodes can contain different data.
 | Symptom | Next step |
 | --- | --- |
 | Repository test fails | Verify the destination, restic password, storage credentials, and connectivity from the configured execution location. |
+| Docker cannot access the backup repository folder | Check the repository path on the Docker host and the Docker daemon's filesystem permissions. A directory inside Core's container is not automatically available to backup helpers. Use a host-accessible filesystem repository or S3-compatible storage. The failure message retains the original Docker details. |
 | Policy has no eligible data | Review the preview for the intended volumes and bind mounts, synchronize workload inventory, and check discovery warnings and host-path permissions. |
 | Remote filesystem repository is rejected | Use S3-compatible storage for Agent, Edge Agent, or Swarm Node execution. |
 | A run failed or its progress connection closed | Inspect its entry in Runs and the logs before retrying; check whether it already completed. |

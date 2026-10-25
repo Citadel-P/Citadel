@@ -1,5 +1,6 @@
 import { BuildProjectBuilderKind, AuthorizedProject, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { LastRunCell } from '@/components/custom/last-run-cell';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
@@ -123,21 +124,17 @@ const columns = (
       const run = latestRuns.get(row.original.id);
       const isProjectProcessing = isBuildProjectProcessing(row.original);
       if (!run) {
-        return isProjectProcessing ? (
-          <span className="inline-flex items-center gap-2 text-sm">
-            <StateIndicator value={BuildRunStatus.Queued} isProcessing kind="buildRun" />
-            In progress
-          </span>
-        ) : (
-          <span className="text-sm text-muted-foreground">-</span>
+        return (
+          <LastRunCell status={isProjectProcessing ? BuildRunStatus.Queued : undefined}>
+            {isProjectProcessing ? 'In progress' : null}
+          </LastRunCell>
         );
       }
 
       return (
-        <span className="inline-flex items-center gap-2 text-sm">
-          <StateIndicator value={run.status} isProcessing={isProjectProcessing && isActiveRun(run)} kind="buildRun" />
+        <LastRunCell status={run.status}>
           <TimestampCell value={run.completedAt ?? run.startedAt ?? run.queuedAt} formatDateTime={formatDateTime} />
-        </span>
+        </LastRunCell>
       );
     },
     sortFn: (rowA, rowB) =>

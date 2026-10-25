@@ -1,16 +1,15 @@
-import { AutomationRunStatus, AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
+import { AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { isFailedRunStatus } from '@/components/custom/state-badge';
+import { LastRunCell } from '@/components/custom/last-run-cell';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
-import { CalendarClock, PlayCircle } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { TagChips } from '../tags/components';
@@ -73,7 +72,11 @@ const columns = (
   {
     accessorKey: 'latestRun',
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
-    cell: ({ row }) => <LastRunCell action={row.original} />,
+    cell: ({ row }) => (
+      <LastRunCell status={row.original.latestRun?.status}>
+        <span className="whitespace-nowrap">{fromNow(row.original.latestRun?.queuedAt)}</span>
+      </LastRunCell>
+    ),
     sortFn: (rowA, rowB) =>
       String(rowA.original.latestRun?.queuedAt ?? '').localeCompare(String(rowB.original.latestRun?.queuedAt ?? '')),
   },
@@ -117,30 +120,5 @@ const ScheduleCell = ({ action }: { action: AuthorizedAction }) => {
         {action.scheduleCron}
       </span>
     </span>
-  );
-};
-
-const LastRunCell = ({ action }: { action: AuthorizedAction }) => {
-  const run = action.latestRun;
-  if (!run) return <span className="text-sm text-muted-foreground">No runs</span>;
-  const status = run.status === AutomationRunStatus.TimedOut ? 'Timed out' : run.status;
-  const iconColor = isFailedRunStatus(run.status)
-    ? 'text-red-500'
-    : run.status === AutomationRunStatus.Succeeded
-      ? 'text-green-500'
-      : 'text-muted-foreground';
-
-  return (
-    <div className="inline-flex items-center gap-2 text-sm">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span role="img" aria-label={`Last run: ${status}`} className="inline-flex">
-            <PlayCircle aria-hidden="true" className={`size-3.5 ${iconColor}`} />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{status}</TooltipContent>
-      </Tooltip>
-      <span className="whitespace-nowrap">{fromNow(run.queuedAt)}</span>
-    </div>
   );
 };
