@@ -1,11 +1,14 @@
 import { AppContent } from '@/components/custom/app-content';
-import { CurrentProfileView, UserDateTimeFormat } from '@/api/generated/api.types';
+import { CurrentProfileView, ProfileResourceInfo, UserDateTimeFormat } from '@/api/generated/api.types';
+import { OverflowCountBadge } from '@/components/custom/common';
 import { getBrowserTimezone } from '@/components/custom/timezone-select';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import Loader from '@/components/ui/loader';
 import { useRead } from '@/lib/hooks';
-import { CalendarClock, Mail, ShieldCheck, UserRound, Users } from 'lucide-react';
-import { ReactNode, useMemo } from 'react';
+import { CalendarClock, Mail, ShieldCheck, Users } from 'lucide-react';
+import { ReactNode, useId, useMemo, useState } from 'react';
 import { ProfileForm } from './profile-form';
 import { formatProfileDateTime, getInitials, ProfileDateFormatter } from './utils';
 
@@ -45,18 +48,23 @@ export default function ProfilePage() {
 
 function AccountHeader({ profile, formatDate }: { profile: CurrentProfileView; formatDate: ProfileDateFormatter }) {
   return (
-    <header className="rounded-sm border bg-background">
+    <header className="rounded-lg border bg-card shadow-xs">
       <div className="flex flex-col gap-(--section-gap) p-(--surface-padding) lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-sm font-semibold text-primary">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-semibold text-primary">
             {getInitials(profile.displayName)}
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h1 className="min-w-0 truncate text-lg font-semibold text-foreground">{profile.displayName}</h1>
-              <Badge variant="secondary" className="rounded-sm">
+              <Badge variant="secondary" className="min-h-6 leading-4 bg-accent/60 border-none">
                 {profile.authentication.label}
               </Badge>
+              {profile.authentication.oidcProviderName && (
+                <Badge variant="secondary" className="min-h-6 max-w-full leading-4 bg-accent/60 border-none">
+                  <span className="truncate">{profile.authentication.oidcProviderName}</span>
+                </Badge>
+              )}
             </div>
             <div className="mt-1 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
               <Mail className="size-3.5 shrink-0" />
@@ -65,16 +73,22 @@ function AccountHeader({ profile, formatDate }: { profile: CurrentProfileView; f
           </div>
         </div>
 
-        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:min-w-[520px] lg:grid-cols-4">
-          <HeaderFact
+        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-[1fr_1fr_auto] lg:min-w-100">
+          <HeaderMembership
             icon={<ShieldCheck className="size-3.5" />}
             label="Roles"
-            value={profile.directRoles.length.toString()}
+            description="Roles assigned directly to you."
+            items={profile.directRoles}
           />
-          <HeaderFact icon={<Users className="size-3.5" />} label="Teams" value={profile.teams.length.toString()} />
-          <HeaderFact icon={<UserRound className="size-3.5" />} label="Method" value={profile.authentication.label} />
+          <HeaderMembership
+            icon={<Users className="size-3.5" />}
+            label="Teams"
+            description="Teams you're a member of."
+            items={profile.teams}
+          />
           <HeaderFact
             icon={<CalendarClock className="size-3.5" />}
+            className="col-span-2 sm:col-span-1"
             label="Created"
             value={formatDate(profile.createdAt)}
           />
@@ -84,9 +98,88 @@ function AccountHeader({ profile, formatDate }: { profile: CurrentProfileView; f
   );
 }
 
-function HeaderFact({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function HeaderMembership({
+  icon,
+  label,
+  description,
+  items,
+}: {
+  icon: ReactNode;
+  label: string;
+  description: string;
+  items: ProfileResourceInfo[];
+}) {
+  const [open, setOpen] = useState(false);
+  const contentId = useId();
+  const first = items[0];
+  const remaining = items.length - 1;
+
   return (
     <div className="min-w-0 border-l pl-3">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="mt-1">
+        {first ? (
+          <HoverCard open={open} onOpenChange={setOpen} openDelay={150} closeDelay={150}>
+            <HoverCardTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-auto w-full min-w-0 justify-start gap-1.5 px-2 py-0 text-left"
+                aria-label={`${label}: ${first.name}${remaining > 0 ? `, ${remaining} more` : ''}`}
+                aria-expanded={open}
+                aria-controls={open ? contentId : undefined}
+                onClick={() => setOpen(true)}
+                onTouchStart={() => setOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setOpen(false);
+                }}>
+                <span className="min-w-0 truncate">{first.name}</span>
+                <OverflowCountBadge count={remaining} className="shrink-0" />
+              </Button>
+            </HoverCardTrigger>
+            <HoverCardContent
+              id={contentId}
+              role="region"
+              aria-label={label}
+              align="start"
+              className="w-72 max-w-[calc(100vw-2rem)] p-3">
+              <p className="text-sm font-semibold">{label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+              <ul className="mt-3 max-h-60 space-y-2 overflow-y-auto text-sm">
+                {items.map((item) => (
+                  <li key={item.id} className="flex min-w-0 items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
+                    <span className="min-w-0 wrap-anywhere">{item.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </HoverCardContent>
+          </HoverCard>
+        ) : (
+          <span className="text-sm text-muted-foreground">--</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HeaderFact({
+  icon,
+  label,
+  value,
+  className = '',
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 border-l pl-3 ${className}`}>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {icon}
         <span>{label}</span>

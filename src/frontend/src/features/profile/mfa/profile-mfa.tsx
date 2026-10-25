@@ -1,14 +1,17 @@
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { StateBadge } from '@/components/custom/state-badge';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,10 +35,56 @@ type SetupState =
   | { step: 'code'; secret: string; otpAuthUri: string }
   | { step: 'recovery'; codes: string[] };
 
+export function ProfileMfaStatusBadge({ canUseLocalPassword }: { canUseLocalPassword: boolean }) {
+  const query = useRead('getProfileMfaStatus', undefined, { enabled: canUseLocalPassword });
+  const status = query.data?.data;
+  const label = !canUseLocalPassword
+    ? 'Unavailable'
+    : query.isLoading
+      ? 'Loading…'
+      : query.isError || !status
+        ? 'Unavailable'
+        : status.enabled
+          ? 'Enabled'
+          : 'Disabled';
+  return (
+    <span role="status" aria-label={`Two-factor authentication: ${label}`}>
+      <StateBadge value={!canUseLocalPassword || query.isLoading ? 'Unknown' : label} label={label} />
+    </span>
+  );
+}
+
 export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword: boolean }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <ShieldCheck className="size-4" />
+          Manage two-factor authentication
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Two-factor authentication</DialogTitle>
+          <DialogDescription>Manage your authenticator app and recovery codes.</DialogDescription>
+        </DialogHeader>
+        <ProfileMfaSettings canUseLocalPassword={canUseLocalPassword} />
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Done
+            </Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProfileMfaSettings({ canUseLocalPassword }: { canUseLocalPassword: boolean }) {
   const queryClient = useQueryClient();
   const { completeLogin } = useAuthContext();
-  const statusQuery = useRead('getProfileMfaStatus');
+  const statusQuery = useRead('getProfileMfaStatus', undefined, { enabled: canUseLocalPassword });
   const startSetup = useMutate('startProfileMfaSetup');
   const confirmSetup = useMutate('confirmProfileMfaSetup');
   const disableMfa = useMutate('disableProfileMfa');
@@ -52,33 +101,40 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
     await queryClient.invalidateQueries({ queryKey: ['listProfileSessions'] });
   };
 
-  if (statusQuery.isLoading) return <MfaLoadingPanel />;
   if (!canUseLocalPassword) return <MfaUnavailablePanel />;
+  if (statusQuery.isLoading) return <MfaLoadingPanel />;
+  if (statusQuery.isError || !status) {
+    return (
+      <div className="space-y-3 rounded-lg border bg-card p-(--surface-padding)">
+        <StateBadge value="Unavailable" />
+        <p className="text-sm text-muted-foreground">Unable to load your two-factor authentication settings.</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={statusQuery.isFetching}
+          onClick={() => void statusQuery.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const enabled = status?.enabled === true;
   const remainingRecoveryCodes = Number(status?.remainingRecoveryCodes ?? 0);
   const recoveryState = getRecoveryState(enabled, remainingRecoveryCodes);
 
   return (
-    <div className="max-w-full overflow-hidden rounded-sm border bg-background">
-      <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="max-w-full overflow-hidden rounded-lg border bg-card">
+      <div className="flex flex-col gap-4 p-(--surface-padding) sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div
-            className={`flex size-10 shrink-0 items-center justify-center rounded-sm border ${
-              enabled
-                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'
-                : 'border-border bg-muted/40 text-muted-foreground'
-            }`}>
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted/40 text-muted-foreground">
             {enabled ? <ShieldCheck className="size-5" /> : <ShieldOff className="size-5" />}
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <p className="text-sm font-semibold">Authenticator app</p>
-              <Badge
-                variant={enabled ? 'secondary' : 'outline'}
-                className={`rounded-sm ${enabled ? 'bg-green-500/15 text-green-700 dark:text-green-300' : 'bg-muted/40 text-muted-foreground'}`}>
-                {enabled ? 'Enabled' : 'Disabled'}
-              </Badge>
+              <StateBadge value={enabled ? 'Enabled' : 'Disabled'} />
             </div>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
               {enabled
@@ -88,7 +144,7 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
           {!enabled && (
             <Button type="button" size="sm" onClick={() => setSetup({ step: 'password', password: '' })}>
               <FingerprintPattern className="size-4" />
@@ -121,28 +177,44 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
         <MfaSummaryCell
           icon={enabled ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
           label="Status"
-          value={enabled ? 'Protected' : 'Not configured'}
-          tone={enabled ? 'success' : 'muted'}
+          value={
+            <StateBadge
+              value={enabled ? 'Enabled' : 'Disabled'}
+              label={enabled ? 'Protected' : 'Not configured'}
+              className="max-w-full whitespace-normal"
+            />
+          }
         />
         <MfaSummaryCell
           icon={<ShieldAlert className="size-4" />}
           label="Policy"
-          value={formatPolicy(status?.policy)}
-          tone={status?.canDisable === false ? 'warning' : 'muted'}
+          value={
+            <StateBadge
+              value={status.canDisable ? 'Unknown' : 'Warning'}
+              label={formatPolicy(status.policy)}
+              className="max-w-full whitespace-normal"
+            />
+          }
         />
         <MfaSummaryCell
           icon={<KeyRound className="size-4" />}
           label="Recovery codes"
-          value={recoveryState.label}
-          tone={recoveryState.tone}
+          value={
+            <StateBadge
+              value={recoveryState.state}
+              label={recoveryState.label}
+              className="max-w-full whitespace-normal"
+            />
+          }
         />
       </div>
 
       {enabled && status?.canDisable === false && (
         <>
           <Separator />
-          <div className="bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-            MFA is required by the active policy and cannot be disabled for this account.
+          <div className="flex items-start gap-2 bg-muted/15 p-(--surface-padding) text-sm text-muted-foreground">
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+            <p>MFA is required by the active policy and cannot be disabled for this account.</p>
           </div>
         </>
       )}
@@ -210,12 +282,12 @@ export function ProfileMfaCommand({ canUseLocalPassword }: { canUseLocalPassword
 
 function MfaLoadingPanel() {
   return (
-    <div className="max-w-3xl rounded-sm border bg-background p-4">
+    <div className="rounded-lg border bg-card p-(--surface-padding)">
       <div className="flex items-center gap-3">
-        <div className="size-10 animate-pulse rounded-sm bg-muted" />
+        <Skeleton className="size-10 rounded-md" />
         <div className="min-w-0 flex-1 space-y-2">
-          <div className="h-4 w-40 animate-pulse rounded-sm bg-muted" />
-          <div className="h-3 w-72 max-w-full animate-pulse rounded-sm bg-muted" />
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-72 max-w-full" />
         </div>
       </div>
     </div>
@@ -224,9 +296,9 @@ function MfaLoadingPanel() {
 
 function MfaUnavailablePanel() {
   return (
-    <div className="max-w-3xl rounded-sm border bg-muted/20 p-4">
+    <div className="rounded-lg border bg-card p-(--surface-padding)">
       <div className="flex gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-sm border bg-background text-muted-foreground">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted/40 text-muted-foreground">
           <ShieldOff className="size-5" />
         </div>
         <div className="min-w-0">
@@ -240,33 +312,14 @@ function MfaUnavailablePanel() {
   );
 }
 
-function MfaSummaryCell({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  tone: 'success' | 'warning' | 'muted';
-}) {
-  const toneClass =
-    tone === 'success'
-      ? 'text-green-700 dark:text-green-300'
-      : tone === 'warning'
-        ? 'text-amber-800 dark:text-amber-200'
-        : 'text-muted-foreground';
-
+function MfaSummaryCell({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
   return (
-    <div className="bg-background px-4 py-3">
-      <div className={`flex items-center gap-2 ${toneClass}`}>
+    <div className="bg-card px-(--surface-padding) py-3">
+      <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
-        <span className="text-xs font-medium uppercase">{label}</span>
+        <span className="text-xs font-medium">{label}</span>
       </div>
-      <p className="mt-1 truncate text-sm font-medium" title={value}>
-        {value}
-      </p>
+      <div className="mt-2">{value}</div>
     </div>
   );
 }
@@ -274,11 +327,11 @@ function MfaSummaryCell({
 function getRecoveryState(
   enabled: boolean,
   remainingCodes: number,
-): { label: string; tone: 'success' | 'warning' | 'muted' } {
-  if (!enabled) return { label: '-', tone: 'muted' };
-  if (remainingCodes <= 0) return { label: 'No codes remaining', tone: 'warning' };
-  if (remainingCodes <= 2) return { label: `${remainingCodes} remaining`, tone: 'warning' };
-  return { label: `${remainingCodes} remaining`, tone: 'success' };
+): { label: string; state: 'Unknown' | 'Warning' | 'Enabled' } {
+  if (!enabled) return { label: 'Not configured', state: 'Unknown' };
+  if (remainingCodes <= 0) return { label: 'No codes remaining', state: 'Warning' };
+  if (remainingCodes <= 2) return { label: `${remainingCodes} remaining`, state: 'Warning' };
+  return { label: `${remainingCodes} remaining`, state: 'Enabled' };
 }
 
 function formatPolicy(policy?: string) {
@@ -364,9 +417,9 @@ function SetupCodeStep({
         event.preventDefault();
         if (/^\d{6}$/.test(code)) await onSubmit(code);
       }}>
-      <div className="space-y-3 rounded-sm border bg-muted/20 p-3">
+      <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
         <div className="flex gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-primary text-xs font-semibold text-primary-foreground">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
             1
           </span>
           <div className="min-w-0">
@@ -380,9 +433,9 @@ function SetupCodeStep({
         <TotpSetupPanel secret={secret} otpAuthUri={otpAuthUri} />
       </div>
 
-      <div className="space-y-3 rounded-sm border bg-background p-3">
+      <div className="space-y-3 rounded-lg border bg-card p-3">
         <div className="flex gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-primary text-xs font-semibold text-primary-foreground">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
             2
           </span>
           <div className="min-w-0">

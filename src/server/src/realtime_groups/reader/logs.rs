@@ -132,8 +132,11 @@ impl ApplicationGroupReader {
                     Some(item)=streams.next(),if !streams.is_empty()=>(None,Some(item)),
                     else=>break,
                 };
-                if let Some((id,item))=item {
-                    if let Some(event)=forward_log_item(id,item,&mut streams,&mut retired)? {yield event;}
+                if let Some(event)=match item {
+                    Some((id,item))=>forward_log_item(id,item,&mut streams,&mut retired)?,
+                    None=>None,
+                } {
+                    yield event;
                 }
                 if let Some(change)=change {
                         let change=change.map_err(failure)?;
@@ -149,8 +152,11 @@ impl ApplicationGroupReader {
                                 Some(item)=streams.next(),if !streams.is_empty()=>(None,Some(item)),
                             };
                             if let Some(targets)=targets {break targets;}
-                            if let Some((id,item))=item {
-                                if let Some(event)=forward_log_item(id,item,&mut streams,&mut retired)? {yield event;}
+                            if let Some(event)=match item {
+                                Some((id,item))=>forward_log_item(id,item,&mut streams,&mut retired)?,
+                                None=>None,
+                            } {
+                                yield event;
                             }
                         };
                         let targets=targets?;

@@ -41,6 +41,7 @@ export interface FieldConfig<T> {
   dirtyKey?: string;
   key: Path<T>;
   label: string;
+  labelSuffix?: React.ReactNode;
   required?: boolean;
   placeholder?: string;
   description?: React.ReactElement | string;
@@ -89,6 +90,7 @@ export type FieldChange<T> = (partial: Partial<T> | ((prev: Partial<T>) => Parti
 
 interface FieldShellProps {
   label: string;
+  labelSuffix?: React.ReactNode;
   required?: boolean;
   description?: React.ReactElement | string;
   requiredLicense?: LicenseEdition;
@@ -172,6 +174,7 @@ export function defineSection<T>(config: SectionConfig<T>): SectionConfig<T> {
 
 function FieldShell({
   label,
+  labelSuffix,
   required,
   description,
   requiredLicense,
@@ -191,10 +194,13 @@ function FieldShell({
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <label className="block font-medium text-sm">
-            {label}
-            {required && <span className="text-destructive ml-1">*</span>}
-          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="block font-medium text-sm">
+              {label}
+              {required && <span className="text-destructive ml-1">*</span>}
+            </label>
+            {labelSuffix}
+          </div>
           {typeof description === 'string' ? (
             <p id={descriptionId} className="text-sm text-muted-foreground">
               {description}
@@ -1459,6 +1465,7 @@ export function FormShell<T>({
                           value={value}
                           onChange={getFieldHandler(key)}
                           label={f.label}
+                          labelSuffix={f.labelSuffix}
                           required={f.required}
                           description={f.description}
                           requiredLicense={f.requiredLicense}
@@ -1500,6 +1507,7 @@ export function FormShell<T>({
                                   value={value}
                                   onChange={getFieldHandler(key)}
                                   label={f.label}
+                                  labelSuffix={f.labelSuffix}
                                   required={f.required}
                                   description={f.description}
                                   requiredLicense={f.requiredLicense}
@@ -1568,6 +1576,7 @@ export function FormShell<T>({
                                   value={value}
                                   onChange={getFieldHandler(key)}
                                   label={f.label}
+                                  labelSuffix={f.labelSuffix}
                                   required={f.required}
                                   description={f.description}
                                   requiredLicense={f.requiredLicense}
@@ -1610,6 +1619,7 @@ export function FormShell<T>({
                                         value={value}
                                         onChange={getFieldHandler(key)}
                                         label={f.label}
+                                        labelSuffix={f.labelSuffix}
                                         required={f.required}
                                         description={f.description}
                                         requiredLicense={f.requiredLicense}
