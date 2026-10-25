@@ -220,6 +220,7 @@ export function AutomationActionForm({
                     defineField({
                       key: 'enabled',
                       label: 'Enabled',
+                      description: 'Allow manual runs and configured schedule or webhook triggers.',
                       render: (value, set) => (
                         <FieldSwitch
                           checked={value ?? false}
@@ -241,6 +242,7 @@ export function AutomationActionForm({
                     defineField<AutomationActionFormValue, 'enabled'>({
                       key: 'enabled',
                       label: 'Enabled',
+                      description: 'Allow manual runs and configured schedule or webhook triggers.',
                       render: (value, set) => (
                         <FieldSwitch
                           checked={value ?? false}

@@ -7,6 +7,7 @@ import {
 } from '@/api/generated/api.types';
 import { createResourceTargetColumn, type ResourceTargetValue } from '@/components/custom/resource-target-column';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { LastRunCell } from '@/components/custom/last-run-cell';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TimestampCell } from '@/components/custom/timestamp-cell';
@@ -93,7 +94,11 @@ const columns = (
   {
     accessorKey: 'latestRun',
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
-    cell: ({ row }) => <TimestampCell value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => (
+      <LastRunCell status={row.original.latestRun?.status}>
+        <TimestampCell value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />
+      </LastRunCell>
+    ),
     sortFn: (rowA, rowB) =>
       String(getBackupPolicyLastRunAt(rowA.original) ?? '').localeCompare(
         String(getBackupPolicyLastRunAt(rowB.original) ?? ''),
