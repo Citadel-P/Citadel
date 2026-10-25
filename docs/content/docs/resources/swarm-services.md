@@ -64,6 +64,11 @@ After the first Apply, use:
   Registry digest;
 - **Delete** to remove the Docker Service and then its Citadel record.
 
+Apply, Scale, and Restart Tasks send invisible keepalive data during quiet rollout
+periods to keep the progress connection active. Closing the progress sheet does
+not cancel a claimed operation; check the Service status and activity history
+before retrying after a connection failure.
+
 Global Services cannot be scaled by replica count. Scheduling mode cannot be
 changed after the first successful Apply; create another Service when you
 need to change between replicated and global mode.

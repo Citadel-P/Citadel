@@ -260,31 +260,24 @@ pub(super) async fn pull(
         // The body drains queued progress before delivering this final error.
         let _ = completed.send(terminal);
     });
-    let mut response = no_store(progress_body(receiver, completion, guard).into_response());
-    response.headers_mut().insert(
-        axum::http::header::CONTENT_TYPE,
-        axum::http::HeaderValue::from_static("application/json; charset=utf-8"),
-    );
-    Ok(response)
+    Ok(progress_response(receiver, completion, guard))
 }
 
-pub(super) fn progress_body(
+fn progress_response(
     mut receiver: tokio::sync::mpsc::Receiver<PullImageStreamItem>,
     completion: tokio::sync::oneshot::Receiver<Option<PullImageStreamItem>>,
     guard: tokio_util::sync::DropGuard,
-) -> axum::body::Body {
-    let stream = async_stream::stream! {
-        let _guard=guard;
-        yield Ok::<_,std::convert::Infallible>(bytes::Bytes::from_static(b"["));
-        let mut first=true;
-        while let Some(item)=receiver.recv().await {if !first{yield Ok(bytes::Bytes::from_static(b","));}first=false;yield Ok(bytes::Bytes::from(serde_json::to_vec(&item).expect("Image pull progress serializes")));}
-        if let Ok(Some(item)) = completion.await {
-            if !first { yield Ok(bytes::Bytes::from_static(b",")); }
-            yield Ok(bytes::Bytes::from(serde_json::to_vec(&item).expect("Image pull error serializes")));
+) -> axum::response::Response {
+    let items = async_stream::stream! {
+        let _guard = guard;
+        while let Some(item) = receiver.recv().await {
+            yield item;
         }
-        yield Ok(bytes::Bytes::from_static(b"]"));
+        if let Ok(Some(item)) = completion.await {
+            yield item;
+        }
     };
-    axum::body::Body::from_stream(stream)
+    crate::api::progress::json_response(items)
 }
 
 pub(super) static IMAGE_DELETE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
@@ -876,7 +869,79 @@ pub(super) async fn browse(
 
 #[cfg(test)]
 mod image_pull_tests {
-    use crate::api::routes::platforms::*;
+    use super::*;
+    use futures_util::StreamExt;
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_pull_and_completion_wait_keep_alive_without_cancelling_the_pull() {
+        for failed in [false, true] {
+            let (sender, receiver) = tokio::sync::mpsc::channel(1);
+            let (completed, completion) = tokio::sync::oneshot::channel();
+            let cancel = CancellationToken::new();
+            let response = progress_response(receiver, completion, cancel.clone().drop_guard());
+            assert_eq!(response.headers()["x-accel-buffering"], "no");
+            let mut stream = response.into_body().into_data_stream();
+            let mut body = stream.next().await.unwrap().unwrap().to_vec();
+            sender
+                .send(PullImageStreamItem {
+                    status: Some("Pulling".into()),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            body.extend_from_slice(&stream.next().await.unwrap().unwrap());
+            for _ in 0..9 {
+                let started = tokio::time::Instant::now();
+                let chunk = stream.next().await.unwrap().unwrap();
+                assert_eq!(chunk.as_ref(), b"\n");
+                assert_eq!(started.elapsed(), std::time::Duration::from_secs(15));
+                assert!(!cancel.is_cancelled());
+                body.extend_from_slice(&chunk);
+            }
+            drop(sender);
+            // Closing the progress queue need not coincide with completion.
+            let chunk = stream.next().await.unwrap().unwrap();
+            assert_eq!(chunk.as_ref(), b"\n");
+            assert!(!cancel.is_cancelled());
+            body.extend_from_slice(&chunk);
+            assert!(
+                completed
+                    .send(failed.then(|| PullImageStreamItem {
+                        error_message: Some("Image pull failed.".into()),
+                        ..Default::default()
+                    }))
+                    .is_ok()
+            );
+            while let Some(chunk) = stream.next().await {
+                body.extend_from_slice(&chunk.unwrap());
+            }
+            let items: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(items.as_array().unwrap().len(), if failed { 2 } else { 1 });
+            assert_eq!(items[0]["status"], "Pulling");
+            if failed {
+                assert_eq!(items[1]["errorMessage"], "Image pull failed.");
+            }
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn dropping_pull_response_still_cancels_before_or_after_keepalive() {
+        for poll in [false, true] {
+            let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+            let (_completed, completion) = tokio::sync::oneshot::channel();
+            let cancel = CancellationToken::new();
+            let mut stream = progress_response(receiver, completion, cancel.clone().drop_guard())
+                .into_body()
+                .into_data_stream();
+            if poll {
+                assert_eq!(stream.next().await.unwrap().unwrap().as_ref(), b"[");
+                assert_eq!(stream.next().await.unwrap().unwrap().as_ref(), b"\n");
+            }
+            assert!(!cancel.is_cancelled());
+            drop(stream);
+            assert!(cancel.is_cancelled());
+        }
+    }
 
     #[tokio::test]
     async fn terminal_error_does_not_wait_for_space_in_a_stalled_progress_queue() {
@@ -902,7 +967,7 @@ mod image_pull_tests {
         drop(sender);
         let cancel = CancellationToken::new();
         let bytes = axum::body::to_bytes(
-            progress_body(receiver, completion, cancel.drop_guard()),
+            progress_response(receiver, completion, cancel.drop_guard()).into_body(),
             4096,
         )
         .await

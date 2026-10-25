@@ -1006,6 +1006,16 @@ async fn invoke_args(socket: &mut Socket, target: &str, args: Value) -> Value {
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn stack_logs_follow_committed_container_replacement_without_replaying_unchanged_streams() {
+    verify_stack_log_replacement(false).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn stack_logs_survive_removed_member_until_committed_replacement() {
+    verify_stack_log_replacement(true).await;
+}
+
+async fn verify_stack_log_replacement(removed: bool) {
     use citadel_adapters::connectors::edge::EdgeTarget;
     use citadel_contracts::citadel::{
         containers::v1::{ContainerLogRequest, ContainerLogResponse},
@@ -1102,6 +1112,25 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
     );
     logs.next().await.unwrap().unwrap();
     assert!(commands.try_recv().is_err());
+    if removed {
+        session.fail(original, "not_found");
+        assert!(
+            tokio::time::timeout(StdDuration::from_millis(100), logs.next())
+                .await
+                .is_err(),
+            "removing one member must not terminate Stack logs or publish LogStreamError"
+        );
+        hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
+        assert!(
+            tokio::time::timeout(StdDuration::from_millis(100), logs.next())
+                .await
+                .is_err()
+        );
+        assert!(
+            commands.try_recv().is_err(),
+            "stale membership must not reopen the retired container"
+        );
+    }
     sqlx::query("UPDATE containers SET dockercontainerid='replacement' WHERE platformid=$1")
         .bind(f.platform_id)
         .execute(&f.pool)
@@ -1109,12 +1138,14 @@ async fn stack_logs_follow_committed_container_replacement_without_replaying_unc
         .unwrap();
     hub.publish_runtime_change(f.platform_id, "platformInventory", "reconciled", "");
     let (event, ()) = tokio::join!(logs.next(), async {
-        let cancel = commands.recv().await.unwrap();
-        assert_eq!(cancel.command_id, original.to_string());
-        assert!(matches!(
-            cancel.body,
-            Some(core_envelope::Body::CancelCommand(_))
-        ));
+        if !removed {
+            let cancel = commands.recv().await.unwrap();
+            assert_eq!(cancel.command_id, original.to_string());
+            assert!(matches!(
+                cancel.body,
+                Some(core_envelope::Body::CancelCommand(_))
+            ));
+        }
         let command = commands.recv().await.unwrap();
         let id = Uuid::parse_str(&command.command_id).unwrap();
         let Some(core_envelope::Body::Command(request)) = command.body else {

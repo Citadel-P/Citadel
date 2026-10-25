@@ -3,6 +3,15 @@ use crate::{api::resources::platforms::views::ContainerView, realtime::topic::To
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
 
+enum LogStreamItem {
+    Line(ClientEvent),
+    Removed,
+}
+
+type ContainerLogStream =
+    futures_util::stream::BoxStream<'static, Result<LogStreamItem, RealtimeReadError>>;
+type ContainerLogStreams = tokio_stream::StreamMap<Uuid, ContainerLogStream>;
+
 static LOG_STREAM_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(128);
 
 impl ApplicationGroupReader {
@@ -101,6 +110,7 @@ impl ApplicationGroupReader {
         };
         let mut streams = tokio_stream::StreamMap::new();
         let mut identities = BTreeMap::new();
+        let mut retired = BTreeSet::new();
         for target in &targets {
             streams.insert(
                 target.id,
@@ -119,10 +129,15 @@ impl ApplicationGroupReader {
                     biased;
                     ()=cancel.cancelled()=>break,
                     change=async {match &mut changes {Some(receiver)=>receiver.recv().await,None=>std::future::pending().await}}=>(Some(change),None),
-                    Some((_,item))=streams.next(),if !streams.is_empty()=>(None,Some(item)),
+                    Some(item)=streams.next(),if !streams.is_empty()=>(None,Some(item)),
                     else=>break,
                 };
-                if let Some(item)=item {yield item?;}
+                if let Some(event)=match item {
+                    Some((id,item))=>forward_log_item(id,item,&mut streams,&mut retired)?,
+                    None=>None,
+                } {
+                    yield event;
+                }
                 if let Some(change)=change {
                         let change=change.map_err(failure)?;
                         if change.platform_id!=platform_id || change.event_kind!="runtimeChanged" || change.payload["dockerResourceType"]=="containerStats" {continue;}
@@ -130,25 +145,33 @@ impl ApplicationGroupReader {
                         let read=reader.log_targets(&principal,&group);
                         tokio::pin!(read);
                         let targets=loop {
-                            tokio::select! {
+                            let (targets,item)=tokio::select! {
                                 biased;
                                 ()=cancel.cancelled()=>return,
-                                targets=&mut read=>break targets,
-                                Some((_,item))=streams.next(),if !streams.is_empty()=>yield item?,
+                                targets=&mut read=>(Some(targets),None),
+                                Some(item)=streams.next(),if !streams.is_empty()=>(None,Some(item)),
+                            };
+                            if let Some(targets)=targets {break targets;}
+                            if let Some(event)=match item {
+                                Some((id,item))=>forward_log_item(id,item,&mut streams,&mut retired)?,
+                                None=>None,
+                            } {
+                                yield event;
                             }
                         };
                         let targets=targets?;
                         identities.retain(|id,_|{
                             let keep=targets.iter().any(|t|t.id==*id);
-                            if !keep {streams.remove(id);}
+                            if !keep {streams.remove(id);retired.remove(id);}
                             keep
                         });
                         for target in targets {
                             if target.projection_stale_since.is_some() {Err(failure("Container node data is stale."))?;}
                             let identity=log_identity(&target);
-                            if identities.get(&target.id)!=Some(&identity) || (!streams.contains_key(&target.id) && target.state.eq_ignore_ascii_case("running")) {
+                            if identities.get(&target.id)!=Some(&identity) || (!retired.contains(&target.id) && !streams.contains_key(&target.id) && target.state.eq_ignore_ascii_case("running")) {
                                 // Release the previous command/slot before opening its replacement.
                                 streams.remove(&target.id);
+                                retired.remove(&target.id);
                                 streams.insert(target.id,reader.open_log(&target,matches!(group.topic(), Topic::StackLog(..)),&cancel).await?);
                                 identities.insert(target.id,identity);
                             }
@@ -164,7 +187,7 @@ impl ApplicationGroupReader {
         target: &ContainerView,
         stack: bool,
         cancel: &CancellationToken,
-    ) -> Result<GroupStream, RealtimeReadError> {
+    ) -> Result<ContainerLogStream, RealtimeReadError> {
         let permit = LOG_STREAM_SLOTS
             .try_acquire()
             .map_err(|_| failure("Log stream capacity exceeded."))?;
@@ -175,8 +198,16 @@ impl ApplicationGroupReader {
             .runtime
             .streams(target.platform_id, target.docker_node_id.as_deref())
             .container_logs(&target.container_id, cancel)
-            .await
-            .map_err(failure)?;
+            .await;
+        let stream = match stream {
+            Ok(stream) => stream,
+            Err(error) if stack && removed_log_target(&error) => {
+                return Ok(Box::pin(futures_util::stream::once(async {
+                    Ok(LogStreamItem::Removed)
+                })));
+            }
+            Err(error) => return Err(failure(error)),
+        };
         let mut lines = log_lines(
             stream,
             if stack {
@@ -266,14 +297,45 @@ fn log_identity(container: &ContainerView) -> (String, Option<String>, String) {
     )
 }
 
+// A removed member is not a failure of the parent Stack log subscription.
+// Retire its exact identity until committed membership changes, without replaying
+// unchanged streams on every platform event.
+fn forward_log_item(
+    id: Uuid,
+    item: Result<LogStreamItem, RealtimeReadError>,
+    streams: &mut ContainerLogStreams,
+    retired: &mut BTreeSet<Uuid>,
+) -> Result<Option<ClientEvent>, RealtimeReadError> {
+    match item? {
+        LogStreamItem::Line(event) => Ok(Some(event)),
+        LogStreamItem::Removed => {
+            streams.remove(&id);
+            retired.insert(id);
+            Ok(None)
+        }
+    }
+}
+
+fn removed_log_target(error: &citadel_platforms::RuntimeCapabilityError) -> bool {
+    error.kind == citadel_platforms::RuntimeErrorKind::NotFound
+}
+
 fn log_lines(
     mut input: citadel_platforms::logs::RuntimeLogStream,
     name: Option<String>,
-) -> GroupStream {
+) -> ContainerLogStream {
     Box::pin(async_stream::try_stream! {
         let mut line=Vec::new();
         while let Some(chunk)=input.next().await {
-            let mut chunk=bytes::Bytes::from(chunk.map_err(failure)?);
+            let chunk = match chunk {
+                Ok(chunk) => chunk,
+                Err(error) if name.is_some() && removed_log_target(&error) => {
+                    yield LogStreamItem::Removed;
+                    return;
+                }
+                Err(error) => Err(failure(error))?,
+            };
+            let mut chunk=bytes::Bytes::from(chunk);
             while !chunk.is_empty() {
                 let count=chunk.iter().position(|b|*b==b'\n').map_or(chunk.len(),|index|index+1);
                 let segment=chunk.split_to(count);
@@ -284,11 +346,11 @@ fn log_lines(
                 if line.last()==Some(&b'\n') {
                     let event=log_event(&line,name.as_deref());
                     citadel_runtime::reset_stream_buffer(&mut line);
-                    yield event;
+                    yield LogStreamItem::Line(event);
                 }
             }
         }
-        if !line.is_empty(){line.push(b'\n');let event=log_event(&line,name.as_deref());drop(line);yield event;}
+        if !line.is_empty(){line.push(b'\n');let event=log_event(&line,name.as_deref());drop(line);yield LogStreamItem::Line(event);}
     })
 }
 
@@ -311,6 +373,64 @@ fn log_event(line: &[u8], name: Option<&str>) -> ClientEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn removed_stack_member_retires_only_its_stream_and_releases_resources() {
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        let mut streams = ContainerLogStreams::new();
+        let mut retired = BTreeSet::new();
+        let dropped = CancellationToken::new();
+        let guard = dropped.clone().drop_guard();
+        streams.insert(
+            id,
+            Box::pin(async_stream::stream! {
+                let _guard = guard;
+                yield Ok(LogStreamItem::Removed);
+                std::future::pending::<()>().await;
+            }) as ContainerLogStream,
+        );
+        streams.insert(
+            other,
+            Box::pin(futures_util::stream::pending()) as ContainerLogStream,
+        );
+        let (id, item) = streams.next().await.unwrap();
+        assert!(
+            forward_log_item(id, item, &mut streams, &mut retired)
+                .unwrap()
+                .is_none()
+        );
+        assert!(dropped.is_cancelled());
+        assert_eq!(streams.len(), 1);
+        assert!(streams.contains_key(&other));
+        assert!(retired.contains(&id));
+    }
+
+    #[tokio::test]
+    async fn only_missing_stack_members_are_retired_other_failures_stay_visible() {
+        use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
+        for stack in [false, true] {
+            for kind in [
+                RuntimeErrorKind::NotFound,
+                RuntimeErrorKind::PermissionDenied,
+                RuntimeErrorKind::Authentication,
+                RuntimeErrorKind::Unavailable,
+                RuntimeErrorKind::Conflict,
+                RuntimeErrorKind::InvalidRequest,
+            ] {
+                let input = futures_util::stream::iter([Err(RuntimeCapabilityError::new(
+                    kind, "failure", false,
+                ))]);
+                let mut lines = log_lines(Box::pin(input), stack.then(|| "web".into()));
+                let item = lines.next().await.unwrap();
+                if stack && kind == RuntimeErrorKind::NotFound {
+                    assert!(matches!(item, Ok(LogStreamItem::Removed)));
+                } else {
+                    assert!(item.is_err());
+                }
+                assert!(lines.next().await.is_none());
+            }
+        }
+    }
     #[tokio::test]
     async fn log_failure_is_reported_to_its_group_without_closing_realtime() {
         let stream: GroupStream = Box::pin(futures_util::stream::iter([
@@ -347,7 +467,9 @@ mod tests {
             "2026-09-06T12:00:00Z [web] héllo\n",
             "2026-09-06T12:00:01Z [web] final\n",
         ]) {
-            let event = item.unwrap();
+            let LogStreamItem::Line(event) = item.unwrap() else {
+                panic!("expected log line")
+            };
             assert_eq!(event.target, "SendStackLogs");
             let data: Vec<u8> = serde_json::from_value(event.arguments[0].clone()).unwrap();
             assert_eq!(String::from_utf8(data).unwrap(), expected);
@@ -363,6 +485,9 @@ mod tests {
         .await
         .unwrap()
         .unwrap();
+        let LogStreamItem::Line(output) = output else {
+            panic!("expected log line")
+        };
         assert_eq!(output.target, "SendContainerLogs");
         assert_eq!(output.arguments[0], json!(b"date line\n".to_vec()));
         let output = log_lines(

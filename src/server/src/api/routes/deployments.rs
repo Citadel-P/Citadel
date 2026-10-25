@@ -15,15 +15,11 @@ use crate::{
 
 use axum::{
     Json, Router,
-    body::Body,
     extract::{
         Extension, Path, State,
         rejection::{JsonRejection, PathRejection},
     },
-    http::{
-        HeaderMap, HeaderValue, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_TYPE},
-    },
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 
@@ -157,7 +153,7 @@ async fn apply_deployment(
             .await,
         &headers,
     )?;
-    let mut receiver = api_result(
+    let receiver = api_result(
         state
             .deployments
             .apply(
@@ -170,33 +166,16 @@ async fn apply_deployment(
             .map_err(deployment_error),
         &headers,
     )?;
-    let stream = async_stream::stream! {
-        yield Ok::<_, std::convert::Infallible>(bytes::Bytes::from_static(b"["));
-        let mut first = true;
-        while let Some(item) = receiver.recv().await {
-            if !first {
-                yield Ok(bytes::Bytes::from_static(b","));
-            }
-            first = false;
-            match serde_json::to_vec(&DeploymentStreamItem::from(item)) {
-                Ok(value) => yield Ok(bytes::Bytes::from(value)),
-                Err(error) => {
-                    tracing::error!(%error, "failed to serialize Deployment Apply progress");
-                    break;
-                }
-            }
-        }
-        yield Ok(bytes::Bytes::from_static(b"]"));
-    };
-    let mut response = Body::from_stream(stream).into_response();
-    response.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static("application/json; charset=utf-8"),
-    );
-    response
-        .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    Ok(response)
+    Ok(progress_response(receiver))
+}
+
+fn progress_response(
+    receiver: tokio::sync::mpsc::Receiver<citadel_deployments::DeploymentProgress>,
+) -> axum::response::Response {
+    use futures_util::StreamExt;
+    crate::api::progress::json_response(
+        tokio_stream::wrappers::ReceiverStream::new(receiver).map(DeploymentStreamItem::from),
+    )
 }
 
 #[utoipa::path(
@@ -818,6 +797,70 @@ async fn adopt(
 #[cfg(test)]
 mod tests {
     use crate::api::routes::deployments::*;
+    use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+    use citadel_deployments::DeploymentProgress;
+    use futures_util::StreamExt;
+
+    #[tokio::test(start_paused = true)]
+    async fn apply_progress_keeps_idle_connections_alive_without_changing_items() {
+        for terminal in [
+            DeploymentProgress::info("Deployment completed."),
+            DeploymentProgress::failure(1, "Image pull failed."),
+        ] {
+            let (sender, receiver) = tokio::sync::mpsc::channel(4);
+            let response = progress_response(receiver);
+            assert_eq!(response.headers()["x-accel-buffering"], "no");
+            assert_eq!(response.headers()[CACHE_CONTROL], "no-store");
+            assert_eq!(
+                response.headers()[CONTENT_TYPE],
+                "application/json; charset=utf-8"
+            );
+            let mut stream = response.into_body().into_data_stream();
+            let mut body = stream.next().await.unwrap().unwrap().to_vec();
+            assert_eq!(body, b"[");
+
+            // Keepalive also works before the first progress item.
+            let started = tokio::time::Instant::now();
+            body.extend_from_slice(&stream.next().await.unwrap().unwrap());
+            assert_eq!(started.elapsed(), std::time::Duration::from_secs(15));
+            let pulling = DeploymentProgress::info("Pulling image codeberg.org/forgejo/forgejo:15");
+            sender.send(pulling.clone()).await.unwrap();
+            body.extend_from_slice(&stream.next().await.unwrap().unwrap());
+
+            // A pull can stay silent longer than a two-minute proxy idle limit.
+            for _ in 0..9 {
+                let started = tokio::time::Instant::now();
+                let chunk = stream.next().await.unwrap().unwrap();
+                assert_eq!(chunk.as_ref(), b"\n");
+                assert_eq!(started.elapsed(), std::time::Duration::from_secs(15));
+                body.extend_from_slice(&chunk);
+            }
+            sender.send(terminal.clone()).await.unwrap();
+            drop(sender);
+            while let Some(chunk) = stream.next().await {
+                body.extend_from_slice(&chunk.unwrap());
+            }
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+                serde_json::json!([
+                    DeploymentStreamItem::from(pulling),
+                    DeploymentStreamItem::from(terminal),
+                ]),
+            );
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn apply_progress_closes_when_producer_finishes_without_waiting_for_keepalive() {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        drop(sender);
+        let started = tokio::time::Instant::now();
+        let body = axum::body::to_bytes(progress_response(receiver).into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(body.as_ref(), b"[]");
+        assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+    }
 
     #[test]
     fn filter_accepts_repeated_tags_and_one_platform() {

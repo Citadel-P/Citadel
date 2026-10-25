@@ -7,7 +7,7 @@ const renderCitadel = (ui: ReactElement) => renderApp(ui, { auth: { accessToken:
 const storageKey = (key: string) => scopedDraftKey(key, token, 'http://localhost')!;
 import { screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
-import { defineField, defineGroupField, FormSchema, FormShell } from './form-builder';
+import { defineField, defineGroupField, defineRowField, FieldInput, FormSchema, FormShell } from './form-builder';
 
 vi.mock('@/lib/monaco', () => ({
   MonacoDiff: () => null,
@@ -22,6 +22,33 @@ const original: TestConfiguration = {
   name: 'api',
   description: 'Public API',
 };
+
+it.each(['field', 'row', 'group', 'group-row'])(
+  'renders a label suffix in a %s without changing the input name',
+  (placement) => {
+    const field = defineField<TestConfiguration>({
+      key: 'name',
+      label: 'Name',
+      labelSuffix: <span role="status">Enabled</span>,
+      render: (value, set) => <FieldInput value={value} onChange={(name) => set({ name })} />,
+    });
+    const row = defineRowField<TestConfiguration>({ id: 'name-row', fields: [field] });
+    const item = placement.startsWith('group')
+      ? defineGroupField<TestConfiguration>({
+          id: 'name-group',
+          label: 'Identity',
+          items: [placement === 'group-row' ? row : field],
+        })
+      : placement === 'row'
+        ? row
+        : field;
+
+    renderCitadel(<FormHarness onSave={vi.fn()} formSchema={{ general: { items: [item] } }} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Enabled');
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('api');
+  },
+);
 
 const schema: FormSchema<TestConfiguration> = {
   general: {

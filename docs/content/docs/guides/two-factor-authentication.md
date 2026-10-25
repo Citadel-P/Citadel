@@ -7,6 +7,9 @@ Citadel two-factor authentication adds a six-digit authenticator-app code to loc
 
 Citadel TOTP applies only when you sign in with a Citadel username or email and password. If you sign in with OIDC or SSO, multi-factor authentication is controlled by your identity provider.
 
+Under **Profile → Security → Two-factor authentication**, select **Manage
+two-factor authentication** to open the authenticator and recovery-code controls.
+
 Supported authenticator apps include:
 
 - Microsoft Authenticator

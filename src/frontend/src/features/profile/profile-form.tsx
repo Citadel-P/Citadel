@@ -1,7 +1,6 @@
 import { useSetupContext } from '@/features/setup/setup-context';
 import {
   CurrentProfileView,
-  ProfileResourceInfo,
   UserDateTimeFormat,
   UserPreferencesView,
   UserSessionSummaryView,
@@ -11,6 +10,7 @@ import { defineField, defineGroupField, defineSection, FieldInput, FormShell } f
 import { getBrowserTimezone, TimezoneSelectField } from '@/components/custom/timezone-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
   DialogContent,
@@ -18,20 +18,19 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Constants } from '@/lib/constants';
 import { AppearanceCustomizer } from '@/components/custom/appearance-customizer';
-import { useAppearance } from '@/lib/appearance/appearance-context';
-import { FONT_OPTIONS } from '@/lib/appearance/appearance-config';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Clock, KeyRound, Laptop, MapPin, ShieldCheck, Users } from 'lucide-react';
+import { ChevronDown, Clock, KeyRound, Laptop, MapPin, RefreshCw } from 'lucide-react';
 import { FormEvent, ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ProfileDateFormatter } from './utils';
-import { ProfileMfaCommand } from './mfa/profile-mfa';
+import { ProfileMfaCommand, ProfileMfaStatusBadge } from './mfa/profile-mfa';
 
 const DATE_TIME_FORMAT_OPTIONS = [
   { value: UserDateTimeFormat.System, label: 'System' },
@@ -42,10 +41,6 @@ const DATE_TIME_FORMAT_OPTIONS = [
 type ProfileFormValue = {
   displayName: string;
   email: string;
-  authenticationLabel: string;
-  oidcProviderName: string;
-  roles: ProfileResourceInfo[];
-  teams: ProfileResourceInfo[];
   timeZone: string;
   dateTimeFormat: UserDateTimeFormat;
   appearance: string;
@@ -74,10 +69,6 @@ export function ProfileForm({
     () => ({
       displayName: profile.displayName,
       email: profile.email,
-      authenticationLabel: profile.authentication.label,
-      oidcProviderName: profile.authentication.oidcProviderName ?? '-',
-      roles: profile.directRoles,
-      teams: profile.teams,
       timeZone: preferences?.timeZone ?? getBrowserTimezone(),
       dateTimeFormat: preferences?.dateTimeFormat ?? UserDateTimeFormat.System,
       appearance: '',
@@ -124,7 +115,7 @@ export function ProfileForm({
             id: 'profile',
             label: 'Profile',
             title: 'Profile',
-            description: 'Your account identity and access information.',
+            description: 'Your name and sign-in email.',
             items: [
               defineField({
                 key: 'displayName',
@@ -142,35 +133,6 @@ export function ProfileForm({
                 label: 'Email',
                 description: 'Used to sign in and recover your account.',
                 render: (value) => <ReadOnlyValue value={value} />,
-              }),
-              defineField({
-                key: 'authenticationLabel',
-                label: 'Authentication',
-                description: 'How you currently sign in to Citadel.',
-                render: (value) => (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary" className="rounded-sm bg-accent/60">
-                      {value}
-                    </Badge>
-                    {profile.authentication.oidcProviderName && (
-                      <Badge variant="outline" className="rounded-sm bg-accent/60">
-                        {profile.authentication.oidcProviderName}
-                      </Badge>
-                    )}
-                  </div>
-                ),
-              }),
-              defineField({
-                key: 'roles',
-                label: 'Direct Roles',
-                description: 'Roles assigned directly to you.',
-                render: (value) => <ResourceBadges items={value ?? []} icon={<ShieldCheck className="size-3.5" />} />,
-              }),
-              defineField({
-                key: 'teams',
-                label: 'Teams',
-                description: "Teams you're a member of.",
-                render: (value) => <ResourceBadges items={value ?? []} icon={<Users className="size-3.5" />} />,
               }),
             ],
           }),
@@ -196,7 +158,7 @@ export function ProfileForm({
               defineField({
                 key: 'dateTimeFormat',
                 label: 'Date and Time',
-                description: 'Choose how clock values are shown in your profile and session views.',
+                description: 'How dates and times are displayed.',
                 render: (value, set) => (
                   <SelectField
                     value={value ?? UserDateTimeFormat.System}
@@ -214,7 +176,7 @@ export function ProfileForm({
                 label: 'Appearance',
                 description: 'Customize your workspace. Changes are saved automatically.',
                 ignoreFormDisabled: true,
-                render: () => <ProfileAppearance />,
+                render: () => <AppearanceCustomizer showLabel />,
               }),
             ],
           }),
@@ -243,6 +205,9 @@ export function ProfileForm({
               defineField({
                 key: 'mfaCommands',
                 label: 'Two-factor authentication',
+                labelSuffix: (
+                  <ProfileMfaStatusBadge canUseLocalPassword={profile.authentication.canUseLocalPasswordMfa} />
+                ),
                 ignoreFormDisabled: true,
                 description: 'Protect local-password sign-in with an authenticator app and recovery codes.',
                 render: () => <ProfileMfaCommand canUseLocalPassword={profile.authentication.canUseLocalPasswordMfa} />,
@@ -259,12 +224,7 @@ export function ProfileForm({
         ],
       }),
     }),
-    [
-      formatDate,
-      profile.authentication.canUseLocalPasswordMfa,
-      profile.authentication.canChangePassword,
-      profile.authentication.oidcProviderName,
-    ],
+    [formatDate, profile.authentication.canUseLocalPasswordMfa, profile.authentication.canChangePassword],
   );
 
   return (
@@ -285,39 +245,14 @@ export function ProfileForm({
   );
 }
 
-function ProfileAppearance() {
-  const { preferences } = useAppearance();
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        {preferences.mode} · {preferences.color} ·{' '}
-        {FONT_OPTIONS.find((option) => option.value === preferences.font)?.label} · {preferences.contentLayout}
-      </p>
-      <AppearanceCustomizer showLabel />
-    </div>
-  );
-}
-
 function ReadOnlyValue({ value }: { value?: string | null }) {
   return (
-    <div className="flex min-h-9 max-w-100 items-center rounded-sm border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-      <span className="truncate">{value || '-'}</span>
-    </div>
-  );
-}
-
-function ResourceBadges({ items, icon }: { items: ProfileResourceInfo[]; icon: ReactNode }) {
-  if (!items.length) return <p className="text-sm text-muted-foreground">None assigned.</p>;
-
-  return (
-    <div className="flex min-w-0 flex-wrap gap-1.5">
-      {items.map((item) => (
-        <Badge key={item.id} variant="secondary" className="max-w-full rounded-sm font-semibold bg-accent/60">
-          {icon}
-          <span className="truncate">{item.name}</span>
-        </Badge>
-      ))}
-    </div>
+    <Input
+      aria-label="Email"
+      readOnly
+      value={value || '-'}
+      className="max-w-100 max-h-9 bg-muted/30 text-muted-foreground"
+    />
   );
 }
 
@@ -325,6 +260,7 @@ function PasswordCommand() {
   const { passwordMinimumLength, passwordMaximumLength } = useSetupContext();
   const queryClient = useQueryClient();
   const changePassword = useMutate('changeCurrentPassword');
+  const [open, setOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -339,69 +275,124 @@ function PasswordCommand() {
 
   const canSubmit = Boolean(currentPassword && newPassword && confirmPassword && !validationError);
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (changePassword.isPending) return;
+    setOpen(nextOpen);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    changePassword.reset();
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || changePassword.isPending) return;
 
-    await changePassword.mutateAsync({
-      data: {
-        currentPassword,
-        newPassword,
-      },
-    });
+    try {
+      await changePassword.mutateAsync({
+        data: {
+          currentPassword,
+          newPassword,
+        },
+      });
+    } catch {
+      // Keep the dialog open; shared HTTP handling and inline validation report the error.
+      return;
+    }
 
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setOpen(false);
     await queryClient.invalidateQueries({ queryKey: ['listProfileSessions'] });
     toast.success('Password changed.');
   };
 
   return (
-    <form className="grid max-w-100 gap-3" onSubmit={handleSubmit}>
-      <Input
-        type="password"
-        value={currentPassword}
-        placeholder="Current password"
-        autoComplete="current-password"
-        onChange={(event) => setCurrentPassword(event.target.value)}
-      />
-      <Input
-        type="password"
-        value={newPassword}
-        placeholder="New password"
-        autoComplete="new-password"
-        onChange={(event) => setNewPassword(event.target.value)}
-      />
-      <Input
-        type="password"
-        value={confirmPassword}
-        placeholder="Confirm new password"
-        autoComplete="new-password"
-        onChange={(event) => setConfirmPassword(event.target.value)}
-      />
-      {!validationError && (
-        <p className="text-xs text-muted-foreground">
-          Use {passwordMinimumLength} to {passwordMaximumLength} characters.
-        </p>
-      )}
-
-      {(validationError || changePassword.validationErrors) && (
-        <p className="text-sm text-destructive">{validationError ?? changePassword.validationErrors}</p>
-      )}
-
-      <div className="flex justify-end">
-        <Button type="submit" disabled={!canSubmit || changePassword.isPending}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <KeyRound className="size-4" />
           Change Password
         </Button>
-      </div>
-    </form>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Change password</DialogTitle>
+          <DialogDescription>Changing your password signs out other Citadel sessions.</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-3" onSubmit={handleSubmit}>
+          <div className="space-y-2">
+            <label htmlFor="profile-current-password" className="text-sm font-medium">
+              Current password
+            </label>
+            <Input
+              id="profile-current-password"
+              type="password"
+              value={currentPassword}
+              autoComplete="current-password"
+              disabled={changePassword.isPending}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="profile-new-password" className="text-sm font-medium">
+              New password
+            </label>
+            <Input
+              id="profile-new-password"
+              type="password"
+              value={newPassword}
+              autoComplete="new-password"
+              disabled={changePassword.isPending}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="profile-confirm-password" className="text-sm font-medium">
+              Confirm new password
+            </label>
+            <Input
+              id="profile-confirm-password"
+              type="password"
+              value={confirmPassword}
+              autoComplete="new-password"
+              disabled={changePassword.isPending}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </div>
+          {!validationError && (
+            <p className="text-xs text-muted-foreground">
+              Use {passwordMinimumLength} to {passwordMaximumLength} characters.
+            </p>
+          )}
+
+          {(validationError || changePassword.validationErrors) && (
+            <p className="text-sm text-destructive">{validationError ?? changePassword.validationErrors}</p>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={changePassword.isPending}
+              onClick={() => handleOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!canSubmit || changePassword.isPending}>
+              Change Password
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function SessionsCommand({ formatDate }: { formatDate: ProfileDateFormatter }) {
+  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const sessionsQuery = useRead('listProfileSessions');
+  const sessionsQuery = useRead('listProfileSessions', undefined, { staleTime: Infinity });
   const sessions = sessionsQuery.data?.data;
   const revokeSession = useMutate('revokeProfileSession');
   const revokeOtherSessions = useMutate('revokeOtherProfileSessions');
@@ -423,38 +414,86 @@ function SessionsCommand({ formatDate }: { formatDate: ProfileDateFormatter }) {
   };
 
   return (
-    <div className="max-full rounded-sm border">
-      <div className="flex flex-col gap-3 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-muted-foreground">Manage your active browser sessions.</div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!sessions?.canRevokeOtherSessions || revokeOtherSessions.isPending}
-          onClick={() => setConfirmAction({ type: 'other-sessions' })}>
-          Sign Out Others
-        </Button>
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="max-w-full overflow-hidden rounded-lg border bg-card shadow-xs">
+      <div className={`flex flex-wrap items-center bg-muted/15 ${open ? 'border-b' : ''}`}>
+        <CollapsibleTrigger
+          aria-label={
+            sessions
+              ? `Manage active sessions: ${sessions.sessions.length} session${sessions.sessions.length === 1 ? '' : 's'}`
+              : 'Manage active sessions'
+          }
+          className="flex min-w-0 flex-1 items-center gap-2 p-3 text-left text-sm font-normal hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+          Manage active sessions
+          {sessions && (
+            <Badge
+              variant="secondary"
+              className="min-h-6 leading-4 bg-accent/60"
+              title={`${sessions.sessions.length} active session${sessions.sessions.length === 1 ? '' : 's'}`}>
+              {sessions.sessions.length}
+            </Badge>
+          )}
+        </CollapsibleTrigger>
+        {open && (
+          <div className="order-3 flex w-full items-center justify-end gap-2 px-3 pb-3 sm:order-none sm:w-auto sm:py-2 sm:pr-0 sm:pl-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+              disabled={sessionsQuery.isFetching}
+              onClick={() => void sessionsQuery.refetch()}>
+              <RefreshCw
+                className={`size-4 ${sessionsQuery.isFetching ? 'animate-spin motion-reduce:animate-none' : ''}`}
+                aria-hidden="true"
+              />
+              Refresh
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+              disabled={
+                !sessions?.canRevokeOtherSessions || sessions.sessions.length <= 1 || revokeOtherSessions.isPending
+              }
+              onClick={() => setConfirmAction({ type: 'other-sessions' })}>
+              Sign Out Others
+            </Button>
+          </div>
+        )}
+        <CollapsibleTrigger
+          aria-label={open ? 'Collapse active sessions' : 'Expand active sessions'}
+          className="shrink-0 self-start p-3 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:self-auto">
+          <ChevronDown
+            className={`size-4 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </CollapsibleTrigger>
       </div>
-
-      {sessionsQuery.isLoading ? (
-        <div className="p-3">
-          <Skeleton className="h-24 w-full" />
-        </div>
-      ) : sessions?.sessions.length ? (
-        <div className="divide-y">
-          {sessions.sessions.map((session) => (
-            <SessionRow
-              key={session.id}
-              session={session}
-              formatDate={formatDate}
-              disabled={revokeSession.isPending}
-              onRevoke={() => setConfirmAction({ type: 'session', session })}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="p-3 text-sm text-muted-foreground">No active sessions found.</p>
-      )}
+      <CollapsibleContent>
+        {sessionsQuery.isLoading ? (
+          <div className="p-3">
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : sessions?.sessions.length ? (
+          <div className="divide-y">
+            {sessions.sessions.map((session) => (
+              <SessionRow
+                key={session.id}
+                session={session}
+                formatDate={formatDate}
+                disabled={revokeSession.isPending}
+                onRevoke={() => setConfirmAction({ type: 'session', session })}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="p-3 text-sm text-muted-foreground">No active sessions found.</p>
+        )}
+      </CollapsibleContent>
 
       <ConfirmSessionDialog
         action={confirmAction}
@@ -462,7 +501,7 @@ function SessionsCommand({ formatDate }: { formatDate: ProfileDateFormatter }) {
         onOpenChange={(open) => !open && setConfirmAction(null)}
         onConfirm={handleConfirm}
       />
-    </div>
+    </Collapsible>
   );
 }
 
@@ -487,7 +526,7 @@ function SessionRow({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="min-w-0 truncate text-sm font-medium">{session.displayName}</span>
             {session.isCurrent && (
-              <Badge variant="secondary" className="shrink-0 rounded-sm bg-accent/60">
+              <Badge variant="secondary" className="shrink-0 rounded-sm bg-accent/60 font-normal">
                 Current
               </Badge>
             )}

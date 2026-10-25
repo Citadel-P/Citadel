@@ -27,6 +27,11 @@ selected Registry.
 3. Select **Pull image** and follow the operation's progress.
 4. When it finishes, find the image in the Platform's image list.
 
+Quiet periods during a pull do not add log entries; Citadel sends keepalive data
+to keep the progress connection active. Closing the pull sheet or losing its
+connection cancels the manual pull request. Docker may already have downloaded
+some or all of the image, so refresh inventory before retrying.
+
 Pulling downloads an image; it does not start a container or update an existing
 application. Use a [Deployment](/docs/resources/deployments#image-source) to run
 it, or the owning workload's update controls to apply a newer version.
