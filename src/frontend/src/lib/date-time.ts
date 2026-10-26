@@ -1,6 +1,6 @@
 import { UserDateTimeFormat } from '@/api/generated/api.types';
 
-export type DateTimeFormatter = (value: unknown) => string;
+export type DateTimeFormatter = (value: unknown, mode?: 'exact') => string;
 
 const ISO_WITHOUT_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
 

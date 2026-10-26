@@ -1,3 +1,4 @@
+import { MfaPolicy } from '@/api/generated/api.types';
 import { ApiClientContext } from '@/api/api-client-context';
 import { createApiClient } from '@/api/api-client-provider';
 import { LoginNextStep } from '@/api/generated/api.types';
@@ -53,6 +54,10 @@ function AuthProbe() {
 const completeSetup: SetupContextValue = {
   passwordMinimumLength: 15,
   passwordMaximumLength: 128,
+  updateChecksEnabled: true,
+  updateChecksAllowed: true,
+  mfaPolicy: MfaPolicy.Optional,
+  minimumMfaPolicy: MfaPolicy.Optional,
   isSetupReady: true,
   requiresSetup: false,
   markSetupComplete: () => {},

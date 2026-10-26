@@ -22,7 +22,9 @@ use citadel_identity::{
     ProfileRepository, ProfileService, ServiceAccountResourceAccess, ServiceAccountService,
     SessionMetadata, SystemClock, UpdateCurrentProfile, UserReadService,
 };
-use citadel_identity::{AuthenticatedPrincipalType, UserDateTimeFormat, UserTheme};
+use citadel_identity::{
+    AuthenticatedPrincipalType, UserDateDisplay, UserDateTimeFormat, UserTheme,
+};
 use citadel_primitives::PatchField;
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType, SpecificPermission};
 use sqlx::postgres::PgPoolOptions;
@@ -77,6 +79,8 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
                 name: "owner".into(),
                 email: "owner@example.test".into(),
                 password: "correct-horse-battery-staple".into(),
+                update_checks_enabled: None,
+                mfa_policy: None,
             },
             metadata(),
         )
@@ -103,6 +107,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     let preferences = profiles.get_preferences(&owner).await.unwrap();
     assert_eq!(preferences.time_zone, None);
     assert_eq!(preferences.date_time_format, UserDateTimeFormat::System);
+    assert_eq!(preferences.date_display, UserDateDisplay::Relative);
     assert_eq!(preferences.theme, UserTheme::System);
     assert!(!preferences.is_persisted);
     assert_eq!(
@@ -158,8 +163,20 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         preferences.density,
         citadel_identity::UserUiDensity::Compact
     );
-    let stored = sqlx::query_as::<_, (String, String, String)>(
-        "SELECT timezone, datetimeformat, theme FROM userpreferences WHERE userid = $1",
+    assert_eq!(preferences.date_display, UserDateDisplay::Relative);
+    let preferences = profiles
+        .patch_preferences(
+            &owner,
+            PatchUserPreferences {
+                date_display: PatchField::Value(UserDateDisplay::Exact),
+                ..PatchUserPreferences::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(preferences.date_display, UserDateDisplay::Exact);
+    let stored = sqlx::query_as::<_, (String, String, String, String)>(
+        "SELECT timezone, datetimeformat, theme, datedisplay FROM userpreferences WHERE userid = $1",
     )
     .bind(owner.subject_id)
     .fetch_one(&pool)
@@ -170,7 +187,8 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         (
             "Europe/Paris".to_owned(),
             "TwentyFourHour".to_owned(),
-            "Dark".to_owned()
+            "Dark".to_owned(),
+            "Exact".to_owned()
         )
     );
     // Appearance fields round-trip independently of the locale and mode.
@@ -217,10 +235,18 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
         serde_json::json!({"font":"ComicSans"}),
         serde_json::json!({"radius":"huge"}),
         serde_json::json!({"density":"roomy"}),
+        serde_json::json!({"dateDisplay":"Unknown"}),
     ] {
         assert!(serde_json::from_value::<PatchUserPreferences>(invalid).is_err());
     }
-    for field in ["themeColor", "font", "radius", "contentLayout", "density"] {
+    for field in [
+        "themeColor",
+        "font",
+        "radius",
+        "contentLayout",
+        "density",
+        "dateDisplay",
+    ] {
         assert!(
             profiles
                 .patch_preferences(
@@ -251,6 +277,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     let preferences = profiles.get_preferences(&owner).await.unwrap();
     assert_eq!(preferences.time_zone.as_deref(), Some("America/New_York"));
     assert_eq!(preferences.theme, UserTheme::Light);
+    assert_eq!(preferences.date_display, UserDateDisplay::Exact);
     assert_eq!(
         preferences.date_time_format,
         UserDateTimeFormat::TwentyFourHour

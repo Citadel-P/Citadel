@@ -9,6 +9,7 @@ import {
   UserContentLayout,
   UserUiDensity,
   UserDateTimeFormat,
+  UserDateDisplay,
   type UserPreferencesView,
 } from '@/api/generated/api.types';
 import { AuthContext, useAuthContext } from '@/features/auth/auth-context';
@@ -24,6 +25,7 @@ import { AppearanceProvider } from './appearance-provider';
 const profile = (): UserPreferencesView => ({
   timeZone: 'Europe/Paris',
   dateTimeFormat: UserDateTimeFormat.System,
+  dateDisplay: UserDateDisplay.Relative,
   theme: UserTheme.System,
   themeColor: UserThemeColor.Blue,
   font: UserUiFont.Geist,

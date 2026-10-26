@@ -14,6 +14,8 @@ pub struct PatchUserPreferences {
     #[serde(default)]
     pub date_time_format: PatchField<UserDateTimeFormat>,
     #[serde(default)]
+    pub date_display: PatchField<UserDateDisplay>,
+    #[serde(default)]
     pub theme: PatchField<UserTheme>,
     #[serde(default)]
     pub theme_color: PatchField<UserThemeColor>,
@@ -31,6 +33,7 @@ pub struct PatchUserPreferences {
 pub struct UserPreferencesUpdate {
     pub time_zone: Option<String>,
     pub date_time_format: Option<UserDateTimeFormat>,
+    pub date_display: Option<UserDateDisplay>,
     pub theme: Option<UserTheme>,
     pub theme_color: Option<UserThemeColor>,
     pub font: Option<UserUiFont>,

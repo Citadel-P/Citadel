@@ -8,16 +8,16 @@ import {
 import { createResourceTargetColumn, type ResourceTargetValue } from '@/components/custom/resource-target-column';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { LastRunCell } from '@/components/custom/last-run-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
 import { TagChips } from '@/features/tags/components';
 import { useSelectedResources } from '@/lib/atoms';
 import type { DateTimeFormatter } from '@/lib/date-time';
-import { useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { useRead } from '@/lib/hooks';
 import { ActionData } from '@/pages/types';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { CalendarClock, Database, HardDrive } from 'lucide-react';
@@ -96,7 +96,7 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
     cell: ({ row }) => (
       <LastRunCell status={row.original.latestRun?.status}>
-        <TimestampCell value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />
+        <Timestamp value={getBackupPolicyLastRunAt(row.original)} formatDateTime={formatDateTime} />
       </LastRunCell>
     ),
     sortFn: (rowA, rowB) =>

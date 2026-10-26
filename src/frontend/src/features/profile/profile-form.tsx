@@ -1,7 +1,10 @@
+import { Timestamp } from '@/components/custom/timestamp';
+import { InstallationSettingsControls } from './installation-settings';
 import { useSetupContext } from '@/features/setup/setup-context';
 import {
   CurrentProfileView,
   UserDateTimeFormat,
+  UserDateDisplay,
   UserPreferencesView,
   UserSessionSummaryView,
 } from '@/api/generated/api.types';
@@ -38,15 +41,22 @@ const DATE_TIME_FORMAT_OPTIONS = [
   { value: UserDateTimeFormat.TwelveHour, label: '12-hour' },
 ];
 
+const DATE_DISPLAY_OPTIONS = [
+  { value: UserDateDisplay.Relative, label: 'Relative' },
+  { value: UserDateDisplay.Exact, label: 'Exact' },
+];
+
 type ProfileFormValue = {
   displayName: string;
   email: string;
   timeZone: string;
   dateTimeFormat: UserDateTimeFormat;
+  dateDisplay: UserDateDisplay;
   appearance: string;
   passwordCommands: string;
   mfaCommands: string;
   sessionCommands: string;
+  installationCommands: string;
 };
 
 type ConfirmSessionAction = { type: 'session'; session: UserSessionSummaryView } | { type: 'other-sessions' };
@@ -71,10 +81,12 @@ export function ProfileForm({
       email: profile.email,
       timeZone: preferences?.timeZone ?? getBrowserTimezone(),
       dateTimeFormat: preferences?.dateTimeFormat ?? UserDateTimeFormat.System,
+      dateDisplay: preferences?.dateDisplay ?? UserDateDisplay.Relative,
       appearance: '',
       passwordCommands: '',
       mfaCommands: '',
       sessionCommands: '',
+      installationCommands: '',
     }),
     [preferences, profile],
   );
@@ -83,7 +95,9 @@ export function ProfileForm({
     const displayName = payload.displayName.trim();
     const profileChanged = displayName !== original.displayName;
     const preferencesChanged =
-      payload.timeZone !== original.timeZone || payload.dateTimeFormat !== original.dateTimeFormat;
+      payload.timeZone !== original.timeZone ||
+      payload.dateTimeFormat !== original.dateTimeFormat ||
+      payload.dateDisplay !== original.dateDisplay;
 
     if (profileChanged) {
       await updateProfile.mutateAsync({ data: { displayName } });
@@ -94,6 +108,7 @@ export function ProfileForm({
         data: {
           timeZone: payload.timeZone,
           dateTimeFormat: payload.dateTimeFormat,
+          dateDisplay: payload.dateDisplay,
         },
       });
     }
@@ -157,15 +172,32 @@ export function ProfileForm({
               }),
               defineField({
                 key: 'dateTimeFormat',
-                label: 'Date and Time',
-                description: 'How dates and times are displayed.',
+                label: 'Clock Format',
+                description: 'Format for exact timestamps, including those shown when hovering over relative dates.',
                 render: (value, set) => (
                   <SelectField
                     value={value ?? UserDateTimeFormat.System}
                     onChange={(dateTimeFormat) => set({ dateTimeFormat: dateTimeFormat as UserDateTimeFormat })}
                     options={DATE_TIME_FORMAT_OPTIONS}
-                    placeholder="Date and time format"
-                    allLabel="Date and time format"
+                    placeholder="Clock format"
+                    allLabel="Clock format"
+                    selectableLabel={false}
+                    className="max-w-100"
+                  />
+                ),
+              }),
+              defineField({
+                key: 'dateDisplay',
+                label: 'Date Display',
+                description:
+                  'Show elapsed time (e.g. “2 hours ago”) or the full date and time. Hover over a date to see the exact timestamp.',
+                render: (value, set) => (
+                  <SelectField
+                    value={value ?? UserDateDisplay.Relative}
+                    onChange={(dateDisplay) => set({ dateDisplay: dateDisplay as UserDateDisplay })}
+                    options={DATE_DISPLAY_OPTIONS}
+                    placeholder="Date display"
+                    allLabel="Date display"
                     selectableLabel={false}
                     className="max-w-100"
                   />
@@ -221,10 +253,37 @@ export function ProfileForm({
               }),
             ],
           }),
+          ...(profile.authorization.isAdministrator
+            ? [
+                defineGroupField<ProfileFormValue>({
+                  id: 'installation',
+                  label: 'Instance',
+                  title: (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span>Instance settings</span> <Badge variant="outline">Admins only</Badge>
+                    </span>
+                  ),
+                  description: 'Manage update checks and security policies for all users.',
+                  items: [
+                    defineField({
+                      key: 'installationCommands',
+                      label: '',
+                      ignoreFormDisabled: true,
+                      render: () => <InstallationSettingsControls />,
+                    }),
+                  ],
+                }),
+              ]
+            : []),
         ],
       }),
     }),
-    [formatDate, profile.authentication.canUseLocalPasswordMfa, profile.authentication.canChangePassword],
+    [
+      formatDate,
+      profile.authentication.canUseLocalPasswordMfa,
+      profile.authentication.canChangePassword,
+      profile.authorization.isAdministrator,
+    ],
   );
 
   return (
@@ -533,8 +592,13 @@ function SessionRow({
           </div>
           <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
             <SessionMeta icon={<MapPin className="size-3.5" />} label={session.ipAddress ?? 'Unknown'} />
-            <SessionMeta icon={<Clock className="size-3.5" />} label={formatDate(session.lastSeenAt)} />
-            <SessionMeta icon={<KeyRound className="size-3.5" />} label={formatDate(session.expiresAt)} />
+            <SessionMeta
+              icon={<Clock className="size-3.5" />}
+              label={
+                <Timestamp value={session.lastSeenAt} formatDateTime={formatDate} className="text-xs text-inherit" />
+              }
+            />
+            <SessionMeta icon={<KeyRound className="size-3.5" />} label={formatDate(session.expiresAt, 'exact')} />
           </div>
         </div>
       </div>
@@ -545,11 +609,11 @@ function SessionRow({
   );
 }
 
-function SessionMeta({ icon, label }: { icon: ReactNode; label: string }) {
+function SessionMeta({ icon, label }: { icon: ReactNode; label: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       <span className="shrink-0">{icon}</span>
-      <span className="truncate" title={label}>
+      <span className="truncate" title={typeof label === 'string' ? label : undefined}>
         {label}
       </span>
     </div>

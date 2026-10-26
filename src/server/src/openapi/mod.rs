@@ -214,7 +214,17 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 422);
+        assert_eq!(operations(&full), 424);
+        assert!(
+            public["paths"]
+                .get("/api/v1/installation/settings")
+                .is_none()
+        );
+        for method in ["get", "patch"] {
+            let operation = &full["paths"]["/api/v1/installation/settings"][method];
+            assert_eq!(operation["security"], json!([{"Bearer": []}]));
+            assert_eq!(operation["x-citadel-principal"], "human");
+        }
         assert_eq!(operations(&public), 317);
         for doc in [&full, &public] {
             let refresh = &doc["paths"]["/api/v1/platforms/{platformId}/swarm/refresh"]["post"];

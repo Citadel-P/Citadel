@@ -15,7 +15,7 @@ import { createNodeResourceColumn } from '@/components/custom/node-resource-colu
 import { useAtomValue } from 'jotai';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { networkColumnsAtom, networkOptionalColumns } from './table-columns';
@@ -198,7 +198,7 @@ const columns = (
     id: 'created',
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.created} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => <Timestamp value={row.original.created} formatDateTime={formatDateTime} />,
   },
   {
     id: 'networkId',

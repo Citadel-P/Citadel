@@ -6,6 +6,16 @@ use super::*;
 // Activity construction solely to reduce the enum's stack size.
 #[allow(clippy::large_enum_variant)]
 pub enum ActivityEventInfo {
+    InstallationSettingsUpdated {
+        #[serde(rename = "PreviousUpdateChecksEnabled")]
+        previous_update_checks_enabled: bool,
+        #[serde(rename = "UpdateChecksEnabled")]
+        update_checks_enabled: bool,
+        #[serde(rename = "PreviousMfaPolicy")]
+        previous_mfa_policy: String,
+        #[serde(rename = "MfaPolicy")]
+        mfa_policy: String,
+    },
     InitialAdministratorCreated {
         #[serde(rename = "UserId")]
         user_id: Uuid,
@@ -1283,6 +1293,9 @@ impl ActivityEventInfo {
             Self::RegistryUpdated { .. } => ActivityEventType::RegistryUpdated,
             Self::RegistryRenamed { .. } => ActivityEventType::RegistryRenamed,
             Self::AlertRuleRenamed { .. } => ActivityEventType::AlertRuleRenamed,
+            Self::InstallationSettingsUpdated { .. } => {
+                ActivityEventType::InstallationSettingsUpdated
+            }
             Self::InitialAdministratorCreated { .. } => {
                 ActivityEventType::InitialAdministratorCreated
             }

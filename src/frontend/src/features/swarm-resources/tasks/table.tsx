@@ -3,6 +3,8 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { CPUCell, MemoryUsageCell } from '@/components/custom/common';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { StateBadge } from '@/components/custom/state-badge';
+import { Timestamp } from '@/components/custom/timestamp';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { getSwarmTaskIdFromContainerName, getTaskName } from '@/lib/utils';
@@ -27,6 +29,7 @@ export const TasksTable = ({
 }) => {
   const { platformId: routePlatformId = '' } = useParams<{ platformId: string }>();
   const platformId = platformIdOverride ?? routePlatformId;
+  const formatDateTime = useProfileDateTimeFormatter();
   const taskContainersById = useMemo(() => {
     const result = new Map<string, ContainerView>();
     for (const container of taskContainers ?? []) {
@@ -126,10 +129,10 @@ export const TasksTable = ({
     result.push({
       accessorKey: 'statusTimestamp',
       header: 'Updated',
-      cell: ({ row }) => (row.original.statusTimestamp ? new Date(row.original.statusTimestamp).toLocaleString() : '-'),
+      cell: ({ row }) => <Timestamp value={row.original.statusTimestamp} formatDateTime={formatDateTime} />,
     });
     return result;
-  }, [platformId, showNode, showService, taskContainers, taskContainersById]);
+  }, [platformId, showNode, showService, taskContainers, taskContainersById, formatDateTime]);
 
   return (
     <DataTable

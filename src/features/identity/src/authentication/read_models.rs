@@ -13,6 +13,10 @@ pub struct SetupStatus {
     pub requires_setup: bool,
     pub password_minimum_length: usize,
     pub password_maximum_length: usize,
+    pub update_checks_enabled: bool,
+    pub update_checks_allowed: bool,
+    pub mfa_policy: crate::MfaPolicy,
+    pub minimum_mfa_policy: crate::MfaPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

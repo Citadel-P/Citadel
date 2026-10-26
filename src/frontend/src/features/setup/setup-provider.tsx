@@ -1,6 +1,7 @@
 import { useApiClientContext } from '@/api/api-client-context';
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import { SetupContext, SetupError } from './setup-context';
+import { MfaPolicy } from '@/api/generated/api.types';
 
 type SetupState =
   | { status: 'loading'; attempt: number }
@@ -26,7 +27,14 @@ function reducer(state: SetupState, action: SetupAction): SetupState {
 
 export function SetupProvider({ children }: { children: React.ReactNode }) {
   const { apiClient } = useApiClientContext();
-  const [passwordPolicy, setPasswordPolicy] = useState({ passwordMinimumLength: 15, passwordMaximumLength: 128 });
+  const [passwordPolicy, setPasswordPolicy] = useState({
+    passwordMinimumLength: 15,
+    passwordMaximumLength: 128,
+    updateChecksEnabled: true,
+    updateChecksAllowed: true,
+    mfaPolicy: MfaPolicy.Optional,
+    minimumMfaPolicy: MfaPolicy.Optional,
+  });
   const [state, dispatch] = useReducer(reducer, { status: 'loading', attempt: 0 });
 
   useEffect(() => {
@@ -40,6 +48,10 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
         setPasswordPolicy({
           passwordMinimumLength: response.data.passwordMinimumLength,
           passwordMaximumLength: response.data.passwordMaximumLength,
+          updateChecksEnabled: response.data.updateChecksEnabled ?? true,
+          updateChecksAllowed: response.data.updateChecksAllowed ?? true,
+          mfaPolicy: response.data.mfaPolicy ?? MfaPolicy.Optional,
+          minimumMfaPolicy: response.data.minimumMfaPolicy ?? MfaPolicy.Optional,
         });
         dispatch({ type: response.data.requiresSetup ? 'PENDING' : 'COMPLETE' });
       })

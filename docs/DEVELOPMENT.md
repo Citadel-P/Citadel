@@ -138,6 +138,9 @@ Inspect non-secret effective configuration without connecting to PostgreSQL:
 bash src/tools/dev/dev.sh exec cargo run --locked -p citadel-server -- print-effective-config
 ```
 
+This command reports deployment configuration. Database-managed update-check and
+MFA-policy choices are shown in administrator **Profile → Instance settings**.
+
 For deployment settings, use the [configuration guide](content/docs/getting-started/configuration.md).
 
 ## Checks

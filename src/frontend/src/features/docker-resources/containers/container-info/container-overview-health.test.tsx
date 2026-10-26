@@ -1,3 +1,5 @@
+vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => String }));
+
 import { screen, waitFor, within } from '@testing-library/react';
 import { renderCitadel } from '@/test/render-citadel';
 import { ContainerHealthStatus as Status, ContainerStateStatus, type ContainerView } from '@/api/generated/api.types';
@@ -47,6 +49,8 @@ it('supports keyboard entry and restores focus on Escape', async () => {
   expect(trigger).toHaveFocus();
   await user.tab();
   expect(screen.getByRole('dialog', { name: 'Container health' })).toHaveFocus();
+  await user.tab();
+  expect(document.activeElement?.querySelector('time')).not.toBeNull();
   await user.tab();
   expect(screen.getByRole('button', { name: 'View details' })).toHaveFocus();
   await user.keyboard('{Escape}');

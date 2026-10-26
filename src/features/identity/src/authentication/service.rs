@@ -1,6 +1,8 @@
 use super::login_throttle::LoginThrottle;
 use super::*;
 
+mod installation;
+
 pub const MAXIMUM_SESSIONS_PER_USER: i64 = 10;
 
 #[derive(Debug, Default)]
@@ -22,6 +24,8 @@ pub struct IdentityService {
     access_token_lifetime: Duration,
     refresh_token_lifetime: Duration,
     password_policy: PasswordPolicy,
+    installation_policy: InstallationPolicy,
+    installation_changes: tokio::sync::watch::Sender<()>,
     login_throttle: LoginThrottle,
     last_used_tracker: Arc<dyn ServiceAccountLastUsedTracker>,
 }
@@ -50,6 +54,8 @@ impl IdentityService {
             access_token_lifetime,
             refresh_token_lifetime,
             password_policy: PasswordPolicy::default(),
+            installation_policy: InstallationPolicy::default(),
+            installation_changes: tokio::sync::watch::channel(()).0,
             login_throttle: LoginThrottle::default(),
             last_used_tracker,
         }
@@ -70,6 +76,10 @@ impl IdentityService {
             requires_setup: self.store.setup_required().await?,
             password_minimum_length: self.password_policy.minimum_length(),
             password_maximum_length: MAXIMUM_PASSWORD_CHARACTERS,
+            update_checks_enabled: self.installation_policy.update_checks_allowed,
+            update_checks_allowed: self.installation_policy.update_checks_allowed,
+            mfa_policy: self.installation_policy.minimum_mfa_policy,
+            minimum_mfa_policy: self.installation_policy.minimum_mfa_policy,
         })
     }
 
@@ -102,6 +112,12 @@ impl IdentityService {
         request: InitializeCitadel,
         mode: crate::SetupInitializationMode,
     ) -> Result<UserAuthentication, IdentityError> {
+        self.validate_installation_choices(request.update_checks_enabled, request.mfa_policy)?;
+        let settings = InstallationSettings {
+            initialized: true,
+            update_checks_enabled: request.update_checks_enabled.unwrap_or(true),
+            mfa_policy: request.mfa_policy.unwrap_or_default(),
+        };
         validate_name(&request.name)?;
         validate_email(&request.email)?;
         self.password_policy.validate(
@@ -118,9 +134,12 @@ impl IdentityService {
             ActorId::new(SYSTEM_ACTOR_ID),
             now,
         );
-        self.store
-            .initialize_administrator(&administrator, mode)
-            .await
+        let user = self
+            .store
+            .initialize_administrator(&administrator, mode, settings)
+            .await?;
+        self.installation_changes.send_replace(());
+        Ok(user)
     }
 
     pub async fn login(

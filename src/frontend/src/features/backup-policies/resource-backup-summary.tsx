@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { BackupCoverageStatus, ResourceBackupSummaryView, BackupSourceSpec } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation } from 'react-router';
@@ -46,6 +48,7 @@ export function BackupSummaryDetails({
   returnTo?: string;
   coverage: ResourceBackupSummaryView;
 }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const location = useLocation();
   const returnTo = returnPath ?? `${location.pathname}${location.search}${location.hash}`;
   const volumes = coverage.volumes;
@@ -92,7 +95,8 @@ export function BackupSummaryDetails({
           )}
           {lastSuccessful && (
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Most recent successful backup: {new Date(lastSuccessful).toLocaleString()}
+              Most recent successful backup:{' '}
+              <Timestamp value={lastSuccessful} formatDateTime={formatDateTime} className="text-inherit" />
             </p>
           )}
         </div>

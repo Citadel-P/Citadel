@@ -15,10 +15,31 @@ and Team memberships. Roles and Teams show the first item and the number of
 additional items; hover, focus, or tap the summary to view the full list.
 Contact an administrator for access or account changes.
 
-Under **Preferences**, choose a time zone and date/time format, then save.
+Under **Preferences**, choose a time zone and clock format, then save.
 These affect personal display, including profile and session timestamps; a job's
 configured schedule and time zone remain separate. Appearance changes save
 automatically.
+
+**Date Display** defaults to **Relative**, such as “2 days ago”. Choose
+**Exact** to show full dates and times throughout Citadel, including tables,
+activity sheets, resource details, and profile sections. Hover over a date
+to see its exact timestamp. Exact timestamps use your selected time zone and clock format;
+log timestamps and scheduled execution times remain precise.
+
+## Instance settings
+
+Administrators also see **Instance settings**. These choices apply to everyone
+in the installation and save automatically:
+
+- **Check for Citadel updates** contacts GitHub for new releases, with no Citadel
+  telemetry or automatic installation. Server configuration can force checks off.
+- **Two-factor authentication policy** is Optional by default. Users can enable MFA
+  later in **Profile → Security**. Administrators can require MFA for administrators
+  or all local-password users, subject to the minimum set by server configuration.
+
+MFA policy changes apply to subsequent local-password sign-ins and do not revoke
+existing browser sessions. Instance settings remain separate from personal
+preferences and are available only to administrators.
 
 ## Change your password
 

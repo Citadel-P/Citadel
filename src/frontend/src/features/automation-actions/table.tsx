@@ -1,11 +1,13 @@
 import { AuthorizedAction, ResourceControlState } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { LastRunCell } from '@/components/custom/last-run-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
-import { fromNow } from '@/lib/dayjs.helper';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
@@ -27,7 +29,8 @@ export function AutomationActionsTable({
   >;
 }) {
   const [, setSelectedResources] = useSelectedResources<AuthorizedAction>('AutomationAction');
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const formatDateTime = useProfileDateTimeFormatter();
+  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 }
@@ -37,6 +40,7 @@ const columns = (
     string,
     React.FC<{ resource: AuthorizedAction; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  formatDateTime: DateTimeFormatter,
 ): ColumnDef<StockFeatures, AuthorizedAction>[] => [
   {
     id: 'select',
@@ -74,7 +78,7 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Last Run" column={column} />,
     cell: ({ row }) => (
       <LastRunCell status={row.original.latestRun?.status}>
-        <span className="whitespace-nowrap">{fromNow(row.original.latestRun?.queuedAt)}</span>
+        <Timestamp value={row.original.latestRun?.queuedAt} formatDateTime={formatDateTime} />
       </LastRunCell>
     ),
     sortFn: (rowA, rowB) =>

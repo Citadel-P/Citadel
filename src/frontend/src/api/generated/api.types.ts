@@ -89,6 +89,11 @@ export enum UserDateTimeFormat {
   TwelveHour = "TwelveHour",
 }
 
+export enum UserDateDisplay {
+  Relative = "Relative",
+  Exact = "Exact",
+}
+
 export enum UserContentLayout {
   Compact = "Compact",
   Wide = "Wide",
@@ -1075,6 +1080,7 @@ export enum ActivityEventType {
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
   StackImported = "StackImported",
   StackWebhookReceived = "StackWebhookReceived",
+  InstallationSettingsUpdated = "InstallationSettingsUpdated",
   InitialAdministratorCreated = "InitialAdministratorCreated",
   UserProfileUpdated = "UserProfileUpdated",
   UserPreferencesUpdated = "UserPreferencesUpdated",
@@ -3971,12 +3977,21 @@ export interface ImportRequest {
 
 export interface InitializeCitadelRequest {
   email: string;
+  mfaPolicy?: MfaPolicy | null;
   name: string;
   password: string;
+  updateChecksEnabled?: boolean | null;
 }
 
 export interface InstallLicenseRequest {
   license: string;
+}
+
+export interface InstallationSettingsView {
+  mfaPolicy: MfaPolicy;
+  minimumMfaPolicy: MfaPolicy;
+  updateChecksAllowed: boolean;
+  updateChecksEnabled: boolean;
 }
 
 export interface InternalSecretInput {
@@ -4621,6 +4636,11 @@ export interface PatchDeploymentMetadataInput {
   tags?: string[] | null;
 }
 
+export interface PatchInstallationSettingsRequest {
+  mfaPolicy?: MfaPolicy | null;
+  updateChecksEnabled?: boolean | null;
+}
+
 export interface PatchOidcProviderMetadataRequest {
   description?: string | null;
   tags?: string[] | null;
@@ -4684,6 +4704,7 @@ export interface PatchTeamRequest {
 
 export interface PatchUserPreferencesRequest {
   contentLayout?: UserContentLayout | null;
+  dateDisplay?: UserDateDisplay | null;
   dateTimeFormat?: UserDateTimeFormat | null;
   density?: UserUiDensity | null;
   font?: UserUiFont | null;
@@ -4937,6 +4958,13 @@ export interface PrunePlatformView {
 }
 
 export type PublicActivityEventInfo =
+  | {
+      $type: "InstallationSettingsUpdated";
+      mfaPolicy: string;
+      previousMfaPolicy: string;
+      previousUpdateChecksEnabled: boolean;
+      updateChecksEnabled: boolean;
+    }
   | {
       $type: "InitialAdministratorCreated";
       mode: string;
@@ -6487,11 +6515,15 @@ export interface ServiceStatistics {
 }
 
 export interface SetupStatusView {
+  mfaPolicy: MfaPolicy;
+  minimumMfaPolicy: MfaPolicy;
   /** @min 0 */
   passwordMaximumLength: number;
   /** @min 0 */
   passwordMinimumLength: number;
   requiresSetup: boolean;
+  updateChecksAllowed: boolean;
+  updateChecksEnabled: boolean;
 }
 
 export interface StackActivitySnapshot {
@@ -7736,6 +7768,7 @@ export interface UserActivitySnapshot {
 
 export interface UserPreferencesView {
   contentLayout: UserContentLayout;
+  dateDisplay: UserDateDisplay;
   dateTimeFormat: UserDateTimeFormat;
   density: UserUiDensity;
   font: UserUiFont;
@@ -13851,6 +13884,61 @@ export class Api<
         path: `/api/v1/images/${registryName}/repositories`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Setup
+     * @name GetInstallationSettings
+     * @summary Get installation settings (administrator)
+     * @request GET:/api/v1/installation/settings
+     * @secure
+     * @response `200` `InstallationSettingsView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstallationSettings: (params: RequestParams = {}) =>
+      this.request<InstallationSettingsView, ProblemDetails>({
+        path: `/api/v1/installation/settings`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Setup
+     * @name PatchInstallationSettings
+     * @summary Update installation settings (administrator)
+     * @request PATCH:/api/v1/installation/settings
+     * @secure
+     * @response `200` `InstallationSettingsView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    patchInstallationSettings: (
+      data: PatchInstallationSettingsRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<InstallationSettingsView, ProblemDetails>({
+        path: `/api/v1/installation/settings`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

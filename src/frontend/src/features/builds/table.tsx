@@ -1,9 +1,9 @@
 import { BuildProjectBuilderKind, AuthorizedProject, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { LastRunCell } from '@/components/custom/last-run-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
 import { TagChips } from '@/features/tags/components';
@@ -34,7 +34,7 @@ export function BuildsTable({
   const [, setSelectedResources] = useSelectedResources<AuthorizedProject>('Build');
   const formatDateTime = useProfileDateTimeFormatter();
   const latestRuns = useMemo(() => indexLatestRuns(items), [items]);
-  const cols = useMemo(() => columns(actions ?? {}, latestRuns, formatDateTime), [actions, formatDateTime, latestRuns]);
+  const cols = useMemo(() => columns(actions ?? {}, latestRuns, formatDateTime), [actions, latestRuns, formatDateTime]);
 
   return <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 }
@@ -133,7 +133,7 @@ const columns = (
 
       return (
         <LastRunCell status={run.status}>
-          <TimestampCell value={run.completedAt ?? run.startedAt ?? run.queuedAt} formatDateTime={formatDateTime} />
+          <Timestamp value={run.completedAt ?? run.startedAt ?? run.queuedAt} formatDateTime={formatDateTime} />
         </LastRunCell>
       );
     },

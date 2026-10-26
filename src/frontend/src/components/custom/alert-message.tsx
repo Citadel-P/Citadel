@@ -1,7 +1,8 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { InfoIcon, Check, TriangleAlert, AlertCircle, X, Clock } from 'lucide-react';
 import { JSX, ReactNode, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { fromNow } from '@/lib/dayjs.helper';
 
 interface AlertMessageProps {
   title?: string;
@@ -116,7 +117,7 @@ export const AlertMessage = ({
         {date && (
           <div className="flex flex-wrap gap-2 items-center text-muted-foreground">
             <Clock width={13} height={13} />
-            <span className="text-xs">{fromNow(date)}</span>
+            <AlertTimestamp date={date} />
           </div>
         )}
 
@@ -132,3 +133,8 @@ export const AlertMessage = ({
     </div>
   );
 };
+
+function AlertTimestamp({ date }: { date: Date | number | string }) {
+  const formatDateTime = useProfileDateTimeFormatter();
+  return <Timestamp value={date} formatDateTime={formatDateTime} className="text-xs text-inherit" />;
+}

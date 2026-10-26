@@ -17,7 +17,7 @@ import { ResourceSelectorField } from '@/components/custom/common';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -280,7 +280,7 @@ const runColumns = (
   {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.queuedAt} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => <Timestamp value={row.original.queuedAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
@@ -371,7 +371,7 @@ const restoreRunColumns = (
   {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.queuedAt} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => <Timestamp value={row.original.queuedAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
@@ -379,7 +379,7 @@ const restoreRunColumns = (
     header: ({ column }) => <SortableCell cellName="Completed" column={column} />,
     cell: ({ row }) =>
       row.original.completedAt ? (
-        <TimestampCell value={row.original.completedAt} formatDateTime={formatDateTime} />
+        <Timestamp value={row.original.completedAt} formatDateTime={formatDateTime} />
       ) : (
         <span className="text-sm text-muted-foreground">-</span>
       ),

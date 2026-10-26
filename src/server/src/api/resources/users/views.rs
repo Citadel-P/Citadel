@@ -4,8 +4,8 @@ use crate::api::resources::{
     common::{PagedResult, ResourceInfo},
 };
 use citadel_identity::{
-    UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor, UserUiDensity, UserUiFont,
-    UserUiRadius,
+    UserContentLayout, UserDateDisplay, UserDateTimeFormat, UserTheme, UserThemeColor,
+    UserUiDensity, UserUiFont, UserUiRadius,
 };
 use citadel_primitives::ActorId;
 use serde::Serialize;
@@ -25,6 +25,8 @@ pub struct UserPreferencesView {
     pub time_zone: Option<String>,
     #[schema(value_type = crate::api::resources::vocabulary::UserDateTimeFormatSchema)]
     pub date_time_format: UserDateTimeFormat,
+    #[schema(value_type = crate::api::resources::vocabulary::UserDateDisplaySchema)]
+    pub date_display: UserDateDisplay,
     #[schema(value_type = crate::api::resources::vocabulary::UserThemeSchema)]
     pub theme: UserTheme,
     #[schema(value_type = crate::api::resources::vocabulary::UserThemeColorSchema)]
@@ -46,6 +48,7 @@ impl From<UserPreferencesView> for citadel_identity::UserPreferencesDetails {
         Self {
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
+            date_display: value.date_display,
             theme: value.theme,
             theme_color: value.theme_color,
             font: value.font,
@@ -63,6 +66,7 @@ impl From<citadel_identity::UserPreferencesDetails> for UserPreferencesView {
         Self {
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
+            date_display: value.date_display,
             theme: value.theme,
             theme_color: value.theme_color,
             font: value.font,

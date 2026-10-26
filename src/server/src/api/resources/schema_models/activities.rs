@@ -29,6 +29,17 @@ schema_model! {
 #[serde(tag = "$type")]
 #[schema(as = ActivityEventInfo)]
 pub enum ActivityEventInfoSchema {
+    InstallationSettingsUpdated {
+        #[serde(rename = "PreviousUpdateChecksEnabled")]
+        previous_update_checks_enabled: bool,
+        #[serde(rename = "UpdateChecksEnabled")]
+        update_checks_enabled: bool,
+        #[serde(rename = "PreviousMfaPolicy")]
+        previous_mfa_policy: String,
+        #[serde(rename = "MfaPolicy")]
+        mfa_policy: String,
+    },
+
     InitialAdministratorCreated {
         #[serde(rename = "UserId")]
         user_id: Uuid,
@@ -1010,6 +1021,17 @@ pub enum ActivityEventInfoSchema {
 impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
     fn from(value: citadel_activities::ActivityEventInfo) -> Self {
         match value {
+            citadel_activities::ActivityEventInfo::InstallationSettingsUpdated {
+                previous_update_checks_enabled,
+                update_checks_enabled,
+                previous_mfa_policy,
+                mfa_policy,
+            } => Self::InstallationSettingsUpdated {
+                previous_update_checks_enabled,
+                update_checks_enabled,
+                previous_mfa_policy,
+                mfa_policy,
+            },
             citadel_activities::ActivityEventInfo::InitialAdministratorCreated {
                 user_id,
                 user_name,
@@ -1791,6 +1813,7 @@ enum_schema!(
         StackGitAutoDeployFailed,
         StackImported,
         StackWebhookReceived,
+        InstallationSettingsUpdated,
         InitialAdministratorCreated,
         UserProfileUpdated,
         UserPreferencesUpdated,

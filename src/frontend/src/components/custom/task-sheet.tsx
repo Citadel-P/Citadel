@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { memo, ReactNode, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import {
@@ -1099,10 +1101,11 @@ function ActivityInfo({ activity }: { activity: ActivityView }) {
 }
 
 function RecordedAtCell({ createdAt }: { createdAt: string }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   return (
     <div className="flex flex-row items-center gap-2">
       <Calendar className="size-3.5 text-foreground/80" />
-      <span>{new Date(createdAt).toLocaleString()}</span>
+      <Timestamp value={createdAt} formatDateTime={formatDateTime} className="text-inherit" />
     </div>
   );
 }

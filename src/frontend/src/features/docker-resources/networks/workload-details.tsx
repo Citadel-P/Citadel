@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import type { ContainerNetworkingView, NetworkContainer } from '@/api/generated/api.types';
 import { Link } from 'react-router';
 import { WorkloadLink } from './workload-link';
@@ -27,6 +29,7 @@ export function WorkloadDetails({
   platformId: string;
   visibleNetworks: Set<string>;
 }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   return (
     <div className="space-y-5">
       <Link className="table-link block text-sm" to={`/platforms/${platformId}/containers/${container.containerId}`}>
@@ -74,7 +77,8 @@ export function WorkloadDetails({
         </section>
       )}
       <p className="text-xs text-muted-foreground">
-        Observed {new Date(networking.observedAt * 1000).toLocaleString()}
+        Observed{' '}
+        <Timestamp value={networking.observedAt * 1000} formatDateTime={formatDateTime} className="text-inherit" />
       </p>
       {networking.truncated && <p className="text-xs text-muted-foreground">Some networking details are omitted.</p>}
     </div>

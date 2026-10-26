@@ -79,7 +79,14 @@ If you cannot access your authenticator app, select the recovery-code option on 
 
 ## Mandatory Setup During Login
 
-An administrator can require two-factor authentication by policy.
+MFA is optional by default and can be enabled later from **Profile → Security**.
+An administrator can choose an installation-wide policy during first-run setup or
+in **Profile → Instance settings**: Optional, Required for administrators, or
+Required for everyone. Changes apply to subsequent local-password sign-ins;
+existing browser sessions are not revoked by changing the policy.
+
+`CITADEL_MFA_POLICY` sets the minimum policy allowed by server configuration. The
+UI cannot select a weaker policy.
 
 When policy requires setup, Citadel prompts you after you enter a valid username or email and password. Complete the QR-code setup and save recovery codes before entering the application.
 

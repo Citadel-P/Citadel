@@ -1,3 +1,5 @@
+vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => String }));
+
 import { createPlatform as platformDefaults } from '@/test/factories/resources';
 import {
   PlatformConnectorType,

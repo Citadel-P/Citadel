@@ -1,13 +1,16 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { AuthorizedGitRepositoryView, GitRepositoryRefStatus, GitRepositorySyncMode } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { fromNow } from '@/lib/dayjs.helper';
 import { ChevronDown, Clock } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 export function GitRepositorySyncStatus({ repository }: { repository: AuthorizedGitRepositoryView }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const [open, setOpen] = useState(false);
   const titleId = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
   const reference = repository.syncStatus;
   const completed =
     reference?.status === GitRepositoryRefStatus.Healthy || reference?.status === GitRepositoryRefStatus.Degraded;
@@ -41,6 +44,11 @@ export function GitRepositorySyncStatus({ repository }: { repository: Authorized
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        ref={contentRef}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          contentRef.current?.focus();
+        }}
         align="end"
         sideOffset={8}
         collisionPadding={16}
@@ -70,12 +78,7 @@ export function GitRepositorySyncStatus({ repository }: { repository: Authorized
                 {reference.status === GitRepositoryRefStatus.Degraded ? 'Last attempt' : 'Last checked'}
               </dt>
               <dd className="text-right">
-                <time dateTime={reference.lastSyncedAt}>
-                  {fromNow(reference.lastSyncedAt)}
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {new Date(reference.lastSyncedAt).toLocaleString()}
-                  </span>
-                </time>
+                <Timestamp value={reference.lastSyncedAt} formatDateTime={formatDateTime} />
               </dd>
             </div>
           )}

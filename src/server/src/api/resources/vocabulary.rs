@@ -33,6 +33,13 @@ pub enum UserDateTimeFormatSchema {
 }
 
 #[derive(utoipa::ToSchema)]
+#[schema(as = UserDateDisplay)]
+pub enum UserDateDisplaySchema {
+    Relative,
+    Exact,
+}
+
+#[derive(utoipa::ToSchema)]
 #[schema(as = UserTheme)]
 pub enum UserThemeSchema {
     System,

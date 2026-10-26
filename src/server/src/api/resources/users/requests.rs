@@ -1,8 +1,8 @@
 use crate::api::resources::common::enabled_by_default;
 use crate::api::resources::resource_access::ResourceAccessInput;
 use citadel_identity::{
-    UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor, UserUiDensity, UserUiFont,
-    UserUiRadius,
+    UserContentLayout, UserDateDisplay, UserDateTimeFormat, UserTheme, UserThemeColor,
+    UserUiDensity, UserUiFont, UserUiRadius,
 };
 use citadel_primitives::PatchField;
 use serde::Deserialize;
@@ -52,6 +52,9 @@ pub struct PatchUserPreferencesRequest {
     #[schema(value_type = Option<crate::api::resources::vocabulary::UserDateTimeFormatSchema>, required = false)]
     pub date_time_format: PatchField<UserDateTimeFormat>,
     #[serde(default)]
+    #[schema(value_type = Option<crate::api::resources::vocabulary::UserDateDisplaySchema>, required = false)]
+    pub date_display: PatchField<UserDateDisplay>,
+    #[serde(default)]
     #[schema(value_type = Option<crate::api::resources::vocabulary::UserThemeSchema>, required = false)]
     pub theme: PatchField<UserTheme>,
     #[serde(default)]
@@ -76,6 +79,7 @@ impl From<PatchUserPreferencesRequest> for citadel_identity::PatchUserPreference
         Self {
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
+            date_display: value.date_display,
             theme: value.theme,
             theme_color: value.theme_color,
             font: value.font,
@@ -91,6 +95,7 @@ impl From<citadel_identity::PatchUserPreferences> for PatchUserPreferencesReques
         Self {
             time_zone: value.time_zone,
             date_time_format: value.date_time_format,
+            date_display: value.date_display,
             theme: value.theme,
             theme_color: value.theme_color,
             font: value.font,

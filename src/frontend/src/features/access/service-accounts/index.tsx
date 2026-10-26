@@ -1,3 +1,4 @@
+import { Timestamp } from '@/components/custom/timestamp';
 import { LicenseCapability, PagedResultServiceAccountView, ServiceAccountView } from '@/api/generated/api.types';
 import { PagedDataTable } from '@/components/custom/common';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
@@ -147,7 +148,13 @@ const buildColumns = (
     accessorKey: 'lastUsedAtUtc',
     header: 'Last used',
     cell: ({ row }) => (
-      <span>{row.original.lastUsedAtUtc ? formatDateTime(row.original.lastUsedAtUtc) : 'Not used'}</span>
+      <span>
+        {row.original.lastUsedAtUtc ? (
+          <Timestamp value={row.original.lastUsedAtUtc} formatDateTime={formatDateTime} />
+        ) : (
+          'Not used'
+        )}
+      </span>
     ),
   },
   {

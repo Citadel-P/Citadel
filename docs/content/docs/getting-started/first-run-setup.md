@@ -20,6 +20,18 @@ Enter:
 3. A password meeting the configured length requirement (15 to 128 characters by default).
 4. The same password again.
 
+**Advanced** is collapsed by default. Open it to change update checks (enabled
+by default) or the two-factor authentication policy (Optional by default).
+
+**MFA is optional by default.** You and other users can enable it later in
+**Profile → Security → Two-factor authentication**. Selecting a required policy
+starts MFA enrollment after the administrator account is created. A policy
+enforced by server configuration cannot be weakened during setup.
+
+Update checks send no Citadel telemetry and never install updates. Core waits
+until the setup choices have been saved before making a release-check request.
+See [update checks and privacy](/docs/getting-started/configuration#allow-update-checks).
+
 Select **Create administrator**. Citadel creates the account with the built-in
 Admin role and signs you in. Setup cannot be opened again after it succeeds.
 
@@ -43,9 +55,10 @@ overlay if configured, then reload the setup page.
 ## Two-Factor Authentication
 
 Two-factor authentication is optional by default. It can be enabled later from
-**Profile -> Security**.
+**Profile → Security**. Administrators can change the installation-wide policy
+in **Profile → Instance settings**; changes save automatically.
 
-To require the initial administrator to enroll before entering Citadel, set:
+To enforce a minimum policy through deployment configuration, set:
 
 ```text
 CITADEL_MFA_POLICY=RequiredForAdministrators

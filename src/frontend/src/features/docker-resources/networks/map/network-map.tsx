@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, ChevronsUpDown, Ellipsis, RotateCcw, Box } from 'lucide-react';
@@ -384,6 +386,7 @@ function MemberDetails({
   platformId: string;
   onExplore?: (id: string) => void;
 }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   return (
     <div className="space-y-4">
       {node.kind === 'container' && node.entries[0]?.containerId && (
@@ -424,7 +427,8 @@ function MemberDetails({
               )}
               {entry.observedAt && (
                 <p className="text-xs text-muted-foreground">
-                  Observed {new Date(entry.observedAt * 1000).toLocaleString()}
+                  Observed{' '}
+                  <Timestamp value={entry.observedAt * 1000} formatDateTime={formatDateTime} className="text-inherit" />
                 </p>
               )}
               {entry.relationship === 'Attachment' && (

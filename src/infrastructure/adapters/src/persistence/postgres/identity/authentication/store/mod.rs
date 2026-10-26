@@ -20,6 +20,7 @@ use crate::persistence::postgres::activities::store::insert_activity;
 use crate::persistence::postgres::activities::store::invalid_activity;
 
 mod default_automations;
+mod installation;
 
 #[derive(Clone)]
 pub struct PostgresIdentityStore {
@@ -50,10 +51,26 @@ impl IdentityStore for PostgresIdentityStore {
         })
     }
 
+    fn installation_settings(
+        &self,
+    ) -> BoxFuture<'_, Result<citadel_identity::InstallationSettings, IdentityError>> {
+        Box::pin(installation::load(&self.pool))
+    }
+
+    fn patch_installation_settings<'a>(
+        &'a self,
+        principal: &'a ActorPrincipal,
+        patch: &'a citadel_identity::PatchInstallationSettings,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<citadel_identity::InstallationSettings, IdentityError>> {
+        Box::pin(installation::patch(self, principal, patch, now))
+    }
+
     fn initialize_administrator<'a>(
         &'a self,
         administrator: &'a User,
         mode: citadel_identity::SetupInitializationMode,
+        settings: citadel_identity::InstallationSettings,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>> {
         Box::pin(async move {
             let mut authorization = Mutation::enter(&self.pool).await;
@@ -117,12 +134,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
             let completed = sqlx::query(
                 r#"
 UPDATE instancesetupstates
-SET initialadministratoractorid = $1, initializedat = $2, updatedat = $2
+SET initialadministratoractorid = $1, initializedat = $2, updatedat = $2,
+    updatechecksenabled = $3, mfapolicy = $4
 WHERE id = 1 AND initializedat IS NULL
 "#,
             )
             .bind(administrator.actor_id().value())
             .bind(administrator.created_at())
+            .bind(settings.update_checks_enabled)
+            .bind(settings.mfa_policy.as_database_str())
             .execute(&mut *transaction)
             .await
             .map_err(storage)?

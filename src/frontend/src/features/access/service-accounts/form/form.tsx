@@ -1,3 +1,4 @@
+import { Timestamp } from '@/components/custom/timestamp';
 import {
   CreateServiceAccountRequest,
   LicenseCapability,
@@ -583,7 +584,7 @@ const CredentialsPanel = ({
       {
         accessorKey: 'createdAtUtc',
         header: 'Created',
-        cell: ({ row }) => <span>{formatDate(row.original.createdAtUtc)}</span>,
+        cell: ({ row }) => <Timestamp value={row.original.createdAtUtc} formatDateTime={formatDate} />,
       },
       {
         accessorKey: 'createdByName',
@@ -592,13 +593,21 @@ const CredentialsPanel = ({
       {
         accessorKey: 'expiresAtUtc',
         header: 'Expires',
-        cell: ({ row }) => <span>{row.original.expiresAtUtc ? formatDate(row.original.expiresAtUtc) : 'Never'}</span>,
+        cell: ({ row }) => (
+          <span>{row.original.expiresAtUtc ? formatDate(row.original.expiresAtUtc, 'exact') : 'Never'}</span>
+        ),
       },
       {
         accessorKey: 'lastUsedAtUtc',
         header: 'Last used',
         cell: ({ row }) => (
-          <span>{row.original.lastUsedAtUtc ? formatDate(row.original.lastUsedAtUtc) : 'Not used'}</span>
+          <span>
+            {row.original.lastUsedAtUtc ? (
+              <Timestamp value={row.original.lastUsedAtUtc} formatDateTime={formatDate} />
+            ) : (
+              'Not used'
+            )}
+          </span>
         ),
       },
       {

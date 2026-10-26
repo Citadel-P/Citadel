@@ -16,6 +16,8 @@ fn credential_debug_redacts_plaintext_without_changing_serialization() {
         name: "name".into(),
         email: "email".into(),
         password: "SYNTHETIC_PASSWORD".into(),
+        update_checks_enabled: None,
+        mfa_policy: None,
     };
     assert!(!format!("{initialize:?}").contains("SYNTHETIC_PASSWORD"));
     let change = ChangeCurrentPassword {

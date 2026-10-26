@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import {
   GitEntryTypeView,
   GitFileContent,
@@ -34,6 +36,7 @@ export function RepositoryBrowser({
   showToolbar = true,
   className,
 }: RepositoryBrowserProps) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const { apiClient } = useApiClientContext();
   const refsQuery = useRead(
     'getGitRepositoryRefs',
@@ -84,7 +87,8 @@ export function RepositoryBrowser({
           </div>
           {selectedRef?.lastSyncedAt && (
             <span className="hidden text-xs text-muted-foreground lg:inline">
-              Synced {new Date(selectedRef.lastSyncedAt).toLocaleString()}
+              Synced{' '}
+              <Timestamp value={selectedRef.lastSyncedAt} formatDateTime={formatDateTime} className="text-inherit" />
             </span>
           )}
           {providerRepositoryUrl && (

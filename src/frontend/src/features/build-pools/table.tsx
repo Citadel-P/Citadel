@@ -145,7 +145,9 @@ const ValidationTooltip = ({ pool, formatDateTime }: { pool: AuthorizedPool; for
   return (
     <div className="space-y-1">
       <div className="font-medium">Connection: {validationLabel(pool.lastValidationStatus)}</div>
-      <div>Last validated: {testedAt}</div>
+      <div>
+        Last validated: <span title={formatDateTime(pool.lastValidatedAt, 'exact')}>{testedAt}</span>
+      </div>
       {pool.lastValidationMessage ? (
         <div className="max-w-xs whitespace-normal">{pool.lastValidationMessage}</div>
       ) : null}

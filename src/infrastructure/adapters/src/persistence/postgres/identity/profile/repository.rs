@@ -5,8 +5,8 @@ use citadel_identity::{
     ProfileResourceInfo, User, UserPreferences, UserPreferencesUpdate,
 };
 use citadel_identity::{
-    UserAppearance, UserContentLayout, UserDateTimeFormat, UserTheme, UserThemeColor,
-    UserUiDensity, UserUiFont, UserUiRadius,
+    UserAppearance, UserContentLayout, UserDateDisplay, UserDateTimeFormat, UserTheme,
+    UserThemeColor, UserUiDensity, UserUiFont, UserUiRadius,
 };
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
@@ -66,7 +66,7 @@ WHERE u.id = $1
 "#;
 
 const USER_PREFERENCES_SQL: &str = r#"
-SELECT userid, timezone, datetimeformat, theme, updatedat, themecolor, font, radius, contentlayout, density
+SELECT userid, timezone, datetimeformat, datedisplay, theme, updatedat, themecolor, font, radius, contentlayout, density
 FROM userpreferences
 WHERE userid = $1
 "#;
@@ -222,6 +222,11 @@ impl ProfileRepository for PostgresProfileRepository {
                     UserPreferences::date_time_format,
                 )
             });
+            let date_display = update.date_display.unwrap_or_else(|| {
+                current
+                    .as_ref()
+                    .map_or(UserDateDisplay::Relative, UserPreferences::date_display)
+            });
             let theme = update.theme.unwrap_or_else(|| {
                 current
                     .as_ref()
@@ -258,6 +263,7 @@ impl ProfileRepository for PostgresProfileRepository {
             if current.as_ref().is_some_and(|preferences| {
                 preferences.time_zone() == time_zone
                     && preferences.date_time_format() == date_time_format
+                    && preferences.date_display() == date_display
                     && preferences.theme() == theme
                     && preferences.theme_color() == theme_color
                     && preferences.font() == font
@@ -275,11 +281,12 @@ impl ProfileRepository for PostgresProfileRepository {
                     user_id,
                     time_zone.clone(),
                     date_time_format,
+                    date_display,
                     theme,
                     updated_at,
                 )
             });
-            preferences.update(time_zone, date_time_format, theme, updated_at);
+            preferences.update(time_zone, date_time_format, date_display, theme, updated_at);
             preferences = preferences.with_appearance(UserAppearance {
                 theme_color,
                 font,
@@ -289,11 +296,12 @@ impl ProfileRepository for PostgresProfileRepository {
             });
             sqlx::query(
                 r#"
-INSERT INTO userpreferences (userid, timezone, datetimeformat, theme, updatedat, themecolor, font, radius, contentlayout, density)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO userpreferences (userid, timezone, datetimeformat, theme, updatedat, themecolor, font, radius, contentlayout, density, datedisplay)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (userid) DO UPDATE
 SET timezone = EXCLUDED.timezone,
     datetimeformat = EXCLUDED.datetimeformat,
+    datedisplay = EXCLUDED.datedisplay,
     theme = EXCLUDED.theme,
     themecolor = EXCLUDED.themecolor,
     font = EXCLUDED.font,
@@ -314,6 +322,7 @@ SET timezone = EXCLUDED.timezone,
             .bind(preferences.radius().as_database_str())
             .bind(preferences.content_layout().as_database_str())
             .bind(preferences.density().as_database_str())
+            .bind(preferences.date_display().as_database_str())
 
             .execute(&mut *transaction)
             .await
@@ -488,6 +497,10 @@ fn map_preferences(row: sqlx::postgres::PgRow) -> Result<UserPreferences, Identi
                 "Unknown User preference date/time format '{date_time_format}'."
             ))
         })?,
+        UserDateDisplay::from_database_str(
+            &row.try_get::<String, _>("datedisplay").map_err(storage)?,
+        )
+        .ok_or_else(|| IdentityError::Storage("Unknown preference date_display.".to_owned()))?,
         UserTheme::from_database_str(&theme).ok_or_else(|| {
             IdentityError::Storage(format!("Unknown User preference theme '{theme}'."))
         })?,

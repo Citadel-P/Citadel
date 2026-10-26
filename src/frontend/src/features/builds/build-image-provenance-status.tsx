@@ -1,3 +1,4 @@
+import { Timestamp } from '@/components/custom/timestamp';
 import { CheckCircle2, Clock3 } from 'lucide-react';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { cn } from '@/lib/utils';
@@ -54,13 +55,23 @@ export const BuildImageProvenanceStatus = ({
         )}>
         {isApplied ? <CheckCircle2 className="size-3.5" /> : <Clock3 className="size-3.5" />}
         <span>
-          {isApplied
-            ? `Applied${value?.appliedAt ? ` ${formatDateTime(value.appliedAt)}` : ''}`
-            : hasDesired
-              ? 'Apply required'
-              : hasLatest
-                ? 'Ready to apply'
-                : 'Waiting for a successful build'}
+          {isApplied ? (
+            <>
+              Applied
+              {value?.appliedAt && (
+                <>
+                  {' '}
+                  <Timestamp value={value.appliedAt} formatDateTime={formatDateTime} className="text-xs text-inherit" />
+                </>
+              )}
+            </>
+          ) : hasDesired ? (
+            'Apply required'
+          ) : hasLatest ? (
+            'Ready to apply'
+          ) : (
+            'Waiting for a successful build'
+          )}
         </span>
       </div>
     </div>

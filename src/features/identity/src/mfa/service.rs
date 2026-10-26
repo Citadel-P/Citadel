@@ -70,11 +70,12 @@ impl MfaService {
         } else {
             0
         };
+        let policy = self.effective_policy().await?;
         Ok(ProfileMfaStatusDetails {
             enabled,
             remaining_recovery_codes,
-            policy: self.configuration.policy,
-            can_disable: !self.requires_mfa(&user),
+            policy,
+            can_disable: !Self::requires_mfa(&user, policy),
         })
     }
 
@@ -379,7 +380,7 @@ impl MfaService {
             .identity
             .current_local_user(principal.subject_id, &input.password)
             .await?;
-        if self.requires_mfa(&user) {
+        if Self::requires_mfa(&user, self.effective_policy().await?) {
             return Err(IdentityError::Validation(
                 "Two-factor authentication is required by policy.".to_owned(),
             ));
@@ -509,7 +510,7 @@ impl MfaService {
                 },
             });
         }
-        if self.requires_mfa(&user) {
+        if Self::requires_mfa(&user, self.effective_policy().await?) {
             let (session, _) = self.create_setup_session(&user)?;
             self.store.start_setup(session.clone(), now).await?;
             return Ok(BrowserAuthenticationResult {
@@ -533,11 +534,20 @@ impl MfaService {
         })
     }
 
-    fn requires_mfa(&self, user: &UserAuthentication) -> bool {
+    async fn effective_policy(&self) -> Result<MfaPolicy, IdentityError> {
+        Ok(self
+            .identity
+            .installation_settings()
+            .await?
+            .mfa_policy
+            .at_least(self.configuration.policy))
+    }
+
+    fn requires_mfa(user: &UserAuthentication, policy: MfaPolicy) -> bool {
         if user.password_hash.is_none() {
             return false;
         }
-        match self.configuration.policy {
+        match policy {
             MfaPolicy::Optional => false,
             MfaPolicy::RequiredForAdministrators => user
                 .roles
@@ -729,11 +739,29 @@ mod tests {
         let local_user = user(Some("hash"), &["Viewer"]);
         let oidc_admin = user(None, &["Admin"]);
 
-        assert!(requires(MfaPolicy::RequiredForAdministrators, &local_admin));
-        assert!(!requires(MfaPolicy::RequiredForAdministrators, &local_user));
-        assert!(!requires(MfaPolicy::RequiredForAdministrators, &oidc_admin));
-        assert!(requires(MfaPolicy::RequiredForAllUsers, &local_user));
-        assert!(!requires(MfaPolicy::RequiredForAllUsers, &oidc_admin));
+        assert!(!MfaService::requires_mfa(&local_admin, MfaPolicy::Optional));
+        assert!(!MfaService::requires_mfa(&local_user, MfaPolicy::Optional));
+
+        assert!(MfaService::requires_mfa(
+            &local_admin,
+            MfaPolicy::RequiredForAdministrators
+        ));
+        assert!(!MfaService::requires_mfa(
+            &local_user,
+            MfaPolicy::RequiredForAdministrators
+        ));
+        assert!(!MfaService::requires_mfa(
+            &oidc_admin,
+            MfaPolicy::RequiredForAdministrators
+        ));
+        assert!(MfaService::requires_mfa(
+            &local_user,
+            MfaPolicy::RequiredForAllUsers
+        ));
+        assert!(!MfaService::requires_mfa(
+            &oidc_admin,
+            MfaPolicy::RequiredForAllUsers
+        ));
     }
 
     #[test]
@@ -744,18 +772,6 @@ mod tests {
         assert!(validate_exactly_one(&Some("123456".into()), &Some("ABCD".into())).is_err());
         assert!(validate_totp_code("123456").is_ok());
         assert!(validate_totp_code("12345x").is_err());
-    }
-
-    fn requires(policy: MfaPolicy, user: &UserAuthentication) -> bool {
-        user.password_hash.is_some()
-            && match policy {
-                MfaPolicy::Optional => false,
-                MfaPolicy::RequiredForAdministrators => user
-                    .roles
-                    .iter()
-                    .any(|role| role.eq_ignore_ascii_case("Admin")),
-                MfaPolicy::RequiredForAllUsers => true,
-            }
     }
 
     fn user(password_hash: Option<&str>, roles: &[&str]) -> UserAuthentication {

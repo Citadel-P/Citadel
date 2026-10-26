@@ -1,3 +1,5 @@
+vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => String }));
+
 import {
   ActivityEventType,
   ActivityResourceType,
@@ -161,7 +163,7 @@ describe('Git repository subheader', () => {
       expect(within(details).getByText('Last checked')).toBeVisible();
       expect(within(details).getByText('Every 5 minutes')).toBeVisible();
       expect(screen.getByText('Successful background syncs do not create activity entries.')).toBeVisible();
-      expect(details.querySelector('time')).toHaveAttribute('dateTime', '2026-09-06T05:00:00Z');
+      expect(details.querySelector('time')).toHaveAttribute('dateTime', '2026-09-06T05:00:00.000Z');
       expect(screen.getByText(/Synced to commit/)).toBeVisible();
       expect(screen.getByText(/0123456789ab/)).toBeVisible();
       // A repository update refreshes the open popover without an API/query provider.
@@ -179,7 +181,7 @@ describe('Git repository subheader', () => {
           }
         />,
       );
-      expect(details.querySelector('time')).toHaveAttribute('dateTime', '2026-09-06T05:05:00Z');
+      expect(details.querySelector('time')).toHaveAttribute('dateTime', '2026-09-06T05:05:00.000Z');
 
       await user.keyboard('{Escape}');
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

@@ -5,7 +5,9 @@ import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMemo, useState } from 'react';
 import { byteTransform } from '@/lib/bytes.helper';
-import { fromNow } from '@/lib/dayjs.helper';
+import { Timestamp } from '@/components/custom/timestamp';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
@@ -30,10 +32,14 @@ export const VolumesTable = ({
   >;
 }) => {
   const [_, setSelectedResources] = useSelectedResources<VolumeView>('Volume');
+  const formatDateTime = useProfileDateTimeFormatter();
   const { currentPlatform } = useAppContext();
   const [browsingVolume, setBrowsingVolume] = useState<VolumeView | null>(null);
   const showNode = currentPlatform?.type === PlatformType.DockerSwarm;
-  const cols = useMemo(() => columns(actions ?? {}, setBrowsingVolume, showNode), [actions, showNode]);
+  const cols = useMemo(
+    () => columns(actions ?? {}, setBrowsingVolume, showNode, formatDateTime),
+    [actions, showNode, formatDateTime],
+  );
 
   return (
     <>
@@ -55,6 +61,7 @@ const columns = (
   >,
   onBrowse: (volume: VolumeView) => void,
   showNode: boolean,
+  formatDateTime: DateTimeFormatter,
 ): ColumnDef<StockFeatures, VolumeView>[] => [
   {
     id: 'select',
@@ -85,7 +92,7 @@ const columns = (
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>,
+    cell: ({ row }) => <Timestamp value={row.original.createdAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {

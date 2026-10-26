@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { workloadHealthColumn, useHealthColumn } from '@/features/workload-health/table';
 import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { DataTable, DataTableEmptyState } from '@/components/ui/data-table';
@@ -15,7 +17,6 @@ import { HardDrive } from 'lucide-react';
 import { formatId } from '@/lib/utils';
 import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { fromNow } from '@/lib/dayjs.helper';
 import { truncate } from '@/lib/truncate';
 import { TagChips } from '@/features/tags/components';
 
@@ -176,6 +177,7 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
 };
 
 const DeploymentUpdateStatusCell = ({ deployment }: { deployment: DeploymentView }) => {
+  const formatDateTime = useProfileDateTimeFormatter();
   const state = deployment.autoUpdateState;
   if (!state) return <span className="text-muted-foreground text-sm">{'<none>'}</span>;
   const status = state.status;
@@ -201,7 +203,9 @@ const DeploymentUpdateStatusCell = ({ deployment }: { deployment: DeploymentView
         <div className="flex justify-between items-start mb-4">
           <div className="space-y-1">
             <h4 className="text-sm font-medium leading-none text-foreground">{deployment.imageName}</h4>
-            <p className="text-xs text-muted-foreground">Checked {fromNow(state.lastCheckedAt)}</p>
+            <p className="text-xs text-muted-foreground">
+              Checked <Timestamp value={state.lastCheckedAt} formatDateTime={formatDateTime} className="text-inherit" />
+            </p>
           </div>
           <UpdateStatusIcon updateStatus={status} />
         </div>

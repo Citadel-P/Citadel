@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router';
 import { ResourceCopyKind, ResourceCopyEligibilityStatus } from '@/api/generated/api.types';
 import { renderCitadel as renderWithProviders } from '@/test/render-citadel';
 import { server } from '@/test/server';
+import { formatDateTime } from '@/lib/date-time';
+import { UserDateTimeFormat, UserDateDisplay } from '@/api/generated/api.types';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { DuplicateWorkload } from './duplicate-workload';
 
@@ -95,7 +97,17 @@ function render(route = '/stacks/edit/source/') {
   );
 }
 
-it('uses three reviewed steps and starts only after explicit confirmation', async () => {
+it('uses exact backup dates even with relative display and starts only after confirmation', async () => {
+  server.use(
+    http.get('http://localhost/api/v1/profile/preferences', () =>
+      HttpResponse.json({
+        timeZone: 'UTC',
+        dateTimeFormat: UserDateTimeFormat.TwentyFourHour,
+        dateDisplay: UserDateDisplay.Relative,
+      }),
+    ),
+  );
+  const exactDate = formatDateTime(snapshot.completedAt, 'UTC', UserDateTimeFormat.TwentyFourHour);
   const emptyRead = vi.fn(() => new HttpResponse(null, { status: 404 }));
   server.use(http.get('http://localhost/api/v1/resource-copies/', emptyRead));
   const requests: unknown[] = [];
@@ -122,9 +134,10 @@ it('uses three reviewed steps and starts only after explicit confirmation', asyn
   await user.click(screen.getByRole('option', { name: 'Use an existing backup' }));
   await user.click(screen.getByRole('button', { name: 'Choose backups' }));
   await user.click(await screen.findByRole('combobox', { name: 'data' }));
-  await user.click(screen.getByRole('option', { name: /Daily/ }));
+  await user.click(screen.getByRole('option', { name: `Daily · ${exactDate}` }));
   await user.click(screen.getByRole('button', { name: 'Review copy' }));
   expect(await screen.findByText('New volume: new-data')).toBeVisible();
+  expect(screen.getByText(`Backup: Daily · ${exactDate}`)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Create copy' })).toBeDisabled();
   expect(start).not.toHaveBeenCalled();
   await user.click(screen.getByRole('checkbox'));

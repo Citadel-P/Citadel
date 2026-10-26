@@ -2,7 +2,7 @@ import { ActorType, AuthorizedProject, BuildLogEntry, BuildRunStatus, BuildRunVi
 import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -294,7 +294,7 @@ const runColumns = (
   {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.queuedAt} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => <Timestamp value={row.original.queuedAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
@@ -382,7 +382,7 @@ function BuildRunLogsSheet({
                       <>
                         <span className="inline-flex items-center gap-1.5">
                           <Clock className="size-3.5" />
-                          {formatDateTime(run.queuedAt)}
+                          {formatDateTime(run.queuedAt, 'exact')}
                         </span>
                         <span>{formatDuration(run)}</span>
                         <span>{logEntryCount} log entries</span>

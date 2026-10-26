@@ -6,7 +6,7 @@ import { useActivityQuery, useTaskSheet } from '@/lib/atoms';
 import { ActorCell, PagedDataTable } from '@/components/custom/common';
 import { createResourceTargetColumn } from '@/components/custom/resource-target-column';
 import { StateBadge } from '@/components/custom/state-badge';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { formatActivityEvent } from '@/lib/utils';
@@ -82,7 +82,7 @@ const columns = (
       accessorKey: 'createdAt',
       header: ({ column }) => <SortableCell cellName="Created" column={column} />,
       cell: ({ row }) => {
-        return <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />;
+        return <Timestamp value={row.original.createdAt} formatDateTime={formatDateTime} />;
       },
       sortFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
     },

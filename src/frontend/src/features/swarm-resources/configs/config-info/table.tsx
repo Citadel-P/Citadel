@@ -1,5 +1,5 @@
 import { SwarmConfigView } from '@/api/generated/api.types';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import { DataTable } from '@/components/ui/data-table';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
@@ -18,12 +18,12 @@ export const ConfigInfoTable = ({ config }: { config: SwarmConfigView }) => {
       {
         accessorKey: 'createdAt',
         header: 'Created',
-        cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
+        cell: ({ row }) => <Timestamp value={row.original.createdAt} formatDateTime={formatDateTime} />,
       },
       {
         accessorKey: 'updatedAt',
         header: 'Updated',
-        cell: ({ row }) => <TimestampCell value={row.original.updatedAt} formatDateTime={formatDateTime} />,
+        cell: ({ row }) => <Timestamp value={row.original.updatedAt} formatDateTime={formatDateTime} />,
       },
     ],
     [formatDateTime],

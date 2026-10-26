@@ -1,3 +1,4 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { StateBadge } from '@/components/custom/state-badge';
 import {
   PlatformConnectorType,
@@ -12,7 +13,6 @@ import { Link } from 'react-router';
 import { Box, Cpu, HardDrive, Layers, MemoryStick, Network, PlugZap, Rocket, Workflow } from 'lucide-react';
 import { cn, toFixedNumber } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { fromNow } from '@/lib/dayjs.helper';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
@@ -89,6 +89,7 @@ const DockerPlatformCard = ({
   >;
   swarmOverview?: SwarmOverviewView;
 }) => {
+  const formatDateTime = useProfileDateTimeFormatter();
   const descriptor = platform.platformDescriptor?.$type !== 'Kubernetes' ? platform.platformDescriptor : null;
   const isSwarm = platform.type === PlatformType.DockerSwarm;
   const swarmDescriptor =
@@ -149,7 +150,7 @@ const DockerPlatformCard = ({
               </TooltipTrigger>
               <TooltipContent>
                 {isOnline ? 'Online' : 'Offline'}
-                {lastSnapshot ? ` - ${fromNow(lastSnapshot)}` : ''}
+                {lastSnapshot ? ` - ${formatDateTime(lastSnapshot)}` : ''}
               </TooltipContent>
             </Tooltip>
           </div>
