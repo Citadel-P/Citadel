@@ -53,6 +53,7 @@ impl AutomationRunTokenIssuer for NoAutomation {
         &'a self,
         _: ActorId,
         _: Uuid,
+        _attempt_id: Uuid,
         _: Duration,
     ) -> BoxFuture<'a, Result<String, AutomationError>> {
         Box::pin(async { panic!("This acceptance fixture does not run automations") })

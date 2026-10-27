@@ -177,86 +177,130 @@ async fn edge_pull_reads_error_frames_even_when_output_is_not_retained() {
 // payload, completion semantics and cancellation of the regular Agent path.
 #[tokio::test]
 async fn edge_build_pushes_the_requested_tags_using_the_shared_contract() {
-    let registry = EdgeRegistry::default();
-    let (session, mut receiver) = registry
-        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+    for reject_push in [false, true] {
+        let registry = EdgeRegistry::default();
+        let (session, mut receiver) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        let client = AgentExecutionClient::Edge(session.clone());
+        let cancellation = CancellationToken::new();
+        let (progress, mut progress_receiver) = tokio::sync::mpsc::channel(1);
+        let command = AgentBuildCommand {
+            preparation: None,
+            admission_authority_id: uuid::Uuid::now_v7().to_string(),
+            admission_generation: 1,
+            run_id: uuid::Uuid::now_v7(),
+            attempt_id: uuid::Uuid::now_v7(),
+            push_to_registry: true,
+            output: Some(progress),
+            context_archive: vec![1, 2, 3],
+            dockerfile_path: "Dockerfile".into(),
+            tags: vec!["registry.test/app:test".into()],
+            build_args: Default::default(),
+            target: None,
+            registry_auth: Some("registry-credential".into()),
+            registry_host: Some("registry.test".into()),
+            timeout_seconds: 5,
+            maximum_log_bytes: 1024,
+            secrets: vec![("token".into(), "secret-value".into())],
+        };
+        let agent = async {
+            let envelope = receiver.recv().await.unwrap();
+            let id = Uuid::parse_str(&envelope.command_id).unwrap();
+            let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                panic!("expected command")
+            };
+            assert_eq!(command.kind, EdgeCommandKind::ImageBuildStream as i32);
+            let request = BuildImageRequest::decode(command.payload.as_slice()).unwrap();
+            assert_eq!(request.context_archive, [1, 2, 3]);
+            assert!(request.push_to_registry);
+            let run_id = request.run_id.clone();
+            let attempt_id = request.attempt_id.clone();
+            assert!(Uuid::parse_str(&run_id).is_ok());
+            assert!(Uuid::parse_str(&attempt_id).is_ok());
+            assert_eq!(request.build_secrets[0].value, "secret-value");
+            assert_eq!(
+                request.registry_auth.as_deref(),
+                Some("registry-credential")
+            );
+            session.output(
+                id,
+                ImageBuildResponse {
+                    stream: Some("built".into()),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            );
+            let live = progress_receiver.recv().await.unwrap();
+            assert_eq!(
+                live.bytes, b"built",
+                "Output must arrive before Agent command completion"
+            );
+            session.output(
+                id,
+                ImageBuildResponse {
+                    status: Some("completed".into()),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            );
+            session.complete(id, true);
+            assert_eq!(progress_receiver.recv().await.unwrap().bytes, b"completed");
+            let envelope = receiver.recv().await.unwrap();
+            let id = Uuid::parse_str(&envelope.command_id).unwrap();
+            let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                panic!("expected command")
+            };
+            assert_eq!(command.kind, EdgeCommandKind::ImagePushStream as i32);
+            let request = PushImageRequest::decode(command.payload.as_slice()).unwrap();
+            assert_eq!(request.image_reference, "registry.test/app:test");
+            assert_eq!(request.run_id, run_id);
+            assert_eq!(request.attempt_id, attempt_id);
+            if reject_push {
+                session.output(id, ImageBuildResponse {
+                admission: citadel_contracts::citadel::images::v1::BuildAdmissionResult::BuildAdmissionCapacityBusyNotStarted as i32,
+                ..Default::default()
+            }.encode_to_vec());
+                session.complete(id, true);
+                return;
+            }
+            assert_eq!(
+                request.registry_auth.as_deref(),
+                Some("registry-credential")
+            );
+            session.output(
+                id,
+                ImageBuildResponse {
+                    status: Some("pushed".into()),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            );
+            assert_eq!(progress_receiver.recv().await.unwrap().bytes, b"pushed");
+            session.output(
+                id,
+                ImageBuildResponse {
+                    status: Some("completed".into()),
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            );
+            session.complete(id, true);
+        };
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(client.build_image(command, &cancellation), agent)
+        })
+        .await
         .unwrap();
-    let client = AgentExecutionClient::Edge(session.clone());
-    let cancellation = CancellationToken::new();
-    let (progress, mut progress_receiver) = tokio::sync::mpsc::channel(1);
-    let command = AgentBuildCommand {
-        push_to_registry: true,
-        output: Some(progress),
-        context_archive: vec![1, 2, 3],
-        dockerfile_path: "Dockerfile".into(),
-        tags: vec!["registry.test/app:test".into()],
-        build_args: Default::default(),
-        target: None,
-        registry_auth: Some("registry-credential".into()),
-        registry_host: Some("registry.test".into()),
-        timeout_seconds: 5,
-        maximum_log_bytes: 1024,
-        secrets: vec![("token".into(), "secret-value".into())],
-    };
-    let agent = async {
-        let envelope = receiver.recv().await.unwrap();
-        let id = Uuid::parse_str(&envelope.command_id).unwrap();
-        let Some(core_envelope::Body::Command(command)) = envelope.body else {
-            panic!("expected command")
-        };
-        assert_eq!(command.kind, EdgeCommandKind::ImageBuildStream as i32);
-        let request = BuildImageRequest::decode(command.payload.as_slice()).unwrap();
-        assert_eq!(request.context_archive, [1, 2, 3]);
-        assert_eq!(request.build_secrets[0].value, "secret-value");
-        assert_eq!(
-            request.registry_auth.as_deref(),
-            Some("registry-credential")
-        );
-        session.output(
-            id,
-            ImageBuildResponse {
-                stream: Some("built".into()),
-                ..Default::default()
-            }
-            .encode_to_vec(),
-        );
-        let live = progress_receiver.recv().await.unwrap();
-        assert_eq!(
-            live.bytes, b"built",
-            "Output must arrive before Agent command completion"
-        );
-        session.complete(id, true);
-        let envelope = receiver.recv().await.unwrap();
-        let id = Uuid::parse_str(&envelope.command_id).unwrap();
-        let Some(core_envelope::Body::Command(command)) = envelope.body else {
-            panic!("expected command")
-        };
-        assert_eq!(command.kind, EdgeCommandKind::ImagePushStream as i32);
-        let request = PushImageRequest::decode(command.payload.as_slice()).unwrap();
-        assert_eq!(request.image_reference, "registry.test/app:test");
-        assert_eq!(
-            request.registry_auth.as_deref(),
-            Some("registry-credential")
-        );
-        session.output(
-            id,
-            ImageBuildResponse {
-                status: Some("pushed".into()),
-                ..Default::default()
-            }
-            .encode_to_vec(),
-        );
-        assert_eq!(progress_receiver.recv().await.unwrap().bytes, b"pushed");
-        session.complete(id, true);
-    };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
-        tokio::join!(client.build_image(command, &cancellation), agent)
-    })
-    .await
-    .unwrap();
-    let output = result.unwrap();
-    assert!(output.contains("built") && output.contains("pushed"));
-    assert_eq!(session.pending_count(), 0);
+        if reject_push {
+            assert!(result.unwrap_err().message.contains("will not be replayed"));
+        } else {
+            let output = result.unwrap();
+            assert!(!output.not_started);
+            assert_eq!(output.log_bytes, b"builtcompletedpushedcompleted".len());
+        }
+        assert_eq!(session.pending_count(), 0);
+    }
 }
 
 #[tokio::test]
@@ -334,4 +378,148 @@ async fn edge_unary_requires_a_response_and_pre_cancel_does_not_send() {
     );
     assert!(receiver.try_recv().is_err());
     assert_eq!(session.pending_count(), 0);
+}
+
+#[tokio::test]
+async fn edge_cleanup_preserves_attempt_fencing_and_the_agent_outcome() {
+    use citadel_contracts::citadel::images::v1::{
+        BuildCleanupState, ReconcileBuildRequest, ReconcileBuildResponse,
+    };
+    for state in [
+        BuildCleanupState::BuildCleanupConfirmed,
+        BuildCleanupState::BuildCleanupActive,
+        BuildCleanupState::BuildCleanupUncertain,
+    ] {
+        let registry = EdgeRegistry::default();
+        let (session, mut receiver) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        let client = AgentExecutionClient::Edge(session.clone());
+        let request = ReconcileBuildRequest {
+            run_id: Uuid::now_v7().to_string(),
+            attempt_id: Uuid::now_v7().to_string(),
+            docker_daemon_id: "daemon".into(),
+            admission_authority_id: Uuid::now_v7().to_string(),
+            admission_generation: 7,
+        };
+        let cancellation = CancellationToken::new();
+        let (result, ()) = tokio::join!(
+            client.reconcile_build(request.clone(), &cancellation),
+            async {
+                let envelope = receiver.recv().await.unwrap();
+                let id = Uuid::parse_str(&envelope.command_id).unwrap();
+                let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                    panic!("expected command")
+                };
+                assert_eq!(command.kind, EdgeCommandKind::ImageReconcileBuild as i32);
+                assert_eq!(
+                    ReconcileBuildRequest::decode(command.payload.as_slice()).unwrap(),
+                    request
+                );
+                session.output(
+                    id,
+                    ReconcileBuildResponse {
+                        state: state as i32,
+                    }
+                    .encode_to_vec(),
+                );
+                session.complete(id, true);
+            }
+        );
+        assert_eq!(result.unwrap().state, state as i32);
+        assert_eq!(session.pending_count(), 0);
+    }
+}
+
+#[tokio::test]
+async fn edge_build_defers_only_proven_local_transfer_refusal() {
+    let registry = EdgeRegistry::default();
+    let (occupied, mut occupied_outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let (session, mut outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let _held = occupied
+        .command(
+            EdgeCommandKind::ImageBuildStream,
+            vec![0; 12 * 1024 * 1024],
+            Duration::from_secs(10),
+            true,
+        )
+        .unwrap();
+    let client = AgentExecutionClient::Edge(session.clone());
+    let make_command = || AgentBuildCommand {
+        preparation: None,
+        admission_authority_id: Uuid::now_v7().to_string(),
+        admission_generation: 1,
+        run_id: Uuid::now_v7(),
+        attempt_id: Uuid::now_v7(),
+        push_to_registry: true,
+        output: None,
+        context_archive: vec![0; 12 * 1024 * 1024],
+        dockerfile_path: "Dockerfile".into(),
+        tags: vec!["fixture:latest".into()],
+        build_args: Default::default(),
+        target: None,
+        registry_auth: None,
+        registry_host: None,
+        timeout_seconds: 5,
+        maximum_log_bytes: 1024,
+        secrets: vec![],
+    };
+    let cancellation = CancellationToken::new();
+    let result = client
+        .build_image(make_command(), &cancellation)
+        .await
+        .unwrap();
+    assert!(result.not_started);
+    assert_eq!(session.pending_count(), 0);
+    assert!(
+        outbound.try_recv().is_err(),
+        "neither build nor push may have been submitted"
+    );
+    drop(occupied_outbound.recv().await.unwrap());
+    assert!(occupied_outbound.try_recv().is_err()); // encoder finished, remote work remains active
+    for remote_busy in [false, true] {
+        let agent = async {
+            let request = outbound.recv().await.unwrap();
+            let id = Uuid::parse_str(&request.command_id).unwrap();
+            drop(request);
+            assert!(outbound.try_recv().is_err());
+            if remote_busy {
+                session.fail(id, "resource_exhausted");
+            } else {
+                session.output(
+                    id,
+                    ImageBuildResponse {
+                        status: Some("completed".into()),
+                        ..Default::default()
+                    }
+                    .encode_to_vec(),
+                );
+                session.complete(id, true);
+                let request = outbound.recv().await.unwrap();
+                let id = Uuid::parse_str(&request.command_id).unwrap();
+                session.output(
+                    id,
+                    ImageBuildResponse {
+                        status: Some("completed".into()),
+                        ..Default::default()
+                    }
+                    .encode_to_vec(),
+                );
+                session.complete(id, true);
+            }
+        };
+        let (result, ()) = tokio::join!(client.build_image(make_command(), &cancellation), agent);
+        if remote_busy {
+            assert!(
+                result.is_err(),
+                "remote generic failures never authorize replay"
+            );
+        } else {
+            assert!(!result.unwrap().not_started);
+        }
+    }
 }

@@ -97,6 +97,7 @@
           "ActionDeleted",
           "ActionRunQueued",
           "ActionRunStarted",
+          "ActionRunCleanupResolved",
           "ActionRunSucceeded",
           "ActionRunFailed",
           "ActionRunTimedOut",
@@ -163,6 +164,7 @@
           "BuildRunSucceeded",
           "BuildRunFailed",
           "BuildRunTimedOut",
+          "BuildRunCleanupResolved",
           "BuildRunCancelled",
           "BuildWebhookReceived",
           "BuildAgentPoolCreated",
@@ -1500,6 +1502,7 @@
           "enabled": {
             "type": "boolean"
           },
+          "executor": {},
           "id": {
             "format": "uuid",
             "type": "string"
@@ -1548,7 +1551,8 @@
           "scheduleTimeZone",
           "timeoutSeconds",
           "alertOnFailure",
-          "runAsActorId"
+          "runAsActorId",
+          "executor"
         ],
         "type": "object"
       },
@@ -1596,6 +1600,9 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/AutomationExecutorSchema"
           },
           "name": {
             "type": "string"
@@ -1710,6 +1717,9 @@
           "enabled": {
             "type": "boolean"
           },
+          "executor": {
+            "$ref": "#/components/schemas/AutomationExecutorSchema"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -1792,6 +1802,7 @@
           "webhook",
           "timeoutSeconds",
           "alertOnFailure",
+          "executor",
           "runAsActorId",
           "controlState",
           "currentRunId",
@@ -1804,6 +1815,65 @@
           "latestRun"
         ],
         "type": "object"
+      },
+      "AutomationExecutorSchema": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "Core"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "agentId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "Agent"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "agentId",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "agentIds": {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "Automatic"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "agentIds",
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "AutomationProgress": {
         "properties": {
@@ -1912,6 +1982,16 @@
           "argsJson": {
             "type": "string"
           },
+          "attemptId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupPending": {
+            "type": "boolean"
+          },
           "codeHash": {
             "type": "string"
           },
@@ -1929,6 +2009,13 @@
             ]
           },
           "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "executorId": {
+            "format": "uuid",
             "type": [
               "string",
               "null"
@@ -1993,6 +2080,9 @@
         },
         "required": [
           "id",
+          "executorId",
+          "attemptId",
+          "cleanupPending",
           "actionId",
           "actionName",
           "trigger",
@@ -15741,6 +15831,76 @@
             "properties": {
               "$type": {
                 "enum": [
+                  "ActionRunCleanupResolved"
+                ],
+                "type": "string"
+              },
+              "attemptId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "attemptId",
+              "reason",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "BuildRunCleanupResolved"
+                ],
+                "type": "string"
+              },
+              "attemptId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "daemonId": {
+                "type": "string"
+              },
+              "previousAuthorityId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "replacementAuthorityId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "attemptId",
+              "daemonId",
+              "previousAuthorityId",
+              "replacementAuthorityId",
+              "reason",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
                   "BuildRunCancelled"
                 ],
                 "type": "string"
@@ -17985,10 +18145,6 @@
               "array",
               "null"
             ]
-          },
-          "maxWorkers": {
-            "format": "int32",
-            "type": "integer"
           },
           "registrationSecretId": {
             "format": "uuid",
@@ -22721,6 +22877,9 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/AutomationExecutorSchema"
           },
           "runAsActorId": {
             "format": "uuid",

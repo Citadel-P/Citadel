@@ -173,6 +173,15 @@ selector before executing it, so a renamed test cannot silently run zero tests:
   recovery inspects shared queues. They run real service orchestration with
   transaction wrappers injecting precommit failures and lost commit acknowledgments,
   recovery, supersession and cancellation. Execution and cleanup remain single-use.
+  The build fixture also covers shared-daemon reservations, stale cleanup receipts,
+  duplicate acknowledgments, terminal transaction rollback and restart after a
+  durable cleanup receipt. Operator recovery covers current human-administrator
+  access, active/stale attempt rejection, concurrent resolution, audit/log rollback,
+  missing admission replies, and preservation of run outcomes without fabricated
+  Agent receipts. The Edge fixture checks the original target's host identity;
+  it does not prove cleanup across a live Agent restart.
+  Agent ledger and signed Direct tests cover delayed
+  requests after reconciliation and rejection of changed authority/daemon IDs.
 - `alert_persistence::durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure`
   keeps durable observation consumer/receipt coverage on a separate fresh execution
   database, so unrelated queued observations cannot affect its receipt counts.
@@ -421,3 +430,80 @@ and runs the ignored wrapper with the pinned Docker CLI and Compose plugin from
 ```bash
 cargo test --locked -p citadel-docker --lib stacks::tests::compose_interpolation_excludes_core_secrets -- --ignored --exact
 ```
+
+## Execution capacity gates
+
+Use a fresh disposable database for each database command below. The worker
+comparison deliberately simulates the old lifecycle-held preparation permit and
+the new transfer-only permit with the same six projects and log workload; it is
+not a benchmark of two released Core binaries.
+
+```sh
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::builds::tests::two_preparations_can_track_six_executions_and_drain -- --ignored --nocapture --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test backup_execution -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test build_execution -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test edge_sessions
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --lib --test direct --test configuration
+```
+
+The first three commands read `CITADEL_EXECUTION_DATABASE_URL`. Backup coverage
+includes renewable ownership beyond the former timeout, stale owners, six data
+reservations over three hosts, shared-heavy limits, aliases, expiry quarantine,
+source deferral, immutable plans and completion failures. Agent Direct tests use
+signed HTTP/2 with a Docker fixture, including a cancelled create whose absent
+helper name must not free capacity. Edge session tests use 12 MiB contexts and
+bounded noisy output; payload ownership survives cancellation until encoding ends.
+
+`cargo test --locked -p citadel-backups --lib` also checks stalled renewal,
+ownership-loss cleanup and capped completion backoff using paused time.
+The backup execution fixture checks tracking ownership across dispatcher handoff
+and completion retries. With a separate disposable `CITADEL_EXECUTION_DATABASE_URL`,
+`cargo test --locked -p citadel-server --lib workers::backups::tests -- --ignored --test-threads=1`
+checks concurrent dispatch, the tracking limit and shutdown drain without running
+Docker or Restic.
+
+`cargo test --locked -p citadel-agent --test edge_intake -- --ignored --test-threads=1`
+uses `CITADEL_AGENT_TEST_DATABASE_URL` and the real authenticated Core/Agent Edge
+transport, with a fixture Docker server. Data reservations survive reconnect and
+late admissions are fenced after cleanup. The opt-in Agent `memory` test measures
+an isolated Agent process across repeated Direct/Edge workloads. These protocol
+fixtures do not substitute for the real Docker/Restic round trips above.
+
+Capacity measurements from the disposable 2026-10-27 fixture (debug binaries):
+
+| Fixture | Observed result |
+| --- | --- |
+| Lifecycle-held preparation, six projects | 2 executing; 2 preparing peak; 397 ms to overlap; 24 ms shutdown drain |
+| Transfer-only preparation, same projects | 6 executing; 2 preparing peak; 855 ms to overlap; 56 ms shutdown drain |
+| Persisted noisy output | 64 / 192 rows, 61,440 / 184,320 message bytes respectively |
+| Combined worker comparison process | 38,264 KiB peak RSS; 1.47 s user + 0.09 s system CPU; 4.23 s elapsed |
+| Isolated Agent, 36 Direct rounds | 103,256 KiB highest sampled RSS; 78,252 KiB final idle RSS; 12 final file descriptors |
+| Isolated Agent, 36 Edge rounds | 49,504 KiB highest sampled RSS; 49,444 KiB final idle RSS; 12 final file descriptors |
+
+These are fixture measurements, not production sizing guarantees or a comparison
+of two complete Core versions. The Agent daemon/build process is simulated; the
+transport, bounded 12 MiB input handling and cancellation are real. RSS samples
+are not continuous peaks. The worker RSS/CPU figures cover both modes together.
+
+Execution diagnostics use fixed `RuntimeWork` families: queue depth/oldest age,
+durable build/data reservation counts, pending cleanup, preparation and cleanup
+durations, and result-persistence attempt counts/durations. Edge transfer,
+control and output buffered-byte gauges follow buffer ownership through drop.
+Database gauges are sampled by maintenance; they are not admission authority.
+
+### Automation placement and credentials
+
+Use a disposable `CITADEL_EXECUTION_DATABASE_URL` for the adapter test
+`remote_attempts_fence_tokens_deferral_shared_capacity_and_recovery` and the Server
+`automation_http_execution` integration target. The latter also needs
+`CITADEL_DENO_PATH`. Run each against its own empty fixture database because queue
+claims intentionally cover all actions.
+
+Agent unit tests cover shared heavy capacity, duplicate attempts and cleanup
+fencing. The ignored Agent library test `actual_deno_is_bounded_redacted_sandboxed_and_reaped_after_stream_loss`
+uses `CITADEL_DENO_PATH`, temporary workspaces and an unreachable fixture Docker
+endpoint; it does not touch a real Docker daemon. It checks HTTPS input validation,
+redaction, host-file/subprocess/network restrictions and process cleanup after a
+lost stream. `token_safety` uses its own disposable `CITADEL_TOKEN_SAFETY_DATABASE_URL`
+and verifies run tokens become invalid on cancellation, attempt replacement and
+completion, in addition to its HTTP/realtime credential restrictions.

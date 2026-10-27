@@ -39,7 +39,6 @@ pub(super) fn build(
                 PostgresBackupPersistence::new(pool.clone()).with_lease_options(
                     options.repository_lease_seconds,
                     options.source_lease_seconds,
-                    options.settings.default_timeout.as_secs() as i32,
                 ),
             ),
             Arc::new(
@@ -53,6 +52,8 @@ pub(super) fn build(
                     options.maximum_log_bytes,
                     pool.clone(),
                 )
+                .with_local_budget(runtime.local_heavy_work.clone())
+                .with_local_authority(runtime.local_execution_authority)
                 .with_restic(config.execution.tools.restic.clone())
                 .with_settings(options.settings.clone())
                 .with_agent(agent.clone())
@@ -70,6 +71,7 @@ pub(super) fn build(
                             options.settings.working_directory.join("citadel-system"),
                             options.maximum_log_bytes,
                         )
+                        .with_local_budget(runtime.local_heavy_work.clone())
                         .with_recovery_assets(RecoveryAssets {
                             core_data_path: options.core_data_path.clone(),
                             jwt_key_is_external: config.identity.jwt_key_is_external,
@@ -80,6 +82,7 @@ pub(super) fn build(
             chrono::Duration::minutes(10),
             Arc::new(IdentityBackupRunAuthorizer::new(Arc::clone(identity))),
         )
+        .with_tracking_slots(config.backup_workers.tracking_slots)
         .with_repository_operation_lease(chrono::Duration::seconds(
             options.settings.default_timeout.as_secs() as i64 * 2
                 + i64::from(options.repository_lease_seconds),

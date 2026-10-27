@@ -421,6 +421,30 @@ Cancellation is best-effort:
 
 If Citadel restarts during a run, the reconciler marks orphaned active runs as interrupted.
 
+### Resolving retained build capacity
+
+A failed or interrupted build may keep its capacity reserved when Citadel cannot
+confirm that the build and registry pushes stopped. Automatic reconciliation releases
+that capacity when the original Agent confirms cleanup, without retrying the build.
+
+For unresolved terminal runs, administrators see **Cleanup pending → Resolve cleanup**
+in the run log sheet:
+
+1. Check the original execution host and stop any remaining build or registry pushes for the displayed attempt.
+2. Once other builds on the host finish, restart the original Agent so delayed commands from the old attempt are fenced.
+3. Enter resolution notes and confirm that the work has stopped, then select **Release capacity**.
+
+Citadel must reach the restarted Agent on the same Docker daemon. An offline, removed,
+or different-daemon target stays reserved until the original target is available.
+Restarting the Agent alone does not prove Docker work stopped; the administrator must
+verify that first. Resolution records the administrator, attempt, daemon, old/new Agent
+identities and notes in Activities and run logs. It preserves the original build result
+and completion time and does not retry the build.
+
+Core-local builds also retain uncertain daemon occupancy. For those runs, restart
+Core after verifying that its old build/push processes stopped; recovery checks
+Core's new authority against the same local Docker daemon.
+
 ## Retention
 
 Each build project keeps its most recent terminal runs according to **Run retention**.

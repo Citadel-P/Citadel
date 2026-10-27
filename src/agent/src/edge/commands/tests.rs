@@ -4,6 +4,7 @@ use axum::{Json, Router, body::Body, response::IntoResponse};
 use citadel_contracts::citadel::{
     containers::v1::*, shared_models::v1::VolumeResponse, volumes::v1::CreateVolumeRequest,
 };
+use citadel_docker::client::DockerClient;
 use std::sync::{
     Mutex,
     atomic::{AtomicUsize, Ordering},
@@ -52,7 +53,8 @@ impl Harness {
                     use serde_json::json;
                     calls.fetch_add(1, Ordering::SeqCst);
                     match request.uri().path() {
-                        "/version" => Json(json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response(),
+                        "/version" | "/v1.49/version" => Json(json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response(),
+                        "/v1.49/info" => Json(json!({"ID":"fixture-daemon"})).into_response(),
                         "/_ping" => "OK".into_response(),
                         "/v1.49/volumes/create" => {
                             let body = axum::body::to_bytes(request.into_body(), 1024 * 1024).await.unwrap();
@@ -111,8 +113,7 @@ impl Harness {
         let (outgoing, receiver) = Outgoing::channel();
         (
             Commands::new(
-                self.docker.clone(),
-                None,
+                Runtime::new(self.docker.clone(), CancellationToken::new(), None),
                 self.identity.clone(),
                 EdgeProfile::Ordinary,
                 Uuid::now_v7().to_string(),
@@ -186,7 +187,7 @@ async fn every_generated_command_reaches_its_protobuf_decoder() {
         let error = dispatch::execute(
             Runtime::new(h.docker.clone(), CancellationToken::new(), None),
             kind,
-            &[0xff],
+            vec![0xff],
             Box::pin(futures_util::stream::empty()),
             Output {
                 outgoing: outgoing.clone(),
@@ -206,7 +207,7 @@ async fn every_generated_command_reaches_its_protobuf_decoder() {
             count += 1;
         }
     }
-    assert_eq!(count, 69);
+    assert_eq!(count, 75);
     assert_eq!(h.calls.load(Ordering::SeqCst), 0);
 }
 
@@ -513,14 +514,18 @@ async fn interactive_and_binary_exec_preserve_input_resize_output_bytes_and_exit
         let h = Harness::new().await;
         let (mut commands, mut receiver) = h.commands();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        commands.docker = DockerClient::with_endpoint(
-            format!("http://{}", listener.local_addr().unwrap())
-                .parse()
-                .unwrap(),
-            Duration::from_secs(2),
-            "/host",
-        )
-        .unwrap();
+        commands.runtime = Runtime::new(
+            DockerClient::with_endpoint(
+                format!("http://{}", listener.local_addr().unwrap())
+                    .parse()
+                    .unwrap(),
+                Duration::from_secs(2),
+                "/host",
+            )
+            .unwrap(),
+            CancellationToken::new(),
+            None,
+        );
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
             assert!(request(&mut socket).await.0.contains("/version"));
@@ -529,6 +534,16 @@ async fn interactive_and_binary_exec_preserve_input_resize_output_bytes_and_exit
                 r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
             )
             .await;
+            if !interactive {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                assert!(
+                    request(&mut socket)
+                        .await
+                        .0
+                        .contains("/containers/fixture/json")
+                );
+                respond(&mut socket, r#"{"Id":"fixture","Config":{"Labels":{}}}"#).await;
+            }
             let (mut socket, _) = listener.accept().await.unwrap();
             let (headers, body) = request(&mut socket).await;
             assert!(headers.contains("/containers/fixture/exec"));
@@ -712,15 +727,19 @@ async fn swarm_volume_browsing_runs_packaged_rust_helper_and_cleans_up() {
     let image = std::env::var("CITADEL_AGENT_HELPER_TEST_IMAGE").unwrap();
     let h = Harness::new().await;
     let (mut commands, mut receiver) = h.commands();
-    commands.docker = DockerClient::with_endpoint(
-        std::env::var("DOCKER_HOST")
-            .unwrap_or_else(|_| "unix:///var/run/docker.sock".into())
-            .parse()
-            .unwrap(),
-        Duration::from_secs(10),
-        "/host",
-    )
-    .unwrap();
+    commands.runtime = Runtime::new(
+        DockerClient::with_endpoint(
+            std::env::var("DOCKER_HOST")
+                .unwrap_or_else(|_| "unix:///var/run/docker.sock".into())
+                .parse()
+                .unwrap(),
+            Duration::from_secs(10),
+            "/host",
+        )
+        .unwrap(),
+        CancellationToken::new(),
+        None,
+    );
     commands.profile = EdgeProfile::SwarmNode(crate::config::SwarmIdentity {
         bootstrap_file: "unused".into(),
         platform_id: h.identity.platform_id.to_string(),
@@ -1040,4 +1059,162 @@ async fn process_snapshot_uses_read_only_edge_dispatch() {
     assert!(super::super::swarm_policy::allowed(
         EdgeCommandKind::ContainerProcesses
     ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn replacement_session_keeps_build_admission_and_busy_is_a_typed_output() {
+    use citadel_contracts::citadel::images::v1::{
+        BuildAdmissionResult, BuildImageRequest, ImageBuildResponse,
+    };
+    use std::os::unix::fs::PermissionsExt;
+    struct Fixture(std::path::PathBuf);
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let fixture =
+        Fixture(std::env::temp_dir().join(format!("citadel-edge-build-{}", Uuid::now_v7())));
+    std::fs::create_dir(&fixture.0).unwrap();
+    let docker = fixture.0.join("docker");
+    std::fs::write(&docker, "#!/bin/sh\ncat >/dev/null\nexit 7\n").unwrap();
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let h = Harness::new().await;
+    let runtime = Runtime::new(h.docker.clone(), CancellationToken::new(), None)
+        .with_build_capacity(1)
+        .with_docker_cli(docker.display().to_string());
+    let initial = citadel_contracts::citadel::images::v1::image_service_server::ImageService::check_build_host(&runtime, tonic::Request::new(())).await.unwrap().into_inner();
+    let calls = h.calls.load(Ordering::SeqCst);
+    for session_index in 0..2 {
+        let (outgoing, mut receiver) = Outgoing::channel();
+        let mut commands = Commands::new(
+            runtime.clone(),
+            h.identity.clone(),
+            EdgeProfile::Ordinary,
+            Uuid::now_v7().to_string(),
+            outgoing,
+        );
+        start(
+            &mut commands,
+            h.command(
+                EdgeCommandKind::ImageBuildStream,
+                BuildImageRequest {
+                    admission_authority_id: initial.admission_authority_id.clone(),
+                    admission_generation: initial.admission_generation,
+                    run_id: Uuid::now_v7().to_string(),
+                    attempt_id: Uuid::now_v7().to_string(),
+                    context_archive: vec![1, 2, 3],
+                    dockerfile_archive_path: Some("Dockerfile".into()),
+                    timeout_seconds: 5,
+                    ..Default::default()
+                },
+            ),
+        )
+        .await;
+        finish(&mut commands).await;
+        let messages = take(&mut receiver);
+        let outputs: Vec<_> = messages
+            .iter()
+            .filter_map(|message| match &message.body {
+                Some(AgentBody::CommandOutput(value)) => {
+                    Some(ImageBuildResponse::decode(value.payload.as_slice()).unwrap())
+                }
+                _ => None,
+            })
+            .collect();
+        if session_index == 0 {
+            assert_eq!(
+                outputs[0].admission,
+                BuildAdmissionResult::BuildAdmissionAccepted as i32
+            );
+            assert!(
+                outputs[1]
+                    .error_message
+                    .as_deref()
+                    .unwrap()
+                    .contains("Docker build failed with exit code 7")
+            );
+        } else {
+            assert_eq!(outputs.len(), 1);
+            assert_eq!(
+                outputs[0].admission,
+                BuildAdmissionResult::BuildAdmissionCapacityBusyNotStarted as i32
+            );
+        }
+        assert!(matches!(
+            messages.last().unwrap().body,
+            Some(AgentBody::CommandCompleted(_))
+        ));
+    }
+    assert_eq!(h.calls.load(Ordering::SeqCst), calls);
+}
+
+#[tokio::test]
+async fn data_admission_survives_edge_replacement_and_cleanup_fences_late_requests() {
+    use citadel_contracts::citadel::images::v1::{image_service_server::ImageService, *};
+    let h = Harness::new().await;
+    let runtime = Runtime::new(h.docker.clone(), CancellationToken::new(), None)
+        .with_execution_capacity(2, 2, 1);
+    let host = ImageService::check_build_host(&runtime, tonic::Request::new(()))
+        .await
+        .unwrap()
+        .into_inner();
+    let original = DataOperationRequest {
+        run_id: Uuid::now_v7().to_string(),
+        attempt_id: Uuid::now_v7().to_string(),
+        operation_id: Uuid::now_v7().to_string(),
+        admission_authority_id: host.admission_authority_id,
+        docker_daemon_id: host.docker_daemon_id,
+        admission_generation: host.admission_generation,
+    };
+    for index in 0..2 {
+        let (outgoing, mut receiver) = Outgoing::channel();
+        let mut commands = Commands::new(
+            runtime.clone(),
+            h.identity.clone(),
+            EdgeProfile::Ordinary,
+            Uuid::now_v7().to_string(),
+            outgoing,
+        );
+        let mut request = original.clone();
+        if index == 1 {
+            request.operation_id = Uuid::now_v7().to_string();
+        }
+        start(
+            &mut commands,
+            h.command(EdgeCommandKind::ImageReserveData, request),
+        )
+        .await;
+        finish(&mut commands).await;
+        let messages = take(&mut receiver);
+        let Some(AgentBody::CommandOutput(value)) = &messages[0].body else {
+            panic!("typed admission output")
+        };
+        let response = DataAdmissionResponse::decode(value.payload.as_slice()).unwrap();
+        assert_eq!(
+            response.admission,
+            if index == 0 {
+                BuildAdmissionResult::BuildAdmissionAccepted
+            } else {
+                BuildAdmissionResult::BuildAdmissionCapacityBusyNotStarted
+            } as i32
+        );
+    }
+    let response = ImageService::reconcile_data(&runtime, tonic::Request::new(original.clone()))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        response.state,
+        BuildCleanupState::BuildCleanupConfirmed as i32
+    );
+    let response = ImageService::reserve_data(&runtime, tonic::Request::new(original))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        response.admission,
+        BuildAdmissionResult::BuildAdmissionFencedNotStarted as i32
+    );
 }

@@ -24,7 +24,7 @@ impl PostgresAutomationRepository {
                 .map_err(storage)?
                 .ok_or(AutomationError::NotFound)?;
             let enabled: bool = action.try_get("enabled").map_err(storage)?;
-            if let EnqueueMode::Execute(Some(draft)) = mode {
+            if let EnqueueMode::Draft(Some(draft)) = mode {
                 if trigger != "Test" {
                     return Err(AutomationError::Validation(
                         "Draft code is only accepted for tests.".into(),
@@ -59,7 +59,7 @@ impl PostgresAutomationRepository {
             let state: String = action.try_get("controlstate").map_err(storage)?;
             let run_id = Uuid::now_v7();
             let code: String = match mode {
-                EnqueueMode::Execute(Some(draft)) if trigger == "Test" => draft.code.clone(),
+                EnqueueMode::Draft(Some(draft)) if trigger == "Test" => draft.code.clone(),
                 _ => action.try_get("code").map_err(storage)?,
             };
             let name: String = action.try_get("name").map_err(storage)?;
@@ -74,7 +74,7 @@ impl PostgresAutomationRepository {
             }
             if state != "Idle" {
                 let reason = "Another run for this Action is already queued or running.";
-                let row = sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,finishedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid,errormessage) VALUES($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,$7,'Rejected',$8,$9,$10,$11) RETURNING *")
+                let row = sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,finishedat,runasactorid,status,timeoutseconds,trigger,triggeredbyactorid,errormessage) VALUES($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,$7,'Rejected',$8,$9,$10,$11) RETURNING *, false AS cleanuppending")
                     .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
                     .bind(run_as).bind(timeout).bind(trigger).bind(triggered_by).bind(reason)
                     .fetch_one(&mut *tx).await.map_err(database)?;
@@ -86,6 +86,16 @@ impl PostgresAutomationRepository {
                 .bind(run_id).bind(id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
                 .bind(Utc::now()).bind(run_as).bind(timeout).bind(trigger).bind(triggered_by)
                 .execute(&mut *tx).await.map_err(database)?;
+            sqlx::query("UPDATE actionruns SET executor=$2 WHERE id=$1")
+                .bind(run_id)
+                .bind(
+                    action
+                        .try_get::<serde_json::Value, _>("executor")
+                        .map_err(storage)?,
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             sqlx::query("SELECT pg_notify('citadel_automation_work','')")
                 .execute(&mut *tx)
                 .await
@@ -93,11 +103,6 @@ impl PostgresAutomationRepository {
             sqlx::query("UPDATE actions SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1 WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             let run = get_run_tx(&mut tx, run_id).await?;
             add_run_activity(&mut tx, &run).await?;
-            let run = if matches!(mode, EnqueueMode::Execute(_)) {
-                start_run(&mut tx, id, run_id).await?
-            } else {
-                run
-            };
             tx.commit().await.map_err(storage)?;
             Ok(run)
         })
@@ -125,7 +130,7 @@ impl PostgresAutomationRepository {
 }
 
 impl PostgresAutomationRepository {
-    pub(super) fn enqueue_for_execution_impl<'a>(
+    pub(super) fn enqueue_with_draft_impl<'a>(
         &'a self,
         actor: ActorId,
         id: Uuid,
@@ -133,7 +138,7 @@ impl PostgresAutomationRepository {
         args: &'a serde_json::Value,
         timeout_seconds: Option<i32>,
         draft: Option<&'a AutomationDraft>,
-    ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>> {
+    ) -> BoxFuture<'a, Result<AutomationRun, AutomationError>> {
         Box::pin(async move {
             self.enqueue_run(
                 actor,
@@ -141,10 +146,9 @@ impl PostgresAutomationRepository {
                 trigger,
                 args,
                 timeout_seconds,
-                EnqueueMode::Execute(draft),
+                EnqueueMode::Draft(draft),
             )
             .await
-            .map(|run| AutomationRunClaim { run })
         })
     }
 }
@@ -171,20 +175,27 @@ impl PostgresAutomationRepository {
     pub(super) fn claim_next_impl<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<Option<AutomationRunClaim>, AutomationError>> {
+        remote: bool,
+    ) -> BoxFuture<'a, Result<AutomationClaimResult, AutomationError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            recover_interrupted(&mut tx, stale_before).await?;
-            let row = sqlx::query("SELECT run.id,run.actionid FROM actionruns run JOIN actions action ON action.id=run.actionid WHERE run.status='Queued' AND action.currentrunid=run.id ORDER BY run.queuedat,run.id FOR UPDATE OF run,action SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
+            let recovered_actions = recover_interrupted(&mut tx, stale_before).await?;
+            let row = sqlx::query("SELECT run.id,run.actionid FROM actionruns run JOIN actions action ON action.id=run.actionid WHERE run.status='Queued' AND action.currentrunid=run.id AND (run.executor->>'kind'<>'Core')=$1 AND (run.nexteligibleat IS NULL OR run.nexteligibleat<=CURRENT_TIMESTAMP) ORDER BY run.queuedat,run.id FOR UPDATE OF run,action SKIP LOCKED LIMIT 1").bind(remote).fetch_optional(&mut *tx).await.map_err(storage)?;
             let Some(row) = row else {
                 tx.commit().await.map_err(storage)?;
-                return Ok(None);
+                return Ok(AutomationClaimResult {
+                    claim: None,
+                    recovered_actions,
+                });
             };
             let run_id: Uuid = row.try_get("id").map_err(storage)?;
             let action_id: Uuid = row.try_get("actionid").map_err(storage)?;
             let run = start_run(&mut tx, action_id, run_id).await?;
             tx.commit().await.map_err(storage)?;
-            Ok(Some(AutomationRunClaim { run }))
+            Ok(AutomationClaimResult {
+                claim: Some(AutomationRunClaim { run }),
+                recovered_actions,
+            })
         })
     }
 }
@@ -198,10 +209,12 @@ impl PostgresAutomationRepository {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let finished = Utc::now();
-            let affected = sqlx::query("UPDATE actionruns SET status=$2,finishedat=$3,durationms=GREATEST(0,(EXTRACT(EPOCH FROM ($3-startedat))*1000)::bigint),exitcode=$4,logs=$5,errormessage=$6 WHERE id=$1 AND status='Running'")
-                .bind(claim.run.id).bind(result.status.as_str()).bind(finished).bind(result.exit_code).bind(&result.logs).bind(result.error.as_deref()).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let affected = sqlx::query("UPDATE actionruns SET status=$2,finishedat=$3,durationms=GREATEST(0,(EXTRACT(EPOCH FROM ($3-startedat))*1000)::bigint),exitcode=$4,logs=$5,errormessage=$6 WHERE id=$1 AND status='Running' AND attemptid=$7")
+                .bind(claim.run.id).bind(result.status.as_str()).bind(finished).bind(result.exit_code).bind(&result.logs).bind(result.error.as_deref()).bind(claim.run.attempt_id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if affected == 1 {
-                sqlx::query("UPDATE actions SET controlstate='Idle',controlstartedat=NULL,currentrunid=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(claim.run.action_id).bind(claim.run.id).execute(&mut *tx).await.map_err(storage)?;
+                sqlx::query("DELETE FROM automationexecutorreservations WHERE runid=$1 AND attemptid=$2 AND cleanupconfirmed")
+                    .bind(claim.run.id).bind(claim.run.attempt_id).execute(&mut *tx).await.map_err(storage)?;
+                sqlx::query("UPDATE actions SET controlstate='Idle',controlstartedat=NULL,currentrunid=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2 AND NOT EXISTS(SELECT 1 FROM automationexecutorreservations WHERE runid=$2)").bind(claim.run.action_id).bind(claim.run.id).execute(&mut *tx).await.map_err(storage)?;
                 let run = get_run_tx(&mut tx, claim.run.id).await?;
                 add_run_activity(&mut tx, &run).await?;
             }
@@ -260,10 +273,16 @@ impl PostgresAutomationRepository {
                 tx.commit().await.map_err(storage)?;
                 Ok(())
             } else {
-                tx.rollback().await.map_err(storage)?;
-                Err(AutomationError::Conflict(
-                    "Only a queued Automation run can be cancelled by this endpoint.".to_owned(),
-                ))
+                let affected = sqlx::query("UPDATE actionruns SET cancelrequested=true WHERE id=$1 AND actionid=$2 AND status='Running'")
+                    .bind(run_id).bind(action_id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+                tx.commit().await.map_err(storage)?;
+                if affected == 1 {
+                    Ok(())
+                } else {
+                    Err(AutomationError::Conflict(
+                        "Automation run is not active.".to_owned(),
+                    ))
+                }
             }
         })
     }

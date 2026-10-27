@@ -1,5 +1,11 @@
+#[path = "build_execution/admission.rs"]
+mod admission;
+#[path = "build_execution/attempts.rs"]
+mod attempts;
 #[path = "build_execution/completion.rs"]
 mod completion;
+#[path = "build_execution/operator_recovery.rs"]
+mod operator_recovery;
 use chrono::{Duration, Utc};
 use citadel_adapters::external::builds::executor::LocalDockerBuildExecutor;
 use citadel_adapters::persistence::postgres::builds::PostgresBuildRepository;
@@ -80,6 +86,8 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     };
     input.validate().unwrap();
     completion::verify(&pool, actor, &input).await;
+    attempts::verify(&pool, actor, &input).await;
+    admission::verify(&pool, actor, &input).await;
     let project = store.create(actor, &input).await.unwrap();
     assert_eq!(project.tags.len(), 1);
     assert_eq!(project.tags[0].id, tag);
@@ -684,6 +692,7 @@ async fn assert_local_build_skips_registry(
             "fixture",
         ],
         vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+        vec!["remote", "add", "origin", "https://example.test/repo.git"],
     ] {
         let output = std::process::Command::new("git")
             .arg("-C")
@@ -704,6 +713,32 @@ async fn assert_local_build_skips_registry(
     )
     .unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // Only network fetch is stubbed; the normal Git worker still validates and
+    // publishes the committed fixture through its durable completion path.
+    let git_cli = root.join("git-stub");
+    std::fs::write(
+        &git_cli,
+        "#!/bin/sh\nfor arg in \"$@\"; do [ \"$arg\" != fetch ] || exit 0; done\nexec git \"$@\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&git_cli, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = CancellationToken::new();
+    let stopped = shutdown.clone();
+    let daemon_id = format!("local-build-fixture-{}", Uuid::now_v7());
+    let daemon = tokio::spawn(async move {
+        axum::serve(listener, axum::Router::new().fallback(move |uri: axum::http::Uri| async move {
+            use axum::response::IntoResponse;
+            if uri.path().ends_with("/version") {
+                return axum::Json(serde_json::json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response();
+            }
+            if uri.path().ends_with("/info") {
+                return axum::Json(serde_json::json!({"ID": daemon_id, "Name": "fixture", "ServerVersion": "29"})).into_response();
+            }
+            axum::http::StatusCode::NOT_FOUND.into_response()
+        })).with_graceful_shutdown(stopped.cancelled_owned()).await.unwrap();
+    });
     let protector = Arc::new(AesGcmSecretProtector::new(&[91_u8; 32]).unwrap());
     let git = Arc::new(GitRepositoryExecutionService::new(
         Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
@@ -711,34 +746,49 @@ async fn assert_local_build_skips_registry(
             Arc::new(PostgresGitAccountRepository::new(pool.clone())),
             protector.clone(),
         )),
-        Arc::new(GitCli::new(
+        Arc::new(GitCli::with_process(
             Arc::new(citadel_processes::SystemProcess),
             Arc::new(
                 citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
                     citadel_runtime::DynamicTasks::new(CancellationToken::new()),
                 ),
             ),
+            git_cli,
             std::time::Duration::from_secs(10),
         )),
         root.clone(),
         std::time::Duration::from_secs(60),
     ));
     let executor = LocalDockerBuildExecutor::new(
-        git,
-        citadel_docker::client::DockerEndpoint::Unix("/unused.sock".into()),
+        git.clone(),
+        citadel_docker::client::DockerEndpoint::Tcp(format!("http://{address}").parse().unwrap()),
         docker.as_os_str(),
         Arc::new(PostgresBuildSecretResolver::new(pool.clone(), protector).unwrap()),
         Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone())),
         4096,
         pool.clone(),
     );
-    let result = executor
-        .execute(
-            claim,
-            &citadel_builds::NoopBuildLogSink,
-            &CancellationToken::new(),
-        )
-        .await;
+    let token = CancellationToken::new();
+    let execution = executor.execute(claim, &citadel_builds::NoopBuildLogSink, &token);
+    let synchronize = async {
+        loop {
+            if git.process_one(&token).await.unwrap() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    };
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        tokio::pin!(execution);
+        tokio::select! {
+            result = &mut execution => result,
+            () = synchronize => execution.await,
+        }
+    })
+    .await;
+    shutdown.cancel();
+    daemon.await.unwrap();
+    let result = result.expect("local build and Git synchronization finish");
     assert_eq!(
         result.status,
         citadel_builds::BuildRunStatus::Succeeded,

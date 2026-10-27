@@ -58,6 +58,7 @@ pub(super) async fn token(f: &Fixture, p: &ActorPrincipal) -> String {
     JwtSessionTokenCodec::new(&[7; 32], "fixture".into(), "fixture".into())
         .unwrap()
         .encode_access(&AccessTokenClaims {
+            automation_attempt_id: None,
             session_id: Some(session_id),
             subject_id: p.subject_id,
             actor_id: p.actor_id,
@@ -1985,4 +1986,108 @@ async fn platform_realtime_capabilities_match_http_and_remain_actor_specific() {
     cancellation.cancel();
     server.await.unwrap();
     cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn automation_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
+    use citadel_automation::{AutomationActionConfiguration, AutomationRepository};
+    let f = fixture().await;
+    let reader = reader(&f);
+    let store = PostgresAutomationRepository::new(f.pool.clone());
+    let actor = f.administrator.actor_id;
+    let mut input: AutomationActionConfiguration = serde_json::from_value(json!({
+        "name": "Realtime automation", "code": "console.log('fixture')",
+        "enabled": true, "scheduleEnabled": false, "alertOnFailure": false
+    }))
+    .unwrap();
+    input.validate(actor).unwrap();
+    let action = store.create(actor, &input).await.unwrap();
+    let group = Group::parse(&format!("automation-runs:{}", action.id)).unwrap();
+    let mut denied = f.administrator.clone();
+    denied.actor_id = ActorId::new(f.actor_id);
+    denied.roles.clear();
+    assert!(matches!(
+        reader.read(&denied, &group, None).await,
+        Err(citadel_server::realtime::RealtimeReadError::Authorization)
+    ));
+    let initial = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(initial.events[0].target, "AutomationRunWindow");
+    assert_eq!(
+        initial.events[0].arguments[0],
+        json!({"actionId": action.id, "ids": []})
+    );
+
+    let run = store
+        .enqueue(actor, action.id, "Manual", &json!({}), None)
+        .await
+        .unwrap();
+    let queued = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(queued.rows[0].rows[0]["status"], "Queued");
+    assert!(queued.rows[0].rows[0]["codeSnapshot"].is_null());
+    assert!(queued.rows[0].rows[0]["logs"].is_null());
+    store.cancel(action.id, run.id).await.unwrap();
+    let daemon = Uuid::now_v7().to_string();
+    let authority = Uuid::now_v7();
+    sqlx::query("INSERT INTO buildexecutors(daemonid,authorityid,buildcapacity) VALUES($1,$2,1)")
+        .bind(&daemon)
+        .bind(authority)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO automationexecutorreservations(attemptid,runid,daemonid,authorityid,admissiongeneration,agentid,agenttype) VALUES($1,$2,$3,$4,1,$5,$6)")
+        .bind(Uuid::now_v7()).bind(run.id).bind(daemon).bind(authority).bind(f.platform_id)
+        .bind(ResourceType::Platform as i32).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE actions SET controlstate='Processing',currentrunid=$2 WHERE id=$1")
+        .bind(action.id)
+        .bind(run.id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    citadel_adapters::persistence::postgres::maintenance::reconcile(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store.get(action.id).await.unwrap().current_run_id,
+        Some(run.id),
+        "maintenance must preserve retained cleanup ownership"
+    );
+    let retained = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(retained.rows[0].rows[0]["status"], "Cancelled");
+    assert_eq!(retained.rows[0].rows[0]["cleanupPending"], true);
+    sqlx::query("DELETE FROM automationexecutorreservations WHERE runid=$1")
+        .bind(run.id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    citadel_adapters::persistence::postgres::maintenance::reconcile(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(store.get(action.id).await.unwrap().current_run_id, None);
+    let recovered = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(recovered.rows[0].rows[0]["cleanupPending"], false);
+    // A valid window can exceed one frame when arguments need JSON escaping.
+    let args = json!({"value": "\\".repeat(32_000)});
+    sqlx::query("INSERT INTO actionruns(id,actionid,actionname,trigger,status,runasactorid,argsjson,codehash,codesnapshot,timeoutseconds,queuedat,finishedat) SELECT gen_random_uuid(),$1,'Large args','Manual','Succeeded',$2,$3,'fixture','export default async () => {};',30,now()-make_interval(secs=>n),now() FROM generate_series(1,51) n")
+        .bind(action.id).bind(actor.value()).bind(args).execute(&f.pool).await.unwrap();
+    let window = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(window.rows[0].rows.len(), 50);
+    assert_eq!(
+        window.events[0].arguments[0]["ids"]
+            .as_array()
+            .unwrap()
+            .len(),
+        50
+    );
+    assert!(serde_json::to_vec(&window.rows[0].rows).unwrap().len() > 4 * 1024 * 1024);
+    for row in &window.rows[0].rows {
+        assert!(serde_json::to_vec(row).unwrap().len() < 4 * 1024 * 1024);
+    }
+    sqlx::query("DELETE FROM actionruns WHERE actionid=$1")
+        .bind(action.id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let rejoined = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(rejoined.events[0].arguments[0]["ids"], json!([]));
 }

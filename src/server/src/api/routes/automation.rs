@@ -63,6 +63,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Automati
         .normalized_routes(utoipa_axum::routes!(get_run))
         .normalized_routes(utoipa_axum::routes!(run_logs))
         .normalized_routes(utoipa_axum::routes!(cancel_run))
+        .normalized_routes(utoipa_axum::routes!(resolve_cleanup))
 }
 
 fn actor(
@@ -888,4 +889,45 @@ async fn duplicate_draft(
         })
         .into_response(),
     ))
+}
+
+#[utoipa::path(
+    post, path = "/api/v1/automation/actions/{id}/runs/{runId}/recovery", operation_id = "resolveAutomationRunCleanup",
+    tag = "AutomationActions", summary = "Resolve retained automation capacity after manual cleanup and Agent restart",
+    request_body = ResolveAutomationCleanupInput,
+    responses((status = 204, description = "Capacity released and acknowledgment audited; result unchanged"), crate::openapi::errors::ResourceMutationErrors),
+    params(("id" = uuid::Uuid, Path), ("runId" = uuid::Uuid, Path)), security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn resolve_cleanup(
+    State(state): State<AutomationHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    ApiPath((id, run_id)): ApiPath<(Uuid, Uuid)>,
+    headers: HeaderMap,
+    input: Result<Json<ResolveAutomationCleanupInput>, JsonRejection>,
+) -> HttpResult {
+    let principal = api_result(
+        super::authentication::require_human_administrator(principal),
+        &headers,
+    )?;
+    let Json(input) = api_result(
+        input.map_err(|_| ApiError::Validation("Invalid cleanup request.".into())),
+        &headers,
+    )?;
+    api_result(
+        state
+            .automation
+            .resolve_cleanup(
+                id,
+                run_id,
+                input.attempt_id,
+                principal.actor_id,
+                &input.reason,
+                input.acknowledged,
+            )
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }

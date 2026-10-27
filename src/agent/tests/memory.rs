@@ -60,7 +60,8 @@ impl Fixture {
             let live = live.clone();
             async move {
                 let path = uri.path();
-                if path == "/version" { return Json(json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response(); }
+                if path.ends_with("/_ping") { return "OK".into_response(); }
+                if path == "/version" || path == "/v1.49/version" { return Json(json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response(); }
                 if path == "/v1.49/info" { return Json(json!({"ID":"memory-daemon","Name":"memory-fixture","ServerVersion":"29"})).into_response(); }
                 if path.ends_with("/json") {
                     return Json(json!({"Id":"fixture","Config":{"Tty":path.contains("/tty/")}})).into_response();
@@ -255,8 +256,12 @@ fn log_request(tty: bool) -> ContainerLogRequest {
         tail: 1,
     }
 }
-fn build_request(round: usize) -> BuildImageRequest {
+fn build_request(round: usize, capacity: &CheckBuildHostResponse) -> BuildImageRequest {
     BuildImageRequest {
+        admission_authority_id: capacity.admission_authority_id.clone(),
+        admission_generation: capacity.admission_generation,
+        run_id: uuid::Uuid::now_v7().to_string(),
+        attempt_id: uuid::Uuid::now_v7().to_string(),
         context_archive: vec![0; [1, 4, 12][round % 3] * MIB],
         dockerfile_archive_path: Some("Dockerfile".into()),
         tags: vec!["fixture:memory".into()],
@@ -305,9 +310,14 @@ async fn direct_cycle(channel: Channel, round: usize) {
         frames += 1;
     }
     assert_eq!(frames, 4);
+    let capacity = images
+        .check_build_host(signed((), "/citadel.images.v1.ImageService/CheckBuildHost"))
+        .await
+        .unwrap()
+        .into_inner();
     let mut build = images
         .build(signed(
-            build_request(round),
+            build_request(round, &capacity),
             "/citadel.images.v1.ImageService/Build",
         ))
         .await

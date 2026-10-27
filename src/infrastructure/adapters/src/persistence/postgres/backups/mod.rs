@@ -2,6 +2,8 @@ use citadel_backups::runs::read_models as summaries;
 mod repository;
 mod rows;
 use rows::*;
+pub mod data_admission;
+mod leases;
 mod recovery;
 pub(crate) use recovery::{recover_stale, recover_stale_with_mode};
 mod activity;

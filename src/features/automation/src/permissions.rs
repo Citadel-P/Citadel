@@ -14,3 +14,9 @@ permission_policy!(
     ResourceType::AutomationAction,
     PermissionLevel::Execute
 );
+
+permission_policy!(
+    ExecuteAutomationAgent,
+    ResourceType::Platform,
+    PermissionLevel::Execute
+);

@@ -105,6 +105,7 @@ database_string_enum! {
         ActionDeleted,
         ActionRunQueued,
         ActionRunStarted,
+        ActionRunCleanupResolved,
         ActionRunSucceeded,
         ActionRunFailed,
         ActionRunTimedOut,
@@ -171,6 +172,7 @@ database_string_enum! {
         BuildRunSucceeded,
         BuildRunFailed,
         BuildRunTimedOut,
+        BuildRunCleanupResolved,
         BuildRunCancelled,
         BuildWebhookReceived,
         BuildAgentPoolCreated,
@@ -255,6 +257,7 @@ impl ActivityEventType {
             | Self::ActionRenamed
             | Self::ActionDeleted
             | Self::ActionRunQueued
+            | Self::ActionRunCleanupResolved
             | Self::ActionRunStarted
             | Self::ActionRunSucceeded
             | Self::ActionRunFailed
@@ -320,6 +323,7 @@ impl ActivityEventType {
             | Self::BuildRunSucceeded
             | Self::BuildRunFailed
             | Self::BuildRunTimedOut
+            | Self::BuildRunCleanupResolved
             | Self::BuildRunCancelled
             | Self::BuildWebhookReceived => ActivityResourceType::Build,
             Self::BuildAgentPoolCreated

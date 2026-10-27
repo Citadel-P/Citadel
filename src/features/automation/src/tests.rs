@@ -7,6 +7,7 @@ use citadel_primitives::schedule::schedule_is_due;
 use uuid::Uuid;
 fn input() -> AutomationActionConfiguration {
     AutomationActionConfiguration {
+        executor: Default::default(),
         duplicate_source_id: None,
         name: "prune-images".to_owned(),
         description: None,
@@ -51,6 +52,7 @@ fn paid_trigger_policy_matches_dotnet_expansion_and_disable_cases() {
     assert_eq!(proposed.schedule_time_zone.as_deref(), Some("UTC"));
     assert!(changes_paid_trigger(None, &proposed));
     let current = AutomationAction {
+        executor: Default::default(),
         id: Uuid::now_v7(),
         name: proposed.name.clone(),
         description: None,
@@ -173,6 +175,10 @@ fn log_redaction_masks_common_credentials() {
 fn generated_script_exposes_typed_clients_without_persisting_the_token() {
     let now = Utc::now();
     let run = AutomationRun {
+        executor: Default::default(),
+        attempt_id: None,
+        executor_id: None,
+        cleanup_pending: false,
         id: Uuid::now_v7(),
         action_id: Uuid::now_v7(),
         action_name: "test".to_owned(),
@@ -222,4 +228,23 @@ fn configuration_copy_requires_disabled_triggers_and_current_actor() {
     assert!(forged.validate(actor).is_err());
     copy.webhook = Some(serde_json::from_value(serde_json::json!({"enabled": false})).unwrap());
     assert!(copy.validate(actor).is_err());
+}
+
+#[test]
+fn default_network_allowance_is_limited_to_the_core_port() {
+    assert_eq!(
+        allow_net_authority("https://core.example"),
+        "core.example:443"
+    );
+    assert_eq!(
+        allow_net_authority("http://core.example"),
+        "core.example:80"
+    );
+    assert_eq!(allow_net_authority("https://[::1]"), "[::1]:443");
+    assert_eq!(
+        allow_net_authority("https://core.example:8443"),
+        "core.example:8443"
+    );
+    assert!(allow_net_authority("not-an-origin").is_empty());
+    assert!(allow_net_authority("https://user:pass@core.example").is_empty());
 }

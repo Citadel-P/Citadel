@@ -30,7 +30,7 @@ pub struct WorkerSettings {
     pub stats_flush_interval: Duration,
     pub retention_interval: Duration,
     pub stats_batch_size: usize,
-    pub build_parallel_runs: usize,
+    pub build_tracking_slots: usize,
     pub build_retention_days: Option<i32>,
     pub backup_workers: crate::config::BackupWorkerConfig,
     pub queue_capacity: usize,
@@ -229,6 +229,13 @@ pub async fn register(
         ),
     );
     supervisor.spawn(
+        "automation-cleanup",
+        crate::workers::automation::automation_cleanup(
+            cancellation.child_token(),
+            Arc::clone(&automation),
+        ),
+    );
+    supervisor.spawn(
         "automation-scheduler",
         crate::workers::automation::automation_scheduler(cancellation.child_token(), automation),
     );
@@ -256,7 +263,7 @@ pub async fn register(
         crate::workers::builds::build_runs(
             cancellation.child_token(),
             Arc::clone(&builds),
-            settings.build_parallel_runs,
+            settings.build_tracking_slots,
             notifications.subscribe(citadel_runtime::RuntimeSignal::Builds),
         ),
     );
@@ -281,12 +288,20 @@ pub async fn register(
         ),
     );
     supervisor.spawn(
+        "build-cleanup",
+        crate::workers::builds::cleanup_reservations(cancellation.child_token(), builds.clone()),
+    );
+    supervisor.spawn(
         "build-pool-health",
         crate::workers::builds::pool_health(
             cancellation.child_token(),
             builds,
             Arc::new(edge.clone()),
         ),
+    );
+    supervisor.spawn(
+        "backup-cleanup",
+        crate::workers::backups::cleanup_reservations(cancellation.child_token(), backups.clone()),
     );
     supervisor.spawn(
         "backup-runs",

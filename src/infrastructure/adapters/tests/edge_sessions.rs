@@ -368,6 +368,58 @@ async fn concurrency_limits_and_full_cancel_queue_close_the_session() {
 }
 
 #[tokio::test]
+async fn ordinary_commands_cannot_take_reserved_control_slots() {
+    let registry = EdgeRegistry::default();
+    let (session, _outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let mut commands = Vec::new();
+    for _ in 0..14 {
+        commands.push(
+            session
+                .command(
+                    EdgeCommandKind::NetworkInspect,
+                    vec![],
+                    Duration::from_secs(10),
+                    false,
+                )
+                .unwrap(),
+        );
+    }
+    assert!(
+        session
+            .command(
+                EdgeCommandKind::NetworkInspect,
+                vec![],
+                Duration::from_secs(10),
+                false
+            )
+            .is_err()
+    );
+    for kind in [
+        EdgeCommandKind::ImageCheckBuildHost,
+        EdgeCommandKind::ImageReconcileBuild,
+    ] {
+        commands.push(
+            session
+                .command(kind, vec![], Duration::from_secs(10), false)
+                .unwrap(),
+        );
+    }
+    assert_eq!(session.pending_count(), 16);
+    assert!(
+        session
+            .command(
+                EdgeCommandKind::ImageCheckBuildHost,
+                vec![],
+                Duration::from_secs(10),
+                false
+            )
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn outbound_payload_budget_is_shared_between_sessions() {
     let registry = EdgeRegistry::default();
     let (first, receiver1) = registry
@@ -379,7 +431,7 @@ async fn outbound_payload_budget_is_shared_between_sessions() {
     let one = first
         .command(
             EdgeCommandKind::ImageBuildStream,
-            vec![0; 16 * 1024 * 1024],
+            vec![0; 8 * 1024 * 1024],
             Duration::from_secs(10),
             true,
         )
@@ -387,7 +439,7 @@ async fn outbound_payload_budget_is_shared_between_sessions() {
     let two = second
         .command(
             EdgeCommandKind::ImageBuildStream,
-            vec![0; 16 * 1024 * 1024],
+            vec![0; 8 * 1024 * 1024],
             Duration::from_secs(10),
             true,
         )
@@ -395,17 +447,130 @@ async fn outbound_payload_budget_is_shared_between_sessions() {
     assert!(
         first
             .command(
-                EdgeCommandKind::ContainerInspect,
+                EdgeCommandKind::ImageBuildStream,
                 vec![0],
                 Duration::from_secs(10),
                 false
             )
             .is_err()
     );
+    // Health, cleanup and inspection retain their own bounded control capacity.
+    for kind in [
+        EdgeCommandKind::PlatformCheckHealth,
+        EdgeCommandKind::ImageCheckBuildHost,
+        EdgeCommandKind::ImageReconcileBuild,
+        EdgeCommandKind::ContainerInspect,
+    ] {
+        let control = first
+            .command(kind, vec![0], Duration::from_secs(10), false)
+            .unwrap();
+        drop(control);
+    }
     drop(one);
     drop(two);
     drop(receiver1);
     drop(receiver2);
+}
+
+#[tokio::test]
+async fn transferred_build_contexts_do_not_reserve_bytes_for_remote_execution() {
+    let registry = EdgeRegistry::default();
+    let mut sessions = Vec::new();
+    let mut commands = Vec::new();
+    for _ in 0..3 {
+        let (session, mut outbound) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        for _ in 0..2 {
+            let mut command = session
+                .command(
+                    EdgeCommandKind::ImageBuildStream,
+                    vec![0; 12 * 1024 * 1024],
+                    Duration::from_secs(30),
+                    true,
+                )
+                .unwrap();
+            // Simulate the encoder consuming the payload, then polling for
+            // another message. The remote execution has not completed.
+            drop(outbound.recv().await.unwrap());
+            assert!(outbound.try_recv().is_err());
+            session.output(command.id(), vec![1; 1024]);
+            assert_eq!(
+                command
+                    .next(&CancellationToken::new())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .len(),
+                1024
+            );
+            commands.push(command);
+        }
+        assert_eq!(session.pending_count(), 2);
+        sessions.push((session, outbound));
+    }
+    assert_eq!(commands.len(), 6);
+    assert_eq!(
+        sessions
+            .iter()
+            .map(|(session, _)| session.pending_count())
+            .sum::<usize>(),
+        6
+    );
+}
+
+#[tokio::test]
+async fn cancelling_a_command_does_not_release_its_queued_payload() {
+    let registry = EdgeRegistry::default();
+    let (first, mut outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let (other, _other_outbound) = registry
+        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+        .unwrap();
+    let command = first
+        .command(
+            EdgeCommandKind::ImageBuildStream,
+            vec![0; 16 * 1024 * 1024],
+            Duration::from_secs(30),
+            true,
+        )
+        .unwrap();
+    drop(command);
+    assert_eq!(first.pending_count(), 0);
+    assert!(
+        other
+            .command(
+                EdgeCommandKind::ImageBuildStream,
+                vec![0; 1024],
+                Duration::from_secs(30),
+                true
+            )
+            .is_err()
+    );
+    drop(outbound.recv().await.unwrap());
+    // The previous frame stays charged until the transport polls again.
+    assert!(
+        other
+            .command(
+                EdgeCommandKind::ImageBuildStream,
+                vec![0; 1024],
+                Duration::from_secs(30),
+                true
+            )
+            .is_err()
+    );
+    drop(outbound.recv().await.unwrap()); // cancellation control frame
+    assert!(
+        other
+            .command(
+                EdgeCommandKind::ImageBuildStream,
+                vec![0; 1024],
+                Duration::from_secs(30),
+                true
+            )
+            .is_ok()
+    );
 }
 
 // Ports EdgeAgentSessionRegistryTests and EdgeAgentCommandRouterTests. The
@@ -611,6 +776,16 @@ async fn node_routing_is_exact_and_rejects_manager_commands() {
         )
         .is_ok()
     );
+    for kind in [
+        EdgeCommandKind::ImageCheckBuildHost,
+        EdgeCommandKind::ImageReserveData,
+        EdgeCommandKind::ImageReconcileData,
+    ] {
+        assert!(
+            node.command(kind, vec![], Duration::from_secs(1), false)
+                .is_ok()
+        );
+    }
 }
 
 #[tokio::test]

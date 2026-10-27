@@ -109,7 +109,7 @@ impl PostgresBackupPersistence {
                 .map_err(|error| BackupError::Validation(error.to_string()))?;
             }
             if input.spec != current.spec {
-                let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND expiresat>CURRENT_TIMESTAMP)")
+                let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1)")
                     .bind(id).fetch_one(&mut *tx).await.map_err(storage)?;
                 if active {
                     return Err(BackupError::Conflict(
@@ -255,7 +255,7 @@ impl PostgresBackupPersistence {
                     return Ok(false);
                 }
             }
-            let affected = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,$3,CURRENT_TIMESTAMP,$4) ON CONFLICT(backuprepositoryid) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype=EXCLUDED.operationtype,createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backuprepositoryleases.expiresat<=CURRENT_TIMESTAMP")
+            let affected = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat,attemptid) VALUES($1,$2,$3,CURRENT_TIMESTAMP,$4,$2) ON CONFLICT(backuprepositoryid) DO NOTHING")
                 .bind(repository_id)
                 .bind(operation_id)
                 .bind(operation)

@@ -204,3 +204,11 @@ impl QueueBuildTrigger {
 fn default_push_to_registry() -> bool {
     true
 }
+
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResolveBuildCleanupInput {
+    pub attempt_id: Uuid,
+    pub reason: String,
+    pub acknowledged: bool,
+}

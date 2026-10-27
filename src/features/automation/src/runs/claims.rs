@@ -1,3 +1,9 @@
+/// Committed queue work, including stale runs recovered even when no run is claimable.
+pub struct AutomationClaimResult {
+    pub claim: Option<AutomationRunClaim>,
+    pub recovered_actions: Vec<uuid::Uuid>,
+}
+
 use crate::*;
 
 #[derive(Debug, Clone)]

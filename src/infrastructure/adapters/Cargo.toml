@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-automation-runtime = { path = "../automation" }
 citadel-docker = { path = "../docker" }
 citadel-resource-copies = { path = "../../features/resource-copies" }
 citadel-runtime = { path = "../runtime" }

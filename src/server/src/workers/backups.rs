@@ -10,7 +10,7 @@ pub async fn backup_runs(
     options: crate::config::BackupWorkerConfig,
     wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
-    run_parallel(cancellation, service, false, options, wake).await
+    dispatch_runs(cancellation, service, false, options, wake).await
 }
 
 pub async fn restore_runs(
@@ -19,7 +19,7 @@ pub async fn restore_runs(
     options: crate::config::BackupWorkerConfig,
     wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
-    run_parallel(cancellation, service, true, options, wake).await
+    dispatch_runs(cancellation, service, true, options, wake).await
 }
 
 pub async fn policy_scheduler(
@@ -41,69 +41,97 @@ pub async fn policy_scheduler(
     Ok(())
 }
 
-async fn run_parallel(
+async fn dispatch_runs(
     cancellation: CancellationToken,
     service: Arc<BackupService>,
     restores: bool,
     options: crate::config::BackupWorkerConfig,
-    wake: tokio::sync::watch::Receiver<()>,
+    mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
     if !options.enabled {
         cancellation.cancelled().await;
         return Ok(());
     }
-    for result in futures_util::future::join_all((0..options.parallel_runs).map(|_| {
-        run_loop(
-            cancellation.clone(),
-            service.clone(),
-            restores,
-            options.poll_interval,
-            wake.clone(),
-        )
-    }))
-    .await
-    {
-        result?;
+    let cancellation = cancellation.child_token();
+    let mut controllers = tokio::task::JoinSet::new();
+    let family = if restores {
+        citadel_runtime::runtime_metrics::RuntimeWork::RestoreClaim
+    } else {
+        citadel_runtime::runtime_metrics::RuntimeWork::BackupClaim
+    };
+    let minimum = options.poll_interval;
+    let mut delay = minimum;
+    while !cancellation.is_cancelled() {
+        while let Some(result) = controllers.try_join_next() {
+            report_controller(result, restores);
+        }
+        // Only this dispatcher polls its queue. The claim carries a shared
+        // tracking permit, including while completion persistence is retried.
+        if controllers.len() < options.tracking_slots {
+            let claim = {
+                let _iteration = family.start();
+                if restores {
+                    service.claim_restore(&cancellation).await
+                } else {
+                    service.claim_backup(&cancellation).await
+                }
+            };
+            match claim {
+                Ok(Some(claim)) => {
+                    family.units(1);
+                    let service = service.clone();
+                    let token = cancellation.clone();
+                    // Complete claims even if shutdown arrived during SQL; every
+                    // claimed run gets an owned controller and cleanup path.
+                    controllers.spawn(async move { service.execute_claim(claim, &token).await });
+                    delay = minimum;
+                    continue;
+                }
+                Ok(None) => {}
+                Err(error) => tracing::error!(%error, restores, "Backup dispatch failed"),
+            }
+            delay = citadel_runtime::worker_poll_delay(delay, minimum, false);
+        }
+        tokio::select! {
+            () = cancellation.cancelled() => break,
+            result = controllers.join_next(), if !controllers.is_empty() => {
+                if let Some(result) = result { report_controller(result, restores); }
+            }
+            () = super::notifications::wait(&mut wake, &cancellation, delay.max(Duration::from_secs(30))) => {},
+        }
+    }
+    // Shutdown cancels controllers cooperatively and waits for their cleanup.
+    while let Some(result) = controllers.join_next().await {
+        report_controller(result, restores);
     }
     Ok(())
 }
 
-async fn run_loop(
+fn report_controller(
+    result: Result<Result<bool, BackupError>, tokio::task::JoinError>,
+    restores: bool,
+) {
+    match result {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => tracing::error!(%error, restores, "Backup controller failed"),
+        Err(error) => tracing::error!(%error, restores, "Backup controller task failed"),
+    }
+}
+
+pub async fn cleanup_reservations(
     cancellation: CancellationToken,
     service: Arc<BackupService>,
-    restores: bool,
-    poll_interval: Duration,
-    mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
-    let minimum = poll_interval;
-    let mut delay = minimum;
+    let mut cursor = None;
     while !cancellation.is_cancelled() {
-        let family = if restores {
-            citadel_runtime::runtime_metrics::RuntimeWork::RestoreClaim
-        } else {
-            citadel_runtime::runtime_metrics::RuntimeWork::BackupClaim
-        };
-        let iteration = family.start();
-        let result = if restores {
-            service.process_restore(&cancellation).await
-        } else {
-            service.process_backup(&cancellation).await
-        };
-        drop(iteration);
-        if matches!(result, Ok(true)) {
-            family.units(1);
+        match service.reconcile_cleanup(cursor, &cancellation).await {
+            Ok(next) => cursor = next,
+            Err(error) => tracing::warn!(%error, "Backup cleanup reconciliation failed"),
         }
-        match result {
-            Ok(true) => {
-                delay = citadel_runtime::worker_poll_delay(delay, minimum, true);
-                continue;
-            }
-            Ok(false) => {}
-            Err(error) => tracing::error!(%error, restores, "Backup worker iteration failed"),
-        }
-        delay = citadel_runtime::worker_poll_delay(delay, minimum, false);
-        super::notifications::wait(&mut wake, &cancellation, delay.max(Duration::from_secs(30)))
-            .await;
+        tokio::select! { ()=cancellation.cancelled()=>break, ()=tokio::time::sleep(Duration::from_secs(30))=>{} }
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

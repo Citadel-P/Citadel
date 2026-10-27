@@ -52,7 +52,7 @@ pub trait AutomationRepository: Send + Sync {
         args: &'a Value,
         timeout_seconds: Option<i32>,
     ) -> BoxFuture<'a, Result<AutomationRun, AutomationError>>;
-    fn enqueue_for_execution<'a>(
+    fn enqueue_with_draft<'a>(
         &'a self,
         actor: ActorId,
         id: Uuid,
@@ -60,7 +60,7 @@ pub trait AutomationRepository: Send + Sync {
         args: &'a Value,
         timeout_seconds: Option<i32>,
         draft: Option<&'a AutomationDraft>,
-    ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>>;
+    ) -> BoxFuture<'a, Result<AutomationRun, AutomationError>>;
     fn enqueue_webhook<'a>(
         &'a self,
         id: Uuid,
@@ -70,7 +70,14 @@ pub trait AutomationRepository: Send + Sync {
     fn claim_next<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<Option<AutomationRunClaim>, AutomationError>>;
+        remote: bool,
+    ) -> BoxFuture<'a, Result<AutomationClaimResult, AutomationError>>;
+    /// A cancellation request is durable across the queued-to-running transition.
+    fn cancellation_requested(&self, run_id: Uuid) -> BoxFuture<'_, Result<bool, AutomationError>>;
+    fn defer<'a>(
+        &'a self,
+        claim: &'a AutomationRunClaim,
+    ) -> BoxFuture<'a, Result<AutomationRunStatus, AutomationError>>;
     fn finish<'a>(
         &'a self,
         claim: &'a AutomationRunClaim,

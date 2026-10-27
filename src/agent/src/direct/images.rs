@@ -208,7 +208,17 @@ impl ImageService for Runtime {
     ) -> Result<Response<CheckBuildHostResponse>, Status> {
         self.docker.ping().await.map_err(docker_error)?;
         let v = self.docker.version().await.map_err(docker_error)?;
+        let (capacity, occupied, uncertain) = self.builds.capacity()?;
         Ok(Response::new(CheckBuildHostResponse {
+            docker_daemon_id: self.docker.info().await.map_err(docker_error)?.id,
+            admission_authority_id: self.builds.authority()?,
+            admission_generation: self.builds.generation()?,
+            build_capacity: capacity as u32,
+            data_capacity: self.data.capacity().0 as u32,
+            occupied_data: self.data.capacity().1 as u32,
+            heavy_capacity: self.heavy_capacity as u32,
+            occupied_builds: occupied as u32,
+            uncertain_builds: uncertain as u32,
             available: true,
             docker_version: v.version,
             api_version: v.api_version,
@@ -220,6 +230,46 @@ impl ImageService for Runtime {
                 .find(|v| v.name.eq_ignore_ascii_case("buildkit"))
                 .map(|v| v.version)
                 .unwrap_or_default(),
+        }))
+    }
+    async fn reserve_data(
+        &self,
+        request: Request<DataOperationRequest>,
+    ) -> Result<Response<DataAdmissionResponse>, Status> {
+        let request = request.into_inner();
+        self.validate_data_host(&request).await?;
+        let admission = self.builds.reserve_data(&self.data, &request)?;
+        Ok(Response::new(DataAdmissionResponse {
+            admission: admission as i32,
+        }))
+    }
+    async fn reconcile_data(
+        &self,
+        request: Request<DataOperationRequest>,
+    ) -> Result<Response<ReconcileBuildResponse>, Status> {
+        Ok(Response::new(ReconcileBuildResponse {
+            state: self.reconcile_data_operation(request.into_inner()).await? as i32,
+        }))
+    }
+    async fn reconcile_build(
+        &self,
+        request: Request<ReconcileBuildRequest>,
+    ) -> Result<Response<ReconcileBuildResponse>, Status> {
+        let request = request.into_inner();
+        let daemon = self.docker.info().await.map_err(docker_error)?.id;
+        if daemon.is_empty() || daemon != request.docker_daemon_id {
+            return Err(Status::failed_precondition(
+                "Build executor identity changed",
+            ));
+        }
+        let state = self.builds.reconcile(
+            &request.run_id,
+            &request.attempt_id,
+            &request.admission_authority_id,
+            request.admission_generation,
+        )?;
+        Ok(Response::new(ReconcileBuildResponse {
+            state: state as i32,
         }))
     }
     type PullStream = Output<PullImageResponse>;

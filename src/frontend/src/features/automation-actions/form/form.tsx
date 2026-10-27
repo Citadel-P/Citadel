@@ -13,11 +13,12 @@ import {
   defineGroupField,
   defineSection,
   FieldInput,
+  FieldSelect,
   FieldSwitch,
   FieldTextArea,
   FormShell,
 } from '@/components/custom/form-builder';
-import { ResourceSelectorField } from '@/components/custom/common';
+import { ResourceSelectorField, MultiResourceSelectorField } from '@/components/custom/common';
 import { TimezoneSelectField } from '@/components/custom/timezone-select';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ const emptyAction = (): AutomationActionFormValue => ({
   timeoutSeconds: 300,
   alertOnFailure: false,
   runAsActorId: '',
+  executor: { kind: 'Core' },
   tagIds: [],
 });
 
@@ -309,6 +311,60 @@ export function AutomationActionForm({
             label: 'Runtime',
             items: [
               defineField({
+                key: 'executor',
+                label: 'Run on',
+                description: 'Choose Core, a specific agent, or let Citadel select an available agent from your list.',
+                validate: (value) => {
+                  if (value?.kind === 'Agent' && !value.agentId) return 'Select an agent';
+                  if (value?.kind === 'Automatic' && !value.agentIds.length) return 'Select eligible agents';
+                  return null;
+                },
+                render: (value, set) => (
+                  <div className="flex flex-col gap-2">
+                    <FieldSelect
+                      value={value?.kind ?? 'Core'}
+                      disabled={disabled}
+                      options={[
+                        { value: 'Core', label: 'Core' },
+                        { value: 'Agent', label: 'Specific agent' },
+                        { value: 'Automatic', label: 'Automatic' },
+                      ]}
+                      onChange={(kind) =>
+                        set({
+                          executor:
+                            kind === 'Agent'
+                              ? { kind: 'Agent', agentId: '' }
+                              : kind === 'Automatic'
+                                ? { kind: 'Automatic', agentIds: [] }
+                                : { kind: 'Core' },
+                        })
+                      }
+                    />
+                    {value?.kind === 'Agent' && (
+                      <ResourceSelectorField
+                        targetType={LookupResourceType.AutomationAgent}
+                        selected={value.agentId}
+                        disabled={disabled}
+                        placeholder="Select agent"
+                        onSelect={(agent) => set({ executor: { kind: 'Agent', agentId: agent?.id ?? '' } })}
+                      />
+                    )}
+                    {value?.kind === 'Automatic' && (
+                      <MultiResourceSelectorField
+                        sourceType={LookupResourceType.AutomationAction}
+                        targetType={LookupResourceType.AutomationAgent}
+                        selected={value.agentIds}
+                        disabled={disabled}
+                        placeholder="Select eligible agents"
+                        onSelect={(agents) =>
+                          set({ executor: { kind: 'Automatic', agentIds: agents.map((agent) => agent.id) } })
+                        }
+                      />
+                    )}
+                  </div>
+                ),
+              }),
+              defineField({
                 key: 'runAsActorId',
                 label: 'Run as',
                 description: 'Permissions are evaluated at run time for this identity.',
@@ -516,6 +572,7 @@ function toFormValue(action?: AuthorizedAction): AutomationActionFormValue {
     timeoutSeconds: Number(action.timeoutSeconds),
     alertOnFailure: action.alertOnFailure,
     runAsActorId: action.runAsActorId ?? '',
+    executor: action.executor,
     tagIds: action.tags?.map((tag) => tag.id) ?? [],
   };
 }
@@ -536,6 +593,7 @@ function toCreateInput(value: AutomationActionFormValue): AutomationActionInput 
     timeoutSeconds: Number(value.timeoutSeconds) || 300,
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,
+    executor: value.executor ?? { kind: 'Core' },
     tagIds: value.tagIds ?? [],
   };
 }
@@ -553,6 +611,7 @@ function toUpdateInput(
     timeoutSeconds: Number(value.timeoutSeconds) || 300,
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,
+    executor: value.executor ?? { kind: 'Core' },
   };
 
   if (update.scheduleCron !== undefined || update.scheduleEnabled !== undefined) {

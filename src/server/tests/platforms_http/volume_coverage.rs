@@ -76,6 +76,7 @@ impl BackupExecutor for NoExecution {
     fn repository<'a>(
         &'a self,
         _: &'a BackupRepository,
+        _operation_id: Uuid,
         _: &'a str,
         _: &'a str,
         _: Option<Uuid>,

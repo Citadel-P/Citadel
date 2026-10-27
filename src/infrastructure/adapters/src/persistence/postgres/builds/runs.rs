@@ -147,10 +147,18 @@ impl PostgresBuildRepository {
             if !owns_claim {
                 return Ok(None);
             }
-            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND project.currentrunid=run.id AND ((run.platformsnapshot->>'buildAgentPoolId')::uuid IS NULL OR (SELECT count(*) FROM buildruns active JOIN buildprojects other ON other.id=active.buildprojectid WHERE (active.platformsnapshot->>'buildAgentPoolId')::uuid=(run.platformsnapshot->>'buildAgentPoolId')::uuid AND active.status IN ('Preparing','Running')) < COALESCE((SELECT maxactivebuilders FROM buildagentpools WHERE id=(run.platformsnapshot->>'buildAgentPoolId')::uuid),1)) ORDER BY run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else { tx.commit().await.map_err(storage)?; return Ok(None) };
+            let expired: Vec<(Uuid, Uuid)> = sqlx::query_as("UPDATE buildruns SET status='Failed',completedat=CURRENT_TIMESTAMP,errorcode='build.queue_timeout',errormessage='Build waited in the queue for 24 hours.' WHERE id IN(SELECT id FROM buildruns WHERE status='Queued' AND queuedat+INTERVAL '24 hours'<=CURRENT_TIMESTAMP ORDER BY queuedat,id LIMIT 64 FOR UPDATE SKIP LOCKED) RETURNING id,buildprojectid")
+                .fetch_all(&mut *tx).await.map_err(storage)?;
+            for (run, project) in expired {
+                sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2")
+                    .bind(project).bind(run).execute(&mut *tx).await.map_err(storage)?;
+                record_run_activity(&mut tx, run).await?;
+            }
+            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND (run.nextattemptat IS NULL OR run.nextattemptat<=CURRENT_TIMESTAMP) AND project.currentrunid=run.id AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation JOIN buildruns previous ON previous.id=reservation.runid WHERE previous.buildprojectid=run.buildprojectid) AND ((run.platformsnapshot->>'buildAgentPoolId')::uuid IS NULL OR (SELECT count(*) FROM buildruns active JOIN buildprojects other ON other.id=active.buildprojectid WHERE (active.platformsnapshot->>'buildAgentPoolId')::uuid=(run.platformsnapshot->>'buildAgentPoolId')::uuid AND (active.status IN ('Preparing','Running') OR EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=active.id))) < COALESCE((SELECT maxactivebuilders FROM buildagentpools WHERE id=(run.platformsnapshot->>'buildAgentPoolId')::uuid),1)) ORDER BY run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else { tx.commit().await.map_err(storage)?; return Ok(None) };
             let run_id: Uuid = row.try_get("id").map_err(storage)?;
             let project_id: Uuid = row.try_get("buildprojectid").map_err(storage)?;
-            sqlx::query("UPDATE buildruns SET status='Preparing',startedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Queued'").bind(run_id).execute(&mut *tx).await.map_err(storage)?;
+            let attempt_id = Uuid::now_v7();
+            sqlx::query("UPDATE buildruns SET status='Preparing',startedat=CURRENT_TIMESTAMP,attemptid=$2,nextattemptat=NULL,errorcode=NULL,errormessage=NULL WHERE id=$1 AND status='Queued'").bind(run_id).bind(attempt_id).execute(&mut *tx).await.map_err(storage)?;
             sqlx::query("UPDATE buildprojects SET controlstate='Processing',controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2").bind(project_id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             record_run_activity(&mut tx, run_id).await?;
             let mut project = map_project(
@@ -185,7 +193,11 @@ impl PostgresBuildRepository {
             project.registry_id = run.registry_id;
             project.image_repository = run.image_repository.clone();
             tx.commit().await.map_err(storage)?;
-            Ok(Some(BuildClaim { project, run }))
+            Ok(Some(BuildClaim {
+                attempt_id,
+                project,
+                run,
+            }))
         })
     }
 }
@@ -198,10 +210,21 @@ impl PostgresBuildRepository {
         observation: Option<&'a citadel_alerts::AlertObservation>,
     ) -> BoxFuture<'a, Result<bool, BuildError>> {
         Box::pin(async move {
+            let _persistence =
+                citadel_runtime::runtime_metrics::RuntimeWork::BuildResultPersistence.start();
+            if result.status == citadel_builds::BuildRunStatus::Queued {
+                return self.defer_impl(claim, result).await;
+            }
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let affected = sqlx::query("UPDATE buildruns SET status=$2,completedat=CURRENT_TIMESTAMP,exitcode=$3,imagedigest=$4,imagereferences=$5,errorcode=$6,errormessage=$7,resolvedcommitsha=$8 WHERE id=$1 AND status IN ('Preparing','Running') AND EXISTS(SELECT 1 FROM buildprojects project WHERE project.id=buildruns.buildprojectid AND project.currentrunid=buildruns.id)")
-                .bind(claim.run.id).bind(result.status.as_str()).bind(result.exit_code).bind(result.image_digest.as_deref()).bind(serde_json::to_value(&result.image_references).map_err(storage)?).bind(result.error_code.as_deref()).bind(result.error_message.as_deref()).bind(result.resolved_commit_sha.as_deref()).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let affected = sqlx::query("UPDATE buildruns SET status=$2,completedat=CURRENT_TIMESTAMP,exitcode=$3,imagedigest=$4,imagereferences=$5,errorcode=$6,errormessage=$7,resolvedcommitsha=COALESCE($8,resolvedcommitsha) WHERE id=$1 AND attemptid=$9 AND status IN ('Preparing','Running') AND EXISTS(SELECT 1 FROM buildprojects project WHERE project.id=buildruns.buildprojectid AND project.currentrunid=buildruns.id)")
+                .bind(claim.run.id).bind(result.status.as_str()).bind(result.exit_code).bind(result.image_digest.as_deref()).bind(serde_json::to_value(&result.image_references).map_err(storage)?).bind(result.error_code.as_deref()).bind(result.error_message.as_deref()).bind(result.resolved_commit_sha.as_deref()).bind(claim.attempt_id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if affected == 1 {
+                admission::settle_reservation(
+                    &mut tx,
+                    claim,
+                    result.status == citadel_builds::BuildRunStatus::Succeeded,
+                )
+                .await?;
                 if let Some(observation) = observation {
                     crate::persistence::postgres::alerts::observations::enqueue(
                         &mut tx,
@@ -230,7 +253,7 @@ impl PostgresBuildRepository {
                 }
                 sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1 AND currentrunid=$2").bind(claim.project.id).bind(claim.run.id).execute(&mut *tx).await.map_err(storage)?;
                 sqlx::query(
-                    "WITH retained AS (SELECT id FROM buildruns WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') ORDER BY completedat DESC NULLS LAST,id DESC LIMIT $2) DELETE FROM buildruns b WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND id NOT IN (SELECT id FROM retained) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=b.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',b.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases r WHERE jsonb_path_exists(r.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',b.id::text)))",
+                    "WITH retained AS (SELECT id FROM buildruns WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') ORDER BY completedat DESC NULLS LAST,id DESC LIMIT $2) DELETE FROM buildruns b WHERE buildprojectid=$1 AND status IN ('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND id NOT IN (SELECT id FROM retained) AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=b.id) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=b.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',b.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases r WHERE jsonb_path_exists(r.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',b.id::text)))",
                 )
                 .bind(claim.project.id)
                 .bind(i64::from(claim.project.retention_run_count.max(1)))
@@ -348,12 +371,13 @@ impl PostgresBuildRepository {
     pub(super) fn append_log_impl<'a>(
         &'a self,
         run_id: Uuid,
+        attempt_id: Uuid,
         log: &'a citadel_builds::BuildLog,
     ) -> BoxFuture<'a, Result<citadel_builds::BuildLogEntry, BuildError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let active: Option<Uuid> = sqlx::query_scalar("SELECT id FROM buildruns WHERE id=$1 AND status IN ('Preparing','Running') FOR UPDATE")
-                .bind(run_id).fetch_optional(&mut *tx).await.map_err(storage)?;
+            let active: Option<Uuid> = sqlx::query_scalar("SELECT id FROM buildruns WHERE id=$1 AND attemptid=$2 AND status IN ('Preparing','Running') AND EXISTS(SELECT 1 FROM buildprojects project WHERE project.id=buildruns.buildprojectid AND project.currentrunid=buildruns.id) FOR UPDATE")
+                .bind(run_id).bind(attempt_id).fetch_optional(&mut *tx).await.map_err(storage)?;
             if active.is_none() {
                 return Err(BuildError::Conflict(
                     "Build Run is no longer active.".into(),

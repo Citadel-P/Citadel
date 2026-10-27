@@ -330,3 +330,47 @@ fn workload_health_updates_only_matching_platform_and_owner_without_deletions() 
         2
     );
 }
+
+#[test]
+fn automation_updates_target_only_the_action_and_its_run_history() {
+    let action = Uuid::now_v7();
+    let mut event = PublishedRuntimeEvent {
+        platform_id: None,
+        resource_type: "AutomationAction",
+        resource_id: action,
+        event_kind: "resourceChanged",
+        resource_revision: 1,
+        reads: Default::default(),
+        containers: Default::default(),
+        payload: json!({}),
+    };
+    for prefix in ["automation-action", "automation-runs"] {
+        assert!(
+            Group::parse(&format!("{prefix}:{action}"))
+                .unwrap()
+                .affected_by(&event)
+        );
+        assert!(
+            !Group::parse(&format!("{prefix}:{}", Uuid::now_v7()))
+                .unwrap()
+                .affected_by(&event)
+        );
+    }
+    assert!(
+        Group::parse("automation-actions")
+            .unwrap()
+            .affected_by(&event)
+    );
+    event.resource_id = Uuid::nil();
+    assert!(
+        Group::parse(&format!("automation-runs:{action}"))
+            .unwrap()
+            .affected_by(&event)
+    );
+    event.resource_type = "Build";
+    assert!(
+        !Group::parse(&format!("automation-runs:{action}"))
+            .unwrap()
+            .affected_by(&event)
+    );
+}

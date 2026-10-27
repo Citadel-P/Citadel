@@ -26,6 +26,14 @@ impl IoBudget {
         }
     }
 
+    pub fn try_enter(&self) -> Option<IoPermit> {
+        let permit = self.permits.clone().try_acquire_owned().ok()?;
+        Some(IoPermit {
+            _permit: permit,
+            _timer: self.family.start(),
+        })
+    }
+
     pub async fn enter(&self, cancellation: &CancellationToken) -> Option<IoPermit> {
         let started = std::time::Instant::now();
         let saturated = self.permits.available_permits() == 0;

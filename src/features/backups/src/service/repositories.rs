@@ -9,6 +9,10 @@ impl BackupService {
         platform_id: Option<Uuid>,
         cancellation: &CancellationToken,
     ) -> Result<BackupRepository, BackupError> {
+        let _tracking = self
+            .tracking_slot(cancellation)
+            .await
+            .ok_or_else(|| BackupError::Conflict("Repository operation was cancelled.".into()))?;
         let operation_id = Uuid::now_v7();
         if !self
             .store
@@ -24,18 +28,33 @@ impl BackupService {
                 "Backup Repository is already in use.".into(),
             ));
         }
-        let result = async {
+        let token = cancellation.child_token();
+        let execution = async {
+            if token.is_cancelled() {
+                return Err(BackupError::CleanupPending);
+            }
             let mut candidate = self.store.get_repository(id).await?;
             credentials.apply(&mut candidate.spec)?;
             // Validate the candidate without replacing the persisted configuration or readiness.
-            self.executor.repository(&candidate, "Validate", location, platform_id, cancellation)
-                .await.map_err(|_| BackupError::Validation(
-                    "Could not validate the new S3 credentials. Check the selected secrets and repository connectivity. Existing credentials were not changed.".into()))?;
+            self.executor.repository(&candidate, operation_id, "Validate", location, platform_id, &token)
+                .await.map_err(|error| if matches!(error, BackupError::CleanupPending | BackupError::Conflict(_)) { error } else { BackupError::Validation(
+                    "Could not validate the new S3 credentials. Check the selected secrets and repository connectivity. Existing credentials were not changed.".into()) })?;
             if cancellation.is_cancelled() {
-                return Err(BackupError::Conflict("Credential update was cancelled; existing credentials were not changed.".into()));
+                return Err(BackupError::Conflict(
+                    "Credential update was cancelled; existing credentials were not changed."
+                        .into(),
+                ));
             }
-            self.store.commit_repository_credentials(id, operation_id, candidate.row_version, credentials).await
-        }.await;
+            self.store
+                .commit_repository_credentials(id, operation_id, candidate.row_version, credentials)
+                .await
+        };
+        let (result, owned) = self
+            .with_lease(id, operation_id, operation_id, &token, execution)
+            .await;
+        if !owned || matches!(result, Err(BackupError::CleanupPending)) {
+            return Err(BackupError::CleanupPending);
+        }
         let released = self
             .store
             .release_repository_operation(id, operation_id)
@@ -61,6 +80,10 @@ impl BackupService {
                 "Backup Repository operation is invalid.".into(),
             ));
         }
+        let _tracking = self
+            .tracking_slot(cancellation)
+            .await
+            .ok_or_else(|| BackupError::Conflict("Repository operation was cancelled.".into()))?;
         let operation_id = Uuid::now_v7();
         if !self
             .store
@@ -95,10 +118,32 @@ impl BackupService {
                     .into(),
             ));
         }
-        let result = self
-            .executor
-            .repository(&repository, operation, location, platform_id, cancellation)
+        let token = cancellation.child_token();
+        let (result, owned) = self
+            .with_lease(
+                id,
+                operation_id,
+                operation_id,
+                &token,
+                self.executor.repository(
+                    &repository,
+                    operation_id,
+                    operation,
+                    location,
+                    platform_id,
+                    &token,
+                ),
+            )
             .await;
+        if !owned || matches!(result, Err(BackupError::CleanupPending)) {
+            return Err(BackupError::CleanupPending);
+        }
+        if let Err(BackupError::Conflict(message)) = &result {
+            self.store
+                .release_repository_operation(id, operation_id)
+                .await?;
+            return Err(BackupError::Conflict(message.clone()));
+        }
         let error_message = result.as_ref().err().map(ToString::to_string);
         let recorded = self
             .store

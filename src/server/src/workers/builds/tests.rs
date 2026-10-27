@@ -322,3 +322,141 @@ async fn project_retention_preserves_both_json_contracts_and_notifies_after_comm
     );
     pool.close().await;
 }
+
+struct PreparingExecutor {
+    release_preparation: bool,
+    running: AtomicUsize,
+    preparing: AtomicUsize,
+    peak_preparing: AtomicUsize,
+}
+impl BuildExecutor for PreparingExecutor {
+    fn execute<'a>(
+        &'a self,
+        _: &'a BuildClaim,
+        _: &'a dyn BuildLogSink,
+        _: &'a CancellationToken,
+    ) -> futures_util::future::BoxFuture<'a, BuildExecutionResult> {
+        unreachable!("worker must transfer preparation ownership")
+    }
+    fn execute_with_preparation<'a>(
+        &'a self,
+        _: &'a BuildClaim,
+        logs: &'a dyn BuildLogSink,
+        token: &'a CancellationToken,
+        preparation: Option<tokio::sync::OwnedSemaphorePermit>,
+    ) -> futures_util::future::BoxFuture<'a, BuildExecutionResult> {
+        Box::pin(async move {
+            assert!(preparation.is_some());
+            let active = self.preparing.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak_preparing.fetch_max(active, Ordering::SeqCst);
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            self.preparing.fetch_sub(1, Ordering::SeqCst);
+            let mut preparation = preparation;
+            if self.release_preparation {
+                drop(preparation.take());
+            }
+            for _ in 0..32 {
+                logs.append("stdout", &"fixture output ".repeat(64))
+                    .await
+                    .unwrap();
+            }
+            self.running.fetch_add(1, Ordering::SeqCst);
+            token.cancelled().await;
+            self.running.fetch_sub(1, Ordering::SeqCst);
+            BuildExecutionResult {
+                status: citadel_builds::BuildRunStatus::Cancelled,
+                exit_code: None,
+                image_digest: None,
+                resolved_commit_sha: None,
+                image_references: vec![],
+                error_code: None,
+                error_message: None,
+                logs: vec![],
+            }
+        })
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
+async fn two_preparations_can_track_six_executions_and_drain() {
+    for release_preparation in [false, true] {
+        let (pool, actor, store, mut input) = fixture().await;
+        let mut runs = vec![];
+        for _ in 0..6 {
+            input.name = format!("dispatch-{}", Uuid::now_v7());
+            let project = store.create(actor, &input).await.unwrap();
+            runs.push(store.enqueue(actor, project.id, "Manual").await.unwrap().id);
+        }
+        let executor = Arc::new(PreparingExecutor {
+            release_preparation,
+            running: AtomicUsize::new(0),
+            preparing: AtomicUsize::new(0),
+            peak_preparing: AtomicUsize::new(0),
+        });
+        let token = CancellationToken::new();
+        let service = Arc::new(
+            BuildService::new(
+                Arc::new(crate::tasks::builds::TrackedBuildTasks::new(
+                    citadel_runtime::DynamicTasks::new(token.clone()),
+                )),
+                token.clone(),
+                store.clone(),
+                executor.clone(),
+                chrono::Duration::minutes(5),
+            )
+            .with_preparation_slots(2),
+        );
+        let started = std::time::Instant::now();
+        let worker = tokio::spawn(build_runs(
+            token.clone(),
+            service,
+            6,
+            tokio::sync::watch::channel(()).1,
+        ));
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while executor.running.load(Ordering::SeqCst) != if release_preparation { 6 } else { 2 }
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("all six runs must overlap despite only two preparation slots");
+        assert_eq!(executor.peak_preparing.load(Ordering::SeqCst), 2);
+        let ready_ms = started.elapsed().as_millis();
+        if !release_preparation {
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            assert_eq!(
+                executor.running.load(Ordering::SeqCst),
+                2,
+                "lifecycle-held preparation prevents the other four runs from starting"
+            );
+        }
+        let draining = std::time::Instant::now();
+        token.cancel();
+        tokio::time::timeout(Duration::from_secs(10), worker)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(executor.running.load(Ordering::SeqCst), 0);
+        let drain_ms = draining.elapsed().as_millis();
+        let log_stats: (i64, i64) = sqlx::query_as("SELECT count(*), COALESCE(sum(octet_length(message)),0)::bigint FROM buildrunlogs WHERE buildrunid=ANY($1) AND stream='stdout'").bind(&runs).fetch_one(&pool).await.unwrap();
+        assert_eq!(log_stats.0, if release_preparation { 192 } else { 64 });
+        eprintln!(
+            "capacity fixture: release_preparation={release_preparation}, active={}, peak_preparation={}, ready_ms={ready_ms}, drain_ms={drain_ms}, log_rows={}, log_bytes={}",
+            if release_preparation { 6 } else { 2 },
+            executor.peak_preparing.load(Ordering::SeqCst),
+            log_stats.0,
+            log_stats.1
+        );
+        for id in runs {
+            store.cancel_queued(id).await.unwrap();
+            assert_eq!(
+                store.get_run(id).await.unwrap().status,
+                citadel_builds::BuildRunStatus::Cancelled
+            );
+        }
+        pool.close().await;
+    }
+}

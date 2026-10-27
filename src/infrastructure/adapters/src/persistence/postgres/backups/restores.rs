@@ -105,11 +105,12 @@ impl PostgresBackupPersistence {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             recover_stale(&mut tx, stale_before).await?;
-            let row=sqlx::query("SELECT r.id,r.backuprunid,r.backuprepositoryid,r.sourcebackuprunitemid,r.targetplatformid,r.targetdockernodeid,r.targetvolumename,r.targethostpath FROM backuprestoreruns r JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid AND l.expiresat>CURRENT_TIMESTAMP) ORDER BY r.queuedat,r.id FOR UPDATE OF r,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
+            let row=sqlx::query("SELECT r.id,r.backuprunid,r.backuprepositoryid,r.sourcebackuprunitemid,r.targetplatformid,r.targetdockernodeid,r.targetvolumename,r.targethostpath FROM backuprestoreruns r JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND (r.nextattemptat IS NULL OR r.nextattemptat<=CURRENT_TIMESTAMP) AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid) ORDER BY r.queuedat,r.id FOR UPDATE OF r,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
             let Some(row) = row else {
                 tx.commit().await.map_err(storage)?;
                 return Ok(None);
             };
+            let attempt = Uuid::now_v7();
             let id: Uuid = row.try_get("id").map_err(storage)?;
             let source_id: Uuid = row.try_get("backuprunid").map_err(storage)?;
             let source_item_id: Option<Uuid> =
@@ -126,18 +127,20 @@ impl PostgresBackupPersistence {
                 ),
                 None => docker_volume_key(target_platform, target_node.as_deref(), &target_volume),
             };
-            let leased = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$3)) ON CONFLICT(backuprepositoryid) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Restore',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backuprepositoryleases.expiresat<=CURRENT_TIMESTAMP").bind(repo_id).bind(id).bind(self.restore_timeout_seconds * 2 + self.repository_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let leased = sqlx::query("INSERT INTO backuprepositoryleases(backuprepositoryid,ownerrunid,operationtype,createdat,expiresat,attemptid) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$4::integer),$3) ON CONFLICT(backuprepositoryid) DO NOTHING").bind(repo_id).bind(id).bind(attempt).bind(self.repository_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if leased == 0 {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(None);
             }
-            let source_leased = sqlx::query("INSERT INTO backupsourceleases(sourcekey,ownerrunid,operationtype,createdat,expiresat) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$3)) ON CONFLICT(sourcekey) DO UPDATE SET ownerrunid=EXCLUDED.ownerrunid,operationtype='Restore',createdat=EXCLUDED.createdat,expiresat=EXCLUDED.expiresat WHERE backupsourceleases.expiresat<=CURRENT_TIMESTAMP")
-                .bind(source_key).bind(id).bind(self.restore_timeout_seconds * 2 + self.source_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let source_leased = sqlx::query("INSERT INTO backupsourceleases(sourcekey,ownerrunid,operationtype,createdat,expiresat,attemptid) VALUES($1,$2,'Restore',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+make_interval(secs=>$4::integer),$3) ON CONFLICT(sourcekey) DO NOTHING")
+                .bind(source_key).bind(id).bind(attempt).bind(self.source_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if source_leased == 0 {
-                tx.rollback().await.map_err(storage)?;
+                sqlx::query("DELETE FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND attemptid=$3").bind(repo_id).bind(id).bind(attempt).execute(&mut *tx).await.map_err(storage)?;
+                sqlx::query("UPDATE backuprestoreruns SET nextattemptat=CURRENT_TIMESTAMP+INTERVAL '15 seconds',errorcode='SourceBusy',errormessage='Waiting for target storage to become available.' WHERE id=$1 AND status='Queued'").bind(id).execute(&mut *tx).await.map_err(storage)?;
+                tx.commit().await.map_err(storage)?;
                 return Ok(None);
             }
-            let claimed = sqlx::query("UPDATE backuprestoreruns SET status='Running',startedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Queued'").bind(id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let claimed = sqlx::query("UPDATE backuprestoreruns SET status='Running',startedat=CURRENT_TIMESTAMP,attemptid=$2 WHERE id=$1 AND status='Queued'").bind(id).bind(attempt).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if claimed != 1 {
                 return Err(BackupError::Storage(
                     "Backup Restore Run could not be claimed atomically.".into(),
@@ -164,6 +167,7 @@ impl PostgresBackupPersistence {
                 })
                 .transpose()?;
             Ok(Some(RestoreClaim {
+                attempt_id: attempt,
                 repository: self.get_repository(repo_id).await?,
                 run: self.get_restore(id).await?,
                 source,
@@ -180,8 +184,15 @@ impl PostgresBackupPersistence {
         result: &'a RestoreExecutionResult,
     ) -> BoxFuture<'a, Result<bool, BackupError>> {
         Box::pin(async move {
+            let _persistence =
+                citadel_runtime::runtime_metrics::RuntimeWork::RestoreResultPersistence.start();
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let finished = sqlx::query("UPDATE backuprestoreruns SET status=$2,exitcode=$3,errorcode=$4,errormessage=$5,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running'").bind(claim.run.id).bind(result.status.as_str()).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let owned: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprestoreruns WHERE id=$1 AND attemptid=$2 AND status='Running')")
+                .bind(claim.run.id).bind(claim.attempt_id).fetch_one(&mut *tx).await.map_err(storage)?;
+            if !owned {
+                return Ok(false);
+            }
+            let finished = sqlx::query("UPDATE backuprestoreruns SET status=$2,exitcode=$3,errorcode=$4,errormessage=$5,completedat=CURRENT_TIMESTAMP WHERE id=$1 AND status='Running' AND attemptid=$6").bind(claim.run.id).bind(result.status.as_str()).bind(result.exit_code).bind(&result.error_code).bind(&result.error_message).bind(claim.attempt_id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if finished == 0 {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(false);
@@ -194,7 +205,13 @@ impl PostgresBackupPersistence {
                 &result.logs,
             )
             .await?;
-            release(&mut tx, claim.repository.id, claim.run.id, None, false).await?;
+            if !matches!(
+                result.error_code.as_deref(),
+                Some("LeaseLost" | "CleanupPending")
+            ) {
+                release(&mut tx, claim.repository.id, claim.run.id, None, false).await?;
+            }
+
             super::super::resource_copies::changes::restore_changed(&mut tx, claim.run.id)
                 .await
                 .map_err(storage)?;

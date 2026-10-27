@@ -4,7 +4,7 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { ActivitiesTab } from '@/features/activities';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
-import { useRead } from '@/lib/hooks';
+import { useAutomationActionGroup } from '../hooks/useAutomationActionGroup';
 import { hasCapability } from '@/lib/resource-capabilities';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { AutomationActionInfoActions } from '../actions';
@@ -82,7 +82,7 @@ export const AutomationActionFormComponents: RequiredFormComponents<AutomationAc
       },
     ],
     useData(id: string) {
-      const { data, isLoading, error, refetch, isFetching } = useRead('getAutomationAction', { id });
+      const { data, isLoading, error, refetch, isFetching } = useAutomationActionGroup(id);
       return {
         error,
         refetch,

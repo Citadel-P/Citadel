@@ -108,6 +108,7 @@
           "ActionDeleted",
           "ActionRunQueued",
           "ActionRunStarted",
+          "ActionRunCleanupResolved",
           "ActionRunSucceeded",
           "ActionRunFailed",
           "ActionRunTimedOut",
@@ -174,6 +175,7 @@
           "BuildRunSucceeded",
           "BuildRunFailed",
           "BuildRunTimedOut",
+          "BuildRunCleanupResolved",
           "BuildRunCancelled",
           "BuildWebhookReceived",
           "BuildAgentPoolCreated",
@@ -1679,6 +1681,7 @@
           "enabled": {
             "type": "boolean"
           },
+          "executor": {},
           "id": {
             "format": "uuid",
             "type": "string"
@@ -1727,7 +1730,8 @@
           "scheduleTimeZone",
           "timeoutSeconds",
           "alertOnFailure",
-          "runAsActorId"
+          "runAsActorId",
+          "executor"
         ],
         "type": "object"
       },
@@ -1775,6 +1779,9 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/AutomationExecutorSchema"
           },
           "name": {
             "type": "string"
@@ -1889,6 +1896,9 @@
           "enabled": {
             "type": "boolean"
           },
+          "executor": {
+            "$ref": "#/components/schemas/AutomationExecutorSchema"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -1971,6 +1981,7 @@
           "webhook",
           "timeoutSeconds",
           "alertOnFailure",
+          "executor",
           "runAsActorId",
           "controlState",
           "currentRunId",
@@ -1983,6 +1994,65 @@
           "latestRun"
         ],
         "type": "object"
+      },
+      "AutomationExecutorSchema": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "Core"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "agentId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "Agent"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "agentId",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "agentIds": {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "Automatic"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "agentIds",
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "AutomationProgress": {
         "properties": {
@@ -2091,6 +2161,16 @@
           "argsJson": {
             "type": "string"
           },
+          "attemptId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupPending": {
+            "type": "boolean"
+          },
           "codeHash": {
             "type": "string"
           },
@@ -2108,6 +2188,13 @@
             ]
           },
           "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "executorId": {
+            "format": "uuid",
             "type": [
               "string",
               "null"
@@ -2172,6 +2259,9 @@
         },
         "required": [
           "id",
+          "executorId",
+          "attemptId",
+          "cleanupPending",
           "actionId",
           "actionName",
           "trigger",
@@ -4864,6 +4954,45 @@
           "updatedAt",
           "archivedAt",
           "rowVersion"
+        ],
+        "type": "object"
+      },
+      "BuildRetainedReservationView": {
+        "properties": {
+          "attemptId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "authorityId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "daemonId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attemptId",
+          "daemonId",
+          "authorityId"
+        ],
+        "type": "object"
+      },
+      "BuildRunRecoveryView": {
+        "properties": {
+          "reservation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BuildRetainedReservationView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "reservation"
         ],
         "type": "object"
       },
@@ -12081,6 +12210,7 @@
           "BuildAgentPool",
           "SwarmService",
           "RunAsActor",
+          "AutomationAgent",
           "ServiceAccount"
         ],
         "type": "string"
@@ -18382,6 +18512,76 @@
             "properties": {
               "$type": {
                 "enum": [
+                  "ActionRunCleanupResolved"
+                ],
+                "type": "string"
+              },
+              "attemptId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "attemptId",
+              "reason",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "BuildRunCleanupResolved"
+                ],
+                "type": "string"
+              },
+              "attemptId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "daemonId": {
+                "type": "string"
+              },
+              "previousAuthorityId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "replacementAuthorityId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "attemptId",
+              "daemonId",
+              "previousAuthorityId",
+              "replacementAuthorityId",
+              "reason",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
                   "BuildRunCancelled"
                 ],
                 "type": "string"
@@ -19789,6 +19989,47 @@
         },
         "required": [
           "location"
+        ],
+        "type": "object"
+      },
+      "ResolveAutomationCleanupInput": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "attemptId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attemptId",
+          "reason",
+          "acknowledged"
+        ],
+        "type": "object"
+      },
+      "ResolveBuildCleanupInput": {
+        "properties": {
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "attemptId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attemptId",
+          "reason",
+          "acknowledged"
         ],
         "type": "object"
       },
@@ -21361,10 +21602,6 @@
               "array",
               "null"
             ]
-          },
-          "maxWorkers": {
-            "format": "int32",
-            "type": "integer"
           },
           "registrationSecretId": {
             "format": "uuid",
@@ -26594,6 +26831,9 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/AutomationExecutorSchema"
           },
           "runAsActorId": {
             "format": "uuid",
@@ -33578,6 +33818,138 @@
         ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/automation/actions/{id}/runs/{runId}/recovery": {
+      "post": {
+        "operationId": "resolveAutomationRunCleanup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAutomationCleanupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Capacity released and acknowledgment audited; result unchanged"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Resolve retained automation capacity after manual cleanup and Agent restart",
+        "tags": [
+          "AutomationActions"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
         "x-citadel-setup-exempt": false
       }
     },
@@ -41348,6 +41720,237 @@
         ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/buildRuns/{id}/recovery": {
+      "get": {
+        "operationId": "getBuildRunRecovery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRunRecoveryView"
+                }
+              }
+            },
+            "description": "Retained reservation, if any"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Inspect retained Build capacity (administrators only)",
+        "tags": [
+          "BuildRuns"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      },
+      "post": {
+        "operationId": "resolveBuildRunCleanup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveBuildCleanupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Capacity released and operator acknowledgment audited; run outcome unchanged"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Resolve retained Build capacity after manual cleanup and Agent restart",
+        "tags": [
+          "BuildRuns"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
         "x-citadel-setup-exempt": false
       }
     },

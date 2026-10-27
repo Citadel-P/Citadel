@@ -23,6 +23,7 @@ pub struct BackupRestoreRun {
 
 #[derive(Debug, Clone)]
 pub struct RestoreClaim {
+    pub attempt_id: Uuid,
     pub repository: BackupRepository,
     pub run: BackupRestoreRun,
     pub source: BackupRun,

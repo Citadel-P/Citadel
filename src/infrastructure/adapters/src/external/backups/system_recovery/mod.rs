@@ -26,6 +26,7 @@ const MAX_RECOVERY_KEY_BYTES: u64 = 16 * 1024;
 
 #[derive(Clone)]
 pub struct PgDumpSystemBackupBuilder {
+    local_budget: citadel_runtime::IoBudget,
     pool: PgPool,
     database_url: String,
     pg_dump: OsString,
@@ -101,6 +102,10 @@ impl PgDumpSystemBackupBuilder {
         maximum_output: usize,
     ) -> Self {
         Self {
+            local_budget: citadel_runtime::IoBudget::new(
+                2.try_into().expect("positive capacity"),
+                citadel_runtime::runtime_metrics::RuntimeWork::LocalHeavyWork,
+            ),
             pool,
             database_url,
             pg_dump: pg_dump.into(),
@@ -108,6 +113,11 @@ impl PgDumpSystemBackupBuilder {
             maximum_output,
             recovery_assets: None,
         }
+    }
+
+    pub fn with_local_budget(mut self, budget: citadel_runtime::IoBudget) -> Self {
+        self.local_budget = budget;
+        self
     }
 
     pub fn with_recovery_assets(mut self, assets: RecoveryAssets) -> Self {
@@ -120,6 +130,9 @@ impl PgDumpSystemBackupBuilder {
         run_id: Uuid,
         cancellation: &CancellationToken,
     ) -> Result<PathBuf, BackupError> {
+        let _local = self.local_budget.enter(cancellation).await.ok_or_else(|| {
+            BackupError::External("System backup cancelled while waiting for Core capacity.".into())
+        })?;
         ensure_private_root(&self.staging_root).await?;
         cleanup_stale_staging(&self.staging_root).await?;
         let directory = self.staging_root.join(run_id.simple().to_string());

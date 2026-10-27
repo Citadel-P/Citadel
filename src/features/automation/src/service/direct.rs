@@ -1,4 +1,5 @@
 use super::*;
+
 impl AutomationService {
     pub async fn run(
         self: &Arc<Self>,
@@ -21,72 +22,69 @@ impl AutomationService {
             None => self.store.get(id).await?.timeout_seconds,
         };
         self.options.validate_execution(configured)?;
-        let permit = self.slots.clone().try_acquire_owned().map_err(|_| {
-            AutomationError::Conflict(
-                "Automation execution slots are busy. Try again later.".into(),
-            )
-        })?;
         let service = self.clone();
         let trigger = trigger.to_owned();
         let args = args.clone();
         let draft = draft.cloned();
         let (started, ready) = tokio::sync::oneshot::channel();
-        // Admission precedes the durable claim. Once admitted, the process owns
-        // claim completion even if the request disappears during the DB call.
+        // The process owns admission even if HTTP disappears during the commit.
+        // Execution belongs to the queue workers, not to this progress viewer.
         if !self.tasks.spawn(
-            "automation.direct_run",
+            "automation.progress",
             Box::pin(async move {
-                let _permit = permit;
-                let claim = match service
+                let mut updates = service.progress.subscribe();
+                let run = match service
                     .store
-                    .enqueue_for_execution(
-                        actor,
-                        id,
-                        &trigger,
-                        &args,
-                        timeout_seconds,
-                        draft.as_ref(),
-                    )
+                    .enqueue_with_draft(actor, id, &trigger, &args, timeout_seconds, draft.as_ref())
                     .await
                 {
-                    Ok(claim) => claim,
+                    Ok(run) => run,
                     Err(error) => {
                         let _ = started.send(Err(error));
                         return Ok(());
                     }
                 };
+                service.changed(Some(id));
                 let (sender, receiver) = mpsc::channel(16);
-                let _ = sender.try_send(AutomationProgress::state(
-                    &claim.run,
-                    crate::AutomationRunStatus::Queued,
-                ));
+                let _ = sender.try_send(AutomationProgress::state(&run, AutomationRunStatus::Queued));
                 let _ = started.send(Ok(receiver));
-                let cancellation = service.shutdown.child_token();
-                let execution = service.execute_claim(&claim, &cancellation, Some(&sender));
-                tokio::pin!(execution);
-                let outcome = tokio::select! {
-                    value = &mut execution => value,
-                    () = sender.closed() => {
-                        cancellation.cancel();
-                        execution.await
+                // A terminal database read also covers queued cancellation and a
+                // completion that raced admission or overflowed the progress ring.
+                let mut refresh = tokio::time::interval(Duration::from_secs(2));
+                loop {
+                    tokio::select! {
+                        () = service.shutdown.cancelled() => break,
+                        () = sender.closed() => break,
+                        update = updates.recv() => match update {
+                            Ok(item) if item.run_id == Some(run.id) => {
+                                let terminal = item.status.is_some_and(is_terminal);
+                                if terminal {
+                                    let _ = tokio::time::timeout(Duration::from_secs(5), sender.send(item)).await;
+                                    break;
+                                }
+                                // Logs remain available on the persisted run. A
+                                // slow viewer must not backpressure the executor.
+                                let _ = sender.try_send(item);
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            _ => {}
+                        },
+                        _ = refresh.tick() => {
+                            let current = service.store.get_run(id, run.id).await?;
+                            if is_terminal(current.status) {
+                                let result = AutomationRunResult {
+                                    status: current.status,
+                                    exit_code: current.exit_code,
+                                    logs: current.logs.unwrap_or_default(),
+                                    error: current.error_message,
+                                };
+                                let _ = tokio::time::timeout(Duration::from_secs(5), sender.send(AutomationProgress::completed(&run, &result))).await;
+                                break;
+                            }
+                        }
                     }
-                };
-                if outcome.is_err() {
-                    // Recovery owns a failed persistence attempt; never report success.
-                    progress::send(
-                        &sender,
-                        AutomationProgress::completed(
-                            &claim.run,
-                            &AutomationRunResult::failed(
-                                None,
-                                "Automation completion could not be persisted.".into(),
-                            ),
-                        ),
-                        &cancellation,
-                    )
-                    .await;
                 }
-                outcome
+                Ok(())
             }),
         ) {
             return Err(AutomationError::Conflict("Server is shutting down.".into()));
@@ -95,4 +93,11 @@ impl AutomationService {
             .await
             .map_err(|_| AutomationError::Storage("Automation admission was interrupted.".into()))?
     }
+}
+
+fn is_terminal(status: AutomationRunStatus) -> bool {
+    !matches!(
+        status,
+        AutomationRunStatus::Queued | AutomationRunStatus::Running
+    )
 }

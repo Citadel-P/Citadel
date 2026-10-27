@@ -17,6 +17,7 @@ pub struct AutomationAction {
     pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
+    pub executor: crate::AutomationExecutor,
     pub run_as_actor_id: Uuid,
     pub control_state: citadel_primitives::ResourceControlState,
     pub current_run_id: Option<Uuid>,
@@ -43,6 +44,7 @@ impl AutomationAction {
             webhook: None,
             timeout_seconds: Some(self.timeout_seconds),
             alert_on_failure: self.alert_on_failure,
+            executor: self.executor.clone(),
             run_as_actor_id: None,
             tag_ids: self.tags.iter().map(|tag| tag.id).collect(),
         }
@@ -63,6 +65,7 @@ impl AutomationAction {
             timeout_seconds: self.timeout_seconds,
             alert_on_failure: self.alert_on_failure,
             run_as_actor_id: self.run_as_actor_id,
+            executor: serde_json::to_value(&self.executor).expect("executor selection serializes"),
         }
     }
 }

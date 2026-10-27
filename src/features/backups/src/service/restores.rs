@@ -2,13 +2,34 @@ use super::*;
 
 impl BackupService {
     pub async fn process_restore(&self, shutdown: &CancellationToken) -> Result<bool, BackupError> {
-        let Some(claim) = self
+        let Some(work) = self.claim_restore(shutdown).await? else {
+            return Ok(false);
+        };
+        self.execute_claim(work, shutdown).await
+    }
+
+    pub async fn claim_restore(
+        &self,
+        shutdown: &CancellationToken,
+    ) -> Result<Option<ClaimedBackupWork>, BackupError> {
+        let Some(tracking) = self.tracking_slot(shutdown).await else {
+            return Ok(None);
+        };
+        Ok(self
             .store
             .claim_restore(Utc::now() - self.stale_after)
             .await?
-        else {
-            return Ok(false);
-        };
+            .map(|claim| ClaimedBackupWork {
+                claim: BackupWorkClaim::Restore(Box::new(claim)),
+                _tracking: tracking,
+            }))
+    }
+
+    pub(super) async fn execute_restore(
+        &self,
+        claim: RestoreClaim,
+        shutdown: &CancellationToken,
+    ) -> Result<bool, BackupError> {
         self.changed();
         self.progress(
             claim.run.id,
@@ -20,58 +41,70 @@ impl BackupService {
             .lock()
             .map_err(poison)?
             .insert(claim.run.id, token.clone());
-        let result = match self.authorizer.authorize_restore(&claim).await {
-            Ok(()) => {
-                self.executor
-                    .restore_with_progress(&claim, &token, self.log_progress(claim.run.id))
-                    .await
+        let execution = async {
+            match self.authorizer.authorize_restore(&claim).await {
+                Ok(()) => {
+                    self.executor
+                        .restore_with_progress(&claim, &token, self.log_progress(claim.run.id))
+                        .await
+                }
+                Err(error) => rejected_restore(error.to_string()),
             }
-            Err(error) => rejected_restore(error.to_string()),
         };
+        let (mut result, owned) = self
+            .with_lease(
+                claim.repository.id,
+                claim.run.id,
+                claim.attempt_id,
+                &token,
+                execution,
+            )
+            .await;
+        if !owned {
+            result.error_code = Some("LeaseLost".into());
+            result.error_message = Some(
+                "Restore ownership was lost. Storage remains reserved until cleanup is verified."
+                    .into(),
+            );
+            result.status = BackupRestoreStatus::Interrupted;
+        }
         if let Ok(mut active) = self.active_restores.lock() {
             active.remove(&claim.run.id);
         }
-        let mut delay = std::time::Duration::from_millis(250);
-        loop {
-            let completion = async {
-                if self.store.finish_restore(&claim, &result).await? {
-                    return Ok(Some((result.status, result.error_message.clone())));
-                }
-                match self.store.get_restore(claim.run.id).await {
-                    Ok(run) if run.status.is_terminal() => {
-                        Ok(Some((run.status, run.error_message)))
-                    }
-                    Ok(_) | Err(BackupError::NotFound) => Ok(None),
-                    Err(error) => Err(error),
-                }
-            };
-            let outcome = tokio::select! {
-                biased;
-                () = shutdown.cancelled() => return Ok(true),
-                outcome = completion => outcome,
-            };
-            match outcome {
-                Ok(confirmed) => {
-                    if let Some((status, message)) = confirmed {
-                        self.progress(
-                            claim.run.id,
-                            status.as_str(),
-                            message.as_deref().unwrap_or("Restore run completed."),
-                        );
-                        self.changed();
-                    }
-                    break;
-                }
-                Err(BackupError::Storage(error)) => {
-                    tracing::warn!(%error, run_id=%claim.run.id, "Restore completion pending");
-                }
-                Err(error) => return Err(error),
+        if owned
+            && result.error_code.as_deref() == Some("HostBusy")
+            && self.store.defer_restore(&claim).await?
+        {
+            self.changed();
+            return Ok(true);
+        }
+        let confirmed = completion::persist(claim.run.id, shutdown, || async {
+            // Keep ownership alive while retrying persistence of this same
+            // result. Never re-run the external operation.
+            if owned {
+                let _ = self
+                    .store
+                    .renew_leases(claim.repository.id, claim.run.id, claim.attempt_id)
+                    .await;
             }
-            tokio::select! {
-                () = shutdown.cancelled() => return Ok(true),
-                () = tokio::time::sleep(delay) => {}
+
+            if self.store.finish_restore(&claim, &result).await? {
+                return Ok(Some((result.status, result.error_message.clone())));
             }
-            delay = (delay * 2).min(std::time::Duration::from_secs(5));
+            match self.store.get_restore(claim.run.id).await {
+                Ok(run) if run.status.is_terminal() => Ok(Some((run.status, run.error_message))),
+                Ok(_) | Err(BackupError::NotFound) => Ok(None),
+                Err(error) => Err(error),
+            }
+        })
+        .await?;
+        if let Some((status, message)) = confirmed {
+            self.progress(
+                claim.run.id,
+                status.as_str(),
+                message.as_deref().unwrap_or("Restore run completed."),
+            );
+            self.changed();
         }
         Ok(true)
     }

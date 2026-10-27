@@ -11,6 +11,8 @@ pub struct UpdateAutomationActionInput {
     #[serde(default)]
     pub description: FieldUpdate<Option<String>>,
     #[serde(default)]
+    pub executor: FieldUpdate<crate::AutomationExecutor>,
+    #[serde(default)]
     pub code: FieldUpdate<String>,
     #[serde(default)]
     pub default_args_json: FieldUpdate<Option<String>>,
@@ -118,6 +120,7 @@ impl UpdateAutomationActionInput {
             },
             timeout_seconds: self.timeout_seconds.apply(Some(current.timeout_seconds)),
             alert_on_failure: self.alert_on_failure.apply(current.alert_on_failure),
+            executor: self.executor.apply(current.executor),
             run_as_actor_id: self.run_as_actor_id.apply(Some(current.run_as_actor_id)),
             tag_ids: Vec::new(),
         }
@@ -143,6 +146,7 @@ mod tests {
             webhook: Some(serde_json::from_value(json!({"enabled":false})).unwrap()),
             timeout_seconds: 300,
             alert_on_failure: true,
+            executor: Default::default(),
             run_as_actor_id: uuid::Uuid::now_v7(),
             control_state: citadel_primitives::ResourceControlState::Idle,
             current_run_id: None,

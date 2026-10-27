@@ -46,6 +46,8 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 pub(super) struct RuntimeContext {
+    pub local_execution_authority: uuid::Uuid,
+    pub local_heavy_work: citadel_runtime::IoBudget,
     pub image_cache: Arc<citadel_adapters::connectors::registries::digest_cache::ImageDigestCache>,
     pub pool: PgPool,
     pub docker: DockerClient,
@@ -191,6 +193,11 @@ impl ServerComponents {
             container_runtime,
         } = connectors::build(config, &pool, &docker)?;
         let runtime = RuntimeContext {
+            local_execution_authority: uuid::Uuid::now_v7(),
+            local_heavy_work: citadel_runtime::IoBudget::new(
+                2.try_into().expect("positive capacity"),
+                citadel_runtime::runtime_metrics::RuntimeWork::LocalHeavyWork,
+            ),
             image_cache: Arc::new(Default::default()),
             pool: pool.clone(),
             docker: docker.clone(),

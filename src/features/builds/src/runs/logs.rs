@@ -39,6 +39,7 @@ impl BuildLogSink for NoopBuildLogSink {
 pub(crate) struct PersistedBuildLogs {
     store: Arc<dyn BuildRepository>,
     run: Uuid,
+    attempt_id: Uuid,
     notifier: Option<BuildLogNotifier>,
     remaining: AtomicUsize,
 }
@@ -47,11 +48,13 @@ impl PersistedBuildLogs {
     pub fn new(
         store: Arc<dyn BuildRepository>,
         run: Uuid,
+        attempt_id: Uuid,
         notifier: Option<BuildLogNotifier>,
     ) -> Self {
         Self {
             store,
             run,
+            attempt_id,
             notifier,
             remaining: AtomicUsize::new(4 * 1024 * 1024),
         }
@@ -91,7 +94,10 @@ impl BuildLogSink for PersistedBuildLogs {
                     stream: stream.into(),
                     message: part.replace('\0', ""),
                 };
-                let entry = self.store.append_log(self.run, &log).await?;
+                let entry = self
+                    .store
+                    .append_log(self.run, self.attempt_id, &log)
+                    .await?;
                 if let Some(notify) = &self.notifier {
                     notify(self.run, entry);
                 }

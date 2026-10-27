@@ -20,4 +20,4 @@ WITH actor_scope AS (
 "#;
 
 // List and latest-run projections deliberately do not load retained source/log payloads.
-pub(super) const RUN_SUMMARY_COLUMNS: &str = "id,actionid,actionname,trigger,status,runasactorid,triggeredbyactorid,argsjson,NULL::text AS codesnapshot,codehash,timeoutseconds,queuedat,startedat,finishedat,durationms,exitcode,NULL::text AS logs,errormessage";
+pub(super) const RUN_SUMMARY_COLUMNS: &str = "EXISTS(SELECT 1 FROM automationexecutorreservations WHERE runid=actionruns.id) AS cleanuppending,executor,attemptid,executorid,id,actionid,actionname,trigger,status,runasactorid,triggeredbyactorid,argsjson,NULL::text AS codesnapshot,codehash,timeoutseconds,queuedat,startedat,finishedat,durationms,exitcode,NULL::text AS logs,errormessage";

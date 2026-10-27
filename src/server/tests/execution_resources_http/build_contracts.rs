@@ -27,6 +27,62 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, project: &str) 
             StatusCode::BAD_REQUEST
         );
     }
+    let recovery = format!("/api/v1/buildRuns/{}/recovery", Uuid::now_v7());
+    let mut reader = admin.clone();
+    reader.roles.clear();
+    let mut service_account = admin.clone();
+    service_account.principal_type = AuthenticatedPrincipalType::ServiceAccount;
+    for method in [Method::GET, Method::POST] {
+        for (principal, expected) in [
+            (None, StatusCode::UNAUTHORIZED),
+            (Some(reader.clone()), StatusCode::FORBIDDEN),
+            (Some(service_account.clone()), StatusCode::FORBIDDEN),
+        ] {
+            assert_eq!(
+                request(
+                    app,
+                    method.clone(),
+                    &recovery,
+                    principal,
+                    Some(
+                        json!({"attemptId":Uuid::now_v7(), "reason":"checked", "acknowledged":true})
+                    )
+                )
+                .await
+                .status(),
+                expected
+            );
+        }
+    }
+    let response = request(app, Method::GET, &recovery, Some(admin.clone()), None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert!(response_json(response).await["reservation"].is_null());
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            &recovery,
+            Some(admin.clone()),
+            Some(json!({"attemptId":Uuid::now_v7(),"reason":"checked","acknowledged":false}))
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(
+            app,
+            Method::POST,
+            &recovery,
+            Some(admin.clone()),
+            Some(json!({"attemptId":Uuid::now_v7(),"reason":"checked","acknowledged":true}))
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+
     let duplicate_path = format!("/api/v1/buildProjects/{project}/duplicate-draft");
     assert_eq!(
         request(app, Method::GET, &duplicate_path, None, None)
@@ -179,7 +235,7 @@ pub(super) async fn verify(app: &Router, admin: &ActorPrincipal, project: &str) 
     assert!(cleared["webhook"].is_null());
     assert!(cleared["target"].is_null());
     let pool=response_json(request(app,Method::POST,"/api/v1/buildAgentPools",Some(admin.clone()),Some(json!({"name":"native-build-contract","enabled":true,"providerSpec":{"$type":"SelfManagedVm","connectionMode":"EdgeAgent"}}))).await).await;
-    assert_eq!(pool["providerSpec"]["maxWorkers"], 1);
+    assert!(pool["providerSpec"].get("maxWorkers").is_none());
     assert_eq!(pool["providerSpec"]["architecture"], "Amd64");
     let path = format!("/api/v1/buildAgentPools/{}", pool["id"].as_str().unwrap());
     let preserved = response_json(

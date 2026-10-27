@@ -12,6 +12,9 @@ pub struct UpdateAutomationActionInput {
     #[schema(value_type = Option<String>, required = false)]
     description: FieldUpdate<Option<String>>,
     #[serde(default)]
+    #[schema(value_type = super::spec::AutomationExecutorSchema, required = false)]
+    executor: FieldUpdate<citadel_automation::AutomationExecutor>,
+    #[serde(default)]
     #[schema(value_type = String, required = false)]
     code: FieldUpdate<String>,
     #[serde(default)]
@@ -118,6 +121,7 @@ impl UpdateAutomationActionInput {
             webhook: self.webhook,
             timeout_seconds: self.timeout_seconds,
             alert_on_failure: self.alert_on_failure,
+            executor: self.executor,
             run_as_actor_id: self.run_as_actor_id,
         }
         .apply(current)

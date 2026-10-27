@@ -33,6 +33,7 @@ impl BuildSecretResolver for NoSecrets {
 struct Logs {
     store: Arc<PostgresBuildRepository>,
     id: Uuid,
+    attempt_id: Uuid,
 }
 impl BuildLogSink for Logs {
     fn append<'a>(
@@ -44,6 +45,7 @@ impl BuildLogSink for Logs {
             self.store
                 .append_log(
                     self.id,
+                    self.attempt_id,
                     &BuildLog {
                         stream: stream.into(),
                         message: message.into(),
@@ -178,10 +180,10 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
         assert_eq!(claim.run.id,queued.id);
         let credentials=Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone()));
         let executor=match client {
-            Some(client) => AgentDockerBuildExecutor::new(directory.clone(),client,Arc::new(NoSecrets),credentials,1024*1024),
-            None => AgentDockerBuildExecutor::new_edge(directory.clone(),edge_registry.clone(),Arc::new(NoSecrets),credentials,1024*1024),
+            Some(client) => AgentDockerBuildExecutor::new(directory.clone(),client,Arc::new(NoSecrets),credentials,1024*1024,store.clone()),
+            None => AgentDockerBuildExecutor::new_edge(directory.clone(),edge_registry.clone(),Arc::new(NoSecrets),credentials,1024*1024,store.clone()),
         };
-        let completed=executor.execute(&claim,&Logs{store:store.clone(),id:queued.id},&cancel).await;
+        let completed=executor.execute(&claim,&Logs{store:store.clone(),id:queued.id,attempt_id:claim.attempt_id},&cancel).await;
         assert_eq!(completed.status,citadel_builds::BuildRunStatus::Succeeded,"{completed:?}");
         assert_eq!(completed.resolved_commit_sha.as_deref(),Some(commit.as_str()));
         let reference=completed.image_references.first().unwrap().clone();

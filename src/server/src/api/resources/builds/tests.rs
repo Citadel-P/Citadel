@@ -49,9 +49,21 @@ fn provider_specs_preserve_fields_and_self_managed_defaults() {
             .unwrap();
     let wire = serde_json::to_value(spec).unwrap();
     assert_eq!(wire["architecture"], "Amd64");
-    assert_eq!(wire["maxWorkers"], 1);
+    assert!(wire.get("maxWorkers").is_none());
     assert_eq!(wire["connectionMode"], "EdgeAgent");
     assert!(wire["endpoint"].is_null());
+    // Existing JSON remains readable, but the ineffective setting is no longer
+    // emitted as executable configuration. The pool's maxActiveBuilders owns policy.
+    let stored: BuildAgentPoolProviderSpec = serde_json::from_value(json!({
+        "$type": "SelfManagedVm", "connectionMode": "EdgeAgent", "maxWorkers": 16
+    }))
+    .unwrap();
+    assert!(
+        serde_json::to_value(stored)
+            .unwrap()
+            .get("maxWorkers")
+            .is_none()
+    );
     let spec: BuildAgentPoolProviderSpec = serde_json::from_value(json!({"$type":"AwsEc2","region":"eu-west-1","tags":{"Owner":"OPS"},"securityGroupIds":["sg-1"]})).unwrap();
     let wire = serde_json::to_value(spec).unwrap();
     assert_eq!(wire["region"], "eu-west-1");

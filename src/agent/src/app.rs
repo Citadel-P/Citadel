@@ -67,11 +67,19 @@ impl Agent {
         tracing::info!(address = %self.listener.local_addr()?, mode, tls = self.components.tls.is_some(), "Agent listener started");
         let router = match self.config.mode {
             AgentMode::Direct(direct) => health_router().merge(crate::direct::router(
-                self.components.docker,
+                crate::direct::Runtime::new(
+                    self.components.docker,
+                    cancellation.clone(),
+                    self.config.runtime_container,
+                )
+                .with_execution_capacity(
+                    self.config.build_slots,
+                    self.config.data_slots,
+                    self.config.heavy_slots,
+                )
+                .with_automation(self.config.automation_slots, terminal_tasks.clone()),
                 direct.hub_public_key,
                 &direct.audience,
-                cancellation.clone(),
-                self.config.runtime_container,
             )),
             AgentMode::Edge(_) => health_router(),
         };

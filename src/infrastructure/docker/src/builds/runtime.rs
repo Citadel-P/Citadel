@@ -22,10 +22,36 @@ pub enum BuildRuntimeError {
     Command(String),
     #[error(transparent)]
     Process(ProcessError),
+    /// The build/push subprocess never started. Temporary files still require cleanup.
+    #[error(transparent)]
+    NotStarted(Box<BuildRuntimeError>),
+    #[error("Could not clean temporary Docker credentials and build files.")]
+    Cleanup,
 }
 impl BuildRuntimeError {
+    pub fn is_known_not_started(&self) -> bool {
+        matches!(self, Self::NotStarted(_))
+    }
+
+    pub fn not_started(self) -> Self {
+        match self {
+            // Missing cleanup evidence always takes precedence over non-execution.
+            Self::Cleanup | Self::NotStarted(_) => self,
+            error => Self::NotStarted(Box::new(error)),
+        }
+    }
+
+    pub fn cause(&self) -> &Self {
+        match self {
+            Self::NotStarted(error) => error.cause(),
+            error => error,
+        }
+    }
+
     pub fn code(&self) -> &'static str {
         match self {
+            Self::NotStarted(error) => error.code(),
+            Self::Cleanup => "build.cleanup",
             Self::Validation(_) => "build.validation",
             Self::Io(_) => "build.source",
             Self::Command(_) => "build.command",
@@ -42,7 +68,7 @@ pub enum DockerBuildSource<'a> {
         dockerfile: &'a Path,
     },
     /// Pass the tar directly to Docker; never unpack caller archives on the host.
-    Archive { data: &'a [u8], dockerfile: &'a str },
+    Archive { data: Vec<u8>, dockerfile: &'a str },
 }
 
 pub struct DockerBuildOptions<'a> {
@@ -71,55 +97,77 @@ impl DockerBuildSession {
         maximum_log_bytes: usize,
         cancellation: &CancellationToken,
     ) -> Result<Self, BuildRuntimeError> {
-        if timeout.is_zero() || maximum_log_bytes < 1024 {
-            return Err(BuildRuntimeError::Validation(
-                "Invalid Docker execution limits.".into(),
-            ));
-        }
-        endpoint
-            .docker_host()
-            .map_err(|error| BuildRuntimeError::Validation(error.to_string()))?;
-        let config =
-            std::env::temp_dir().join(format!("citadel-build-config-{}", uuid::Uuid::now_v7()));
-        let mut directory = std::fs::DirBuilder::new();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            directory.mode(0o700);
-        }
-        directory
-            .create(&config)
-            .map_err(|error| BuildRuntimeError::Io(error.to_string()))?;
-        let session = Self {
-            docker: docker.into(),
-            endpoint,
-            config,
-            timeout,
-            maximum_log_bytes,
-            password: registry.map(|(_, credentials)| credentials.password.clone()),
-        };
-        if let Some((host, credentials)) = registry {
-            let request = session
-                .request(vec![
-                    "login".into(),
-                    normalize_registry_host(host)?.into(),
-                    "--username".into(),
-                    credentials.username.clone().into(),
-                    "--password-stdin".into(),
-                ])?
-                .stdin(credentials.password.as_bytes().to_vec())
-                .limits(limits(Duration::from_secs(60), maximum_log_bytes));
-            let login = citadel_processes::run(request, cancellation)
-                .await
-                .map_err(BuildRuntimeError::Process)?;
-            if !login.succeeded() {
-                return Err(BuildRuntimeError::Command(redact_values(
-                    &logs(&login.stdout, &login.stderr),
-                    &[credentials.password.as_str()],
-                )));
+        let result = async {
+            if timeout.is_zero() || maximum_log_bytes < 1024 {
+                return Err(BuildRuntimeError::Validation(
+                    "Invalid Docker execution limits.".into(),
+                ));
             }
+            endpoint
+                .docker_host()
+                .map_err(|error| BuildRuntimeError::Validation(error.to_string()))?;
+            let config =
+                std::env::temp_dir().join(format!("citadel-build-config-{}", uuid::Uuid::now_v7()));
+            let mut directory = std::fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                directory.mode(0o700);
+            }
+            directory
+                .create(&config)
+                .map_err(|error| BuildRuntimeError::Io(error.to_string()))?;
+            let mut session = Self {
+                docker: docker.into(),
+                endpoint,
+                config,
+                timeout,
+                maximum_log_bytes,
+                password: registry.map(|(_, credentials)| credentials.password.clone()),
+            };
+            let authentication = async {
+                if let Some((host, credentials)) = registry {
+                    let request = session
+                        .request(vec![
+                            "login".into(),
+                            normalize_registry_host(host)?.into(),
+                            "--username".into(),
+                            credentials.username.clone().into(),
+                            "--password-stdin".into(),
+                        ])?
+                        .stdin(credentials.password.as_bytes().to_vec())
+                        .limits(limits(Duration::from_secs(60), maximum_log_bytes));
+                    let login = citadel_processes::run(request, cancellation)
+                        .await
+                        .map_err(BuildRuntimeError::Process)?;
+                    if !login.succeeded() {
+                        return Err(BuildRuntimeError::Command(redact_values(
+                            &logs(&login.stdout, &login.stderr),
+                            &[credentials.password.as_str()],
+                        )));
+                    }
+                }
+                Ok::<(), BuildRuntimeError>(())
+            }
+            .await;
+            if let Err(error) = authentication {
+                session.cleanup()?;
+                return Err(error);
+            }
+            Ok(session)
         }
-        Ok(session)
+        .await;
+        result.map_err(BuildRuntimeError::not_started)
+    }
+
+    /// Confirm private credentials and temporary build files have been removed.
+    /// Call before releasing execution capacity; Drop remains a fallback on cancellation.
+    pub fn cleanup(&mut self) -> Result<(), BuildRuntimeError> {
+        match std::fs::remove_dir_all(&self.config) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(BuildRuntimeError::Cleanup),
+        }
     }
 
     /// Install a registry identity token in this session's private Docker config.
@@ -180,121 +228,135 @@ impl DockerBuildSession {
         progress: &dyn BuildLogSink,
         cancellation: &CancellationToken,
     ) -> Result<(), BuildRuntimeError> {
-        let (context, dockerfile, stdin) = match options.source {
-            DockerBuildSource::Directory {
-                context,
-                dockerfile,
-            } => (
-                tokio::fs::canonicalize(context)
-                    .await
-                    .map_err(|error| BuildRuntimeError::Io(error.to_string()))?
-                    .into_os_string(),
-                tokio::fs::canonicalize(dockerfile)
-                    .await
-                    .map_err(|error| BuildRuntimeError::Io(error.to_string()))?
-                    .into_os_string(),
-                None,
-            ),
-            DockerBuildSource::Archive { data, dockerfile } => {
-                if data.is_empty()
-                    || data.len() > 16 * 1024 * 1024
-                    || dockerfile.is_empty()
-                    || Path::new(dockerfile).is_absolute()
-                    || dockerfile
-                        .split(['/', '\\'])
-                        .any(|part| matches!(part, ".." | ".git"))
+        let mut started = false;
+        let result = async {
+            let (context, dockerfile, stdin) = match options.source {
+                DockerBuildSource::Directory {
+                    context,
+                    dockerfile,
+                } => (
+                    tokio::fs::canonicalize(context)
+                        .await
+                        .map_err(|error| BuildRuntimeError::Io(error.to_string()))?
+                        .into_os_string(),
+                    tokio::fs::canonicalize(dockerfile)
+                        .await
+                        .map_err(|error| BuildRuntimeError::Io(error.to_string()))?
+                        .into_os_string(),
+                    None,
+                ),
+                DockerBuildSource::Archive { data, dockerfile } => {
+                    if data.is_empty()
+                        || data.len() > 16 * 1024 * 1024
+                        || dockerfile.is_empty()
+                        || Path::new(dockerfile).is_absolute()
+                        || dockerfile
+                            .split(['/', '\\'])
+                            .any(|part| matches!(part, ".." | ".git"))
+                    {
+                        return Err(BuildRuntimeError::Validation(
+                            "Invalid transported Build context or Dockerfile path.".into(),
+                        ));
+                    }
+                    (OsString::from("-"), OsString::from(dockerfile), Some(data))
+                }
+            };
+            let mut args = vec![OsString::from("build"), "--file".into(), dockerfile];
+            if let Some(target) = options.target {
+                args.extend(["--target".into(), target.into()]);
+            }
+            for argument in options.build_args {
+                args.extend([
+                    "--build-arg".into(),
+                    match &argument.value {
+                        Some(value) => format!("{}={value}", argument.name),
+                        None => argument.name.clone(),
+                    }
+                    .into(),
+                ]);
+            }
+            for tag in options.tags {
+                args.extend(["--tag".into(), tag.into()]);
+            }
+            let mut environment = Vec::new();
+            for (index, (id, value)) in options.secrets.iter().enumerate() {
+                if id.is_empty()
+                    || !id
+                        .chars()
+                        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
                 {
                     return Err(BuildRuntimeError::Validation(
-                        "Invalid transported Build context or Dockerfile path.".into(),
+                        "Invalid Build secret identifier.".into(),
                     ));
                 }
-                (
-                    OsString::from("-"),
-                    OsString::from(dockerfile),
-                    Some(data.to_vec()),
-                )
+                let name = format!("CITADEL_BUILDKIT_SECRET_{index}");
+                args.extend(["--secret".into(), format!("id={id},env={name}").into()]);
+                environment.push((name, value.as_str()));
             }
-        };
-        let mut args = vec![OsString::from("build"), "--file".into(), dockerfile];
-        if let Some(target) = options.target {
-            args.extend(["--target".into(), target.into()]);
-        }
-        for argument in options.build_args {
-            args.extend([
-                "--build-arg".into(),
-                match &argument.value {
-                    Some(value) => format!("{}={value}", argument.name),
-                    None => argument.name.clone(),
-                }
-                .into(),
-            ]);
-        }
-        for tag in options.tags {
-            args.extend(["--tag".into(), tag.into()]);
-        }
-        let mut environment = Vec::new();
-        for (index, (id, value)) in options.secrets.iter().enumerate() {
-            if id.is_empty()
-                || !id
-                    .chars()
-                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
-            {
-                return Err(BuildRuntimeError::Validation(
-                    "Invalid Build secret identifier.".into(),
-                ));
+            args.push(context);
+            let mut request = self.request(args)?.env("DOCKER_BUILDKIT", "1");
+            if let Some(stdin) = stdin {
+                request = request.stdin(stdin);
             }
-            let name = format!("CITADEL_BUILDKIT_SECRET_{index}");
-            args.extend(["--secret".into(), format!("id={id},env={name}").into()]);
-            environment.push((name, value.as_str()));
+            for (name, value) in &environment {
+                request = request.env(name, *value);
+            }
+            let secrets: Vec<_> = environment
+                .iter()
+                .map(|(_, value)| *value)
+                .chain(self.password.as_ref().map(|value| value.as_str()))
+                .collect();
+            started = true;
+            let result = output::run(request, cancellation, progress, &secrets).await?;
+            if !result.succeeded() {
+                return Err(streamed_command_failure("build", result.exit_code));
+            }
+            Ok(())
         }
-        args.push(context);
-        let mut request = self.request(args)?.env("DOCKER_BUILDKIT", "1");
-        if let Some(stdin) = stdin {
-            request = request.stdin(stdin);
-        }
-        for (name, value) in &environment {
-            request = request.env(name, *value);
-        }
-        let secrets: Vec<_> = environment
-            .iter()
-            .map(|(_, value)| *value)
-            .chain(self.password.as_ref().map(|value| value.as_str()))
-            .collect();
-        let result = output::run(request, cancellation, progress, &secrets).await?;
-        if !result.succeeded() {
-            return Err(streamed_command_failure("build", result.exit_code));
-        }
-        Ok(())
+        .await;
+        result.map_err(|error| {
+            if !started || matches!(error, BuildRuntimeError::Process(ProcessError::Spawn(_))) {
+                error.not_started()
+            } else {
+                error
+            }
+        })
     }
-
     pub async fn push(
         &self,
         reference: &str,
         progress: &dyn BuildLogSink,
         cancellation: &CancellationToken,
     ) -> Result<Option<String>, BuildRuntimeError> {
-        if reference.trim().is_empty() || reference.starts_with('-') {
-            return Err(BuildRuntimeError::Validation(
-                "Invalid image reference.".into(),
-            ));
+        let mut started = false;
+        let result = async {
+            if reference.trim().is_empty() || reference.starts_with('-') {
+                return Err(BuildRuntimeError::Validation(
+                    "Invalid image reference.".into(),
+                ));
+            }
+            let secrets: Vec<_> = self
+                .password
+                .as_ref()
+                .map(|value| value.as_str())
+                .into_iter()
+                .collect();
+            let request = self.request(vec!["push".into(), reference.into()])?;
+            started = true;
+            let result = output::run(request, cancellation, progress, &secrets).await?;
+            if !result.succeeded() {
+                return Err(streamed_command_failure("push", result.exit_code));
+            }
+            Ok(find_digest(&logs(&result.stdout, &result.stderr)))
         }
-        let secrets: Vec<_> = self
-            .password
-            .as_ref()
-            .map(|value| value.as_str())
-            .into_iter()
-            .collect();
-        let result = output::run(
-            self.request(vec!["push".into(), reference.into()])?,
-            cancellation,
-            progress,
-            &secrets,
-        )
-        .await?;
-        if !result.succeeded() {
-            return Err(streamed_command_failure("push", result.exit_code));
-        }
-        Ok(find_digest(&logs(&result.stdout, &result.stderr)))
+        .await;
+        result.map_err(|error| {
+            if !started || matches!(error, BuildRuntimeError::Process(ProcessError::Spawn(_))) {
+                error.not_started()
+            } else {
+                error
+            }
+        })
     }
 }
 
@@ -313,7 +375,7 @@ fn streamed_command_failure(operation: &str, exit_code: Option<i32>) -> BuildRun
 
 impl Drop for DockerBuildSession {
     fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.config) {
+        if let Err(error) = self.cleanup() {
             tracing::warn!(%error,"Failed to clean temporary Docker credentials");
         }
     }

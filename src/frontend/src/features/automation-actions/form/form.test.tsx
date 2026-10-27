@@ -50,6 +50,7 @@ vi.mock('@/features/tags/components', () => ({
 }));
 
 const action: AuthorizedAction = {
+  executor: { kind: 'Core' },
   id: '019fb442-8b08-7fea-b21d-6ea46f42da21',
   name: 'Prune images',
   description: null,

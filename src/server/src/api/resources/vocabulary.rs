@@ -75,6 +75,7 @@ pub enum LookupResourceTypeSchema {
     BuildAgentPool,
     SwarmService,
     RunAsActor,
+    AutomationAgent,
     ServiceAccount,
 }
 

@@ -86,6 +86,9 @@ pub async fn run(
         let mut stdin = child.child.stdin.take().expect("piped stdin is available");
         tokio::spawn(async move {
             stdin.write_all(&input).await?;
+            // Input ownership ends when the bytes have been written, not when
+            // the child exits or closes the pipe. Build archives can be large.
+            drop(input);
             stdin.shutdown().await
         })
     });

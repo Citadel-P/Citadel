@@ -1,11 +1,11 @@
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::AutomationRun;
 use crate::AutomationRunResult;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AutomationProgress {
     pub run_id: Option<Uuid>,
     pub status: Option<crate::AutomationRunStatus>,
@@ -15,7 +15,7 @@ pub struct AutomationProgress {
     pub error: Option<AutomationProgressError>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AutomationProgressError {
     pub code: i32,
     pub message: String,
@@ -52,17 +52,11 @@ impl AutomationProgress {
     }
 }
 
-/// A slow or disconnected viewer cannot retain a child process indefinitely.
+/// Progress is observational. Slow viewers never cancel a durable execution.
 pub(crate) async fn send(
-    sender: &mpsc::Sender<AutomationProgress>,
+    sender: &broadcast::Sender<AutomationProgress>,
     item: AutomationProgress,
-    cancellation: &CancellationToken,
+    _cancellation: &CancellationToken,
 ) {
-    tokio::select! {
-        biased;
-        () = cancellation.cancelled() => {},
-        result = tokio::time::timeout(std::time::Duration::from_secs(5), sender.send(item)) => {
-            if !matches!(result, Ok(Ok(()))) { cancellation.cancel(); }
-        }
-    }
+    let _ = sender.send(item);
 }

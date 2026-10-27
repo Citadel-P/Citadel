@@ -4,6 +4,10 @@ use uuid::Uuid;
 
 fn run() -> citadel_automation::AutomationRun {
     citadel_automation::AutomationRun {
+        executor: Default::default(),
+        attempt_id: None,
+        executor_id: None,
+        cleanup_pending: false,
         id: Uuid::now_v7(),
         action_id: Uuid::now_v7(),
         action_name: "maintenance".into(),

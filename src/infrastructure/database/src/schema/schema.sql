@@ -2414,3 +2414,100 @@ WHERE EXISTS (SELECT 1 FROM secretdefinitions WHERE id=(secret->>'secretId')::uu
 INSERT INTO secretusegrants SELECT id, 'Global', '00000000-0000-0000-0000-000000000000'::uuid
 FROM secretdefinitions WHERE providertype='VaultCompatibleKvV2' ON CONFLICT DO NOTHING;
 -- END RESTORE SECRET USE GRANTS
+
+-- Each claim owns a distinct attempt. Legacy active work is never replayed by
+-- this migration; normal startup recovery still marks interrupted runs.
+ALTER TABLE buildruns ADD COLUMN attemptid uuid;
+UPDATE buildruns SET attemptid=gen_random_uuid() WHERE status IN ('Preparing','Running');
+ALTER TABLE buildruns ADD CONSTRAINT ck_buildruns_active_attempt
+    CHECK (status NOT IN ('Preparing','Running') OR attemptid IS NOT NULL);
+
+-- Admission backoff is separate from execution timeout and original queue age.
+ALTER TABLE buildruns ADD COLUMN nextattemptat timestamp with time zone;
+
+-- Durable remote build ownership; a terminal run does not prove remote cleanup.
+CREATE TABLE buildexecutors (
+    daemonid text PRIMARY KEY,
+    authorityid uuid NOT NULL,
+    buildcapacity integer NOT NULL CHECK (buildcapacity BETWEEN 1 AND 64)
+);
+CREATE TABLE buildexecutorreservations (
+    attemptid uuid PRIMARY KEY,
+    runid uuid NOT NULL UNIQUE REFERENCES buildruns(id),
+    daemonid text NOT NULL REFERENCES buildexecutors(daemonid),
+    authorityid uuid NOT NULL,
+    uncertain boolean NOT NULL DEFAULT false,
+    reservedat timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX ix_buildexecutorreservations_daemon ON buildexecutorreservations(daemonid);
+
+-- Older reservations have no generation evidence and remain quarantined.
+ALTER TABLE buildexecutorreservations ADD COLUMN admissiongeneration bigint CHECK (admissiongeneration > 0);
+
+-- Authenticated cleanup evidence survives a lost terminal commit/Core restart.
+-- Retained with run history; recording evidence alone does not release capacity.
+CREATE TABLE buildexecutorcleanupreceipts (
+    attemptid uuid PRIMARY KEY,
+    runid uuid NOT NULL REFERENCES buildruns(id) ON DELETE CASCADE,
+    daemonid text NOT NULL,
+    authorityid uuid NOT NULL,
+    admissiongeneration bigint NOT NULL CHECK (admissiongeneration > 0),
+    confirmedat timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX ix_buildexecutorcleanupreceipts_run ON buildexecutorcleanupreceipts(runid);
+
+-- Legacy reservations may already have executed; only new preparation reservations are releasable without cleanup evidence.
+ALTER TABLE buildexecutorreservations ADD COLUMN dispatchstarted boolean NOT NULL DEFAULT true;
+
+-- Renewable owner-fenced resource locks. Expiry is evidence of lost ownership,
+-- not evidence that a remote helper stopped.
+ALTER TABLE backupruns ADD COLUMN attemptid uuid;
+ALTER TABLE backupruns ADD COLUMN sourceplan jsonb;
+ALTER TABLE backupruns ADD COLUMN nextattemptat timestamp with time zone;
+ALTER TABLE backuprestoreruns ADD COLUMN attemptid uuid;
+ALTER TABLE backuprepositoryleases ADD COLUMN attemptid uuid;
+ALTER TABLE backupsourceleases ADD COLUMN attemptid uuid;
+CREATE INDEX ix_backupruns_dispatch ON backupruns(nextattemptat,queuedat,id) WHERE status='Queued';
+
+-- Data helper occupancy shares the authenticated daemon/authority with builds.
+ALTER TABLE buildexecutors ADD COLUMN heavycapacity integer NOT NULL DEFAULT 2 CHECK (heavycapacity BETWEEN 1 AND 64);
+CREATE TABLE dataexecutorreservations (
+    operationid uuid PRIMARY KEY,
+    platformid uuid NOT NULL REFERENCES platforms(id),
+    nodeid text,
+    repositoryid uuid NOT NULL REFERENCES backuprepositories(id),
+    ownerid uuid NOT NULL,
+    attemptid uuid NOT NULL,
+    daemonid text NOT NULL REFERENCES buildexecutors(daemonid),
+    authorityid uuid NOT NULL,
+    admissiongeneration bigint NOT NULL CHECK (admissiongeneration > 0),
+    createdat timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX ix_dataexecutorreservations_daemon ON dataexecutorreservations(daemonid);
+CREATE INDEX ix_dataexecutorreservations_owner ON dataexecutorreservations(ownerid,attemptid);
+
+-- Pre-execution host refusals yield tracking capacity without replaying work.
+ALTER TABLE backuprestoreruns ADD COLUMN nextattemptat timestamp with time zone;
+CREATE INDEX ix_backuprestoreruns_nextattempt ON backuprestoreruns(nextattemptat,queuedat,id) WHERE status='Queued';
+
+-- Cancellation remains observable if a queued run is claimed concurrently.
+ALTER TABLE actionruns ADD COLUMN cancelrequested boolean NOT NULL DEFAULT false;
+
+ALTER TABLE actions ADD COLUMN executor jsonb NOT NULL DEFAULT '{"kind":"Core"}';
+ALTER TABLE actionruns ADD COLUMN executor jsonb NOT NULL DEFAULT '{"kind":"Core"}';
+ALTER TABLE actionruns ADD COLUMN attemptid uuid;
+ALTER TABLE actionruns ADD COLUMN executorid uuid;
+ALTER TABLE actionruns ADD COLUMN nexteligibleat timestamptz;
+CREATE TABLE automationexecutorreservations (
+    attemptid uuid PRIMARY KEY,
+    runid uuid NOT NULL UNIQUE REFERENCES actionruns(id),
+    daemonid varchar(256) NOT NULL REFERENCES buildexecutors(daemonid),
+    authorityid uuid NOT NULL,
+    admissiongeneration bigint NOT NULL CHECK(admissiongeneration > 0),
+    agentid uuid NOT NULL,
+    agenttype integer NOT NULL,
+    endpoint text,
+    cleanupconfirmed boolean NOT NULL DEFAULT false,
+    lastcheckedat timestamptz
+);
+CREATE INDEX ix_automationexecutorreservations_daemon ON automationexecutorreservations(daemonid);

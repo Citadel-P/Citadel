@@ -19,11 +19,20 @@ pub(crate) fn joined_logs(stdout: &[u8], stderr: &[u8], truncated: bool) -> Stri
     output
 }
 
-pub(crate) fn allow_net_authority(base_url: &str) -> &str {
-    base_url
-        .split_once("://")
-        .map_or(base_url, |(_, authority)| authority)
-        .trim_end_matches('/')
+pub(crate) fn allow_net_authority(base_url: &str) -> String {
+    let Ok(url) = url::Url::parse(base_url) else {
+        return String::new();
+    };
+    if !matches!(url.scheme(), "http" | "https")
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return String::new();
+    }
+    match (url.host(), url.port_or_known_default()) {
+        (Some(host), Some(port)) => format!("{host}:{port}"),
+        _ => String::new(),
+    }
 }
 
 pub(crate) fn redact_run_logs(value: &str, token: &str) -> String {

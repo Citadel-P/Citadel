@@ -1,5 +1,6 @@
 //! Execution operations shared by direct and inbound Agents. Both use the
 //! canonical protobuf messages; Edge changes delivery, not the payload model.
+mod automation;
 use crate::connectors::agent::client::AgentBinaryExecOutput;
 use crate::connectors::agent::client::AgentClient;
 use crate::connectors::agent::client::AgentContainerAction;
@@ -26,6 +27,89 @@ pub(crate) enum AgentExecutionClient {
     Edge(Arc<EdgeSession>),
 }
 impl AgentExecutionClient {
+    pub async fn check_build_host(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::images::v1::CheckBuildHostResponse,
+        RuntimeCapabilityError,
+    > {
+        match self {
+            Self::Direct(client) => client.check_build_host(cancellation).await,
+            Self::Edge(session) => {
+                unary(
+                    session,
+                    EdgeCommandKind::ImageCheckBuildHost,
+                    (),
+                    cancellation,
+                )
+                .await
+            }
+        }
+    }
+
+    pub async fn reconcile_build(
+        &self,
+        request: citadel_contracts::citadel::images::v1::ReconcileBuildRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::images::v1::ReconcileBuildResponse,
+        RuntimeCapabilityError,
+    > {
+        match self {
+            Self::Direct(client) => client.reconcile_build(request, cancellation).await,
+            Self::Edge(session) => {
+                unary(
+                    session,
+                    EdgeCommandKind::ImageReconcileBuild,
+                    request,
+                    cancellation,
+                )
+                .await
+            }
+        }
+    }
+
+    pub async fn reserve_data(
+        &self,
+        request: citadel_contracts::citadel::images::v1::DataOperationRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_contracts::citadel::images::v1::DataAdmissionResponse, RuntimeCapabilityError>
+    {
+        match self {
+            Self::Direct(client) => client.reserve_data(request, cancellation).await,
+            Self::Edge(session) => {
+                unary(
+                    session,
+                    EdgeCommandKind::ImageReserveData,
+                    request,
+                    cancellation,
+                )
+                .await
+            }
+        }
+    }
+    pub async fn reconcile_data(
+        &self,
+        request: citadel_contracts::citadel::images::v1::DataOperationRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::images::v1::ReconcileBuildResponse,
+        RuntimeCapabilityError,
+    > {
+        match self {
+            Self::Direct(client) => client.reconcile_data(request, cancellation).await,
+            Self::Edge(session) => {
+                unary(
+                    session,
+                    EdgeCommandKind::ImageReconcileData,
+                    request,
+                    cancellation,
+                )
+                .await
+            }
+        }
+    }
     pub async fn runtime_image(
         &self,
         cancellation: &CancellationToken,
@@ -385,7 +469,7 @@ impl AgentExecutionClient {
         &self,
         command: crate::connectors::agent::client::AgentBuildCommand,
         cancellation: &CancellationToken,
-    ) -> Result<String, RuntimeCapabilityError> {
+    ) -> Result<crate::connectors::agent::client::BuildStreamSummary, RuntimeCapabilityError> {
         use citadel_contracts::citadel::images::v1::{
             BuildImageRequest, BuildImageSecret, ImageBuildResponse, PushImageRequest,
         };
@@ -399,6 +483,11 @@ impl AgentExecutionClient {
         let timeout = Duration::from_secs(command.timeout_seconds.max(1) as u64);
         let maximum = command.maximum_log_bytes.max(1024);
         let request = BuildImageRequest {
+            admission_authority_id: command.admission_authority_id.clone(),
+            admission_generation: command.admission_generation,
+            run_id: command.run_id.to_string(),
+            attempt_id: command.attempt_id.to_string(),
+            push_to_registry: command.push_to_registry,
             context_directory: ".".into(),
             dockerfile_path: command.dockerfile_path.clone(),
             tags: command.tags.clone(),
@@ -416,14 +505,24 @@ impl AgentExecutionClient {
                 .map(|(id, value)| BuildImageSecret { id, value })
                 .collect(),
         };
-        let mut pending = session
-            .command(
-                EdgeCommandKind::ImageBuildStream,
-                request.encode_to_vec(),
-                timeout,
-                true,
-            )
-            .map_err(edge_error)?;
+        let payload = request.encode_to_vec();
+        drop(request);
+        let mut pending = match session.command_with_preparation(
+            EdgeCommandKind::ImageBuildStream,
+            payload,
+            timeout,
+            true,
+            command.preparation,
+        ) {
+            Ok(pending) => pending,
+            Err(error) if error.capacity_busy_not_submitted() => {
+                return Ok(crate::connectors::agent::client::BuildStreamSummary {
+                    not_started: true,
+                    ..Default::default()
+                });
+            }
+            Err(error) => return Err(edge_error(error)),
+        };
         let frames = async_stream::stream! {
             loop {
                 match pending.next(cancellation).await {
@@ -440,12 +539,18 @@ impl AgentExecutionClient {
             cancellation,
         )
         .await?;
+        if output.not_started {
+            return Ok(output);
+        }
         for reference in command
             .tags
             .into_iter()
             .filter(|_| command.push_to_registry)
         {
             let request = PushImageRequest {
+                admission_authority_id: command.admission_authority_id.clone(),
+                run_id: command.run_id.to_string(),
+                attempt_id: command.attempt_id.to_string(),
                 image_reference: reference,
                 registry_auth: command.registry_auth.clone(),
             };
@@ -468,12 +573,19 @@ impl AgentExecutionClient {
             };
             let pushed = crate::connectors::agent::client::consume_image_build_stream(
                 Box::pin(frames),
-                maximum.saturating_sub(output.len()),
+                maximum.saturating_sub(output.log_bytes),
                 command.output.as_ref(),
                 cancellation,
             )
             .await?;
-            output.push_str(&pushed);
+            if pushed.not_started {
+                return Err(citadel_platforms::RuntimeCapabilityError::new(
+                    citadel_platforms::RuntimeErrorKind::Remote,
+                    "Agent refused a push after the build started; the build will not be replayed.",
+                    false,
+                ));
+            }
+            output.merge(pushed);
         }
         Ok(output)
     }

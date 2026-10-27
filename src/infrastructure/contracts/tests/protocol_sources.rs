@@ -4,9 +4,14 @@ use sha2::{Digest, Sha256};
 fn protocol_sources_preserve_the_accepted_wire_contract() {
     let sources = [
         (
+            "automation_service.proto",
+            include_str!("../proto/automation_service.proto"),
+            "b9aa5f1f60dc8b7b4ee66e70727e012a52d5cd1facc17a9b38c8993faf215aa2",
+        ),
+        (
             "edge_agent_service.proto",
             include_str!("../proto/edge_agent_service.proto"),
-            "4f75ebca064a13cb2ba07d5570dc7da21512c7f7e4a2a43888f61298ad7f2726",
+            "736b865e294f73dc272c1cd2768ac1b4ab99b249066d06674fae5bb2c92a3009",
         ),
         (
             "shared_models.proto",
@@ -36,7 +41,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "image_service.proto",
             include_str!("../proto/image_service.proto"),
-            "7bf4ebf9deab755fb6868d646e6539b38cd08ee2a11e2a9c8ec307081a253321",
+            "4d47b812a034b8bc561fa4d99f3854ef16446ed502fb28d0b92cfa75861b8bf3",
         ),
         (
             "network_service.proto",

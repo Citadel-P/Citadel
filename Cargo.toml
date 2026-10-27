@@ -23,6 +23,7 @@ members = [
     "src/features/swarm-services",
     "src/features/tags",
     "src/infrastructure/adapters",
+    "src/infrastructure/automation",
     "src/infrastructure/contracts",
     "src/infrastructure/database",
     "src/infrastructure/docker-api",

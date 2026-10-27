@@ -6,6 +6,7 @@ use std::time::Duration;
 pub struct AutomationOptions {
     pub enabled: bool,
     pub max_parallel_runs: usize,
+    pub max_remote_runs: usize,
     pub default_timeout_seconds: i32,
     pub max_timeout_seconds: i32,
     pub poll_interval: Duration,
@@ -17,6 +18,7 @@ impl Default for AutomationOptions {
         Self {
             enabled: true,
             max_parallel_runs: 4,
+            max_remote_runs: 16,
             default_timeout_seconds: 300,
             max_timeout_seconds: 1800,
             poll_interval: Duration::from_secs(2),
@@ -28,12 +30,13 @@ impl Default for AutomationOptions {
 impl AutomationOptions {
     pub fn validate(&self) -> Result<(), AutomationError> {
         if !(1..=64).contains(&self.max_parallel_runs)
+            || !(1..=256).contains(&self.max_remote_runs)
             || !(1..=86_400).contains(&self.max_timeout_seconds)
             || !(1..=self.max_timeout_seconds).contains(&self.default_timeout_seconds)
             || self.poll_interval < Duration::from_secs(1)
             || self.schedule_poll_interval < Duration::from_secs(5)
         {
-            return Err(AutomationError::Validation("Invalid Automation execution limits: parallel runs must be 1–64, timeout defaults must fit the 1–86400 second maximum, polling at least 1 second and schedule polling at least 5 seconds.".into()));
+            return Err(AutomationError::Validation("Invalid Automation execution limits: local parallel runs must be 1–64, remote tracked runs 1–256, timeout defaults must fit the 1–86400 second maximum, polling at least 1 second and schedule polling at least 5 seconds.".into()));
         }
         Ok(())
     }

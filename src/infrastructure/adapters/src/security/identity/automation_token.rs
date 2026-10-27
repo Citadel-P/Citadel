@@ -23,6 +23,7 @@ impl AutomationRunTokenIssuer for IdentityAutomationRunTokenIssuer {
         &'a self,
         run_as_actor_id: ActorId,
         run_id: Uuid,
+        attempt_id: Uuid,
         lifetime: Duration,
     ) -> BoxFuture<'a, Result<String, AutomationError>> {
         Box::pin(async move {
@@ -30,6 +31,7 @@ impl AutomationRunTokenIssuer for IdentityAutomationRunTokenIssuer {
                 .issue_automation_access_token(
                     run_as_actor_id,
                     run_id,
+                    attempt_id,
                     chrono::Duration::from_std(lifetime)
                         .map_err(|error| AutomationError::External(error.to_string()))?,
                 )

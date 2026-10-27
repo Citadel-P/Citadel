@@ -4,10 +4,14 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct AutomationRun {
     pub id: Uuid,
+    pub attempt_id: Option<Uuid>,
+    pub executor_id: Option<Uuid>,
+    pub cleanup_pending: bool,
     pub action_id: Uuid,
     pub action_name: String,
     pub trigger: String,
     pub status: crate::AutomationRunStatus,
+    pub executor: crate::AutomationExecutor,
     pub run_as_actor_id: Uuid,
     pub triggered_by_actor_id: Option<Uuid>,
     pub args_json: String,

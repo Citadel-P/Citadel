@@ -29,12 +29,13 @@ pub use runs::{
     BackupClaim, BackupExecutionResult, BackupLog, BackupRun, BackupRunItem, BackupRunItemResult,
 };
 pub use runtime::{
-    BackupEntitlements, BackupExecutor, BackupRunAuthorizer, BackupSecretResolver,
-    BackupSourceItem, BackupSourcePlan, BackupSourcePlanner, CitadelSystemBackupBuilder,
+    BackupDataAdmission, BackupDataOperation, BackupEntitlements, BackupExecutionHost,
+    BackupExecutor, BackupRunAuthorizer, BackupSecretResolver, BackupSourceItem, BackupSourcePlan,
+    BackupSourcePlanner, CitadelSystemBackupBuilder,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-pub use service::BackupService;
+pub use service::{BackupService, ClaimedBackupWork};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

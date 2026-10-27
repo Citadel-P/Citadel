@@ -32,6 +32,8 @@ pub struct BuildRun {
 
 #[derive(Debug, Clone)]
 pub struct BuildClaim {
+    /// Durable ownership token, replaced whenever this run is claimed again.
+    pub attempt_id: Uuid,
     pub project: BuildProject,
     pub run: BuildRun,
 }

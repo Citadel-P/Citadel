@@ -147,10 +147,22 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
             Arc::new(FakeBuildExecutor { pool: pool.clone() }),
             Duration::minutes(5),
         )
+        .with_cleanup(
+            build_store.clone(),
+            Arc::new(
+                citadel_adapters::connectors::agent::build_cleanup::AgentBuildCleanupChecker {
+                    local: None,
+                    pool: pool.clone(),
+                    agent: None,
+                    edge: edge.clone(),
+                },
+            ),
+        )
         .with_entitlements(build_entitlement.clone())
         .with_change_notifier(change_callback(Some(hub.clone()), "Build"))
         .with_pool_checker(Arc::new(
             citadel_adapters::connectors::agent::build_pool_checker::AgentBuildPoolChecker {
+                admission: build_store.clone(),
                 agent: None,
                 edge: edge.clone(),
             },
@@ -1150,6 +1162,11 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         build_store
             .append_log(
                 build_run_id,
+                sqlx::query_scalar("SELECT attemptid FROM buildruns WHERE id=$1")
+                    .bind(build_run_id)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap(),
                 &BuildLog {
                     stream: "stdout".into(),
                     message: "late output".into()
@@ -1507,6 +1524,7 @@ impl BackupExecutor for FakeBackupExecutor {
     fn repository<'a>(
         &'a self,
         repository: &'a BackupRepository,
+        _operation_id: Uuid,
         _: &'a str,
         _: &'a str,
         _: Option<Uuid>,

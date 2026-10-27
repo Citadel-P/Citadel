@@ -24,6 +24,7 @@ pub enum Topic {
     SwarmServices(Uuid),
     GitRepo(Uuid),
     AutomationAction(Uuid),
+    AutomationRuns(Uuid),
     BackupPolicy(Uuid),
     BackupRepository(Uuid),
     BackupRuns(Uuid),
@@ -88,6 +89,7 @@ impl Topic {
             ["swarm-services", id] => Self::SwarmServices(non_nil(id)?),
             ["git-repo", id] => Self::GitRepo(non_nil(id)?),
             ["automation-action", id] => Self::AutomationAction(non_nil(id)?),
+            ["automation-runs", id] => Self::AutomationRuns(non_nil(id)?),
             ["backup-policy", id] => Self::BackupPolicy(non_nil(id)?),
             ["backup-repository", id] => Self::BackupRepository(non_nil(id)?),
             ["backup-runs", id] => Self::BackupRuns(non_nil(id)?),
@@ -152,6 +154,7 @@ impl Topic {
             Self::SwarmServices(_) => "swarm-services",
             Self::GitRepo(_) => "git-repo",
             Self::AutomationAction(_) => "automation-action",
+            Self::AutomationRuns(_) => "automation-runs",
             Self::BackupPolicy(_) => "backup-policy",
             Self::BackupRepository(_) => "backup-repository",
             Self::BackupRuns(_) => "backup-runs",
@@ -187,6 +190,7 @@ impl Topic {
             | Self::SwarmServices(id)
             | Self::GitRepo(id)
             | Self::AutomationAction(id)
+            | Self::AutomationRuns(id)
             | Self::BackupPolicy(id)
             | Self::BackupRepository(id)
             | Self::BackupRuns(id)
@@ -284,6 +288,7 @@ mod tests {
             "swarm-services",
             "git-repo",
             "automation-action",
+            "automation-runs",
             "backup-policy",
             "backup-repository",
             "backup-runs",

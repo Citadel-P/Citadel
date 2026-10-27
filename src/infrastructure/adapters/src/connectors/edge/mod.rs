@@ -7,7 +7,7 @@ mod sessions;
 pub use intake::EdgeIntake;
 pub use runtime::EdgeRuntime;
 pub use sessions::{
-    EdgeCommandStream, EdgeError, EdgeRegistry, EdgeSession, EdgeTarget, MAX_PAYLOAD,
+    EdgeCommandStream, EdgeError, EdgeOutbound, EdgeRegistry, EdgeSession, EdgeTarget, MAX_PAYLOAD,
 };
 
 pub mod observations;

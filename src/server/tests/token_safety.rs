@@ -73,6 +73,14 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
     let (account_token, hash) = OpaqueServiceAccountTokenCodec.issue(credential).unwrap();
     sqlx::query("INSERT INTO serviceaccounttokens (id,serviceaccountid,name,secrethash,expiresatutc,createdbyactorid,createdatutc) VALUES ($1,$2,'fixture',$3,now()+interval '1 hour',$4,now())")
         .bind(credential).bind(account).bind(hash.as_slice()).bind(SYSTEM_ACTOR_ID).execute(&pool).await.unwrap();
+    for token in [&run, &account_run] {
+        let claims = codec().decode_access(token).unwrap();
+        let action = Uuid::now_v7();
+        sqlx::query("INSERT INTO actions(id,name,code,createdbyactorid,runasactorid,alertonfailure,enabled,scheduleenabled,scheduletimezone,timeoutseconds) VALUES($1,$1::text,'fixture', $2,$2,false,true,false,'UTC',30)")
+            .bind(action).bind(claims.actor_id.value()).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,runasactorid,status,timeoutseconds,trigger,attemptid) VALUES($1,$2,'fixture','{}','hash','fixture',now(),$3,'Running',30,'Manual',$4)")
+            .bind(claims.automation_run_id).bind(action).bind(claims.actor_id.value()).bind(claims.automation_attempt_id).execute(&pool).await.unwrap();
+    }
     for token in [&human, &run, &account_token, &account_run] {
         identity
             .authenticate_bearer_context(token)
@@ -140,8 +148,11 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
         );
     }
     let shutdown = CancellationToken::new();
-    let realtime =
-        LicenseRealtimeService::new(identity, LicenseRealtimeHub::default(), shutdown.clone());
+    let realtime = LicenseRealtimeService::new(
+        identity.clone(),
+        LicenseRealtimeHub::default(),
+        shutdown.clone(),
+    );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn({
@@ -196,6 +207,127 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
         .await
         .unwrap()
         .unwrap();
+    // Executor permission is checked independently from API permissions and placement.
+    {
+        use citadel_automation::{AutomationRepository, RemoteAutomationExecutor};
+        let agent = Uuid::now_v7();
+        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Agent',0,0,0,$1::text,0,'{\"$type\":\"Docker\"}','Offline',0)")
+            .bind(agent).bind(format!("https://agent-{agent}.invalid")).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES($1,$2,$3,$4,$5,0)")
+            .bind(Uuid::now_v7()).bind(user_actor).bind(agent).bind(citadel_primitives::ResourceType::Platform as i32).bind(citadel_primitives::PermissionLevel::Execute as i32).execute(&pool).await.unwrap();
+        let executor = citadel_adapters::external::automation::AgentAutomationExecutor::new(
+            pool.clone(),
+            None,
+            Default::default(),
+            identity.clone(),
+            true,
+        );
+        let store =
+            citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository::new(
+                pool.clone(),
+            );
+        let (progress, _) = tokio::sync::broadcast::channel(4);
+        for (token, allowed) in [(&run, true), (&account_run, false)] {
+            let claims = codec().decode_access(token).unwrap();
+            let run_id = claims.automation_run_id.unwrap();
+            sqlx::query("UPDATE actionruns SET executor=$2 WHERE id=$1")
+                .bind(run_id)
+                .bind(json!({"kind":"Agent","agentId":agent}))
+                .execute(&pool)
+                .await
+                .unwrap();
+            let action_id: Uuid = sqlx::query_scalar("SELECT actionid FROM actionruns WHERE id=$1")
+                .bind(run_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            let claim = citadel_automation::AutomationRunClaim {
+                run: store.get_run(action_id, run_id).await.unwrap(),
+            };
+            let outcome = executor
+                .execute(
+                    &claim,
+                    citadel_automation::sandbox::AutomationScript {
+                        run_id,
+                        source: "console.log('fixture')".into(),
+                        token: token.clone(),
+                        args_json: "{}".into(),
+                        base_url: "https://core.invalid".into(),
+                        timeout_seconds: 30,
+                        maximum_log_bytes: 4096,
+                    },
+                    &progress,
+                    &CancellationToken::new(),
+                )
+                .await;
+            if allowed {
+                assert!(
+                    matches!(
+                        outcome,
+                        Ok(citadel_automation::RemoteAutomationOutcome::Deferred)
+                    ),
+                    "authorized offline Agent leaves the run queued"
+                );
+            } else {
+                assert!(
+                    matches!(
+                        outcome,
+                        Err(citadel_automation::AutomationError::Validation(_))
+                    ),
+                    "run-as credentials do not grant executor permission"
+                );
+            }
+        }
+    }
+    let claims = codec().decode_access(&run).unwrap();
+    let run_id = claims.automation_run_id.unwrap();
+    sqlx::query("UPDATE actionruns SET cancelrequested=true WHERE id=$1")
+        .bind(run_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        identity.authenticate_bearer_context(&run).await.is_err(),
+        "cancelled attempt token is revoked immediately"
+    );
+    let next_attempt = Uuid::now_v7();
+    sqlx::query("UPDATE actionruns SET cancelrequested=false,attemptid=$2 WHERE id=$1")
+        .bind(run_id)
+        .bind(next_attempt)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        identity.authenticate_bearer_context(&run).await.is_err(),
+        "an earlier attempt never regains access"
+    );
+    let next_token = identity
+        .issue_automation_access_token(
+            claims.actor_id,
+            run_id,
+            next_attempt,
+            chrono::Duration::minutes(1),
+        )
+        .await
+        .unwrap();
+    assert!(
+        identity
+            .authenticate_bearer_context(&next_token)
+            .await
+            .is_ok()
+    );
+    sqlx::query("UPDATE actionruns SET status='Failed' WHERE id=$1")
+        .bind(run_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        identity
+            .authenticate_bearer_context(&next_token)
+            .await
+            .is_err(),
+        "completed run token is revoked"
+    );
     pool.close().await;
 }
 
@@ -219,6 +351,7 @@ fn jwt(subject: Uuid, actor: Uuid, kind: AuthenticatedPrincipalType, run: bool) 
     let now = chrono::Utc::now();
     codec()
         .encode_access(&AccessTokenClaims {
+            automation_attempt_id: run.then(Uuid::now_v7),
             session_id: (!run && kind == AuthenticatedPrincipalType::User).then_some(subject),
             subject_id: subject,
             actor_id: ActorId::new(actor),

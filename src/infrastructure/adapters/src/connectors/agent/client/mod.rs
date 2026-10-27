@@ -3,7 +3,10 @@ use citadel_docker::client::events::ContainerChange;
 use citadel_docker::client::events::RuntimeEventKind;
 use std::fs;
 
+mod automation;
+mod build_output;
 mod containers;
+pub(crate) use build_output::{BuildStreamSummary, consume_image_build_stream};
 #[cfg(test)]
 mod key_rotation_tests;
 
@@ -30,8 +33,8 @@ use citadel_contracts::citadel::deployments::v1::{
     deployment_service_client::DeploymentServiceClient,
 };
 use citadel_contracts::citadel::images::v1::{
-    BuildImageRequest, BuildImageSecret, ImageBuildResponse, ListImagesRequest, PullImageRequest,
-    PushImageRequest, image_service_client::ImageServiceClient,
+    BuildImageRequest, BuildImageSecret, ListImagesRequest, PullImageRequest, PushImageRequest,
+    image_service_client::ImageServiceClient,
 };
 use citadel_contracts::citadel::networks::v1::{
     ConfigFromMessage, CreateNetworkRequest, DeleteNetworkRequest, InspectNetworkRequest,
@@ -445,6 +448,11 @@ pub struct AgentClient {
 }
 
 pub(crate) struct AgentBuildCommand {
+    pub preparation: Option<tokio::sync::OwnedSemaphorePermit>,
+    pub admission_authority_id: String,
+    pub admission_generation: u64,
+    pub run_id: uuid::Uuid,
+    pub attempt_id: uuid::Uuid,
     pub push_to_registry: bool,
     pub output: Option<tokio::sync::mpsc::Sender<citadel_execution::ProcessChunk>>,
     pub context_archive: Vec<u8>,
@@ -620,6 +628,65 @@ impl AgentClient {
         .await
     }
 
+    pub(crate) async fn reconcile_build(
+        &self,
+        request: citadel_contracts::citadel::images::v1::ReconcileBuildRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::images::v1::ReconcileBuildResponse,
+        RuntimeCapabilityError,
+    > {
+        self.retry_unary(cancellation, || async {
+            let request = self.signer.sign(
+                request.clone(),
+                "/citadel.images.v1.ImageService/ReconcileBuild",
+                Some(self.operation_timeout),
+            )?;
+            self.image_client()
+                .reconcile_build(request)
+                .await
+                .map(|value| value.into_inner())
+                .map_err(normalize_status)
+        })
+        .await
+    }
+
+    pub(crate) async fn reserve_data(
+        &self,
+        request: citadel_contracts::citadel::images::v1::DataOperationRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_contracts::citadel::images::v1::DataAdmissionResponse, RuntimeCapabilityError>
+    {
+        let request = self.signer.sign(
+            request,
+            "/citadel.images.v1.ImageService/ReserveData",
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.image_client();
+        tokio::select! {
+            () = cancellation.cancelled() => Err(RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, "Data operation cancelled", false)),
+            result = client.reserve_data(request) => result.map(|value| value.into_inner()).map_err(normalize_status),
+        }
+    }
+    pub(crate) async fn reconcile_data(
+        &self,
+        request: citadel_contracts::citadel::images::v1::DataOperationRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::images::v1::ReconcileBuildResponse,
+        RuntimeCapabilityError,
+    > {
+        let request = self.signer.sign(
+            request,
+            "/citadel.images.v1.ImageService/ReconcileData",
+            Some(self.operation_timeout),
+        )?;
+        let mut client = self.image_client();
+        tokio::select! {
+            () = cancellation.cancelled() => Err(RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, "Data operation cancelled", false)),
+            result = client.reconcile_data(request) => result.map(|value| value.into_inner()).map_err(normalize_status),
+        }
+    }
     pub async fn handshake(
         &self,
         cancellation: &CancellationToken,
@@ -1011,10 +1078,15 @@ impl AgentClient {
         &self,
         command: AgentBuildCommand,
         cancellation: &CancellationToken,
-    ) -> Result<String, RuntimeCapabilityError> {
+    ) -> Result<BuildStreamSummary, RuntimeCapabilityError> {
         let maximum_log_bytes = command.maximum_log_bytes.max(1024);
         let request = self.signer.sign(
             BuildImageRequest {
+                admission_authority_id: command.admission_authority_id.clone(),
+                admission_generation: command.admission_generation,
+                run_id: command.run_id.to_string(),
+                attempt_id: command.attempt_id.to_string(),
+                push_to_registry: command.push_to_registry,
                 context_directory: ".".to_owned(),
                 dockerfile_path: command.dockerfile_path.clone(),
                 tags: command.tags.clone(),
@@ -1044,6 +1116,7 @@ impl AgentClient {
                     .map_err(normalize_status)?
             }
         };
+        drop(command.preparation);
         let mut output = consume_image_build_stream(
             response.into_inner(),
             maximum_log_bytes,
@@ -1051,6 +1124,9 @@ impl AgentClient {
             cancellation,
         )
         .await?;
+        if output.not_started {
+            return Ok(output);
+        }
         for reference in command
             .tags
             .into_iter()
@@ -1058,6 +1134,9 @@ impl AgentClient {
         {
             let request = self.signer.sign(
                 PushImageRequest {
+                    admission_authority_id: command.admission_authority_id.clone(),
+                    run_id: command.run_id.to_string(),
+                    attempt_id: command.attempt_id.to_string(),
                     image_reference: reference,
                     registry_auth: command.registry_auth.clone(),
                 },
@@ -1074,17 +1153,19 @@ impl AgentClient {
             };
             let pushed = consume_image_build_stream(
                 response.into_inner(),
-                maximum_log_bytes.saturating_sub(output.len()),
+                maximum_log_bytes.saturating_sub(output.log_bytes),
                 command.output.as_ref(),
                 cancellation,
             )
             .await?;
-            if !pushed.is_empty() {
-                if !output.is_empty() {
-                    output.push('\n');
-                }
-                append_bounded(&mut output, &pushed, maximum_log_bytes);
+            if pushed.not_started {
+                return Err(citadel_platforms::RuntimeCapabilityError::new(
+                    citadel_platforms::RuntimeErrorKind::Remote,
+                    "Agent refused a push after the build started; the build will not be replayed.",
+                    false,
+                ));
             }
+            output.merge(pushed);
         }
         Ok(output)
     }
@@ -2686,79 +2767,6 @@ pub(crate) fn normalize_status(status: Status) -> RuntimeCapabilityError {
         _ => (RuntimeErrorKind::Remote, false),
     };
     RuntimeCapabilityError::new(kind, status.message(), retryable)
-}
-
-pub(crate) async fn consume_image_build_stream<S>(
-    mut stream: S,
-    maximum_bytes: usize,
-    progress: Option<&tokio::sync::mpsc::Sender<citadel_execution::ProcessChunk>>,
-    cancellation: &CancellationToken,
-) -> Result<String, RuntimeCapabilityError>
-where
-    S: futures_util::Stream<Item = Result<ImageBuildResponse, Status>> + Unpin,
-{
-    let mut output = String::new();
-    loop {
-        let next = tokio::select! {
-            biased;
-            () = cancellation.cancelled() => return Err(cancelled_error()),
-            item = stream.next() => item,
-        };
-        let Some(item) = next else { break };
-        let item = item.map_err(normalize_status)?;
-        let error = item
-            .error_message
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .or_else(|| {
-                item.error
-                    .as_ref()
-                    .and_then(|error| error.message.as_deref())
-                    .filter(|value| !value.trim().is_empty())
-            });
-        if let Some(error) = error {
-            return Err(RuntimeCapabilityError::new(
-                RuntimeErrorKind::Remote,
-                error.to_owned(),
-                false,
-            ));
-        }
-        for value in [item.stream, item.status, item.progress_message]
-            .into_iter()
-            .flatten()
-            .filter(|value| !value.trim().is_empty())
-        {
-            if let Some(progress) = progress {
-                let retained = value.len().min(maximum_bytes.saturating_sub(output.len()));
-                for bytes in value.as_bytes()[..retained].chunks(8192) {
-                    tokio::select! {
-                        biased;
-                        () = cancellation.cancelled() => return Err(cancelled_error()),
-                        sent = progress.send(citadel_execution::ProcessChunk { stream: "stdout", bytes: bytes.to_vec() }) => {
-                            sent.map_err(|_| RuntimeCapabilityError::new(RuntimeErrorKind::Remote, "Build output consumer closed.", false))?;
-                        }
-                    }
-                }
-            }
-            if !output.is_empty() && !output.ends_with('\n') {
-                append_bounded(&mut output, "\n", maximum_bytes);
-            }
-            append_bounded(&mut output, &value, maximum_bytes);
-        }
-    }
-    Ok(output)
-}
-
-fn append_bounded(output: &mut String, value: &str, maximum_bytes: usize) {
-    let available = maximum_bytes.saturating_sub(output.len());
-    if available == 0 {
-        return;
-    }
-    let mut end = value.len().min(available);
-    while end > 0 && !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    output.push_str(&value[..end]);
 }
 
 #[cfg(test)]

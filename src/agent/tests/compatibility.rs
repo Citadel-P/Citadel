@@ -342,6 +342,8 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
             None
         };
         let mut values = HashMap::from([
+            // Fault probes intentionally retain uncertain attempts until fixture teardown.
+            ("CITADEL_AGENT_BUILD_SLOTS", "4".into()),
             (
                 "CITADEL_AGENT_ID",
                 "7fb4c244-485a-4b80-9611-b29e456adf65".into(),
@@ -443,7 +445,12 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
             .await
             .unwrap();
         assert!(archive.status.success());
-        let build = BuildImageRequest {
+        let mut build = BuildImageRequest {
+            admission_authority_id: ready.admission_authority_id.clone(),
+            admission_generation: ready.admission_generation,
+            run_id: uuid::Uuid::now_v7().to_string(),
+            attempt_id: uuid::Uuid::now_v7().to_string(),
+            push_to_registry: true,
             context_archive: archive.stdout,
             dockerfile_archive_path: Some("Dockerfile".into()),
             tags: vec![image.clone()],
@@ -458,7 +465,7 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
             wire.stream(
                 Kind::ImageBuildStream,
                 "/citadel.images.v1.ImageService/Build",
-                build,
+                build.clone(),
             )
             .await,
             true,
@@ -478,11 +485,28 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
         );
         assert!(!docker(&["image", "inspect", &image]).await.contains(SECRET));
         for password in ["wrong-password", PASSWORD] {
+            if password == PASSWORD {
+                build.run_id = uuid::Uuid::now_v7().to_string();
+                build.attempt_id = uuid::Uuid::now_v7().to_string();
+                image_result(
+                    wire.stream(
+                        Kind::ImageBuildStream,
+                        "/citadel.images.v1.ImageService/Build",
+                        build.clone(),
+                    )
+                    .await,
+                    true,
+                )
+                .await;
+            }
             image_result(
                 wire.stream(
                     Kind::ImagePushStream,
                     "/citadel.images.v1.ImageService/Push",
                     PushImageRequest {
+                        admission_authority_id: build.admission_authority_id.clone(),
+                        run_id: build.run_id.clone(),
+                        attempt_id: build.attempt_id.clone(),
                         image_reference: image.clone(),
                         registry_auth: Some(auth(password)),
                     },
@@ -622,6 +646,10 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
         )
         .unwrap();
         let slow = BuildImageRequest {
+            admission_authority_id: ready.admission_authority_id.clone(),
+            admission_generation: ready.admission_generation,
+            run_id: uuid::Uuid::now_v7().to_string(),
+            attempt_id: uuid::Uuid::now_v7().to_string(),
             context_directory: context.display().to_string(),
             dockerfile_path: context.join("Dockerfile").display().to_string(),
             timeout_seconds: 1,
@@ -645,6 +673,8 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
         );
         let mut slow = slow;
         slow.timeout_seconds = 60;
+        slow.run_id = uuid::Uuid::now_v7().to_string();
+        slow.attempt_id = uuid::Uuid::now_v7().to_string();
         let mut cancelled: BoxStream<'_, Result<ImageBuildResponse, Status>> = wire
             .stream(
                 Kind::ImageBuildStream,

@@ -22,12 +22,7 @@ impl BuildAgentPool {
                 } else {
                     text("endpoint", "Endpoint")
                 },
-                format!(
-                    "static-vm x{}",
-                    field("maxWorkers", "MaxWorkers")
-                        .and_then(Value::as_i64)
-                        .unwrap_or(1)
-                ),
+                "self-managed".to_owned(),
             )
         } else {
             (

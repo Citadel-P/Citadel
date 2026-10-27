@@ -111,7 +111,7 @@ pub(super) async fn verify(
         .unwrap();
     assert!(matches!(
         store
-            .enqueue_for_execution(caller.actor_id, id, "Test", &json!({}), None, Some(&draft))
+            .enqueue_with_draft(caller.actor_id, id, "Test", &json!({}), None, Some(&draft))
             .await,
         Err(AutomationError::Conflict(_))
     ));

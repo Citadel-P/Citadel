@@ -10,6 +10,24 @@ pub struct BackupRepositoryOperation<'a> {
 }
 
 pub trait BackupPersistence: Send + Sync {
+    /// Renew only the current owner. Expiry never authorizes takeover of work
+    /// whose cleanup has not been confirmed.
+    fn renew_leases(
+        &self,
+        repository: Uuid,
+        owner: Uuid,
+        attempt: Uuid,
+    ) -> BoxFuture<'_, Result<bool, BackupError>>;
+    fn defer_backup<'a>(
+        &'a self,
+        claim: &'a BackupClaim,
+    ) -> BoxFuture<'a, Result<bool, BackupError>>;
+
+    fn defer_restore<'a>(
+        &'a self,
+        claim: &'a RestoreClaim,
+    ) -> BoxFuture<'a, Result<bool, BackupError>>;
+
     fn create_repository<'a>(
         &'a self,
         actor: ActorId,

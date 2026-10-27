@@ -427,7 +427,9 @@ impl ApplicationGroupReader {
             Topic::Stack(..) | Topic::Stacks | Topic::StackInfo(..) => Stack,
             Topic::SwarmService(..) | Topic::SwarmServices(..) => SwarmService,
             Topic::GitRepo(..) | Topic::GitRepositories => GitRepository,
-            Topic::AutomationAction(..) | Topic::AutomationActions => AutomationAction,
+            Topic::AutomationAction(..) | Topic::AutomationActions | Topic::AutomationRuns(..) => {
+                AutomationAction
+            }
             Topic::BackupRepository(..) | Topic::BackupRepositories => BackupRepository,
             Topic::BackupPolicy(..)
             | Topic::BackupPolicies
@@ -1110,6 +1112,27 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
+            Topic::AutomationRuns(action_id) => {
+                let runs = self
+                    .automation
+                    .list_runs(*action_id, 50)
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::resources::automation::views::AutomationRunView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?;
+                // Send the window identities before the standard row events. This
+                // removes stale rows on rejoin without putting 50 argument payloads
+                // into one WebSocket frame.
+                let ids: Vec<_> = runs.iter().map(|run| run.id).collect();
+                let mut snapshot = rows("AutomationRunInfoUpdated", runs, RowStyle::Update)?;
+                snapshot.events.push(ClientEvent::new(
+                    "AutomationRunWindow",
+                    vec![json!({"actionId": action_id, "ids": ids})],
+                ));
+                Ok(snapshot)
+            }
             Topic::AutomationActions => rows(
                 "AutomationActionInfoUpdated",
                 crate::api::resources::automation::authorized::authorized_actions(

@@ -113,7 +113,7 @@ esac
         .build(
             DockerBuildOptions {
                 source: DockerBuildSource::Archive {
-                    data: &archive,
+                    data: archive.to_vec(),
                     dockerfile: "build/Dockerfile",
                 },
                 tags: &["registry.example/test:latest".into()],
@@ -180,7 +180,7 @@ exit 7
                 .build(
                     DockerBuildOptions {
                         source: DockerBuildSource::Archive {
-                            data: b"archive",
+                            data: b"archive".to_vec(),
                             dockerfile: "Dockerfile",
                         },
                         tags: &[],
@@ -235,7 +235,8 @@ exit 1
     )
     .await;
     let error = result.err().expect("fixture login must fail");
-    assert!(matches!(error, BuildRuntimeError::Command(_)), "{error:?}");
+    assert!(error.is_known_not_started(), "{error:?}");
+    assert!(matches!(error.cause(), BuildRuntimeError::Command(_)));
     let error = error.to_string();
     assert!(
         error.contains("[redacted]"),
@@ -313,11 +314,11 @@ exec sleep 30
         tokio::time::timeout(Duration::from_secs(5), async { tokio::join!(login, stop) })
             .await
             .expect("cancelled login did not finish");
+    let error = result.err().expect("login must be cancelled");
+    assert!(error.is_known_not_started());
     assert!(matches!(
-        result,
-        Err(BuildRuntimeError::Process(
-            citadel_execution::ProcessError::Cancelled
-        ))
+        error.cause(),
+        BuildRuntimeError::Process(citadel_execution::ProcessError::Cancelled)
     ));
     assert!(
         !config.exists(),
@@ -346,7 +347,7 @@ async fn build_rejects_unsafe_dockerfile_paths_and_cancels_running_process() {
             .build(
                 DockerBuildOptions {
                     source: DockerBuildSource::Archive {
-                        data: b"archive",
+                        data: b"archive".to_vec(),
                         dockerfile,
                     },
                     tags: &[],
@@ -358,13 +359,15 @@ async fn build_rejects_unsafe_dockerfile_paths_and_cancels_running_process() {
                 &cancel,
             )
             .await;
-        assert!(matches!(result, Err(BuildRuntimeError::Validation(_))));
+        let error = result.unwrap_err();
+        assert!(error.is_known_not_started());
+        assert!(matches!(error.cause(), BuildRuntimeError::Validation(_)));
     }
     assert!(!fixture.0.join("started").exists());
     let build = session.build(
         DockerBuildOptions {
             source: DockerBuildSource::Archive {
-                data: b"archive",
+                data: b"archive".to_vec(),
                 dockerfile: "Dockerfile",
             },
             tags: &[],

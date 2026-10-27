@@ -168,6 +168,26 @@ impl LookupReader for PostgresLookupStore {
                         .collect::<Result<_, LookupError>>()?,
                 ));
             }
+            if request.target == AutomationAgent {
+                let mut rows = self
+                    .rows(
+                        caller,
+                        Platform,
+                        &format!("{ACCESS} AND resource.connectortype IN ('Agent','EdgeAgent')"),
+                        None,
+                    )
+                    .await?;
+                for row in &mut rows {
+                    row.group = Some("Platforms".into());
+                }
+                let mut pools = self.rows(caller, BuildAgentPool,
+                    &format!("{ACCESS} AND resource.enabled AND resource.providerspec->>'$type'='SelfManagedVm'"), None).await?;
+                for row in &mut pools {
+                    row.group = Some("Agent pools".into());
+                }
+                rows.extend(pools);
+                return Ok(LookupResult::Rows(rows));
+            }
             if matches!(request.target, UserActor | RunAsActor) {
                 let mut rows = sqlx::query("SELECT actorid AS id,name FROM users WHERE $1 OR id=$2 ORDER BY name,id LIMIT 50")
                     .bind(caller.administrator).bind(caller.user_id).fetch_all(&self.pool).await.map_err(storage)?

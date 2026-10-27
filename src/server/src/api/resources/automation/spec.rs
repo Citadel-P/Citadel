@@ -8,3 +8,18 @@ pub enum AutomationRunTrigger {
     Schedule,
     Webhook,
 }
+
+#[derive(utoipa::ToSchema)]
+#[serde(tag = "kind")]
+#[allow(dead_code)]
+pub enum AutomationExecutorSchema {
+    Core,
+    Agent {
+        #[serde(rename = "agentId")]
+        agent_id: uuid::Uuid,
+    },
+    Automatic {
+        #[serde(rename = "agentIds")]
+        agent_ids: Vec<uuid::Uuid>,
+    },
+}

@@ -39,6 +39,18 @@ impl PostgresIdentityStore {
 }
 
 impl IdentityStore for PostgresIdentityStore {
+    fn automation_attempt_active(
+        &self,
+        actor: ActorId,
+        run: Uuid,
+        attempt: Uuid,
+    ) -> BoxFuture<'_, Result<bool, IdentityError>> {
+        Box::pin(async move {
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM actionruns WHERE id=$1 AND attemptid=$2 AND runasactorid=$3 AND status='Running' AND NOT cancelrequested)")
+                .bind(run).bind(attempt).bind(actor.value()).fetch_one(&self.pool).await.map_err(storage)
+        })
+    }
+
     fn setup_required(&self) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
             sqlx::query_scalar::<_, bool>(

@@ -17,10 +17,10 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
     let mut tx = pool.begin().await?;
     // Existing recovery predicates protect live runs until their execution deadlines.
     let before = chrono::Utc::now();
-    if crate::persistence::postgres::automation::recover_interrupted(&mut tx, before)
+    if !crate::persistence::postgres::automation::recover_interrupted(&mut tx, before)
         .await
         .map_err(protocol)?
-        > 0
+        .is_empty()
     {
         changed.extend(["AutomationAction"]);
     }
@@ -66,7 +66,7 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
         ),
         (
             "AutomationAction",
-            "UPDATE actions a SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE controlstate='Processing' AND NOT EXISTS(SELECT 1 FROM actionruns r WHERE r.id=a.currentrunid AND r.status IN('Queued','Running'))",
+            "UPDATE actions a SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE controlstate='Processing' AND NOT EXISTS(SELECT 1 FROM automationexecutorreservations held WHERE held.runid=a.currentrunid) AND NOT EXISTS(SELECT 1 FROM actionruns r WHERE r.id=a.currentrunid AND r.status IN('Queued','Running'))",
         ),
         (
             "BuildProject",
@@ -82,6 +82,9 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
         }
     }
     tx.commit().await?;
+    if let Err(error) = observe_execution_capacity(pool).await {
+        tracing::warn!(%error, "Execution capacity metrics could not be sampled");
+    }
     changed.sort_unstable();
     changed.dedup();
     Ok(changed)
@@ -102,23 +105,19 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
         deleted += sqlx::query(sql).execute(pool).await?.rows_affected();
     }
     if let Some(days) = build_retention_days.filter(|days| *days > 0) {
-        deleted += sqlx::query("DELETE FROM buildruns b WHERE b.id IN(SELECT r.id FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000)")
+        deleted += sqlx::query("DELETE FROM buildruns b WHERE b.id IN(SELECT r.id FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=r.id) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000)")
             .bind(days).execute(pool).await?.rows_affected();
     }
     citadel_runtime::runtime_metrics::RuntimeWork::Retention.units(deleted);
     Ok(deleted)
 }
-/// Short-lived leases and refresh tokens have a separate expiry cadence.
+/// Refresh tokens have a separate expiry cadence. Backup leases are ownership
+/// evidence: only verified cleanup may release them, regardless of expiry.
 pub async fn expire_leases(pool: &PgPool) -> Result<(), sqlx::Error> {
     let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::LeaseExpiry.start();
-    for sql in [
-        "DELETE FROM refreshtokens WHERE id IN(SELECT id FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP ORDER BY expiresat LIMIT 5000)",
-        "DELETE FROM backuprepositoryleases WHERE ctid IN(SELECT ctid FROM backuprepositoryleases WHERE expiresat<CURRENT_TIMESTAMP LIMIT 5000)",
-        "DELETE FROM backupsourceleases WHERE ctid IN(SELECT ctid FROM backupsourceleases WHERE expiresat<CURRENT_TIMESTAMP LIMIT 5000)",
-    ] {
-        let count = sqlx::query(sql).execute(pool).await?.rows_affected();
-        citadel_runtime::runtime_metrics::RuntimeWork::LeaseExpiry.units(count);
-    }
+    let count = sqlx::query("DELETE FROM refreshtokens WHERE id IN(SELECT id FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP ORDER BY expiresat LIMIT 5000)")
+        .execute(pool).await?.rows_affected();
+    citadel_runtime::runtime_metrics::RuntimeWork::LeaseExpiry.units(count);
     Ok(())
 }
 
@@ -182,6 +181,35 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })
     }
+}
+
+// Fixed families and aggregate values only; no run, host or repository labels.
+async fn observe_execution_capacity(pool: &PgPool) -> Result<(), sqlx::Error> {
+    use citadel_runtime::runtime_metrics::RuntimeWork;
+    for (family, query) in [
+        (
+            RuntimeWork::BuildQueue,
+            "SELECT count(*)::bigint,coalesce(greatest(extract(epoch FROM (CURRENT_TIMESTAMP-min(queuedat)))*1000000,0),0)::bigint FROM buildruns WHERE status='Queued'",
+        ),
+        (
+            RuntimeWork::BackupQueue,
+            "SELECT count(*)::bigint,coalesce(greatest(extract(epoch FROM (CURRENT_TIMESTAMP-min(queuedat)))*1000000,0),0)::bigint FROM backupruns WHERE status='Queued'",
+        ),
+        (
+            RuntimeWork::RestoreQueue,
+            "SELECT count(*)::bigint,coalesce(greatest(extract(epoch FROM (CURRENT_TIMESTAMP-min(queuedat)))*1000000,0),0)::bigint FROM backuprestoreruns WHERE status='Queued'",
+        ),
+    ] {
+        let (count, age): (i64, i64) = sqlx::query_as(query).fetch_one(pool).await?;
+        family.queued(count as usize);
+        family.age(std::time::Duration::from_micros(age as u64));
+    }
+    let (builds, data, unresolved): (i64, i64, i64) = sqlx::query_as("SELECT (SELECT count(*) FROM buildexecutorreservations),(SELECT count(*) FROM dataexecutorreservations),(SELECT count(*) FROM buildexecutorreservations WHERE uncertain)+(SELECT count(*) FROM dataexecutorreservations d WHERE EXISTS(SELECT 1 FROM backupruns r WHERE r.id=d.ownerid AND r.status NOT IN ('Queued','Preparing','Running','ApplyingRetention')) OR EXISTS(SELECT 1 FROM backuprestoreruns r WHERE r.id=d.ownerid AND r.status NOT IN ('Queued','Preparing','Running')) OR EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.ownerrunid=d.ownerid AND l.expiresat<CURRENT_TIMESTAMP))")
+        .fetch_one(pool).await?;
+    RuntimeWork::BuildReservations.queued(builds as usize);
+    RuntimeWork::DataReservations.queued(data as usize);
+    RuntimeWork::ExecutionCleanupPending.queued(unresolved as usize);
+    Ok(())
 }
 
 #[cfg(test)]

@@ -28,6 +28,24 @@ type Output<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 
 #[tonic::async_trait]
 impl ImageService for BuildHost {
+    async fn reserve_data(
+        &self,
+        _: Request<DataOperationRequest>,
+    ) -> Result<Response<DataAdmissionResponse>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+    async fn reconcile_data(
+        &self,
+        _: Request<DataOperationRequest>,
+    ) -> Result<Response<ReconcileBuildResponse>, Status> {
+        Err(Status::unimplemented("not used"))
+    }
+    async fn reconcile_build(
+        &self,
+        _: Request<ReconcileBuildRequest>,
+    ) -> Result<Response<ReconcileBuildResponse>, Status> {
+        Err(Status::unimplemented("fixture"))
+    }
     async fn check_build_host(
         &self,
         request: Request<()>,
@@ -62,6 +80,7 @@ impl ImageService for BuildHost {
             operating_system: "linux".into(),
             architecture: "amd64".into(),
             build_kit_version: String::new(),
+            ..Default::default()
         }))
     }
     async fn get(&self, _: Request<GetImageRequest>) -> Result<Response<ImageReply>, Status> {

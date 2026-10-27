@@ -734,3 +734,28 @@ changing or manually queueing a system backup requires an administrator. Workers
 also require the current run-as identity to be an administrator before creating
 the bundle, including scheduled and webhook runs. Delegated workload-backup
 permissions do not grant control-plane export access.
+
+### Capacity and interrupted operations
+
+Backups and restores share Core's tracking limit. Each Agent admits data work
+under its data and shared heavy-work capacities. Items in a multi-volume backup
+run sequentially; a busy host does not increase parallel work on that host.
+
+Repository and source storage stay reserved throughout the operation, including
+retention and cleanup. Locks renew during long runs. Expiry or an unreachable
+Agent does not prove that a helper stopped, so uncertain cleanup keeps storage
+reserved. Citadel rechecks terminal holds against the original Agent and releases
+them only after verified cleanup. Restarting the Agent changes its identity and
+requires operator review of outstanding work; do not treat restart as proof of
+cleanup or rerun a restore over an uncertain destination.
+
+A busy or offline host before execution leaves the run queued and yields capacity
+to other hosts. Once any item starts, Citadel keeps the parent operation's storage
+locks and processes the remaining items in order. Core-local Docker helpers also
+reserve physical daemon capacity, alongside Core's two-slot local work limit.
+
+For retained data operations after an Agent/Core restart, an operator must review
+the original host, stop any remaining helper work and inspect partial restores
+before releasing the exact owner's reservations under maintenance. There is no
+backup cleanup release button; changing a timeout or restarting a process does
+not clear these holds safely.

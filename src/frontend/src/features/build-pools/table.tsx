@@ -125,7 +125,7 @@ const ProviderCell = ({ pool }: { pool: AuthorizedPool }) => {
   const details = aws
     ? `${aws.region} - ${aws.instanceType}`
     : vm
-      ? `${vmTarget ?? 'Unconfigured'} - ${vm.maxWorkers} worker(s)`
+      ? (vmTarget ?? 'Unconfigured')
       : '';
 
   return (

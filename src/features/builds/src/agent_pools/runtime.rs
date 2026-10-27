@@ -20,8 +20,6 @@ struct SelfManagedSpec {
     connection_mode: Option<String>,
     #[serde(default, alias = "Architecture")]
     architecture: Option<String>,
-    #[serde(default, alias = "MaxWorkers")]
-    max_workers: Option<i32>,
 }
 
 pub fn pool_target(spec: &Value) -> Result<BuildPoolTarget, BuildError> {
@@ -36,10 +34,9 @@ pub fn pool_target(spec: &Value) -> Result<BuildPoolTarget, BuildError> {
     if !matches!(
         spec.architecture.as_deref().unwrap_or("Amd64"),
         "Amd64" | "Arm64"
-    ) || !(1..=100).contains(&spec.max_workers.unwrap_or(1))
-    {
+    ) {
         return Err(BuildError::Validation(
-            "Invalid Build Pool architecture or worker count.".into(),
+            "Invalid Build Pool architecture.".into(),
         ));
     }
     match spec.connection_mode.as_deref().unwrap_or("InboundAgent") {
@@ -120,7 +117,6 @@ mod tests {
             json!({"$type":"SelfManagedVm"}),
             json!({"$type":"SelfManagedVm","endpoint":"https://user:password@builder.test"}),
             json!({"$type":"SelfManagedVm","endpoint":"file:///tmp/docker.sock"}),
-            json!({"$type":"SelfManagedVm","connectionMode":"EdgeAgent","maxWorkers":0}),
             json!({"$type":"SelfManagedVm","connectionMode":"wrong"}),
         ] {
             assert!(pool_target(&spec).is_err());

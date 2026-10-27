@@ -57,6 +57,8 @@ pub struct BackupLog {
 
 #[derive(Debug, Clone)]
 pub struct BackupClaim {
+    pub attempt_id: Uuid,
+    pub source_plan: Option<BackupSourcePlan>,
     pub policy: BackupPolicy,
     pub repository: BackupRepository,
     pub run: BackupRun,

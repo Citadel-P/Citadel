@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "34fdb90966835c8e8897eb466120e4231bd5574521673cb2cb6f70ed28ee063d"
+    "sha256": "76329b06ee190466ff203f90540e444d3be9eca74cc57e93f968d70087aee518"
   },
   "migrations": [
     {
       "id": "0001",
       "name": "initial",
       "file": "0001_initial.sql",
-      "sha256": "28e1528600bc02b32fe1a1a2f4ab545710ea85757d3687b34438a4e905c1d729",
+      "sha256": "4fc0f5eb4cd226f3886258d1bf0562ed8690c2e32fde95c185a19227bed183e9",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

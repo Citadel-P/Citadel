@@ -79,6 +79,13 @@ pub(super) async fn verify(
                 operating_system: "linux".into(),
                 architecture: "amd64".into(),
                 build_kit_version: buildkit.into(),
+                build_capacity: 2,
+                data_capacity: 2,
+                heavy_capacity: 2,
+                docker_daemon_id: "pool-fixture-daemon".into(),
+                admission_authority_id: Uuid::now_v7().to_string(),
+                admission_generation: 1,
+                ..Default::default()
             }
             .encode_to_vec(),
         );
@@ -113,9 +120,9 @@ pub(super) async fn verify(
             assert_eq!(
                 stored.last_validation_message.as_deref(),
                 Some(if buildkit.is_empty() {
-                    "Docker 28.0.0 - API 1.49 - linux/amd64"
+                    "Docker 28.0.0 - API 1.49 - linux/amd64 - Build slots 0/2 occupied - Data slots 0/2 occupied - Shared heavy-work limit 2 - Effective build capacity 2 (pool policy 3)"
                 } else {
-                    "Docker 28.0.0 - API 1.49 - linux/amd64 - BuildKit v0.20.2"
+                    "Docker 28.0.0 - API 1.49 - linux/amd64 - BuildKit v0.20.2 - Build slots 0/2 occupied - Data slots 0/2 occupied - Shared heavy-work limit 2 - Effective build capacity 2 (pool policy 3)"
                 })
             );
         }

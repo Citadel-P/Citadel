@@ -71,7 +71,8 @@ pub struct Config {
     pub stats_flush_interval: Duration,
     pub retention_interval: Duration,
     pub stats_batch_size: usize,
-    pub build_parallel_runs: usize,
+    pub build_tracking_slots: usize,
+    pub build_preparation_slots: usize,
     pub build_retention_days: Option<i32>,
     pub backup_workers: BackupWorkerConfig,
     database_source: &'static str,
@@ -80,9 +81,20 @@ pub struct Config {
 #[derive(Debug, Clone)]
 pub struct BackupWorkerConfig {
     pub enabled: bool,
-    pub parallel_runs: usize,
+    pub tracking_slots: usize,
     pub poll_interval: Duration,
     pub schedule_interval: Duration,
+}
+
+fn bounded_slots(name: &'static str, default: usize, maximum: usize) -> Result<usize, ConfigError> {
+    let value = positive_usize(name, default)?;
+    if value > maximum {
+        return Err(ConfigError::Invalid {
+            name,
+            message: format!("must not exceed {maximum}"),
+        });
+    }
+    Ok(value)
 }
 
 fn positive_usize(name: &'static str, default: usize) -> Result<usize, ConfigError> {
@@ -337,7 +349,8 @@ impl Config {
                 60,
             )? as u64),
             stats_batch_size: positive_usize("CITADEL_STATS_BATCH_SIZE", 500)?,
-            build_parallel_runs: positive_usize("CITADEL_BUILDS_MAX_PARALLEL_RUNS", 4)?,
+            build_preparation_slots: bounded_slots("CITADEL_BUILDS_PREPARATION_SLOTS", 2, 16)?,
+            build_tracking_slots: bounded_slots("CITADEL_BUILDS_TRACKING_SLOTS", 16, 128)?,
             build_retention_days: if parse_env("CITADEL_BUILDS_RUN_CLEANUP_ENABLED", true)? {
                 Some(
                     i32::try_from(positive_usize("CITADEL_BUILDS_RUN_RETENTION_DAYS", 90)?)
@@ -351,7 +364,7 @@ impl Config {
             },
             backup_workers: BackupWorkerConfig {
                 enabled: parse_env("CITADEL_BACKUPS_ENABLED", true)?,
-                parallel_runs: positive_usize("CITADEL_BACKUPS_MAX_PARALLEL_RUNS", 2)?,
+                tracking_slots: bounded_slots("CITADEL_BACKUPS_TRACKING_SLOTS", 16, 128)?,
                 poll_interval: Duration::from_secs(positive_usize(
                     "CITADEL_BACKUPS_POLL_INTERVAL_SECONDS",
                     2,
@@ -1154,6 +1167,7 @@ fn automation_options() -> Result<citadel_automation::AutomationOptions, ConfigE
     let options = citadel_automation::AutomationOptions {
         enabled: parse_env("CITADEL_AUTOMATIONS_ENABLED", true)?,
         max_parallel_runs: parse_env("CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS", 4)?,
+        max_remote_runs: parse_env("CITADEL_AUTOMATIONS_MAX_REMOTE_RUNS", 16)?,
         default_timeout_seconds: parse_env("CITADEL_AUTOMATIONS_DEFAULT_TIMEOUT_SECONDS", 300)?,
         max_timeout_seconds: parse_env("CITADEL_AUTOMATIONS_MAX_TIMEOUT_SECONDS", 1800)?,
         poll_interval: Duration::from_secs(parse_env(

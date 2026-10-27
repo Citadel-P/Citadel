@@ -8,7 +8,7 @@ pub async fn automation_runs(
     service: Arc<AutomationService>,
     wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), AutomationError> {
-    let workers = (0..service.options().max_parallel_runs)
+    let workers = (0..service.options().max_parallel_runs + service.options().max_remote_runs)
         .map(|_| run_worker(cancellation.clone(), service.clone(), wake.clone()));
     // Each loop awaits its process cleanup; shutdown never drops active runs.
     for result in futures_util::future::join_all(workers).await {
@@ -62,6 +62,23 @@ pub async fn automation_scheduler(
         tokio::select! {
             () = cancellation.cancelled() => break,
             () = tokio::time::sleep(service.options().schedule_poll_interval) => {}
+        }
+    }
+    Ok(())
+}
+
+// Slow/offline executors must not delay cron scheduling.
+pub async fn automation_cleanup(
+    cancellation: CancellationToken,
+    service: Arc<AutomationService>,
+) -> Result<(), AutomationError> {
+    while !cancellation.is_cancelled() {
+        if let Err(error) = service.reconcile_remote(&cancellation).await {
+            tracing::warn!(%error, "Automation executor cleanup reconciliation failed");
+        }
+        tokio::select! {
+            () = cancellation.cancelled() => break,
+            () = tokio::time::sleep(std::time::Duration::from_secs(30)) => {}
         }
     }
     Ok(())

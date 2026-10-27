@@ -2,6 +2,8 @@ use citadel_database::{MigrationError, MigrationRunner};
 use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
+mod build_attempts;
+
 // Dedicated child databases keep these destructive migration probes independent
 // of each other and of the existing checksum-tampering test.
 struct Database {

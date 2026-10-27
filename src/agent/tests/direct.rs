@@ -119,13 +119,16 @@ async fn mock_docker(
     let result=match path.as_str() {
         "/version"|"/v1.49/version" => json!({"Version":"28.0.0","ApiVersion":"1.49","MinAPIVersion":"1.41","Os":"linux","Arch":"amd64","Components":[{"Name":"BuildKit","Version":"v0.20.0"}]}),
         "/_ping"|"/v1.49/_ping"=>return "OK".into_response(),
+        "/v1.49/info" => json!({"ID":"admission-fixture"}),
         "/v1.49/volumes/create" => {
             state.created.lock().unwrap().push(value.clone());
             json!({"Name":value["Name"],"Driver":"local","Scope":"local","Labels":value["Labels"],"Options":value["DriverOpts"]})
         }
+        "/v1.49/containers/create" if uri.contains("late-helper") => { tokio::time::sleep(Duration::from_secs(2)).await; json!({"Id":"late-helper","Warnings":[]}) },
         "/v1.49/containers/create"=>json!({"Id":"created-container","Warnings":[]}),
         "/v1.49/containers/created-container/start"=>return axum::http::StatusCode::NO_CONTENT.into_response(),
         "/v1.49/containers/created-container/json"=>json!({"Id":"created-container","State":{"Running":true,"Status":"running"}}),
+        "/v1.49/containers/slow/json"=>json!({"Id":"slow","Config":{"Labels":{}}}),
         "/v1.49/containers/slow/start"=>{tokio::time::sleep(Duration::from_secs(5)).await;return axum::http::StatusCode::NO_CONTENT.into_response()},
         "/v1.49/containers/fixture/json"=>json!({"Id":"fixture","SizeRw":9007199254740993i64,"State":{"Status":"running","Running":true,"ExitCode":0},"Config":{"Image":"redis","Env":null,"Labels":null,"ExposedPorts":{"6379/tcp":{}}},"HostConfig":{"ReadonlyRootfs":false,"Memory":0,"PortBindings":{"6379/tcp":[{"HostIp":"127.0.0.1","HostPort":"6379"}]}},"NetworkSettings":{"HairpinMode":false,"Networks":{"frontend":{"NetworkID":"net","Aliases":null,"GlobalIPv6Address":"::1"}}}}),
         "/v1.49/containers/json" if uri.contains("volume") => json!([{"Id":"web", "Names":["/web"], "Image":"alpine", "ImageID":"image", "State":"running", "NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":"net"}}}, "Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]),
@@ -297,6 +300,7 @@ async fn every_direct_rpc_is_registered_and_requires_authentication() {
     let host = Harness::start().await;
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let protos = [
+        include_str!("../../infrastructure/contracts/proto/automation_service.proto"),
         include_str!("../../infrastructure/contracts/proto/container_service.proto"),
         include_str!("../../infrastructure/contracts/proto/deployment_service.proto"),
         include_str!("../../infrastructure/contracts/proto/image_service.proto"),
@@ -338,7 +342,7 @@ async fn every_direct_rpc_is_registered_and_requires_authentication() {
             count += 1;
         }
     }
-    assert_eq!(count, 69);
+    assert_eq!(count, 75);
     assert_eq!(host.state.calls.load(Ordering::SeqCst), 0);
 }
 
@@ -759,7 +763,7 @@ async fn container_batch_attempts_each_id_and_reports_partial_failure() {
     assert!(
         calls
             .iter()
-            .any(|(_, p, _)| p == "/v1.49/containers/missing/start")
+            .any(|(_, p, _)| p == "/v1.49/containers/missing/json")
     );
 }
 
@@ -916,4 +920,355 @@ async fn captured_request_for_another_agent_is_rejected_before_docker() {
         .await
         .unwrap();
     assert_eq!(b.state.created.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn signed_build_validation_failures_release_capacity_and_keep_control_available() {
+    use citadel_contracts::citadel::images::v1::{
+        BuildAdmissionResult, BuildImageRequest, image_service_client::ImageServiceClient,
+    };
+    let host = Harness::start().await;
+    let mut images = ImageServiceClient::new(host.channel().await);
+    let initial = images
+        .check_build_host(signed(
+            &host.id,
+            (),
+            "/citadel.images.v1.ImageService/CheckBuildHost",
+            [10; 16],
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    let calls = host.state.calls.load(Ordering::SeqCst);
+    for nonce in 1..=3 {
+        let request = BuildImageRequest {
+            admission_authority_id: initial.admission_authority_id.clone(),
+            admission_generation: initial.admission_generation,
+            run_id: uuid::Uuid::now_v7().to_string(),
+            attempt_id: uuid::Uuid::now_v7().to_string(),
+            // Fails before invoking Docker, without relying on a host CLI binary.
+            context_directory: format!("/citadel-admission-missing-{}", uuid::Uuid::now_v7()),
+            timeout_seconds: 5,
+            ..Default::default()
+        };
+        let mut stream = images
+            .build(signed(
+                &host.id,
+                request,
+                "/citadel.images.v1.ImageService/Build",
+                [nonce; 16],
+            ))
+            .await
+            .unwrap()
+            .into_inner();
+        let first = stream.message().await.unwrap().unwrap();
+        assert_eq!(
+            first.admission,
+            BuildAdmissionResult::BuildAdmissionAccepted as i32
+        );
+        let failure = stream.message().await.unwrap().unwrap();
+        assert_eq!(failure.status.as_deref(), Some("error"));
+        assert!(failure.error_message.is_some());
+        assert!(stream.message().await.unwrap().is_none());
+    }
+    assert_eq!(host.state.calls.load(Ordering::SeqCst), calls);
+    let capacity = images
+        .check_build_host(signed(
+            &host.id,
+            (),
+            "/citadel.images.v1.ImageService/CheckBuildHost",
+            [4; 16],
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        (
+            capacity.build_capacity,
+            capacity.occupied_builds,
+            capacity.uncertain_builds
+        ),
+        (2, 0, 0)
+    );
+    assert_eq!(capacity.docker_daemon_id, "admission-fixture");
+    assert!(uuid::Uuid::parse_str(&capacity.admission_authority_id).is_ok());
+}
+
+#[tokio::test]
+async fn signed_cleanup_checks_identity_and_fences_a_delayed_build() {
+    use citadel_contracts::citadel::images::v1::*;
+    let host = Harness::start().await;
+    let mut images = image_service_client::ImageServiceClient::new(host.channel().await);
+    let capacity = images
+        .check_build_host(signed(
+            &host.id,
+            (),
+            "/citadel.images.v1.ImageService/CheckBuildHost",
+            [30; 16],
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    let request = ReconcileBuildRequest {
+        run_id: uuid::Uuid::now_v7().to_string(),
+        attempt_id: uuid::Uuid::now_v7().to_string(),
+        admission_authority_id: capacity.admission_authority_id.clone(),
+        admission_generation: capacity.admission_generation,
+        docker_daemon_id: capacity.docker_daemon_id.clone(),
+    };
+    let mut wrong = request.clone();
+    wrong.docker_daemon_id = "wrong-daemon".into();
+    assert_eq!(
+        images
+            .reconcile_build(signed(
+                &host.id,
+                wrong,
+                "/citadel.images.v1.ImageService/ReconcileBuild",
+                [31; 16]
+            ))
+            .await
+            .unwrap_err()
+            .code(),
+        tonic::Code::FailedPrecondition
+    );
+    let mut wrong = request.clone();
+    wrong.admission_authority_id = uuid::Uuid::now_v7().to_string();
+    assert_eq!(
+        images
+            .reconcile_build(signed(
+                &host.id,
+                wrong,
+                "/citadel.images.v1.ImageService/ReconcileBuild",
+                [32; 16]
+            ))
+            .await
+            .unwrap_err()
+            .code(),
+        tonic::Code::FailedPrecondition
+    );
+    for nonce in [33, 34] {
+        let receipt = images
+            .reconcile_build(signed(
+                &host.id,
+                request.clone(),
+                "/citadel.images.v1.ImageService/ReconcileBuild",
+                [nonce; 16],
+            ))
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(
+            receipt.state,
+            BuildCleanupState::BuildCleanupConfirmed as i32
+        );
+    }
+    let calls = host.state.calls.load(Ordering::SeqCst);
+    let mut stream = images
+        .build(signed(
+            &host.id,
+            BuildImageRequest {
+                run_id: request.run_id,
+                attempt_id: request.attempt_id,
+                admission_authority_id: request.admission_authority_id,
+                admission_generation: request.admission_generation,
+                ..Default::default()
+            },
+            "/citadel.images.v1.ImageService/Build",
+            [35; 16],
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        stream.message().await.unwrap().unwrap().admission,
+        BuildAdmissionResult::BuildAdmissionFencedNotStarted as i32
+    );
+    assert!(stream.message().await.unwrap().is_none());
+    assert_eq!(host.state.calls.load(Ordering::SeqCst), calls);
+}
+
+#[tokio::test]
+async fn independent_direct_agents_admit_six_data_operations_and_fence_cleanup() {
+    use citadel_contracts::citadel::images::v1::{image_service_client::ImageServiceClient, *};
+    let mut hosts = Vec::new();
+    let mut accepted = Vec::new();
+    for _ in 0..3 {
+        let host = Harness::start().await;
+        let mut client = ImageServiceClient::new(host.channel().await);
+        let info = client
+            .check_build_host(signed(
+                &host.id,
+                (),
+                "/citadel.images.v1.ImageService/CheckBuildHost",
+                [101; 16],
+            ))
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!((info.data_capacity, info.heavy_capacity), (2, 2));
+        let mut operations = Vec::new();
+        for index in 0..3 {
+            let request = DataOperationRequest {
+                run_id: uuid::Uuid::now_v7().to_string(),
+                attempt_id: uuid::Uuid::now_v7().to_string(),
+                operation_id: uuid::Uuid::now_v7().to_string(),
+                admission_authority_id: info.admission_authority_id.clone(),
+                docker_daemon_id: info.docker_daemon_id.clone(),
+                admission_generation: info.admission_generation,
+            };
+            let response = client
+                .reserve_data(signed(
+                    &host.id,
+                    request.clone(),
+                    "/citadel.images.v1.ImageService/ReserveData",
+                    [102 + index; 16],
+                ))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(
+                response.admission,
+                if index < 2 {
+                    BuildAdmissionResult::BuildAdmissionAccepted
+                } else {
+                    BuildAdmissionResult::BuildAdmissionCapacityBusyNotStarted
+                } as i32
+            );
+            if index < 2 {
+                operations.push(request);
+            }
+        }
+        accepted.push(operations);
+        hosts.push(host);
+    }
+    assert_eq!(accepted.iter().map(Vec::len).sum::<usize>(), 6);
+    for (host, operations) in hosts.iter().zip(accepted) {
+        let mut client = ImageServiceClient::new(host.channel().await);
+        let info = client
+            .check_build_host(signed(
+                &host.id,
+                (),
+                "/citadel.images.v1.ImageService/CheckBuildHost",
+                [110; 16],
+            ))
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(info.occupied_data, 2);
+        for (index, operation) in operations.into_iter().enumerate() {
+            let response = client
+                .reconcile_data(signed(
+                    &host.id,
+                    operation.clone(),
+                    "/citadel.images.v1.ImageService/ReconcileData",
+                    [111 + index as u8; 16],
+                ))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(
+                response.state,
+                BuildCleanupState::BuildCleanupConfirmed as i32
+            );
+            let response = client
+                .reserve_data(signed(
+                    &host.id,
+                    operation,
+                    "/citadel.images.v1.ImageService/ReserveData",
+                    [113 + index as u8; 16],
+                ))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(
+                response.admission,
+                BuildAdmissionResult::BuildAdmissionFencedNotStarted as i32
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_cancelled_helper_create_cannot_be_released_on_an_absent_name() {
+    use citadel_contracts::citadel::{containers::v1::*, images::v1::*};
+    let host = Harness::start().await;
+    let mut images = image_service_client::ImageServiceClient::new(host.channel().await);
+    let info = images
+        .check_build_host(signed(
+            &host.id,
+            (),
+            "/citadel.images.v1.ImageService/CheckBuildHost",
+            [121; 16],
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    let operation = DataOperationRequest {
+        run_id: uuid::Uuid::now_v7().to_string(),
+        attempt_id: uuid::Uuid::now_v7().to_string(),
+        operation_id: uuid::Uuid::now_v7().to_string(),
+        admission_authority_id: info.admission_authority_id.clone(),
+        docker_daemon_id: info.docker_daemon_id,
+        admission_generation: info.admission_generation,
+    };
+    images
+        .reserve_data(signed(
+            &host.id,
+            operation.clone(),
+            "/citadel.images.v1.ImageService/ReserveData",
+            [122; 16],
+        ))
+        .await
+        .unwrap();
+    let mut containers =
+        container_service_client::ContainerServiceClient::new(host.channel().await);
+    let mut create = signed(
+        &host.id,
+        CreateContainerRequest {
+            name: "late-helper".into(),
+            image_id: "fixture".into(),
+            labels: [
+                (
+                    "citadel.data-operation".into(),
+                    operation.operation_id.clone(),
+                ),
+                (
+                    "citadel.data-authority".into(),
+                    operation.admission_authority_id.clone(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        },
+        "/citadel.containers.v1.ContainerService/Create",
+        [123; 16],
+    );
+    create.set_timeout(Duration::from_millis(100));
+    assert!(containers.create(create).await.is_err());
+    let result = images
+        .reconcile_data(signed(
+            &host.id,
+            operation,
+            "/citadel.images.v1.ImageService/ReconcileData",
+            [124; 16],
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(matches!(
+        BuildCleanupState::try_from(result.state).unwrap(),
+        BuildCleanupState::BuildCleanupUncertain | BuildCleanupState::BuildCleanupActive
+    ));
+    let info = images
+        .check_build_host(signed(
+            &host.id,
+            (),
+            "/citadel.images.v1.ImageService/CheckBuildHost",
+            [125; 16],
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(info.occupied_data, 1);
 }
