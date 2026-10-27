@@ -28,26 +28,53 @@ impl UpdateChecker {
         self.0.read().await.clone()
     }
 
-    /// Disabled checks do not even construct an HTTP client.
+    /// Observe committed installation settings; no request runs before setup.
     pub async fn run(
         self,
-        enabled: bool,
+        identity: Arc<citadel_identity::IdentityService>,
         cancellation: CancellationToken,
     ) -> Result<(), std::convert::Infallible> {
-        if !enabled {
-            cancellation.cancelled().await;
-            return Ok(());
-        }
+        let (enabled, receiver) = tokio::sync::watch::channel(false);
+        let policy = watch_policy(identity, enabled, cancellation.clone());
         let current = env!("CITADEL_BUILD_VERSION");
+        tokio::select! {
+            biased;
+            () = policy => Ok(()),
+            result = self.run_enabled(receiver, cancellation, release_endpoint(current), current) => result,
+        }
+    }
+
+    async fn run_enabled(
+        self,
+        mut enabled: tokio::sync::watch::Receiver<bool>,
+        cancellation: CancellationToken,
+        endpoint: &str,
+        current: &str,
+    ) -> Result<(), std::convert::Infallible> {
         loop {
+            if !*enabled.borrow_and_update() {
+                *self.0.write().await = None;
+                tokio::select! {
+                    biased;
+                    () = cancellation.cancelled() => return Ok(()),
+                    result = enabled.changed() => if result.is_err() { return Ok(()); },
+                }
+                continue;
+            }
             tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Ok(()),
-                () = self.check(release_endpoint(current), current) => {}
+                result = enabled.changed() => {
+                    if result.is_err() { return Ok(()); }
+                    continue;
+                },
+                () = self.check(endpoint, current) => {},
             }
             tokio::select! {
+                biased;
                 () = cancellation.cancelled() => return Ok(()),
-                () = tokio::time::sleep(CHECK_INTERVAL) => {}
+                result = enabled.changed() => if result.is_err() { return Ok(()); },
+                () = tokio::time::sleep(CHECK_INTERVAL) => {},
             }
         }
     }
@@ -68,6 +95,44 @@ impl UpdateChecker {
             // Keep the last successful result; an unavailable endpoint does not
             // mean that the installation is up to date.
             Err(error) => tracing::debug!(%error, "Citadel update check unavailable"),
+        }
+    }
+}
+
+async fn watch_policy(
+    identity: Arc<citadel_identity::IdentityService>,
+    enabled: tokio::sync::watch::Sender<bool>,
+    cancellation: CancellationToken,
+) {
+    let mut changes = identity.installation_changes();
+    let mut poll = tokio::time::interval(Duration::from_secs(30));
+    poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    poll.reset();
+    loop {
+        let settings = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return,
+            result = identity.installation_settings() => result,
+        };
+        let next = match settings {
+            Ok(settings) => settings.initialized && settings.update_checks_enabled,
+            Err(error) => {
+                tracing::debug!(%error, "Citadel update-check configuration unavailable");
+                false
+            }
+        };
+        enabled.send_if_modified(|value| {
+            if *value == next {
+                return false;
+            }
+            *value = next;
+            true
+        });
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return,
+            result = changes.changed() => if result.is_err() { return; },
+            _ = poll.tick() => {},
         }
     }
 }

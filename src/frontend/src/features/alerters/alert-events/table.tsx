@@ -9,7 +9,7 @@ import type { AlertEventView, AlertEventPage } from '@/api/generated/api.types';
 import { useAlertEventQuery, useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { Checkbox } from '@/components/ui/checkbox';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useOpenAlertEventSheet } from './alert-task-sheet';
@@ -104,7 +104,7 @@ const columns = (
   {
     accessorKey: 'createdAt',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => <Timestamp value={row.original.createdAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
   },
   {

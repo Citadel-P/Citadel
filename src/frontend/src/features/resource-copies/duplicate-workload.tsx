@@ -1,3 +1,4 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ArrowLeft, ArrowRight, Check, Copy, Database, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
@@ -55,6 +56,7 @@ export function DuplicateWorkload({
   copyEligibility?: ResourceCopyEligibility | null;
   disabled?: boolean;
 }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const operationId = params.get('copyOperation') ?? '';
@@ -443,7 +445,7 @@ export function DuplicateWorkload({
                                   <SelectItem key={snapshot.backupRunItemId} value={snapshot.backupRunItemId}>
                                     {snapshot.policyName} ·{' '}
                                     {snapshot.completedAt
-                                      ? new Date(snapshot.completedAt).toLocaleString()
+                                      ? formatDateTime(snapshot.completedAt, 'exact')
                                       : snapshot.backupRunId.slice(0, 8)}
                                   </SelectItem>
                                 ))}
@@ -517,7 +519,7 @@ export function DuplicateWorkload({
                                 <p key={snapshot.backupRunItemId} className="text-xs text-muted-foreground">
                                   Backup: {snapshot.policyName} ·{' '}
                                   {snapshot.completedAt
-                                    ? new Date(snapshot.completedAt).toLocaleString()
+                                    ? formatDateTime(snapshot.completedAt, 'exact')
                                     : snapshot.backupRunId.slice(0, 8)}
                                 </p>
                               ))}

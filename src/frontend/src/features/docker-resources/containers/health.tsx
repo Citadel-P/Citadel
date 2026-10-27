@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { Activity } from 'lucide-react';
@@ -18,7 +20,6 @@ import {
   currentHealth,
   healthLabels,
   healthTone,
-  healthTime,
   useHealthClock,
   type HealthContainer,
   inactiveHealthCheckMessage,
@@ -30,6 +31,7 @@ export function ContainerHealthSummary({
   container: HealthContainer;
   layout?: 'compact' | 'metrics';
 }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const status = currentHealth(container, useHealthClock());
   const inactiveMessage = inactiveHealthCheckMessage(status);
   if (inactiveMessage) return <p className="text-sm text-muted-foreground">{inactiveMessage}</p>;
@@ -44,11 +46,37 @@ export function ContainerHealthSummary({
       </p>
       <dl
         className={cn('text-xs', layout === 'metrics' ? 'grid grid-cols-3 gap-3 border-t pt-4 sm:gap-5' : 'space-y-2')}>
-        {[
-          ['Observed', healthTime(container.health?.observedAt)],
-          ['Last check', healthTime(container.health?.lastCheckAt)],
-          ['Consecutive failures', container.health?.failingStreak ?? 'Not observed'],
-        ].map(([label, value]) => (
+        {(
+          [
+            [
+              'Observed',
+              container.health?.observedAt ? (
+                <Timestamp
+                  key="observed"
+                  value={container.health.observedAt}
+                  formatDateTime={formatDateTime}
+                  className="text-inherit"
+                />
+              ) : (
+                'Not observed'
+              ),
+            ],
+            [
+              'Last check',
+              container.health?.lastCheckAt ? (
+                <Timestamp
+                  key="last-check"
+                  value={container.health.lastCheckAt}
+                  formatDateTime={formatDateTime}
+                  className="text-inherit"
+                />
+              ) : (
+                'Not observed'
+              ),
+            ],
+            ['Consecutive failures', container.health?.failingStreak ?? 'Not observed'],
+          ] as const
+        ).map(([label, value]) => (
           <div
             key={label}
             className={layout === 'metrics' ? 'min-w-0 space-y-1.5' : 'flex items-baseline justify-between gap-4'}>

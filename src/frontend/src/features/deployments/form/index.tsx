@@ -1,3 +1,4 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
@@ -263,6 +264,7 @@ const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) 
 };
 
 const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {
+  const formatDateTime = useProfileDateTimeFormatter();
   const online = deployment.platformStatus === PlatformStatus.Online;
   const canRead = hasCapability(deployment, 'canRead');
   const { data, dataUpdatedAt, isLoading, isFetching, error } = useRead(
@@ -333,7 +335,10 @@ const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {
           {summary && dataUpdatedAt > 0 && (
             <span className="block mt-1">
               Details last loaded:{' '}
-              <time dateTime={new Date(dataUpdatedAt).toISOString()}>{new Date(dataUpdatedAt).toLocaleString()}</time>.
+              <time dateTime={new Date(dataUpdatedAt).toISOString()} title={formatDateTime(dataUpdatedAt, 'exact')}>
+                {formatDateTime(dataUpdatedAt)}
+              </time>
+              .
             </span>
           )}
         </AlertMessage>

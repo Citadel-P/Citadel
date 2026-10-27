@@ -1,4 +1,4 @@
-import { LoginNextStep } from '@/api/generated/api.types';
+import { LoginNextStep, MfaPolicy } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen, waitFor } from '@testing-library/react';
@@ -28,6 +28,9 @@ describe('InitialSetup', () => {
       setup: { requiresSetup: true, markSetupComplete },
     });
 
+    expect(screen.queryByText(/MFA is optional/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Advanced' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('switch', { name: 'Check for Citadel updates' })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Username'), 'owner');
     await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
     await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple');
@@ -42,6 +45,8 @@ describe('InitialSetup', () => {
       name: 'owner',
       email: 'owner@example.test',
       password: 'correct-horse-battery-staple',
+      updateChecksEnabled: true,
+      mfaPolicy: MfaPolicy.Optional,
     });
     expect(sessionStorage.getItem('redirectTo')).toBe('/stacks?source=first-run');
   }, 10_000);
@@ -116,4 +121,66 @@ it('uses the server minimum rather than a hardcoded fifteen-character rule', asy
   await user.type(screen.getByLabelText('Confirm password'), 'river oak');
   await user.click(screen.getByRole('button', { name: 'Create administrator' }));
   await waitFor(() => expect(completeLogin).toHaveBeenCalledWith('token'));
+});
+
+it('submits the chosen installation settings and follows required MFA enrollment', async () => {
+  const completeLogin = vi.fn();
+  const markSetupComplete = vi.fn();
+  const save = vi.fn();
+  server.use(
+    http.post(initializeUrl, async ({ request }) => {
+      save(await request.json());
+      return HttpResponse.json({ accessToken: null, nextStep: LoginNextStep.EnrollMfa });
+    }),
+  );
+  const { user } = renderCitadel(<InitialSetup />, {
+    auth: { completeLogin },
+    setup: { requiresSetup: true, markSetupComplete },
+  });
+  await user.type(screen.getByLabelText('Username'), 'owner');
+  await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
+  await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple');
+  await user.type(screen.getByLabelText('Confirm password'), 'correct-horse-battery-staple');
+  await user.click(screen.getByRole('button', { name: 'Advanced' }));
+  expect(screen.getByText(/MFA is optional/)).toBeVisible();
+  expect(screen.getByRole('switch', { name: 'Check for Citadel updates' })).toBeChecked();
+  await user.click(screen.getByRole('switch', { name: 'Check for Citadel updates' }));
+  await user.click(screen.getByRole('combobox', { name: 'Two-factor authentication' }));
+  await user.click(screen.getByRole('option', { name: 'Required for administrators' }));
+  expect(screen.queryByText(/MFA is optional/)).not.toBeInTheDocument();
+  expect(screen.getByText(/You’ll enroll after creating/)).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Advanced' }));
+  expect(screen.queryByRole('combobox', { name: 'Two-factor authentication' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/You’ll enroll after creating/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Create administrator' }));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ updateChecksEnabled: false, mfaPolicy: MfaPolicy.RequiredForAdministrators }),
+    ),
+  );
+  expect(markSetupComplete).toHaveBeenCalledOnce();
+  expect(completeLogin).not.toHaveBeenCalled();
+});
+
+it('honors installation restrictions supplied by the server', async () => {
+  const { user } = renderCitadel(<InitialSetup />, {
+    setup: {
+      requiresSetup: true,
+      updateChecksEnabled: false,
+      updateChecksAllowed: false,
+      mfaPolicy: MfaPolicy.RequiredForAllUsers,
+      minimumMfaPolicy: MfaPolicy.RequiredForAllUsers,
+    },
+  });
+  expect(screen.getByRole('button', { name: 'Advanced' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText(/You’ll enroll after creating/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Advanced' }));
+  expect(screen.getByRole('switch', { name: 'Check for Citadel updates' })).toBeDisabled();
+  expect(screen.getByRole('switch', { name: 'Check for Citadel updates' })).not.toBeChecked();
+  expect(screen.getByRole('combobox', { name: 'Two-factor authentication' })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'Two-factor authentication' })).toHaveTextContent(
+    'Required for everyone',
+  );
+  expect(screen.getByText('The minimum policy is set by server configuration.')).toBeVisible();
+  expect(screen.queryByText(/MFA is optional/)).not.toBeInTheDocument();
 });

@@ -1,13 +1,17 @@
+import { FieldSwitch } from '@/components/custom/form-builder';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { mfaPolicyOptions, mfaPolicyDescription } from '@/lib/mfa-policy';
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
-import { LoginNextStep, ProblemDetails } from '@/api/generated/api.types';
+import { ChevronDown, Eye, EyeOff, LoaderCircle } from 'lucide-react';
+import { LoginNextStep, ProblemDetails, MfaPolicy } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getPostLoginRedirect } from '@/features/auth/auth-route-guards';
 import { useAuthContext } from '@/features/auth/auth-context';
-import { MfaAuthShell } from '@/features/auth/mfa/components';
+import { AuthShell } from '@/features/auth/auth-shell';
 import { clearMfaFlowStep, markMfaFlowStep } from '@/features/auth/mfa/mfa-flow';
 import { Constants } from '@/lib/constants';
 import { useMutate } from '@/lib/hooks';
@@ -32,7 +36,17 @@ const initialForm: SetupForm = {
 export default function InitialSetup() {
   const navigate = useNavigate();
   const { completeLogin } = useAuthContext();
-  const { markSetupComplete, passwordMinimumLength, passwordMaximumLength } = useSetupContext();
+  const {
+    markSetupComplete,
+    passwordMinimumLength,
+    passwordMaximumLength,
+    updateChecksEnabled,
+    updateChecksAllowed,
+    mfaPolicy: initialMfaPolicy,
+    minimumMfaPolicy,
+  } = useSetupContext();
+  const [checkForUpdates, setCheckForUpdates] = useState(updateChecksEnabled && updateChecksAllowed);
+  const [mfaPolicy, setMfaPolicy] = useState(initialMfaPolicy);
   const initialize = useMutate('initializeCitadel');
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<SetupErrors>({});
@@ -89,6 +103,8 @@ export default function InitialSetup() {
           name: form.name,
           email: form.email,
           password: form.password,
+          updateChecksEnabled: checkForUpdates && updateChecksAllowed,
+          mfaPolicy,
         },
       });
     } catch (error) {
@@ -120,82 +136,178 @@ export default function InitialSetup() {
   };
 
   return (
-    <MfaAuthShell title="Set up Citadel" description="Create the administrator account for this installation.">
+    <AuthShell title="Set up Citadel" description="Create your administrator account." panelClassName="max-w-md">
       {initialize.validationErrors && <AlertMessage type="warning">{initialize.validationErrors}</AlertMessage>}
 
-      <form className="space-y-5" onSubmit={submit} noValidate>
-        <Field
-          id="setup-name"
-          label="Username"
-          value={form.name}
-          error={errors.name}
-          disabled={initialize.isPending}
-          autoComplete="username"
-          onChange={(value) => updateField('name', value)}
-        />
-        <Field
-          id="setup-email"
-          label="Email address"
-          value={form.email}
-          error={errors.email}
-          disabled={initialize.isPending}
-          type="email"
-          autoComplete="email"
-          onChange={(value) => updateField('email', value)}
-        />
+      <form className="space-y-5" onSubmit={submit} noValidate aria-busy={initialize.isPending}>
+        <fieldset className="min-w-0">
+          <legend className="sr-only">Administrator account</legend>
+          <div className="space-y-4">
+            <Field
+              id="setup-name"
+              name="username"
+              placeholder="e.g. admin"
+              label="Username"
+              value={form.name}
+              error={errors.name}
+              disabled={initialize.isPending}
+              required
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={(value) => updateField('name', value)}
+            />
+            <Field
+              id="setup-email"
+              name="email"
+              placeholder="you@example.com"
+              label="Email address"
+              value={form.email}
+              error={errors.email}
+              disabled={initialize.isPending}
+              required
+              autoCapitalize="none"
+              spellCheck={false}
+              type="email"
+              autoComplete="email"
+              onChange={(value) => updateField('email', value)}
+            />
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium leading-none" htmlFor="setup-password">
-            Password
-          </label>
-          <div className="relative">
-            <Input
-              id="setup-password"
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none" htmlFor="setup-password">
+                Password
+              </label>
+              <div className="relative">
+                <Input
+                  id="setup-password"
+                  name="password"
+                  required
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={form.password}
+                  aria-invalid={Boolean(errors.password)}
+                  aria-describedby="setup-password-description"
+                  className="pr-11"
+                  disabled={initialize.isPending}
+                  onChange={(event) => updateField('password', event.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute inset-y-0 right-0 size-10 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  disabled={initialize.isPending}
+                  onClick={() => setShowPassword((current) => !current)}>
+                  {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                </Button>
+              </div>
+              <p
+                id="setup-password-description"
+                role={errors.password ? 'alert' : undefined}
+                className={errors.password ? 'text-xs font-medium text-destructive' : 'text-xs text-muted-foreground'}>
+                {errors.password || `Use ${passwordMinimumLength} to ${passwordMaximumLength} characters.`}
+              </p>
+            </div>
+
+            <Field
+              id="setup-confirm-password"
+              name="confirmPassword"
+              required
+              label="Confirm password"
+              value={form.confirmPassword}
+              error={errors.confirmPassword}
+              disabled={initialize.isPending}
               type={showPassword ? 'text' : 'password'}
               autoComplete="new-password"
-              value={form.password}
-              aria-invalid={Boolean(errors.password)}
-              className="pr-10"
-              disabled={initialize.isPending}
-              onChange={(event) => updateField('password', event.target.value)}
+              onChange={(value) => updateField('confirmPassword', value)}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="absolute right-1 top-1"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              disabled={initialize.isPending}
-              onClick={() => setShowPassword((current) => !current)}>
-              {showPassword ? <EyeOff /> : <Eye />}
-            </Button>
           </div>
-          {errors.password ? (
-            <p className="text-xs font-medium text-destructive">{errors.password}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Use {passwordMinimumLength} to {passwordMaximumLength} characters.
-            </p>
-          )}
-        </div>
+        </fieldset>
 
-        <Field
-          id="setup-confirm-password"
-          label="Confirm password"
-          value={form.confirmPassword}
-          error={errors.confirmPassword}
-          disabled={initialize.isPending}
-          type={showPassword ? 'text' : 'password'}
-          autoComplete="new-password"
-          onChange={(value) => updateField('confirmPassword', value)}
-        />
+        <Collapsible className="border-y" defaultOpen={false}>
+          <CollapsibleTrigger
+            type="button"
+            disabled={initialize.isPending}
+            className="group flex min-h-12 w-full items-center justify-between gap-3 py-3 text-left text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50">
+            Advanced
+            <ChevronDown aria-hidden="true" className="size-4 shrink-0 group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="space-y-5 pb-5 pt-1">
+              <div className="space-y-2">
+                <div className="min-w-0 space-y-1">
+                  <label htmlFor="setup-update-checks" className="text-sm font-medium">
+                    Check for Citadel updates
+                  </label>
+                  <p id="setup-update-checks-description" className="text-xs leading-relaxed text-muted-foreground">
+                    {updateChecksAllowed
+                      ? 'Checks GitHub for new releases. No telemetry or automatic installation.'
+                      : 'Disabled by server configuration.'}
+                  </p>
+                </div>
+                <FieldSwitch
+                  id="setup-update-checks"
+                  checked={checkForUpdates}
+                  disabled={initialize.isPending || !updateChecksAllowed}
+                  aria-label="Check for Citadel updates"
+                  aria-describedby="setup-update-checks-description"
+                  onChange={setCheckForUpdates}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="space-y-2">
+                  <label htmlFor="setup-mfa-policy" className="text-sm font-medium">
+                    Two-factor authentication
+                  </label>
+                  <Select
+                    value={mfaPolicy}
+                    onValueChange={(value) => setMfaPolicy(value as MfaPolicy)}
+                    disabled={initialize.isPending || minimumMfaPolicy === MfaPolicy.RequiredForAllUsers}>
+                    <SelectTrigger
+                      id="setup-mfa-policy"
+                      className="h-10 w-full"
+                      aria-describedby="setup-mfa-description">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mfaPolicyOptions(minimumMfaPolicy).map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <p id="setup-mfa-description" className="text-xs leading-relaxed text-muted-foreground">
+                    {mfaPolicy === MfaPolicy.Optional
+                      ? 'MFA is optional. Set it up later in Profile → Security.'
+                      : mfaPolicyDescription(mfaPolicy)}
+                  </p>
+                  {mfaPolicy !== MfaPolicy.Optional && (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      You’ll enroll after creating the administrator account.
+                    </p>
+                  )}
+                </div>
+                {minimumMfaPolicy !== MfaPolicy.Optional && (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    The minimum policy is set by server configuration.
+                  </p>
+                )}
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
-        <Button type="submit" className="w-full" disabled={initialize.isPending}>
-          Create administrator
-          {initialize.isPending && <LoaderCircle className="animate-spin" />}
+        <Button type="submit" className="h-10 w-full" disabled={initialize.isPending}>
+          {initialize.isPending && <LoaderCircle aria-hidden="true" className="motion-safe:animate-spin" />}
+          {initialize.isPending ? 'Creating administrator…' : 'Create administrator'}
         </Button>
       </form>
-    </MfaAuthShell>
+    </AuthShell>
   );
 }
 
@@ -222,10 +334,15 @@ function Field({
         id={id}
         value={value}
         aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
         onChange={(event) => onChange(event.target.value)}
         {...inputProps}
       />
-      {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+      {error && (
+        <p id={`${id}-error`} role="alert" className="text-xs font-medium text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

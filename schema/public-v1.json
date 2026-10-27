@@ -122,6 +122,7 @@
           "StackGitAutoDeployFailed",
           "StackImported",
           "StackWebhookReceived",
+          "InstallationSettingsUpdated",
           "InitialAdministratorCreated",
           "UserProfileUpdated",
           "UserPreferencesUpdated",
@@ -12906,6 +12907,36 @@
       },
       "PublicActivityEventInfo": {
         "oneOf": [
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstallationSettingsUpdated"
+                ],
+                "type": "string"
+              },
+              "mfaPolicy": {
+                "type": "string"
+              },
+              "previousMfaPolicy": {
+                "type": "string"
+              },
+              "previousUpdateChecksEnabled": {
+                "type": "boolean"
+              },
+              "updateChecksEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "previousUpdateChecksEnabled",
+              "updateChecksEnabled",
+              "previousMfaPolicy",
+              "mfaPolicy",
+              "$type"
+            ],
+            "type": "object"
+          },
           {
             "properties": {
               "$type": {

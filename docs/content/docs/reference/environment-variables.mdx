@@ -30,7 +30,7 @@ sharing an installation.
 | `CITADEL_JWT_ISSUER`, `CITADEL_JWT_AUDIENCE` | Optional override | Token validation identities; otherwise derived from the public URL |
 | `CITADEL_JWT_KEY` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
 | `CITADEL_SECRETS_ENCRYPTION_KEY` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
-| `CITADEL_MFA_POLICY` | Optional | `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers` |
+| `CITADEL_MFA_POLICY` | Optional | Minimum installation MFA policy: `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers`; the UI can strengthen it |
 | `CITADEL_PASSWORDS_MINIMUM_LENGTH` | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
 | `CITADEL_HTTP_OPENAPI_ENABLED` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
@@ -49,7 +49,7 @@ restart alone does not load a changed Compose environment.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Allow Core to check public releases in its installed channel at startup and every six hours; no automatic installation |
+| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit release checks controlled by setup or administrator Profile settings; false forces them off. Checks start after setup and repeat every six hours; no automatic installation |
 
 No Citadel telemetry or instance data is sent. GitHub receives normal connection
 information, including the outbound IP address. See

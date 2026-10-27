@@ -65,6 +65,12 @@ pub struct SetupStatusView {
     pub requires_setup: bool,
     pub password_minimum_length: usize,
     pub password_maximum_length: usize,
+    pub update_checks_enabled: bool,
+    pub update_checks_allowed: bool,
+    #[schema(value_type = crate::api::resources::vocabulary::MfaPolicySchema)]
+    pub mfa_policy: citadel_identity::MfaPolicy,
+    #[schema(value_type = crate::api::resources::vocabulary::MfaPolicySchema)]
+    pub minimum_mfa_policy: citadel_identity::MfaPolicy,
 }
 
 impl From<citadel_identity::SetupStatus> for SetupStatusView {
@@ -73,6 +79,35 @@ impl From<citadel_identity::SetupStatus> for SetupStatusView {
             requires_setup: value.requires_setup,
             password_minimum_length: value.password_minimum_length,
             password_maximum_length: value.password_maximum_length,
+            update_checks_enabled: value.update_checks_enabled,
+            update_checks_allowed: value.update_checks_allowed,
+            mfa_policy: value.mfa_policy,
+            minimum_mfa_policy: value.minimum_mfa_policy,
+        }
+    }
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallationSettingsView {
+    pub update_checks_enabled: bool,
+    pub update_checks_allowed: bool,
+    #[schema(value_type = crate::api::resources::vocabulary::MfaPolicySchema)]
+    pub mfa_policy: citadel_identity::MfaPolicy,
+    #[schema(value_type = crate::api::resources::vocabulary::MfaPolicySchema)]
+    pub minimum_mfa_policy: citadel_identity::MfaPolicy,
+}
+
+impl InstallationSettingsView {
+    pub fn new(
+        settings: citadel_identity::InstallationSettings,
+        policy: citadel_identity::InstallationPolicy,
+    ) -> Self {
+        Self {
+            update_checks_enabled: settings.update_checks_enabled,
+            update_checks_allowed: policy.update_checks_allowed,
+            mfa_policy: settings.mfa_policy,
+            minimum_mfa_policy: policy.minimum_mfa_policy,
         }
     }
 }

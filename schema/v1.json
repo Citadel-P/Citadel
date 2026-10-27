@@ -133,6 +133,7 @@
           "StackGitAutoDeployFailed",
           "StackImported",
           "StackWebhookReceived",
+          "InstallationSettingsUpdated",
           "InitialAdministratorCreated",
           "UserProfileUpdated",
           "UserPreferencesUpdated",
@@ -11521,11 +11522,27 @@
           "email": {
             "type": "string"
           },
+          "mfaPolicy": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MfaPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "type": "string"
           },
           "password": {
             "type": "string"
+          },
+          "updateChecksEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
         "required": [
@@ -11544,6 +11561,29 @@
         },
         "required": [
           "license"
+        ],
+        "type": "object"
+      },
+      "InstallationSettingsView": {
+        "properties": {
+          "mfaPolicy": {
+            "$ref": "#/components/schemas/MfaPolicy"
+          },
+          "minimumMfaPolicy": {
+            "$ref": "#/components/schemas/MfaPolicy"
+          },
+          "updateChecksAllowed": {
+            "type": "boolean"
+          },
+          "updateChecksEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "updateChecksEnabled",
+          "updateChecksAllowed",
+          "mfaPolicy",
+          "minimumMfaPolicy"
         ],
         "type": "object"
       },
@@ -14163,6 +14203,28 @@
         },
         "type": "object"
       },
+      "PatchInstallationSettingsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "mfaPolicy": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MfaPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updateChecksEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "PatchOidcProviderMetadataRequest": {
         "additionalProperties": false,
         "properties": {
@@ -14445,6 +14507,16 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UserContentLayout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dateDisplay": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UserDateDisplay"
               },
               {
                 "type": "null"
@@ -15476,6 +15548,36 @@
       },
       "PublicActivityEventInfo": {
         "oneOf": [
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstallationSettingsUpdated"
+                ],
+                "type": "string"
+              },
+              "mfaPolicy": {
+                "type": "string"
+              },
+              "previousMfaPolicy": {
+                "type": "string"
+              },
+              "previousUpdateChecksEnabled": {
+                "type": "boolean"
+              },
+              "updateChecksEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "previousUpdateChecksEnabled",
+              "updateChecksEnabled",
+              "previousMfaPolicy",
+              "mfaPolicy",
+              "$type"
+            ],
+            "type": "object"
+          },
           {
             "properties": {
               "$type": {
@@ -21810,6 +21912,12 @@
       },
       "SetupStatusView": {
         "properties": {
+          "mfaPolicy": {
+            "$ref": "#/components/schemas/MfaPolicy"
+          },
+          "minimumMfaPolicy": {
+            "$ref": "#/components/schemas/MfaPolicy"
+          },
           "passwordMaximumLength": {
             "minimum": 0,
             "type": "integer"
@@ -21820,12 +21928,22 @@
           },
           "requiresSetup": {
             "type": "boolean"
+          },
+          "updateChecksAllowed": {
+            "type": "boolean"
+          },
+          "updateChecksEnabled": {
+            "type": "boolean"
           }
         },
         "required": [
           "requiresSetup",
           "passwordMinimumLength",
-          "passwordMaximumLength"
+          "passwordMaximumLength",
+          "updateChecksEnabled",
+          "updateChecksAllowed",
+          "mfaPolicy",
+          "minimumMfaPolicy"
         ],
         "type": "object"
       },
@@ -27056,6 +27174,13 @@
         ],
         "type": "string"
       },
+      "UserDateDisplay": {
+        "enum": [
+          "Relative",
+          "Exact"
+        ],
+        "type": "string"
+      },
       "UserDateTimeFormat": {
         "enum": [
           "System",
@@ -27068,6 +27193,9 @@
         "properties": {
           "contentLayout": {
             "$ref": "#/components/schemas/UserContentLayout"
+          },
+          "dateDisplay": {
+            "$ref": "#/components/schemas/UserDateDisplay"
           },
           "dateTimeFormat": {
             "$ref": "#/components/schemas/UserDateTimeFormat"
@@ -27100,6 +27228,7 @@
         "required": [
           "timeZone",
           "dateTimeFormat",
+          "dateDisplay",
           "theme",
           "themeColor",
           "font",
@@ -50391,6 +50520,192 @@
         ],
         "x-citadel-principal": "actor",
         "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/installation/settings": {
+      "get": {
+        "operationId": "getInstallationSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationSettingsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get installation settings (administrator)",
+        "tags": [
+          "Setup"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      },
+      "patch": {
+        "operationId": "patchInstallationSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchInstallationSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationSettingsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update installation settings (administrator)",
+        "tags": [
+          "Setup"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false,
         "x-citadel-setup-exempt": false
       }
     },

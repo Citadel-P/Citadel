@@ -1,6 +1,6 @@
 import { SwarmConfigView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -72,7 +72,7 @@ export const ConfigsTable = ({
       {
         accessorKey: 'createdAt',
         header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-        cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
+        cell: ({ row }) => <Timestamp value={row.original.createdAt} formatDateTime={formatDateTime} />,
       },
       {
         id: 'actions',

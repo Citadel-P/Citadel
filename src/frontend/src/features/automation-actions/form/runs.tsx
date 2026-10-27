@@ -4,7 +4,9 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { fromNow } from '@/lib/dayjs.helper';
+import { Timestamp } from '@/components/custom/timestamp';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useMutate, useRead } from '@/lib/hooks';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,6 +16,7 @@ import { toast } from 'sonner';
 import { LogViewer } from '@/components/custom/log-viewer';
 
 export function AutomationActionRunsTab({ resource }: { resource: AuthorizedAction }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const [logRunId, setLogRunId] = useState<string | undefined>();
   const queryClient = useQueryClient();
   const cancelRun = useMutate('cancelAutomationActionRun');
@@ -54,8 +57,8 @@ export function AutomationActionRunsTab({ resource }: { resource: AuthorizedActi
   );
 
   const columns = useMemo(
-    () => runColumns(setLogRunId, handleCancel, cancelRun.isPending),
-    [cancelRun.isPending, handleCancel],
+    () => runColumns(setLogRunId, handleCancel, cancelRun.isPending, formatDateTime),
+    [cancelRun.isPending, handleCancel, formatDateTime],
   );
 
   return (
@@ -65,6 +68,7 @@ export function AutomationActionRunsTab({ resource }: { resource: AuthorizedActi
       <AutomationRunLogsSheet
         open={Boolean(logRunId)}
         run={selectedRun}
+        formatDateTime={formatDateTime}
         logs={logs.data?.data.logs ?? ''}
         isLoading={logs.isLoading}
         onOpenChange={(open) => {
@@ -79,6 +83,7 @@ const runColumns = (
   onSelectLog: (id: string) => void,
   onCancel: (run: AutomationRunView) => void,
   cancelPending: boolean,
+  formatDateTime: DateTimeFormatter,
 ): ColumnDef<StockFeatures, AutomationRunView>[] => [
   {
     accessorKey: 'status',
@@ -104,7 +109,7 @@ const runColumns = (
   {
     accessorKey: 'queuedAt',
     header: ({ column }) => <SortableCell cellName="Queued" column={column} />,
-    cell: ({ row }) => <span className="text-sm">{fromNow(row.original.queuedAt)}</span>,
+    cell: ({ row }) => <Timestamp value={row.original.queuedAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => String(rowA.original.queuedAt).localeCompare(String(rowB.original.queuedAt)),
   },
   {
@@ -167,18 +172,20 @@ function isActiveRun(run: Pick<AutomationRunView, 'status'>) {
 function AutomationRunLogsSheet({
   open,
   run,
+  formatDateTime,
   logs,
   isLoading,
   onOpenChange,
 }: {
   open: boolean;
   run?: AutomationRunView;
+  formatDateTime: DateTimeFormatter;
   logs: string;
   isLoading: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const description = run
-    ? `${run.trigger} run queued ${fromNow(run.queuedAt)}`
+    ? `${run.trigger} run queued ${formatDateTime(run.queuedAt, 'exact')}`
     : isLoading
       ? 'Loading run logs...'
       : 'Run logs';

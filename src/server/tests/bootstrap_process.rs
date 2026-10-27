@@ -95,6 +95,7 @@ impl Fixture {
             .env("CITADEL_DATABASE_URL", &self.database_url)
             .env("CITADEL_TRANSPORT_MODE", "Disabled")
             .env("CITADEL_HTTP_OPENAPI_ENABLED", "true")
+            .env("CITADEL_UPDATE_CHECKS_ENABLED", "false")
             // Lifecycle assertions below intentionally inspect structured log fields.
             .env("CITADEL_LOG_FORMAT", "json")
             // A slow fresh-install migration can log the entire schema and fill

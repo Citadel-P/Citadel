@@ -95,6 +95,21 @@ database_string_enum! {
     }
 }
 
+impl MfaPolicy {
+    #[must_use]
+    pub const fn at_least(self, minimum: Self) -> Self {
+        match (self, minimum) {
+            (Self::RequiredForAllUsers, _) | (_, Self::RequiredForAllUsers) => {
+                Self::RequiredForAllUsers
+            }
+            (Self::RequiredForAdministrators, _) | (_, Self::RequiredForAdministrators) => {
+                Self::RequiredForAdministrators
+            }
+            _ => Self::Optional,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct MfaConfiguration {
     pub policy: MfaPolicy,

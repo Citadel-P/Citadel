@@ -1,3 +1,5 @@
+vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => String }));
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContainerHealth } from './container-health';

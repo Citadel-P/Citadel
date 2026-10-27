@@ -76,7 +76,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { useRead } from '@/lib/hooks';
 import { useTaskSheet } from '@/lib/atoms';
-import { fromNow } from '@/lib/dayjs.helper';
+import { Timestamp } from '@/components/custom/timestamp';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { MonacoDiff } from '@/lib/monaco';
 import { GitRepositoryCompareAction } from '@/features/git-repos/browser/compare-dialog';
@@ -522,6 +523,7 @@ const StackContainersRuntime = ({
 };
 
 const StackReleasesTab = ({ stack }: { stack: StackView }) => {
+  const formatDateTime = useProfileDateTimeFormatter();
   const { data, isLoading } = useRead('listStackReleases', { stackId: stack.id });
   const { open: openSheet } = useTaskSheet('Stack');
   const [previewRelease, setPreviewRelease] = useState<StackReleaseView | null>(null);
@@ -549,7 +551,7 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
       {
         accessorKey: 'createdAt',
         header: () => <span>Created At</span>,
-        cell: ({ row }) => <span className="text-[13px]">{fromNow(row.original.createdAt)}</span>,
+        cell: ({ row }) => <Timestamp value={row.original.createdAt} formatDateTime={formatDateTime} />,
       },
       {
         id: 'actions',
@@ -593,7 +595,7 @@ const StackReleasesTab = ({ stack }: { stack: StackView }) => {
         },
       },
     ],
-    [canRollback, openSheet, stack.id, stack.name],
+    [canRollback, openSheet, stack.id, stack.name, formatDateTime],
   );
 
   return (
@@ -701,6 +703,7 @@ const StackReleaseSourceCell = ({ release }: { release: StackReleaseView }) => {
 };
 
 const StackReleaseSourceDetails = ({ release }: { release: StackReleaseView }) => {
+  const formatDateTime = useProfileDateTimeFormatter();
   const source = release.source;
 
   if (!source || source.sourceType !== StackSource.Git) {
@@ -713,8 +716,7 @@ const StackReleaseSourceDetails = ({ release }: { release: StackReleaseView }) =
         />
         <ReleaseMetaItem
           icon={<Calendar className="size-3.5" />}
-          value={fromNow(release.createdAt)}
-          title={String(release.createdAt)}
+          value={<Timestamp value={release.createdAt} formatDateTime={formatDateTime} className="text-inherit" />}
         />
         <ReleaseMetaItem icon={<FileText className="size-3.5" />} value={source?.sourceType ?? 'Stored spec'} />
       </div>
@@ -731,8 +733,7 @@ const StackReleaseSourceDetails = ({ release }: { release: StackReleaseView }) =
         />
         <ReleaseMetaItem
           icon={<Calendar className="size-3.5" />}
-          value={fromNow(release.createdAt)}
-          title={String(release.createdAt)}
+          value={<Timestamp value={release.createdAt} formatDateTime={formatDateTime} className="text-inherit" />}
         />
         <ReleaseMetaItem icon={<GitBranch className="size-3.5" />} value={source.gitRepositoryName ?? '-'} />
         <ReleaseMetaItem icon={<Route className="size-3.5" />} value={source.branch ?? '-'} />
@@ -755,10 +756,12 @@ const StackReleaseSourceDetails = ({ release }: { release: StackReleaseView }) =
   );
 };
 
-const ReleaseMetaItem = ({ icon, value, title }: { icon: ReactNode; value: string; title?: string | null }) => (
+const ReleaseMetaItem = ({ icon, value, title }: { icon: ReactNode; value: ReactNode; title?: string | null }) => (
   <div className="flex min-w-0 items-center gap-2">
     <span className="shrink-0 text-foreground/80">{icon}</span>
-    <span className="min-w-0 truncate text-muted-foreground" title={title ?? value}>
+    <span
+      className="min-w-0 truncate text-muted-foreground"
+      title={title ?? (typeof value === 'string' ? value : undefined)}>
       {value}
     </span>
   </div>

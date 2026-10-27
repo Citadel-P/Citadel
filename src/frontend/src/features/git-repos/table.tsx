@@ -10,7 +10,7 @@ import { useMemo } from 'react';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { TagChips } from '@/features/tags/components';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
@@ -62,7 +62,7 @@ const columns = (
   {
     accessorKey: 'createdAt',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <TimestampCell value={row.original.createdAt} formatDateTime={formatDateTime} />,
+    cell: ({ row }) => <Timestamp value={row.original.createdAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => String(rowA.original.createdAt).localeCompare(String(rowB.original.createdAt)),
   },
   {

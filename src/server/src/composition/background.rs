@@ -61,7 +61,7 @@ pub async fn spawn_all(
         state
             .updates
             .clone()
-            .run(config.updates_enabled, cancellation.child_token()),
+            .run(state.identity.clone(), cancellation.child_token()),
     );
     supervisor.spawn(
         "service-account-last-used",

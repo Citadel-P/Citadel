@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { SwarmNodeAgentCoverage } from '@/api/generated/api.types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -20,6 +22,7 @@ export const SwarmNodeAgentCoveragePanel = ({
   platformId: string;
   platformName: string;
 }) => {
+  const formatDateTime = useProfileDateTimeFormatter();
   const args = useMemo(() => ({ id: platformId }), [platformId]);
   const query = useRead('getSwarmNodeAgentCoverage', args);
   const queryClient = useQueryClient();
@@ -133,8 +136,13 @@ export const SwarmNodeAgentCoveragePanel = ({
         <span>{coverage.unschedulableNodes} unschedulable</span>
         <span>{coverage.staleNodes} stale</span>
         {coverage.lastMembershipReconciliationAtUtc && (
-          <span title={new Date(coverage.lastMembershipReconciliationAtUtc).toLocaleString()}>
-            Membership last reconciled {new Date(coverage.lastMembershipReconciliationAtUtc).toLocaleString()}
+          <span>
+            Membership last reconciled{' '}
+            <Timestamp
+              value={coverage.lastMembershipReconciliationAtUtc}
+              formatDateTime={formatDateTime}
+              className="text-inherit"
+            />
           </span>
         )}
       </div>

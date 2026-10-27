@@ -84,6 +84,7 @@ impl ProfileService {
         require_human(principal)?;
         if matches!(&request.time_zone, PatchField::Missing)
             && matches!(&request.date_time_format, PatchField::Missing)
+            && matches!(&request.date_display, PatchField::Missing)
             && matches!(&request.theme, PatchField::Missing)
             && matches!(&request.theme_color, PatchField::Missing)
             && matches!(&request.font, PatchField::Missing)
@@ -97,6 +98,7 @@ impl ProfileService {
         }
         reject_null(&request.time_zone, "timeZone")?;
         reject_null(&request.date_time_format, "dateTimeFormat")?;
+        reject_null(&request.date_display, "dateDisplay")?;
         reject_null(&request.theme, "theme")?;
         reject_null(&request.theme_color, "themeColor")?;
         reject_null(&request.font, "font")?;
@@ -125,6 +127,10 @@ impl ProfileService {
                 &UserPreferencesUpdate {
                     time_zone,
                     date_time_format,
+                    date_display: match request.date_display {
+                        PatchField::Value(value) => Some(value),
+                        _ => None,
+                    },
                     theme,
                     theme_color: match request.theme_color {
                         PatchField::Value(value) => Some(value),
@@ -355,6 +361,7 @@ pub(super) fn default_preferences() -> UserPreferencesDetails {
     UserPreferencesDetails {
         time_zone: None,
         date_time_format: UserDateTimeFormat::System,
+        date_display: UserDateDisplay::Relative,
         theme: UserTheme::System,
         theme_color: UserThemeColor::default(),
         font: UserUiFont::Geist,
@@ -370,6 +377,7 @@ pub(super) fn persisted_preferences(preferences: UserPreferences) -> UserPrefere
     UserPreferencesDetails {
         time_zone: Some(preferences.time_zone().to_owned()),
         date_time_format: preferences.date_time_format(),
+        date_display: preferences.date_display(),
         theme: preferences.theme(),
         theme_color: preferences.theme_color(),
         font: preferences.font(),

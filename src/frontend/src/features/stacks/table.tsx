@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { workloadHealthColumn, useHealthColumn } from '@/features/workload-health/table';
 import { backupColumn } from '@/features/backup-policies/table-coverage';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -22,7 +24,6 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
 import { truncate } from '@/lib/truncate';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { fromNow } from '@/lib/dayjs.helper';
 import { formatId } from '@/lib/utils';
 import { FileText, GitBranch } from 'lucide-react';
 import { TagChips } from '@/features/tags/components';
@@ -203,6 +204,7 @@ const StackSourceCell = ({ stack }: { stack: StackView }) => {
 };
 
 const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
+  const formatDateTime = useProfileDateTimeFormatter();
   const states = getStackImageUpdateStates(stack);
   const gitState = getStackGitUpdateState(stack);
   const status = getStackUpdateStatus(stack);
@@ -226,7 +228,11 @@ const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
         <div className="flex justify-between items-start mb-4">
           <div className="space-y-1">
             <h4 className="text-sm font-medium leading-none text-foreground">{stack.name}</h4>
-            {updatedAt && <p className="text-xs text-muted-foreground">Checked {fromNow(new Date(updatedAt))}</p>}
+            {updatedAt && (
+              <p className="text-xs text-muted-foreground">
+                Checked <Timestamp value={updatedAt} formatDateTime={formatDateTime} className="text-inherit" />
+              </p>
+            )}
           </div>
           <UpdateStatusIcon updateStatus={status} />
         </div>

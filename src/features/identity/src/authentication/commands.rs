@@ -6,6 +6,10 @@ pub struct InitializeCitadel {
     pub name: String,
     pub email: String,
     pub password: String,
+    #[serde(default)]
+    pub update_checks_enabled: Option<bool>,
+    #[serde(default)]
+    pub mfa_policy: Option<crate::MfaPolicy>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -41,4 +45,13 @@ impl std::fmt::Debug for Login {
             .field("password", &"[REDACTED]")
             .finish()
     }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PatchInstallationSettings {
+    #[serde(default)]
+    pub update_checks_enabled: citadel_primitives::PatchField<bool>,
+    #[serde(default)]
+    pub mfa_policy: citadel_primitives::PatchField<crate::MfaPolicy>,
 }

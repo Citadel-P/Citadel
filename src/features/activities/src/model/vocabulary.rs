@@ -130,6 +130,7 @@ database_string_enum! {
         StackGitAutoDeployFailed,
         StackImported,
         StackWebhookReceived,
+        InstallationSettingsUpdated,
         InitialAdministratorCreated,
         UserProfileUpdated,
         UserPreferencesUpdated,
@@ -280,7 +281,8 @@ impl ActivityEventType {
             | Self::StackGitAutoDeployFailed
             | Self::StackImported
             | Self::StackWebhookReceived => ActivityResourceType::Stack,
-            Self::InitialAdministratorCreated
+            Self::InstallationSettingsUpdated
+            | Self::InitialAdministratorCreated
             | Self::UserProfileUpdated
             | Self::UserPreferencesUpdated
             | Self::UserPasswordChanged

@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { useContext, useState } from 'react';
 import { Activity } from 'lucide-react';
 import {
@@ -12,7 +14,6 @@ import {
   HealthLabel,
   healthLabels,
   healthTone,
-  healthTime,
   useHealthClock,
   inactiveHealthCheckMessage,
 } from '@/components/custom/health-status';
@@ -93,6 +94,7 @@ export function WorkloadHealthCard({
 }
 
 function HealthSummary({ resource, unavailable }: { resource: HealthResource; unavailable: boolean }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const health = resource.probeHealth;
   const now = useHealthClock();
   const coverageFresh = health && workloadHealthCoverageFresh(health, now);
@@ -145,7 +147,9 @@ function HealthSummary({ resource, unavailable }: { resource: HealthResource; un
               {attention.map((reason) => attentionLabels[reason]).join(' · ')}
             </p>
           )}
-          <p className="text-xs text-muted-foreground">Observed {healthTime(health.observedAt)}</p>
+          <p className="text-xs text-muted-foreground">
+            Observed <Timestamp value={health.observedAt} formatDateTime={formatDateTime} className="text-inherit" />
+          </p>
         </>
       )}
     </div>
@@ -268,6 +272,7 @@ export function WorkloadMemberHealthCard({
 }) {
   const now = useHealthClock();
   const live = useContext(RealtimeContext);
+  const formatDateTime = useProfileDateTimeFormatter();
   const unavailable = platformStatus !== PlatformStatus.Online || !!(live && live.liveConnectionState !== 'connected');
   const status = unavailable ? ContainerHealthStatus.Unknown : currentHealth(memberHealth(member), now);
   const tone = healthTone(status);
@@ -285,7 +290,14 @@ export function WorkloadMemberHealthCard({
           {inactiveHealthCheckMessage(status) && (
             <p className="text-muted-foreground">{inactiveHealthCheckMessage(status)}</p>
           )}
-          <p className="text-xs text-muted-foreground">Observed {healthTime(member.observation?.observedAt)}</p>
+          <p className="text-xs text-muted-foreground">
+            Observed{' '}
+            <Timestamp
+              value={member.observation?.observedAt}
+              formatDateTime={formatDateTime}
+              className="text-inherit"
+            />
+          </p>
           {member.nodeId && <p className="text-xs text-muted-foreground">Node {member.nodeId}</p>}
         </div>
       }

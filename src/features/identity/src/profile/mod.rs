@@ -28,8 +28,8 @@ mod service;
 pub mod model;
 
 pub use model::{
-    UserAppearance, UserContentLayout, UserDateTimeFormat, UserPreferences, UserTheme,
-    UserThemeColor, UserUiDensity, UserUiFont, UserUiRadius,
+    UserAppearance, UserContentLayout, UserDateDisplay, UserDateTimeFormat, UserPreferences,
+    UserTheme, UserThemeColor, UserUiDensity, UserUiFont, UserUiRadius,
 };
 
 pub use commands::{

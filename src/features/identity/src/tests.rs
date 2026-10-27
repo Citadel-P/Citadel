@@ -81,6 +81,7 @@ fn preference_updates_preserve_user_ownership() {
         user_id,
         "UTC".to_owned(),
         UserDateTimeFormat::System,
+        UserDateDisplay::Relative,
         UserTheme::System,
         created_at,
     );
@@ -88,6 +89,7 @@ fn preference_updates_preserve_user_ownership() {
     preferences.update(
         "Europe/Paris".to_owned(),
         UserDateTimeFormat::TwentyFourHour,
+        UserDateDisplay::Exact,
         UserTheme::Dark,
         updated_at,
     );
@@ -99,6 +101,7 @@ fn preference_updates_preserve_user_ownership() {
         UserDateTimeFormat::TwentyFourHour
     );
     assert_eq!(preferences.theme(), UserTheme::Dark);
+    assert_eq!(preferences.date_display(), UserDateDisplay::Exact);
     assert_eq!(preferences.updated_at(), updated_at);
 }
 

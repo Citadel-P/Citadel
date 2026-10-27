@@ -1,9 +1,11 @@
-import type { ActivityView } from '@/api/generated/api.types';
+import { UserDateDisplay, UserDateTimeFormat, type ActivityView } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { screen } from '@testing-library/react';
 import { TaskSheet } from './task-sheet';
+import { formatDateTime } from '@/lib/date-time';
 
 const mocks = vi.hoisted(() => ({
+  preferences: { dateDisplay: 'Relative', timeZone: 'UTC', dateTimeFormat: 'TwentyFourHour' },
   activity: {
     id: '019ffb55-f35e-7178-91f2-281696860dc8',
     platformId: null,
@@ -37,7 +39,10 @@ vi.mock('@/lib/atoms', () => ({
 }));
 
 vi.mock('@/lib/hooks', () => ({
-  useRead: () => ({ data: { data: mocks.activity }, isLoading: false }),
+  useRead: (resource: string) => ({
+    data: { data: resource === 'getProfilePreferences' ? mocks.preferences : mocks.activity },
+    isLoading: false,
+  }),
 }));
 
 vi.mock('@/lib/monaco', () => ({
@@ -51,6 +56,21 @@ vi.mock('@/lib/monaco', () => ({
 }));
 
 describe('TaskSheet activity details', () => {
+  it.each([UserDateDisplay.Relative, UserDateDisplay.Exact])(
+    'uses %s dates in activity sheets and exposes the exact timestamp',
+    async (dateDisplay) => {
+      const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+      mocks.activity = { ...mocks.activity, createdAt };
+      mocks.preferences = { ...mocks.preferences, dateDisplay };
+      renderCitadel(<TaskSheet type="Activity" />);
+      const exact = formatDateTime(createdAt, 'UTC', UserDateTimeFormat.TwentyFourHour);
+      const time = screen.getByRole('dialog').querySelector('time');
+      expect(time).toHaveTextContent(dateDisplay === UserDateDisplay.Relative ? '2 days ago' : exact);
+      expect(time).toHaveAttribute('datetime', createdAt);
+      expect(time).toHaveAttribute('title', exact);
+    },
+  );
+
   it('renders a Service Account rename as a concise message instead of Monaco', () => {
     renderCitadel(<TaskSheet type="Activity" />);
 

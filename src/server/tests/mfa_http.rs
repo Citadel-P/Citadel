@@ -415,17 +415,21 @@ async fn mfa_endpoints_preserve_login_enrollment_recovery_replay_and_reset_seman
 }
 
 async fn fixture(policy: MfaPolicy) -> Fixture {
+    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
+        .expect("CITADEL_IDENTITY_DATABASE_URL is required for this fixture");
+    fixture_at(policy, &database_url).await
+}
+
+async fn fixture_at(policy: MfaPolicy, database_url: &str) -> Fixture {
     let guard = TEST_LOCK
         .get_or_init(|| Arc::new(Mutex::new(())))
         .clone()
         .lock_owned()
         .await;
-    let database_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL")
-        .expect("CITADEL_IDENTITY_DATABASE_URL is required for this fixture");
-    MigrationRunner::migrate(&database_url).await.unwrap();
+    MigrationRunner::migrate(database_url).await.unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(6)
-        .connect(&database_url)
+        .connect(database_url)
         .await
         .unwrap();
     let passwords = Arc::new(Argon2PasswordHasher::default());
@@ -442,24 +446,39 @@ async fn fixture(policy: MfaPolicy) -> Fixture {
 }
 
 fn identity(pool: &PgPool, passwords: Arc<Argon2PasswordHasher>) -> Arc<IdentityService> {
-    Arc::new(IdentityService::new(
-        Arc::new(PostgresIdentityStore::new(pool.clone())),
-        Arc::new(citadel_identity::CredentialWork::new(passwords)),
-        Arc::new(
-            JwtSessionTokenCodec::new(
-                &[7_u8; 32],
-                "mfa-http-fixture".to_owned(),
-                "mfa-http-fixture".to_owned(),
-            )
-            .unwrap(),
-        ),
-        Arc::new(OpaqueServiceAccountTokenCodec),
-        Arc::new(StaticEntitlementService::new(true)),
-        Arc::new(SystemClock),
-        Arc::new(NoopServiceAccountLastUsedTracker),
-        Duration::minutes(15),
-        Duration::days(30),
-    ))
+    identity_with_policy(
+        pool,
+        passwords,
+        citadel_identity::InstallationPolicy::default(),
+    )
+}
+
+fn identity_with_policy(
+    pool: &PgPool,
+    passwords: Arc<Argon2PasswordHasher>,
+    policy: citadel_identity::InstallationPolicy,
+) -> Arc<IdentityService> {
+    Arc::new(
+        IdentityService::new(
+            Arc::new(PostgresIdentityStore::new(pool.clone())),
+            Arc::new(citadel_identity::CredentialWork::new(passwords)),
+            Arc::new(
+                JwtSessionTokenCodec::new(
+                    &[7_u8; 32],
+                    "mfa-http-fixture".to_owned(),
+                    "mfa-http-fixture".to_owned(),
+                )
+                .unwrap(),
+            ),
+            Arc::new(OpaqueServiceAccountTokenCodec),
+            Arc::new(StaticEntitlementService::new(true)),
+            Arc::new(SystemClock),
+            Arc::new(NoopServiceAccountLastUsedTracker),
+            Duration::minutes(15),
+            Duration::days(30),
+        )
+        .with_installation_policy(policy),
+    )
 }
 
 fn router(identity: Arc<IdentityService>, pool: PgPool, policy: MfaPolicy) -> Router {
@@ -624,4 +643,300 @@ async fn active_challenge_count(pool: &PgPool, user_id: Uuid) -> i64 {
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_IDENTITY_DATABASE_URL"]
+async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa() {
+    let base_url = std::env::var("CITADEL_IDENTITY_DATABASE_URL").unwrap();
+    let admin = PgPool::connect(&base_url).await.unwrap();
+    let database_name = format!("citadel_installation_{}", Uuid::now_v7().simple());
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "CREATE DATABASE {database_name}"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
+    let mut url = url::Url::parse(&base_url).unwrap();
+    url.set_path(&database_name);
+    let fixture = fixture_at(MfaPolicy::Optional, url.as_str()).await;
+    let status = send_json(
+        &fixture.app,
+        Method::GET,
+        "/api/v1/setup/status",
+        json!(null),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status.status(), StatusCode::OK);
+    let status = json_body(status).await;
+    assert_eq!(status["requiresSetup"], true);
+    assert_eq!(status["mfaPolicy"], "Optional");
+    assert_eq!(status["updateChecksEnabled"], true);
+    let forced = identity_with_policy(
+        &fixture.pool,
+        Arc::new(Argon2PasswordHasher::default()),
+        citadel_identity::InstallationPolicy {
+            update_checks_allowed: false,
+            minimum_mfa_policy: MfaPolicy::RequiredForAllUsers,
+        },
+    );
+    let forced_app = router(forced, fixture.pool.clone(), MfaPolicy::RequiredForAllUsers);
+    let forced_status = json_body(
+        send_json(
+            &forced_app,
+            Method::GET,
+            "/api/v1/setup/status",
+            json!(null),
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(forced_status["updateChecksAllowed"], false);
+    assert_eq!(forced_status["minimumMfaPolicy"], "RequiredForAllUsers");
+    for choices in [
+        json!({"updateChecksEnabled":true,"mfaPolicy":"RequiredForAllUsers"}),
+        json!({"updateChecksEnabled":false,"mfaPolicy":"Optional"}),
+    ] {
+        let mut input =
+            json!({"name":"blocked-setup","email":"blocked@example.test","password":PASSWORD});
+        input
+            .as_object_mut()
+            .unwrap()
+            .extend(choices.as_object().unwrap().clone());
+        let result = send_json(
+            &forced_app,
+            Method::POST,
+            "/api/v1/setup/initialize",
+            input,
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(result.status(), StatusCode::BAD_REQUEST);
+        assert!(
+            fixture
+                .identity
+                .setup_status()
+                .await
+                .unwrap()
+                .requires_setup
+        );
+    }
+    let name = format!("setup-{}", Uuid::now_v7());
+    let input = json!({ "name": name, "email": format!("{name}@example.test"), "password": PASSWORD,
+        "updateChecksEnabled": false, "mfaPolicy": "RequiredForAdministrators" });
+    let response = send_json(
+        &fixture.app,
+        Method::POST,
+        "/api/v1/setup/initialize",
+        input.clone(),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(cookie_value(&response, REFRESH_COOKIE).is_none());
+    assert!(cookie_value(&response, MFA_SETUP_COOKIE).is_some());
+    let body = json_body(response).await;
+    assert_eq!(body["nextStep"], "EnrollMfa");
+    assert!(body["accessToken"].is_null());
+    let persisted: (bool, bool, String) = sqlx::query_as("SELECT initializedat IS NOT NULL, updatechecksenabled, mfapolicy FROM instancesetupstates WHERE id=1")
+        .fetch_one(&fixture.pool).await.unwrap();
+    assert_eq!(persisted, (true, false, "RequiredForAdministrators".into()));
+    let mut retry = input;
+    retry["mfaPolicy"] = json!("Optional");
+    retry["updateChecksEnabled"] = json!(true);
+    let repeated = send_json(
+        &fixture.app,
+        Method::POST,
+        "/api/v1/setup/initialize",
+        retry,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(repeated.status(), StatusCode::CONFLICT);
+    assert!(
+        !fixture
+            .identity
+            .installation_settings()
+            .await
+            .unwrap()
+            .update_checks_enabled
+    );
+    let required = login(&fixture.app, &fixture.principal.name).await;
+    assert_eq!(json_body(required).await["nextStep"], "EnrollMfa");
+
+    for principal in [
+        None,
+        Some(ActorPrincipal {
+            roles: vec![],
+            ..fixture.principal.clone()
+        }),
+        Some(ActorPrincipal {
+            principal_type: AuthenticatedPrincipalType::ServiceAccount,
+            ..fixture.principal.clone()
+        }),
+    ] {
+        let expected = if principal.is_none() {
+            StatusCode::UNAUTHORIZED
+        } else {
+            StatusCode::FORBIDDEN
+        };
+        for method in [Method::GET, Method::PATCH] {
+            let result = send_json(
+                &fixture.app,
+                method,
+                "/api/v1/installation/settings",
+                json!({ "updateChecksEnabled": true }),
+                principal.clone(),
+                None,
+            )
+            .await;
+            assert_eq!(result.status(), expected);
+        }
+    }
+    for invalid in [
+        json!({}),
+        json!({"updateChecksEnabled":null}),
+        json!({"mfaPolicy":null}),
+        json!({"mfaPolicy":"Unknown"}),
+    ] {
+        let response = send_json(
+            &fixture.app,
+            Method::PATCH,
+            "/api/v1/installation/settings",
+            invalid,
+            Some(fixture.principal.clone()),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+    let optional = send_json(
+        &fixture.app,
+        Method::PATCH,
+        "/api/v1/installation/settings",
+        json!({"mfaPolicy":"Optional"}),
+        Some(fixture.principal.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(optional.status(), StatusCode::OK);
+    assert_eq!(optional.headers()["cache-control"], "no-store");
+    assert!(
+        !json_body(optional).await["updateChecksEnabled"]
+            .as_bool()
+            .unwrap()
+    );
+    assert_eq!(
+        json_body(login(&fixture.app, &fixture.principal.name).await).await["nextStep"],
+        "Completed"
+    );
+    // Independent administrator patches must preserve each other's field.
+    let (updates, mfa) = tokio::join!(
+        send_json(
+            &fixture.app,
+            Method::PATCH,
+            "/api/v1/installation/settings",
+            json!({"updateChecksEnabled":true}),
+            Some(fixture.principal.clone()),
+            None
+        ),
+        send_json(
+            &fixture.app,
+            Method::PATCH,
+            "/api/v1/installation/settings",
+            json!({"mfaPolicy":"RequiredForAllUsers"}),
+            Some(fixture.principal.clone()),
+            None
+        )
+    );
+    assert_eq!(updates.status(), StatusCode::OK);
+    assert_eq!(mfa.status(), StatusCode::OK);
+    let persisted = fixture.identity.installation_settings().await.unwrap();
+    assert!(persisted.update_checks_enabled);
+    assert_eq!(persisted.mfa_policy, MfaPolicy::RequiredForAllUsers);
+    let restarted = identity(&fixture.pool, Arc::new(Argon2PasswordHasher::default()));
+    assert_eq!(restarted.installation_settings().await.unwrap(), persisted);
+
+    let restricted = identity_with_policy(
+        &fixture.pool,
+        Arc::new(Argon2PasswordHasher::default()),
+        citadel_identity::InstallationPolicy {
+            update_checks_allowed: false,
+            minimum_mfa_policy: MfaPolicy::RequiredForAllUsers,
+        },
+    );
+    let restricted_app = router(
+        restricted,
+        fixture.pool.clone(),
+        MfaPolicy::RequiredForAllUsers,
+    );
+    for invalid in [
+        json!({"updateChecksEnabled":true}),
+        json!({"mfaPolicy":"Optional"}),
+        json!({"mfaPolicy":"RequiredForAdministrators"}),
+    ] {
+        let response = send_json(
+            &restricted_app,
+            Method::PATCH,
+            "/api/v1/installation/settings",
+            invalid,
+            Some(fixture.principal.clone()),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+    let settings = send_json(
+        &restricted_app,
+        Method::GET,
+        "/api/v1/installation/settings",
+        json!(null),
+        Some(fixture.principal.clone()),
+        None,
+    )
+    .await;
+    let settings = json_body(settings).await;
+    assert_eq!(settings["updateChecksEnabled"], false);
+    assert_eq!(settings["updateChecksAllowed"], false);
+    assert_eq!(settings["minimumMfaPolicy"], "RequiredForAllUsers");
+    // A stale administrator principal cannot write after its grant is removed.
+    sqlx::query("DELETE FROM actorroles WHERE actorid=$1 AND roleid=$2")
+        .bind(fixture.principal.actor_id.value())
+        .bind(ADMIN_ROLE_ID)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    let revoked = send_json(
+        &fixture.app,
+        Method::PATCH,
+        "/api/v1/installation/settings",
+        json!({"updateChecksEnabled":false}),
+        Some(fixture.principal.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(revoked.status(), StatusCode::FORBIDDEN);
+    let audit: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM activityevents WHERE eventtype='InstallationSettingsUpdated'",
+    )
+    .fetch_one(&fixture.pool)
+    .await
+    .unwrap();
+    assert!(audit >= 3);
+    fixture.pool.close().await;
+    drop(fixture);
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE {database_name} WITH (FORCE)"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
+    admin.close().await;
 }

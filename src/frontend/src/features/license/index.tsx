@@ -113,7 +113,7 @@ export default function LicensePage() {
                 <HeaderFact label="Edition" value={license.effectiveEdition} />
                 <HeaderFact label="Schema" value={license.licenseSchema ? String(license.licenseSchema) : '-'} />
                 <HeaderFact label="Instance" value={shortId(license.instanceId)} />
-                <HeaderFact label="Expires" value={license.expiresAt ? formatDate(license.expiresAt) : '-'} />
+                <HeaderFact label="Expires" value={license.expiresAt ? formatDate(license.expiresAt, 'exact') : '-'} />
                 <HeaderFact
                   label="Fingerprint"
                   value={license.fingerprint ? shortFingerprint(license.fingerprint) : '-'}

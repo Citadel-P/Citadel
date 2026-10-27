@@ -24,7 +24,7 @@ import { BreadcrumbTrail } from './breadcrumb';
 import { GlobalSearch } from '@/features/search/global-search';
 import { useOpenAlertEventSheet } from '@/features/alerters/alert-events/alert-task-sheet';
 import { CitadelIcons } from '@/lib/icons';
-import { fromNow } from '@/lib/dayjs.helper';
+import type { DateTimeFormatter } from '@/lib/date-time';
 import { cn, formatActivityEvent } from '@/lib/utils';
 import { LiveConnectionIndicator } from './live-connection-indicator';
 import { ThemeToggle } from './theme-toggle';
@@ -169,7 +169,7 @@ function AlertEventPreview({
   onOpen,
 }: {
   event: AlertEventView;
-  formatDateTime: (value: unknown) => string;
+  formatDateTime: DateTimeFormatter;
   onOpen: () => void;
 }) {
   const Icon = CitadelIcons[event.resourceType as ResourceType] ?? CitadelIcons.Alert;
@@ -189,8 +189,8 @@ function AlertEventPreview({
           <span className="truncate text-[13px] font-medium text-foreground">{formatActivityEvent(event.type)}</span>
           <span
             className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground"
-            title={formatDateTime(event.createdAt)}>
-            {fromNow(event.createdAt)}
+            title={formatDateTime(event.createdAt, 'exact')}>
+            {formatDateTime(event.createdAt)}
           </span>
         </div>
 

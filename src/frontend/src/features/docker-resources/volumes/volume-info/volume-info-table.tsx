@@ -1,7 +1,7 @@
 import { VolumeView } from '@/api/generated/api.types';
 import { DetailFacts } from '@/components/custom/resource-detail';
 import { byteTransform } from '@/lib/bytes.helper';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 
 export const VolumeInfoTable = ({ volume }: { volume: VolumeView | undefined }) => {
@@ -21,7 +21,7 @@ export const VolumeInfoTable = ({ volume }: { volume: VolumeView | undefined }) 
               ? byteTransform(size, 2)
               : 'Not available',
         },
-        { label: 'Created', value: <TimestampCell value={volume.createdAt} formatDateTime={formatDateTime} /> },
+        { label: 'Created', value: <Timestamp value={volume.createdAt} formatDateTime={formatDateTime} /> },
         { label: 'Mount point', value: volume.mountpoint || 'Not available' },
         { label: 'Attached containers', value: volume.containers?.length ?? 0 },
       ]}

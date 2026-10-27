@@ -53,6 +53,7 @@ pub struct CurrentProfileDetails {
 pub struct UserPreferencesDetails {
     pub time_zone: Option<String>,
     pub date_time_format: UserDateTimeFormat,
+    pub date_display: UserDateDisplay,
     pub theme: UserTheme,
     pub theme_color: UserThemeColor,
     pub font: UserUiFont,

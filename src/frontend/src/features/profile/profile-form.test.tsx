@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { CurrentProfileAuthenticationType, type CurrentProfileView } from '@/api/generated/api.types';
+import { CurrentProfileAuthenticationType, UserDateDisplay, type CurrentProfileView } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { ProfileForm } from './profile-form';
@@ -26,6 +26,29 @@ const profile: CurrentProfileView = {
   directRoles: [],
   teams: [],
 };
+
+it('defaults dates to Relative and saves the Exact preference', async () => {
+  const save = vi.fn();
+  server.use(
+    http.get('http://localhost/api/v1/profile/sessions', () =>
+      HttpResponse.json({ sessions: [], canRevokeOtherSessions: false }),
+    ),
+    http.patch('http://localhost/api/v1/profile/preferences', async ({ request }) => {
+      const body = await request.json();
+      save(body);
+      return HttpResponse.json(body);
+    }),
+  );
+  const { user } = renderCitadel(<ProfileForm profile={profile} formatDate={String} />);
+  const display = screen.getAllByRole('combobox').find((element) => element.textContent === 'Relative')!;
+  expect(display).toBeVisible();
+  await user.click(display);
+  await user.click(screen.getByRole('option', { name: 'Exact' }));
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ dateDisplay: UserDateDisplay.Exact })),
+  );
+});
 
 it('loads the collapsed session count once, reuses the list, and updates on refresh or invalidation', async () => {
   let reads = 0;
@@ -83,4 +106,35 @@ it('loads the collapsed session count once, reuses the list, and updates on refr
   expect(screen.getByText('Browser 3')).toBeVisible();
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
   expect(reads).toBe(3);
+});
+
+it.each([false, true])('shows installation controls only for an administrator (%s)', async (isAdministrator) => {
+  const reads = vi.fn(() =>
+    HttpResponse.json({
+      updateChecksEnabled: true,
+      updateChecksAllowed: true,
+      mfaPolicy: 'Optional',
+      minimumMfaPolicy: 'Optional',
+    }),
+  );
+  server.use(
+    http.get('http://localhost/api/v1/installation/settings', reads),
+    http.get('http://localhost/api/v1/profile/sessions', () =>
+      HttpResponse.json({ sessions: [], canRevokeOtherSessions: false }),
+    ),
+  );
+  renderCitadel(
+    <ProfileForm
+      profile={{ ...profile, authorization: { ...profile.authorization, isAdministrator } }}
+      formatDate={String}
+    />,
+  );
+  if (isAdministrator) {
+    expect(await screen.findByRole('switch', { name: 'Check for Citadel updates' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Instance settings Admins only' })).toBeVisible();
+    expect(reads).toHaveBeenCalledOnce();
+  } else {
+    expect(screen.queryByText('Instance settings')).not.toBeInTheDocument();
+    expect(reads).not.toHaveBeenCalled();
+  }
 });

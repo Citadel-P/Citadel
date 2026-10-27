@@ -4,7 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import type { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { TimestampCell } from '@/components/custom/timestamp-cell';
+import { Timestamp } from '@/components/custom/timestamp';
 import { Link } from 'react-router';
 import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
@@ -52,7 +52,7 @@ function ImageUsageTable({ usage }: { usage: ImageUsageView }) {
       header: 'Observed',
       cell: ({ row }) => (
         <div className="space-y-1">
-          <TimestampCell value={row.original.observedAt} formatDateTime={formatDateTime} />
+          <Timestamp value={row.original.observedAt} formatDateTime={formatDateTime} />
           {row.original.isStale && <p className="text-warning">Inventory observation is stale.</p>}
         </div>
       ),
@@ -108,7 +108,11 @@ export function ImageUsageEntries({ usage }: { usage: ImageUsageView }) {
               <span className="font-medium">{entry.containerName ?? 'Container'}</span>
             )}
             <p>{referenceDescription(entry)}</p>
-            {entry.observedAt && <p className="text-muted-foreground">Observed {formatDateTime(entry.observedAt)}</p>}
+            {entry.observedAt && (
+              <p className="text-muted-foreground">
+                Observed <Timestamp value={entry.observedAt} formatDateTime={formatDateTime} className="text-inherit" />
+              </p>
+            )}
             {entry.isStale && <p className="text-warning">Inventory observation is stale.</p>}
           </div>
         );

@@ -6,6 +6,7 @@ pub struct UserPreferences {
     user_id: Uuid,
     time_zone: String,
     date_time_format: UserDateTimeFormat,
+    date_display: UserDateDisplay,
     theme: UserTheme,
     appearance: UserAppearance,
     updated_at: DateTime<Utc>,
@@ -17,6 +18,7 @@ impl UserPreferences {
         user_id: Uuid,
         time_zone: String,
         date_time_format: UserDateTimeFormat,
+        date_display: UserDateDisplay,
         theme: UserTheme,
         updated_at: DateTime<Utc>,
     ) -> Self {
@@ -24,6 +26,7 @@ impl UserPreferences {
             user_id,
             time_zone,
             date_time_format,
+            date_display,
             theme,
             appearance: UserAppearance::default(),
             updated_at,
@@ -43,6 +46,11 @@ impl UserPreferences {
     #[must_use]
     pub const fn date_time_format(&self) -> UserDateTimeFormat {
         self.date_time_format
+    }
+
+    #[must_use]
+    pub const fn date_display(&self) -> UserDateDisplay {
+        self.date_display
     }
 
     #[must_use]
@@ -90,13 +98,41 @@ impl UserPreferences {
         &mut self,
         time_zone: String,
         date_time_format: UserDateTimeFormat,
+        date_display: UserDateDisplay,
         theme: UserTheme,
         updated_at: DateTime<Utc>,
     ) {
         self.time_zone = time_zone;
         self.date_time_format = date_time_format;
+        self.date_display = date_display;
         self.theme = theme;
         self.updated_at = updated_at;
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UserDateDisplay {
+    #[default]
+    Relative,
+    Exact,
+}
+
+impl UserDateDisplay {
+    #[must_use]
+    pub const fn as_database_str(self) -> &'static str {
+        match self {
+            Self::Relative => "Relative",
+            Self::Exact => "Exact",
+        }
+    }
+
+    #[must_use]
+    pub fn from_database_str(value: &str) -> Option<Self> {
+        match value {
+            "Relative" => Some(Self::Relative),
+            "Exact" => Some(Self::Exact),
+            _ => None,
+        }
     }
 }
 

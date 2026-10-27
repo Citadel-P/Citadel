@@ -1,3 +1,4 @@
+import { Timestamp } from '@/components/custom/timestamp';
 import { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { AutoUpdateStatus, ImageUpdateStatus as Status, type ImageTagUpdate } from '@/api/generated/api.types';
@@ -61,10 +62,15 @@ export function ImageUpdateStatus({
             <p className="text-muted-foreground">This result may be out of date. Check again to confirm.</p>
           )}
           {update.lastAttemptAt && (
-            <p className="text-xs text-muted-foreground">Last check: {format(update.lastAttemptAt)}</p>
+            <p className="text-xs text-muted-foreground">
+              Last check: <Timestamp value={update.lastAttemptAt} formatDateTime={format} className="text-inherit" />
+            </p>
           )}
           {update.lastSuccessAt && update.status !== 'UpToDate' && update.status !== 'UpdateAvailable' && (
-            <p>Last successful observation: {format(update.lastSuccessAt)}</p>
+            <p>
+              Last successful observation:{' '}
+              <Timestamp value={update.lastSuccessAt} formatDateTime={format} className="text-inherit" />
+            </p>
           )}
           {(update.localConfigDigest || update.remoteConfigDigest || update.remoteManifestDigest) && (
             <Collapsible>

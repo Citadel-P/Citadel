@@ -5,9 +5,14 @@ use citadel_identity::{ActorPrincipal, AuthenticatedBearer, IdentityError, Ident
 pub(crate) fn authorize_http(auth: &AuthenticatedBearer, path: &str) -> Result<(), IdentityError> {
     let path = path.to_ascii_lowercase();
     if auth.principal.principal_type == AuthenticatedPrincipalType::ServiceAccount
-        && ["/api/v1/authentication", "/api/v1/profile", "/hubs"]
-            .iter()
-            .any(|prefix| starts_with_segments(&path, prefix))
+        && [
+            "/api/v1/authentication",
+            "/api/v1/profile",
+            "/api/v1/installation",
+            "/hubs",
+        ]
+        .iter()
+        .any(|prefix| starts_with_segments(&path, prefix))
     {
         return Err(IdentityError::Forbidden);
     }
@@ -15,6 +20,7 @@ pub(crate) fn authorize_http(auth: &AuthenticatedBearer, path: &str) -> Result<(
         && ([
             "/api/v1/authentication",
             "/api/v1/automation",
+            "/api/v1/installation",
             "/api/v1/resourcebindings/secrets",
             "/api/v1/resourcebindings/secret-providers",
         ]
@@ -81,6 +87,7 @@ mod tests {
             "/API/V1/AUTHENTICATION/login",
             "/api/v1/authentication/refresh",
             "/api/v1/profile/sessions",
+            "/api/v1/installation/settings",
             "/HUBS",
             "/hubs/citadel",
         ] {
@@ -111,6 +118,7 @@ mod tests {
             for path in [
                 "/api/v1/authentication/logout",
                 "/API/V1/AUTOMATION/actions",
+                "/API/V1/INSTALLATION/settings",
                 "/api/v1/resourceBindings/secrets",
                 "/api/v1/resourceBindings/SECRET-PROVIDERS/id",
                 "/api/v1/platforms/id/containers/id/Terminal",
@@ -151,6 +159,7 @@ mod tests {
         for path in [
             "/api/v1/authentication/login",
             "/api/v1/profile",
+            "/api/v1/installation/settings",
             "/hubs",
             "/api/v1/automation",
             "/api/v1/resourceBindings/secrets",

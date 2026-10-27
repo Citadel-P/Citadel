@@ -3,7 +3,9 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable } from '@/components/ui/data-table';
-import { fromNow } from '@/lib/dayjs.helper';
+import { Timestamp } from '@/components/custom/timestamp';
+import type { DateTimeFormatter } from '@/lib/date-time';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
@@ -25,8 +27,9 @@ export function TagsTable({
   >;
 }) {
   const [_, setSelectedResources] = useSelectedResources<TagView>('Tag');
+  const formatDateTime = useProfileDateTimeFormatter();
   const [editingTag, setEditingTag] = useState<TagView | null>(null);
-  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+  const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
   useEffect(() => {
     return subscribeTagPageActions((action: TagPageAction) => {
@@ -52,6 +55,7 @@ const columns = (
     string,
     React.FC<{ resource: TagView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
+  formatDateTime: DateTimeFormatter,
 ): ColumnDef<StockFeatures, TagView>[] => [
   {
     id: 'select',
@@ -93,7 +97,7 @@ const columns = (
   {
     accessorKey: 'updatedAt',
     header: ({ column }) => <SortableCell cellName="Updated" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{fromNow(row.original.updatedAt)}</span>,
+    cell: ({ row }) => <Timestamp value={row.original.updatedAt} formatDateTime={formatDateTime} />,
     sortFn: (rowA, rowB) => String(rowA.original.updatedAt).localeCompare(String(rowB.original.updatedAt)),
   },
   {

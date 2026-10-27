@@ -118,6 +118,7 @@ function isAutomationEndpointAllowed(pathStr: string, tag: string) {
   const lower = pathStr.toLowerCase();
   return (
     !lower.startsWith('/api/v1/authentication') &&
+    !lower.startsWith('/api/v1/installation') &&
     !lower.startsWith('/api/v1/automation') &&
     !lower.startsWith('/api/v1/resourcebindings/secrets') &&
     !lower.startsWith('/api/v1/resourcebindings/secret-providers') &&

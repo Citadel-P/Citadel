@@ -72,7 +72,7 @@ export interface GroupFieldConfig<T> {
   kind: 'group';
   id: string;
   label: string;
-  title?: string;
+  title?: React.ReactNode;
   description?: React.ReactElement | string;
   requiredLicense?: LicenseEdition;
   items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
@@ -146,7 +146,7 @@ export function defineRowField<T>(config: {
 export function defineGroupField<T>(config: {
   id: string;
   label: string;
-  title?: string;
+  title?: React.ReactNode;
   description?: React.ReactElement | string;
   requiredLicense?: LicenseEdition;
   items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
@@ -352,12 +352,14 @@ export const FieldSwitch = ({
   id,
   onChange,
   disabled,
+  'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
 }: {
   checked: boolean;
   id: string;
   onChange: (v: boolean) => void;
   disabled?: boolean;
-}) => {
+} & Pick<React.ComponentProps<typeof Switch>, 'aria-label' | 'aria-describedby'>) => {
   const accessibility = useFormFieldAccessibility();
 
   return (
@@ -365,8 +367,8 @@ export const FieldSwitch = ({
       <Switch
         checked={checked ?? false}
         id={id}
-        aria-label={accessibility?.label}
-        aria-describedby={accessibility?.describedBy}
+        aria-label={ariaLabel ?? accessibility?.label}
+        aria-describedby={ariaDescribedBy ?? accessibility?.describedBy}
         aria-invalid={accessibility?.invalid || undefined}
         onCheckedChange={onChange}
         disabled={disabled}

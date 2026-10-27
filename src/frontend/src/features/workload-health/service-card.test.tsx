@@ -1,3 +1,5 @@
+vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => String }));
+
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { CheckConfiguration, HealthStatus, PlatformStatus, type HealthMember } from '@/api/generated/api.types';

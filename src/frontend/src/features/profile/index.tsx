@@ -1,16 +1,17 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import { AppContent } from '@/components/custom/app-content';
-import { CurrentProfileView, ProfileResourceInfo, UserDateTimeFormat } from '@/api/generated/api.types';
+import { CurrentProfileView, ProfileResourceInfo } from '@/api/generated/api.types';
 import { OverflowCountBadge } from '@/components/custom/common';
-import { getBrowserTimezone } from '@/components/custom/timezone-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import Loader from '@/components/ui/loader';
 import { useRead } from '@/lib/hooks';
 import { CalendarClock, Mail, ShieldCheck, Users } from 'lucide-react';
-import { ReactNode, useId, useMemo, useState } from 'react';
+import { ReactNode, useId, useState } from 'react';
 import { ProfileForm } from './profile-form';
-import { formatProfileDateTime, getInitials, ProfileDateFormatter } from './utils';
+import { getInitials, ProfileDateFormatter } from './utils';
 
 export default function ProfilePage() {
   const profileQuery = useRead('getCurrentProfile');
@@ -18,13 +19,7 @@ export default function ProfilePage() {
 
   const profile = profileQuery.data?.data;
   const preferences = preferencesQuery.data?.data;
-  const timeZone = preferences?.timeZone ?? getBrowserTimezone();
-  const dateTimeFormat = preferences?.dateTimeFormat ?? UserDateTimeFormat.System;
-
-  const formatDate = useMemo(
-    () => (value: unknown) => formatProfileDateTime(value, timeZone, dateTimeFormat),
-    [timeZone, dateTimeFormat],
-  );
+  const formatDate = useProfileDateTimeFormatter();
 
   if (profileQuery.isLoading || preferencesQuery.isLoading) {
     return (
@@ -90,7 +85,7 @@ function AccountHeader({ profile, formatDate }: { profile: CurrentProfileView; f
             icon={<CalendarClock className="size-3.5" />}
             className="col-span-2 sm:col-span-1"
             label="Created"
-            value={formatDate(profile.createdAt)}
+            value={<Timestamp value={profile.createdAt} formatDateTime={formatDate} />}
           />
         </div>
       </div>
@@ -175,7 +170,7 @@ function HeaderFact({
 }: {
   icon: ReactNode;
   label: string;
-  value: string;
+  value: ReactNode;
   className?: string;
 }) {
   return (
@@ -184,7 +179,7 @@ function HeaderFact({
         {icon}
         <span>{label}</span>
       </div>
-      <div className="mt-1 truncate font-medium text-foreground" title={value}>
+      <div className="mt-1 truncate font-medium text-foreground" title={typeof value === 'string' ? value : undefined}>
         {value}
       </div>
     </div>

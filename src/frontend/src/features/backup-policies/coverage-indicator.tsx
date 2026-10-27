@@ -1,3 +1,4 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { BackupCoverageStatus } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,7 @@ export function CoverageIndicator({
   volumeName: string;
   kind?: 'volume' | 'bind mount';
 }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const state = loading ? undefined : coverage.status;
   const detail = loading
     ? { Icon: CircleHelp, label: 'Loading', description: 'Loading backup coverage.', color: 'text-muted-foreground' }
@@ -84,7 +86,12 @@ export function CoverageIndicator({
       <TooltipContent className="max-w-xs space-y-1">
         <p>{detail.description}</p>
         {!loading && coverage.lastSuccessfulRunAt && (
-          <p>Last successful backup: {new Date(coverage.lastSuccessfulRunAt).toLocaleString()}</p>
+          <p>
+            Last successful backup:{' '}
+            <time dateTime={coverage.lastSuccessfulRunAt} title={formatDateTime(coverage.lastSuccessfulRunAt, 'exact')}>
+              {formatDateTime(coverage.lastSuccessfulRunAt)}
+            </time>
+          </p>
         )}
         {!loading && coverage.policies.length > 0 && <p>{coverage.policies.map((policy) => policy.name).join(', ')}</p>}
       </TooltipContent>

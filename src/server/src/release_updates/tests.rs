@@ -169,7 +169,13 @@ fn rejects_drafts_prereleases_and_invalid_tags() {
 async fn disabled_worker_stays_idle_until_cancelled() {
     let checker = UpdateChecker::default();
     let cancellation = CancellationToken::new();
-    let task = tokio::spawn(checker.clone().run(false, cancellation.clone()));
+    let (_enabled, receiver) = tokio::sync::watch::channel(false);
+    let task = tokio::spawn(checker.clone().run_enabled(
+        receiver,
+        cancellation.clone(),
+        "http://127.0.0.1:1",
+        "1.0.0",
+    ));
     tokio::time::advance(CHECK_INTERVAL * 2).await;
     assert!(!task.is_finished());
     assert!(checker.available().await.is_none());
@@ -269,4 +275,80 @@ async fn application_info_only_exposes_updates_to_administrators() {
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json.get("availableUpdate").is_some(), expected);
     }
+}
+
+#[tokio::test]
+async fn settings_toggle_cancels_checks_clears_notices_and_resumes_without_restart() {
+    let requests = Arc::new(AtomicUsize::new(0));
+    let started = Arc::new(tokio::sync::Notify::new());
+    let release_first = Arc::new(tokio::sync::Notify::new());
+    let app = Router::new().route(
+        "/",
+        get({
+            let requests = requests.clone();
+            let started = started.clone();
+            let release_first = release_first.clone();
+            move || {
+                let first = requests.fetch_add(1, Ordering::SeqCst) == 0;
+                let started = started.clone();
+                let release_first = release_first.clone();
+                async move {
+                    if first {
+                        started.notify_one();
+                        release_first.notified().await;
+                    }
+                    r#"{"tag_name":"v1.1.0","draft":false,"prerelease":false}"#
+                }
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let checker = UpdateChecker::default();
+    let (enabled, receiver) = tokio::sync::watch::channel(false);
+    let cancellation = CancellationToken::new();
+    let task = tokio::spawn({
+        let checker = checker.clone();
+        let cancellation = cancellation.clone();
+        async move {
+            checker
+                .run_enabled(receiver, cancellation, &endpoint, "1.0.0")
+                .await
+        }
+    });
+    tokio::task::yield_now().await;
+    assert_eq!(requests.load(Ordering::SeqCst), 0);
+    enabled.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(5), started.notified())
+        .await
+        .unwrap();
+    enabled.send_replace(false);
+    tokio::task::yield_now().await;
+    release_first.notify_one();
+    tokio::task::yield_now().await;
+    assert!(checker.available().await.is_none());
+    enabled.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while checker.available().await.is_none() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(requests.load(Ordering::SeqCst), 2);
+    enabled.send_replace(false);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while checker.available().await.is_some() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    cancellation.cancel();
+    task.await.unwrap().unwrap();
+    server.abort();
+    let _ = server.await;
 }

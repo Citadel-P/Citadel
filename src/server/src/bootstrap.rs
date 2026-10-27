@@ -40,6 +40,8 @@ pub async fn initialize_from_environment(identity: &IdentityService) -> Result<(
                 name,
                 email,
                 password,
+                update_checks_enabled: None,
+                mfa_policy: None,
             },
             citadel_identity::SetupInitializationMode::Unattended,
         )

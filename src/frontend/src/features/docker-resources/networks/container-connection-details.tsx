@@ -1,3 +1,5 @@
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Timestamp } from '@/components/custom/timestamp';
 import type { NetworkUsageEntry } from '@/api/generated/api.types';
 import { ResourceReadError } from '@/components/custom/resource-read-error';
 import { canShowCachedResource } from '@/lib/request-error';
@@ -6,6 +8,7 @@ import { networkModeLabel } from './workload-details';
 
 // Mounted for one selected endpoint only, in either List or Map.
 export function ContainerConnectionDetails({ entry, platformId }: { entry: NetworkUsageEntry; platformId: string }) {
+  const formatDateTime = useProfileDateTimeFormatter();
   const { networking } = useNetworkWorkloads(platformId, entry.containerId ?? undefined, false);
   if (networking.error && !canShowCachedResource(networking.error)) return <ResourceReadError {...networking} />;
   const details = networking.data?.data;
@@ -41,7 +44,10 @@ export function ContainerConnectionDetails({ entry, platformId }: { entry: Netwo
               ))}
             </div>
           )}
-          <p>Observed {new Date(details.observedAt * 1000).toLocaleString()}</p>
+          <p>
+            Observed{' '}
+            <Timestamp value={details.observedAt * 1000} formatDateTime={formatDateTime} className="text-inherit" />
+          </p>
           {details.truncated && <p>Some networking details are omitted.</p>}
         </>
       )}

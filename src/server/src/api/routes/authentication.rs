@@ -59,6 +59,8 @@ pub fn router(state: IdentityHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(setup_status))
+        .normalized_routes(utoipa_axum::routes!(get_installation_settings))
+        .normalized_routes(utoipa_axum::routes!(patch_installation_settings))
         .normalized_routes(utoipa_axum::routes!(initialize))
         .normalized_routes(utoipa_axum::routes!(login))
         .normalized_routes(utoipa_axum::routes!(refresh))
@@ -624,5 +626,83 @@ mod tests {
             roles: vec!["Admin".to_owned()],
         };
         assert!(require_human_administrator(Some(Extension(principal))).is_ok());
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/installation/settings",
+    operation_id = "getInstallationSettings",
+    tag = "Setup",
+    summary = "Get installation settings (administrator)",
+    responses(
+        (status = 200, description = "Success", body = crate::api::resources::authentication::views::InstallationSettingsView),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn get_installation_settings(
+    State(state): State<IdentityHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    match state.identity.get_installation_settings(&principal).await {
+        Ok(settings) => no_store(
+            Json(
+                crate::api::resources::authentication::views::InstallationSettingsView::new(
+                    settings,
+                    state.identity.installation_policy(),
+                ),
+            )
+            .into_response(),
+        ),
+        Err(error) => error_response(error, &headers),
+    }
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/installation/settings",
+    operation_id = "patchInstallationSettings",
+    tag = "Setup",
+    summary = "Update installation settings (administrator)",
+    request_body = crate::api::resources::authentication::requests::PatchInstallationSettingsRequest,
+    responses(
+        (status = 200, description = "Success", body = crate::api::resources::authentication::views::InstallationSettingsView),
+        crate::openapi::errors::AccessErrors
+    ),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn patch_installation_settings(
+    State(state): State<IdentityHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    ValidatedJson(request): ValidatedJson<
+        crate::api::resources::authentication::requests::PatchInstallationSettingsRequest,
+    >,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    match state
+        .identity
+        .patch_installation_settings(&principal, request.into())
+        .await
+    {
+        Ok(settings) => no_store(
+            Json(
+                crate::api::resources::authentication::views::InstallationSettingsView::new(
+                    settings,
+                    state.identity.installation_policy(),
+                ),
+            )
+            .into_response(),
+        ),
+        Err(error) => error_response(error, &headers),
     }
 }

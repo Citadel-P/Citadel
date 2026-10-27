@@ -52,8 +52,8 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `CITADEL_PASSWORDS_MINIMUM_LENGTH` | `15` | Minimum length for new or changed passwords; accepts 8–128 characters, with a fixed maximum password length of 128 |
-| `CITADEL_MFA_POLICY` | `Optional` | Require two-factor authentication for administrators or all users |
-| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Allow Core to check for new Citadel releases in its installed channel |
+| `CITADEL_MFA_POLICY` | `Optional` | Minimum MFA policy; setup and administrator settings can choose a stronger policy |
+| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit the saved installation setting to enable release checks; false forces checks off |
 | `CITADEL_HTTP_OPENAPI_ENABLED` | `false` | Show API reference pages on your installation |
 | `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Collect metrics every 10 seconds |
 | `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Save buffered metrics every 60 seconds |
@@ -73,28 +73,35 @@ Unattended administrator setup is explained in
 
 ## Allow update checks
 
-Update checks are **on by default**. To disable them, set this in `.env` and
-[apply the setting change](#apply-a-setting-change):
+Update checks are **on by default**. Choose **Check for Citadel updates** during
+first-run setup or change it in **Profile → Instance settings** as an
+administrator. This choice applies to the whole installation, saves automatically,
+and takes effect without restarting Core.
+
+To prohibit release checks through deployment configuration, set this in `.env`
+and [apply the setting change](#apply-a-setting-change):
 
 ```dotenv
 CITADEL_UPDATE_CHECKS_ENABLED=false
 ```
 
-Core checks Citadel's public GitHub release information at startup and every
-six hours. Administrators see a small dot beside the sidebar version and a
+After setup completes, Core checks Citadel's public GitHub release information
+when checks are enabled and every six hours. Administrators see a small dot beside the sidebar version and a
 notice on Home when a newer release in the installed channel is available.
 Stable installations track stable releases; development versions (`-dev.N`)
 track development releases. Open either notification for
 release notes and the [upgrade guide](/docs/operations/upgrade-and-rollback).
-Checks do not install updates. Set `CITADEL_UPDATE_CHECKS_ENABLED=true` to re-enable them
-after opting out. Agents and Edge Agents do not make these requests.
+Checks do not install updates. With `CITADEL_UPDATE_CHECKS_ENABLED=false`, the UI
+control is disabled and explains that server configuration prevents checks. When
+the variable is true or unset, the saved installation choice controls checks.
+Agents and Edge Agents do not make these requests.
 
 **No telemetry is collected by Citadel through update checks.** Requests send no
 installed version, instance identifiers, configuration, credentials, or usage
 data. Version comparison happens inside Core. GitHub receives normal HTTPS
 connection information, including your server's outbound IP address. The browser
-only reads Core's cached result; opening release notes or the guide visits the
-linked website.
+only reads Core's cached result, refreshing it every minute while the page is
+active. Opening release notes or the guide visits the linked website.
 
 Checks require outbound HTTPS to `api.github.com`. A failed or rate-limited
 request does not interrupt Citadel; the last successful result is kept until the
