@@ -397,6 +397,48 @@ async fn agent_mutations_share_daemon_permits_and_do_not_block_health() {
 }
 
 #[tokio::test]
+async fn command_contexts_share_capacity_without_sharing_cancellation() {
+    use citadel_contracts::citadel::containers::v1::ContainerIds;
+    let (runtime, calls, server) =
+        fixture(Arc::new(std::sync::atomic::AtomicBool::new(false))).await;
+    let first_stop = CancellationToken::new();
+    let first = runtime.for_command(first_stop.clone());
+    let replacement = runtime.for_command(CancellationToken::new());
+    assert!(Arc::ptr_eq(&first.mutations, &replacement.mutations));
+    assert!(Arc::ptr_eq(&first.samples, &replacement.samples));
+    let permits = first.mutations.acquire_many(8).await.unwrap();
+    first_stop.cancel();
+    assert!(!replacement.shutdown.is_cancelled());
+    // Keep polling the command while probing health: pausing it during Docker
+    // API negotiation can otherwise hold the shared negotiation lock forever.
+    let mut operation = tokio::spawn({
+        let replacement = replacement.clone();
+        async move {
+            replacement
+                .start(Request::new(ContainerIds {
+                    ids: vec!["c0".into()],
+                }))
+                .await
+        }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(10), &mut operation)
+            .await
+            .is_err()
+    );
+    replacement.check_health(Request::new(())).await.unwrap();
+    assert!(!calls.lock().unwrap().iter().any(|p| p.contains("/start")));
+    drop(permits);
+    tokio::time::timeout(Duration::from_secs(5), operation)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    runtime.shutdown.cancel();
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn health_collection_is_explicit_read_only_and_does_not_sample_stats() {
     use citadel_contracts::citadel::containers::v1::ListContainersRequest;
     let (runtime, calls, server) =

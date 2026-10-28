@@ -17,6 +17,27 @@ struct Store {
     resume: tokio::sync::Notify,
 }
 impl BackupPersistence for Store {
+    fn defer_restore<'a>(
+        &'a self,
+        claim: &'a RestoreClaim,
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
+        self.inner.defer_restore(claim)
+    }
+    fn renew_leases(
+        &self,
+        repository: Uuid,
+        owner: Uuid,
+        attempt: Uuid,
+    ) -> BoxFuture<'_, Result<bool, BackupError>> {
+        self.inner.renew_leases(repository, owner, attempt)
+    }
+    fn defer_backup<'a>(
+        &'a self,
+        claim: &'a BackupClaim,
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
+        self.inner.defer_backup(claim)
+    }
+
     fn create_repository<'a>(
         &'a self,
         actor: ActorId,
@@ -332,6 +353,7 @@ impl BackupExecutor for Runtime {
     fn repository<'a>(
         &'a self,
         _: &'a BackupRepository,
+        _operation_id: Uuid,
         _: &'a str,
         _: &'a str,
         _: Option<Uuid>,
@@ -380,6 +402,7 @@ impl BackupExecutor for Runtime {
 impl BackupSourcePlanner for Runtime {
     fn cleanup_staging<'a>(
         &'a self,
+        _claim: &'a citadel_backups::BackupClaim,
         _: &'a BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {
@@ -536,7 +559,8 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
                 runtime.clone(),
                 Duration::minutes(5),
                 Arc::new(Authorization),
-            );
+            )
+            .with_tracking_slots(1);
             let mut progress = service.subscribe_progress();
             let shutdown = CancellationToken::new();
             let observer = async {
@@ -551,6 +575,11 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
                         );
                     }
                     assert_eq!(store.claims.load(Ordering::SeqCst), 1);
+                    // Completion retries still own the shared tracking permit.
+                    let waiting = service.claim_restore(&shutdown);
+                    tokio::pin!(waiting);
+                    assert!(futures_util::poll!(&mut waiting).is_pending());
+                    assert_eq!(store.claims.load(Ordering::SeqCst), 1);
                     if mode == 3 {
                         shutdown.cancel();
                     }
@@ -561,7 +590,30 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
                 }
             };
             let process = async {
-                if restore {
+                if mode % 2 == 0 {
+                    let work = if restore {
+                        service.claim_restore(&shutdown).await?
+                    } else {
+                        service.claim_backup(&shutdown).await?
+                    }
+                    .expect("queued work");
+                    // A claim owns capacity before its controller is spawned.
+                    // The other queue shares the same limit and cannot touch SQL.
+                    let waiting_token = shutdown.child_token();
+                    let waiting = async {
+                        if restore {
+                            service.claim_backup(&waiting_token).await
+                        } else {
+                            service.claim_restore(&waiting_token).await
+                        }
+                    };
+                    tokio::pin!(waiting);
+                    assert!(futures_util::poll!(&mut waiting).is_pending());
+                    assert_eq!(store.claims.load(Ordering::SeqCst), 1);
+                    waiting_token.cancel();
+                    assert!(waiting.await?.is_none());
+                    service.execute_claim(work, &shutdown).await
+                } else if restore {
                     service.process_restore(&shutdown).await
                 } else {
                     service.process_backup(&shutdown).await
@@ -578,7 +630,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
                 assert!(result.unwrap());
             }
             assert_eq!(runtime.calls.load(Ordering::SeqCst), usize::from(mode != 6));
-            assert_eq!(runtime.cleanup.load(Ordering::SeqCst), 1);
+            assert_eq!(
+                runtime.cleanup.load(Ordering::SeqCst),
+                usize::from(mode != 6)
+            );
             assert_eq!(runtime.plans.load(Ordering::SeqCst), usize::from(!restore));
             assert_eq!(store.claims.load(Ordering::SeqCst), 1);
             let status = if restore {
@@ -588,8 +643,8 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
             };
             let expected = match mode {
                 2 => "Interrupted",
-                3..=5 => "Running",
-                6 => "Failed",
+                3 | 4 => "Running",
+                6 => "Queued",
                 _ => "Succeeded",
             };
             assert_eq!(status, expected, "restore={restore}, mode={mode}");
@@ -602,13 +657,13 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
             .unwrap();
             assert_eq!(
                 leases,
-                i64::from(matches!(mode, 3..=5)),
-                "only confirmed completion/recovery releases ownership"
+                i64::from(matches!(mode, 2..=4)),
+                "recovery retains ownership until external cleanup is verified"
             );
             if !restore {
                 let terminal_activity: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE eventtype='BackupRunCompleted' AND info::jsonb->>'RunId'=$1")
                     .bind(run_id.to_string()).fetch_one(pool).await.unwrap();
-                assert_eq!(terminal_activity, i64::from(!matches!(mode, 3..=5)));
+                assert_eq!(terminal_activity, i64::from(!matches!(mode, 3 | 4 | 6)));
             }
             let mut terminals = Vec::new();
             while let Ok(event) = progress.try_recv() {
@@ -620,7 +675,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
             }
             assert_eq!(
                 terminals,
-                if matches!(mode, 3..=5) {
+                if matches!(mode, 3 | 4 | 6) {
                     vec![]
                 } else {
                     vec![expected.to_owned()]
@@ -647,6 +702,23 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
             citadel_adapters::persistence::postgres::maintenance::recover_on_startup(pool)
                 .await
                 .unwrap();
+            // The fake executor has finished and its cleanup was asserted above.
+            // Production recovery retains these locks until executor proof arrives;
+            // explicitly clean this fixture before exercising the next fault mode.
+            sqlx::query("DELETE FROM backupsourceleases WHERE ownerrunid=$1")
+                .bind(run_id)
+                .execute(pool)
+                .await
+                .unwrap();
+            sqlx::query("DELETE FROM backuprepositoryleases WHERE ownerrunid=$1")
+                .bind(run_id)
+                .execute(pool)
+                .await
+                .unwrap();
+            sqlx::query("UPDATE backuppolicies SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL WHERE currentrunid=$1").bind(run_id).execute(pool).await.unwrap();
+            if mode == 6 {
+                store.cancel_backup(run_id).await.unwrap();
+            }
         }
     }
     sqlx::query("DELETE FROM activityevents WHERE resourceid=$1")

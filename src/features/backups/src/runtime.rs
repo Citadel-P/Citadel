@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BackupSourceItem {
     pub id: Uuid,
     pub platform_id: Uuid,
@@ -43,7 +43,7 @@ impl BackupSourceItem {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BackupSourcePlan {
     pub display_name: String,
     pub items: Vec<BackupSourceItem>,
@@ -52,6 +52,8 @@ pub struct BackupSourcePlan {
 }
 
 pub trait CitadelSystemBackupBuilder: Send + Sync {
+    /// Errors other than CleanupPending confirm owned processes have stopped and
+    /// staging was removed. An interrupted future supplies no cleanup evidence.
     fn build<'a>(
         &'a self,
         run_id: Uuid,
@@ -60,6 +62,14 @@ pub trait CitadelSystemBackupBuilder: Send + Sync {
 }
 
 pub trait BackupExecutor: Send + Sync {
+    fn reconcile_cleanup<'a>(
+        &'a self,
+        _after: Option<Uuid>,
+        _cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, BackupError>> {
+        Box::pin(async { Ok(None) })
+    }
+
     fn backup_with_progress<'a>(
         &'a self,
         claim: &'a BackupClaim,
@@ -80,6 +90,7 @@ pub trait BackupExecutor: Send + Sync {
     fn repository<'a>(
         &'a self,
         repository: &'a BackupRepository,
+        _operation_id: Uuid,
         operation: &'a str,
         location: &'a str,
         platform_id: Option<Uuid>,
@@ -101,6 +112,7 @@ pub trait BackupExecutor: Send + Sync {
 pub trait BackupSourcePlanner: Send + Sync {
     fn cleanup_staging<'a>(
         &'a self,
+        claim: &'a BackupClaim,
         plan: &'a BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), BackupError>>;
     fn preview<'a>(
@@ -150,4 +162,46 @@ pub trait BackupRunAuthorizer: Send + Sync {
 
 pub trait BackupEntitlements: Send + Sync {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, BackupError>>;
+}
+
+/// Physical executor identity, shared by all Platform/node aliases.
+#[derive(Clone)]
+pub struct BackupExecutionHost {
+    pub daemon_id: String,
+    pub authority_id: Uuid,
+    pub generation: u64,
+    pub data_slots: u32,
+    pub heavy_slots: u32,
+}
+#[derive(Clone)]
+pub struct BackupDataOperation {
+    pub platform_id: Uuid,
+    pub node_id: Option<String>,
+    pub id: Uuid,
+    pub repository_id: Uuid,
+    pub owner_id: Uuid,
+    pub attempt_id: Uuid,
+}
+pub trait BackupDataAdmission: Send + Sync {
+    fn pending_cleanup(
+        &self,
+        after: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<(BackupDataOperation, BackupExecutionHost)>, BackupError>>;
+    fn finish_cleanup<'a>(
+        &'a self,
+        operation: &'a BackupDataOperation,
+        host: &'a BackupExecutionHost,
+    ) -> BoxFuture<'a, Result<(), BackupError>>;
+
+    fn reserve<'a>(
+        &'a self,
+        operation: &'a BackupDataOperation,
+        host: &'a BackupExecutionHost,
+    ) -> BoxFuture<'a, Result<bool, BackupError>>;
+    /// Only authenticated cleanup or a proven pre-execution refusal may release.
+    fn release<'a>(
+        &'a self,
+        operation: &'a BackupDataOperation,
+        host: &'a BackupExecutionHost,
+    ) -> BoxFuture<'a, Result<(), BackupError>>;
 }

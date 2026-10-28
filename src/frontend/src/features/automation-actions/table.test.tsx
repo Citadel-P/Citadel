@@ -9,6 +9,7 @@ import { screen } from '@testing-library/react';
 import { AutomationActionsTable } from './table';
 
 const createAction = (enabled: boolean): AuthorizedAction => ({
+  executor: { kind: 'Core' },
   capabilities: { canRead: true, canWrite: true, canExecute: true },
   id: '019fbf2c-1c80-790f-a50a-11bbec0241d3',
   name: enabled ? 'Enabled action' : 'Disabled action',
@@ -31,6 +32,9 @@ const createAction = (enabled: boolean): AuthorizedAction => ({
   scheduleEnabled: false,
   controlState: ResourceControlState.Idle,
   latestRun: {
+    attemptId: null,
+    executorId: null,
+    cleanupPending: false,
     id: 'run-id',
     actionId: 'action-id',
     actionName: 'Action',

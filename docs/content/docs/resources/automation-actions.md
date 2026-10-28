@@ -62,8 +62,8 @@ if (args.dryRun !== false) {
 }
 ```
 
-Keep the progress sheet connected until completion. Confirm **Succeeded** and
-the access-check message in **Runs**. This checks Read access only; it does not
+Confirm **Succeeded** and the access-check message in **Runs**. Closing the
+progress sheet does not cancel the run. This checks Read access only; it does not
 prove that the identity can deploy the Stack.
 
 `dryRun` is a convention implemented by this script. **Test** itself can perform
@@ -101,6 +101,7 @@ Set:
 - `Enabled`: whether manual and scheduled runs are allowed
 - `Code`: TypeScript code executed by Deno
 - `Default Args`: JSON object available as `args`
+- `Run on`: Core, a specific Agent, or Automatic among eligible Agents
 - `Run As`: enabled User or Service Account whose current Citadel permissions
   are used for runs
 - `Timeout`: maximum run duration in seconds
@@ -223,10 +224,10 @@ Manual runs require the action to be enabled.
 
 If the same action is already running, Citadel rejects the new run instead of running the same action twice.
 
-Manual and test runs show live output in the progress sheet. Keep the connection
-open until the run finishes; disconnecting from an interactive run requests
-cancellation. Cancellation does not undo operations the script has already
-completed. Check the Runs tab before retrying.
+Manual and test runs wait in the queue when execution slots are full. They show
+live output in the progress sheet, but continue if that sheet or connection closes.
+Use Cancel to stop a queued or running action. Cancellation does not undo operations
+the script has already completed. Check the Runs tab before retrying.
 
 ## Schedule
 
@@ -474,3 +475,39 @@ without that capability, but it cannot queue the action run.
 If the capability becomes unavailable, existing schedule and webhook
 configuration remains stored and is shown as paused. Manual and test runs remain
 available.
+
+## Execution host
+
+**Run on** selects Core (the default), a specific Agent, or Automatic.
+Automatic requires Team’s **Automated Operations** capability. Core and a specific
+Agent remain available in Community. After license expiry, saved Automatic
+configuration remains editable, but new runs cannot start; choose Core or a
+specific Agent to continue. Already running actions may finish or be cancelled.
+
+Automatic discovers eligible Agents and chooses one with available capacity;
+there is no agent list to configure. A specific Agent selection waits for that
+Agent, while Automatic can choose another eligible Agent. Busy or offline hosts
+leave work queued. Automatic never falls back to Core. The run-as identity needs Execute permission on the chosen Platform or Agent
+pool, as well as permissions for each API operation the script performs.
+
+Agents call Core's public HTTPS API. For example, an action executing on Agent B
+can stop a stack on Agent A through the normal Citadel API. Core still checks the
+run-as user's permissions and routes the stack operation to A. No administrator
+credentials or Docker sockets are passed to the script.
+
+Remote execution requires trusted HTTPS connections to Core and the Agent. Scripts
+use the same Deno sandbox as Core, with network access restricted to Core. Existing
+Core-only extra network allowances are not inherited by Agents. Remote module
+imports follow the same network allowlist; npm package resolution is disabled.
+
+Run records include the selected executor. The Runs tab shows **Cleanup pending** if execution ended without
+confirmed cleanup. Citadel never automatically reruns an uncertain attempt.
+Reconnection normally resolves cleanup. After an Agent restart, administrators can
+use **Resolve cleanup** after checking that the old script has stopped and the
+original Agent has restarted on the same Docker host. The acknowledgment is audited;
+it releases retained capacity without changing the run result.
+
+Run history and action status update through realtime after their initial load.
+Reconnecting refreshes the run window, including cleanup changes made while
+disconnected. While realtime is unavailable, views retain their last data until
+reconnection or a page refresh.

@@ -1,4 +1,7 @@
+mod admission;
+mod local_helpers;
 use super::restore_storage::RestoreVolumeOwner;
+use crate::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission;
 use citadel_backups::spec::{BackupExecutionLocation, BackupRepositorySpec};
 use citadel_docker::bind_mount::{BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT};
 use citadel_platforms::PlatformInfoPort;
@@ -42,8 +45,10 @@ use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuar
 
 #[derive(Clone)]
 pub struct DockerResticBackupExecutor {
+    local_authority: Uuid,
+    local_budget: citadel_runtime::IoBudget,
+    admission: Arc<PostgresBackupDataAdmission>,
     settings: Option<super::settings::BackupExecutionSettings>,
-    progress: Option<Arc<dyn Fn(BackupLog) + Send + Sync>>,
     docker: OsString,
     restic: OsString,
     image: String,
@@ -59,6 +64,69 @@ enum BackupExecutionTarget {
     Agent(AgentExecutionClient),
 }
 
+#[derive(Clone, Copy)]
+struct OperationOwner {
+    repository: Uuid,
+    run: Uuid,
+    attempt: Uuid,
+}
+
+impl OperationOwner {
+    fn backup(claim: &BackupClaim) -> Self {
+        Self {
+            repository: claim.repository.id,
+            run: claim.run.id,
+            attempt: claim.attempt_id,
+        }
+    }
+
+    fn restore(claim: &RestoreClaim) -> Self {
+        Self {
+            repository: claim.repository.id,
+            run: claim.run.id,
+            attempt: claim.attempt_id,
+        }
+    }
+}
+
+#[derive(Default)]
+struct OperationState {
+    cleanup_uncertain: std::sync::atomic::AtomicBool,
+    execution_started: std::sync::atomic::AtomicBool,
+    waiting_capacity: std::sync::atomic::AtomicBool,
+    local_scope: std::sync::Mutex<Option<(BackupDataOperation, BackupExecutionHost)>>,
+}
+
+/// Immutable executor dependencies are shared; mutable state belongs to one run.
+/// Admission clones share that run's state, never state from another invocation.
+#[derive(Clone)]
+struct ResticOperation<'a> {
+    executor: &'a DockerResticBackupExecutor,
+    owner: OperationOwner,
+    state: Arc<OperationState>,
+    defer_capacity: bool,
+    data_scope: Option<admission::DataScope>,
+    progress: Option<Arc<dyn Fn(BackupLog) + Send + Sync>>,
+}
+
+impl<'a> ResticOperation<'a> {
+    fn new(
+        executor: &'a DockerResticBackupExecutor,
+        owner: OperationOwner,
+        defer_capacity: bool,
+        progress: Option<Arc<dyn Fn(BackupLog) + Send + Sync>>,
+    ) -> Self {
+        Self {
+            executor,
+            owner,
+            state: Arc::default(),
+            defer_capacity,
+            data_scope: None,
+            progress,
+        }
+    }
+}
+
 impl DockerResticBackupExecutor {
     pub fn new(
         docker: impl Into<OsString>,
@@ -68,8 +136,10 @@ impl DockerResticBackupExecutor {
         pool: PgPool,
     ) -> Self {
         Self {
+            admission: Arc::new(crate::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission::new(pool.clone())),
+            local_authority: Uuid::now_v7(),
+            local_budget: citadel_runtime::IoBudget::new(2.try_into().expect("positive capacity"), citadel_runtime::runtime_metrics::RuntimeWork::LocalHeavyWork),
             settings: None,
-            progress: None,
             docker: docker.into(),
             restic: "restic".into(),
             image: image.into(),
@@ -81,6 +151,14 @@ impl DockerResticBackupExecutor {
         }
     }
 
+    pub fn with_local_authority(mut self, authority: Uuid) -> Self {
+        self.local_authority = authority;
+        self
+    }
+    pub fn with_local_budget(mut self, budget: citadel_runtime::IoBudget) -> Self {
+        self.local_budget = budget;
+        self
+    }
     pub fn with_settings(mut self, settings: super::settings::BackupExecutionSettings) -> Self {
         self.settings = Some(settings);
         self
@@ -125,7 +203,192 @@ impl DockerResticBackupExecutor {
     }
 }
 
+impl ResticOperation<'_> {
+    async fn execution_target(
+        &self,
+        platform_id: Uuid,
+        node_id: Option<&str>,
+        cancellation: &CancellationToken,
+    ) -> Result<BackupExecutionTarget, String> {
+        let (connector, address, status) =
+            crate::persistence::postgres::platforms::connection::execution_target(
+                self.executor.targets.pool(),
+                platform_id,
+            )
+            .await
+            .map_err(|error| format!("Platform lookup failed: {error}"))?
+            .ok_or_else(|| "The selected Platform was not found.".to_owned())?;
+        if status != "Online" {
+            self.defer_if_unstarted();
+            return Err("The selected Platform is disconnected or unavailable.".to_owned());
+        }
+        if let Some(node_id) = node_id {
+            let target = EdgeTarget::node(platform_id, node_id.to_owned());
+            if let Ok(session) = self.executor.edge.get(&target) {
+                return Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Edge(
+                    session,
+                )));
+            }
+        }
+        if connector == "EdgeAgent" {
+            let session = self
+                .executor
+                .edge
+                .get(&EdgeTarget::platform(platform_id))
+                .map_err(|error| {
+                    self.defer_if_unstarted();
+                    error.to_string()
+                })?;
+            if let Some(expected) = node_id {
+                let info = crate::connectors::edge::EdgeRuntime {
+                    session: session.clone(),
+                }
+                .get_info(cancellation)
+                .await
+                .map_err(|error| error.to_string())?;
+                if info.swarm.as_ref().map(|swarm| swarm.node_id.as_str()) != Some(expected) {
+                    return Err(
+                        "The connected Edge Agent is not on the required Swarm Node.".into(),
+                    );
+                }
+            }
+            return Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Edge(
+                session,
+            )));
+        }
+        if connector == "Local" {
+            if let Some(expected) = node_id {
+                let actual = self
+                    .execute(
+                        vec!["info".into(), "--format".into(), "{{.Swarm.NodeID}}".into()],
+                        vec![],
+                        Duration::from_secs(30),
+                        cancellation,
+                    )
+                    .await?;
+                if !actual.succeeded() || String::from_utf8_lossy(&actual.stdout).trim() != expected
+                {
+                    return Err(
+                        "The selected Swarm Node Agent is disconnected or unavailable.".into(),
+                    );
+                }
+            }
+            return Ok(BackupExecutionTarget::Local);
+        }
+        if connector != "Agent" {
+            return Err(format!(
+                "Platform connector '{connector}' does not support backup execution."
+            ));
+        }
+        let agent = self
+            .executor
+            .agent
+            .as_ref()
+            .ok_or_else(|| "The configured Agent backup transport is unavailable.".to_owned())?
+            .at_address(&address, platform_id)
+            .map_err(|error| error.message)?;
+        if let Some(expected_node) = node_id {
+            let info = agent
+                .handshake(cancellation)
+                .await
+                .map_err(|error| error.to_string())?;
+            let actual = info
+                .swarm
+                .as_ref()
+                .map(|swarm| swarm.node_id.as_str())
+                .filter(|node| !node.is_empty());
+            if actual != Some(expected_node) {
+                return Err(format!(
+                    "The configured Agent is not connected to required Swarm Node '{expected_node}'."
+                ));
+            }
+        }
+        Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Direct(
+            Arc::new(agent.clone()),
+        )))
+    }
+}
+
 impl BackupExecutor for DockerResticBackupExecutor {
+    fn reconcile_cleanup<'a>(
+        &'a self,
+        after: Option<Uuid>,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<Uuid>, BackupError>> {
+        Box::pin(async move {
+            let pending = self.admission.pending_cleanup(after).await?;
+            let next = (pending.len() == 16).then(|| pending.last().expect("full page").0.id);
+            for (operation, host) in pending {
+                if cancellation.is_cancelled() {
+                    break;
+                }
+                let context = ResticOperation::new(
+                    self,
+                    OperationOwner {
+                        repository: operation.repository_id,
+                        run: operation.owner_id,
+                        attempt: operation.attempt_id,
+                    },
+                    false,
+                    None,
+                );
+                let target = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    context.execution_target(
+                        operation.platform_id,
+                        operation.node_id.as_deref(),
+                        cancellation,
+                    ),
+                )
+                .await;
+                let confirmed = match target {
+                    Ok(Ok(BackupExecutionTarget::Local)) => {
+                        match tokio::time::timeout(
+                            Duration::from_secs(30),
+                            context.reconcile_local_helpers(&operation, &host, None),
+                        )
+                        .await
+                        {
+                            Ok(Ok(())) => true,
+                            result => {
+                                let reason = match result {
+                                    Ok(Err(error)) => error,
+                                    _ => {
+                                        "Local Docker cleanup timed out; storage remains reserved."
+                                            .into()
+                                    }
+                                };
+                                let mut message =
+                                    redact(&format!("Local backup cleanup pending: {reason}"));
+                                message.truncate(message.floor_char_boundary(1024));
+                                self.admission
+                                    .record_cleanup_pending(&operation, &message)
+                                    .await?;
+                                false
+                            }
+                        }
+                    }
+                    Ok(Ok(BackupExecutionTarget::Agent(agent))) => {
+                        let request =
+                            citadel_contracts::citadel::images::v1::DataOperationRequest {
+                                run_id: operation.owner_id.to_string(),
+                                attempt_id: operation.attempt_id.to_string(),
+                                operation_id: operation.id.to_string(),
+                                admission_authority_id: host.authority_id.to_string(),
+                                docker_daemon_id: host.daemon_id.clone(),
+                                admission_generation: host.generation,
+                            };
+                        matches!(tokio::time::timeout(Duration::from_secs(5),agent.reconcile_data(request,cancellation)).await,Ok(Ok(response)) if response.state==citadel_contracts::citadel::images::v1::BuildCleanupState::BuildCleanupConfirmed as i32)
+                    }
+                    _ => false,
+                };
+                if confirmed {
+                    self.admission.finish_cleanup(&operation, &host).await?;
+                }
+            }
+            Ok(next)
+        })
+    }
     fn backup_with_progress<'a>(
         &'a self,
         claim: &'a BackupClaim,
@@ -134,9 +397,14 @@ impl BackupExecutor for DockerResticBackupExecutor {
         progress: Arc<dyn Fn(BackupLog) + Send + Sync>,
     ) -> BoxFuture<'a, BackupExecutionResult> {
         Box::pin(async move {
-            let mut executor = self.clone();
-            executor.progress = Some(progress);
-            executor.backup(claim, plan, cancellation).await
+            ResticOperation::new(
+                self,
+                OperationOwner::backup(claim),
+                plan.local_directory.is_none(),
+                Some(progress),
+            )
+            .backup(claim, plan, cancellation)
+            .await
         })
     }
     fn restore_with_progress<'a>(
@@ -146,84 +414,48 @@ impl BackupExecutor for DockerResticBackupExecutor {
         progress: Arc<dyn Fn(BackupLog) + Send + Sync>,
     ) -> BoxFuture<'a, RestoreExecutionResult> {
         Box::pin(async move {
-            let mut executor = self.clone();
-            executor.progress = Some(progress);
-            executor.restore(claim, cancellation).await
+            ResticOperation::new(self, OperationOwner::restore(claim), true, Some(progress))
+                .restore(claim, cancellation)
+                .await
         })
     }
     fn repository<'a>(
         &'a self,
         repository: &'a BackupRepository,
+        operation_id: Uuid,
         operation: &'a str,
         location: &'a str,
         platform_id: Option<Uuid>,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<BackupLog>, BackupError>> {
         Box::pin(async move {
-            self.validate_repository_target(repository, location, platform_id)
-                .await
-                .map_err(BackupError::Validation)?;
-            if location == "Core" {
-                return self
-                    .run_direct_repository_operation(repository, operation, cancellation)
-                    .await
-                    .map_err(BackupError::Storage);
-            }
-            let platform_id = platform_id.ok_or_else(|| {
-                BackupError::Validation("A Platform is required for this operation.".into())
-            })?;
-            if let BackupExecutionTarget::Agent(agent) = self
-                .execution_target(platform_id, None, cancellation)
-                .await
-                .map_err(BackupError::Validation)?
-            {
-                let arguments = match operation {
-                    "Validate" | "Check" => vec!["check".into(), "--read-data-subset=1/100".into()],
-                    "Initialize" => vec!["init".into()],
-                    "Prune" => vec!["prune".into()],
-                    _ => {
-                        return Err(BackupError::Validation(
-                            "Backup Repository operation is invalid.".into(),
-                        ));
-                    }
-                };
-                return self
-                    .run_agent_repository(
-                        &agent,
-                        platform_id,
-                        repository,
-                        arguments,
-                        self.repository_timeout(),
-                        cancellation,
-                    )
-                    .await
-                    .map_err(BackupError::Storage);
-            }
-            let name = format!("citadel-repository-{}", Uuid::now_v7().simple());
-            let (mut args, env) = self
-                .base_args(&name, repository)
-                .await
-                .map_err(BackupError::Validation)?;
-            args.push(self.image.clone().into());
-            match operation {
-                "Validate" | "Check" => {
-                    args.extend(["check".into(), "--read-data-subset=1/100".into()])
-                }
-                "Initialize" => args.push("init".into()),
-                "Prune" => args.push("prune".into()),
-                _ => {
-                    return Err(BackupError::Validation(
-                        "Backup Repository operation is invalid.".into(),
-                    ));
-                }
-            }
-            let output = self
-                .execute(args, env, self.repository_timeout(), cancellation)
+            let executor = ResticOperation::new(
+                self,
+                OperationOwner {
+                    repository: repository.id,
+                    run: operation_id,
+                    attempt: operation_id,
+                },
+                true,
+                None,
+            );
+            let result = executor
+                .repository_inner(repository, operation, location, platform_id, cancellation)
                 .await;
-            self.cleanup(&name).await;
-            output
-                .map(|value| output_logs(&value, self.log_line_limit(), self.maximum_output))
-                .map_err(BackupError::Storage)
+            if executor.cleanup_is_uncertain() {
+                return Err(BackupError::CleanupPending);
+            }
+            if executor
+                .state
+                .waiting_capacity
+                .load(std::sync::atomic::Ordering::Acquire)
+            {
+                return Err(BackupError::Conflict(
+                    "Execution host is busy or unavailable. Retry when capacity is available."
+                        .into(),
+                ));
+            }
+            result
         })
     }
     fn backup<'a>(
@@ -233,46 +465,14 @@ impl BackupExecutor for DockerResticBackupExecutor {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BackupExecutionResult> {
         Box::pin(async move {
-            match self.run_backup(claim, plan, cancellation).await {
-                Ok((snapshot, mut logs, items, summary, mut warnings)) => {
-                    let retention = self.run_retention(claim, plan, cancellation).await;
-                    let status = match retention {
-                        Ok(retention_logs) => {
-                            logs.extend(retention_logs);
-                            if warnings.is_empty() && plan.warnings.is_empty() {
-                                citadel_backups::BackupRunStatus::Succeeded
-                            } else {
-                                citadel_backups::BackupRunStatus::SucceededWithWarnings
-                            }
-                        }
-                        Err(error) => {
-                            warnings.push(format!(
-                                "Snapshot was created, but retention failed: {error}"
-                            ));
-                            citadel_backups::BackupRunStatus::SucceededWithWarnings
-                        }
-                    };
-                    BackupExecutionResult {
-                        status,
-                        snapshot_availability:
-                            citadel_backups::BackupSnapshotAvailability::Available,
-                        restic_snapshot_id: snapshot,
-                        parent_snapshot_id: None,
-                        files_processed: summary.files_processed,
-                        bytes_processed: summary.bytes_processed,
-                        bytes_added: summary.bytes_added,
-                        exit_code: Some(0),
-                        error_code: None,
-                        error_message: None,
-                        warnings: plan.warnings.iter().cloned().chain(warnings).collect(),
-                        logs,
-                        items,
-                    }
-                }
-                Err((error, logs, items)) => {
-                    failed_backup(error, cancellation.is_cancelled(), logs, items)
-                }
-            }
+            ResticOperation::new(
+                self,
+                OperationOwner::backup(claim),
+                plan.local_directory.is_none(),
+                None,
+            )
+            .backup(claim, plan, cancellation)
+            .await
         })
     }
     fn restore<'a>(
@@ -281,44 +481,165 @@ impl BackupExecutor for DockerResticBackupExecutor {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, RestoreExecutionResult> {
         Box::pin(async move {
-            match self.run_restore(claim, cancellation).await {
-                Ok(logs) => RestoreExecutionResult {
-                    status: citadel_backups::BackupRestoreStatus::Succeeded,
-                    exit_code: Some(0),
-                    error_code: None,
-                    error_message: None,
-                    logs,
-                },
-                Err(error) => RestoreExecutionResult {
-                    status: if cancellation.is_cancelled() {
-                        citadel_backups::BackupRestoreStatus::Cancelled
-                    } else {
-                        citadel_backups::BackupRestoreStatus::Failed
-                    },
-                    exit_code: None,
-                    error_code: Some(
-                        if cancellation.is_cancelled() {
-                            "Cancelled"
-                        } else {
-                            "ResticFailed"
-                        }
-                        .into(),
-                    ),
-                    error_message: Some(error),
-                    logs: vec![],
-                },
-            }
+            ResticOperation::new(self, OperationOwner::restore(claim), true, None)
+                .restore(claim, cancellation)
+                .await
         })
     }
 }
 
-impl DockerResticBackupExecutor {
+impl ResticOperation<'_> {
+    async fn backup(
+        &self,
+        claim: &BackupClaim,
+        plan: &BackupSourcePlan,
+        cancellation: &CancellationToken,
+    ) -> BackupExecutionResult {
+        let mut result = match self.run_backup(claim, plan, cancellation).await {
+            Ok((snapshot, mut logs, items, summary, mut warnings)) => {
+                let retention = self.run_retention(claim, plan, cancellation).await;
+                let status = match retention {
+                    Ok(retention_logs) => {
+                        logs.extend(retention_logs);
+                        if warnings.is_empty() && plan.warnings.is_empty() {
+                            citadel_backups::BackupRunStatus::Succeeded
+                        } else {
+                            citadel_backups::BackupRunStatus::SucceededWithWarnings
+                        }
+                    }
+                    Err(error) => {
+                        warnings.push(format!(
+                            "Snapshot was created, but retention failed: {error}"
+                        ));
+                        citadel_backups::BackupRunStatus::SucceededWithWarnings
+                    }
+                };
+                BackupExecutionResult {
+                    status,
+                    snapshot_availability: citadel_backups::BackupSnapshotAvailability::Available,
+                    restic_snapshot_id: snapshot,
+                    parent_snapshot_id: None,
+                    files_processed: summary.files_processed,
+                    bytes_processed: summary.bytes_processed,
+                    bytes_added: summary.bytes_added,
+                    exit_code: Some(0),
+                    error_code: None,
+                    error_message: None,
+                    warnings: plan.warnings.iter().cloned().chain(warnings).collect(),
+                    logs,
+                    items,
+                }
+            }
+            Err((error, logs, items)) => {
+                failed_backup(error, cancellation.is_cancelled(), logs, items)
+            }
+        };
+        if self
+            .state
+            .waiting_capacity
+            .load(std::sync::atomic::Ordering::Acquire)
+            && !cancellation.is_cancelled()
+        {
+            result.error_code = Some("HostBusy".into());
+            result.error_message = Some("Waiting for an available execution host.".into());
+        }
+        if let Some(directory) = &plan.local_directory
+            && (!matches!(tokio::fs::try_exists(directory).await, Ok(false))
+                || self.cleanup_is_uncertain()
+                || self
+                    .executor
+                    .admission
+                    .finish_core_work(self.owner.repository, self.owner.run, self.owner.attempt)
+                    .await
+                    .is_err())
+        {
+            self.mark_cleanup_uncertain();
+        }
+        if self.cleanup_is_uncertain() {
+            result.error_code = Some("CleanupPending".into());
+            result.error_message = Some(
+                "Backup helper cleanup could not be verified. Storage remains reserved.".into(),
+            );
+        }
+        result
+    }
+    async fn restore(
+        &self,
+        claim: &RestoreClaim,
+        cancellation: &CancellationToken,
+    ) -> RestoreExecutionResult {
+        let mut result = match self.run_restore(claim, cancellation).await {
+            Ok(logs) => RestoreExecutionResult {
+                status: citadel_backups::BackupRestoreStatus::Succeeded,
+                exit_code: Some(0),
+                error_code: None,
+                error_message: None,
+                logs,
+            },
+            Err(error) => RestoreExecutionResult {
+                status: if cancellation.is_cancelled() {
+                    citadel_backups::BackupRestoreStatus::Cancelled
+                } else {
+                    citadel_backups::BackupRestoreStatus::Failed
+                },
+                exit_code: None,
+                error_code: Some(
+                    if cancellation.is_cancelled() {
+                        "Cancelled"
+                    } else {
+                        "ResticFailed"
+                    }
+                    .into(),
+                ),
+                error_message: Some(error),
+                logs: vec![],
+            },
+        };
+        if self
+            .state
+            .waiting_capacity
+            .load(std::sync::atomic::Ordering::Acquire)
+            && !cancellation.is_cancelled()
+        {
+            result.error_code = Some("HostBusy".into());
+            result.error_message = Some("Waiting for an available execution host.".into());
+        }
+        if self.cleanup_is_uncertain() {
+            result.error_code = Some("CleanupPending".into());
+            result.error_message = Some(
+                "Backup helper cleanup could not be verified. Storage remains reserved.".into(),
+            );
+        }
+        result
+    }
+    async fn local_admission(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_runtime::IoPermit, String> {
+        if cancellation.is_cancelled() {
+            return Err("Backup was cancelled.".into());
+        }
+        let permit = if let Some(permit) = self.executor.local_budget.try_enter() {
+            permit
+        } else if self.defer_if_unstarted() {
+            return Err("Waiting for Core execution capacity.".into());
+        } else {
+            self.executor
+                .local_budget
+                .enter(cancellation)
+                .await
+                .ok_or("Backup was cancelled while waiting for Core capacity.")?
+        };
+        Ok(permit)
+    }
+
     async fn run_direct_repository_operation(
         &self,
         repository: &BackupRepository,
         operation: &str,
         cancellation: &CancellationToken,
     ) -> Result<Vec<BackupLog>, String> {
+        let _local = self.local_admission(cancellation).await?;
         let (location, environment) = self.direct_repository_environment(repository).await?;
         let mut arguments = vec!["-r".into(), location];
         match operation {
@@ -329,12 +650,12 @@ impl DockerResticBackupExecutor {
             "Prune" => arguments.push("prune".into()),
             _ => return Err("Backup Repository operation is invalid.".into()),
         }
-        let mut request = ProcessRequest::new(self.restic.clone())
+        let mut request = ProcessRequest::new(self.executor.restic.clone())
             .args(arguments)
             .limits(ProcessLimits {
-                timeout: self.repository_timeout(),
-                maximum_stdout_bytes: self.maximum_output,
-                maximum_stderr_bytes: self.maximum_output,
+                timeout: self.executor.repository_timeout(),
+                maximum_stdout_bytes: self.executor.maximum_output,
+                maximum_stderr_bytes: self.executor.maximum_output,
                 output_limit_policy: OutputLimitPolicy::Truncate,
             });
         for (key, value) in environment {
@@ -347,8 +668,8 @@ impl DockerResticBackupExecutor {
         if output.succeeded() {
             Ok(output_logs(
                 &output,
-                self.log_line_limit(),
-                self.maximum_output,
+                self.executor.log_line_limit(),
+                self.executor.maximum_output,
             ))
         } else {
             Err(redact(&String::from_utf8_lossy(&output.stderr)))
@@ -402,6 +723,9 @@ impl DockerResticBackupExecutor {
         let mut logs = Vec::new();
         let mut results = Vec::with_capacity(plan.items.len());
         for item in &plan.items {
+            if cancellation.is_cancelled() {
+                return Err(("Backup was cancelled.".into(), logs, results));
+            }
             let target = match self
                 .execution_target(
                     item.platform_id,
@@ -487,6 +811,10 @@ impl DockerResticBackupExecutor {
         directory: &std::path::Path,
         cancellation: &CancellationToken,
     ) -> Result<(String, Vec<BackupLog>, ResticSummary), (String, Vec<BackupLog>)> {
+        let _local = self
+            .local_admission(cancellation)
+            .await
+            .map_err(|error| (error, vec![]))?;
         let (repository, environment) = self
             .direct_repository_environment(&claim.repository)
             .await
@@ -504,29 +832,36 @@ impl DockerResticBackupExecutor {
             "citadel-system".into(),
             directory.as_os_str().to_owned(),
         ];
-        let mut request =
-            ProcessRequest::new(self.restic.clone())
-                .args(args)
-                .limits(ProcessLimits {
-                    timeout: Duration::from_secs(
-                        u64::try_from(claim.policy.timeout_seconds).unwrap_or(14_400),
-                    ),
-                    maximum_stdout_bytes: self.maximum_output,
-                    maximum_stderr_bytes: self.maximum_output,
-                    output_limit_policy: OutputLimitPolicy::Truncate,
-                });
+        let mut request = ProcessRequest::new(self.executor.restic.clone())
+            .args(args)
+            .limits(ProcessLimits {
+                timeout: Duration::from_secs(
+                    u64::try_from(claim.policy.timeout_seconds).unwrap_or(14_400),
+                ),
+                maximum_stdout_bytes: self.executor.maximum_output,
+                maximum_stderr_bytes: self.executor.maximum_output,
+                output_limit_policy: OutputLimitPolicy::Truncate,
+            });
         for (key, value) in environment {
             request = request.env(key, value);
         }
         let output = match self.run_observed(request, cancellation).await {
             Ok(output) if output.succeeded() => output,
             Ok(output) => {
-                let logs = output_logs(&output, self.log_line_limit(), self.maximum_output);
+                let logs = output_logs(
+                    &output,
+                    self.executor.log_line_limit(),
+                    self.executor.maximum_output,
+                );
                 return Err((redact(&String::from_utf8_lossy(&output.stderr)), logs));
             }
             Err(error) => return Err((error.to_string(), vec![])),
         };
-        let logs = output_logs(&output, self.log_line_limit(), self.maximum_output);
+        let logs = output_logs(
+            &output,
+            self.executor.log_line_limit(),
+            self.executor.maximum_output,
+        );
         let summary = parse_restic_summary(&output.stdout).ok_or_else(|| {
             (
                 "Restic completed without returning a summary.".to_owned(),
@@ -543,6 +878,27 @@ impl DockerResticBackupExecutor {
     }
 
     async fn run_backup_item(
+        &self,
+        claim: &BackupClaim,
+        item: &BackupSourceItem,
+        cancellation: &CancellationToken,
+    ) -> Result<(String, Vec<BackupLog>, ResticSummary), (String, Vec<BackupLog>)> {
+        let scope = self
+            .admit_local(
+                item.platform_id,
+                item.docker_node_id.as_deref(),
+                cancellation,
+            )
+            .await
+            .map_err(|error| (error, vec![]))?;
+        let result = self.run_local_backup_item(claim, item, cancellation).await;
+        self.finish_local(scope)
+            .await
+            .map_err(|error| (error, vec![]))?;
+        result
+    }
+
+    async fn run_local_backup_item(
         &self,
         claim: &BackupClaim,
         item: &BackupSourceItem,
@@ -590,7 +946,7 @@ impl DockerResticBackupExecutor {
                     .into(),
                 "--entrypoint".into(),
                 "/bin/sh".into(),
-                self.image.clone().into(),
+                self.executor.image.clone().into(),
                 "-c".into(),
                 BIND_BACKUP_SCRIPT.into(),
                 "sh".into(),
@@ -599,7 +955,7 @@ impl DockerResticBackupExecutor {
             args.extend([
                 "--volume".into(),
                 format!("{volume}:/data:ro").into(),
-                self.image.clone().into(),
+                self.executor.image.clone().into(),
             ]);
         }
         args.extend([
@@ -626,12 +982,16 @@ impl DockerResticBackupExecutor {
                 cancellation,
             )
             .await;
-        self.cleanup(&name).await;
+        self.cleanup(&name).await.map_err(|error| (error, vec![]))?;
         let output = match output {
             Ok(output) => output,
             Err(error) => return Err((error, vec![])),
         };
-        let logs = output_logs(&output, self.log_line_limit(), self.maximum_output);
+        let logs = output_logs(
+            &output,
+            self.executor.log_line_limit(),
+            self.executor.maximum_output,
+        );
         let summary = parse_restic_summary(&output.stdout).ok_or_else(|| {
             (
                 "Restic completed without returning a summary.".to_owned(),
@@ -648,6 +1008,31 @@ impl DockerResticBackupExecutor {
     }
 
     async fn run_agent_backup_item(
+        &self,
+        agent: &AgentExecutionClient,
+        claim: &BackupClaim,
+        item: &BackupSourceItem,
+        cancellation: &CancellationToken,
+    ) -> Result<(String, Vec<BackupLog>, ResticSummary), (String, Vec<BackupLog>)> {
+        let scoped = self
+            .admit_data(
+                agent,
+                item.platform_id,
+                item.docker_node_id.as_deref(),
+                cancellation,
+            )
+            .await
+            .map_err(|error| (error, vec![]))?;
+        let result = scoped
+            .run_agent_backup_item_admitted(agent, claim, item, cancellation)
+            .await;
+        scoped
+            .finish_data()
+            .await
+            .map_err(|error| (error, vec![]))?;
+        result
+    }
+    async fn run_agent_backup_item_admitted(
         &self,
         agent: &AgentExecutionClient,
         claim: &BackupClaim,
@@ -732,7 +1117,7 @@ impl DockerResticBackupExecutor {
                         tty: false,
                     },
                     timeout,
-                    self.maximum_output,
+                    self.executor.maximum_output,
                     cancellation,
                 )
                 .await
@@ -740,8 +1125,8 @@ impl DockerResticBackupExecutor {
             let logs = agent_output_logs(
                 &output.stdout,
                 &output.stderr,
-                self.log_line_limit(),
-                self.maximum_output,
+                self.executor.log_line_limit(),
+                self.executor.maximum_output,
             );
             if output.exit_code != 0 {
                 return Err((redact(&String::from_utf8_lossy(&output.stderr)), logs));
@@ -761,12 +1146,37 @@ impl DockerResticBackupExecutor {
             Ok((snapshot, logs, summary.1))
         }
         .await;
-        let _ = agent
-            .delete_container(&container_id, &CancellationToken::new())
-            .await;
+        self.cleanup_agent(agent, &container_id)
+            .await
+            .map_err(|error| (error, vec![]))?;
         result
     }
     async fn run_agent_repository(
+        &self,
+        agent: &AgentExecutionClient,
+        target: (Uuid, Option<&str>),
+        repository: &BackupRepository,
+        arguments: Vec<String>,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<BackupLog>, String> {
+        let scoped = self
+            .admit_data(agent, target.0, target.1, cancellation)
+            .await?;
+        let result = scoped
+            .run_agent_repository_admitted(
+                agent,
+                target.0,
+                repository,
+                arguments,
+                timeout,
+                cancellation,
+            )
+            .await;
+        scoped.finish_data().await?;
+        result
+    }
+    async fn run_agent_repository_admitted(
         &self,
         agent: &AgentExecutionClient,
         platform_id: Uuid,
@@ -804,7 +1214,7 @@ impl DockerResticBackupExecutor {
                         tty: false,
                     },
                     timeout,
-                    self.maximum_output,
+                    self.executor.maximum_output,
                     cancellation,
                 )
                 .await
@@ -815,14 +1225,12 @@ impl DockerResticBackupExecutor {
             Ok(agent_output_logs(
                 &output.stdout,
                 &output.stderr,
-                self.log_line_limit(),
-                self.maximum_output,
+                self.executor.log_line_limit(),
+                self.executor.maximum_output,
             ))
         }
         .await;
-        let _ = agent
-            .delete_container(&container_id, &CancellationToken::new())
-            .await;
+        self.cleanup_agent(agent, &container_id).await?;
         result
     }
 
@@ -850,7 +1258,7 @@ impl DockerResticBackupExecutor {
             return self
                 .run_agent_repository(
                     &agent,
-                    item.platform_id,
+                    (item.platform_id, item.docker_node_id.as_deref()),
                     &claim.repository,
                     vec![
                         "forget".into(),
@@ -868,28 +1276,48 @@ impl DockerResticBackupExecutor {
                 )
                 .await;
         }
-        let name = format!("citadel-retention-{}", claim.run.id.simple());
-        let (mut args, env) = self.base_args(&name, &claim.repository).await?;
-        args.extend([
-            self.image.clone().into(),
-            "forget".into(),
-            "--json".into(),
-            "--tag".into(),
-            policy_tag(claim.policy.id).into(),
-            "--keep-last".into(),
-            claim.policy.keep_last_successful.to_string().into(),
-            "--prune".into(),
-        ]);
-        let output = self
-            .execute(
-                args,
-                env,
-                Duration::from_secs(u64::try_from(claim.policy.timeout_seconds).unwrap_or(14_400)),
+        let scope = self
+            .admit_local(
+                item.platform_id,
+                item.docker_node_id.as_deref(),
                 cancellation,
             )
-            .await;
-        self.cleanup(&name).await;
-        output.map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
+            .await?;
+        let result = async {
+            let name = format!("citadel-retention-{}", claim.run.id.simple());
+            let (mut args, env) = self.base_args(&name, &claim.repository).await?;
+            args.extend([
+                self.executor.image.clone().into(),
+                "forget".into(),
+                "--json".into(),
+                "--tag".into(),
+                policy_tag(claim.policy.id).into(),
+                "--keep-last".into(),
+                claim.policy.keep_last_successful.to_string().into(),
+                "--prune".into(),
+            ]);
+            let output = self
+                .execute(
+                    args,
+                    env,
+                    Duration::from_secs(
+                        u64::try_from(claim.policy.timeout_seconds).unwrap_or(14_400),
+                    ),
+                    cancellation,
+                )
+                .await;
+            self.cleanup(&name).await?;
+            output.map(|output| {
+                output_logs(
+                    &output,
+                    self.executor.log_line_limit(),
+                    self.executor.maximum_output,
+                )
+            })
+        }
+        .await;
+        self.finish_local(scope).await?;
+        result
     }
 
     async fn run_direct_retention(
@@ -897,6 +1325,7 @@ impl DockerResticBackupExecutor {
         claim: &BackupClaim,
         cancellation: &CancellationToken,
     ) -> Result<Vec<BackupLog>, String> {
+        let _local = self.local_admission(cancellation).await?;
         let (repository, environment) = self
             .direct_repository_environment(&claim.repository)
             .await?;
@@ -911,14 +1340,14 @@ impl DockerResticBackupExecutor {
             claim.policy.keep_last_successful.to_string().into(),
             "--prune".into(),
         ];
-        let mut request = ProcessRequest::new(self.restic.clone())
+        let mut request = ProcessRequest::new(self.executor.restic.clone())
             .args(arguments)
             .limits(ProcessLimits {
                 timeout: Duration::from_secs(
                     u64::try_from(claim.policy.timeout_seconds).unwrap_or(14_400),
                 ),
-                maximum_stdout_bytes: self.maximum_output,
-                maximum_stderr_bytes: self.maximum_output,
+                maximum_stdout_bytes: self.executor.maximum_output,
+                maximum_stderr_bytes: self.executor.maximum_output,
                 output_limit_policy: OutputLimitPolicy::Truncate,
             });
         for (key, value) in environment {
@@ -931,14 +1360,51 @@ impl DockerResticBackupExecutor {
         if output.succeeded() {
             Ok(output_logs(
                 &output,
-                self.log_line_limit(),
-                self.maximum_output,
+                self.executor.log_line_limit(),
+                self.executor.maximum_output,
             ))
         } else {
             Err(redact(&String::from_utf8_lossy(&output.stderr)))
         }
     }
     async fn run_restore(
+        &self,
+        claim: &RestoreClaim,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<BackupLog>, String> {
+        let target = self
+            .execution_target(
+                claim.run.target_platform_id,
+                claim.run.target_docker_node_id.as_deref(),
+                cancellation,
+            )
+            .await?;
+        if let BackupExecutionTarget::Agent(agent) = target {
+            let scoped = self
+                .admit_data(
+                    &agent,
+                    claim.run.target_platform_id,
+                    claim.run.target_docker_node_id.as_deref(),
+                    cancellation,
+                )
+                .await?;
+            let result = scoped.run_restore_admitted(claim, cancellation).await;
+            scoped.finish_data().await?;
+            result
+        } else {
+            let scope = self
+                .admit_local(
+                    claim.run.target_platform_id,
+                    claim.run.target_docker_node_id.as_deref(),
+                    cancellation,
+                )
+                .await?;
+            let result = self.run_restore_admitted(claim, cancellation).await;
+            self.finish_local(scope).await?;
+            result
+        }
+    }
+    async fn run_restore_admitted(
         &self,
         claim: &RestoreClaim,
         cancellation: &CancellationToken,
@@ -996,7 +1462,7 @@ impl DockerResticBackupExecutor {
         let (mut metadata_args, metadata_env) =
             self.base_args(&metadata_name, &claim.repository).await?;
         metadata_args.extend([
-            self.image.clone().into(),
+            self.executor.image.clone().into(),
             "snapshots".into(),
             "--json".into(),
             snapshot.into(),
@@ -1009,7 +1475,7 @@ impl DockerResticBackupExecutor {
                 cancellation,
             )
             .await;
-        self.cleanup(&metadata_name).await;
+        self.cleanup(&metadata_name).await?;
         let (snapshot, root) = snapshot_root(&metadata?.stdout, snapshot)?;
         let owner = RestoreVolumeOwner::new(claim.run.target_platform_id, claim.run.id);
         if !existing {
@@ -1045,13 +1511,14 @@ impl DockerResticBackupExecutor {
         args.extend([
             "--volume".into(),
             format!("{volume}:/restore{root}").into(),
-            self.image.clone().into(),
+            self.executor.image.clone().into(),
             "restore".into(),
             snapshot.into(),
             "--target".into(),
             "/restore".into(),
             "--delete".into(),
         ]);
+        let prior_cleanup_uncertainty = self.cleanup_is_uncertain();
         let created = self
             .execute(args, env, Duration::from_secs(60), cancellation)
             .await
@@ -1066,7 +1533,16 @@ impl DockerResticBackupExecutor {
                     .await
                     .is_err()
                 {
+                    self.mark_cleanup_uncertain();
                     error.push_str(" Restore helper cleanup could not be verified; inspect the destination before retrying.");
+                } else {
+                    // The exact attempt-labelled helper was observed and its
+                    // immutable ID removed. This resolves this create's lost
+                    // response, without clearing an earlier cleanup failure.
+                    self.state.cleanup_uncertain.store(
+                        prior_cleanup_uncertainty,
+                        std::sync::atomic::Ordering::Release,
+                    );
                 }
                 return Err(error);
             }
@@ -1097,16 +1573,22 @@ impl DockerResticBackupExecutor {
                     container_id.clone().into(),
                 ],
                 vec![],
-                self.restore_timeout(),
+                self.executor.restore_timeout(),
                 cancellation,
             )
             .await
         }
         .await;
-        self.cleanup(&container_id).await;
+        self.cleanup(&container_id).await?;
         // Preserve partial data for inspection. Never remove a volume based on
         // a pre-create existence check or a remembered name after cancellation.
-        output.map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
+        output.map(|output| {
+            output_logs(
+                &output,
+                self.executor.log_line_limit(),
+                self.executor.maximum_output,
+            )
+        })
     }
 
     async fn verify_local_restore_owner(
@@ -1161,6 +1643,18 @@ impl DockerResticBackupExecutor {
             )
             .await?;
         let id = restore_helper_identity(&output)?;
+        if let Some((operation, host)) = self.local_scope()? {
+            // Keep the recovered immutable identity before removing the helper,
+            // so a crash after removal still leaves durable cleanup evidence.
+            self.executor
+                .admission
+                .register_helper(&operation, name, &id)
+                .await
+                .map_err(|error| error.to_string())?;
+            return self
+                .reconcile_local_helpers(&operation, &host, Some(&id))
+                .await;
+        }
         self.execute(
             vec!["rm".into(), "--force".into(), id.into()],
             vec![],
@@ -1204,7 +1698,7 @@ impl DockerResticBackupExecutor {
                     "no-new-privileges".into(),
                     "--entrypoint".into(),
                     "/bin/sh".into(),
-                    self.image.clone().into(),
+                    self.executor.image.clone().into(),
                     "-c".into(),
                     BIND_PATH_PROBE.into(),
                     "sh".into(),
@@ -1215,7 +1709,7 @@ impl DockerResticBackupExecutor {
                 cancellation,
             )
             .await;
-        self.cleanup(&name).await;
+        self.cleanup(&name).await?;
         output.map(|_| ())
     }
 
@@ -1263,7 +1757,7 @@ impl DockerResticBackupExecutor {
                         tty: false,
                     },
                     Duration::from_secs(30),
-                    self.maximum_output,
+                    self.executor.maximum_output,
                     cancellation,
                 )
                 .await
@@ -1275,7 +1769,7 @@ impl DockerResticBackupExecutor {
             }
         }
         .await;
-        let _ = agent.delete_container(&id, &CancellationToken::new()).await;
+        self.cleanup_agent(agent, &id).await?;
         result
     }
 
@@ -1357,7 +1851,7 @@ impl DockerResticBackupExecutor {
                         .into(),
                     "--entrypoint".into(),
                     "/bin/sh".into(),
-                    self.image.clone().into(),
+                    self.executor.image.clone().into(),
                     "-c".into(),
                     BIND_RESTORE_SCRIPT.into(),
                     "sh".into(),
@@ -1365,11 +1859,16 @@ impl DockerResticBackupExecutor {
                     overwrite.into(),
                 ]);
                 let output = self
-                    .execute(args, env, self.restore_timeout(), cancellation)
+                    .execute(args, env, self.executor.restore_timeout(), cancellation)
                     .await;
-                self.cleanup(&name).await;
-                output
-                    .map(|output| output_logs(&output, self.log_line_limit(), self.maximum_output))
+                self.cleanup(&name).await?;
+                output.map(|output| {
+                    output_logs(
+                        &output,
+                        self.executor.log_line_limit(),
+                        self.executor.maximum_output,
+                    )
+                })
             }
             BackupExecutionTarget::Agent(agent) => {
                 self.validate_agent_bind_path(
@@ -1379,7 +1878,7 @@ impl DockerResticBackupExecutor {
                     cancellation,
                 )
                 .await?;
-                let timeout = self.restore_timeout();
+                let timeout = self.executor.restore_timeout();
                 let id = self
                     .create_agent_helper(
                         &agent,
@@ -1418,7 +1917,7 @@ impl DockerResticBackupExecutor {
                                 tty: false,
                             },
                             timeout,
-                            self.maximum_output,
+                            self.executor.maximum_output,
                             cancellation,
                         )
                         .await
@@ -1429,12 +1928,12 @@ impl DockerResticBackupExecutor {
                     Ok(agent_output_logs(
                         &output.stdout,
                         &output.stderr,
-                        self.log_line_limit(),
-                        self.maximum_output,
+                        self.executor.log_line_limit(),
+                        self.executor.maximum_output,
                     ))
                 }
                 .await;
-                let _ = agent.delete_container(&id, &CancellationToken::new()).await;
+                self.cleanup_agent(&agent, &id).await?;
                 result
             }
         }
@@ -1477,7 +1976,7 @@ impl DockerResticBackupExecutor {
                         tty: false,
                     },
                     Duration::from_secs(60),
-                    self.maximum_output,
+                    self.executor.maximum_output,
                     cancellation,
                 )
                 .await
@@ -1488,9 +1987,7 @@ impl DockerResticBackupExecutor {
             snapshot_root(&metadata.stdout, snapshot)
         }
         .await;
-        let _ = agent
-            .delete_container(&container_id, &CancellationToken::new())
-            .await;
+        self.cleanup_agent(agent, &container_id).await?;
         result
     }
 
@@ -1532,7 +2029,7 @@ impl DockerResticBackupExecutor {
                 .map_err(|error| error.to_string())?;
             owner.verify(&claim.run.target_volume_name, &volume)?;
         }
-        let timeout = self.restore_timeout();
+        let timeout = self.executor.restore_timeout();
         let container_id = self
             .create_agent_helper(
                 agent,
@@ -1588,7 +2085,7 @@ impl DockerResticBackupExecutor {
                         tty: false,
                     },
                     timeout,
-                    self.maximum_output,
+                    self.executor.maximum_output,
                     cancellation,
                 )
                 .await
@@ -1597,116 +2094,16 @@ impl DockerResticBackupExecutor {
                 Ok(agent_output_logs(
                     &output.stdout,
                     &output.stderr,
-                    self.log_line_limit(),
-                    self.maximum_output,
+                    self.executor.log_line_limit(),
+                    self.executor.maximum_output,
                 ))
             } else {
                 Err(redact(&String::from_utf8_lossy(&output.stderr)))
             }
         }
         .await;
-        let _ = agent
-            .delete_container(&container_id, &CancellationToken::new())
-            .await;
+        self.cleanup_agent(agent, &container_id).await?;
         result
-    }
-
-    async fn execution_target(
-        &self,
-        platform_id: Uuid,
-        node_id: Option<&str>,
-        cancellation: &CancellationToken,
-    ) -> Result<BackupExecutionTarget, String> {
-        let (connector, address, status) =
-            crate::persistence::postgres::platforms::connection::execution_target(
-                self.targets.pool(),
-                platform_id,
-            )
-            .await
-            .map_err(|error| format!("Platform lookup failed: {error}"))?
-            .ok_or_else(|| "The selected Platform was not found.".to_owned())?;
-        if status != "Online" {
-            return Err("The selected Platform is disconnected or unavailable.".to_owned());
-        }
-        if let Some(node_id) = node_id {
-            let target = EdgeTarget::node(platform_id, node_id.to_owned());
-            if let Ok(session) = self.edge.get(&target) {
-                return Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Edge(
-                    session,
-                )));
-            }
-        }
-        if connector == "EdgeAgent" {
-            let session = self
-                .edge
-                .get(&EdgeTarget::platform(platform_id))
-                .map_err(|error| error.to_string())?;
-            if let Some(expected) = node_id {
-                let info = crate::connectors::edge::EdgeRuntime {
-                    session: session.clone(),
-                }
-                .get_info(cancellation)
-                .await
-                .map_err(|error| error.to_string())?;
-                if info.swarm.as_ref().map(|swarm| swarm.node_id.as_str()) != Some(expected) {
-                    return Err(
-                        "The connected Edge Agent is not on the required Swarm Node.".into(),
-                    );
-                }
-            }
-            return Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Edge(
-                session,
-            )));
-        }
-        if connector == "Local" {
-            if let Some(expected) = node_id {
-                let actual = self
-                    .execute(
-                        vec!["info".into(), "--format".into(), "{{.Swarm.NodeID}}".into()],
-                        vec![],
-                        Duration::from_secs(30),
-                        cancellation,
-                    )
-                    .await?;
-                if !actual.succeeded() || String::from_utf8_lossy(&actual.stdout).trim() != expected
-                {
-                    return Err(
-                        "The selected Swarm Node Agent is disconnected or unavailable.".into(),
-                    );
-                }
-            }
-            return Ok(BackupExecutionTarget::Local);
-        }
-        if connector != "Agent" {
-            return Err(format!(
-                "Platform connector '{connector}' does not support backup execution."
-            ));
-        }
-        let agent = self
-            .agent
-            .as_ref()
-            .ok_or_else(|| "The configured Agent backup transport is unavailable.".to_owned())?
-            .at_address(&address, platform_id)
-            .map_err(|error| error.message)?;
-        if let Some(expected_node) = node_id {
-            let info = agent
-                .handshake(cancellation)
-                .await
-                .map_err(|error| error.to_string())?;
-            let actual = info
-                .swarm
-                .as_ref()
-                .map(|swarm| swarm.node_id.as_str())
-                .filter(|node| !node.is_empty());
-            if actual != Some(expected_node) {
-                return Err(format!(
-                    "The configured Agent is not connected to required Swarm Node '{expected_node}'."
-                ));
-            }
-        }
-        Ok(BackupExecutionTarget::Agent(AgentExecutionClient::Direct(
-            Arc::new(agent.clone()),
-        )))
     }
 
     async fn create_agent_helper(
@@ -1717,6 +2114,13 @@ impl DockerResticBackupExecutor {
         timeout: Duration,
         cancellation: &CancellationToken,
     ) -> Result<String, String> {
+        if cancellation.is_cancelled() {
+            return Err("Backup was cancelled.".into());
+        }
+        let scope = self
+            .data_scope
+            .as_ref()
+            .ok_or("Backup host reservation is missing")?;
         // Packaged Agents include Restic. Use the image already installed on
         // this daemon instead of requiring Core's helper image on every node.
         let runtime_image = agent
@@ -1724,7 +2128,7 @@ impl DockerResticBackupExecutor {
             .await
             .map_err(|error| format!("Could not resolve the Agent backup helper image: {error}"))?;
         let image = if runtime_image.trim().is_empty() {
-            &self.image
+            &self.executor.image
         } else {
             &runtime_image
         };
@@ -1749,6 +2153,8 @@ impl DockerResticBackupExecutor {
                     restart_policy: RestartPolicy::Empty as i32,
                     labels: [
                         ("citadel.backup-helper".to_owned(), "true".to_owned()),
+                        ("citadel.data-operation".to_owned(), scope.request.operation_id.clone()),
+                        ("citadel.data-authority".to_owned(), scope.request.admission_authority_id.clone()),
                         ("citadel.platform-id".to_owned(), platform_id.to_string()),
                         ("com.citadel.system".to_owned(), "true".to_owned()),
                         ("com.citadel.system-role".to_owned(), "backup-helper".to_owned()),
@@ -1789,6 +2195,7 @@ impl DockerResticBackupExecutor {
             )
             .await
             .map_err(|error| {
+                self.mark_cleanup_uncertain();
                 format!(
                     "Backup helper image '{}' is unavailable on the target Agent or the helper could not be created: {error}",
                     image
@@ -1825,7 +2232,8 @@ impl DockerResticBackupExecutor {
         let mut environment = std::collections::HashMap::from([
             (
                 "RESTIC_PASSWORD".to_owned(),
-                self.secrets
+                self.executor
+                    .secrets
                     .resolve(repository.password_secret_id, repository.id)
                     .await
                     .map_err(|error| error.to_string())?
@@ -1839,7 +2247,8 @@ impl DockerResticBackupExecutor {
         ] {
             environment.insert(
                 key.to_owned(),
-                self.secrets
+                self.executor
+                    .secrets
                     .resolve(id, repository.id)
                     .await
                     .map_err(|error| error.to_string())?
@@ -1849,7 +2258,8 @@ impl DockerResticBackupExecutor {
         if let Some(id) = *session_token_secret_id {
             environment.insert(
                 "AWS_SESSION_TOKEN".to_owned(),
-                self.secrets
+                self.executor
+                    .secrets
                     .resolve(id, repository.id)
                     .await
                     .map_err(|error| error.to_string())?
@@ -1864,6 +2274,7 @@ impl DockerResticBackupExecutor {
         repo: &BackupRepository,
     ) -> Result<(Vec<OsString>, Vec<(OsString, OsString)>), String> {
         let password = self
+            .executor
             .secrets
             .resolve(repo.password_secret_id, repo.id)
             .await
@@ -1886,7 +2297,10 @@ impl DockerResticBackupExecutor {
         match &repo.spec {
             BackupRepositorySpec::FileSystem { location, path, .. } => {
                 let path = if *location == BackupExecutionLocation::Core {
-                    self.core_repository_path(path)?.display().to_string()
+                    self.executor
+                        .core_repository_path(path)?
+                        .display()
+                        .to_string()
                 } else {
                     path.to_owned()
                 };
@@ -1915,6 +2329,7 @@ impl DockerResticBackupExecutor {
                     (*secret_key_secret_id, "AWS_SECRET_ACCESS_KEY"),
                 ] {
                     let secret = self
+                        .executor
                         .secrets
                         .resolve(id, repo.id)
                         .await
@@ -1924,6 +2339,7 @@ impl DockerResticBackupExecutor {
                 }
                 if let Some(id) = *session_token_secret_id {
                     let secret = self
+                        .executor
                         .secrets
                         .resolve(id, repo.id)
                         .await
@@ -1941,6 +2357,7 @@ impl DockerResticBackupExecutor {
         repository: &BackupRepository,
     ) -> Result<(OsString, Vec<(OsString, OsString)>), String> {
         let password = self
+            .executor
             .secrets
             .resolve(repository.password_secret_id, repository.id)
             .await
@@ -1953,7 +2370,7 @@ impl DockerResticBackupExecutor {
                         "Citadel system backup requires a Core or S3-compatible repository.".into(),
                     );
                 }
-                self.core_repository_path(path)?.into_os_string()
+                self.executor.core_repository_path(path)?.into_os_string()
             }
             BackupRepositorySpec::S3Compatible {
                 endpoint,
@@ -1971,6 +2388,7 @@ impl DockerResticBackupExecutor {
                     (*secret_key_secret_id, "AWS_SECRET_ACCESS_KEY"),
                 ] {
                     let value = self
+                        .executor
                         .secrets
                         .resolve(id, repository.id)
                         .await
@@ -1979,6 +2397,7 @@ impl DockerResticBackupExecutor {
                 }
                 if let Some(id) = *session_token_secret_id {
                     let value = self
+                        .executor
                         .secrets
                         .resolve(id, repository.id)
                         .await
@@ -2007,7 +2426,7 @@ impl DockerResticBackupExecutor {
             ..
         } = &repository.spec
         {
-            self.core_repository_path(path)?;
+            self.executor.core_repository_path(path)?;
         }
         match location {
             "Core" if platform_id.is_none() => {}
@@ -2015,7 +2434,7 @@ impl DockerResticBackupExecutor {
                 let platform_id = platform_id
                     .ok_or_else(|| "A Platform is required for this operation.".to_owned())?;
                 if repository.repository_type != "S3Compatible" {
-                    self.targets.require_local(platform_id).await?;
+                    self.executor.targets.require_local(platform_id).await?;
                 }
             }
             _ => return Err("Backup Repository operation location is invalid.".to_owned()),
@@ -2028,7 +2447,10 @@ impl DockerResticBackupExecutor {
         {
             let repository_platform =
                 repository_platform.ok_or_else(|| "Repository Platform is required.".to_owned())?;
-            self.targets.require_local(repository_platform).await?;
+            self.executor
+                .targets
+                .require_local(repository_platform)
+                .await?;
             if location != "Platform" || platform_id != Some(repository_platform) {
                 return Err(
                     "Filesystem Backup Repository operations must run on their configured Platform."
@@ -2038,29 +2460,38 @@ impl DockerResticBackupExecutor {
         }
         Ok(())
     }
-    async fn execute(
+    async fn execute_raw(
         &self,
         args: Vec<OsString>,
         env: Vec<(OsString, OsString)>,
         timeout: Duration,
         cancellation: &CancellationToken,
     ) -> Result<citadel_execution::ProcessOutput, String> {
-        let mut request =
-            ProcessRequest::new(self.docker.clone())
-                .args(&args)
-                .limits(ProcessLimits {
-                    timeout,
-                    maximum_stdout_bytes: self.maximum_output,
-                    maximum_stderr_bytes: self.maximum_output,
-                    output_limit_policy: OutputLimitPolicy::Truncate,
-                });
+        let mut request = ProcessRequest::new(self.executor.docker.clone())
+            .args(&args)
+            .limits(ProcessLimits {
+                timeout,
+                maximum_stdout_bytes: self.executor.maximum_output,
+                maximum_stderr_bytes: self.executor.maximum_output,
+                output_limit_policy: OutputLimitPolicy::Truncate,
+            });
         for (key, value) in env {
             request = request.env(key, value);
         }
         let output = self
             .run_observed(request, cancellation)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|error| {
+                if args
+                    .first()
+                    .is_some_and(|arg| arg == "run" || arg == "create")
+                    && !matches!(error, citadel_execution::ProcessError::Spawn(_))
+                {
+                    // A cancelled CLI cannot prove Docker finished its create.
+                    self.mark_cleanup_uncertain();
+                }
+                error.to_string()
+            })?;
         if output.succeeded() {
             Ok(output)
         } else {
@@ -2072,7 +2503,7 @@ impl DockerResticBackupExecutor {
         mut request: ProcessRequest,
         cancellation: &CancellationToken,
     ) -> Result<citadel_execution::ProcessOutput, citadel_execution::ProcessError> {
-        if let Some(settings) = &self.settings {
+        if let Some(settings) = &self.executor.settings {
             tokio::fs::create_dir_all(&settings.working_directory)
                 .await
                 .map_err(citadel_execution::ProcessError::Io)?;
@@ -2108,7 +2539,7 @@ impl DockerResticBackupExecutor {
             .env("TMPDIR", root.as_os_str())
             .env("RESTIC_CACHE_DIR", root.join("restic-cache").as_os_str())
             .env("DOCKER_CONFIG", root.join("docker").as_os_str());
-        if request.program == self.docker {
+        if request.program == self.executor.docker {
             for key in ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"] {
                 if !request.environment.iter().any(|(name, _)| name == key)
                     && let Some(value) = std::env::var_os(key)
@@ -2126,8 +2557,8 @@ impl DockerResticBackupExecutor {
             observe_output(
                 receiver,
                 progress,
-                self.log_line_limit(),
-                self.maximum_output
+                self.executor.log_line_limit(),
+                self.executor.maximum_output
             )
         );
         result
@@ -2154,15 +2585,61 @@ impl DockerResticBackupExecutor {
             observe_output(
                 receiver,
                 progress,
-                self.log_line_limit(),
-                self.maximum_output
+                self.executor.log_line_limit(),
+                self.executor.maximum_output
             )
         );
         result
     }
-    async fn cleanup(&self, name: &str) {
-        let _ = run(
-            ProcessRequest::new(self.docker.clone())
+    fn defer_if_unstarted(&self) -> bool {
+        if self.defer_capacity
+            && !self
+                .state
+                .execution_started
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
+            self.state
+                .waiting_capacity
+                .store(true, std::sync::atomic::Ordering::Release);
+            true
+        } else {
+            false
+        }
+    }
+    fn cleanup_is_uncertain(&self) -> bool {
+        self.state
+            .cleanup_uncertain
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+    fn mark_cleanup_uncertain(&self) {
+        self.state
+            .cleanup_uncertain
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    async fn cleanup_agent(&self, agent: &AgentExecutionClient, id: &str) -> Result<(), String> {
+        match tokio::time::timeout(
+            Duration::from_secs(30),
+            agent.delete_container(id, &CancellationToken::new()),
+        )
+        .await
+        {
+            Ok(Ok(())) => Ok(()),
+            _ => {
+                self.mark_cleanup_uncertain();
+                Err("Backup helper cleanup could not be verified.".into())
+            }
+        }
+    }
+    async fn cleanup(&self, name: &str) -> Result<(), String> {
+        if let Some((operation, host)) = self.local_scope()? {
+            return self
+                .reconcile_local_helpers(&operation, &host, Some(name))
+                .await
+                .inspect_err(|_| self.mark_cleanup_uncertain());
+        }
+        let result = run(
+            ProcessRequest::new(self.executor.docker.clone())
                 .args(["rm", "--force", name])
                 .limits(ProcessLimits {
                     timeout: Duration::from_secs(30),
@@ -2173,6 +2650,19 @@ impl DockerResticBackupExecutor {
             &CancellationToken::new(),
         )
         .await;
+        match result {
+            Ok(output)
+                if output.succeeded()
+                    || String::from_utf8_lossy(&output.stderr).trim()
+                        == format!("Error response from daemon: No such container: {name}") =>
+            {
+                Ok(())
+            }
+            _ => {
+                self.mark_cleanup_uncertain();
+                Err("Backup helper cleanup could not be verified.".into())
+            }
+        }
     }
 }
 
@@ -2476,6 +2966,113 @@ fn validate_bind_repository(repository: &BackupRepository, path: &str) -> Result
     Ok(())
 }
 
+impl ResticOperation<'_> {
+    fn repository_inner<'a>(
+        &'a self,
+        repository: &'a BackupRepository,
+        operation: &'a str,
+        location: &'a str,
+        platform_id: Option<Uuid>,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<BackupLog>, BackupError>> {
+        Box::pin(async move {
+            self.validate_repository_target(repository, location, platform_id)
+                .await
+                .map_err(BackupError::Validation)?;
+            if location == "Core" {
+                self.executor
+                    .admission
+                    .begin_core_work(self.owner.repository, self.owner.run, self.owner.attempt)
+                    .await?;
+                let result = self
+                    .run_direct_repository_operation(repository, operation, cancellation)
+                    .await;
+                if !self.cleanup_is_uncertain() {
+                    self.executor
+                        .admission
+                        .finish_core_work(self.owner.repository, self.owner.run, self.owner.attempt)
+                        .await?;
+                }
+                return result.map_err(BackupError::Storage);
+            }
+            let platform_id = platform_id.ok_or_else(|| {
+                BackupError::Validation("A Platform is required for this operation.".into())
+            })?;
+            if let BackupExecutionTarget::Agent(agent) = self
+                .execution_target(platform_id, None, cancellation)
+                .await
+                .map_err(BackupError::Validation)?
+            {
+                let arguments = match operation {
+                    "Validate" | "Check" => vec!["check".into(), "--read-data-subset=1/100".into()],
+                    "Initialize" => vec!["init".into()],
+                    "Prune" => vec!["prune".into()],
+                    _ => {
+                        return Err(BackupError::Validation(
+                            "Backup Repository operation is invalid.".into(),
+                        ));
+                    }
+                };
+                return self
+                    .run_agent_repository(
+                        &agent,
+                        (platform_id, None),
+                        repository,
+                        arguments,
+                        self.executor.repository_timeout(),
+                        cancellation,
+                    )
+                    .await
+                    .map_err(BackupError::Storage);
+            }
+            let scope = self
+                .admit_local(platform_id, None, cancellation)
+                .await
+                .map_err(BackupError::External)?;
+            let result = async {
+                let name = format!("citadel-repository-{}", Uuid::now_v7().simple());
+                let (mut args, env) = self
+                    .base_args(&name, repository)
+                    .await
+                    .map_err(BackupError::Validation)?;
+                args.push(self.executor.image.clone().into());
+                match operation {
+                    "Validate" | "Check" => {
+                        args.extend(["check".into(), "--read-data-subset=1/100".into()])
+                    }
+                    "Initialize" => args.push("init".into()),
+                    "Prune" => args.push("prune".into()),
+                    _ => {
+                        return Err(BackupError::Validation(
+                            "Backup Repository operation is invalid.".into(),
+                        ));
+                    }
+                }
+                let output = self
+                    .execute(args, env, self.executor.repository_timeout(), cancellation)
+                    .await;
+                self.cleanup(&name)
+                    .await
+                    .map_err(|_| BackupError::CleanupPending)?;
+                output
+                    .map(|value| {
+                        output_logs(
+                            &value,
+                            self.executor.log_line_limit(),
+                            self.executor.maximum_output,
+                        )
+                    })
+                    .map_err(BackupError::Storage)
+            }
+            .await;
+            self.finish_local(scope)
+                .await
+                .map_err(|_| BackupError::CleanupPending)?;
+            result
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2536,18 +3133,70 @@ mod tests {
         );
     }
 
+    struct NoSecrets;
+    impl BackupSecretResolver for NoSecrets {
+        fn resolve(
+            &self,
+            _: Uuid,
+            _repository_id: Uuid,
+        ) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BackupError>> {
+            panic!("Rejected paths must not resolve secrets or run Restic")
+        }
+    }
+
+    #[tokio::test]
+    async fn operation_state_is_shared_only_within_the_same_run() {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+            .unwrap();
+        let executor = DockerResticBackupExecutor::new(
+            "must-not-run",
+            "unused",
+            Arc::new(NoSecrets),
+            4096,
+            pool,
+        );
+        let owner = OperationOwner {
+            repository: Uuid::now_v7(),
+            run: Uuid::now_v7(),
+            attempt: Uuid::now_v7(),
+        };
+        let first = ResticOperation::new(&executor, owner, true, None);
+        let second = ResticOperation::new(
+            &executor,
+            OperationOwner {
+                run: Uuid::now_v7(),
+                ..owner
+            },
+            true,
+            None,
+        );
+        let scoped = first.clone();
+        scoped.mark_cleanup_uncertain();
+        assert!(first.cleanup_is_uncertain());
+        assert!(!second.cleanup_is_uncertain());
+        scoped
+            .state
+            .execution_started
+            .store(true, std::sync::atomic::Ordering::Release);
+        assert!(
+            !first.defer_if_unstarted(),
+            "admitted work must never be requeued"
+        );
+        assert!(
+            second.defer_if_unstarted(),
+            "another run still has its own admission state"
+        );
+        assert!(
+            !first
+                .state
+                .waiting_capacity
+                .load(std::sync::atomic::Ordering::Acquire)
+        );
+    }
+
     #[tokio::test]
     async fn core_repository_paths_are_validated_before_secrets_or_process_execution() {
-        struct NoSecrets;
-        impl BackupSecretResolver for NoSecrets {
-            fn resolve(
-                &self,
-                _: Uuid,
-                _repository_id: Uuid,
-            ) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BackupError>> {
-                panic!("Rejected paths must not resolve secrets or run Restic")
-            }
-        }
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
             .unwrap();
@@ -2594,6 +3243,7 @@ mod tests {
         let error = executor
             .repository(
                 &repository,
+                Uuid::now_v7(),
                 "Initialize",
                 "Core",
                 None,

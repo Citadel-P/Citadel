@@ -2,6 +2,7 @@
 use super::commands::Output;
 use crate::direct::Runtime;
 use citadel_contracts::citadel::{
+    automation::v1::automation_service_server::AutomationService,
     containers::v1::{ExecClientMessage, container_service_server::ContainerService},
     deployments::v1::deployment_service_server::DeploymentService,
     edge::v1::EdgeCommandKind,
@@ -24,19 +25,27 @@ pub(super) fn decode<T: Message + Default>(payload: &[u8]) -> Result<T, Status> 
 pub(super) async fn execute(
     runtime: Runtime,
     kind: EdgeCommandKind,
-    payload: &[u8],
+    payload: Vec<u8>,
     input: BoxStream<'static, Result<ExecClientMessage, Status>>,
     output: Output,
 ) -> Result<(), Status> {
     macro_rules! unary {
         ($service:ident, $method:ident) => {{
-            let response = $service::$method(&runtime, Request::new(decode(payload)?)).await?;
+            let request = decode(payload.as_slice())?;
+            // Decoded requests own their input. Do not retain the raw protobuf
+            // alongside a long-lived stream (notably transported build archives).
+            drop(payload);
+            let response = $service::$method(&runtime, Request::new(request)).await?;
             output.message(response.into_inner()).await
         }};
     }
     macro_rules! stream {
         ($service:ident, $method:ident) => {{
-            let response = $service::$method(&runtime, Request::new(decode(payload)?)).await?;
+            let request = decode(payload.as_slice())?;
+            // Decoded requests own their input. Do not retain the raw protobuf
+            // alongside a long-lived stream (notably transported build archives).
+            drop(payload);
+            let response = $service::$method(&runtime, Request::new(request)).await?;
             let mut stream = response.into_inner();
             while let Some(message) = stream.next().await {
                 output.message(message?).await?;
@@ -48,6 +57,9 @@ pub(super) async fn execute(
     // No wildcard: a new protocol enum variant must acquire an explicit implementation.
     match kind {
         Unspecified => Err(Status::invalid_argument("An Edge command kind is required")),
+        AutomationCheckHost => unary!(AutomationService, check_host),
+        AutomationRun => stream!(AutomationService, run),
+        AutomationReconcile => unary!(AutomationService, reconcile),
         PlatformCheckHealth => unary!(PlatformService, check_health),
         PlatformGetInfo => unary!(PlatformService, get_platform_info),
         PlatformStatsStream => stream!(PlatformService, stream_platform_stats),
@@ -67,7 +79,8 @@ pub(super) async fn execute(
         ContainerStatsStream => stream!(ContainerService, stream_container_stats),
         ContainersStatsStream => stream!(ContainerService, stream_containers_stats),
         ContainerExec => {
-            let opening = decode(payload)?;
+            let opening = decode(payload.as_slice())?;
+            drop(payload);
             let incoming = futures_util::stream::once(async move { Ok(opening) }).chain(input);
             let mut stream = runtime
                 .exec_messages(Box::pin(incoming))
@@ -90,6 +103,9 @@ pub(super) async fn execute(
         ImageBuildStream => stream!(ImageService, build),
         ImagePushStream => stream!(ImageService, push),
         ImageCheckBuildHost => unary!(ImageService, check_build_host),
+        ImageReconcileBuild => unary!(ImageService, reconcile_build),
+        ImageReserveData => unary!(ImageService, reserve_data),
+        ImageReconcileData => unary!(ImageService, reconcile_data),
         VolumeList => unary!(VolumeService, list),
         VolumeInspect => unary!(VolumeService, inspect),
         VolumeCreate => unary!(VolumeService, create),

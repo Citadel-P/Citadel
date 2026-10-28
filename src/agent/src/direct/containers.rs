@@ -25,7 +25,9 @@ impl Runtime {
         let count = ids.ids.len();
         let results = futures_util::stream::iter(ids.ids.into_iter().map(|id| {
             let docker = self.docker.clone();
+            let runtime = self.clone();
             async move {
+                let _data = if action == ContainerAction::Start { runtime.data_command(&id).await.map_err(|error| (id.clone(), error))? } else { None };
                 let _permit = tokio::select! {
                     () = self.shutdown.cancelled() => return Err((id, Status::cancelled("Agent shutting down"))),
                     permit = self.mutations.acquire() => permit.map_err(|_| (id.clone(), Status::cancelled("Agent shutting down")))?,
@@ -192,12 +194,28 @@ impl container_service_server::ContainerService for Runtime {
     ) -> Result<Response<CreateContainerResponse>, Status> {
         let r = r.into_inner();
         let body = super::container_config::create(&r)?;
+        let _data = match r.labels.get(super::data_admission::OPERATION) {
+            Some(operation) => Some(
+                self.data.command(
+                    operation,
+                    r.labels
+                        .get(super::data_admission::AUTHORITY)
+                        .map(String::as_str)
+                        .unwrap_or_default(),
+                    Some(&r.name),
+                )?,
+            ),
+            None => None,
+        };
+        let created = self.docker.create_container(&r.name, &body).await;
+        if (created.is_ok()
+            || matches!(&created, Err(citadel_docker::client::DockerError::Api { status, .. }) if status.is_client_error()))
+            && let Some(guard) = &_data
+        {
+            guard.created();
+        }
         Ok(Response::new(CreateContainerResponse {
-            container_id: self
-                .docker
-                .create_container(&r.name, &body)
-                .await
-                .map_err(docker_error)?,
+            container_id: created.map_err(docker_error)?,
         }))
     }
 
@@ -212,6 +230,7 @@ impl container_service_server::ContainerService for Runtime {
                 "Container ID and command are required",
             ));
         }
+        let data_guard = self.data_command(&r.container_id).await?;
         let cancel = self.shutdown.child_token();
         let guard = cancel.clone().drop_guard();
         let mut output = self
@@ -237,6 +256,7 @@ impl container_service_server::ContainerService for Runtime {
             .map_err(runtime_error)?;
         Ok(Response::new(Box::pin(async_stream::try_stream! {
             let _guard=guard;
+            let _data_guard=data_guard;
             while let Some(event)=output.next().await {
                 let event=event.map_err(|e|match e {
                     DockerExecError::Cancelled=>Status::cancelled(e.to_string()),DockerExecError::InvalidFrame(_)=>Status::data_loss(e.to_string()),

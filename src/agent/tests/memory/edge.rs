@@ -213,8 +213,20 @@ impl Session {
             }
         }
         assert_eq!(frames, 4);
+        let id = self.start(EdgeCommandKind::ImageCheckBuildHost, ()).await;
+        let AgentBody::CommandOutput(value) = self.receive(&id).await else {
+            panic!("expected capacity output")
+        };
+        let capacity = CheckBuildHostResponse::decode(value.payload.as_slice()).unwrap();
+        assert!(matches!(
+            self.receive(&id).await,
+            AgentBody::CommandCompleted(_)
+        ));
         let id = self
-            .start(EdgeCommandKind::ImageBuildStream, build_request(round))
+            .start(
+                EdgeCommandKind::ImageBuildStream,
+                build_request(round, &capacity),
+            )
             .await;
         let mut completed = false;
         loop {

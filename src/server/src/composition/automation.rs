@@ -51,6 +51,18 @@ pub(super) fn build(
                 stale_after: Duration::from_secs(10 * 60),
             },
         )
+        .with_remote(
+            Arc::new(
+                citadel_adapters::external::automation::AgentAutomationExecutor::new(
+                    pool.clone(),
+                    runtime.agent.clone(),
+                    runtime.edge_registry.clone(),
+                    identity.clone(),
+                    config.transport.edge_agent_public_url.scheme() == "https",
+                ),
+            ),
+            config.transport.public_url.to_string(),
+        )
         .with_options(config.automation)?
         .with_sandbox(
             config.execution.automation.cache_root.clone(),
@@ -58,10 +70,18 @@ pub(super) fn build(
         )
         .with_entitlements(entitlements.clone())
         .with_alerts(alert_store.clone())
-        .with_change_notifier(citadel_server::realtime::change_callback(
-            realtime_hub.clone(),
-            "AutomationAction",
-        )),
+        .with_change_notifier({
+            let hub = realtime_hub.clone();
+            Arc::new(move |action_id| {
+                if let Some(hub) = &hub {
+                    hub.publish_resource_change(
+                        "AutomationAction",
+                        action_id.unwrap_or_default(),
+                        "resourceChanged",
+                    );
+                }
+            })
+        }),
     );
     Ok(automation)
 }

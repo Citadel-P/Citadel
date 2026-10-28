@@ -1,5 +1,13 @@
 #![forbid(unsafe_code)]
 
+mod cleanup;
+pub use cleanup::{
+    BuildCleanupAttempt, BuildCleanupChecker, BuildCleanupStore, BuildRetainedReservation,
+};
+mod admission;
+pub use admission::{
+    BuildAdmission, BuildAdmissionStore, BuildExecutorCapacity, BuildExecutorOccupancy,
+};
 mod jobs;
 pub use agent_pools::runtime::{BuildPoolCheck, BuildPoolChecker, BuildPoolTarget, pool_target};
 pub use jobs::completion::{

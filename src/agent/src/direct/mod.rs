@@ -1,8 +1,11 @@
 //! Direct transport and protobuf boundaries over the shared local runtime.
 mod auth;
+mod automation;
+mod build_admission;
 mod container_config;
 mod container_mapping;
 mod containers;
+mod data_admission;
 mod deployments;
 mod image_builds;
 mod images;
@@ -35,6 +38,14 @@ pub struct Runtime {
     docker: DockerClient,
     samples: Arc<sampling::SharedSampler>,
     mutations: Arc<tokio::sync::Semaphore>,
+    builds: build_admission::BuildAdmission,
+    data: data_admission::DataAdmission,
+    automations: automation::Admission,
+    automation_root: std::path::PathBuf,
+    deno_path: std::ffi::OsString,
+    tasks: citadel_runtime::DynamicTasks,
+    heavy: Arc<tokio::sync::Semaphore>,
+    heavy_capacity: usize,
     docker_cli: String,
     shutdown: CancellationToken,
     runtime_container: Option<String>,
@@ -46,7 +57,16 @@ impl Runtime {
         shutdown: CancellationToken,
         runtime_container: Option<String>,
     ) -> Self {
+        let heavy = Arc::new(tokio::sync::Semaphore::new(2));
         Self {
+            automations: automation::Admission::new(4, heavy.clone()),
+            automation_root: "/app/data/automation".into(),
+            deno_path: "deno".into(),
+            tasks: citadel_runtime::DynamicTasks::new(shutdown.clone()),
+            builds: build_admission::BuildAdmission::with_heavy(2, heavy.clone()),
+            data: data_admission::DataAdmission::new(2, heavy.clone()),
+            heavy,
+            heavy_capacity: 2,
             mutations: Arc::new(tokio::sync::Semaphore::new(8)),
             samples: Arc::new(sampling::SharedSampler::new(docker.clone())),
             docker,
@@ -55,18 +75,65 @@ impl Runtime {
             runtime_container,
         }
     }
+    /// Command cancellation is scoped; daemon admission and sampling are shared
+    /// for the Agent lifetime, including Edge session replacement.
+    pub(crate) fn for_command(&self, shutdown: CancellationToken) -> Self {
+        Self {
+            shutdown,
+            ..self.clone()
+        }
+    }
+
+    pub(crate) fn with_execution_capacity(
+        mut self,
+        build: usize,
+        data: usize,
+        heavy: usize,
+    ) -> Self {
+        self.heavy = Arc::new(tokio::sync::Semaphore::new(heavy));
+        self.heavy_capacity = heavy;
+        self.builds = build_admission::BuildAdmission::with_heavy(build, self.heavy.clone());
+        self.data = data_admission::DataAdmission::new(data, self.heavy.clone());
+        self.automations = automation::Admission::new(self.automations.limit(), self.heavy.clone());
+        self
+    }
+
+    pub(crate) fn with_automation(
+        mut self,
+        slots: usize,
+        tasks: citadel_runtime::DynamicTasks,
+    ) -> Self {
+        self.automations = automation::Admission::new(slots, self.heavy.clone());
+        self.tasks = tasks;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_build_capacity(mut self, capacity: usize) -> Self {
+        self.builds = build_admission::BuildAdmission::with_heavy(capacity, self.heavy.clone());
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_docker_cli(mut self, executable: String) -> Self {
+        self.docker_cli = executable;
+        self
+    }
+
+    pub(crate) fn docker(&self) -> &DockerClient {
+        &self.docker
+    }
+
+    pub(crate) fn with_runtime_container(mut self, container: Option<String>) -> Self {
+        self.runtime_container = container;
+        self
+    }
 }
 
-pub fn router(
-    docker: DockerClient,
-    key: VerifyingKey,
-    audience: &str,
-    shutdown: CancellationToken,
-    runtime_container: Option<String>,
-) -> Router {
-    let verifier = auth::Verifier::new(key, audience).with_shutdown(shutdown.clone());
-    let runtime = Runtime::new(docker, shutdown, runtime_container);
+pub(crate) fn router(runtime: Runtime, key: VerifyingKey, audience: &str) -> Router {
+    let verifier = auth::Verifier::new(key, audience).with_shutdown(runtime.shutdown.clone());
     tonic::service::Routes::new(citadel_contracts::citadel::containers::v1::container_service_server::ContainerServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
+        .add_service(citadel_contracts::citadel::automation::v1::automation_service_server::AutomationServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::platforms::v1::platform_service_server::PlatformServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::deployments::v1::deployment_service_server::DeploymentServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::images::v1::image_service_server::ImageServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))

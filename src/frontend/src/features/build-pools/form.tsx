@@ -70,7 +70,6 @@ const defaultSelfManagedVmSpec: SelfManagedVmProviderSpec = {
   $type: 'SelfManagedVm',
   endpoint: '',
   architecture: CpuArchitecture.Amd64,
-  maxWorkers: 1,
   registrationSecretId: null,
   labels: [],
   connectionMode: BuildAgentPoolConnectionMode.InboundAgent,
@@ -440,8 +439,8 @@ function BuildPoolForm({
             items: [
               defineNumberField(
                 'maxActiveBuilders',
-                'Max active builders',
-                'Maximum concurrently leased builders from this pool.',
+                'Maximum concurrent builds',
+                'Maximum builds this pool can run at the same time.',
               ),
               defineNumberField(
                 'queueTimeoutSeconds',
@@ -823,22 +822,6 @@ function selfManagedVmFields(
           />
         ),
       }),
-      defineField({
-        id: 'self-managed-max-workers',
-        key: 'providerSpec',
-        dirtyKey: 'providerSpec.maxWorkers',
-        label: 'Max workers',
-        required: true,
-        description: 'Maximum workers available across this static builder pool.',
-        render: () => (
-          <FieldInput
-            type="number"
-            value={vmSpec.maxWorkers}
-            disabled={disabled}
-            onChange={(maxWorkers) => setVmSpec({ maxWorkers })}
-          />
-        ),
-      }),
       defineRowField<BuildPoolInput>({
         id: 'self-managed-vm-optional',
         fields: [
@@ -1063,7 +1046,6 @@ function normalizeSelfManagedVmSpec(value: unknown): SelfManagedVmProviderSpec {
     ...spec,
     $type: 'SelfManagedVm',
     endpoint: spec.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent ? null : (spec.endpoint ?? ''),
-    maxWorkers: Number(spec.maxWorkers ?? 1),
     registrationSecretId: spec.registrationSecretId || null,
     labels: Array.isArray(spec.labels) ? spec.labels : [],
     connectionMode: spec.connectionMode ?? BuildAgentPoolConnectionMode.InboundAgent,

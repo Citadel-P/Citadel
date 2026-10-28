@@ -11,7 +11,7 @@ Swarm-node restrictions. For image builds and local setup, see
 | Direct | Core calls the Agent's gRPC listener | Signed requests verified with `CITADEL_CORE_PUBLIC_KEY` and a configured target audience |
 | Edge | Agent connects to Core's Edge gRPC listener | Enrollment and persisted session identity |
 
-Both transports expose the same 69 operations. Edge carries commands through
+Both transports expose the same 70 operations. Edge carries commands through
 `EdgeAgentService/Connect`, a bidirectional stream from
 `citadel.edge.v1.AgentEnvelope` to `citadel.edge.v1.CoreEnvelope`. Its protocol
 version is **2**. Command number 0 and unknown command numbers are rejected.
@@ -79,6 +79,10 @@ Read configuration once at startup. Docker can load the templates with
 | --- | --- | --- |
 | CITADEL_AGENT_MODE | case-insensitive `edge` selects Edge; otherwise Direct; whitespace is not trimmed | all |
 | CITADEL_AGENT_PORT | 9000 when absent/blank; otherwise integer 1–65535 | all; health listener in Edge |
+| CITADEL_AGENT_BUILD_SLOTS | 2; integer 1–64, reserved across build, pushes and cleanup | Direct / ordinary Edge / Edge Build Pool |
+| CITADEL_AGENT_AUTOMATION_SLOTS | 4; integer 1–64, sharing the host heavy-work budget | Direct / ordinary Edge / Edge Build Pool |
+| CITADEL_AGENT_DATA_SLOTS | 2; integer 1–64, retained across data helper phases | Direct / Edge / Swarm-node Edge |
+| CITADEL_AGENT_HEAVY_SLOTS | 2; integer 1–64, shared build and data pressure | All Agent modes |
 | CITADEL_CORE_PUBLIC_KEY | required base64 raw Ed25519 public key | Direct |
 | CITADEL_AGENT_ID | required nonzero Platform or Build Pool UUID from the generated setup command | Direct |
 | CITADEL_AGENT_TLS_MODE | Disabled; accepts Disabled or Direct after trimming, case-insensitive; reject numeric/unknown values | Direct |
@@ -178,6 +182,98 @@ owned by the session. SIGTERM and Ctrl+C stop listeners and outbound work with
 a ten-second shutdown limit. These limits are implementation constants, not
 additional deployment settings.
 
+Core accounts for outbound Edge requests separately from incoming output backlog.
+The shared transfer allowance is 32 MiB across all sessions, charging twice the
+payload size to cover the raw request and its encoded copy. Queued frames retain
+their allowance even if the caller cancels; the allowance ends when the transport
+consumes the frame, rather than when remote execution finishes. HTTP/2 transport
+buffers are additionally governed by transport flow control. The output queue has
+a separate shared 32 MiB allowance, including frame overhead. These are transport
+bounds, not limits on total process memory or workload execution capacity.
+Health, build-capacity, cleanup and container-inspection requests use a separate
+shared 1 MiB request allowance (64 KiB per request), with two command slots per
+session reserved for those operations. A build refused by Core's local transfer
+or command budget before enqueueing stays queued with backoff. Remote generic
+resource-exhaustion errors never authorize replay.
+
+The Agent shares its runtime mutation permits and sample cache across Edge
+commands and replacement sessions. Each command still has independent
+cancellation. Build contexts move into the Docker subprocess input without a
+second archive copy, and raw Edge protobuf input is dropped after decoding.
+Core forwards bounded, redacted build progress and retains only a digest summary,
+rather than a second complete build transcript.
+
+Build and Push carry Core's run UUID and durable attempt UUID. Build also
+declares whether its tags will be pushed. One Agent-lifetime admission ledger
+reserves a slot for the build and the ordered push plan; duplicate active runs,
+attempts, phases and unrelated pushes are rejected before execution. The
+`CITADEL_AGENT_BUILD_SLOTS` limit defaults to two and is independent of transport
+and ordinary mutation permits. CheckBuildHost reports capacity, occupied and
+uncertain attempts, the Docker daemon ID and this process's admission authority
+UUID. These authenticated identities are distinct from Platform/Pool aliases.
+
+Before dispatch, Core can defer contention without execution side effects. Once
+dispatched, only a standalone `BUILD_ADMISSION_CAPACITY_BUSY_NOT_STARTED` or
+`BUILD_ADMISSION_FENCED_NOT_STARTED` response to Build permits Core to defer the attempt. Accepted/progress frames, a refused push,
+generic gRPC errors and streams without a completion receipt never authorize
+replay. Deferral transactionally preserves the commit and original queue time,
+adds 5–15 seconds of backoff, and fails capacity waiting after 24 hours. Actual
+wakeup also depends on the existing worker polling interval.
+
+Successful attempts release their slots after the final push and confirmed local
+session cleanup. Validation, registry-login and subprocess-spawn failures that prove the build or
+push never started also release their slots after confirmed temporary-file cleanup.
+Cleanup failures and uncertain failed, timed-out or dropped operations retain occupancy;
+an elapsed timeout or disconnected session does not prove daemon work stopped.
+Health and capacity inspection remain available when all build slots are held.
+Pool health includes Core reservation counts alongside the Agent's live occupancy,
+including cleanup-pending holds and a changed Agent authority.
+
+Core also persists a reservation keyed by Docker daemon ID and attempt UUID
+before dispatching a remote build. Platform and Pool aliases share this account.
+While reservations exist, a different Agent process authority cannot take over
+that daemon. Successful completion and verified pre-start deferral release only
+the owned reservation in the same transaction as the run-state change. Other
+failures and startup recovery retain it, with `build.cleanup_pending` on the run.
+Retention cannot delete a run with unresolved occupancy, and the same Project
+cannot claim replacement work even if its configured target changes to a Local
+platform. The shared claim transaction enforces this before source preparation.
+
+The Agent's in-memory ledger survives connection replacement, not process restart;
+Core's reservations survive both. Restart is never cleanup evidence.
+Build requests include the advertised authority and admission generation; pushes
+retain the authority. `ReconcileBuild` requires the same authority and Docker
+daemon identity. It confirms cleanup only for absent attempts or completed builds
+waiting for their next push. It advances an admission fence before releasing that
+state, rejecting delayed build/push requests without interrupting other admitted
+work. Duplicate cleanup checks are idempotent. Active and uncertain attempts do
+not produce cleanup receipts; a changed authority is rejected.
+
+After a remote execution error, Core makes a bounded cleanup check. Confirmed
+cleanup is stored with the attempt and a system log entry; capacity remains held
+until the terminal result commits. Startup recovery can release an attempt with
+that durable receipt without changing its Interrupted outcome. Lost receipts and
+unreachable Agents remain held. A supervised Core worker revisits terminal
+reservations in batches of 16, pausing 30 seconds between batches. Each Agent check
+has a five-second bound; unavailable Agents do not block later pages. It uses the
+run's original resource and recorded daemon/authority/generation. Confirmed cleanup
+is persisted with a system log and capacity release in one transaction, preserving
+the run's terminal outcome. Previously saved receipts require no new Agent call.
+Active/uncertain work and changed Agent authorities remain reserved automatically.
+Human administrators can resolve a terminal reservation from the build run sheet
+with cleanup notes and explicit acknowledgment that the old build and pushes stopped.
+They must stop any remaining work, then restart the original Agent. A five-second
+`CheckBuildHost` check requires the original Docker daemon and a different, nonempty
+admission authority; restart fences old admission requests but is not cleanup evidence.
+Core rechecks current human administrator access inside the release transaction and
+records `BuildRunCleanupResolved` plus a system run log. No Agent cleanup receipt is
+fabricated, and the original outcome/time stay unchanged. Concurrent or stale resolutions
+cannot release another attempt. Offline, removed or different-daemon targets remain
+held until the original target is available. Core-local builds use the same durable
+account with the Core process as authority. Backup/data operations have separate
+item reservations sharing the daemon heavy-work budget; uncertain data cleanup
+requires the recovery procedure described in the backup documentation.
+
 Implementation: [edge/](../src/agent/src/edge/).
 
 ## Swarm-node restrictions and capabilities
@@ -273,6 +369,9 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 <!-- operations -->
 | RPC | Request | Response | Stream | Edge command | Number | Swarm | Runtime reference | Checks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| citadel.automation.v1.AutomationService/CheckHost | google.protobuf.Empty | citadel.automation.v1.AutomationHost | unary | AUTOMATION_CHECK_HOST | 120 | denied | ../../../agent/src/direct/automation.rs:check_host | G1 |
+| citadel.automation.v1.AutomationService/Run | citadel.automation.v1.AutomationRequest | citadel.automation.v1.AutomationEvent | server | AUTOMATION_RUN | 121 | denied | ../../../agent/src/direct/automation.rs:run | G1 |
+| citadel.automation.v1.AutomationService/Reconcile | citadel.automation.v1.AutomationAttempt | citadel.automation.v1.AutomationCleanup | unary | AUTOMATION_RECONCILE | 122 | denied | ../../../agent/src/direct/automation.rs:reconcile | G1 |
 | citadel.containers.v1.ContainerService/List | citadel.containers.v1.ListContainersRequest | citadel.containers.v1.ListContainersResponse | unary | CONTAINER_LIST | 10 | allowed | client/finite.rs:list_container_models | G2 |
 | citadel.containers.v1.ContainerService/Start | citadel.containers.v1.ContainerIds | google.protobuf.Empty | unary | CONTAINER_START | 14 | allowed | client/finite.rs:start_container | G1 |
 | citadel.containers.v1.ContainerService/Stop | citadel.containers.v1.ContainerIds | google.protobuf.Empty | unary | CONTAINER_STOP | 15 | allowed | client/finite.rs:change_container_state | G1 |
@@ -295,7 +394,10 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 | citadel.images.v1.ImageService/History | citadel.images.v1.HistoryImageRequest | citadel.images.v1.HistoryImageResponse | unary | IMAGE_HISTORY | 34 | denied | client/finite.rs:image_history | G1 |
 | citadel.images.v1.ImageService/GetExposedPorts | citadel.images.v1.GetExposedPortsRequest | citadel.images.v1.GetExposedPortsResponse | unary | IMAGE_EXPOSED_PORTS | 35 | denied | client/finite.rs:inspect_image | G1 |
 | citadel.images.v1.ImageService/DistributionInspect | citadel.images.v1.DistributionInspectRequest | citadel.images.v1.DistributionInspectResponse | unary | IMAGE_DISTRIBUTION_INSPECT | 36 | denied | client/finite.rs:distribution_inspect_authenticated | G1 |
-| citadel.images.v1.ImageService/CheckBuildHost | google.protobuf.Empty | citadel.images.v1.CheckBuildHostResponse | unary | IMAGE_CHECK_BUILD_HOST | 40 | denied | client/transport/mod.rs:version | G5 |
+| citadel.images.v1.ImageService/CheckBuildHost | google.protobuf.Empty | citadel.images.v1.CheckBuildHostResponse | unary | IMAGE_CHECK_BUILD_HOST | 40 | allowed | client/transport/mod.rs:version | G5 |
+| citadel.images.v1.ImageService/ReconcileBuild | citadel.images.v1.ReconcileBuildRequest | citadel.images.v1.ReconcileBuildResponse | unary | IMAGE_RECONCILE_BUILD | 41 | denied | client/mod.rs:reconcile_build | G5 |
+| citadel.images.v1.ImageService/ReserveData | citadel.images.v1.DataOperationRequest | citadel.images.v1.DataAdmissionResponse | unary | IMAGE_RESERVE_DATA | 42 | allowed | client/mod.rs:reserve_data | G5 |
+| citadel.images.v1.ImageService/ReconcileData | citadel.images.v1.DataOperationRequest | citadel.images.v1.ReconcileBuildResponse | unary | IMAGE_RECONCILE_DATA | 43 | allowed | client/mod.rs:reconcile_data | G5 |
 | citadel.images.v1.ImageService/Pull | citadel.images.v1.PullImageRequest | citadel.images.v1.PullImageResponse | server | IMAGE_PULL_STREAM | 37 | denied | client/transport/mod.rs:pull_image_with_options | G5 |
 | citadel.images.v1.ImageService/Build | citadel.images.v1.BuildImageRequest | citadel.images.v1.ImageBuildResponse | server | IMAGE_BUILD_STREAM | 38 | denied | builds/runtime.rs:build | G5 |
 | citadel.images.v1.ImageService/Push | citadel.images.v1.PushImageRequest | citadel.images.v1.ImageBuildResponse | server | IMAGE_PUSH_STREAM | 39 | denied | builds/runtime.rs:push | G5 |
@@ -450,3 +552,48 @@ The Agent verifies the audience, timestamp and signature before polling a reques
 body. At most eight opening requests share admission, each bounded to 16 MiB plus
 the framing header and ten seconds. Cancellation and timeout release admission.
 Body integrity is then checked and the nonce consumed atomically before dispatch.
+
+### Data-operation admission
+
+`ReserveData` binds a unique operation, run/attempt, authenticated daemon,
+Agent authority and admission generation before helper creation. Its data slot
+and shared heavy-work permit survive gaps between helper commands and Edge
+connection replacement. A structured busy/fenced refusal proves non-execution;
+an ambiguous response requires reconciliation, never blind retry.
+
+Backup helpers carry the operation and authority labels. Creation is recorded
+before calling Docker; starts and binary execution retain a command guard.
+`ReconcileData` fences late admissions, waits for active commands to end, verifies
+helper ownership and confirms deletion before releasing the Agent permit. A
+changed Agent authority cannot confirm an old operation. Swarm-node profiles
+allow these admission calls while retaining their existing helper/path/command
+restrictions.
+
+Core persists matching host occupancy before admission. Terminal data holds are
+rechecked in pages of 16, with five-second probes and 30 seconds between pages.
+Same-authority cleanup releases host and storage locks without replaying the run
+or changing its terminal outcome. Unreachable or restarted Agents retain holds.
+
+### Automation execution
+
+Direct and ordinary Edge Agents execute Deno actions under the same sandbox as
+Core. Swarm-node sessions cannot check, run, or reconcile automation work.
+Remote actions require HTTPS for Core's public API and Agent transport; plaintext
+Edge Agents advertise no automation slots. Direct calls retain signed-body
+verification and configured CA trust. Agents need a trusted public Core HTTPS
+certificate; private CAs must be installed in the Agent's system trust store.
+
+Core commits the run/attempt, physical daemon, authority and admission generation
+before transmitting source or credentials. Deno has no subprocess or host
+environment access, and network access is limited to the configured Core origin.
+Its short-lived run-as token is checked against the current running attempt and
+cancellation flag on every API authentication. It grants no permissions beyond
+the run-as actor. Core additionally requires Execute on the selected Agent resource.
+
+Admission shares the physical-host heavy budget with builds and backups. A busy
+Agent returns an explicit not-started response. Lost responses and duplicate
+attempts do not permit replay. Reconcile fences delayed starts, requests cancellation,
+and confirms cleanup only after the owned process has exited. An Agent restart
+changes authority, so retained work needs explicit administrator recovery after
+checking the original host. A progress viewer disconnect does not cancel the Core
+run; loss of the Core-to-Agent execution stream cancels the owned Agent process.

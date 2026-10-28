@@ -212,6 +212,8 @@ async fn stack_preview_and_execution_discover_owned_physical_mounts_without_save
         .await
         .unwrap();
     let mut claim = BackupClaim {
+        source_plan: None,
+        attempt_id: Uuid::now_v7(),
         policy,
         repository,
         run,

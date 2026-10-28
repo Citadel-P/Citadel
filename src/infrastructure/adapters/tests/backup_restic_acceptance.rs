@@ -251,7 +251,7 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         ));
         let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
         let cancellation = CancellationToken::new();
-        executor.repository(&repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
+        repository_operation(&store, &executor, &repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
         let operation_id=Uuid::now_v7();
         assert!(store.acquire_repository_operation(repository.id, operation_id, "Initialize", Utc::now()+chrono::Duration::minutes(5)).await.unwrap());
         store.record_repository_operation(repository.id, citadel_backups::BackupRepositoryOperation { operation_id, operation: "Initialize", location: "Platform", platform_id: Some(platform), succeeded: true, message: None }).await.unwrap();
@@ -269,8 +269,9 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         let plan = BackupSourcePlan { display_name: source.clone(), items: vec![BackupSourceItem::new(platform, source.clone(), None, None)], warnings: vec![], local_directory: None };
         store.prepare_backup_items(&claim, &plan).await.unwrap();
         let completed = executor.backup(&claim, &plan, &cancellation).await;
-        executor.repository(&repository, "Prune", "Platform", Some(platform), &cancellation).await.unwrap();
         store.finish_backup(&claim, &completed).await.unwrap();
+        repository_operation(&store, &executor, &repository, "Prune", "Platform", Some(platform), &cancellation).await.unwrap();
+
         assert_eq!(completed.status, citadel_backups::BackupRunStatus::Succeeded, "{:?}; {:?}", completed.error_message, completed.logs);
         let persisted = PostgresBackupPersistence::new(pool.clone()).get_run(run.id).await.unwrap();
         assert_eq!(persisted.status, citadel_backups::BackupRunStatus::Succeeded);
@@ -347,4 +348,37 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
     if let Err(panic) = result {
         std::panic::resume_unwind(panic);
     }
+}
+
+// Match production ownership even when an acceptance fixture calls the executor
+// directly: maintenance may never overlap the repository's backup/restore owner.
+async fn repository_operation(
+    store: &PostgresBackupPersistence,
+    executor: &DockerResticBackupExecutor,
+    repository: &BackupRepository,
+    operation: &str,
+    location: &str,
+    platform: Option<Uuid>,
+    cancellation: &CancellationToken,
+) -> Result<Vec<citadel_backups::BackupLog>, citadel_backups::BackupError> {
+    let id = Uuid::now_v7();
+    assert!(
+        store
+            .acquire_repository_operation(
+                repository.id,
+                id,
+                operation,
+                Utc::now() + chrono::Duration::minutes(5)
+            )
+            .await?
+    );
+    let result = executor
+        .repository(repository, id, operation, location, platform, cancellation)
+        .await;
+    if !matches!(result, Err(citadel_backups::BackupError::CleanupPending)) {
+        store
+            .release_repository_operation(repository.id, id)
+            .await?;
+    }
+    result
 }

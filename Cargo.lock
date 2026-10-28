@@ -479,6 +479,7 @@ dependencies = [
  "citadel-activities",
  "citadel-alerts",
  "citadel-automation",
+ "citadel-automation-runtime",
  "citadel-backups",
  "citadel-bindings",
  "citadel-builds",
@@ -539,6 +540,8 @@ dependencies = [
  "bytes",
  "chrono",
  "citadel-adapters",
+ "citadel-automation",
+ "citadel-automation-runtime",
  "citadel-builds",
  "citadel-contracts",
  "citadel-database",
@@ -547,6 +550,7 @@ dependencies = [
  "citadel-docker-api",
  "citadel-identity",
  "citadel-platforms",
+ "citadel-processes",
  "citadel-runtime",
  "citadel-stacks",
  "ed25519-dalek",
@@ -608,6 +612,20 @@ dependencies = [
  "serde_json",
  "sha2 0.11.1",
  "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "citadel-automation-runtime"
+version = "0.0.0"
+dependencies = [
+ "citadel-automation",
+ "citadel-runtime",
+ "futures-util",
  "tokio",
  "tokio-util",
  "tracing",

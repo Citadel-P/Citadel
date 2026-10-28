@@ -40,6 +40,7 @@ impl AutomationRunTokenIssuer for Tokens {
         &'a self,
         actor: ActorId,
         _run: Uuid,
+        _attempt_id: Uuid,
         _lifetime: Duration,
     ) -> BoxFuture<'a, Result<String, AutomationError>> {
         Box::pin(async move {
@@ -196,6 +197,7 @@ async fn real_automation_execution_persists_results_and_retries_failure_notifica
         ("await fetch('http://denied.example.test');", "Failed", 10),
     ] {
         let mut input = AutomationActionConfiguration {
+            executor: Default::default(),
             duplicate_source_id: None,
             name: format!("real-deno-{}", Uuid::now_v7()),
             description: None,

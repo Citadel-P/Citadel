@@ -23,6 +23,8 @@ pub struct AutomationActionView {
     pub webhook: Option<WebhookView>,
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
+    #[schema(value_type = super::spec::AutomationExecutorSchema)]
+    pub executor: citadel_automation::AutomationExecutor,
     pub run_as_actor_id: Uuid,
     #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
     pub control_state: ResourceControlState,
@@ -55,6 +57,7 @@ impl TryFrom<citadel_automation::AutomationAction> for AutomationActionView {
             webhook: value.webhook.map(Into::into),
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,
+            executor: value.executor,
             run_as_actor_id: value.run_as_actor_id,
             control_state: value.control_state,
             current_run_id: value.current_run_id,
@@ -76,6 +79,11 @@ impl TryFrom<citadel_automation::AutomationAction> for AutomationActionView {
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRunView {
     pub id: Uuid,
+    #[schema(required = true)]
+    pub executor_id: Option<Uuid>,
+    #[schema(required = true)]
+    pub attempt_id: Option<Uuid>,
+    pub cleanup_pending: bool,
     pub action_id: Uuid,
     pub action_name: String,
     pub trigger: AutomationRunTrigger,
@@ -109,6 +117,9 @@ impl TryFrom<citadel_automation::AutomationRun> for AutomationRunView {
     fn try_from(value: citadel_automation::AutomationRun) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
+            executor_id: value.executor_id,
+            attempt_id: value.attempt_id,
+            cleanup_pending: value.cleanup_pending,
             action_id: value.action_id,
             action_name: value.action_name,
             trigger: serde_json::from_value(value.trigger.into())?,

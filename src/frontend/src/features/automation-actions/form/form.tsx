@@ -21,6 +21,7 @@ import { ResourceSelectorField } from '@/components/custom/common';
 import { TimezoneSelectField } from '@/components/custom/timezone-select';
 import { WebhookConfigField } from '@/components/custom/webhook-config-field';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResourceTagSelector } from '@/features/tags/components';
 import { configureAutomationActionEditor, MonacoEditor } from '@/lib/monaco';
@@ -32,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useConfigurationCopyReview } from '@/components/custom/use-configuration-copy-review';
 import { AlertMessage } from '@/components/custom/alert-message';
+import { LicensedFeatureLabel } from '@/components/custom/license-feature-indicator';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
 
 type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
@@ -40,6 +42,16 @@ type AutomationActionFormValue = Omit<AutomationActionInput, 'runAsActorId'> & {
   webhook: WebhookConfig | null;
   tagIds?: string[] | null;
 };
+
+const executorOptions = [
+  { value: 'Core', label: 'Core', description: 'Run on the Citadel Core server.' },
+  { value: 'Agent', label: 'Specific agent', description: 'Always run on the agent you select.' },
+  {
+    value: 'Automatic',
+    label: 'Automatic',
+    description: 'Let Citadel choose an eligible agent with available capacity.',
+  },
+] as const;
 
 const DEFAULT_CODE = `console.log("Action run", run.id);
 console.log("Arguments", args);
@@ -61,6 +73,7 @@ const emptyAction = (): AutomationActionFormValue => ({
   timeoutSeconds: 300,
   alertOnFailure: false,
   runAsActorId: '',
+  executor: { kind: 'Core' },
   tagIds: [],
 });
 
@@ -309,6 +322,75 @@ export function AutomationActionForm({
             label: 'Runtime',
             items: [
               defineField({
+                key: 'executor',
+                label: 'Run on',
+                description: 'Choose where this action runs.',
+                validate: (value) => {
+                  if (value?.kind === 'Agent' && !value.agentId) return 'Select an agent';
+                  return null;
+                },
+                render: (value, set) => (
+                  <div className="flex flex-col gap-2">
+                    <Select
+                      value={value?.kind ?? 'Core'}
+                      disabled={disabled}
+                      onValueChange={(kind) =>
+                        set({
+                          executor:
+                            kind === 'Agent'
+                              ? { kind: 'Agent', agentId: '' }
+                              : { kind: kind === 'Automatic' ? 'Automatic' : 'Core' },
+                        })
+                      }>
+                      <SelectTrigger aria-label="Run on" className="w-full max-w-100">
+                        <SelectValue>
+                          <LicensedFeatureLabel
+                            requiredLicense={
+                              value?.kind === 'Automatic' && !automatedOperationsEnabled ? 'Team' : undefined
+                            }>
+                            {executorOptions.find((option) => option.value === (value?.kind ?? 'Core'))?.label}
+                          </LicensedFeatureLabel>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {executorOptions.map((option) => (
+                          <SelectItem
+                            key={option.value}
+                            value={option.value}
+                            textValue={option.label}
+                            disabled={option.value === 'Automatic' && !automatedOperationsEnabled}>
+                            <div className="flex flex-col">
+                              <LicensedFeatureLabel
+                                className="font-medium"
+                                requiredLicense={
+                                  option.value === 'Automatic' && !automatedOperationsEnabled ? 'Team' : undefined
+                                }>
+                                {option.label}
+                              </LicensedFeatureLabel>
+                              <span className="text-xs text-muted-foreground">{option.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {value?.kind === 'Automatic' && !automatedOperationsEnabled && (
+                      <p className="text-sm text-muted-foreground">
+                        Automatic requires Team. Choose Core or a specific agent to run this action.
+                      </p>
+                    )}
+                    {value?.kind === 'Agent' && (
+                      <ResourceSelectorField
+                        targetType={LookupResourceType.AutomationAgent}
+                        selected={value.agentId}
+                        disabled={disabled}
+                        placeholder="Select agent"
+                        onSelect={(agent) => set({ executor: { kind: 'Agent', agentId: agent?.id ?? '' } })}
+                      />
+                    )}
+                  </div>
+                ),
+              }),
+              defineField({
                 key: 'runAsActorId',
                 label: 'Run as',
                 description: 'Permissions are evaluated at run time for this identity.',
@@ -465,7 +547,16 @@ export function AutomationActionForm({
         original={original}
         update={update}
         setUpdate={setUpdate}
-        onSave={handleSave}
+        onSave={(value) =>
+          handleSave({
+            ...value,
+            // Form edits merge nested objects; discard fields from the previous placement type.
+            executor:
+              value.executor?.kind === 'Agent'
+                ? { kind: 'Agent', agentId: value.executor.agentId }
+                : { kind: value.executor?.kind ?? 'Core' },
+          })
+        }
         pending={isPending}
         disabled={disabled}
         saveDisabled={!!duplicateFrom && (duplicateLoading || !duplicate)}
@@ -516,6 +607,7 @@ function toFormValue(action?: AuthorizedAction): AutomationActionFormValue {
     timeoutSeconds: Number(action.timeoutSeconds),
     alertOnFailure: action.alertOnFailure,
     runAsActorId: action.runAsActorId ?? '',
+    executor: action.executor,
     tagIds: action.tags?.map((tag) => tag.id) ?? [],
   };
 }
@@ -536,6 +628,7 @@ function toCreateInput(value: AutomationActionFormValue): AutomationActionInput 
     timeoutSeconds: Number(value.timeoutSeconds) || 300,
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,
+    executor: value.executor ?? { kind: 'Core' },
     tagIds: value.tagIds ?? [],
   };
 }
@@ -553,6 +646,7 @@ function toUpdateInput(
     timeoutSeconds: Number(value.timeoutSeconds) || 300,
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,
+    executor: value.executor ?? { kind: 'Core' },
   };
 
   if (update.scheduleCron !== undefined || update.scheduleEnabled !== undefined) {

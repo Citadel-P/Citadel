@@ -1,3 +1,5 @@
+#[path = "backup_execution/admission.rs"]
+mod admission;
 #[path = "backup_execution/completion.rs"]
 mod completion;
 use chrono::{Duration, Timelike, Utc};
@@ -81,7 +83,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
 
-    let store = PostgresBackupPersistence::new(pool.clone()).with_lease_options(60, 90, 30);
+    let store = PostgresBackupPersistence::new(pool.clone()).with_lease_options(90, 90);
     let mut repository_input = BackupRepositoryConfiguration {
         name: format!("backup-repository-{}", Uuid::now_v7().simple()),
         spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Core","platformId":null,"path":"/tmp/citadel-backups"})).unwrap(),
@@ -105,6 +107,23 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             .unwrap()
     );
     let operation_id = Uuid::now_v7();
+    assert!(
+        !store
+            .acquire_repository_operation(
+                repository.id,
+                operation_id,
+                "Validate",
+                Utc::now() + Duration::minutes(5)
+            )
+            .await
+            .unwrap()
+    );
+    // Expiration cannot prove that the old helper stopped. This fixture has no
+    // helper; explicit owner cleanup releases it before a new operation starts.
+    store
+        .release_repository_operation(repository.id, expired_operation)
+        .await
+        .unwrap();
     assert!(
         store
             .acquire_repository_operation(
@@ -194,6 +213,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         assert!(created.latest_run.is_none());
         policies.push(created);
     }
+    admission::verify_queue_progress_and_owner_recovery(&pool, actor, platform, &repository_input)
+        .await;
+    admission::verify(&pool, actor, platform, &repository_input).await;
+    admission::verify_source_deferral(&pool, actor, platform, &repository_input).await;
     completion::verify(&pool, actor, platform, repository.id).await;
     let persisted_tags: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM resourcetags WHERE resourcetype='BackupPolicy' AND resourceid=ANY($1) AND tagid=$2",
@@ -273,7 +296,49 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let first_claim = claims.into_iter().flatten().next().unwrap();
     assert_eq!(
         lease_durations(&pool, first_claim.run.id).await,
-        (180.0, 210.0)
+        (90.0, 90.0)
+    );
+    // Reproduce the old multi-item bug: the run is older than two item
+    // timeouts, but its owner is alive and renewable.
+    sqlx::query("UPDATE backupruns SET startedat=CURRENT_TIMESTAMP-INTERVAL '6 hours' WHERE id=$1")
+        .bind(first_claim.run.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .renew_leases(
+                first_claim.repository.id,
+                first_claim.run.id,
+                first_claim.attempt_id
+            )
+            .await
+            .unwrap()
+    );
+    assert!(
+        !store
+            .renew_leases(
+                first_claim.repository.id,
+                first_claim.run.id,
+                Uuid::now_v7()
+            )
+            .await
+            .unwrap()
+    );
+    citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store.get_run(first_claim.run.id).await.unwrap().status,
+        citadel_backups::BackupRunStatus::Running
+    );
+    let mut stale = first_claim.clone();
+    stale.attempt_id = Uuid::now_v7();
+    assert!(
+        !store
+            .finish_backup(&stale, &success_result("stale", None))
+            .await
+            .unwrap()
     );
     let guarded_claim = first_claim.clone();
     let identity = Arc::new(IdentityService::new(
@@ -464,7 +529,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(lease_durations(&pool, restore.run.id).await, (120.0, 150.0));
+    assert_eq!(lease_durations(&pool, restore.run.id).await, (90.0, 90.0));
     store
         .finish_restore(
             &restore,
@@ -576,6 +641,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             .unwrap()
             .is_empty()
     );
+    release_interrupted_fixture(&pool, &late_claim).await;
 
     sqlx::query("UPDATE backuppolicies SET cron='* * * * *',timezone='UTC',controlstate='Idle',currentrunid=NULL WHERE id=$1")
         .bind(policies[0].id)
@@ -692,13 +758,12 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         )
         .await;
     assert_eq!(rejected.status, citadel_backups::BackupRunStatus::Failed);
-    assert!(
-        rejected
-            .error_message
-            .as_deref()
-            .is_some_and(|message| message.contains("Edge Agent is disconnected or unavailable"))
+    assert_eq!(
+        rejected.error_code.as_deref(),
+        Some("HostBusy"),
+        "offline pre-execution work must defer"
     );
-    edge_failure_cleans_helper_on_the_exact_node(executor, &guarded_claim, platform).await;
+    edge_failure_cleans_helper_on_the_exact_node(&pool, executor, &guarded_claim, platform).await;
     edge_restore_uses_the_saved_snapshot_root(&pool, &guarded_claim, platform).await;
 
     // The first scheduled run is already queued. Exercise real enqueue paths
@@ -784,6 +849,9 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             matches!(trigger, "Schedule" | "Webhook") && notify && activity_status == "Failure",
         );
         assert_backup_alert_count(&pool, claim.run.id, expected).await;
+        if outcome == "Interrupted" {
+            release_interrupted_fixture(&pool, &claim).await;
+        }
     }
 
     let alerts =
@@ -883,7 +951,42 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap();
 }
 
+// These activity fixtures never dispatch a helper. Exercise production owner
+// recovery before another run on the same repository.
+async fn release_interrupted_fixture(pool: &sqlx::PgPool, claim: &citadel_backups::BackupClaim) {
+    let retained: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM backuprepositoryleases WHERE ownerrunid=$1 AND attemptid=$2",
+    )
+    .bind(claim.run.id)
+    .bind(claim.attempt_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(retained, 1);
+    let external: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM dataexecutorreservations WHERE ownerid=$1")
+            .bind(claim.run.id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(external, 0);
+    use citadel_backups::BackupDataAdmission;
+    let admission=citadel_adapters::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission::new(pool.clone());
+    admission.pending_cleanup(None).await.unwrap();
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM backuprepositoryleases WHERE ownerrunid=$1")
+            .bind(claim.run.id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        remaining, 0,
+        "unstarted interrupted owner is released by production recovery"
+    );
+}
+
 async fn edge_failure_cleans_helper_on_the_exact_node(
+    pool: &sqlx::PgPool,
     executor: DockerResticBackupExecutor,
     claim: &citadel_backups::BackupClaim,
     platform: Uuid,
@@ -896,6 +999,12 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
         shared_models::v1::PlatformInfoResponse,
     };
     use prost::Message;
+    let mut claim = claim.clone();
+    // Protocol-only fixture uses a real maintenance lease, not a synthetic run.
+    claim.run.id = Uuid::now_v7();
+    claim.attempt_id = claim.run.id;
+    claim.repository =
+        executor_repository(pool, &claim.repository, claim.run.id, claim.attempt_id).await;
     let registry = EdgeRegistry::default();
     let (_wrong, mut wrong_outbound) = registry
         .register(
@@ -922,13 +1031,16 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
         local_directory: None,
     };
     let cancellation = CancellationToken::new();
-    let run = executor.backup(claim, &plan, &cancellation);
+    let run = executor.backup(&claim, &plan, &cancellation);
     let agent = async {
         for kind in [
+            EdgeCommandKind::ImageCheckBuildHost,
+            EdgeCommandKind::ImageReserveData,
             EdgeCommandKind::PlatformGetInfo,
             EdgeCommandKind::ContainerCreate,
             EdgeCommandKind::ContainerStart,
             EdgeCommandKind::ContainerDelete,
+            EdgeCommandKind::ImageReconcileData,
         ] {
             let message = tokio::time::timeout(std::time::Duration::from_secs(5), outbound.recv())
                 .await
@@ -940,6 +1052,7 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
             };
             assert_eq!(command.node_id, "node-two");
             assert_eq!(command.kind, kind as i32);
+            admission_response(&selected, id, kind, platform);
             if kind == EdgeCommandKind::PlatformGetInfo {
                 selected.output(
                     id,
@@ -974,6 +1087,7 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
     );
     assert!(wrong_outbound.try_recv().is_err());
     assert_eq!(selected.pending_count(), 0);
+    release_executor_repository(pool, claim.repository.id, claim.run.id).await;
 }
 
 // Verify that restore resolves the saved snapshot root across connectors.
@@ -1037,7 +1151,8 @@ async fn edge_restore_uses_the_saved_snapshot_root(
             "accessKeySecretId":Uuid::now_v7(), "secretKeySecretId":Uuid::now_v7(), "allowInsecureHttp":true})).unwrap();
         let mut source = backup.run.clone();
         source.restic_snapshot_id = Some(snapshot.clone());
-        let claim = RestoreClaim {
+        let mut claim = RestoreClaim {
+            attempt_id: Uuid::now_v7(),
             repository,
             source,
             source_item: None,
@@ -1061,11 +1176,17 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                 triggered_by_actor_id: SYSTEM_ACTOR_ID,
             },
         };
+        claim.attempt_id = claim.run.id;
+        let stored =
+            executor_repository(pool, &backup.repository, claim.run.id, claim.attempt_id).await;
+        claim.repository.id = stored.id;
         let cancellation = CancellationToken::new();
         let peer = async {
             // Snapshot metadata is read without mounting the destination. Only
             // a valid root permits destination allocation and writable access.
             let mut kinds = vec![
+                Kind::ImageCheckBuildHost,
+                Kind::ImageReserveData,
                 Kind::PlatformGetInfo,
                 Kind::ContainerCreate,
                 Kind::ContainerStart,
@@ -1085,6 +1206,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                     Kind::ContainerDelete,
                 ]);
             }
+            kinds.push(Kind::ImageReconcileData);
             let mut volume = VolumeResponse::default();
             let mut metadata = true;
             for kind in kinds {
@@ -1099,6 +1221,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                 };
                 assert_eq!(command.kind, kind as i32);
                 assert_eq!(command.node_id, "restore-node");
+                admission_response(&session, id, kind, platform);
                 match kind {
                     Kind::PlatformGetInfo => {
                         session.output(
@@ -1245,6 +1368,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
             "the source node must not receive restore commands"
         );
         assert_eq!(session.pending_count(), 0);
+        release_executor_repository(pool, claim.repository.id, claim.run.id).await;
     }
 }
 
@@ -1324,4 +1448,101 @@ async fn assert_backup_alert_count(pool: &sqlx::PgPool, run: Uuid, expected: i64
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM alertobservations WHERE payload->>'alert_type'='BackupRunFailed' AND payload->'info'->>'RunId'=$1")
         .bind(run.to_string()).fetch_one(pool).await.unwrap();
     assert_eq!(count, expected, "failure observation count for run {run}");
+}
+
+async fn executor_repository(
+    pool: &sqlx::PgPool,
+    base: &citadel_backups::BackupRepository,
+    owner: Uuid,
+    attempt: Uuid,
+) -> citadel_backups::BackupRepository {
+    let store = PostgresBackupPersistence::new(pool.clone());
+    let repo = store
+        .create_repository(
+            ActorId::new(SYSTEM_ACTOR_ID),
+            &BackupRepositoryConfiguration {
+                name: format!("executor-fixture-{}", Uuid::now_v7()),
+                spec: base.spec.clone(),
+                password_secret_id: base.password_secret_id,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        store
+            .acquire_repository_operation(
+                repo.id,
+                owner,
+                "Check",
+                Utc::now() + Duration::minutes(5)
+            )
+            .await
+            .unwrap()
+    );
+    sqlx::query("UPDATE backuprepositoryleases SET attemptid=$2 WHERE backuprepositoryid=$1 AND ownerrunid=$3").bind(repo.id).bind(attempt).bind(owner).execute(pool).await.unwrap();
+    repo
+}
+async fn release_executor_repository(pool: &sqlx::PgPool, repo: Uuid, owner: Uuid) {
+    let retained: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM dataexecutorreservations WHERE repositoryid=$1")
+            .bind(repo)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(retained, 0, "the protocol peer confirmed cleanup");
+    PostgresBackupPersistence::new(pool.clone())
+        .release_repository_operation(repo, owner)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM backuprepositories WHERE id=$1")
+        .bind(repo)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+fn admission_response(
+    session: &citadel_adapters::connectors::edge::EdgeSession,
+    id: Uuid,
+    kind: citadel_contracts::citadel::edge::v1::EdgeCommandKind,
+    platform: Uuid,
+) {
+    use citadel_contracts::citadel::{edge::v1::EdgeCommandKind as Kind, images::v1::*};
+    use prost::Message;
+    match kind {
+        Kind::ImageCheckBuildHost => {
+            session.output(
+                id,
+                CheckBuildHostResponse {
+                    available: true,
+                    docker_daemon_id: format!("fixture-{platform}"),
+                    admission_authority_id: platform.to_string(),
+                    admission_generation: 1,
+                    build_capacity: 2,
+                    data_capacity: 2,
+                    heavy_capacity: 2,
+                    ..Default::default()
+                }
+                .encode_to_vec(),
+            );
+        }
+        Kind::ImageReserveData => {
+            session.output(
+                id,
+                DataAdmissionResponse {
+                    admission: BuildAdmissionResult::BuildAdmissionAccepted as i32,
+                }
+                .encode_to_vec(),
+            );
+        }
+        Kind::ImageReconcileData => {
+            session.output(
+                id,
+                ReconcileBuildResponse {
+                    state: BuildCleanupState::BuildCleanupConfirmed as i32,
+                }
+                .encode_to_vec(),
+            );
+        }
+        _ => {}
+    }
 }

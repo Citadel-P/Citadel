@@ -9,7 +9,6 @@ use citadel_contracts::citadel::{
     containers::v1::ExecClientMessage,
     edge::v1::{CommandCompleted, CommandFailed, CommandOutput},
 };
-use citadel_docker::client::DockerClient;
 use futures_util::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use prost::Message;
 use std::{collections::HashMap, io, sync::Arc, time::Duration};
@@ -35,8 +34,7 @@ pub(super) struct Commands {
     futures: FuturesUnordered<BoxFuture<'static, (Uuid, io::Result<()>)>>,
     cancel: CancellationToken,
     budget: Arc<Semaphore>,
-    docker: DockerClient,
-    runtime_container: Option<String>,
+    runtime: Runtime,
     identity: Identity,
     profile: EdgeProfile,
     session: String,
@@ -49,8 +47,7 @@ impl Drop for Commands {
 }
 impl Commands {
     pub fn new(
-        docker: DockerClient,
-        runtime_container: Option<String>,
+        runtime: Runtime,
         identity: Identity,
         profile: EdgeProfile,
         session: String,
@@ -61,8 +58,7 @@ impl Commands {
             futures: FuturesUnordered::new(),
             cancel: CancellationToken::new(),
             budget: Arc::new(Semaphore::new(INPUT_BYTES)),
-            docker,
-            runtime_container,
+            runtime,
             identity,
             profile,
             session,
@@ -126,11 +122,7 @@ impl Commands {
         };
         let cancel = self.cancel.child_token();
         let guard = cancel.clone().drop_guard();
-        let runtime = Runtime::new(
-            self.docker.clone(),
-            cancel.clone(),
-            self.runtime_container.clone(),
-        );
+        let runtime = self.runtime.for_command(cancel.clone());
         let (sender, receiver) = mpsc::channel::<Input>(INPUT_CAPACITY);
         let input = futures_util::stream::unfold(receiver, |mut receiver| async move {
             receiver
@@ -149,7 +141,7 @@ impl Commands {
             tokio::time::Instant::now() + Duration::from_millis(command.timeout_ms as u64)
         });
         let profile = self.profile.clone();
-        let docker = self.docker.clone();
+        let docker = self.runtime.docker().clone();
         self.futures.push(Box::pin(async move {
             let _guard = guard;
             let _permit = permit;
@@ -162,7 +154,7 @@ impl Commands {
                     if let EdgeProfile::SwarmNode(node) = &profile {
                         super::swarm_guard::authorize(&docker, node, kind, &mut payload).await?;
                     }
-                    dispatch::execute(runtime, kind, &payload, Box::pin(input), output.clone()).await
+                    dispatch::execute(runtime, kind, payload, Box::pin(input), output.clone()).await
                 } => result,
             };
             // Drop operation/streams first, then publish the single terminal outcome.

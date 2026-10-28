@@ -9,29 +9,18 @@ import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useMutate, useRead } from '@/lib/hooks';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
-import { useQueryClient } from '@tanstack/react-query';
 import { Ban, FileText } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { AutomationRunRecovery } from './run-recovery';
+import { useAutomationRuns } from '../hooks/useAutomationRuns';
 import { LogViewer } from '@/components/custom/log-viewer';
 
 export function AutomationActionRunsTab({ resource }: { resource: AuthorizedAction }) {
   const formatDateTime = useProfileDateTimeFormatter();
   const [logRunId, setLogRunId] = useState<string | undefined>();
-  const queryClient = useQueryClient();
   const cancelRun = useMutate('cancelAutomationActionRun');
-  const { data, isLoading } = useRead(
-    'listAutomationActionRuns',
-    { id: resource.id, query: { limit: 50 } },
-    {
-      refetchInterval: (query) => {
-        const runs = query.state.data?.data.runs ?? [];
-        if (runs.some(isActiveRun)) return 3000;
-        if (resource.currentRunId && !query.state.data) return 3000;
-        return false;
-      },
-    },
-  );
+  const { data, isLoading } = useAutomationRuns(resource.id);
 
   const runs = useMemo(() => data?.data.runs ?? [], [data?.data.runs]);
   const selectedRun = useMemo(() => runs.find((run) => run.id === logRunId), [logRunId, runs]);
@@ -46,14 +35,12 @@ export function AutomationActionRunsTab({ resource }: { resource: AuthorizedActi
     async (run: AutomationRunView) => {
       try {
         await cancelRun.mutateAsync({ id: resource.id, runId: run.id } as any);
-        await queryClient.invalidateQueries({ queryKey: ['listAutomationActionRuns', { id: resource.id }] });
-        await queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id: resource.id }] });
         toast.success('Run cancellation requested');
       } catch {
         toast.error(cancelRun.validationErrors ?? 'Failed to cancel run');
       }
     },
-    [cancelRun, queryClient, resource.id],
+    [cancelRun, resource.id],
   );
 
   const columns = useMemo(
@@ -96,6 +83,9 @@ const runColumns = (
           kind="automationActionRun"
         />
         {row.original.status}
+        {row.original.cleanupPending && !isActiveRun(row.original) && (
+          <span className="text-muted-foreground"> · Cleanup pending</span>
+        )}
       </span>
     ),
     sortFn: (rowA, rowB) => rowA.original.status.localeCompare(rowB.original.status),
@@ -203,6 +193,7 @@ function AutomationRunLogsSheet({
           </SheetHeader>
 
           <div className="p-4 pt-0 pb-2">
+            {run && <AutomationRunRecovery run={run} />}
             <LogViewer logs={isLoading ? '' : logs} autoScroll={false} allowWrap timeStamps />
           </div>
         </div>

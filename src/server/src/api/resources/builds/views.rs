@@ -370,3 +370,18 @@ pub struct BuildProjectDuplicateDraftView {
     pub source_name: String,
     pub draft: super::requests::BuildProjectInput,
 }
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BuildRunRecoveryView {
+    #[schema(required = true)]
+    pub reservation: Option<BuildRetainedReservationView>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BuildRetainedReservationView {
+    pub attempt_id: Uuid,
+    pub daemon_id: String,
+    pub authority_id: Uuid,
+}

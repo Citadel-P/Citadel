@@ -80,7 +80,7 @@ for ownership, earlier public snapshots and release review.
 | Users and teams | Included | Included | Included |
 | Custom access control | Existing custom access and retained Service Accounts remain visible and removable after downgrade, but expansion, machine authentication, and run-as use are unavailable | Custom roles, scoped access, non-human identities, API tokens, and run-as execution | Team capability plus future organizational identity and access governance |
 | Authentication | Local authentication, MFA, and existing OIDC | Same as Community | Future enterprise identity lifecycle, such as SCIM and enforced organizational SSO |
-| Automation actions | Define, test, and run manually | Manual, scheduled, and webhook-triggered execution | Team capabilities plus future approval and change-control policies |
+| Automation actions | Define, test, and run manually on Core or a specific Agent | Automatic Agent selection plus manual, scheduled, and webhook-triggered execution | Team capabilities plus future approval and change-control policies |
 | Backups | Define policies, run on demand, and restore | On-demand, scheduled, and webhook-triggered backups | Team capabilities plus future governed and validated recovery workflows |
 | Webhooks and GitOps | Receive and authenticate repository webhooks, synchronize source, and show pending updates | Automatically build, deploy, apply, run an action, or start a backup from a webhook | Future approval and organization-wide deployment policy |
 | Build execution | Manual builds on existing Local, Agent, and Edge Agent platforms; build-pool configuration remains manageable | Execute builds through external build pools | Future governed elastic capacity and organizational build policy |
@@ -383,6 +383,7 @@ After the grace period:
 - paid webhooks may still be received and authenticated, but they cannot start a
   mutating operation
 - queued paid-trigger runs that have not started do not begin
+- Automatic automation runs that have not started cannot dispatch; Core and specific Agent placement remain available
 - queued external build-pool runs do not lease or provision builder capacity
 - external builds already running may finish or be cancelled
 - custom alert rules are paused
@@ -488,7 +489,8 @@ Check:
 - whether `Automated Operations` is included
 - whether the individual schedule or webhook is configured and enabled
 
-Manual automation, backup, and restore operations remain available.
+Manual automation on Core or a specific Agent, on-demand backups, and restores
+remain available. Automatic Agent selection requires Automated Operations.
 
 ### A Webhook Is Accepted But Does Not Execute
 

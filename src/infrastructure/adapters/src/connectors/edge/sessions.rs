@@ -7,6 +7,7 @@ use std::{
 use citadel_contracts::citadel::edge::v1::{
     CancelCommand, CoreEnvelope, EdgeCommand, EdgeCommandKind, core_envelope,
 };
+use citadel_runtime::runtime_metrics::{BufferedBytes, RuntimeWork};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use tonic::{Code, Status};
@@ -15,6 +16,20 @@ use uuid::Uuid;
 pub const MAX_PAYLOAD: usize = 16 * 1024 * 1024;
 const MAX_COMMANDS: usize = 16;
 const MAX_STREAMS: usize = 8;
+const CONTROL_COMMANDS: usize = 2;
+const MAX_CONTROL_PAYLOAD: usize = 64 * 1024;
+
+fn is_control(kind: EdgeCommandKind) -> bool {
+    matches!(
+        kind,
+        EdgeCommandKind::PlatformCheckHealth
+            | EdgeCommandKind::ImageCheckBuildHost
+            | EdgeCommandKind::ImageReconcileBuild
+            | EdgeCommandKind::ImageReserveData
+            | EdgeCommandKind::ImageReconcileData
+            | EdgeCommandKind::ContainerInspect
+    )
+}
 const OUTBOUND_CAPACITY: usize = 32;
 // Account for queue nodes and permits even when a frame has an empty payload.
 const OUTPUT_FRAME_OVERHEAD: usize = 256;
@@ -24,11 +39,29 @@ const OUTPUT_FRAME_OVERHEAD: usize = 256;
 pub struct EdgeError {
     code: Code,
     message: &'static str,
+    capacity_busy_not_submitted: bool,
 }
 
 impl EdgeError {
     fn new(code: Code, message: &'static str) -> Self {
-        Self { code, message }
+        Self {
+            code,
+            message,
+            capacity_busy_not_submitted: false,
+        }
+    }
+
+    fn capacity_busy(message: &'static str) -> Self {
+        Self {
+            code: Code::ResourceExhausted,
+            message,
+            capacity_busy_not_submitted: true,
+        }
+    }
+
+    /// Local admission refused before enqueueing. Remote errors never carry this evidence.
+    pub(crate) fn capacity_busy_not_submitted(&self) -> bool {
+        self.capacity_busy_not_submitted
     }
 
     fn remote(code: &str) -> Self {
@@ -87,12 +120,16 @@ pub struct EdgeRegistry {
     // Across all sessions, not a per-node multiplier. Slow consumers fail
     // explicitly instead of retaining an unbounded log/backup output backlog.
     output_budget: Arc<Semaphore>,
+    transfer_budget: Arc<Semaphore>,
+    control_budget: Arc<Semaphore>,
 }
 impl Default for EdgeRegistry {
     fn default() -> Self {
         Self {
             sessions: Arc::default(),
             output_budget: Arc::new(Semaphore::new(32 * 1024 * 1024)),
+            transfer_budget: Arc::new(Semaphore::new(32 * 1024 * 1024)),
+            control_budget: Arc::new(Semaphore::new(1024 * 1024)),
         }
     }
 }
@@ -124,7 +161,7 @@ impl EdgeRegistry {
         &self,
         target: EdgeTarget,
         agent_id: Uuid,
-    ) -> Result<(Arc<EdgeSession>, mpsc::Receiver<CoreEnvelope>), EdgeError> {
+    ) -> Result<(Arc<EdgeSession>, EdgeOutbound), EdgeError> {
         let mut sessions = self.sessions.lock().expect("Edge registry lock poisoned");
         if let Some(previous) = sessions.get(&target)
             && target.node_id.is_some()
@@ -155,11 +192,20 @@ impl EdgeRegistry {
             closed: CancellationToken::new(),
             pending: Mutex::new(HashMap::new()),
             output_budget: self.output_budget.clone(),
+            transfer_budget: self.transfer_budget.clone(),
+            control_budget: self.control_budget.clone(),
         });
         if let Some(previous) = sessions.insert(target, session.clone()) {
             previous.close();
         }
-        Ok((session, receiver))
+        Ok((
+            session,
+            EdgeOutbound {
+                receiver,
+                in_transfer: None,
+                preparation: None,
+            },
+        ))
     }
     pub fn get(&self, target: &EdgeTarget) -> Result<Arc<EdgeSession>, EdgeError> {
         self.sessions
@@ -198,9 +244,58 @@ impl EdgeRegistry {
     }
 }
 
+/// The queue owns payload permits independently of command metadata. Cancelling
+/// a pending command cannot free bytes that are still queued for the transport.
+struct QueuedRequest {
+    envelope: CoreEnvelope,
+    _budget: Option<(OwnedSemaphorePermit, BufferedBytes)>,
+    preparation: Option<OwnedSemaphorePermit>,
+}
+impl QueuedRequest {
+    fn control(envelope: CoreEnvelope) -> Self {
+        Self {
+            envelope,
+            _budget: None,
+            preparation: None,
+        }
+    }
+}
+
+/// Single-consumer transport boundary. The previous frame remains charged until
+/// the encoder asks for the next frame. The reservation covers both the raw
+/// payload and its encoded copy; HTTP/2's own flow-control buffer is separate.
+/// Consumers must finish with a frame before requesting the next one.
+pub struct EdgeOutbound {
+    receiver: mpsc::Receiver<QueuedRequest>,
+    in_transfer: Option<(OwnedSemaphorePermit, BufferedBytes)>,
+    preparation: Option<OwnedSemaphorePermit>,
+}
+impl EdgeOutbound {
+    pub(crate) fn encoding_finished(&mut self) {
+        self.in_transfer.take();
+        self.preparation.take();
+    }
+
+    pub async fn recv(&mut self) -> Option<CoreEnvelope> {
+        self.encoding_finished();
+        let queued = self.receiver.recv().await?;
+        self.in_transfer = queued._budget;
+        self.preparation = queued.preparation;
+        Some(queued.envelope)
+    }
+
+    pub fn try_recv(&mut self) -> Result<CoreEnvelope, mpsc::error::TryRecvError> {
+        self.encoding_finished();
+        let queued = self.receiver.try_recv()?;
+        self.in_transfer = queued._budget;
+        self.preparation = queued.preparation;
+        Ok(queued.envelope)
+    }
+}
+
 struct QueuedOutput {
     payload: Vec<u8>,
-    _permit: OwnedSemaphorePermit,
+    _permit: (OwnedSemaphorePermit, BufferedBytes),
 }
 struct Pending {
     output: mpsc::UnboundedSender<QueuedOutput>,
@@ -208,7 +303,6 @@ struct Pending {
     failure: Arc<Mutex<Option<EdgeError>>>,
     streaming: bool,
     interactive: bool,
-    _request_budget: OwnedSemaphorePermit,
 }
 
 pub struct EdgeSession {
@@ -216,10 +310,12 @@ pub struct EdgeSession {
     pub agent_id: Uuid,
     pub id: Uuid,
     pub connected_at: chrono::DateTime<chrono::Utc>,
-    outbound: mpsc::Sender<CoreEnvelope>,
+    outbound: mpsc::Sender<QueuedRequest>,
     closed: CancellationToken,
     pending: Mutex<HashMap<Uuid, Pending>>,
     output_budget: Arc<Semaphore>,
+    transfer_budget: Arc<Semaphore>,
+    control_budget: Arc<Semaphore>,
 }
 impl EdgeSession {
     /// Buffered observations must not outlive the authenticated session.
@@ -258,7 +354,19 @@ impl EdgeSession {
         timeout: Duration,
         streaming: bool,
     ) -> Result<EdgeCommandStream, EdgeError> {
-        if payload.len() > MAX_PAYLOAD {
+        self.command_with_preparation(kind, payload, timeout, streaming, None)
+    }
+
+    pub(crate) fn command_with_preparation(
+        self: &Arc<Self>,
+        kind: EdgeCommandKind,
+        payload: Vec<u8>,
+        timeout: Duration,
+        streaming: bool,
+        preparation: Option<OwnedSemaphorePermit>,
+    ) -> Result<EdgeCommandStream, EdgeError> {
+        let control = is_control(kind);
+        if payload.len() > MAX_PAYLOAD || (control && payload.len() > MAX_CONTROL_PAYLOAD) {
             return Err(EdgeError::new(
                 Code::ResourceExhausted,
                 "Edge command exceeds maximum payload size.",
@@ -283,25 +391,36 @@ impl EdgeSession {
                 "Edge session disconnected.",
             ));
         }
-        if pending.len() >= MAX_COMMANDS
+        if pending.len()
+            >= if control {
+                MAX_COMMANDS
+            } else {
+                MAX_COMMANDS - CONTROL_COMMANDS
+            }
             || (streaming && pending.values().filter(|p| p.streaming).count() >= MAX_STREAMS)
         {
-            return Err(EdgeError::new(
-                Code::ResourceExhausted,
+            return Err(EdgeError::capacity_busy(
                 "Edge session concurrent command limit reached.",
             ));
         }
         let id = Uuid::now_v7();
-        let request_budget = self
-            .output_budget
-            .clone()
-            .try_acquire_many_owned(payload.len().max(1) as u32)
-            .map_err(|_| {
-                EdgeError::new(
-                    Code::ResourceExhausted,
-                    "Edge queued payload byte budget is exhausted.",
-                )
-            })?;
+        let request_budget = if control {
+            &self.control_budget
+        } else {
+            &self.transfer_budget
+        }
+        .clone()
+        .try_acquire_many_owned((2 * payload.len().max(1)) as u32)
+        .map_err(|_| EdgeError::capacity_busy("Edge queued payload byte budget is exhausted."))?;
+        let request_budget = (
+            request_budget,
+            if control {
+                RuntimeWork::EdgeControlBytes
+            } else {
+                RuntimeWork::EdgeTransferBytes
+            }
+            .retain_bytes(2 * payload.len().max(1)),
+        );
         // The shared byte budget bounds this queue. A frame-count limit rejects
         // normal log history bursts regardless of how little memory they use.
         let (output, receiver) = mpsc::unbounded_channel();
@@ -331,10 +450,17 @@ impl EdgeSession {
                 failure: failure.clone(),
                 streaming,
                 interactive: kind == EdgeCommandKind::ContainerExec,
-                _request_budget: request_budget,
             },
         );
-        if self.outbound.try_send(envelope).is_err() {
+        if self
+            .outbound
+            .try_send(QueuedRequest {
+                envelope,
+                _budget: Some(request_budget),
+                preparation,
+            })
+            .is_err()
+        {
             pending.remove(&id);
             return Err(EdgeError::new(
                 Code::Unavailable,
@@ -369,12 +495,12 @@ impl EdgeSession {
             pending.failed.cancel();
             if self
                 .outbound
-                .try_send(self.envelope(
+                .try_send(QueuedRequest::control(self.envelope(
                     id,
                     core_envelope::Body::CancelCommand(CancelCommand {
                         reason: "Core stopped waiting for this command.".into(),
                     }),
-                ))
+                )))
                 .is_err()
             {
                 // A dropped cancel must not leave remote mutations running while
@@ -395,11 +521,13 @@ impl EdgeSession {
                     .clone()
                     .try_acquire_many_owned((payload.len() + OUTPUT_FRAME_OVERHEAD) as u32)
                     .is_ok_and(|permit| {
+                        let bytes = RuntimeWork::EdgeOutputBytes
+                            .retain_bytes(payload.len() + OUTPUT_FRAME_OVERHEAD);
                         command
                             .output
                             .send(QueuedOutput {
                                 payload,
-                                _permit: permit,
+                                _permit: (permit, bytes),
                             })
                             .is_ok()
                     })
@@ -467,12 +595,12 @@ impl EdgeCommandStream {
         }
         self.session
             .outbound
-            .try_send(self.session.envelope(
+            .try_send(QueuedRequest::control(self.session.envelope(
                 self.id,
                 core_envelope::Body::StreamInput(
                     citadel_contracts::citadel::edge::v1::StreamInput { payload },
                 ),
-            ))
+            )))
             .map_err(|_| {
                 EdgeError::new(
                     Code::Unavailable,
@@ -543,6 +671,9 @@ fn node_command_allowed(kind: EdgeCommandKind) -> bool {
             | ImageList
             | ImageInspect
             | ImageExposedPorts
+            | ImageCheckBuildHost
+            | ImageReserveData
+            | ImageReconcileData
             | VolumeList
             | VolumeInspect
             | VolumeCreate
@@ -558,5 +689,39 @@ impl citadel_platforms::edge_management::EdgeSessionControl for EdgeRegistry {
     }
     fn disconnect_platform(&self, id: Uuid) {
         self.disconnect_platform(id);
+    }
+}
+
+#[cfg(test)]
+mod preparation_ownership_tests {
+    use super::*;
+    #[tokio::test]
+    async fn preparation_follows_encoded_payload_not_remote_stream() {
+        let registry = EdgeRegistry::default();
+        let (session, mut outbound) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        let slots = Arc::new(Semaphore::new(2));
+        let permit = slots.clone().acquire_owned().await.unwrap();
+        let _command = session
+            .command_with_preparation(
+                EdgeCommandKind::ImageBuildStream,
+                vec![0; 12 * 1024 * 1024],
+                Duration::from_secs(30),
+                true,
+                Some(permit),
+            )
+            .unwrap();
+        assert_eq!(slots.available_permits(), 1);
+        let payload = outbound.recv().await.unwrap();
+        assert_eq!(
+            slots.available_permits(),
+            1,
+            "encoder still owns the payload"
+        );
+        drop(payload);
+        outbound.encoding_finished();
+        assert_eq!(slots.available_permits(), 2);
+        assert_eq!(session.pending_count(), 1, "remote build still executing");
     }
 }

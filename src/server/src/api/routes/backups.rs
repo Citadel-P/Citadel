@@ -283,6 +283,7 @@ fn result<T>(r: Result<T, BackupError>, h: &HeaderMap) -> HttpResult<T> {
             BackupError::Conflict(m) => ApiError::Conflict(m),
             source @ BackupError::Storage(_) => ApiError::internal(source),
             BackupError::External(m) => ApiError::External(m),
+            BackupError::CleanupPending => ApiError::External(e.to_string()),
         }),
         h,
     )

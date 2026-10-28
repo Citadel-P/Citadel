@@ -94,6 +94,8 @@ struct JwtClaims {
     jti: Uuid,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     automation_run_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    automation_attempt_id: Option<Uuid>,
 }
 
 impl JwtSessionTokenCodec {
@@ -146,6 +148,7 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
             exp: claims.expires_at.timestamp(),
             jti: Uuid::now_v7(),
             automation_run_id: claims.automation_run_id,
+            automation_attempt_id: claims.automation_attempt_id,
         })
     }
 
@@ -159,6 +162,7 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
             issued_at: timestamp(claims.iat)?,
             expires_at: timestamp(claims.exp)?,
             automation_run_id: claims.automation_run_id,
+            automation_attempt_id: claims.automation_attempt_id,
         })
     }
 
@@ -177,6 +181,7 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
             exp: claims.expires_at.timestamp(),
             jti: Uuid::now_v7(),
             automation_run_id: None,
+            automation_attempt_id: None,
         })
     }
 
@@ -424,6 +429,7 @@ mod tests {
                 issued_at: now,
                 expires_at: now + chrono::Duration::minutes(15),
                 automation_run_id: None,
+                automation_attempt_id: None,
             })
             .unwrap();
         assert!(codec.decode_access(&access).is_ok());
@@ -439,6 +445,7 @@ mod tests {
                 issued_at: now,
                 expires_at: now + chrono::Duration::minutes(1),
                 automation_run_id: Some(run_id),
+                automation_attempt_id: Some(Uuid::now_v7()),
             })
             .unwrap();
         assert_eq!(

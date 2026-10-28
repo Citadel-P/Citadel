@@ -10,6 +10,10 @@ use zeroize::Zeroizing;
 pub struct AgentConfig {
     pub mode: AgentMode,
     pub port: u16,
+    pub build_slots: usize,
+    pub data_slots: usize,
+    pub heavy_slots: usize,
+    pub automation_slots: usize,
     pub docker_endpoint: DockerEndpoint,
     pub host_root: PathBuf,
     pub runtime_container: Option<String>,
@@ -105,10 +109,28 @@ impl AgentConfig {
                     "must be unix:///path, tcp://host:port or http://host:port",
                 )
             })?;
+        let build_slots = optional(&mut lookup, "CITADEL_AGENT_BUILD_SLOTS")
+            .map(|value| {
+                value
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|value| (1..=64).contains(value))
+            })
+            .unwrap_or(Some(2))
+            .ok_or_else(|| {
+                invalid(
+                    "CITADEL_AGENT_BUILD_SLOTS",
+                    "must be an integer between 1 and 64",
+                )
+            })?;
         let host_root = path(&mut lookup, "CITADEL_HOST_ROOT", "/host")?;
         Ok(Self {
             mode,
             port,
+            build_slots,
+            data_slots: capacity(&mut lookup, "CITADEL_AGENT_DATA_SLOTS", 2)?,
+            automation_slots: capacity(&mut lookup, "CITADEL_AGENT_AUTOMATION_SLOTS", 4)?,
+            heavy_slots: capacity(&mut lookup, "CITADEL_AGENT_HEAVY_SLOTS", 2)?,
             docker_endpoint,
             host_root,
             runtime_container: optional(&mut lookup, "HOSTNAME"),
@@ -262,6 +284,22 @@ impl EdgeConfig {
             )?,
         })
     }
+}
+
+fn capacity(
+    lookup: &mut impl FnMut(&str) -> Option<String>,
+    name: &'static str,
+    default: usize,
+) -> Result<usize, ConfigError> {
+    optional(lookup, name)
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .ok()
+                .filter(|value| (1..=64).contains(value))
+        })
+        .unwrap_or(Some(default))
+        .ok_or_else(|| invalid(name, "must be an integer between 1 and 64"))
 }
 
 fn optional(lookup: &mut impl FnMut(&str) -> Option<String>, name: &str) -> Option<String> {

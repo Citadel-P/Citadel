@@ -48,7 +48,13 @@ impl PostgresCopyRepository {
             .await
             .map_err(storage_error)?
             .ok_or(CopyError::NotFound)?;
-            let busy:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND expiresat>CURRENT_TIMESTAMP)").bind(repository).fetch_one(&mut *tx).await.map_err(storage_error)?;
+            let busy: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1)",
+            )
+            .bind(repository)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(storage_error)?;
             if busy {
                 return Err(conflict(
                     "A selected backup repository is busy. Wait for its operation to finish, then retry.",

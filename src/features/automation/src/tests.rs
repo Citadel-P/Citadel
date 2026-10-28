@@ -7,6 +7,7 @@ use citadel_primitives::schedule::schedule_is_due;
 use uuid::Uuid;
 fn input() -> AutomationActionConfiguration {
     AutomationActionConfiguration {
+        executor: Default::default(),
         duplicate_source_id: None,
         name: "prune-images".to_owned(),
         description: None,
@@ -49,8 +50,9 @@ fn paid_trigger_policy_matches_dotnet_expansion_and_disable_cases() {
     proposed.schedule_cron = Some("*/5 * * * *".into());
     proposed.validate(ActorId::new(Uuid::now_v7())).unwrap();
     assert_eq!(proposed.schedule_time_zone.as_deref(), Some("UTC"));
-    assert!(changes_paid_trigger(None, &proposed));
+    assert!(changes_paid_configuration(None, &proposed));
     let current = AutomationAction {
+        executor: Default::default(),
         id: Uuid::now_v7(),
         name: proposed.name.clone(),
         description: None,
@@ -78,24 +80,42 @@ fn paid_trigger_policy_matches_dotnet_expansion_and_disable_cases() {
             created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
         },
     };
+    let mut automatic = input();
+    automatic.executor = AutomationExecutor::Automatic;
+    // Creating or switching to Automatic is paid, even for a disabled action.
+    automatic.enabled = false;
+    assert!(changes_paid_configuration(None, &automatic));
+    assert!(changes_paid_configuration(Some(&current), &automatic));
+    let retained = AutomationAction {
+        executor: AutomationExecutor::Automatic,
+        ..current.clone()
+    };
+    assert!(!changes_paid_configuration(Some(&retained), &automatic));
+    automatic.executor = AutomationExecutor::Core;
+    assert!(!changes_paid_configuration(Some(&retained), &automatic));
+    automatic.executor = AutomationExecutor::Agent {
+        agent_id: Uuid::now_v7(),
+    };
+    assert!(!changes_paid_configuration(None, &automatic));
+    assert!(!changes_paid_configuration(Some(&retained), &automatic));
     proposed.code = "console.log('changed');".into();
-    assert!(!changes_paid_trigger(Some(&current), &proposed));
+    assert!(!changes_paid_configuration(Some(&current), &proposed));
     proposed.schedule_cron = Some("*/10 * * * *".into());
-    assert!(changes_paid_trigger(Some(&current), &proposed));
+    assert!(changes_paid_configuration(Some(&current), &proposed));
     proposed.schedule_enabled = false;
-    assert!(!changes_paid_trigger(Some(&current), &proposed));
+    assert!(!changes_paid_configuration(Some(&current), &proposed));
     proposed.webhook = Some(serde_json::from_value(serde_json::json!({"enabled":true})).unwrap());
     let with_webhook = AutomationAction {
         webhook: proposed.webhook.clone(),
         ..current
     };
-    assert!(!changes_paid_trigger(Some(&with_webhook), &proposed));
+    assert!(!changes_paid_configuration(Some(&with_webhook), &proposed));
     proposed.webhook = Some(
         serde_json::from_value(serde_json::json!({"enabled":true,"secret":"changed"})).unwrap(),
     );
-    assert!(changes_paid_trigger(Some(&with_webhook), &proposed));
+    assert!(changes_paid_configuration(Some(&with_webhook), &proposed));
     proposed.enabled = false;
-    assert!(!changes_paid_trigger(Some(&with_webhook), &proposed));
+    assert!(!changes_paid_configuration(Some(&with_webhook), &proposed));
 }
 
 #[test]
@@ -173,6 +193,10 @@ fn log_redaction_masks_common_credentials() {
 fn generated_script_exposes_typed_clients_without_persisting_the_token() {
     let now = Utc::now();
     let run = AutomationRun {
+        executor: Default::default(),
+        attempt_id: None,
+        executor_id: None,
+        cleanup_pending: false,
         id: Uuid::now_v7(),
         action_id: Uuid::now_v7(),
         action_name: "test".to_owned(),
@@ -222,4 +246,23 @@ fn configuration_copy_requires_disabled_triggers_and_current_actor() {
     assert!(forged.validate(actor).is_err());
     copy.webhook = Some(serde_json::from_value(serde_json::json!({"enabled": false})).unwrap());
     assert!(copy.validate(actor).is_err());
+}
+
+#[test]
+fn default_network_allowance_is_limited_to_the_core_port() {
+    assert_eq!(
+        allow_net_authority("https://core.example"),
+        "core.example:443"
+    );
+    assert_eq!(
+        allow_net_authority("http://core.example"),
+        "core.example:80"
+    );
+    assert_eq!(allow_net_authority("https://[::1]"), "[::1]:443");
+    assert_eq!(
+        allow_net_authority("https://core.example:8443"),
+        "core.example:8443"
+    );
+    assert!(allow_net_authority("not-an-origin").is_empty());
+    assert!(allow_net_authority("https://user:pass@core.example").is_empty());
 }

@@ -24,6 +24,26 @@ pub async fn build_consumers(
     Ok(())
 }
 
+pub async fn cleanup_reservations(
+    cancellation: CancellationToken,
+    service: Arc<BuildService>,
+) -> Result<(), BuildError> {
+    let mut cursor = None;
+    while !cancellation.is_cancelled() {
+        match service.reconcile_cleanup(cursor, &cancellation).await {
+            Ok(next) => cursor = next,
+            Err(_) => {
+                tracing::warn!("Build cleanup reconciliation could not read pending reservations")
+            }
+        }
+        tokio::select! {
+            () = cancellation.cancelled() => break,
+            () = tokio::time::sleep(Duration::from_secs(30)) => {}
+        }
+    }
+    Ok(())
+}
+
 pub async fn pool_health(
     cancellation: CancellationToken,
     service: Arc<BuildService>,
@@ -44,51 +64,60 @@ pub async fn pool_health(
 pub async fn build_runs(
     cancellation: CancellationToken,
     service: Arc<BuildService>,
-    parallel_runs: usize,
-    wake: tokio::sync::watch::Receiver<()>,
-) -> Result<(), BuildError> {
-    for result in futures_util::future::join_all(
-        (0..parallel_runs).map(|_| run_worker(cancellation.clone(), service.clone(), wake.clone())),
-    )
-    .await
-    {
-        result?;
-    }
-    Ok(())
-}
-
-async fn run_worker(
-    cancellation: CancellationToken,
-    service: Arc<BuildService>,
+    tracking_slots: usize,
     mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BuildError> {
-    let minimum = Duration::from_secs(2);
-    let mut delay = minimum;
-    while !cancellation.is_cancelled() {
-        let result = {
-            let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::BuildClaim.start();
-            service.process_one(&cancellation).await
-        };
-        if matches!(result, Ok(true)) {
-            citadel_runtime::runtime_metrics::RuntimeWork::BuildClaim.units(1);
-        }
-        match result {
-            Ok(true) => {
-                delay = citadel_runtime::worker_poll_delay(delay, minimum, true);
-                continue;
+    let cancellation = cancellation.child_token();
+    let mut controllers = tokio::task::JoinSet::new();
+    let result = async {
+        while !cancellation.is_cancelled() {
+            while let Some(result) = controllers.try_join_next() {
+                controller_result(result)?;
             }
-            Ok(false) => {}
-            Err(error) => tracing::error!(%error,"Build worker iteration failed"),
+            let mut preparation_busy = false;
+            if controllers.len() < tracking_slots {
+                if let Some(preparation) = service.try_preparation() {
+                    // Complete this short durable claim even if shutdown arrives.
+                    // A returned claim is always handed to an owned controller.
+                    if let Some(claim) = service.claim_next().await? {
+                        citadel_runtime::runtime_metrics::RuntimeWork::BuildPreparation.units(1);
+                        let service = service.clone();
+                        let cancellation = cancellation.clone();
+                        controllers.spawn(async move {
+                            let _tracking = citadel_runtime::runtime_metrics::RuntimeWork::BuildTracking.start();
+                            service.execute_claim(claim, preparation, &cancellation).await
+                        });
+                        continue;
+                    }
+                } else { preparation_busy = true; }
+            }
+            tokio::select! {
+                () = cancellation.cancelled() => break,
+                result = controllers.join_next(), if !controllers.is_empty() => {
+                    if let Some(result) = result { controller_result(result)?; }
+                }
+                () = service.preparation_available(), if preparation_busy => {},
+                _ = super::notifications::wait(&mut wake, &cancellation, Duration::from_secs(2)) => {},
+            }
         }
-        delay = citadel_runtime::worker_poll_delay(delay, minimum, false);
-        super::notifications::wait(
-            &mut wake,
-            &cancellation,
-            delay.max(std::time::Duration::from_secs(30)),
-        )
-        .await;
+        Ok(())
+    }.await;
+    if result.is_err() {
+        cancellation.cancel();
     }
-    Ok(())
+    // No detached streams or dropped result persistence on normal shutdown.
+    while let Some(completed) = controllers.join_next().await {
+        if let Err(error) = controller_result(completed) {
+            tracing::error!(%error, "Build controller failed while draining");
+        }
+    }
+    result
+}
+
+fn controller_result(
+    result: Result<Result<(), BuildError>, tokio::task::JoinError>,
+) -> Result<(), BuildError> {
+    result.map_err(|error| BuildError::Storage(format!("Build controller failed: {error}")))?
 }
 
 #[cfg(test)]

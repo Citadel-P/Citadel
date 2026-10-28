@@ -21,6 +21,9 @@ pub struct AutomationActionInput {
     pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,
+    #[serde(default)]
+    #[schema(value_type = super::spec::AutomationExecutorSchema)]
+    pub executor: citadel_automation::AutomationExecutor,
     pub run_as_actor_id: Option<Uuid>,
     #[serde(default)]
     pub tag_ids: Vec<Uuid>,
@@ -41,6 +44,7 @@ impl From<AutomationActionInput> for citadel_automation::AutomationActionConfigu
             webhook: value.webhook,
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,
+            executor: value.executor,
             run_as_actor_id: value.run_as_actor_id,
             tag_ids: value.tag_ids,
         }
@@ -62,6 +66,7 @@ impl From<citadel_automation::AutomationActionConfiguration> for AutomationActio
             webhook: value.webhook,
             timeout_seconds: value.timeout_seconds,
             alert_on_failure: value.alert_on_failure,
+            executor: value.executor,
             run_as_actor_id: value.run_as_actor_id,
             tag_ids: value.tag_ids,
         }
@@ -86,4 +91,12 @@ pub(crate) struct RenameInput {
 #[derive(Deserialize, Default)]
 pub(crate) struct LimitQuery {
     pub(crate) limit: Option<usize>,
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolveAutomationCleanupInput {
+    pub attempt_id: uuid::Uuid,
+    pub reason: String,
+    pub acknowledged: bool,
 }

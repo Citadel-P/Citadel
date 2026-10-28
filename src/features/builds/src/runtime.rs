@@ -1,6 +1,21 @@
 use crate::*;
 
 pub trait BuildExecutor: Send + Sync {
+    /// Preparation remains charged until its last owned input buffer is consumed.
+    /// Local executors conservatively retain it through their execution.
+    fn execute_with_preparation<'a>(
+        &'a self,
+        claim: &'a BuildClaim,
+        logs: &'a dyn BuildLogSink,
+        cancellation: &'a CancellationToken,
+        preparation: Option<tokio::sync::OwnedSemaphorePermit>,
+    ) -> BoxFuture<'a, BuildExecutionResult> {
+        Box::pin(async move {
+            let _preparation = preparation;
+            self.execute(claim, logs, cancellation).await
+        })
+    }
+
     fn execute<'a>(
         &'a self,
         claim: &'a BuildClaim,

@@ -30,6 +30,12 @@ use std::{sync::Arc, time::Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "automation_http_execution/placement_license.rs"]
+mod placement_license;
+
+#[path = "automation_http_execution/queueing.rs"]
+mod queueing;
+
 #[path = "automation_http_execution/lifecycle.rs"]
 mod lifecycle;
 
@@ -120,6 +126,22 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     }))).await;
     assert_eq!(oversized.status(), StatusCode::BAD_REQUEST);
     webhooks::verify(&app, &admin, &db, &store, &service, &webhook_license).await;
+    placement_license::verify(&app, &admin, &store, &service, &webhook_license).await;
+    // Manual/Test runs use the same durable workers as scheduled/webhook runs.
+    let mut workers = tokio::task::JoinSet::new();
+    for _ in 0..service.options().max_parallel_runs {
+        let service = service.clone();
+        let shutdown = automation_shutdown.clone();
+        workers.spawn(async move {
+            while !shutdown.is_cancelled() {
+                if !service.process_one(&shutdown).await.unwrap() {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }
+        });
+    }
+
+    queueing::verify(&app, &admin, &service, &store).await;
     let action = create(&app, &admin, "console.log('first', args.message); console.log(__citadelToken); await new Promise(r=>setTimeout(r,1500)); console.log('last');", true, 10).await;
     let id = Uuid::parse_str(action["id"].as_str().unwrap()).unwrap();
     let path = format!("/api/v1/automation/actions/{id}/run");
@@ -358,6 +380,13 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     let run = store.list_runs(id, 1).await.unwrap().remove(0);
     assert_eq!(run.status, citadel_automation::AutomationRunStatus::Running);
     drop(stream);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(
+        store.get_run(id, run.id).await.unwrap().status,
+        citadel_automation::AutomationRunStatus::Running,
+        "Closing a viewer must not cancel durable work"
+    );
+    service.cancel(id, run.id).await.unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while store.get_run(id, run.id).await.unwrap().status
             == citadel_automation::AutomationRunStatus::Running
@@ -377,7 +406,7 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     let stalled = create(
         &app,
         &admin,
-        "for(let n=0;;n++){ console.log('progress',n); await new Promise(r=>setTimeout(r,10)); }",
+        "for(let n=0;n<100;n++){ console.log('progress',n); await new Promise(r=>setTimeout(r,10)); }",
         true,
         30,
     )
@@ -392,19 +421,18 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    // Keeping the HTTP response open without consuming progress must not hold
-    // an execution slot indefinitely.
+    // A stalled HTTP viewer must neither cancel nor block execution.
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let runs = store.list_runs(stalled_id, 1).await.unwrap();
-            if runs[0].status == citadel_automation::AutomationRunStatus::Cancelled {
+            if runs[0].status == citadel_automation::AutomationRunStatus::Succeeded {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
     .await
-    .expect("A stalled progress consumer must be cancelled and persisted");
+    .expect("A stalled viewer must allow success to be persisted");
     drop(response);
     lifecycle::verify_request_drop_during_claim(
         &service,
@@ -430,6 +458,9 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
         .await
         .unwrap();
     assert_eq!(automation_tasks.active(), 0);
+    while let Some(result) = workers.join_next().await {
+        result.unwrap();
+    }
     std::fs::remove_dir_all(&root).unwrap();
 }
 

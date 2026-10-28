@@ -25,6 +25,12 @@ Use a Build Pool when builds should run on builder infrastructure rather than on
 
 For a self-managed VM pool, choose one connection mode.
 
+**Maximum concurrent builds** controls how many preparing or running builds the
+pool can accept. It defaults to one. A self-managed pool connects to one Agent;
+the setting does not create additional workers or provision machines. Core's
+[build concurrency limit](/docs/reference/environment-variables#concurrency-limits)
+also applies across pools and Platforms.
+
 ### Inbound Agent endpoint
 
 Use this when Citadel Core can reach the builder host directly. Save the pool first,

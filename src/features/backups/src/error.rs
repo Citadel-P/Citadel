@@ -1,5 +1,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum BackupError {
+    #[error("Backup helper cleanup could not be verified. Storage remains reserved.")]
+    CleanupPending,
     #[error("Automated operations require an active license entitlement.")]
     LicenseRequired,
     #[error("{0}")]

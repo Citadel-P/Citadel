@@ -925,6 +925,28 @@ pub enum ActivityEventInfoSchema {
         error_message: Option<String>,
     },
 
+    ActionRunCleanupResolved {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "AttemptId")]
+        attempt_id: Uuid,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
+    BuildRunCleanupResolved {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "AttemptId")]
+        attempt_id: Uuid,
+        #[serde(rename = "DaemonId")]
+        daemon_id: String,
+        #[serde(rename = "PreviousAuthorityId")]
+        previous_authority_id: Uuid,
+        #[serde(rename = "ReplacementAuthorityId")]
+        replacement_authority_id: Uuid,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
     BuildRunCancelled {
         #[serde(rename = "RunId")]
         run_id: Uuid,
@@ -1516,6 +1538,15 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             citadel_activities::ActivityEventInfo::ActionRunQueued { run_id, trigger } => {
                 Self::ActionRunQueued { run_id, trigger }
             }
+            citadel_activities::ActivityEventInfo::ActionRunCleanupResolved {
+                run_id,
+                attempt_id,
+                reason,
+            } => Self::ActionRunCleanupResolved {
+                run_id,
+                attempt_id,
+                reason,
+            },
             citadel_activities::ActivityEventInfo::ActionRunStarted { run_id, trigger } => {
                 Self::ActionRunStarted { run_id, trigger }
             }
@@ -1610,6 +1641,21 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
                 trigger,
                 duration_ms,
                 error_message,
+            },
+            citadel_activities::ActivityEventInfo::BuildRunCleanupResolved {
+                run_id,
+                attempt_id,
+                daemon_id,
+                previous_authority_id,
+                replacement_authority_id,
+                reason,
+            } => Self::BuildRunCleanupResolved {
+                run_id,
+                attempt_id,
+                daemon_id,
+                previous_authority_id,
+                replacement_authority_id,
+                reason,
             },
             citadel_activities::ActivityEventInfo::BuildRunCancelled { run_id, trigger } => {
                 Self::BuildRunCancelled { run_id, trigger }
@@ -1788,6 +1834,7 @@ enum_schema!(
         ActionDeleted,
         ActionRunQueued,
         ActionRunStarted,
+        ActionRunCleanupResolved,
         ActionRunSucceeded,
         ActionRunFailed,
         ActionRunTimedOut,
@@ -1854,6 +1901,7 @@ enum_schema!(
         BuildRunSucceeded,
         BuildRunFailed,
         BuildRunTimedOut,
+        BuildRunCleanupResolved,
         BuildRunCancelled,
         BuildWebhookReceived,
         BuildAgentPoolCreated,
@@ -2434,5 +2482,6 @@ schema_model! {
         pub timeout_seconds: i32,
         pub alert_on_failure: bool,
         pub run_as_actor_id: Uuid,
+        pub executor: serde_json::Value,
     }
 }

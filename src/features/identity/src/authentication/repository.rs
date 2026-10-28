@@ -1,6 +1,13 @@
 use super::*;
 
 pub trait IdentityStore: Send + Sync {
+    fn automation_attempt_active(
+        &self,
+        actor: ActorId,
+        run: Uuid,
+        attempt: Uuid,
+    ) -> BoxFuture<'_, Result<bool, IdentityError>>;
+
     fn setup_required(&self) -> BoxFuture<'_, Result<bool, IdentityError>>;
 
     fn installation_settings(&self) -> BoxFuture<'_, Result<InstallationSettings, IdentityError>>;

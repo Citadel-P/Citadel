@@ -1,6 +1,6 @@
 import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard } from '@/features/workload-health/card';
-import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
+import { DuplicateWorkload } from '@/components/custom/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { StateBadge } from '@/components/custom/state-badge';

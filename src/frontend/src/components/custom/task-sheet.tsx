@@ -631,6 +631,33 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   BuildRunTimedOut: (info) => <BuildRunActivityDetails info={info} status="Timed out" />,
 
+  ActionRunCleanupResolved: (info) => (
+    <KeyValueBlock
+      label="Cleanup resolution"
+      value={[
+        `Run ID: ${info.runId}`,
+        `Attempt: ${info.attemptId}`,
+        `Resolution notes: ${info.reason}`,
+        'Operator acknowledgment recorded. The run result is unchanged; execution was not retried.',
+      ]}
+    />
+  ),
+
+  BuildRunCleanupResolved: (info) => (
+    <KeyValueBlock
+      label="Cleanup resolution"
+      value={[
+        `Run ID: ${info.runId}`,
+        `Attempt: ${info.attemptId}`,
+        `Docker daemon: ${info.daemonId}`,
+        `Previous Agent identity: ${info.previousAuthorityId}`,
+        `Replacement Agent identity: ${info.replacementAuthorityId}`,
+        `Resolution notes: ${info.reason}`,
+        'Operator acknowledgment recorded. The build result is unchanged; execution was not retried.',
+      ]}
+    />
+  ),
+
   BuildRunCancelled: (info) => <BuildRunActivityDetails info={info} status="Cancelled" />,
 
   BuildWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
@@ -1761,7 +1788,6 @@ function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
 
 function useAutomationActionRunProgress(params: AutomationActionRunParams) {
   const { id, mode } = params;
-  const queryClient = useQueryClient();
 
   const request: RunInput = useMemo(() => {
     if (params.mode === 'run') {
@@ -1779,14 +1805,6 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
     pendingMessage: mode === 'test' ? 'Starting automation test...' : 'Starting automation action...',
     getError: (item) => item.errorMessage ?? item.error?.message,
   });
-
-  useEffect(() => {
-    if (!state.isSuccess && !state.error) return;
-
-    queryClient.invalidateQueries({ queryKey: ['listAutomationActions'] });
-    queryClient.invalidateQueries({ queryKey: ['getAutomationAction', { id }] });
-    queryClient.invalidateQueries({ queryKey: ['listAutomationActionRuns', { id }] });
-  }, [id, queryClient, state.error, state.isSuccess]);
 
   return state;
 }

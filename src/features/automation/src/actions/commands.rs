@@ -22,6 +22,8 @@ pub struct AutomationActionConfiguration {
     pub webhook: Option<WebhookConfig>,
     pub timeout_seconds: Option<i32>,
     pub alert_on_failure: bool,
+    #[serde(default)]
+    pub executor: crate::AutomationExecutor,
     pub run_as_actor_id: Option<Uuid>,
     #[serde(default)]
     pub tag_ids: Vec<Uuid>,
@@ -29,6 +31,7 @@ pub struct AutomationActionConfiguration {
 
 impl AutomationActionConfiguration {
     pub fn validate(&mut self, default_actor: ActorId) -> Result<(), AutomationError> {
+        self.executor.validate()?;
         if self.duplicate_source_id.is_some()
             && (self.enabled
                 || self.webhook.is_some()

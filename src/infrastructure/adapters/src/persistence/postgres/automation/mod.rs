@@ -1,4 +1,5 @@
 pub use repository::PostgresAutomationRepository;
+pub(crate) mod executors;
 mod repository;
 mod rows;
 use rows::*;
@@ -14,8 +15,9 @@ mod scheduling;
 use chrono::{DateTime, Utc};
 
 use citadel_automation::{
-    AutomationAction, AutomationActionConfiguration, AutomationDraft, AutomationError,
-    AutomationRepository, AutomationRun, AutomationRunClaim, AutomationRunResult, code_hash,
+    AutomationAction, AutomationActionConfiguration, AutomationClaimResult, AutomationDraft,
+    AutomationError, AutomationRepository, AutomationRun, AutomationRunClaim, AutomationRunResult,
+    code_hash,
 };
 
 use citadel_activities::{ActivityEvent, ActivityEventInfo};
@@ -31,6 +33,6 @@ use uuid::Uuid;
 
 enum EnqueueMode<'a> {
     Queue,
-    Execute(Option<&'a AutomationDraft>),
+    Draft(Option<&'a AutomationDraft>),
     Webhook(&'a WebhookConfig),
 }

@@ -27,7 +27,6 @@ type CancellationRef = { current: boolean };
 // Details with full realtime snapshots refresh when their groups rejoin.
 // Refetching them here can request a resource just deleted by the user.
 const liveBackedQueryKeys = new Set([
-  'getAutomationAction',
   'getBackupPolicy',
   'getBackupRepository',
   'getBuildRun',

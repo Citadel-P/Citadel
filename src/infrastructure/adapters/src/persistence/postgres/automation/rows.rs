@@ -7,7 +7,7 @@ pub(super) async fn start_run(
 ) -> Result<AutomationRun, AutomationError> {
     let started = Utc::now();
     sqlx::query(
-        "UPDATE actionruns SET status='Running',startedat=$2 WHERE id=$1 AND status='Queued'",
+        "UPDATE actionruns SET status='Running',startedat=$2,attemptid=gen_random_uuid() WHERE id=$1 AND status='Queued'",
     )
     .bind(run_id)
     .bind(started)
@@ -16,7 +16,9 @@ pub(super) async fn start_run(
     .map_err(storage)?;
     sqlx::query("UPDATE actions SET controlstate='Processing',controlstartedat=$2,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$3").bind(action_id).bind(started.timestamp()).bind(run_id).execute(&mut **tx).await.map_err(storage)?;
     let run = get_run_tx(tx, run_id).await?;
-    add_run_activity(tx, &run).await?;
+    if matches!(run.executor, citadel_automation::AutomationExecutor::Core) {
+        add_run_activity(tx, &run).await?;
+    }
     Ok(run)
 }
 
@@ -94,7 +96,7 @@ pub(super) async fn get_run_tx(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<AutomationRun, AutomationError> {
-    sqlx::query("SELECT * FROM actionruns WHERE id=$1")
+    sqlx::query("SELECT *, EXISTS(SELECT 1 FROM automationexecutorreservations WHERE runid=actionruns.id) AS cleanuppending FROM actionruns WHERE id=$1")
         .bind(id)
         .fetch_optional(&mut **tx)
         .await
@@ -108,7 +110,7 @@ pub(super) async fn get_run(
     action_id: Uuid,
     run_id: Uuid,
 ) -> Result<AutomationRun, AutomationError> {
-    sqlx::query("SELECT * FROM actionruns WHERE id=$1 AND actionid=$2")
+    sqlx::query("SELECT *, EXISTS(SELECT 1 FROM automationexecutorreservations WHERE runid=actionruns.id) AS cleanuppending FROM actionruns WHERE id=$1 AND actionid=$2")
         .bind(run_id)
         .bind(action_id)
         .fetch_optional(pool)
@@ -126,6 +128,10 @@ pub(super) fn parse_args(value: &str) -> Result<serde_json::Value, AutomationErr
 
 pub(super) fn map_action(row: sqlx::postgres::PgRow) -> Result<AutomationAction, AutomationError> {
     Ok(AutomationAction {
+        executor: row
+            .try_get::<sqlx::types::Json<citadel_automation::AutomationExecutor>, _>("executor")
+            .map_err(storage)?
+            .0,
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
         description: row.try_get("description").map_err(storage)?,
@@ -169,6 +175,13 @@ pub(super) fn map_action(row: sqlx::postgres::PgRow) -> Result<AutomationAction,
 
 pub(super) fn map_run(row: sqlx::postgres::PgRow) -> Result<AutomationRun, AutomationError> {
     Ok(AutomationRun {
+        attempt_id: row.try_get("attemptid").map_err(storage)?,
+        executor_id: row.try_get("executorid").map_err(storage)?,
+        cleanup_pending: row.try_get("cleanuppending").map_err(storage)?,
+        executor: row
+            .try_get::<sqlx::types::Json<citadel_automation::AutomationExecutor>, _>("executor")
+            .map_err(storage)?
+            .0,
         id: row.try_get("id").map_err(storage)?,
         action_id: row.try_get("actionid").map_err(storage)?,
         action_name: row.try_get("actionname").map_err(storage)?,

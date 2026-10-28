@@ -6,7 +6,7 @@ use futures_util::future::BoxFuture;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Default)]
-pub struct Entitlement(AtomicBool);
+pub struct Entitlement(pub(super) AtomicBool);
 
 impl AutomationEntitlements for Entitlement {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, AutomationError>> {

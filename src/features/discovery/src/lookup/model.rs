@@ -26,6 +26,7 @@ pub enum LookupResourceType {
     BuildAgentPool,
     SwarmService,
     RunAsActor,
+    AutomationAgent,
     ServiceAccount,
 }
 
@@ -56,6 +57,7 @@ impl LookupResourceType {
         Self::BuildAgentPool,
         Self::SwarmService,
         Self::RunAsActor,
+        Self::AutomationAgent,
         Self::ServiceAccount,
     ];
 }

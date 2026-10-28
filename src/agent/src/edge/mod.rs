@@ -37,7 +37,7 @@ pub(crate) struct EdgeAgent {
     endpoint: Endpoint,
     docker: DockerClient,
     heartbeat_interval: Duration,
-    runtime_container: Option<String>,
+    runtime: crate::direct::Runtime,
 }
 impl EdgeAgent {
     pub async fn new(config: EdgeConfig, docker: DockerClient) -> io::Result<Self> {
@@ -73,18 +73,43 @@ impl EdgeAgent {
                 .map_err(|_| invalid("Could not configure Core TLS"))?;
         }
         let state = State::load(&config)?;
+        let shutdown = CancellationToken::new();
+        let runtime = crate::direct::Runtime::new(docker.clone(), shutdown.clone(), None)
+            .with_automation(
+                if config.core_url.scheme() == "https" {
+                    4
+                } else {
+                    0
+                },
+                citadel_runtime::DynamicTasks::new(shutdown),
+            );
         Ok(Self {
             config,
             state,
             endpoint,
+            runtime,
             docker,
             heartbeat_interval: HEARTBEAT_INTERVAL,
-            runtime_container: None,
         })
     }
 
+    pub fn with_automation(mut self, slots: usize, tasks: citadel_runtime::DynamicTasks) -> Self {
+        // Never advertise credential-bearing script execution over plaintext Edge.
+        let slots = if self.config.core_url.scheme() == "https" {
+            slots
+        } else {
+            0
+        };
+        self.runtime = self.runtime.with_automation(slots, tasks);
+        self
+    }
+    pub fn with_execution_capacity(mut self, build: usize, data: usize, heavy: usize) -> Self {
+        self.runtime = self.runtime.with_execution_capacity(build, data, heavy);
+        self
+    }
+
     pub fn with_runtime_container(mut self, runtime_container: Option<String>) -> Self {
-        self.runtime_container = runtime_container;
+        self.runtime = self.runtime.with_runtime_container(runtime_container);
         self
     }
 
@@ -258,8 +283,7 @@ impl EdgeAgent {
                                 })?;
                             session = accepted.session_id;
                             commands = Some(Commands::new(
-                                self.docker.clone(),
-                                self.runtime_container.clone(),
+                                self.runtime.clone(),
                                 self.state.identity.clone().expect("accepted identity"),
                                 self.config.profile.clone(),
                                 session.clone(),

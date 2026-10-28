@@ -2,6 +2,8 @@ use crate::runs::progress;
 use crate::*;
 mod backups;
 mod cancellation;
+mod completion;
+mod leases;
 mod repositories;
 mod restores;
 mod scheduling;
@@ -9,6 +11,7 @@ mod scheduling;
 mod tests;
 
 pub struct BackupService {
+    tracking: Arc<tokio::sync::Semaphore>,
     progress: tokio::sync::broadcast::Sender<Arc<progress::BackupProgressItem>>,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
     store: Arc<dyn BackupPersistence>,
@@ -21,6 +24,18 @@ pub struct BackupService {
     authorizer: Arc<dyn BackupRunAuthorizer>,
     entitlements: Option<Arc<dyn BackupEntitlements>>,
     scheduling_enabled: bool,
+}
+
+/// A durable claim owns its tracking permit until execution and completion finish.
+/// Only the service can construct it; dispatchers transfer it into an owned task.
+pub struct ClaimedBackupWork {
+    claim: BackupWorkClaim,
+    _tracking: tokio::sync::OwnedSemaphorePermit,
+}
+
+enum BackupWorkClaim {
+    Backup(Box<BackupClaim>),
+    Restore(Box<RestoreClaim>),
 }
 
 fn rejected_backup(message: String) -> BackupExecutionResult {
@@ -66,6 +81,29 @@ fn poison<T>(_: std::sync::PoisonError<T>) -> BackupError {
 }
 
 impl BackupService {
+    pub async fn execute_claim(
+        &self,
+        work: ClaimedBackupWork,
+        shutdown: &CancellationToken,
+    ) -> Result<bool, BackupError> {
+        let ClaimedBackupWork { claim, _tracking } = work;
+        match claim {
+            BackupWorkClaim::Backup(claim) => self.execute_backup(*claim, shutdown).await,
+            BackupWorkClaim::Restore(claim) => self.execute_restore(*claim, shutdown).await,
+        }
+    }
+
+    pub fn with_tracking_slots(mut self, slots: usize) -> Self {
+        self.tracking = Arc::new(tokio::sync::Semaphore::new(slots.clamp(1, 128)));
+        self
+    }
+    pub(super) async fn tracking_slot(
+        &self,
+        shutdown: &CancellationToken,
+    ) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        tokio::select! { biased; () = shutdown.cancelled() => None, permit = self.tracking.clone().acquire_owned() => permit.ok() }
+    }
+
     pub fn with_change_notifier(mut self, notifier: Arc<dyn Fn() + Send + Sync>) -> Self {
         self.on_change = Some(notifier);
         self
@@ -85,6 +123,7 @@ impl BackupService {
         authorizer: Arc<dyn BackupRunAuthorizer>,
     ) -> Self {
         Self {
+            tracking: Arc::new(tokio::sync::Semaphore::new(16)),
             progress: tokio::sync::broadcast::channel(256).0,
             store,
             on_change: None,
@@ -103,6 +142,16 @@ impl BackupService {
     pub fn with_repository_operation_lease(mut self, lease: chrono::Duration) -> Self {
         self.repository_operation_lease = lease;
         self
+    }
+
+    pub async fn reconcile_cleanup(
+        &self,
+        after: Option<Uuid>,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<Uuid>, BackupError> {
+        let next = self.executor.reconcile_cleanup(after, cancellation).await?;
+        self.changed();
+        Ok(next)
     }
 
     pub fn store(&self) -> &Arc<dyn BackupPersistence> {

@@ -48,7 +48,7 @@ async fn bind_mount_directory_and_file_round_trip_with_overwrite_guards() {
         }).await.unwrap();
         let executor = DockerResticBackupExecutor::new("docker", IMAGE, Arc::new(Password), 256 * 1024, pool.clone());
         let cancel = CancellationToken::new();
-        executor.repository(&repository, "Initialize", "Platform", Some(platform), &cancel).await.unwrap();
+        repository_operation(&store, &executor, &repository, "Initialize", "Platform", Some(platform), &cancel).await.unwrap();
         let operation_id = Uuid::now_v7();
         assert!(store.acquire_repository_operation(repository.id, operation_id, "Initialize", Utc::now()+chrono::Duration::minutes(5)).await.unwrap());
         store.record_repository_operation(repository.id, BackupRepositoryOperation { operation_id, operation: "Initialize", location: "Platform", platform_id: Some(platform), succeeded: true, message: None }).await.unwrap();

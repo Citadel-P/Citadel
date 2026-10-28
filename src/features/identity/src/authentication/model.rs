@@ -43,6 +43,8 @@ pub struct AccessTokenClaims {
     pub expires_at: DateTime<Utc>,
     #[serde(default)]
     pub automation_run_id: Option<Uuid>,
+    #[serde(default)]
+    pub automation_attempt_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

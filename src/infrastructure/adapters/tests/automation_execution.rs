@@ -29,6 +29,7 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .unwrap();
     let store = PostgresAutomationRepository::new(pool.clone());
     let mut input = AutomationActionConfiguration {
+        executor: Default::default(),
         duplicate_source_id: None,
         name: format!("execution-{}", Uuid::now_v7().simple()),
         description: None,
@@ -77,16 +78,18 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         Some(queued.id)
     );
     let claim = store
-        .claim_next(Utc::now() - Duration::minutes(10))
+        .claim_next(Utc::now() - Duration::minutes(10), false)
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(claim.run.id, queued.id);
     assert!(
         store
-            .claim_next(Utc::now() - Duration::minutes(10))
+            .claim_next(Utc::now() - Duration::minutes(10), false)
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     store
@@ -131,26 +134,73 @@ async fn automation_claim_is_exclusive_and_interrupted_runs_recover() {
         .bind(action.id).fetch_one(&pool).await.unwrap();
     assert_eq!(completed, 1);
 
+    // A cancellation committed after the worker claim remains observable even
+    // before that worker registers its in-memory process token.
+    let cancel_run = store
+        .enqueue(actor, action.id, "Manual", &json!({}), None)
+        .await
+        .unwrap();
+    let cancel_claim = store
+        .claim_next(Utc::now() - Duration::minutes(10), false)
+        .await
+        .unwrap()
+        .claim
+        .unwrap();
+    assert_eq!(cancel_claim.run.id, cancel_run.id);
+    assert!(!store.cancellation_requested(cancel_run.id).await.unwrap());
+    assert!(
+        store.cancel(Uuid::now_v7(), cancel_run.id).await.is_err(),
+        "wrong action must not cancel a run"
+    );
+    assert!(!store.cancellation_requested(cancel_run.id).await.unwrap());
+    store.cancel(action.id, cancel_run.id).await.unwrap();
+    assert!(store.cancellation_requested(cancel_run.id).await.unwrap());
+    assert_eq!(
+        store
+            .get_run(action.id, cancel_run.id)
+            .await
+            .unwrap()
+            .status,
+        citadel_automation::AutomationRunStatus::Running,
+        "requesting cancellation is not cleanup evidence"
+    );
+    store
+        .finish(
+            &cancel_claim,
+            &AutomationRunResult {
+                status: citadel_automation::AutomationRunStatus::Cancelled,
+                exit_code: None,
+                logs: String::new(),
+                error: Some("Cancelled before execution.".into()),
+            },
+        )
+        .await
+        .unwrap();
+
     let interrupted = store
         .enqueue(actor, action.id, "Manual", &json!({}), None)
         .await
         .unwrap();
     let _ = store
-        .claim_next(Utc::now() - Duration::minutes(10))
+        .claim_next(Utc::now() - Duration::minutes(10), false)
         .await
         .unwrap()
+        .claim
         .unwrap();
     sqlx::query("UPDATE actionruns SET startedat=CURRENT_TIMESTAMP-INTERVAL '1 hour' WHERE id=$1")
         .bind(interrupted.id)
         .execute(&pool)
         .await
         .unwrap();
-    assert!(
-        store
-            .claim_next(Utc::now() - Duration::minutes(10))
-            .await
-            .unwrap()
-            .is_none()
+    let outcome = store
+        .claim_next(Utc::now() - Duration::minutes(10), false)
+        .await
+        .unwrap();
+    assert!(outcome.claim.is_none());
+    assert_eq!(
+        outcome.recovered_actions,
+        vec![action.id],
+        "idle queue must still report committed recovery changes"
     );
     let recovered = store.list_runs(action.id, 10).await.unwrap();
     assert_eq!(
@@ -334,6 +384,7 @@ impl citadel_automation::AutomationRunTokenIssuer for SchedulerDependencies {
         &'a self,
         _: ActorId,
         _: Uuid,
+        _attempt_id: Uuid,
         _: std::time::Duration,
     ) -> futures_util::future::BoxFuture<'a, Result<String, citadel_automation::AutomationError>>
     {

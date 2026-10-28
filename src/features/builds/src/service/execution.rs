@@ -3,17 +3,34 @@ use crate::runs::logs;
 
 impl BuildService {
     pub async fn process_one(&self, shutdown: &CancellationToken) -> Result<bool, BuildError> {
-        let Some(claim) = self.store.claim_next(Utc::now() - self.stale_after).await? else {
+        let preparation = tokio::select! {
+            () = shutdown.cancelled() => return Ok(false),
+            permit = self.preparation.clone().acquire_owned() => permit.map_err(|_| BuildError::Conflict("Build preparation is closed.".into()))?,
+        };
+        let Some(claim) = self.claim_next().await? else {
             return Ok(false);
         };
-        self.changed();
+        self.execute_claim(claim, preparation, shutdown).await?;
+        Ok(true)
+    }
+
+    pub async fn execute_claim(
+        &self,
+        claim: BuildClaim,
+        preparation: tokio::sync::OwnedSemaphorePermit,
+        shutdown: &CancellationToken,
+    ) -> Result<(), BuildError> {
         let cancellation = shutdown.child_token();
         self.active
             .lock()
             .map_err(|_| BuildError::Storage("Build cancellation state is poisoned.".to_owned()))?
             .insert(claim.run.id, cancellation.clone());
-        let logs =
-            logs::PersistedBuildLogs::new(self.store.clone(), claim.run.id, self.on_log.clone());
+        let logs = logs::PersistedBuildLogs::new(
+            self.store.clone(),
+            claim.run.id,
+            claim.attempt_id,
+            self.on_log.clone(),
+        );
         let execution = async {
             if let Err(error) = self
                 .ensure_execution_entitlements(&claim.project, &claim.run.trigger)
@@ -30,7 +47,9 @@ impl BuildService {
                     logs: vec![],
                 };
             }
-            self.executor.execute(&claim, &logs, &cancellation).await
+            self.executor
+                .execute_with_preparation(&claim, &logs, &cancellation, Some(preparation))
+                .await
         };
         tokio::pin!(execution);
         let result = tokio::select! {
@@ -105,16 +124,26 @@ impl BuildService {
                 // Readback distinguishes a committed/later terminal result from an
                 // obsolete, still nonterminal claim; neither may be overwritten.
                 match self.store.get_run(claim.run.id).await {
-                    Ok(run) => Ok(run.status.is_terminal()),
+                    Ok(run) => Ok(run.status.is_terminal()
+                        || (result.status == crate::BuildRunStatus::Queued
+                            && run.status == crate::BuildRunStatus::Queued
+                            && run.resolved_commit_sha == result.resolved_commit_sha)),
                     Err(BuildError::NotFound) => Ok(false),
                     Err(error) => Err(error),
                 }
             };
-            let outcome = tokio::select! {
-                biased;
-                () = shutdown.cancelled() => return Ok(true),
-                outcome = completion => outcome,
-            };
+            let outcome =
+                match tokio::time::timeout(std::time::Duration::from_secs(10), completion).await {
+                    Ok(outcome) => outcome,
+                    Err(_) if shutdown.is_cancelled() => return Ok(()),
+                    Err(_) => {
+                        tokio::select! {
+                            () = shutdown.cancelled() => return Ok(()),
+                            () = tokio::time::sleep(delay) => {},
+                        }
+                        continue;
+                    }
+                };
             match outcome {
                 Ok(confirmed) => {
                     if confirmed {
@@ -128,12 +157,12 @@ impl BuildService {
                 Err(error) => return Err(error),
             }
             tokio::select! {
-                () = shutdown.cancelled() => return Ok(true),
+                () = shutdown.cancelled() => return Ok(()),
                 () = tokio::time::sleep(delay) => {}
             }
             delay = (delay * 2).min(std::time::Duration::from_secs(5));
         }
-        Ok(true)
+        Ok(())
     }
 
     pub async fn cancel(&self, id: Uuid) -> Result<(), BuildError> {

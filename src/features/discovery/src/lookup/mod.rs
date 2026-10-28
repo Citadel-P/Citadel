@@ -60,6 +60,7 @@ impl LookupQuery {
                 Platform | Registry | GitRepository | ResourceBinding
             ),
             Some(SwarmService) => self.target == ResourceBinding,
+            Some(AutomationAction) => self.target == AutomationAgent,
             Some(User) => matches!(self.target, Team | Role),
             Some(Platform) => matches!(
                 self.target,
@@ -157,6 +158,35 @@ mod tests {
                 Err(LookupError::Validation(_))
             ));
         }
+    }
+
+    #[test]
+    fn automation_agent_lookup_supports_create_and_edit_contexts() {
+        for source in [None, Some(Kind::AutomationAction)] {
+            for source_id in [None, Some(Uuid::now_v7())] {
+                if source.is_none() && source_id.is_some() {
+                    continue;
+                }
+                let request = LookupQuery {
+                    source,
+                    source_id,
+                    target: Kind::AutomationAgent,
+                    platform_id: None,
+                };
+                assert!(request.validate(false).is_ok());
+                assert!(request.validate(true).is_ok());
+            }
+        }
+        let unsupported = LookupQuery {
+            source: Some(Kind::AutomationAction),
+            source_id: None,
+            target: Kind::Registry,
+            platform_id: None,
+        };
+        assert!(matches!(
+            unsupported.validate(true),
+            Err(LookupError::Validation(_))
+        ));
     }
 
     #[test]

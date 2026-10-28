@@ -29,6 +29,23 @@ pub enum RuntimeWork {
     DockerStorage,
     AutomationClaim,
     BuildClaim,
+    BuildPreparation,
+    BuildTracking,
+    LocalHeavyWork,
+    DataHostWait,
+    DataHostCleanup,
+    BuildQueue,
+    BackupQueue,
+    RestoreQueue,
+    BuildReservations,
+    DataReservations,
+    ExecutionCleanupPending,
+    EdgeTransferBytes,
+    EdgeControlBytes,
+    EdgeOutputBytes,
+    BuildResultPersistence,
+    BackupResultPersistence,
+    RestoreResultPersistence,
     BackupClaim,
     RestoreClaim,
     BuildCompletion,
@@ -166,6 +183,23 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::DockerStorage,
     RuntimeWork::AutomationClaim,
     RuntimeWork::BuildClaim,
+    RuntimeWork::BuildPreparation,
+    RuntimeWork::BuildTracking,
+    RuntimeWork::LocalHeavyWork,
+    RuntimeWork::DataHostWait,
+    RuntimeWork::DataHostCleanup,
+    RuntimeWork::BuildQueue,
+    RuntimeWork::BackupQueue,
+    RuntimeWork::RestoreQueue,
+    RuntimeWork::BuildReservations,
+    RuntimeWork::DataReservations,
+    RuntimeWork::ExecutionCleanupPending,
+    RuntimeWork::EdgeTransferBytes,
+    RuntimeWork::EdgeControlBytes,
+    RuntimeWork::EdgeOutputBytes,
+    RuntimeWork::BuildResultPersistence,
+    RuntimeWork::BackupResultPersistence,
+    RuntimeWork::RestoreResultPersistence,
     RuntimeWork::BackupClaim,
     RuntimeWork::RestoreClaim,
     RuntimeWork::BuildCompletion,
@@ -325,6 +359,16 @@ impl RuntimeWork {
             .buffered
             .store(count as u64, Ordering::Relaxed);
     }
+    /// Account for bytes until their owning buffer is consumed or dropped.
+    pub fn retain_bytes(self, bytes: usize) -> BufferedBytes {
+        COUNTERS[self as usize]
+            .buffered
+            .fetch_add(bytes as u64, Ordering::Relaxed);
+        BufferedBytes {
+            family: self,
+            bytes: bytes as u64,
+        }
+    }
     pub fn queued(self, count: usize) {
         COUNTERS[self as usize]
             .queued
@@ -361,6 +405,18 @@ impl RuntimeWork {
         COUNTERS[self as usize]
             .failures
             .fetch_add(count, Ordering::Relaxed);
+    }
+}
+
+pub struct BufferedBytes {
+    family: RuntimeWork,
+    bytes: u64,
+}
+impl Drop for BufferedBytes {
+    fn drop(&mut self) {
+        COUNTERS[self.family as usize]
+            .buffered
+            .fetch_sub(self.bytes, Ordering::Relaxed);
     }
 }
 
@@ -426,6 +482,27 @@ pub fn render_runtime_metrics(output: &mut String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn buffered_bytes_follow_each_owner_until_drop() {
+        let family = RuntimeWork::EdgeTransferBytes;
+        let first = family.retain_bytes(8);
+        let second = family.retain_bytes(16);
+        assert_eq!(
+            COUNTERS[family as usize].buffered.load(Ordering::Relaxed),
+            24
+        );
+        drop(first);
+        assert_eq!(
+            COUNTERS[family as usize].buffered.load(Ordering::Relaxed),
+            16
+        );
+        drop(second);
+        assert_eq!(
+            COUNTERS[family as usize].buffered.load(Ordering::Relaxed),
+            0
+        );
+    }
 
     #[test]
     fn counters_keep_units_failures_waits_and_in_flight_distinct() {

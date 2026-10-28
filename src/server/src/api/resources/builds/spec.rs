@@ -122,13 +122,8 @@ pub struct SelfManagedVmBuildAgentPoolProviderSpec {
     pub endpoint: Option<String>,
     #[serde(default)]
     pub architecture: CpuArchitecture,
-    #[serde(default = "one_worker")]
-    pub max_workers: i32,
     pub registration_secret_id: Option<Uuid>,
     pub labels: Option<Vec<String>>,
     #[serde(default)]
     pub connection_mode: BuildAgentPoolConnectionMode,
-}
-fn one_worker() -> i32 {
-    1
 }

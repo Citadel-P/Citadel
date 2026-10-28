@@ -3,7 +3,6 @@ pub struct PostgresBackupPersistence {
     pub(super) pool: PgPool,
     pub(super) repository_lease_seconds: i32,
     pub(super) source_lease_seconds: i32,
-    pub(super) restore_timeout_seconds: i32,
 }
 
 impl PostgresBackupPersistence {
@@ -12,24 +11,38 @@ impl PostgresBackupPersistence {
             pool,
             repository_lease_seconds: 300,
             source_lease_seconds: 300,
-            restore_timeout_seconds: 14_400,
         }
     }
-    pub fn with_lease_options(
-        mut self,
-        repository_seconds: i32,
-        source_seconds: i32,
-        restore_seconds: i32,
-    ) -> Self {
-        self.repository_lease_seconds = repository_seconds.max(30);
-        self.source_lease_seconds = source_seconds.max(30);
-        self.restore_timeout_seconds = restore_seconds.max(5);
+    pub fn with_lease_options(mut self, repository_seconds: i32, source_seconds: i32) -> Self {
+        self.repository_lease_seconds = repository_seconds.max(90);
+        self.source_lease_seconds = source_seconds.max(90);
         self
     }
 }
 use super::*;
 
 impl BackupPersistence for PostgresBackupPersistence {
+    fn defer_restore<'a>(
+        &'a self,
+        claim: &'a RestoreClaim,
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
+        self.defer_restore_impl(claim)
+    }
+    fn renew_leases(
+        &self,
+        repository: Uuid,
+        owner: Uuid,
+        attempt: Uuid,
+    ) -> BoxFuture<'_, Result<bool, BackupError>> {
+        self.renew_leases_impl(repository, owner, attempt)
+    }
+    fn defer_backup<'a>(
+        &'a self,
+        claim: &'a BackupClaim,
+    ) -> BoxFuture<'a, Result<bool, BackupError>> {
+        self.defer_backup_impl(claim)
+    }
+
     fn create_repository<'a>(
         &'a self,
         actor: ActorId,

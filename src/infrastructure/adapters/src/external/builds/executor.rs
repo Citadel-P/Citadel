@@ -40,10 +40,13 @@ use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuar
 use citadel_docker::builds::output;
 use citadel_docker::builds::runtime::{
     BuildRuntimeError as BuildFailure, DockerBuildOptions, DockerBuildSession, DockerBuildSource,
-    find_digest, limits, logs, normalize_registry_host, redact, redact_values,
+    limits, logs, normalize_registry_host, redact, redact_values,
 };
 
 pub struct LocalDockerBuildExecutor {
+    local_authority: uuid::Uuid,
+    admission: Arc<dyn citadel_builds::BuildAdmissionStore>,
+    local_budget: citadel_runtime::IoBudget,
     endpoint: citadel_docker::client::DockerEndpoint,
     git: Arc<citadel_git::GitRepositoryExecutionService>,
     docker: OsString,
@@ -78,12 +81,19 @@ impl PlatformBuildExecutor {
     }
 
     #[must_use]
-    pub fn with_edge(mut self, edge: AgentDockerBuildExecutor) -> Self {
+    pub fn with_edge(mut self, mut edge: AgentDockerBuildExecutor) -> Self {
+        edge.git = self.git.clone();
         self.edge = Some(edge);
         self
     }
 
     pub fn with_git_source(mut self, git: Arc<citadel_git::GitRepositoryExecutionService>) -> Self {
+        if let Some(agent) = &mut self.agent {
+            agent.git = Some(git.clone());
+        }
+        if let Some(edge) = &mut self.edge {
+            edge.git = Some(git.clone());
+        }
         self.git = Some(git);
         self
     }
@@ -96,40 +106,17 @@ impl BuildExecutor for PlatformBuildExecutor {
         logs: &'a dyn citadel_builds::BuildLogSink,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
+        self.execute_with_preparation(claim, logs, cancellation, None)
+    }
+
+    fn execute_with_preparation<'a>(
+        &'a self,
+        claim: &'a BuildClaim,
+        logs: &'a dyn citadel_builds::BuildLogSink,
+        cancellation: &'a CancellationToken,
+        preparation: Option<tokio::sync::OwnedSemaphorePermit>,
+    ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
-            let mut prepared;
-            let claim = if let Some(git) = &self.git {
-                if let Err(error) = logs
-                    .append("system", "Synchronizing Build Git source...")
-                    .await
-                {
-                    return failed(BuildFailure::Io(error.to_string()));
-                }
-                let commit = match git
-                    .synchronize_commit(
-                        citadel_primitives::ActorId::new(claim.run.triggered_by_actor_id),
-                        claim.run.git_repository_id,
-                        &claim.run.branch,
-                        cancellation,
-                    )
-                    .await
-                {
-                    Ok(commit) => commit,
-                    Err(citadel_git::GitRepositoryExecutionError::Git(
-                        citadel_git::GitError::Process(error),
-                    )) => return failed(BuildFailure::Process(error)),
-                    Err(error) => return failed(BuildFailure::Validation(error.to_string())),
-                };
-                prepared = claim.clone();
-                // Webhook-pinned commits remain pinned even when the branch has
-                // advanced again. Synchronization only ensures objects are local.
-                if prepared.run.resolved_commit_sha.is_none() {
-                    prepared.run.resolved_commit_sha = Some(commit);
-                }
-                &prepared
-            } else {
-                claim
-            };
             if claim.project.builder_kind == "BuildAgentPool" {
                 let Some(id) = claim.project.build_agent_pool_id else {
                     return failed(BuildFailure::Validation(
@@ -154,15 +141,29 @@ impl BuildExecutor for PlatformBuildExecutor {
                 };
                 return match target {
                     citadel_builds::BuildPoolTarget::Edge => match &self.edge {
-                        Some(edge) => edge.execute(claim, logs, cancellation).await,
+                        Some(edge) => {
+                            edge.execute_with_preparation(claim, logs, cancellation, preparation)
+                                .await
+                        }
                         None => failed(BuildFailure::Validation(
                             "Edge Build transport is unavailable.".into(),
                         )),
                     },
                     citadel_builds::BuildPoolTarget::Inbound(endpoint) => match &self.agent {
                         Some(agent) => match agent.for_address(&endpoint, id, cancellation).await {
-                            Ok(agent) => agent.execute(claim, logs, cancellation).await,
-                            Err(error) => failed(error),
+                            Ok(agent) => {
+                                agent
+                                    .execute_with_preparation(
+                                        claim,
+                                        logs,
+                                        cancellation,
+                                        preparation,
+                                    )
+                                    .await
+                            }
+                            Err(_) => {
+                                waiting(claim, "Waiting for an authenticated Agent connection.")
+                            }
                         },
                         None => failed(BuildFailure::Validation(
                             "Signed Agent transport is not configured.".into(),
@@ -190,17 +191,30 @@ impl BuildExecutor for PlatformBuildExecutor {
                 Err(error) => return failed(BuildFailure::Io(error.to_string())),
             };
             if status != "Online" {
-                return failed(BuildFailure::Validation(
-                    "Build Platform is offline.".to_owned(),
-                ));
+                return waiting(claim, "Waiting for the Build Platform to be online.");
             }
             match connector.as_str() {
-                "Local" => self.local.execute(claim, logs, cancellation).await,
+                "Local" => {
+                    self.local
+                        .execute_with_preparation(claim, logs, cancellation, preparation)
+                        .await
+                }
                 "Agent" => match &self.agent {
                     Some(agent) => {
                         match agent.for_address(&address, platform_id, cancellation).await {
-                            Ok(agent) => agent.execute(claim, logs, cancellation).await,
-                            Err(error) => failed(error),
+                            Ok(agent) => {
+                                agent
+                                    .execute_with_preparation(
+                                        claim,
+                                        logs,
+                                        cancellation,
+                                        preparation,
+                                    )
+                                    .await
+                            }
+                            Err(_) => {
+                                waiting(claim, "Waiting for an authenticated Agent connection.")
+                            }
                         }
                     }
                     _ => failed(BuildFailure::Validation(
@@ -208,7 +222,10 @@ impl BuildExecutor for PlatformBuildExecutor {
                     )),
                 },
                 "EdgeAgent" => match &self.edge {
-                    Some(edge) => edge.execute(claim, logs, cancellation).await,
+                    Some(edge) => {
+                        edge.execute_with_preparation(claim, logs, cancellation, preparation)
+                            .await
+                    }
                     None => failed(BuildFailure::Validation(
                         "Edge Agent Build transport is unavailable.".into(),
                     )),
@@ -223,10 +240,12 @@ impl BuildExecutor for PlatformBuildExecutor {
 
 pub struct AgentDockerBuildExecutor {
     git_cache_root: PathBuf,
+    git: Option<Arc<citadel_git::GitRepositoryExecutionService>>,
     client: BuildTransport,
     secrets: Arc<dyn BuildSecretResolver>,
     registries: Arc<dyn BuildRegistryCredentialResolver>,
     maximum_log_bytes: usize,
+    admission: Arc<dyn citadel_builds::BuildAdmissionStore>,
 }
 
 enum BuildTransport {
@@ -250,13 +269,16 @@ impl AgentDockerBuildExecutor {
             .for_address(endpoint, agent_id, cancellation)
             .await
             .map_err(|error| BuildFailure::Validation(error.to_string()))?;
-        Ok(Self::new(
+        let mut executor = Self::new(
             self.git_cache_root.clone(),
             client,
             self.secrets.clone(),
             self.registries.clone(),
             self.maximum_log_bytes,
-        ))
+            self.admission.clone(),
+        );
+        executor.git = self.git.clone();
+        Ok(executor)
     }
     #[must_use]
     pub fn new(
@@ -265,13 +287,16 @@ impl AgentDockerBuildExecutor {
         secrets: Arc<dyn BuildSecretResolver>,
         registries: Arc<dyn BuildRegistryCredentialResolver>,
         maximum_log_bytes: usize,
+        admission: Arc<dyn citadel_builds::BuildAdmissionStore>,
     ) -> Self {
         Self {
             git_cache_root,
+            git: None,
             client: BuildTransport::Direct(Arc::new(client)),
             secrets,
             registries,
             maximum_log_bytes: maximum_log_bytes.max(1024),
+            admission,
         }
     }
 
@@ -281,13 +306,16 @@ impl AgentDockerBuildExecutor {
         secrets: Arc<dyn BuildSecretResolver>,
         registries: Arc<dyn BuildRegistryCredentialResolver>,
         maximum_log_bytes: usize,
+        admission: Arc<dyn citadel_builds::BuildAdmissionStore>,
     ) -> Self {
         Self {
             git_cache_root,
+            git: None,
             client: BuildTransport::Edge(registry),
             secrets,
             registries,
             maximum_log_bytes: maximum_log_bytes.max(1024),
+            admission,
         }
     }
     async fn execute_inner(
@@ -295,7 +323,69 @@ impl AgentDockerBuildExecutor {
         claim: &BuildClaim,
         progress: &dyn citadel_builds::BuildLogSink,
         cancellation: &CancellationToken,
+        preparation: Option<tokio::sync::OwnedSemaphorePermit>,
     ) -> Result<BuildExecutionResult, BuildFailure> {
+        let client = match &self.client {
+            BuildTransport::Direct(client) => AgentExecutionClient::Direct(client.clone()),
+            BuildTransport::Edge(registry) => {
+                let target = match claim.project.builder_kind.as_str() {
+                    "Platform" => claim.project.platform_id.map(EdgeTarget::platform),
+                    "BuildAgentPool" => claim
+                        .project
+                        .build_agent_pool_id
+                        .map(EdgeTarget::build_pool),
+                    _ => None,
+                }
+                .ok_or_else(|| {
+                    BuildFailure::Validation("Build execution target is invalid.".into())
+                })?;
+                match registry.get(&target) {
+                    Ok(session) => AgentExecutionClient::Edge(session),
+                    Err(_) => return Ok(waiting(claim, "Waiting for the Edge Agent to connect.")),
+                }
+            }
+        };
+        let capacity = match client.check_build_host(cancellation).await {
+            Ok(capacity) => capacity,
+            Err(_) if !cancellation.is_cancelled() => {
+                return Ok(waiting(claim, "Waiting for the executor to be reachable."));
+            }
+            Err(_) => return Err(BuildFailure::Process(ProcessError::Cancelled)),
+        };
+        if !capacity.available {
+            return Ok(waiting(claim, "Waiting for executor Docker availability."));
+        }
+        let executor = citadel_builds::BuildExecutorCapacity {
+            daemon_id: capacity.docker_daemon_id,
+            authority_id: uuid::Uuid::parse_str(&capacity.admission_authority_id).map_err(
+                |_| BuildFailure::Validation("Executor admission identity is invalid.".into()),
+            )?,
+            build_slots: capacity.build_capacity,
+            heavy_slots: capacity.heavy_capacity,
+            admission_generation: capacity.admission_generation,
+        };
+        let reserved = self
+            .admission
+            .reserve_preparation(claim, &executor)
+            .await
+            .map_err(|error| BuildFailure::Io(error.to_string()))?;
+        if reserved != citadel_builds::BuildAdmission::Reserved {
+            return Ok(waiting(
+                claim,
+                if reserved == citadel_builds::BuildAdmission::CleanupPending {
+                    "Waiting for executor cleanup verification."
+                } else {
+                    "Waiting for executor build capacity."
+                },
+            ));
+        }
+        let preparation_timer =
+            citadel_runtime::runtime_metrics::RuntimeWork::BuildPreparation.start();
+        let prepared = match &self.git {
+            Some(git) => synchronize_input(git, claim, progress, cancellation).await?,
+            None => claim.clone(),
+        };
+        let claim = &prepared;
         let repository = tokio::fs::canonicalize(
             self.git_cache_root
                 .join(claim.run.git_repository_id.to_string()),
@@ -350,39 +440,35 @@ impl AgentDockerBuildExecutor {
                     .map(|value| (argument.name.clone(), value.clone()))
             })
             .collect::<HashMap<_, _>>();
-        let client = match &self.client {
-            BuildTransport::Direct(client) => AgentExecutionClient::Direct(client.clone()),
-            BuildTransport::Edge(registry) => {
-                let target = match claim.project.builder_kind.as_str() {
-                    "Platform" => claim.project.platform_id.map(EdgeTarget::platform),
-                    "BuildAgentPool" => claim
-                        .project
-                        .build_agent_pool_id
-                        .map(EdgeTarget::build_pool),
-                    _ => None,
-                }
-                .ok_or_else(|| {
-                    BuildFailure::Validation("Build execution target is invalid.".into())
-                })?;
-                AgentExecutionClient::Edge(
-                    registry
-                        .get(&target)
-                        .map_err(|error| BuildFailure::Validation(error.to_string()))?,
-                )
-            }
-        };
+        let registry_host = claim
+            .run
+            .registry_id
+            .map(|_| normalize_registry_host(&claim.run.registry_host).map(str::to_owned))
+            .transpose()?;
+        // Commit the dispatch boundary before handing the request to transport.
+        // Any subsequent ambiguity retains capacity until cleanup is proven.
+        self.admission
+            .dispatch_executor(claim, &commit)
+            .await
+            .map_err(|error| BuildFailure::Io(error.to_string()))?;
         let sensitive = secret_values
             .iter()
             .map(|value| value.as_str())
             .chain(credentials.as_ref().map(|value| value.password.as_str()))
             .chain(registry_auth.as_deref())
             .collect::<Vec<_>>();
+        drop(preparation_timer);
         let execution_cancellation = cancellation.child_token();
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
         let execution = async {
             client
                 .build_image(
                     AgentBuildCommand {
+                        preparation,
+                        admission_authority_id: capacity.admission_authority_id.clone(),
+                        admission_generation: capacity.admission_generation,
+                        run_id: claim.run.id,
+                        attempt_id: claim.attempt_id,
                         push_to_registry: claim.run.registry_id.is_some(),
                         context_archive,
                         dockerfile_path,
@@ -390,13 +476,7 @@ impl AgentDockerBuildExecutor {
                         build_args,
                         target: claim.run.target.clone(),
                         registry_auth: registry_auth.clone(),
-                        registry_host: claim
-                            .run
-                            .registry_id
-                            .map(|_| {
-                                normalize_registry_host(&claim.run.registry_host).map(str::to_owned)
-                            })
-                            .transpose()?,
+                        registry_host,
                         timeout_seconds: claim.run.timeout_seconds,
                         maximum_log_bytes: self.maximum_log_bytes,
                         secrets,
@@ -420,11 +500,49 @@ impl AgentDockerBuildExecutor {
             &sensitive,
             &execution_cancellation,
         )
-        .await?;
+        .await;
+        if output.is_err() {
+            // The execution future has ended. Independently bounded cleanup may
+            // still run after cancellation, but never forces release or replay.
+            let cleanup = async {
+                let response = client
+                    .reconcile_build(
+                        citadel_contracts::citadel::images::v1::ReconcileBuildRequest {
+                            run_id: claim.run.id.to_string(),
+                            attempt_id: claim.attempt_id.to_string(),
+                            docker_daemon_id: executor.daemon_id.clone(),
+                            admission_authority_id: capacity.admission_authority_id.clone(),
+                            admission_generation: capacity.admission_generation,
+                        },
+                        &CancellationToken::new(),
+                    )
+                    .await
+                    .ok()?;
+                if response.state == citadel_contracts::citadel::images::v1::BuildCleanupState::BuildCleanupConfirmed as i32 {
+                    self.admission.record_executor_cleanup(claim, &executor).await.ok()?;
+                }
+                Some(())
+            };
+            // Failure/lost acknowledgment leaves the original reservation held.
+            let _ = tokio::time::timeout(Duration::from_secs(5), cleanup).await;
+        }
+        let output = output?;
+        if output.not_started {
+            return Ok(BuildExecutionResult {
+                status: citadel_builds::BuildRunStatus::Queued,
+                exit_code: None,
+                image_digest: None,
+                resolved_commit_sha: Some(commit),
+                image_references: references,
+                error_code: Some("build.capacity_wait".into()),
+                error_message: Some("Waiting for executor build capacity.".into()),
+                logs: vec![],
+            });
+        }
         Ok(BuildExecutionResult {
             status: citadel_builds::BuildRunStatus::Succeeded,
             exit_code: Some(0),
-            image_digest: find_digest(&output),
+            image_digest: output.digest,
             resolved_commit_sha: Some(commit),
             image_references: references,
             error_code: None,
@@ -441,8 +559,18 @@ impl BuildExecutor for AgentDockerBuildExecutor {
         logs: &'a dyn citadel_builds::BuildLogSink,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
+        self.execute_with_preparation(claim, logs, cancellation, None)
+    }
+
+    fn execute_with_preparation<'a>(
+        &'a self,
+        claim: &'a BuildClaim,
+        logs: &'a dyn citadel_builds::BuildLogSink,
+        cancellation: &'a CancellationToken,
+        preparation: Option<tokio::sync::OwnedSemaphorePermit>,
+    ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
-            self.execute_inner(claim, logs, cancellation)
+            self.execute_inner(claim, logs, cancellation, preparation)
                 .await
                 .unwrap_or_else(failed)
         })
@@ -460,6 +588,14 @@ impl LocalDockerBuildExecutor {
         pool: PgPool,
     ) -> Self {
         Self {
+            local_authority: uuid::Uuid::now_v7(),
+            admission: Arc::new(
+                crate::persistence::postgres::builds::PostgresBuildRepository::new(pool.clone()),
+            ),
+            local_budget: citadel_runtime::IoBudget::new(
+                2.try_into().expect("positive capacity"),
+                citadel_runtime::runtime_metrics::RuntimeWork::LocalHeavyWork,
+            ),
             git,
             endpoint,
             docker: docker.into(),
@@ -470,12 +606,25 @@ impl LocalDockerBuildExecutor {
         }
     }
 
+    pub fn with_local_authority(mut self, authority: uuid::Uuid) -> Self {
+        self.local_authority = authority;
+        self
+    }
+    pub fn with_local_budget(mut self, budget: citadel_runtime::IoBudget) -> Self {
+        self.local_budget = budget;
+        self
+    }
+
     async fn execute_inner(
         &self,
         claim: &BuildClaim,
         progress: &dyn citadel_builds::BuildLogSink,
         cancellation: &CancellationToken,
+        preparation: Option<tokio::sync::OwnedSemaphorePermit>,
     ) -> Result<BuildExecutionResult, BuildFailure> {
+        let Some(_local) = self.local_budget.try_enter() else {
+            return Ok(waiting(claim, "Waiting for Core execution capacity."));
+        };
         if claim.project.builder_kind != "Platform" {
             return Err(BuildFailure::Validation(
                 "External Build Agent Pool execution is not configured for this worker.".to_owned(),
@@ -488,6 +637,37 @@ impl LocalDockerBuildExecutor {
             .require_local(platform_id)
             .await
             .map_err(BuildFailure::Validation)?;
+        let docker = citadel_docker::client::DockerClient::with_endpoint(
+            self.endpoint.clone(),
+            Duration::from_secs(10),
+            "/",
+        )
+        .map_err(|error| BuildFailure::Io(error.to_string()))?;
+        let info = match docker.info().await {
+            Ok(info) => info,
+            Err(_) => return Ok(waiting(claim, "Waiting for local Docker availability.")),
+        };
+        let executor = citadel_builds::BuildExecutorCapacity {
+            daemon_id: info.id,
+            authority_id: self.local_authority,
+            build_slots: 2,
+            heavy_slots: 2,
+            admission_generation: 1,
+        };
+        if self
+            .admission
+            .reserve_preparation(claim, &executor)
+            .await
+            .map_err(|error| BuildFailure::Io(error.to_string()))?
+            != citadel_builds::BuildAdmission::Reserved
+        {
+            return Ok(waiting(
+                claim,
+                "Waiting for local Docker capacity or cleanup verification.",
+            ));
+        }
+        let prepared = synchronize_input(&self.git, claim, progress, cancellation).await?;
+        let claim = &prepared;
         let repository = self.git.cache_path(claim.run.git_repository_id);
         let repository = tokio::fs::canonicalize(&repository)
             .await
@@ -535,6 +715,8 @@ impl LocalDockerBuildExecutor {
                 cancellation,
             )
             .await?;
+        drop(preparation); // Git workspace is materialized; local execution has its own budget.
+        let mut dispatched = false;
         let outcome = async {
             let credentials = match claim.run.registry_id {
                 Some(id) => self
@@ -544,17 +726,6 @@ impl LocalDockerBuildExecutor {
                     .map_err(|error| BuildFailure::Validation(error.to_string()))?,
                 None => None,
             };
-            let session = DockerBuildSession::open(
-                self.docker.clone(),
-                self.endpoint.clone(),
-                credentials
-                    .as_ref()
-                    .map(|credentials| (claim.run.registry_host.as_str(), credentials)),
-                Duration::from_secs(claim.run.timeout_seconds as u64),
-                self.maximum_log_bytes,
-                cancellation,
-            )
-            .await?;
             let context = safe_child(&workspace, &claim.run.context_path).await?;
             let dockerfile = safe_child(&workspace, &claim.run.dockerfile_path).await?;
             let references = image_references(claim, &commit)?;
@@ -567,41 +738,83 @@ impl LocalDockerBuildExecutor {
                     .map_err(|error| BuildFailure::Validation(error.to_string()))?;
                 secrets.push((secret.id.clone(), value));
             }
-            session
-                .build(
-                    DockerBuildOptions {
-                        source: DockerBuildSource::Directory {
-                            context: &context,
-                            dockerfile: &dockerfile,
+            self.admission
+                .dispatch_executor(claim, &commit)
+                .await
+                .map_err(|error| BuildFailure::Io(error.to_string()))?;
+            dispatched = true;
+            let mut session = DockerBuildSession::open(
+                self.docker.clone(),
+                self.endpoint.clone(),
+                credentials
+                    .as_ref()
+                    .map(|credentials| (claim.run.registry_host.as_str(), credentials)),
+                Duration::from_secs(claim.run.timeout_seconds as u64),
+                self.maximum_log_bytes,
+                cancellation,
+            )
+            .await?;
+            let execution = async {
+                session
+                    .build(
+                        DockerBuildOptions {
+                            source: DockerBuildSource::Directory {
+                                context: &context,
+                                dockerfile: &dockerfile,
+                            },
+                            tags: &references,
+                            build_args: &claim.project.build_args,
+                            target: claim.run.target.as_deref(),
+                            secrets: &secrets,
                         },
-                        tags: &references,
-                        build_args: &claim.project.build_args,
-                        target: claim.run.target.as_deref(),
-                        secrets: &secrets,
-                    },
-                    progress,
-                    cancellation,
-                )
-                .await?;
-            let mut digest = None;
-            if claim.run.registry_id.is_some() {
-                for reference in &references {
-                    digest = digest.or(session.push(reference, progress, cancellation).await?);
+                        progress,
+                        cancellation,
+                    )
+                    .await?;
+                let mut digest = None;
+                if claim.run.registry_id.is_some() {
+                    for reference in &references {
+                        digest = digest.or(session.push(reference, progress, cancellation).await?);
+                    }
                 }
+                Ok(BuildExecutionResult {
+                    status: citadel_builds::BuildRunStatus::Succeeded,
+                    exit_code: Some(0),
+                    image_digest: digest,
+                    resolved_commit_sha: Some(commit.clone()),
+                    image_references: references,
+                    error_code: None,
+                    error_message: None,
+                    logs: vec![],
+                })
             }
-            Ok(BuildExecutionResult {
-                status: citadel_builds::BuildRunStatus::Succeeded,
-                exit_code: Some(0),
-                image_digest: digest,
-                resolved_commit_sha: Some(commit),
-                image_references: references,
-                error_code: None,
-                error_message: None,
-                logs: vec![],
-            })
+            .await;
+            session.cleanup()?;
+            execution
         }
-        .await;
-        remove_directory_if_present(&workspace).await;
+        .await
+        .map_err(|error: BuildFailure| {
+            if dispatched {
+                error
+            } else {
+                error.not_started()
+            }
+        });
+        match tokio::fs::remove_dir_all(&workspace).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(BuildFailure::Cleanup),
+        }
+        if outcome.is_ok()
+            || outcome
+                .as_ref()
+                .is_err_and(BuildFailure::execution_finished)
+        {
+            self.admission
+                .record_executor_cleanup(claim, &executor)
+                .await
+                .map_err(|error| BuildFailure::Io(error.to_string()))?;
+        }
         outcome
     }
 
@@ -706,8 +919,17 @@ impl BuildExecutor for LocalDockerBuildExecutor {
         logs: &'a dyn citadel_builds::BuildLogSink,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, BuildExecutionResult> {
+        self.execute_with_preparation(claim, logs, cancellation, None)
+    }
+    fn execute_with_preparation<'a>(
+        &'a self,
+        claim: &'a BuildClaim,
+        logs: &'a dyn citadel_builds::BuildLogSink,
+        cancellation: &'a CancellationToken,
+        preparation: Option<tokio::sync::OwnedSemaphorePermit>,
+    ) -> BoxFuture<'a, BuildExecutionResult> {
         Box::pin(async move {
-            self.execute_inner(claim, logs, cancellation)
+            self.execute_inner(claim, logs, cancellation, preparation)
                 .await
                 .unwrap_or_else(failed)
         })
@@ -717,7 +939,7 @@ impl BuildExecutor for LocalDockerBuildExecutor {
 fn failed(error: BuildFailure) -> BuildExecutionResult {
     let message = redact(&error.to_string());
     BuildExecutionResult {
-        status: match error {
+        status: match error.cause() {
             BuildFailure::Process(ProcessError::Cancelled) => {
                 citadel_builds::BuildRunStatus::Cancelled
             }
@@ -939,6 +1161,49 @@ fn image_references(claim: &BuildClaim, commit: &str) -> Result<Vec<String>, Bui
     Ok(references)
 }
 
+fn waiting(claim: &BuildClaim, message: &str) -> BuildExecutionResult {
+    BuildExecutionResult {
+        status: citadel_builds::BuildRunStatus::Queued,
+        exit_code: None,
+        image_digest: None,
+        resolved_commit_sha: claim.run.resolved_commit_sha.clone(),
+        image_references: vec![],
+        error_code: Some("build.capacity_wait".into()),
+        error_message: Some(message.into()),
+        logs: vec![],
+    }
+}
+
+async fn synchronize_input(
+    git: &citadel_git::GitRepositoryExecutionService,
+    claim: &BuildClaim,
+    logs: &dyn citadel_builds::BuildLogSink,
+    cancellation: &CancellationToken,
+) -> Result<BuildClaim, BuildFailure> {
+    logs.append("system", "Synchronizing Build Git source...")
+        .await
+        .map_err(|error| BuildFailure::Io(error.to_string()))?;
+    let commit = git
+        .synchronize_commit(
+            citadel_primitives::ActorId::new(claim.run.triggered_by_actor_id),
+            claim.run.git_repository_id,
+            &claim.run.branch,
+            cancellation,
+        )
+        .await
+        .map_err(|error| match error {
+            citadel_git::GitRepositoryExecutionError::Git(citadel_git::GitError::Process(
+                error,
+            )) => BuildFailure::Process(error),
+            error => BuildFailure::Validation(error.to_string()),
+        })?;
+    let mut prepared = claim.clone();
+    if prepared.run.resolved_commit_sha.is_none() {
+        prepared.run.resolved_commit_sha = Some(commit);
+    }
+    Ok(prepared)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -946,8 +1211,8 @@ mod tests {
     use zeroize::Zeroizing;
     #[test]
     fn digest_parser_is_strict() {
-        assert_eq!(find_digest("digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa size: 1").as_deref(),Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-        assert!(find_digest("sha256:short").is_none());
+        assert_eq!(citadel_docker::builds::runtime::find_digest("digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa size: 1").as_deref(),Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(citadel_docker::builds::runtime::find_digest("sha256:short").is_none());
     }
     #[test]
     fn redaction_hides_inline_credentials() {

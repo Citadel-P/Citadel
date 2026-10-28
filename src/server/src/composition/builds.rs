@@ -42,15 +42,20 @@ pub(super) fn build(
         secret_protector.clone(),
     )?);
     let build_registries = Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone()));
-    let local_builds = Arc::new(LocalDockerBuildExecutor::new(
-        git_execution.clone(),
-        runtime.docker.endpoint().clone(),
-        config.execution.tools.docker.clone(),
-        build_secrets.clone(),
-        build_registries.clone(),
-        4 * 1024 * 1024,
-        pool.clone(),
-    ));
+    let build_store = Arc::new(PostgresBuildRepository::new(pool.clone()));
+    let local_builds = Arc::new(
+        LocalDockerBuildExecutor::new(
+            git_execution.clone(),
+            runtime.docker.endpoint().clone(),
+            config.execution.tools.docker.clone(),
+            build_secrets.clone(),
+            build_registries.clone(),
+            4 * 1024 * 1024,
+            pool.clone(),
+        )
+        .with_local_budget(runtime.local_heavy_work.clone())
+        .with_local_authority(runtime.local_execution_authority),
+    );
     let agent_builds = agent.clone().map(|client| {
         AgentDockerBuildExecutor::new(
             data_root.join("git-repositories"),
@@ -58,6 +63,7 @@ pub(super) fn build(
             build_secrets.clone(),
             build_registries.clone(),
             4 * 1024 * 1024,
+            build_store.clone(),
         )
     });
     let builds = Arc::new(
@@ -66,7 +72,7 @@ pub(super) fn build(
                 dynamic_tasks.clone(),
             )),
             cancellation.clone(),
-            Arc::new(PostgresBuildRepository::new(pool.clone())),
+            build_store.clone(),
             Arc::new(
                 PlatformBuildExecutor::new(pool.clone(), local_builds, agent_builds)
                     .with_git_source(git_execution.clone())
@@ -76,9 +82,22 @@ pub(super) fn build(
                         build_secrets,
                         build_registries,
                         4 * 1024 * 1024,
+                        build_store.clone(),
                     )),
             ),
             chrono::Duration::minutes(10),
+        )
+        .with_preparation_slots(config.build_preparation_slots)
+        .with_cleanup(
+            build_store.clone(),
+            Arc::new(
+                citadel_adapters::connectors::agent::build_cleanup::AgentBuildCleanupChecker {
+                    local: Some((runtime.docker.clone(), runtime.local_execution_authority)),
+                    pool: pool.clone(),
+                    agent: agent.clone(),
+                    edge: edge_registry.clone(),
+                },
+            ),
         )
         .with_alerts(alert_store.clone())
         .with_change_notifier(citadel_server::realtime::change_callback(
@@ -92,6 +111,7 @@ pub(super) fn build(
         ))
         .with_pool_checker(Arc::new(
             citadel_adapters::connectors::agent::build_pool_checker::AgentBuildPoolChecker {
+                admission: build_store.clone(),
                 agent: agent.clone(),
                 edge: edge_registry.clone(),
             },

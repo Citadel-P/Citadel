@@ -269,6 +269,7 @@ impl IdentityService {
             return Err(IdentityError::InvalidCredentials);
         }
         let access = self.tokens.encode_access(&AccessTokenClaims {
+            automation_attempt_id: None,
             session_id: Some(claims.session_id),
             subject_id: user.user_id,
             actor_id: user.actor_id,
@@ -373,6 +374,19 @@ impl IdentityService {
         if claims.expires_at <= self.clock.now() {
             return Err(IdentityError::InvalidCredentials);
         }
+        if let Some(run) = claims.automation_run_id {
+            let attempt = claims
+                .automation_attempt_id
+                .ok_or(IdentityError::InvalidCredentials)?;
+            if !self
+                .store
+                .automation_attempt_active(claims.actor_id, run, attempt)
+                .await?
+            {
+                return Err(IdentityError::InvalidCredentials);
+            }
+        }
+
         if claims.principal_type == AuthenticatedPrincipalType::ServiceAccount
             && claims.automation_run_id.is_none()
         {
@@ -470,6 +484,7 @@ impl IdentityService {
         &self,
         run_as_actor_id: ActorId,
         automation_run_id: Uuid,
+        automation_attempt_id: Uuid,
         lifetime: Duration,
     ) -> Result<String, IdentityError> {
         let target = self
@@ -495,6 +510,7 @@ impl IdentityService {
             issued_at,
             expires_at: issued_at + lifetime,
             automation_run_id: Some(automation_run_id),
+            automation_attempt_id: Some(automation_attempt_id),
         })
     }
 
@@ -690,6 +706,7 @@ impl IdentityService {
         let expires_at = now + self.refresh_token_lifetime;
         let session_id = Uuid::now_v7();
         let access_token = self.tokens.encode_access(&AccessTokenClaims {
+            automation_attempt_id: None,
             session_id: Some(session_id),
             subject_id: user.user_id,
             actor_id: user.actor_id,

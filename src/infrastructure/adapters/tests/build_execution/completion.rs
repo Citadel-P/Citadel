@@ -175,7 +175,7 @@ impl BuildRepository for Store {
             if attempt == 0 && self.mode == 0 {
                 self.resume.notified().await;
             }
-            if self.mode == 3 || (self.mode == 0 && attempt == 0) {
+            if self.mode == 3 || (matches!(self.mode, 0 | 11) && attempt == 0) {
                 return Err(BuildError::Storage("injected before commit".into()));
             }
             if self.mode == 2 && attempt == 0 {
@@ -217,7 +217,7 @@ impl BuildRepository for Store {
                     .unwrap();
             }
             let committed = completion?;
-            if matches!(self.mode, 1 | 7) && attempt == 0 {
+            if matches!(self.mode, 1 | 7 | 12) && attempt == 0 {
                 return Err(BuildError::Storage(
                     "injected lost commit acknowledgment".into(),
                 ));
@@ -244,9 +244,10 @@ impl BuildRepository for Store {
     fn append_log<'a>(
         &'a self,
         run_id: Uuid,
+        attempt_id: Uuid,
         log: &'a BuildLog,
     ) -> BoxFuture<'a, Result<BuildLogEntry, BuildError>> {
-        self.inner.append_log(run_id, log)
+        self.inner.append_log(run_id, attempt_id, log)
     }
     fn cancel_queued<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<bool, BuildError>> {
         self.inner.cancel_queued(id)
@@ -291,7 +292,14 @@ impl BuildExecutor for Executor {
             tokio::task::yield_now().await;
             self.cleaned.store(true, Ordering::SeqCst);
             let mut result = super::success_result('a');
-            if self.mode != 7 {
+            if matches!(self.mode, 11 | 12) {
+                result.status = BuildRunStatus::Queued;
+                result.image_digest = None;
+                result.exit_code = None;
+                result.error_code = Some("build.capacity_wait".into());
+                result.error_message = Some("Waiting for executor build capacity.".into());
+                result.logs.clear();
+            } else if self.mode != 7 {
                 result.status = BuildRunStatus::Failed;
                 result.error_message = Some("fixture failure".into());
             }
@@ -304,8 +312,9 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
     // 0: precommit; 1: lost ack; 2: recovery; 3: pending/shutdown;
     // 4: superseded currentrunid; 5: execution shutdown; 6: timeout cleanup;
     // 7: consumer queue lost ack; 8: alerts absent; 9: transactional rollback;
-    // 10: definitive domain error (must not retry).
-    for mode in 0..11 {
+    // 10: definitive domain error (must not retry);
+    // 11/12: capacity deferral before-commit failure / lost commit acknowledgement.
+    for mode in 0..13 {
         let cleaned = Arc::new(AtomicBool::new(false));
         let store = Arc::new(Store {
             inner: PostgresBuildRepository::new(pool.clone()),
@@ -409,9 +418,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         let persisted = store.get_run(run.id).await.unwrap();
         let expected = match mode {
             2 => BuildRunStatus::Interrupted,
-            3..=5 | 10 => BuildRunStatus::Preparing,
+            3 | 4 | 10 => BuildRunStatus::Preparing,
             6 => BuildRunStatus::TimedOut,
             7 => BuildRunStatus::Succeeded,
+            11 | 12 => BuildRunStatus::Queued,
             _ => BuildRunStatus::Failed,
         };
         assert_eq!(persisted.status, expected, "mode {mode}");
@@ -425,7 +435,19 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
                 super::success_result('a').image_references
             );
         }
-        if matches!(mode, 0 | 1) {
+        if matches!(mode, 11 | 12) {
+            assert_eq!(persisted.queued_at, run.queued_at);
+            assert_eq!(
+                persisted.resolved_commit_sha,
+                super::success_result('a').resolved_commit_sha
+            );
+            assert_eq!(
+                changes.load(Ordering::SeqCst),
+                2,
+                "notify only after persisted deferral"
+            );
+        }
+        if matches!(mode, 0 | 1 | 11 | 12) {
             assert_eq!(store.finishes.load(Ordering::SeqCst), 2);
         }
         let observations: Vec<serde_json::Value> = sqlx::query_scalar(
@@ -435,7 +457,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         .fetch_all(pool)
         .await
         .unwrap();
-        let expected_alert = matches!(mode, 0 | 1 | 6 | 9);
+        let expected_alert = matches!(mode, 0 | 1 | 5 | 6 | 9);
         assert_eq!(
             observations.len(),
             usize::from(expected_alert),

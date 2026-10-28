@@ -84,7 +84,7 @@ impl AutomationRepository for PostgresAutomationRepository {
         self.enqueue_impl(actor, id, trigger, args, timeout_seconds)
     }
 
-    fn enqueue_for_execution<'a>(
+    fn enqueue_with_draft<'a>(
         &'a self,
         actor: ActorId,
         id: Uuid,
@@ -92,8 +92,8 @@ impl AutomationRepository for PostgresAutomationRepository {
         args: &'a serde_json::Value,
         timeout_seconds: Option<i32>,
         draft: Option<&'a AutomationDraft>,
-    ) -> BoxFuture<'a, Result<AutomationRunClaim, AutomationError>> {
-        self.enqueue_for_execution_impl(actor, id, trigger, args, timeout_seconds, draft)
+    ) -> BoxFuture<'a, Result<AutomationRun, AutomationError>> {
+        self.enqueue_with_draft_impl(actor, id, trigger, args, timeout_seconds, draft)
     }
 
     fn enqueue_webhook<'a>(
@@ -108,8 +108,52 @@ impl AutomationRepository for PostgresAutomationRepository {
     fn claim_next<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<Option<AutomationRunClaim>, AutomationError>> {
-        self.claim_next_impl(stale_before)
+        remote: bool,
+    ) -> BoxFuture<'a, Result<AutomationClaimResult, AutomationError>> {
+        self.claim_next_impl(stale_before, remote)
+    }
+
+    fn cancellation_requested(&self, run_id: Uuid) -> BoxFuture<'_, Result<bool, AutomationError>> {
+        Box::pin(async move {
+            sqlx::query_scalar("SELECT cancelrequested FROM actionruns WHERE id=$1")
+                .bind(run_id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(storage)
+        })
+    }
+
+    fn defer<'a>(
+        &'a self,
+        claim: &'a AutomationRunClaim,
+    ) -> BoxFuture<'a, Result<citadel_automation::AutomationRunStatus, AutomationError>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let cancelled: Option<bool> = sqlx::query_scalar("UPDATE actionruns SET status=CASE WHEN cancelrequested THEN 'Cancelled' ELSE 'Queued' END,finishedat=CASE WHEN cancelrequested THEN CURRENT_TIMESTAMP ELSE NULL END,startedat=NULL,attemptid=NULL,executorid=NULL,nexteligibleat=CURRENT_TIMESTAMP+INTERVAL '15 seconds' WHERE id=$1 AND attemptid=$2 AND status='Running' AND NOT EXISTS(SELECT 1 FROM automationexecutorreservations WHERE runid=$1 AND NOT cleanupconfirmed) RETURNING cancelrequested")
+                .bind(claim.run.id).bind(claim.run.attempt_id).fetch_optional(&mut *tx).await.map_err(storage)?;
+            let cancelled = cancelled.ok_or_else(|| {
+                AutomationError::Conflict("Automation attempt cannot be deferred.".into())
+            })?;
+            sqlx::query(
+                "DELETE FROM automationexecutorreservations WHERE runid=$1 AND cleanupconfirmed",
+            )
+            .bind(claim.run.id)
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
+            sqlx::query("UPDATE actions SET controlstate=CASE WHEN $3 THEN 'Idle' ELSE 'Queued' END,currentrunid=CASE WHEN $3 THEN NULL ELSE currentrunid END,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2")
+                .bind(claim.run.action_id).bind(claim.run.id).bind(cancelled).execute(&mut *tx).await.map_err(storage)?;
+            if cancelled {
+                let run = get_run_tx(&mut tx, claim.run.id).await?;
+                add_run_activity(&mut tx, &run).await?;
+            }
+            tx.commit().await.map_err(storage)?;
+            Ok(if cancelled {
+                citadel_automation::AutomationRunStatus::Cancelled
+            } else {
+                citadel_automation::AutomationRunStatus::Queued
+            })
+        })
     }
 
     fn finish<'a>(

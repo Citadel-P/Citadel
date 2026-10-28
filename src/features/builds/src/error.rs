@@ -4,6 +4,8 @@ pub enum BuildError {
     LicenseRequired(citadel_licensing::LicenseCapability),
     #[error("{0}")]
     Validation(String),
+    #[error("Administrator access is required.")]
+    Forbidden,
     #[error("Build resource was not found")]
     NotFound,
     #[error("{0}")]

@@ -36,6 +36,7 @@ Pools use the same Agent executable; Swarm-node Agents use a restricted profile.
 | `src/infrastructure/adapters/` | PostgreSQL, remote Agent routing, filesystem and security implementations |
 | `src/infrastructure/docker/` | Shared local Docker, Compose/build execution and transport mapping for Core and Agent |
 | `src/infrastructure/database/` | Declarative schema, migrations and migration runner |
+| `src/infrastructure/automation/` | Shared private script workspace and owned cleanup adapter for Core and Agents |
 | `src/infrastructure/contracts/` | Core/Agent protobufs and generated bindings |
 | `src/infrastructure/docker-api/` | Generated Docker protocol client and pinned source schema |
 | `src/infrastructure/processes/` | Bounded subprocess execution, cancellation and cleanup |
@@ -218,6 +219,12 @@ Authorization failures still fail closed. Process snapshots are transient; no da
 history or separate polling worker is involved. Health history loads through its HTTP query;
 the authenticated health group sends small invalidation notifications on join,
 reconnect and committed changes, rather than carrying the retained records.
+Automation run history loads through HTTP, then an action-authorized realtime
+group replaces the latest 50-run window on join, reconnect and committed run or
+cleanup changes. Live snapshots update the frontend query cache and cancel older
+HTTP reads. Resource subscriptions own synchronization; execution, cancellation
+and cleanup controls do not invalidate those queries. Disconnected views retain
+their last data until reconnection or an ordinary HTTP refresh.
 
 ## Composition and lifecycle
 
@@ -237,12 +244,57 @@ Every spawned task needs an owner, cancellation policy and shutdown behavior.
 Build, Backup and Restore workers retain known execution results in their current
 slot while retrying completion storage failures, with cancellation-aware backoff
 capped at five seconds. They never repeat execution or cleanup to retry persistence.
+Each Build claim persists a fresh attempt UUID in the same transaction as its
+Preparing transition. Completion and streamed log writes require that attempt,
+an active run, and the Project's current-run ownership. A stale controller cannot
+write into a newer attempt of the same run. This token fences database writes;
+it does not by itself reserve executor capacity or confirm remote cleanup.
 A rejected guarded transition is read back: recovered terminal state wins, while
 superseded or removed claims end the attempt. Terminal progress follows confirmed
 storage. Build failure observations are optional and enter the durable alert queue
 in the successful completion transaction. Shutdown may leave an unresolved claim
 for existing recovery; the in-memory result does not survive a Core crash.
 
+Build selection admits one undispatched preparation/probe per configured target at a time.
+After dispatch, canonical daemon capacity governs concurrent execution.
+A deferred target's cooldown also applies to its queued sibling projects, and
+untouched queue entries precede deferred retries. Other targets can use the
+remaining preparation permits while a connection probe is pending. Backup and
+restore claims scan at most 16 candidates per dispatch when source ownership
+blocks an earlier candidate.
+
+Agent build admission is shared across command contexts and replacement Edge
+sessions. A slot covers the build, its declared pushes and confirmed local
+cleanup. Proven pre-execution failures release slots after confirmed cleanup;
+uncertain execution retains occupancy. Core defers only an explicit
+pre-start capacity refusal (including its own Edge transfer admission), preserving the resolved commit and original queue
+age with bounded backoff. Before remote dispatch, Core persists the resolved
+commit and an attempt-owned
+reservation keyed by Docker daemon identity. Platform/Pool aliases share capacity;
+a second Agent authority cannot take over a daemon with outstanding reservations.
+Completion releases capacity transactionally for success, verified pre-start
+refusal, or a persisted same-authority Agent cleanup receipt. Cleanup checks fence
+delayed admission before confirming absence or abandoning a pending push; they
+never clear active or uncertain daemon work. Receipt persistence and a system run
+log commit together, and receipt persistence alone does not release occupancy.
+Startup recovery consumes that evidence; otherwise failures/restarts quarantine
+reservations. Project serialization, pool policy and retention include unresolved
+reservations. The shared claim query blocks replacement work across all builder
+kinds, including Local, before source preparation. A supervised cleanup worker
+sweeps terminal reservations in pages of 16, with five-second Agent checks and
+30 seconds between pages. It uses the original run target and persisted authority,
+never the Project's newly selected builder. Cleanup evidence, reservation release
+and a system log commit atomically; the run outcome remains unchanged. Paging
+advances past unavailable Agents, and existing receipts can settle offline attempts.
+Active work, uncertain execution and changed authorities stay held. Human administrators
+can resolve terminal holds after verifying/stopping old work and restarting the original
+Agent. A bounded host check must reach the same daemon with a different admission
+authority. The release transaction rechecks current administrator access, fences the
+exact terminal attempt, and commits an activity and run log with the operator's notes.
+Operator acknowledgment is never stored as an Agent cleanup receipt. Run outcome and
+completion time remain unchanged; no execution is replayed. Unreachable or replaced
+daemons cannot be manually released through this path. Core-local/data-operation
+admission remains outstanding.
 
 Interactive streams normally end with their caller. Durable operations use
 persisted claims and may continue after a browser disconnect. Recovery inspects
@@ -352,3 +404,101 @@ and affected runtime mappings, not just successful compilation.
    Use disposable external-service fixtures for integration tests.
 
 Test runners and fixture requirements are listed in [test/README.md](../test/README.md).
+
+### Execution capacity and renewable backup ownership
+
+Build dispatch uses bounded controllers with a separate preparation semaphore.
+A host reservation precedes Git preparation; `dispatchstarted` is committed with
+the pinned input before transport submission. Preparation failures can release
+an undispatched reservation; dispatched ambiguity requires authenticated cleanup.
+Preparation ownership follows the actual Direct request or Edge outbound frame,
+not the remote build stream. Completion retries retain the same result.
+
+Backup/restore claims have attempt UUIDs. Repository and source leases renew
+while execution is polled, and late owners cannot renew or finish a replacement
+attempt. A resolved source plan is persisted before acquiring its complete,
+sorted source set. Contention rolls back partial acquisitions and defers work.
+Recovery interrupts lost owners but never frees storage based only on expiry.
+Maintenance and credential validation use the same renewable repository locks.
+Each backup/restore queue has one dispatcher and bounded, owned execution tasks.
+The shared tracking permit travels with the durable claim through completion
+persistence. Initial ownership is verified before execution starts; subsequent
+lease renewals stay concurrent with execution while their database requests are
+pending. Backup and restore results share the same bounded
+completion retry policy. Restic dependencies are reusable; ownership and mutable
+admission/cleanup state belong to an explicit operation context for each run.
+Each claim call scans at most 16 source-blocked candidates, so independent backup
+or restore work can start without another notification. Accepted repository and
+source lease TTLs are at least 90 seconds, with a 30-second heartbeat and bounded
+10-second renewal request.
+
+Data reservations and build reservations share one authenticated daemon authority.
+Agent data admission covers an item/restore/maintenance operation across helper
+creation, execution and cleanup; the Agent heavy-work budget is shared with
+builds. Core's backup tracking limit bounds controllers, independently of host
+capacity. Local build/backup/staging work shares one process-wide heavy-work
+budget. Local Docker execution also records daemon/authority reservations; the
+Core process has one authority shared by its build and backup executors. A new
+Core authority cannot overwrite occupancy retained by an old process or Agent.
+Automation actions select Core (default), a specific Agent, or automatic placement
+among eligible Agents discovered using the run-as identity’s Execute permissions.
+Automatic placement uses the existing Automated Operations entitlement, checked
+when selecting it, starting a manual/test run, and before worker dispatch.
+Downgrade retains configuration and permits switching to fixed placement; cancellation
+and cleanup remain available. Discovery is bounded and rotates candidates between attempts; authorization is
+rechecked before dispatch. Core Deno slots and remote tracking slots
+are independent. Remote Deno processes share Agent heavy capacity with builds and
+backups; Core persists ownership before sending the script over signed Direct or
+authenticated Edge transport. Both require HTTPS for credential-bearing work.
+Run-as tokens are bound to the actor, run and attempt, and stop authenticating after
+cancellation, deferral or completion. Cross-host resource requests go through Core's
+existing authorized HTTP API, never directly from one Agent to another.
+Only a definitive pre-start refusal is deferred; ambiguous dispatch is not replayed.
+Cleanup receipts fence delayed dispatch. Retained capacity after an Agent restart
+requires an audited human-administrator acknowledgment and verification of a new
+Agent authority on the original daemon. This is single-action execution, without
+workflow orchestration. Manual, test, scheduled
+and webhook runs all enter the same durable FIFO queue; only a worker claims a
+run after acquiring the applicable local or remote tracking slot. Source, arguments and run-as identity are frozen
+at enqueue. HTTP progress observers use a bounded broadcast and cannot cancel or
+backpressure execution. Explicit cancellation is persisted, including during the
+queued-to-running transition, and workers observe it before starting a process.
+Queued runs survive restart; interrupted executions fail without being replayed.
+
+Before the first external operation, a busy/offline backup host or busy restore
+source returns the run to the queue with a 15-second eligibility delay. Retried
+candidates sort by their next eligibility time so a full page of blocked work
+cannot monopolize later dispatches. This releases tracking and business leases, preserves the resolved source
+plan, and never defers a partially executed backup. After work starts, the parent
+retains storage ownership while its sequential items wait for their next host.
+
+An Agent records helper names before submitting Docker create. Cancellation of
+that request is not a definitive create result: a later 404 alone cannot release
+its reservation. Confirmed helper identity/removal or a definitive create response
+is required. Same-authority reconciliation fences delayed commands. Restarted
+Agents and Local helpers without sufficient identity or cleanup evidence require
+manual operator review.
+
+Backup storage recovery enumerates repository owners independently of host
+reservations. Admission and recovery serialize on the run and repository lease;
+recovery fences further dispatch. An explicit cleanup receipt survives removal
+of the final host reservation, until parent completion or recovery releases
+repository/source ownership. Missing reservation rows alone never authorize
+release. Core staging and direct Restic work mark the owner unsafe before they
+start and clear that marker only after owned work and staging cleanup finish.
+An interrupted Core process with unconfirmed direct work remains quarantined.
+Staging directories are not deleted solely because of their age.
+
+Local Docker data helpers have an operation-owned journal. Creation intent is
+persisted before Docker create; the immutable container ID is recorded before
+start. Recovery verifies the original daemon and operation label and removes
+only that helper ID. Delayed starts then fail against a removed ID, while fenced
+attempts cannot create another helper. An unacknowledged create with no observed
+container, unavailable Docker, or a changed daemon keeps ownership reserved.
+
+Failed builds release capacity only when a matching BuildKit history record
+confirms terminal execution and temporary files are cleaned. A successful CLI
+cleanup or nonzero exit alone is insufficient. Pushes consume Docker's structured
+response stream; complete terminal responses differ from truncated streams,
+timeouts and transport loss. Unsupported build-history inspection retains the
+reservation rather than guessing that execution stopped.

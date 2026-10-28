@@ -15,4 +15,5 @@ pub struct AutomationActionActivitySnapshot {
     pub timeout_seconds: i32,
     pub alert_on_failure: bool,
     pub run_as_actor_id: Uuid,
+    pub executor: serde_json::Value,
 }

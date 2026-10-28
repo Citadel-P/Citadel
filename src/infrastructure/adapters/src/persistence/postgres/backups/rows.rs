@@ -7,6 +7,11 @@ pub(super) async fn release(
     policy: Option<Uuid>,
     success: bool,
 ) -> Result<(), BackupError> {
+    let unsafe_owner: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND (NOT cleanupconfirmed OR coreworkactive OR EXISTS(SELECT 1 FROM dataexecutorreservations WHERE ownerid=$2)))")
+        .bind(repo).bind(run).fetch_one(&mut **tx).await.map_err(storage)?;
+    if unsafe_owner {
+        return Ok(());
+    }
     sqlx::query("DELETE FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2")
         .bind(repo)
         .bind(run)

@@ -679,6 +679,28 @@ pub enum ActivityEventInfo {
         #[serde(rename = "ErrorMessage")]
         error_message: Option<String>,
     },
+    ActionRunCleanupResolved {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "AttemptId")]
+        attempt_id: Uuid,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
+    BuildRunCleanupResolved {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "AttemptId")]
+        attempt_id: Uuid,
+        #[serde(rename = "DaemonId")]
+        daemon_id: String,
+        #[serde(rename = "PreviousAuthorityId")]
+        previous_authority_id: Uuid,
+        #[serde(rename = "ReplacementAuthorityId")]
+        replacement_authority_id: Uuid,
+        #[serde(rename = "Reason")]
+        reason: String,
+    },
     BuildRunCancelled {
         #[serde(rename = "RunId")]
         run_id: Uuid,
@@ -1364,6 +1386,7 @@ impl ActivityEventInfo {
             Self::ActionRenamed { .. } => ActivityEventType::ActionRenamed,
             Self::ActionDeleted { .. } => ActivityEventType::ActionDeleted,
             Self::ActionRunQueued { .. } => ActivityEventType::ActionRunQueued,
+            Self::ActionRunCleanupResolved { .. } => ActivityEventType::ActionRunCleanupResolved,
             Self::ActionRunStarted { .. } => ActivityEventType::ActionRunStarted,
             Self::ActionRunSucceeded { .. } => ActivityEventType::ActionRunSucceeded,
             Self::ActionRunFailed { .. } => ActivityEventType::ActionRunFailed,
@@ -1381,6 +1404,7 @@ impl ActivityEventInfo {
             Self::BuildRunSucceeded { .. } => ActivityEventType::BuildRunSucceeded,
             Self::BuildRunFailed { .. } => ActivityEventType::BuildRunFailed,
             Self::BuildRunTimedOut { .. } => ActivityEventType::BuildRunTimedOut,
+            Self::BuildRunCleanupResolved { .. } => ActivityEventType::BuildRunCleanupResolved,
             Self::BuildRunCancelled { .. } => ActivityEventType::BuildRunCancelled,
             Self::BuildUpdated { .. } => ActivityEventType::BuildUpdated,
             Self::BuildRenamed { .. } => ActivityEventType::BuildRenamed,

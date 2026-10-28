@@ -140,7 +140,15 @@ impl EdgeAgentService for EdgeIntake {
                             _ => Err(Status::invalid_argument("Unexpected Edge message after authentication."))?,
                         }
                     }
-                    Event::Outgoing(outgoing) => { match outgoing { Some(value) => yield value, None => break } }
+                    Event::Outgoing(outgoing) => { match outgoing {
+                        Some(value) => {
+                            yield value;
+                            // The encoder consumed this frame. Release transfer
+                            // ownership before servicing more incoming output.
+                            outbound.encoding_finished();
+                        },
+                        None => break
+                    } }
                 }
             }
         };

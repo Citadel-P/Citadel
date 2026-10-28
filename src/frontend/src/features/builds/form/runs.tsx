@@ -1,4 +1,5 @@
 import { ActorType, AuthorizedProject, BuildLogEntry, BuildRunStatus, BuildRunView } from '@/api/generated/api.types';
+import { BuildRunRecovery } from './run-recovery';
 import { RunStatusBadge } from '@/components/custom/run-status-badge';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -130,6 +131,7 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
       if (logRunId === run.id) {
         queryClient.setQueryData(['getBuildRun', { id: run.id }], { data: run });
         queryClient.invalidateQueries({ queryKey: ['getBuildRunLogs'] });
+        queryClient.invalidateQueries({ queryKey: ['getBuildRunRecovery', { id: run.id }] });
       }
     },
     [logRunId, queryClient, resource.id, upsertRun],
@@ -180,6 +182,7 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
 
     queryClient.invalidateQueries({ queryKey: ['getBuildRun', { id: logRunId }] });
     queryClient.invalidateQueries({ queryKey: ['getBuildRunLogs', { id: logRunId }] });
+    queryClient.invalidateQueries({ queryKey: ['getBuildRunRecovery', { id: logRunId }] });
     queryClient.invalidateQueries({ queryKey: ['listBuildRuns', readArgs] });
   }, [logRunId, queryClient, readArgs]);
 
@@ -447,6 +450,8 @@ function BuildRunLogsSheet({
                 <MetadataRow icon={Fingerprint} label="Digest" value={run.imageDigest?.slice(0, 20) ?? '-'} monospace />
               </div>
             ) : null}
+
+            {open && run && isTerminalBuildRunStatus(run.status) && <BuildRunRecovery key={run.id} run={run} />}
 
             <LogViewer
               logs={isLoading ? [] : logs}

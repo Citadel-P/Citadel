@@ -52,6 +52,16 @@ impl PostgresAutomationRepository {
                 .bind(run_id).bind(action_id).bind(name).bind(args).bind(code_hash(&code)).bind(code)
                 .bind(Utc::now()).bind(run_as).bind(timeout)
                 .execute(&mut *tx).await.map_err(database)?;
+            sqlx::query("UPDATE actionruns SET executor=$2 WHERE id=$1")
+                .bind(run_id)
+                .bind(
+                    action
+                        .try_get::<serde_json::Value, _>("executor")
+                        .map_err(storage)?,
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             sqlx::query("SELECT pg_notify('citadel_automation_work','')")
                 .execute(&mut *tx)
                 .await

@@ -26,6 +26,7 @@ const MAX_RECOVERY_KEY_BYTES: u64 = 16 * 1024;
 
 #[derive(Clone)]
 pub struct PgDumpSystemBackupBuilder {
+    local_budget: citadel_runtime::IoBudget,
     pool: PgPool,
     database_url: String,
     pg_dump: OsString,
@@ -101,6 +102,10 @@ impl PgDumpSystemBackupBuilder {
         maximum_output: usize,
     ) -> Self {
         Self {
+            local_budget: citadel_runtime::IoBudget::new(
+                2.try_into().expect("positive capacity"),
+                citadel_runtime::runtime_metrics::RuntimeWork::LocalHeavyWork,
+            ),
             pool,
             database_url,
             pg_dump: pg_dump.into(),
@@ -108,6 +113,11 @@ impl PgDumpSystemBackupBuilder {
             maximum_output,
             recovery_assets: None,
         }
+    }
+
+    pub fn with_local_budget(mut self, budget: citadel_runtime::IoBudget) -> Self {
+        self.local_budget = budget;
+        self
     }
 
     pub fn with_recovery_assets(mut self, assets: RecoveryAssets) -> Self {
@@ -120,20 +130,30 @@ impl PgDumpSystemBackupBuilder {
         run_id: Uuid,
         cancellation: &CancellationToken,
     ) -> Result<PathBuf, BackupError> {
-        ensure_private_root(&self.staging_root).await?;
-        cleanup_stale_staging(&self.staging_root).await?;
+        let _local = self.local_budget.enter(cancellation).await.ok_or_else(|| {
+            BackupError::External("System backup cancelled while waiting for Core capacity.".into())
+        })?;
+        ensure_private_root(&self.staging_root)
+            .await
+            .map_err(|_| BackupError::CleanupPending)?;
+        // Other owners may still be writing a bundle. Age is not cleanup proof.
         let directory = self.staging_root.join(run_id.simple().to_string());
         ensure_child(&self.staging_root, &directory)?;
-        if tokio::fs::try_exists(&directory).await.map_err(storage)? {
-            tokio::fs::remove_dir_all(&directory)
-                .await
-                .map_err(storage)?;
+        // Do not replay into an existing attempt's staging directory.
+        tokio::fs::create_dir(&directory)
+            .await
+            .map_err(|_| BackupError::CleanupPending)?;
+        let result = async {
+            set_private_directory(&directory)?;
+            self.write_bundle(&directory, cancellation).await
         }
-        tokio::fs::create_dir(&directory).await.map_err(storage)?;
-        set_private_directory(&directory)?;
-        let result = self.write_bundle(&directory, cancellation).await;
+        .await;
         if let Err(error) = result {
-            let _ = tokio::fs::remove_dir_all(&directory).await;
+            match tokio::fs::remove_dir_all(&directory).await {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => return Err(BackupError::CleanupPending),
+            }
             return Err(error);
         }
         Ok(directory)
@@ -254,44 +274,6 @@ async fn copy_recovery_assets(
         files.push(relative);
     }
     Ok((files, external))
-}
-
-async fn cleanup_stale_staging(root: &Path) -> Result<(), BackupError> {
-    const MAX_ENTRIES: usize = 100;
-    const MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
-    let mut entries = tokio::fs::read_dir(root).await.map_err(storage)?;
-    let now = std::time::SystemTime::now();
-    let mut removed = 0;
-    loop {
-        if removed == MAX_ENTRIES {
-            break;
-        }
-        let Some(entry) = entries.next_entry().await.map_err(storage)? else {
-            break;
-        };
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.len() != 32 || !name.bytes().all(|value| value.is_ascii_hexdigit()) {
-            continue;
-        }
-        let metadata = tokio::fs::symlink_metadata(entry.path())
-            .await
-            .map_err(storage)?;
-        if !metadata.is_dir()
-            || metadata
-                .modified()
-                .ok()
-                .and_then(|modified| now.duration_since(modified).ok())
-                .is_none_or(|age| age < MAX_AGE)
-        {
-            continue;
-        }
-        let path = entry.path();
-        ensure_child(root, &path)?;
-        tokio::fs::remove_dir_all(path).await.map_err(storage)?;
-        removed += 1;
-    }
-    Ok(())
 }
 
 impl CitadelSystemBackupBuilder for PgDumpSystemBackupBuilder {

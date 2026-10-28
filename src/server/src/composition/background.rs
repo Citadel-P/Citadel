@@ -117,7 +117,7 @@ pub async fn spawn_all(
             stats_flush_interval: config.stats_flush_interval,
             retention_interval: config.retention_interval,
             stats_batch_size: config.stats_batch_size,
-            build_parallel_runs: config.build_parallel_runs,
+            build_tracking_slots: config.build_tracking_slots,
             build_retention_days: config.build_retention_days,
             backup_workers: config.backup_workers.clone(),
             queue_capacity: config.event_queue_capacity,

@@ -495,6 +495,7 @@ export enum LookupResourceType {
   BuildAgentPool = "BuildAgentPool",
   SwarmService = "SwarmService",
   RunAsActor = "RunAsActor",
+  AutomationAgent = "AutomationAgent",
   ServiceAccount = "ServiceAccount",
 }
 
@@ -1055,6 +1056,7 @@ export enum ActivityEventType {
   ActionDeleted = "ActionDeleted",
   ActionRunQueued = "ActionRunQueued",
   ActionRunStarted = "ActionRunStarted",
+  ActionRunCleanupResolved = "ActionRunCleanupResolved",
   ActionRunSucceeded = "ActionRunSucceeded",
   ActionRunFailed = "ActionRunFailed",
   ActionRunTimedOut = "ActionRunTimedOut",
@@ -1121,6 +1123,7 @@ export enum ActivityEventType {
   BuildRunSucceeded = "BuildRunSucceeded",
   BuildRunFailed = "BuildRunFailed",
   BuildRunTimedOut = "BuildRunTimedOut",
+  BuildRunCleanupResolved = "BuildRunCleanupResolved",
   BuildRunCancelled = "BuildRunCancelled",
   BuildWebhookReceived = "BuildWebhookReceived",
   BuildAgentPoolCreated = "BuildAgentPoolCreated",
@@ -1531,6 +1534,7 @@ export interface AutomationActionActivitySnapshot {
   defaultArgsJson: string;
   description?: string | null;
   enabled: boolean;
+  executor: any;
   /** @format uuid */
   id: string;
   name: string;
@@ -1557,6 +1561,7 @@ export interface AutomationActionInput {
   /** @format uuid */
   duplicateSourceId?: string | null;
   enabled: boolean;
+  executor?: AutomationExecutorSchema;
   name: string;
   /** @format uuid */
   runAsActorId?: string | null;
@@ -1588,6 +1593,7 @@ export interface AutomationActionView {
   defaultArgsJson: string;
   description: string | null;
   enabled: boolean;
+  executor: AutomationExecutorSchema;
   /** @format uuid */
   id: string;
   /** @format date-time */
@@ -1608,6 +1614,19 @@ export interface AutomationActionView {
   updatedAt: string;
   webhook: WebhookView | null;
 }
+
+export type AutomationExecutorSchema =
+  | {
+      kind: "Core";
+    }
+  | {
+      /** @format uuid */
+      agentId: string;
+      kind: "Agent";
+    }
+  | {
+      kind: "Automatic";
+    };
 
 export interface AutomationProgress {
   error: AutomationProgressError | null;
@@ -1630,11 +1649,16 @@ export interface AutomationRunView {
   actionId: string;
   actionName: string;
   argsJson: string;
+  /** @format uuid */
+  attemptId: string | null;
+  cleanupPending: boolean;
   codeHash: string;
   codeSnapshot: string | null;
   /** @format int64 */
   durationMs: number | null;
   errorMessage: string | null;
+  /** @format uuid */
+  executorId: string | null;
   /** @format int32 */
   exitCode: number | null;
   /** @format date-time */
@@ -2335,6 +2359,18 @@ export interface BuildProjectView {
   /** @format date-time */
   updatedAt: string;
   webhook: WebhookView | null;
+}
+
+export interface BuildRetainedReservationView {
+  /** @format uuid */
+  attemptId: string;
+  /** @format uuid */
+  authorityId: string;
+  daemonId: string;
+}
+
+export interface BuildRunRecoveryView {
+  reservation: BuildRetainedReservationView | null;
 }
 
 export interface BuildRunView {
@@ -5598,6 +5634,27 @@ export type PublicActivityEventInfo =
       trigger: string;
     }
   | {
+      $type: "ActionRunCleanupResolved";
+      /** @format uuid */
+      attemptId: string;
+      reason: string;
+      /** @format uuid */
+      runId: string;
+    }
+  | {
+      $type: "BuildRunCleanupResolved";
+      /** @format uuid */
+      attemptId: string;
+      daemonId: string;
+      /** @format uuid */
+      previousAuthorityId: string;
+      reason: string;
+      /** @format uuid */
+      replacementAuthorityId: string;
+      /** @format uuid */
+      runId: string;
+    }
+  | {
       $type: "BuildRunCancelled";
       /** @format uuid */
       runId: string;
@@ -5957,6 +6014,20 @@ export interface RepositoryLocationInput {
   location: BackupExecutionLocation;
   /** @format uuid */
   platformId?: string | null;
+}
+
+export interface ResolveAutomationCleanupInput {
+  acknowledged: boolean;
+  /** @format uuid */
+  attemptId: string;
+  reason: string;
+}
+
+export interface ResolveBuildCleanupInput {
+  acknowledged: boolean;
+  /** @format uuid */
+  attemptId: string;
+  reason: string;
 }
 
 export interface ResolveInput {
@@ -6359,8 +6430,6 @@ export interface SelfManagedVmBuildAgentPoolProviderSpec {
   connectionMode?: BuildAgentPoolConnectionMode;
   endpoint?: string | null;
   labels?: string[] | null;
-  /** @format int32 */
-  maxWorkers?: number;
   /** @format uuid */
   registrationSecretId?: string | null;
 }
@@ -7626,6 +7695,7 @@ export interface UpdateAutomationActionInput {
   defaultArgsJson?: string | null;
   description?: string | null;
   enabled?: boolean;
+  executor?: AutomationExecutorSchema;
   /** @format uuid */
   runAsActorId?: string | null;
   scheduleCron?: string | null;
@@ -9693,6 +9763,39 @@ export class Api<
      * No description
      *
      * @tags AutomationActions
+     * @name ResolveAutomationRunCleanup
+     * @summary Resolve retained automation capacity after manual cleanup and Agent restart
+     * @request POST:/api/v1/automation/actions/{id}/runs/{runId}/recovery
+     * @secure
+     * @response `204` `void` Capacity released and acknowledgment audited; result unchanged
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    resolveAutomationRunCleanup: (
+      id: string,
+      runId: string,
+      data: ResolveAutomationCleanupInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/automation/actions/${id}/runs/${runId}/recovery`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AutomationActions
      * @name GetAutomationActionTags
      * @summary Get AutomationAction tags
      * @request GET:/api/v1/automation/actions/{id}/tags
@@ -11647,6 +11750,64 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildRuns
+     * @name GetBuildRunRecovery
+     * @summary Inspect retained Build capacity (administrators only)
+     * @request GET:/api/v1/buildRuns/{id}/recovery
+     * @secure
+     * @response `200` `BuildRunRecoveryView` Retained reservation, if any
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getBuildRunRecovery: (id: string, params: RequestParams = {}) =>
+      this.request<BuildRunRecoveryView, ProblemDetails>({
+        path: `/api/v1/buildRuns/${id}/recovery`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags BuildRuns
+     * @name ResolveBuildRunCleanup
+     * @summary Resolve retained Build capacity after manual cleanup and Agent restart
+     * @request POST:/api/v1/buildRuns/{id}/recovery
+     * @secure
+     * @response `204` `void` Capacity released and operator acknowledgment audited; run outcome unchanged
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    resolveBuildRunCleanup: (
+      id: string,
+      data: ResolveBuildCleanupInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/buildRuns/${id}/recovery`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

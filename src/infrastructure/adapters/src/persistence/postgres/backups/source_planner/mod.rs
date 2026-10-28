@@ -511,6 +511,7 @@ impl PostgresBackupSourcePlanner {
 impl BackupSourcePlanner for PostgresBackupSourcePlanner {
     fn cleanup_staging<'a>(
         &'a self,
+        claim: &'a BackupClaim,
         plan: &'a BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {
@@ -520,6 +521,9 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                     Err(e) => return Err(BackupError::Storage(e.to_string())),
                 }
+                super::data_admission::PostgresBackupDataAdmission::new(self.pool.clone())
+                    .finish_core_work(claim.repository.id, claim.run.id, claim.attempt_id)
+                    .await?;
             }
             Ok(())
         })
@@ -649,7 +653,26 @@ impl BackupSourcePlanner for PostgresBackupSourcePlanner {
                             "Citadel system recovery bundle creation is unavailable.".into(),
                         )
                     })?;
-                    let directory = builder.build(claim.run.id, cancellation).await?;
+                    super::data_admission::PostgresBackupDataAdmission::new(self.pool.clone())
+                        .begin_core_work(claim.repository.id, claim.run.id, claim.attempt_id)
+                        .await?;
+                    let directory = match builder.build(claim.run.id, cancellation).await {
+                        Ok(directory) => directory,
+                        Err(error) => {
+                            if !matches!(error, BackupError::CleanupPending) {
+                                super::data_admission::PostgresBackupDataAdmission::new(
+                                    self.pool.clone(),
+                                )
+                                .finish_core_work(
+                                    claim.repository.id,
+                                    claim.run.id,
+                                    claim.attempt_id,
+                                )
+                                .await?;
+                            }
+                            return Err(error);
+                        }
+                    };
                     Ok(BackupSourcePlan {
                         display_name: "Citadel recovery bundle".into(),
                         items: vec![],

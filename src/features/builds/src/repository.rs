@@ -94,9 +94,12 @@ pub trait BuildRepository: Send + Sync {
         &'a self,
         stale_before: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<Option<BuildClaim>, BuildError>>;
-    /// Atomically finish the owned active run and enqueue its optional observation.
+    /// Atomically finish the owned active attempt and enqueue its optional observation.
+    /// A Queued capacity-wait result instead defers proven-not-started work,
+    /// preserving its pinned commit and original queue deadline.
     /// `false` means the run no longer owns the project or is no longer active;
-    /// callers may read terminal state but must not retry a no-op as a write error.
+    /// a replaced attempt also returns `false`. Callers may read terminal state
+    /// but must not retry a no-op as a write error.
     fn finish<'a>(
         &'a self,
         claim: &'a BuildClaim,
@@ -112,9 +115,11 @@ pub trait BuildRepository: Send + Sync {
     ) -> BoxFuture<'a, Result<Vec<BuildRun>, BuildError>>;
     fn get_run<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildRun, BuildError>>;
     fn logs<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<Vec<BuildLogEntry>, BuildError>>;
+    /// Append redacted output only while this attempt owns the active run/project.
     fn append_log<'a>(
         &'a self,
         run_id: Uuid,
+        attempt_id: Uuid,
         log: &'a BuildLog,
     ) -> BoxFuture<'a, Result<BuildLogEntry, BuildError>>;
     fn cancel_queued<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<bool, BuildError>>;

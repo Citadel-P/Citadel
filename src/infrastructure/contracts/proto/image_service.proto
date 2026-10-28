@@ -14,6 +14,9 @@ service ImageService {
 	rpc GetExposedPorts (GetExposedPortsRequest) returns (GetExposedPortsResponse);
 	rpc DistributionInspect (DistributionInspectRequest) returns (DistributionInspectResponse);
 	rpc CheckBuildHost (google.protobuf.Empty) returns (CheckBuildHostResponse);
+	rpc ReconcileBuild (ReconcileBuildRequest) returns (ReconcileBuildResponse);
+    rpc ReserveData (DataOperationRequest) returns (DataAdmissionResponse);
+    rpc ReconcileData (DataOperationRequest) returns (ReconcileBuildResponse);
 
 	rpc Pull (PullImageRequest) returns (stream PullImageResponse);
 	rpc Build (BuildImageRequest) returns (stream ImageBuildResponse);
@@ -50,6 +53,32 @@ message CheckBuildHostResponse {
 	string operatingSystem = 4;
 	string architecture = 5;
 	string buildKitVersion = 6;
+	uint32 buildCapacity = 7;
+	uint32 occupiedBuilds = 8;
+	uint32 uncertainBuilds = 9;
+	string dockerDaemonId = 10;
+	string admissionAuthorityId = 11;
+	uint64 admissionGeneration = 12;
+    uint32 dataCapacity = 13;
+    uint32 heavyCapacity = 14;
+    uint32 occupiedData = 15;
+}
+// Same-authority cleanup evidence, never a cancellation or a replay request.
+message ReconcileBuildRequest {
+ string runId = 1;
+ string attemptId = 2;
+ string admissionAuthorityId = 3;
+ string dockerDaemonId = 4;
+ uint64 admissionGeneration = 5;
+}
+enum BuildCleanupState {
+ BUILD_CLEANUP_UNSPECIFIED = 0;
+ BUILD_CLEANUP_CONFIRMED = 1;
+ BUILD_CLEANUP_ACTIVE = 2;
+ BUILD_CLEANUP_UNCERTAIN = 3;
+}
+message ReconcileBuildResponse {
+ BuildCleanupState state = 1;
 }
 message GetImageRequest {
 	string id = 1;
@@ -111,6 +140,11 @@ message BuildImageRequest {
 	bytes contextArchive = 10;
 	google.protobuf.StringValue dockerfileArchivePath = 11;
 	repeated BuildImageSecret buildSecrets = 12;
+	string runId = 13;
+	string attemptId = 14;
+	bool pushToRegistry = 15;
+	string admissionAuthorityId = 16;
+	uint64 admissionGeneration = 17;
 }
 
 message BuildImageSecret {
@@ -121,9 +155,20 @@ message BuildImageSecret {
 message PushImageRequest {
 	string imageReference = 1;
 	google.protobuf.StringValue registryAuth = 2;
+	string runId = 3;
+	string attemptId = 4;
+	string admissionAuthorityId = 5;
+}
+
+enum BuildAdmissionResult {
+	BUILD_ADMISSION_UNSPECIFIED = 0;
+	BUILD_ADMISSION_ACCEPTED = 1;
+	BUILD_ADMISSION_CAPACITY_BUSY_NOT_STARTED = 2;
+	BUILD_ADMISSION_FENCED_NOT_STARTED = 3;
 }
 
 message ImageBuildResponse {
+	BuildAdmissionResult admission = 8;
 	google.protobuf.StringValue stream = 1;
 	google.protobuf.StringValue status = 2;
 	google.protobuf.StringValue progressMessage = 3;
@@ -301,3 +346,14 @@ message MetadataMessage {
   string lastTagTime = 1;
 }
 message Empty {}
+
+// An item/maintenance operation owns admission across all helper phases.
+message DataOperationRequest {
+ string runId = 1;
+ string attemptId = 2;
+ string operationId = 3;
+ string admissionAuthorityId = 4;
+ string dockerDaemonId = 5;
+ uint64 admissionGeneration = 6;
+}
+message DataAdmissionResponse { BuildAdmissionResult admission = 1; }

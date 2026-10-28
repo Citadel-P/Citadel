@@ -7,6 +7,9 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-automation-runtime = { path = "../infrastructure/automation" }
+citadel-automation = { path = "../features/automation" }
+citadel-processes = { path = "../infrastructure/processes" }
 citadel-docker = { path = "../infrastructure/docker" }
 citadel-runtime = { path = "../infrastructure/runtime" }
 async-stream.workspace = true

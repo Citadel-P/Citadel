@@ -10,3 +10,14 @@ pub(crate) async fn pool_spec(pool: &PgPool, id: Uuid) -> Result<Option<Value>, 
     .fetch_optional(pool)
     .await
 }
+
+/// Disabling/archiving scheduling must not prevent cleanup of previous work.
+pub(crate) async fn pool_cleanup_spec(
+    pool: &PgPool,
+    id: Uuid,
+) -> Result<Option<Value>, sqlx::Error> {
+    sqlx::query_scalar("SELECT providerspec FROM buildagentpools WHERE id=$1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+}

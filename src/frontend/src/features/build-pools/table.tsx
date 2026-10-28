@@ -122,11 +122,7 @@ const ProviderCell = ({ pool }: { pool: AuthorizedPool }) => {
   const vm = pool.providerSpec.$type === 'SelfManagedVm' ? pool.providerSpec : undefined;
   const label = aws ? 'AWS EC2' : vm ? 'Self-managed VM' : pool.provider;
   const vmTarget = vm?.connectionMode === BuildAgentPoolConnectionMode.EdgeAgent ? 'Edge Agent' : vm?.endpoint;
-  const details = aws
-    ? `${aws.region} - ${aws.instanceType}`
-    : vm
-      ? `${vmTarget ?? 'Unconfigured'} - ${vm.maxWorkers} worker(s)`
-      : '';
+  const details = aws ? `${aws.region} - ${aws.instanceType}` : vm ? (vmTarget ?? 'Unconfigured') : '';
 
   return (
     <span className="inline-flex min-w-0 max-w-80 items-center gap-2 text-sm">

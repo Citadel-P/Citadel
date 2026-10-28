@@ -40,7 +40,7 @@ RUN apk add --no-cache binutils \
         /usr/local/libexec/docker/cli-plugins/docker-buildx \
         /usr/local/libexec/docker/cli-plugins/docker-compose
 
-# Reuse Core's pinned GNU runtime libraries without including Deno in the Agent.
+# Core and Agents share the pinned Deno runtime and sandbox.
 FROM docker.io/denoland/deno@sha256:75749604f68aea01d39bead15fd1c86343639e44eb8c58ab051da8a924799d01 AS glibc
 
 # Docker builds/Compose and S3 backup helpers share this Agent runtime.
@@ -63,6 +63,7 @@ LABEL com.citadel.system="true" \
       com.citadel.system-role="agent"
 COPY --from=glibc /usr/local/lib/glibc/ /usr/local/lib/glibc/
 COPY --from=glibc /etc/ld.so.cache /etc/ld.so.cache
+COPY --from=glibc /bin/deno /usr/local/bin/deno
 RUN apk add --no-cache bash ca-certificates git openssh-client restic tini \
     && mkdir -p /lib64 \
     && for loader in /usr/local/lib/glibc/ld-linux-*.so.*; do \

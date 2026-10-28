@@ -1,5 +1,11 @@
+#[path = "build_execution/admission.rs"]
+mod admission;
+#[path = "build_execution/attempts.rs"]
+mod attempts;
 #[path = "build_execution/completion.rs"]
 mod completion;
+#[path = "build_execution/operator_recovery.rs"]
+mod operator_recovery;
 use chrono::{Duration, Utc};
 use citadel_adapters::external::builds::executor::LocalDockerBuildExecutor;
 use citadel_adapters::persistence::postgres::builds::PostgresBuildRepository;
@@ -79,7 +85,10 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         build_agent_pool_id: None,
     };
     input.validate().unwrap();
+    admission::verify_target_fairness(&pool, actor, &input).await;
     completion::verify(&pool, actor, &input).await;
+    attempts::verify(&pool, actor, &input).await;
+    admission::verify(&pool, actor, &input).await;
     let project = store.create(actor, &input).await.unwrap();
     assert_eq!(project.tags.len(), 1);
     assert_eq!(project.tags[0].id, tag);
@@ -684,6 +693,7 @@ async fn assert_local_build_skips_registry(
             "fixture",
         ],
         vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+        vec!["remote", "add", "origin", "https://example.test/repo.git"],
     ] {
         let output = std::process::Command::new("git")
             .arg("-C")
@@ -704,6 +714,32 @@ async fn assert_local_build_skips_registry(
     )
     .unwrap();
     std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // Only network fetch is stubbed; the normal Git worker still validates and
+    // publishes the committed fixture through its durable completion path.
+    let git_cli = root.join("git-stub");
+    std::fs::write(
+        &git_cli,
+        "#!/bin/sh\nfor arg in \"$@\"; do [ \"$arg\" != fetch ] || exit 0; done\nexec git \"$@\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&git_cli, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = CancellationToken::new();
+    let stopped = shutdown.clone();
+    let daemon_id = format!("local-build-fixture-{}", Uuid::now_v7());
+    let daemon = tokio::spawn(async move {
+        axum::serve(listener, axum::Router::new().fallback(move |uri: axum::http::Uri| async move {
+            use axum::response::IntoResponse;
+            if uri.path().ends_with("/version") {
+                return axum::Json(serde_json::json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})).into_response();
+            }
+            if uri.path().ends_with("/info") {
+                return axum::Json(serde_json::json!({"ID": daemon_id, "Name": "fixture", "ServerVersion": "29"})).into_response();
+            }
+            axum::http::StatusCode::NOT_FOUND.into_response()
+        })).with_graceful_shutdown(stopped.cancelled_owned()).await.unwrap();
+    });
     let protector = Arc::new(AesGcmSecretProtector::new(&[91_u8; 32]).unwrap());
     let git = Arc::new(GitRepositoryExecutionService::new(
         Arc::new(PostgresGitRepositoryExecutionPersistence::new(pool.clone())),
@@ -711,34 +747,47 @@ async fn assert_local_build_skips_registry(
             Arc::new(PostgresGitAccountRepository::new(pool.clone())),
             protector.clone(),
         )),
-        Arc::new(GitCli::new(
+        Arc::new(GitCli::with_process(
             Arc::new(citadel_processes::SystemProcess),
             Arc::new(
                 citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
                     citadel_runtime::DynamicTasks::new(CancellationToken::new()),
                 ),
             ),
+            git_cli,
             std::time::Duration::from_secs(10),
         )),
         root.clone(),
         std::time::Duration::from_secs(60),
     ));
     let executor = LocalDockerBuildExecutor::new(
-        git,
-        citadel_docker::client::DockerEndpoint::Unix("/unused.sock".into()),
+        git.clone(),
+        citadel_docker::client::DockerEndpoint::Tcp(format!("http://{address}").parse().unwrap()),
         docker.as_os_str(),
         Arc::new(PostgresBuildSecretResolver::new(pool.clone(), protector).unwrap()),
         Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone())),
         4096,
         pool.clone(),
     );
-    let result = executor
-        .execute(
-            claim,
-            &citadel_builds::NoopBuildLogSink,
-            &CancellationToken::new(),
-        )
-        .await;
+    let token = CancellationToken::new();
+    let execution = executor.execute(claim, &citadel_builds::NoopBuildLogSink, &token);
+    let synchronize = async {
+        loop {
+            if git.process_one(&token).await.unwrap() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    };
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        tokio::pin!(execution);
+        tokio::select! {
+            result = &mut execution => result,
+            () = synchronize => execution.await,
+        }
+    })
+    .await;
+    let result = result.expect("local build and Git synchronization finish");
     assert_eq!(
         result.status,
         citadel_builds::BuildRunStatus::Succeeded,
@@ -753,5 +802,113 @@ async fn assert_local_build_skips_registry(
     );
     let args = std::fs::read_to_string(root.join("docker-stub.args")).unwrap();
     assert!(args.contains(&result.image_references[0]));
+    let store = PostgresBuildRepository::new(pool.clone());
+    assert!(store.finish(claim, &result, None).await.unwrap());
+    for scenario in ["context", "dockerfile", "secret"] {
+        let mut input = BuildProjectConfiguration::from(&claim.project);
+        input.name = format!("invalid-{scenario}-{}", Uuid::now_v7());
+        if scenario == "context" {
+            input.context_path = Some("missing-context".into());
+        }
+        if scenario == "dockerfile" {
+            input.dockerfile_path = Some("missing-Dockerfile".into());
+        }
+        let project = store
+            .create(ActorId::new(claim.run.triggered_by_actor_id), &input)
+            .await
+            .unwrap();
+        store
+            .enqueue(
+                ActorId::new(claim.run.triggered_by_actor_id),
+                project.id,
+                "Manual",
+            )
+            .await
+            .unwrap();
+        let mut invalid = store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .unwrap();
+        if scenario == "secret" {
+            invalid
+                .project
+                .build_secrets
+                .push(citadel_builds::BuildSecretSpec {
+                    id: "missing".into(),
+                    secret_id: Uuid::now_v7(),
+                });
+        }
+        std::fs::remove_file(root.join("docker-stub.args")).ok();
+        let execution = executor.execute(&invalid, &citadel_builds::NoopBuildLogSink, &token);
+        let synchronize = async {
+            loop {
+                if git.process_one(&token).await.unwrap() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        };
+        let failed = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            tokio::pin!(execution);
+            tokio::select! {result=&mut execution=>result,()=synchronize=>execution.await}
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            failed.status,
+            citadel_builds::BuildRunStatus::Failed,
+            "{scenario}"
+        );
+        assert!(
+            !root.join("docker-stub.args").exists(),
+            "invalid preparation must not dispatch Docker"
+        );
+        assert!(store.finish(&invalid, &failed, None).await.unwrap());
+        let held: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM buildexecutorreservations WHERE runid=$1")
+                .bind(invalid.run.id)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        assert_eq!(held, 0, "{scenario}");
+        let retry = store
+            .enqueue(
+                ActorId::new(claim.run.triggered_by_actor_id),
+                project.id,
+                "Manual",
+            )
+            .await
+            .unwrap();
+        let next = store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(next.run.id, retry.id);
+        assert!(store.finish(&next, &failed, None).await.unwrap());
+        sqlx::query("DELETE FROM activityevents WHERE resourceid=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM buildruns WHERE buildprojectid=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM resourcetags WHERE resourcetype='Build' AND resourceid=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM buildprojects WHERE id=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    shutdown.cancel();
+    daemon.await.unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }

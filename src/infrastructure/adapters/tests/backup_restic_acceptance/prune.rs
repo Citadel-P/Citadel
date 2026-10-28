@@ -27,7 +27,7 @@ async fn repository_prune_preserves_all_snapshots_and_policy_retention_stays_sco
         }).await.unwrap();
         let executor = DockerResticBackupExecutor::new("must-not-run-docker", IMAGE, Arc::new(Password), 1024 * 1024, pool.clone()).with_restic(restic.clone());
         let cancel = CancellationToken::new();
-        executor.repository(&repository, "Initialize", "Core", None, &cancel).await.unwrap();
+        repository_operation(&store, &executor, &repository, "Initialize", "Core", None, &cancel).await.unwrap();
         sqlx::query("UPDATE backuprepositories SET status='Ready' WHERE id=$1").bind(repository.id).execute(&pool).await.unwrap();
         let mut input: BackupPolicyConfiguration = serde_json::from_value(json!({
             "name":format!("retention-{}",Uuid::now_v7()), "enabled":true,
@@ -45,7 +45,7 @@ async fn repository_prune_preserves_all_snapshots_and_policy_retention_stays_sco
         let before = snapshots(&restic, &root).await;
         assert_eq!(before.len(), 24);
         let unrelated: BTreeSet<_> = before.iter().filter(|s| s["tags"].as_array().unwrap().contains(&json!(other_tag))).map(|s|s["id"].as_str().unwrap().to_owned()).collect();
-        executor.repository(&repository, "Prune", "Core", None, &cancel).await.unwrap();
+        repository_operation(&store, &executor, &repository, "Prune", "Core", None, &cancel).await.unwrap();
         assert_eq!(ids(&before), ids(&snapshots(&restic, &root).await), "Prune must not expire snapshots, including policies retaining more than 14");
         let run = store.enqueue_backup(actor, policy.id, "Manual", None).await.unwrap();
         let claim = store.claim_backup(Utc::now() - chrono::Duration::hours(1)).await.unwrap().unwrap();
@@ -58,6 +58,7 @@ async fn repository_prune_preserves_all_snapshots_and_policy_retention_stays_sco
         assert_eq!(after.iter().filter(|s|s["tags"].as_array().unwrap().contains(&json!(tag))).count(), 17);
         assert!(unrelated.is_subset(&ids(&after)), "Retention must preserve unrelated policy snapshots");
         assert_eq!(after.len(), 21);
+        store.finish_backup(&claim, &result).await.unwrap();
         verify_agent_prune_dispatch(&pool, &repository).await;
     }).catch_unwind().await;
     pool.close().await;
@@ -81,6 +82,7 @@ async fn verify_agent_prune_dispatch(pool: &sqlx::PgPool, repository: &BackupRep
     };
     use prost::Message;
 
+    let store = PostgresBackupPersistence::new(pool.clone());
     let platform = Uuid::now_v7();
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'EdgeAgent',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(platform).bind(format!("prune-{platform}")).execute(pool).await.unwrap();
@@ -101,13 +103,17 @@ async fn verify_agent_prune_dispatch(pool: &sqlx::PgPool, repository: &BackupRep
     repository.spec = serde_json::from_value(json!({"$type":"S3Compatible", "endpoint":"http://fixture.invalid", "bucket":"backups", "allowInsecureHttp":true,
         "accessKeySecretId":Uuid::now_v7(), "secretKeySecretId":Uuid::now_v7()})).unwrap();
     let cancellation = CancellationToken::new();
+    let authority = Uuid::now_v7().to_string();
     let peer = async {
         for kind in [
+            Kind::ImageCheckBuildHost,
+            Kind::ImageReserveData,
             Kind::PlatformGetInfo,
             Kind::ContainerCreate,
             Kind::ContainerStart,
             Kind::ContainerExecBinary,
             Kind::ContainerDelete,
+            Kind::ImageReconcileData,
         ] {
             let envelope = tokio::time::timeout(Duration::from_secs(5), outbound.recv())
                 .await
@@ -120,6 +126,28 @@ async fn verify_agent_prune_dispatch(pool: &sqlx::PgPool, repository: &BackupRep
             assert_eq!(command.kind, kind as i32);
             assert_eq!(command.resource_id, platform.to_string());
             match kind {
+                Kind::ImageCheckBuildHost => {
+                    session.output(
+                        id,
+                        citadel_contracts::citadel::images::v1::CheckBuildHostResponse {
+                            available: true,
+                            docker_daemon_id: format!("prune-{platform}"),
+                            admission_authority_id: authority.clone(),
+                            admission_generation: 1,
+                            build_capacity: 2,
+                            data_capacity: 2,
+                            heavy_capacity: 2,
+                            ..Default::default()
+                        }
+                        .encode_to_vec(),
+                    );
+                }
+                Kind::ImageReserveData => {
+                    session.output(id, citadel_contracts::citadel::images::v1::DataAdmissionResponse { admission: citadel_contracts::citadel::images::v1::BuildAdmissionResult::BuildAdmissionAccepted as i32 }.encode_to_vec());
+                }
+                Kind::ImageReconcileData => {
+                    session.output(id, citadel_contracts::citadel::images::v1::ReconcileBuildResponse { state: citadel_contracts::citadel::images::v1::BuildCleanupState::BuildCleanupConfirmed as i32 }.encode_to_vec());
+                }
                 Kind::PlatformGetInfo => session.output(
                     id,
                     PlatformInfoResponse {
@@ -161,7 +189,9 @@ async fn verify_agent_prune_dispatch(pool: &sqlx::PgPool, repository: &BackupRep
         }
     };
     let (result, ()) = tokio::join!(
-        executor.repository(
+        repository_operation(
+            &store,
+            &executor,
             &repository,
             "Prune",
             "Platform",

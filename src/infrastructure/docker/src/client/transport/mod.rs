@@ -55,6 +55,8 @@ pub struct DockerImagePullMessage {
     pub error_detail: Option<DockerImagePullError>,
     #[serde(rename = "progressDetail", default)]
     pub progress_detail: Option<DockerImagePullProgress>,
+    #[serde(default)]
+    pub aux: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -422,6 +424,47 @@ impl DockerClient {
         }
         *self.version.write().await = Some(selected);
         Ok(selected)
+    }
+
+    pub async fn push_image(
+        &self,
+        image: &str,
+        registry_auth: Option<&str>,
+    ) -> Result<DockerJsonStream<DockerImagePullMessage>, DockerError> {
+        if image.trim().is_empty() || image.len() > 2048 {
+            return Err(DockerError::InvalidIdentifier);
+        }
+        if image.contains('@') {
+            return Err(DockerError::InvalidIdentifier);
+        }
+        let (name, tag) = image
+            .rsplit_once(':')
+            .filter(|(_, tag)| !tag.contains('/'))
+            .unwrap_or((image, "latest"));
+        if tag.is_empty() {
+            return Err(DockerError::InvalidIdentifier);
+        }
+        let version = self.negotiated_version().await?;
+        let url = format!(
+            "{}/v{version}/images/{}/push?tag={}",
+            self.base_url,
+            urlencoding::encode(name),
+            urlencoding::encode(tag)
+        );
+        let request = self
+            .client
+            .post(url)
+            .header("X-Registry-Auth", registry_auth.unwrap_or("e30="));
+        let response = request.send().await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = bounded_body(response, 64 * 1024).await?;
+            return Err(DockerError::Api {
+                status,
+                message: String::from_utf8_lossy(&body).into_owned(),
+            });
+        }
+        Ok(json_lines(response, MAX_STREAM_ITEM_BYTES))
     }
 
     pub async fn pull_image(

@@ -73,6 +73,8 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHt
         .normalized_routes(utoipa_axum::routes!(get_run))
         .normalized_routes(utoipa_axum::routes!(get_logs))
         .normalized_routes(utoipa_axum::routes!(cancel_run))
+        .normalized_routes(utoipa_axum::routes!(get_run_recovery))
+        .normalized_routes(utoipa_axum::routes!(resolve_run_cleanup))
 }
 
 pub(crate) fn documented_pool_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHttpState> {
@@ -249,6 +251,7 @@ fn map_error(error: BuildError) -> ApiError {
             ApiError::LicenseRequired(capability.as_license_key())
         }
         BuildError::Validation(message) => ApiError::Validation(message),
+        BuildError::Forbidden => ApiError::Forbidden,
         BuildError::NotFound => ApiError::NotFound,
         BuildError::Conflict(message) => ApiError::Conflict(message),
         source @ BuildError::Storage(_) => ApiError::internal(source),
@@ -1599,4 +1602,78 @@ async fn pool_agent_setup(
         Json(crate::api::resources::platforms::views::AgentSetupView::from(instructions))
             .into_response(),
     ))
+}
+
+#[utoipa::path(
+    get, path = "/api/v1/buildRuns/{id}/recovery", operation_id = "getBuildRunRecovery",
+    tag = "BuildRuns", summary = "Inspect retained Build capacity (administrators only)",
+    responses((status = 200, description = "Retained reservation, if any", body = BuildRunRecoveryView), crate::openapi::errors::ResourceErrors),
+    params(("id" = uuid::Uuid, Path)), security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn get_run_recovery(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    ApiPath(id): ApiPath<Uuid>,
+    headers: HeaderMap,
+) -> HttpResult {
+    api_result(
+        super::authentication::require_human_administrator(principal),
+        &headers,
+    )?;
+    let reservation = api_result(
+        state
+            .builds
+            .retained_reservation(id)
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    Ok(no_store(
+        Json(BuildRunRecoveryView {
+            reservation: reservation.map(|r| BuildRetainedReservationView {
+                attempt_id: r.attempt_id,
+                daemon_id: r.daemon_id,
+                authority_id: r.authority_id,
+            }),
+        })
+        .into_response(),
+    ))
+}
+
+#[utoipa::path(
+    post, path = "/api/v1/buildRuns/{id}/recovery", operation_id = "resolveBuildRunCleanup",
+    tag = "BuildRuns", summary = "Resolve retained Build capacity after manual cleanup and Agent restart",
+    request_body = ResolveBuildCleanupInput,
+    responses((status = 204, description = "Capacity released and operator acknowledgment audited; run outcome unchanged"), crate::openapi::errors::ResourceMutationErrors),
+    params(("id" = uuid::Uuid, Path)), security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn resolve_run_cleanup(
+    State(state): State<BuildsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    ApiPath(id): ApiPath<Uuid>,
+    headers: HeaderMap,
+    input: Result<Json<ResolveBuildCleanupInput>, JsonRejection>,
+) -> HttpResult {
+    let principal = api_result(
+        super::authentication::require_human_administrator(principal),
+        &headers,
+    )?;
+    let Json(input) = api_result(input.map_err(invalid_json), &headers)?;
+    api_result(
+        state
+            .builds
+            .resolve_cleanup(
+                id,
+                input.attempt_id,
+                principal.actor_id,
+                &input.reason,
+                input.acknowledged,
+            )
+            .await
+            .map_err(map_error),
+        &headers,
+    )?;
+    Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }

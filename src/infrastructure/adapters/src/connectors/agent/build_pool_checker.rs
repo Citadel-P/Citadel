@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 pub struct AgentBuildPoolChecker {
     pub agent: Option<AgentClient>,
     pub edge: EdgeRegistry,
+    pub admission: std::sync::Arc<dyn citadel_builds::BuildAdmissionStore>,
 }
 
 impl BuildPoolChecker for AgentBuildPoolChecker {
@@ -46,7 +47,35 @@ impl BuildPoolChecker for AgentBuildPoolChecker {
                 }
             }
             .map_err(|error| BuildError::Validation(error.to_string()))?;
-            Ok(capability_result(capabilities))
+            let occupancy = self
+                .admission
+                .executor_occupancy(&capabilities.docker_daemon_id)
+                .await?;
+            let authority = capabilities.admission_authority_id.clone();
+            let effective = capabilities
+                .build_capacity
+                .min(capabilities.heavy_capacity)
+                .min(pool.max_active_builders as u32);
+            let mut result = capability_result(capabilities);
+            result.message.push_str(&format!(
+                " - Effective build capacity {effective} (pool policy {})",
+                pool.max_active_builders
+            ));
+            if occupancy.reserved > 0 {
+                result.message.push_str(&format!(
+                    " - Core reservations {} ({} awaiting cleanup verification)",
+                    occupancy.reserved, occupancy.uncertain
+                ));
+                if occupancy
+                    .authority_id
+                    .is_some_and(|id| id.to_string() != authority)
+                {
+                    result
+                        .message
+                        .push_str(" - Previous Agent execution requires cleanup verification");
+                }
+            }
+            Ok(result)
         })
     }
 }
@@ -79,6 +108,27 @@ fn capability_result(info: CheckBuildHostResponse) -> BuildPoolCheck {
     if !info.build_kit_version.is_empty() {
         parts.push(format!("BuildKit {}", info.build_kit_version));
     }
+    if info.build_capacity > 0 {
+        parts.push(format!(
+            "Build slots {}/{} occupied",
+            info.occupied_builds, info.build_capacity
+        ));
+        if info.uncertain_builds > 0 {
+            parts.push(format!(
+                "{} awaiting cleanup verification",
+                info.uncertain_builds
+            ));
+        }
+    }
+    if info.data_capacity > 0 {
+        parts.push(format!(
+            "Data slots {}/{} occupied",
+            info.occupied_data, info.data_capacity
+        ));
+    }
+    if info.heavy_capacity > 0 {
+        parts.push(format!("Shared heavy-work limit {}", info.heavy_capacity));
+    }
     BuildPoolCheck {
         ready: true,
         message: parts.join(" - "),
@@ -97,6 +147,7 @@ mod tests {
             operating_system: "linux".into(),
             architecture: "amd64".into(),
             build_kit_version: "v0.20.2".into(),
+            ..Default::default()
         };
         assert_eq!(
             capability_result(info.clone()).message,

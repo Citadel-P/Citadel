@@ -75,6 +75,12 @@ impl PostgresAutomationRepository {
                     storage(error)
                 }
             })?;
+            sqlx::query("UPDATE actions SET executor=$2 WHERE id=$1")
+                .bind(id)
+                .bind(sqlx::types::Json(&input.executor))
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             let action = get_action_tx(&mut tx, id).await?;
             add_activity(
                 &mut tx,
@@ -168,6 +174,12 @@ impl PostgresAutomationRepository {
                     "The Automation Action has changed. Reload before saving.".into(),
                 ));
             }
+            sqlx::query("UPDATE actions SET executor=$2 WHERE id=$1")
+                .bind(current.id)
+                .bind(sqlx::types::Json(&input.executor))
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             let action = get_action_tx(&mut tx, current.id).await?;
             if !metadata_only {
                 add_activity(

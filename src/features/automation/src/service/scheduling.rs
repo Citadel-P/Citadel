@@ -8,12 +8,23 @@ impl AutomationService {
     ) -> Result<(), AutomationError> {
         let action = self.store.get(id).await?;
         self.options.validate_execution(action.timeout_seconds)?;
-        self.ensure_paid_trigger().await?;
+        self.ensure_automated_operations().await?;
         self.store
             .enqueue_webhook(id, expected_webhook, args)
             .await?;
-        self.changed();
+        self.changed(Some(id));
         Ok(())
+    }
+    async fn claim_next(
+        &self,
+        stale_before: DateTime<Utc>,
+        remote: bool,
+    ) -> Result<Option<AutomationRunClaim>, AutomationError> {
+        let result = self.store.claim_next(stale_before, remote).await?;
+        for action_id in result.recovered_actions {
+            self.changed(Some(action_id));
+        }
+        Ok(result.claim)
     }
     pub async fn process_one(
         &self,
@@ -22,16 +33,24 @@ impl AutomationService {
         if !self.options.enabled {
             return Ok(false);
         }
-        let Ok(_permit) = self.slots.clone().try_acquire_owned() else {
-            return Ok(false);
-        };
         let stale_before = Utc::now()
             - chrono::Duration::from_std(self.stale_after)
                 .map_err(|error| AutomationError::Storage(error.to_string()))?;
-        let Some(claim) = self.store.claim_next(stale_before).await? else {
+        if let Ok(_permit) = self.slots.clone().try_acquire_owned()
+            && let Some(claim) = self.claim_next(stale_before, false).await?
+        {
+            self.execute_claim(&claim, cancellation, Some(&self.progress))
+                .await?;
+            return Ok(true);
+        }
+        let Ok(_permit) = self.remote_slots.clone().try_acquire_owned() else {
             return Ok(false);
         };
-        self.execute_claim(&claim, cancellation, None).await?;
+        let Some(claim) = self.claim_next(stale_before, true).await? else {
+            return Ok(false);
+        };
+        self.execute_claim(&claim, cancellation, Some(&self.progress))
+            .await?;
         Ok(true)
     }
 }
@@ -41,7 +60,7 @@ impl AutomationService {
         if !self.options.enabled {
             return Ok(0);
         }
-        match self.ensure_paid_trigger().await {
+        match self.ensure_automated_operations().await {
             Ok(()) => {}
             Err(AutomationError::LicenseRequired) => return Ok(0),
             Err(error) => return Err(error),
@@ -79,7 +98,7 @@ impl AutomationService {
                 match self.store.enqueue_scheduled(action.id, minute).await {
                     Ok(Some(_)) => {
                         queued += 1;
-                        self.changed();
+                        self.changed(Some(action.id));
                     }
                     Ok(None) => {}
                     Err(error) => {

@@ -195,9 +195,65 @@ async fn rust_agent_enrolls_reconnects_and_restarts_against_core_intake() {
             serde_json::from_slice(&std::fs::read(&identity_path).unwrap()).unwrap();
         assert_eq!(state["ResourceId"], target.resource_id.to_string());
         assert_eq!(state["PlatformId"], target.platform_id.to_string());
+        let data = if !build {
+            use citadel_contracts::citadel::images::v1::*;
+            let host: CheckBuildHostResponse =
+                unary(&first, EdgeCommandKind::ImageCheckBuildHost, vec![]).await;
+            let request = DataOperationRequest {
+                run_id: Uuid::now_v7().to_string(),
+                attempt_id: Uuid::now_v7().to_string(),
+                operation_id: Uuid::now_v7().to_string(),
+                docker_daemon_id: host.docker_daemon_id,
+                admission_authority_id: host.admission_authority_id,
+                admission_generation: host.admission_generation,
+            };
+            let response: DataAdmissionResponse = unary(
+                &first,
+                EdgeCommandKind::ImageReserveData,
+                request.encode_to_vec(),
+            )
+            .await;
+            assert_eq!(
+                response.admission,
+                BuildAdmissionResult::BuildAdmissionAccepted as i32
+            );
+            Some(request)
+        } else {
+            None
+        };
         registry.disconnect(&target);
         let second = session(&registry, &target, Some(first.id)).await;
         assert_eq!(first.agent_id, second.agent_id);
+        if let Some(request) = data {
+            use citadel_contracts::citadel::images::v1::*;
+            let host: CheckBuildHostResponse =
+                unary(&second, EdgeCommandKind::ImageCheckBuildHost, vec![]).await;
+            assert_eq!(host.admission_authority_id, request.admission_authority_id);
+            assert_eq!(
+                host.occupied_data, 1,
+                "reconnect must retain data occupancy"
+            );
+            let response: ReconcileBuildResponse = unary(
+                &second,
+                EdgeCommandKind::ImageReconcileData,
+                request.encode_to_vec(),
+            )
+            .await;
+            assert_eq!(
+                response.state,
+                BuildCleanupState::BuildCleanupConfirmed as i32
+            );
+            let response: DataAdmissionResponse = unary(
+                &second,
+                EdgeCommandKind::ImageReserveData,
+                request.encode_to_vec(),
+            )
+            .await;
+            assert_eq!(
+                response.admission,
+                BuildAdmissionResult::BuildAdmissionFencedNotStarted as i32
+            );
+        }
         let mut command = second
             .command(
                 EdgeCommandKind::PlatformCheckHealth,
@@ -327,4 +383,18 @@ async fn rust_agent_enrolls_reconnects_and_restarts_against_core_intake() {
         .unwrap()
         .unwrap();
     pool.close().await;
+}
+
+async fn unary<T: Message + Default>(
+    session: &Arc<EdgeSession>,
+    kind: EdgeCommandKind,
+    payload: Vec<u8>,
+) -> T {
+    let mut command = session
+        .command(kind, payload, Duration::from_secs(5), false)
+        .unwrap();
+    let token = CancellationToken::new();
+    let bytes = command.next(&token).await.unwrap().expect("unary response");
+    assert!(command.next(&token).await.unwrap().is_none());
+    T::decode(bytes.as_slice()).unwrap()
 }

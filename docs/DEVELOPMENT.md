@@ -292,12 +292,15 @@ currently configured.
 
 ## Database schema changes
 
-The migration catalog contains a single consolidated `0001_initial.sql`, including
-workload statistics storage, alert observation ordering, and secret-use grants. This baseline replaces
-the separate workload migration and requires a newly created database. It cannot
-upgrade a database that recorded the previous `0001` or `0002` checksums.
-Recreating a database is a separate, explicit operator action; the development
-task never resets storage.
+The pre-release migration catalog contains only `0001_initial.sql`, generated
+from `src/infrastructure/database/src/schema/schema.sql`. It includes workload
+statistics, alert observation ordering, secret-use grants, and build, backup,
+restore and automation execution ownership/capacity changes.
+
+This consolidated baseline requires a fresh database. It cannot upgrade a database
+that recorded an earlier baseline checksum or the former `0002`–`0011` sequence.
+Recreating a database is a separate, explicit operator action; development tasks
+never reset storage.
 
 For an explicitly authorized pre-release baseline reset, restore captured product
 records into a fresh database while retaining its new migration journal and the
@@ -307,21 +310,20 @@ otherwise retain captured grants exactly, including revocations. Rehearse the
 import before cutover. Normal deployments must continue to preserve applied
 migration checksums.
 
-Preserve applied migrations, including `0001_initial.sql`. Add each schema
-change as the next numbered SQL migration under `src/infrastructure/database/generated/`.
-Append the same upgrade SQL to `src/infrastructure/database/src/schema/schema.sql`;
-the verifier compares this schema authority with the ordered migration sequence.
-Then refresh the catalog and verify it:
+While this baseline remains unpublished, update the schema authority and regenerate
+the single initial migration and its catalog:
 
 ```bash
-cargo run --locked -p xtask -- database refresh-catalog
+cargo run --locked -p xtask -- database refresh-baseline
 cargo run --locked -p xtask -- database verify
 ```
 
-Test both fresh installation and upgrade from the previous schema against
-separate disposable databases. `refresh-baseline` is only for an unpublished
-baseline; it is not an upgrade path. Never rewrite applied migration journals or
-checksums to suppress an `AppliedChecksum` error.
+After release, preserve applied migrations and add each change as the next numbered
+SQL migration under `src/infrastructure/database/generated/`. Update the schema
+authority as well, then run `database refresh-catalog` and `database verify`.
+Test fresh installation and upgrades against separate disposable databases.
+`refresh-baseline` is not an upgrade path. Never rewrite applied migration journals
+or checksums to suppress an `AppliedChecksum` error.
 
 ## Agent development
 
@@ -448,3 +450,31 @@ python3 src/tools/build/version.py exec --fallback -- cargo build --locked -p ci
 
 To check changes to version resolution or embedding, install the pinned tool and
 run `python3 -m unittest discover -s test/release -p test_version.py -v`.
+
+### Execution capacity and retained ownership
+
+The initial schema includes build dispatch ownership, renewable backup
+attempt/source/repository ownership, shared daemon capacity for data helpers,
+restore admission backoff, and automation executor reservations. A terminal run
+or expired lease does not prove remote work stopped. Cleanup receipts retain
+same-authority evidence; uncertain work remains blocked until verified.
+Let active builds, backups, restores and repository operations finish before
+an authorized database rebuild. Preserve unresolved ownership records during
+restoration; never invent a live attempt or cleanup proof.
+
+Backup renewal runs every 30 seconds; configured repository/source lease durations
+have a 90-second minimum. Expiration permits interruption and cleanup investigation,
+not replacement ownership. Never clear leases as a general startup cleanup.
+For uncertain data work, inspect `dataexecutorreservations` together with its
+`ownerid`/`attemptid`, the run logs, `backuprepositoryleases` and
+`backupsourceleases`. Local Docker reservations use the current Core process
+as their authority; Direct/Edge reservations use the Agent process authority.
+
+The automatic data sweeper only accepts cleanup from the original authority on
+the original daemon and node. After an authority restart, manual recovery requires
+stopping dispatch, proving the old helper/Restic work stopped on that exact host,
+reviewing any partial restore, and recording the investigation before a targeted
+transaction releases that owner's host/repository/source records. Never bulk-delete
+expired leases, release a live owner's records, fabricate Agent receipts or
+rerun a restore because its connection disappeared. There is no backup cleanup
+release button in this implementation. Keep uncertain holds if proof is unavailable.

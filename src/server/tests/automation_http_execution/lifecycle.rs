@@ -17,7 +17,7 @@ pub(super) async fn verify_request_drop_during_claim(
     .unwrap();
     let before = store.list_runs(id, 100).await.unwrap().len();
     let draft = citadel_automation::AutomationDraft {
-        code: "await new Promise(()=>setInterval(()=>{},1000));".into(),
+        code: "console.log('request-dropped-but-run-owned');".into(),
         expected_row_version: store.get(id).await.unwrap().row_version,
     };
     let mut lock = db.begin().await.unwrap();
@@ -45,10 +45,13 @@ pub(super) async fn verify_request_drop_during_claim(
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let runs = store.list_runs(id, 100).await.unwrap();
-            if runs.len() == before + 1 && tasks.active() == 0 {
+            if runs.len() == before + 1
+                && tasks.active() == 0
+                && runs[0].status == citadel_automation::AutomationRunStatus::Succeeded
+            {
                 assert_eq!(
                     runs[0].status,
-                    citadel_automation::AutomationRunStatus::Cancelled
+                    citadel_automation::AutomationRunStatus::Succeeded
                 );
                 assert_eq!(
                     store.get(id).await.unwrap().control_state,
@@ -101,6 +104,15 @@ pub(super) async fn verify(
     // Keep the viewer connected: shutdown itself must cancel and persist cleanup.
     shutdown.cancel();
     tasks.drain(Duration::from_secs(10)).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while store.get_run(id, run.id).await.unwrap().status
+            == citadel_automation::AutomationRunStatus::Running
+        {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
     assert_eq!(tasks.active(), 0);
     assert_eq!(
         store.get_run(id, run.id).await.unwrap().status,

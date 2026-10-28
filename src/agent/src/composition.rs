@@ -42,7 +42,9 @@ pub async fn build(config: &AgentConfig) -> Result<Components, super::app::Agent
         AgentMode::Edge(edge) => Some(
             crate::edge::EdgeAgent::new(edge.clone(), docker.clone())
                 .await?
-                .with_runtime_container(config.runtime_container.clone()),
+                .with_runtime_container(config.runtime_container.clone())
+                .with_execution_capacity(config.build_slots, config.data_slots, config.heavy_slots)
+                .with_automation(config.automation_slots, terminal_tasks.clone()),
         ),
         AgentMode::Direct(_) => None,
     };

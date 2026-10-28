@@ -1,6 +1,6 @@
 ---
 title: "Environment variables"
-description: "Reference the production settings exposed by Citadel's Docker Compose environment template."
+description: "Configure Core, Direct Agents, and Edge Agents, including execution limits and deployment settings."
 ---
 
 Citadel runtime settings use `CITADEL_` followed by uppercase words separated
@@ -9,6 +9,11 @@ and `PG_*` retain their names. The `.env` downloaded in the [installation guide]
 contains the settings needed to start Citadel. Add optional settings from this
 reference as needed. The defaults are for local HTTP; configure TLS before
 sharing an installation.
+
+The sections below cover **Core and its Compose deployment**, followed by
+[Direct Agent](#direct-agent-settings) and [Edge Agent](#edge-agent-settings)
+configuration. Set each variable on the process or container it belongs to;
+Core's `.env` does not configure remote Agents.
 
 ## Installation and transport
 
@@ -27,6 +32,7 @@ sharing an installation.
 | `CITADEL_HTTP_TRUSTED_PROXY_NETWORKS` | Reverse proxy alternative | Immediate trusted proxy network |
 | `CITADEL_TLS_CERTIFICATE_PATH` | Direct TLS | PEM certificate chain inside Core |
 | `CITADEL_TLS_PRIVATE_KEY_PATH` | Direct TLS | PEM private key inside Core |
+| `CITADEL_TLS_HOST_DIRECTORY` | Direct-TLS Compose overlay | Host certificate directory mounted into Core; defaults to `./tls` |
 | `CITADEL_JWT_ISSUER`, `CITADEL_JWT_AUDIENCE` | Optional override | Token validation identities; otherwise derived from the public URL |
 | `CITADEL_JWT_KEY` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
 | `CITADEL_SECRETS_ENCRYPTION_KEY` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
@@ -86,7 +92,7 @@ project does not isolate an external database configured by an override.
 | `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Platform metric collection interval, in seconds |
 | `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Metric persistence interval, in seconds |
 | `CITADEL_AUTOMATIONS_ENABLED` | `true` | Enables Automation Action execution |
-| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Maximum concurrent Automation Action runs |
+| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Shared Automation Action execution slots; see [concurrency limits](#concurrency-limits) |
 | `CITADEL_AUTOMATIONS_DEFAULT_TIMEOUT_SECONDS` | `300` | Default Action timeout |
 | `CITADEL_AUTOMATIONS_MAX_TIMEOUT_SECONDS` | `1800` | Maximum Action timeout |
 | `CITADEL_LOG_FORMAT` | `Text` | Core log format: `Text` or `Json` |
@@ -98,6 +104,72 @@ For first-run password-file bootstrap, use the complete
 [unattended setup procedure](/docs/getting-started/first-run-setup#unattended-setup).
 For common configuration changes, see
 [Docker Compose configuration](/docs/getting-started/configuration).
+
+## Concurrency limits
+
+Core prepares and tracks work; the execution host admits the expensive operation.
+Automation scripts continue to run on Core.
+
+| Setting | Default | What it limits |
+| --- | --- | --- |
+| `CITADEL_BUILDS_PREPARATION_SLOTS` | `2` | Git preparation and outbound build contexts on Core; accepts 1–16 |
+| `CITADEL_BUILDS_TRACKING_SLOTS` | `16` | Active build controllers, including retained completion results; accepts 1–128 |
+| `CITADEL_BACKUPS_TRACKING_SLOTS` | `16` | Active backup, restore and repository operation controllers combined; accepts 1–128 |
+| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Core Deno runs, including manual runs and tests; accepts 1–64 |
+| `CITADEL_AGENT_BUILD_SLOTS` | `2` | Complete builds on an Agent, including registry pushes and cleanup; accepts 1–64 |
+| `CITADEL_AGENT_DATA_SLOTS` | `2` | Backup items, restores and repository maintenance on an Agent; accepts 1–64 |
+| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Builds, data operations and automations combined on an Agent; accepts 1–64 |
+
+A small installation can keep these defaults. Three independent Agents with two
+build slots and two heavy-work slots each can execute six builds while Core
+prepares at most two contexts. Set a pool's **Maximum concurrent builds** high
+enough for the intended workload; the effective limit is the smallest of the
+pool policy, Agent build capacity and Agent shared heavy-work capacity.
+Aliases of one Docker daemon share its capacity.
+
+Tracking slots do not launch extra Docker work when a host is full. A multi-volume
+backup processes its items sequentially and reserves the host for each item.
+Repository, source and restore-destination locks remain held for the protected
+operation. These locks renew during execution; expiry alone never permits a
+second operation to use storage whose cleanup is uncertain. A source-contention
+retry retains the resolved source plan.
+
+Core-local builds, backup helpers and system-backup staging share two local
+heavy-work slots. Edge contexts have a separate 32 MiB transfer budget, charged
+for raw and encoded payloads; output has its own 32 MiB budget. Control commands
+retain independent headroom. These are bounded implementation limits, not extra
+configuration knobs.
+
+More slots do not make one job faster or provide CPU/memory isolation. Increase
+capacity only when the executing hosts have spare resources. Lowering a pool
+policy prevents new over-limit admission while accepted work drains. Agent
+capacities are startup settings: let active work finish before recreating an
+Agent to change them.
+
+Builds wait when a host is offline or busy. A known pre-execution refusal retries
+with a 5–15 second backoff, preserving a commit once resolved. All queued builds,
+including those waiting for pool capacity, expire after 24 hours. Ambiguous
+execution is never automatically replayed. All automation runs, including manual
+runs and tests, queue when their selected execution hosts are full or offline. Closing a progress sheet
+does not cancel its run.
+
+After changing Core variables, recreate Core with `docker compose up -d server`,
+retaining the project's overlay options. Set Agent capacities on each Agent and
+recreate it to apply them. The old lifecycle-wide build/backup worker variables
+are no longer read.
+
+Core also
+persists remote build reservations per Docker daemon, so aliases do not multiply
+capacity. Failed or interrupted execution retains its reservation unless the
+same Agent confirms cleanup. Core stores that evidence before releasing capacity
+with the final run result; restarting an Agent is not cleanup evidence. Core also
+rechecks terminal reservations in batches of 16, with five-second Agent checks
+and 30 seconds between batches. Confirmed cleanup releases capacity without
+retrying the build or changing its outcome. Unreachable Agents, changed Agent
+identities and uncertain execution remain held. Administrators can resolve terminal
+holds from the build run sheet after verifying cleanup and restarting the original
+Agent on the same Docker daemon. Their acknowledgment is audited without retrying
+the build. These reconciliation bounds are not additional `.env` settings.
 
 ## HTTP listeners and runtime limits
 
@@ -163,15 +235,15 @@ under the same data root. Offline recovery never generates replacement keys.
 | `CITADEL_AUTOMATIONS_ALLOW_NET` | Optional Deno network allowlist; existing comma-separated format |
 | `CITADEL_AUTOMATIONS_MAX_LOG_BYTES` | `1048576` bytes, clamped to 1024–16777216 |
 | `CITADEL_AUTOMATIONS_POLL_INTERVAL_SECONDS` / `CITADEL_AUTOMATIONS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
-| `CITADEL_BUILDS_MAX_PARALLEL_RUNS` | `4` |
+| `CITADEL_BUILDS_PREPARATION_SLOTS` / `CITADEL_BUILDS_TRACKING_SLOTS` | `2` / `16`; [build concurrency](#concurrency-limits) |
 | `CITADEL_BUILDS_RUN_CLEANUP_ENABLED` / `CITADEL_BUILDS_RUN_RETENTION_DAYS` | `true` / `90` days; disabling cleanup disables retention |
-| `CITADEL_BACKUPS_ENABLED` / `CITADEL_BACKUPS_MAX_PARALLEL_RUNS` | `true` / `2` |
+| `CITADEL_BACKUPS_ENABLED` / `CITADEL_BACKUPS_TRACKING_SLOTS` | `true` / `16`; backup, restore, and repository operation tracking combined, see [concurrency limits](#concurrency-limits) |
 | `CITADEL_BACKUPS_POLL_INTERVAL_SECONDS` / `CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
 | `CITADEL_BACKUPS_WORKING_DIRECTORY` / `CITADEL_BACKUPS_CORE_DATA_PATH` | `<data root>/backups/work` / `<data root>` |
 | `CITADEL_BACKUPS_ALLOWED_CORE_PATH_<n>` | `<data root>/backups/repositories`; indices 0–127, numeric order, sparse indices allowed; paths retain spaces and commas |
 | `CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS` | `120` seconds |
 | `CITADEL_BACKUPS_MAX_LOG_BYTES` / `CITADEL_BACKUPS_MAX_LOG_LINE_BYTES` | `1048576` / `8192` bytes |
-| `CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS` / `CITADEL_BACKUPS_SOURCE_LEASE_SECONDS` | `300` / `300` seconds |
+| `CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS` / `CITADEL_BACKUPS_SOURCE_LEASE_SECONDS` | `300` / `300` seconds; minimum `90` each, renewed every `30` seconds |
 | `CITADEL_RESTIC_IMAGE` | `restic/restic:0.18.1` |
 | `CITADEL_VOLUME_HELPER_IMAGE` | Optional helper image override |
 
@@ -192,8 +264,58 @@ under the same data root. Offline recovery never generates replacement keys.
 | `CITADEL_EDGE_AGENT_NODE_AGENT_LIMIT_NANO_CPUS` | `500000000` nanocpus |
 | `CITADEL_EDGE_AGENT_NODE_AGENT_LIMIT_MEMORY_BYTES` / `CITADEL_EDGE_AGENT_NODE_AGENT_PIDS_LIMIT` | `536870912` bytes / `256` processes |
 
-Direct Agent containers require `CITADEL_CORE_PUBLIC_KEY`, the base64 Ed25519 public
-key emitted by Core setup, and `CITADEL_AGENT_ID`, the Platform or dedicated Build Pool UUID included automatically in its setup command. The ID stays the same when the network address changes. Edge mode does not read these Direct-only settings.
-Agent-owned `CITADEL_AGENT_*` and Edge profile settings are unchanged; use the
-[Direct](/docs/operations/agent) and [Edge](/docs/operations/edge-agent)
-setup guides for their generated configuration.
+## Direct Agent settings
+
+Set these on the Agent container. The generated setup command supplies its
+identity and Core public key; follow the [Direct Agent guide](/docs/operations/agent)
+and [TLS configuration](/docs/operations/tls-and-secure-agent-transport).
+
+| Setting | Default / requirement | Purpose |
+| --- | --- | --- |
+| `CITADEL_AGENT_MODE` | Unset selects Direct mode | Set `edge` only for an Edge Agent |
+| `CITADEL_AGENT_ID` | Required | Platform or dedicated Build Pool UUID from setup; remains stable when the address changes |
+| `CITADEL_CORE_PUBLIC_KEY` | Required | Base64 Ed25519 public key emitted by Core setup |
+| `CITADEL_AGENT_PORT` | `9000` | Agent listener port inside the container |
+| `CITADEL_AGENT_BUILD_SLOTS` | `2` | Complete build attempts on this Agent, including pushes; accepts 1–64 |
+| `CITADEL_AGENT_DATA_SLOTS` | `2` | Data operations including helper cleanup; accepts 1–64 |
+| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Shared build/data occupancy; accepts 1–64 |
+| `CITADEL_AGENT_TLS_MODE` | `Disabled` | `Direct` enables TLS and requires the certificate and key below |
+| `CITADEL_AGENT_TLS_CERTIFICATE_PATH` / `CITADEL_AGENT_TLS_PRIVATE_KEY_PATH` | Required for Direct TLS | PEM certificate chain and private key inside the Agent container |
+| `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker endpoint used by the Agent; also applies to Edge Agents |
+| `CITADEL_HOST_ROOT` | `/host` | Host filesystem mount used for storage metrics; also applies to Edge Agents |
+
+## Edge Agent settings
+
+Set these on the Edge Agent container. Use the command generated by Citadel;
+see the [Edge Agent guide](/docs/operations/edge-agent). Edge mode does not read
+the Direct-only identity, Core public-key, or listener TLS settings above.
+
+| Setting | Default / requirement | Purpose |
+| --- | --- | --- |
+| `CITADEL_AGENT_MODE` | `edge` required | Selects the outbound Edge connection |
+| `CITADEL_AGENT_BUILD_SLOTS` | `2` | Shared build capacity across Edge commands and replacement connections; accepts 1–64 |
+| `CITADEL_AGENT_DATA_SLOTS` | `2` | Data operations including helper cleanup; accepts 1–64 |
+| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Shared build/data occupancy; accepts 1–64 |
+| `CITADEL_CORE_URL` | Required | Core's Edge gRPC origin, not its browser/API endpoint |
+| `CITADEL_EDGE_AGENT_PROFILE` | `edge-agent` | `edge-build-agent` selects a dedicated Build Pool Agent; Swarm node profiles are generated by Core |
+| `CITADEL_EDGE_ENROLLMENT_TOKEN` | Required for initial enrollment | Enrollment credential from Citadel; an enrolled Agent reconnects using its persisted identity |
+| `CITADEL_EDGE_CORE_CA_CERTIFICATE_PATH` | Optional | PEM trust bundle for an HTTPS Core endpoint using a private CA |
+| `CITADEL_EDGE_AGENT_KEY_PATH` | `/app/data/edge-agent.key` | Persisted private-key path |
+| `CITADEL_EDGE_IDENTITY_PATH` | `/app/data/edge-agent.identity.json` | Persisted enrollment identity path |
+
+Preserve the Agent's data volume. Dedicated Build Pool setup commands can select
+profile-specific key and identity paths; keep those generated values. Core also
+supplies Swarm node bootstrap and identity variables automatically.
+
+### Automation execution capacity
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Deno processes running locally on Core. |
+| `CITADEL_AUTOMATIONS_MAX_REMOTE_RUNS` | `16` | Remote action runs Core tracks concurrently (1–256); no local Deno process is created for them. |
+| `CITADEL_AGENT_AUTOMATION_SLOTS` | `4` | Concurrent Deno actions on each Agent (1–64), also bounded by `CITADEL_AGENT_HEAVY_SLOTS`. |
+
+All triggers enter the durable queue. A busy host defers work; the Core local
+limit does not prevent execution on a free Agent. Increase Agent capacity only
+when that host has enough memory and CPU for scripts alongside builds and backups.
+Remote scripts use Core's public HTTPS origin, not Core's loopback API address.

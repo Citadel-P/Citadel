@@ -11,6 +11,7 @@ pub trait AutomationRunTokenIssuer: Send + Sync {
         &'a self,
         run_as_actor_id: ActorId,
         run_id: Uuid,
+        attempt_id: Uuid,
         lifetime: Duration,
     ) -> BoxFuture<'a, Result<String, AutomationError>>;
 }

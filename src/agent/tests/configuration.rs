@@ -357,3 +357,19 @@ fn edge_does_not_require_or_read_direct_agent_identity() {
     values.insert("CITADEL_AGENT_ID".into(), "not-a-uuid".into());
     assert!(matches!(parse(&values).unwrap().mode, AgentMode::Edge(_)));
 }
+
+#[test]
+fn build_capacity_is_bounded_for_direct_and_edge() {
+    for mut values in [direct(), edge()] {
+        assert_eq!(parse(&values).unwrap().build_slots, 2);
+        for value in ["0", "65", "-1", "abc"] {
+            values.insert("CITADEL_AGENT_BUILD_SLOTS".into(), value.into());
+            assert_eq!(
+                parse(&values).err().unwrap().variable,
+                "CITADEL_AGENT_BUILD_SLOTS"
+            );
+        }
+        values.insert("CITADEL_AGENT_BUILD_SLOTS".into(), "4".into());
+        assert_eq!(parse(&values).unwrap().build_slots, 4);
+    }
+}

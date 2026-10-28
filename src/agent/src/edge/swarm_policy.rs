@@ -38,6 +38,9 @@ pub(super) fn allowed(kind: EdgeCommandKind) -> bool {
             | ContainersStatsStream
             | ContainerExec
             | ContainerExecBinary
+            | ImageCheckBuildHost
+            | ImageReserveData
+            | ImageReconcileData
             | ImageList
             | ImageInspect
             | VolumeList
@@ -367,7 +370,7 @@ mod tests {
             assert_eq!(allowed(kind), columns[7] != "denied", "{kind:?}");
             count += 1;
         }
-        assert_eq!(count, 69);
+        assert_eq!(count, 75);
         assert!(!allowed(EdgeCommandKind::Unspecified));
     }
     #[test]

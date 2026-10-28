@@ -324,7 +324,7 @@ async fn worker_volume_backs_up_to_rustfs_and_restores_on_another_worker() {
         let repository=store.create_repository(actor,&BackupRepositoryConfiguration {name:format!("repo-{platform}"),password_secret_id:secret,spec:serde_json::from_value(json!({"$type":"S3Compatible","endpoint":std::env::var("CITADEL_TEST_RUSTFS_ENDPOINT").unwrap(),"bucket":"citadel-backups","allowInsecureHttp":true,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap()}).await.unwrap();
         let executor=DockerResticBackupExecutor::new("/no-core-docker-allowed",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent.clone())).with_edge(registry.clone());
         let cancel=CancellationToken::new();
-        executor.repository(&repository,"Initialize","Platform",Some(platform),&cancel).await.unwrap();
+        repository_operation(&store, &executor, &repository,"Initialize","Platform",Some(platform),&cancel).await.unwrap();
         let mut input=BackupPolicyConfiguration {name:format!("policy-{platform}"),description:None,source:serde_json::from_value(json!({"$type":"DockerVolume","platformId":platform,"dockerNodeId":nodes[1],"volumeName":source})).unwrap(),backup_repository_id:repository.id,enabled:true,cron:None,time_zone:None,webhook:None,keep_last_successful:Some(2),timeout_seconds:Some(120),alert_on_failure:false,run_as_actor_id:None,tag_ids:vec![]};input.validate(actor).unwrap();
         let policy=store.create_policy(actor,&input).await.unwrap();let run=store.enqueue_backup(actor,policy.id, "Manual", None).await.unwrap();
         let claim=store.claim_backup(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();

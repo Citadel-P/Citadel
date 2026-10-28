@@ -4,9 +4,11 @@ impl AutomationService {
         &self,
         claim: &AutomationRunClaim,
         cancellation: &CancellationToken,
-        progress: Option<&mpsc::Sender<AutomationProgress>>,
+        progress: Option<&tokio::sync::broadcast::Sender<AutomationProgress>>,
     ) -> Result<(), AutomationError> {
-        self.changed();
+        // Verify before registering local state or starting external work.
+        let cancelled = self.store.cancellation_requested(claim.run.id).await?;
+        self.changed(Some(claim.run.action_id));
         let run_cancellation = cancellation.child_token();
         self.active_runs
             .lock()
@@ -22,68 +24,109 @@ impl AutomationService {
             )
             .await;
         }
-        let result = self.execute(claim, &run_cancellation, progress).await;
+        // Do not start a process when cancellation won the claim race.
+        if cancelled {
+            run_cancellation.cancel();
+        }
+        let execution = self.execute(claim, &run_cancellation, progress);
+        tokio::pin!(execution);
+        let mut check = tokio::time::interval(Duration::from_secs(1));
+        check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let result = loop {
+            tokio::select! {
+                result = &mut execution => break result,
+                _ = check.tick(), if !run_cancellation.is_cancelled() => {
+                    // Keep process output/deadline handling polled while the DB
+                    // is slow. A failed check does not replay or drop execution.
+                    let requested = self.store.cancellation_requested(claim.run.id);
+                    tokio::pin!(requested);
+                    tokio::select! {
+                        result = &mut execution => break result,
+                        value = tokio::time::timeout(Duration::from_secs(5), &mut requested) => {
+                            if matches!(value, Ok(Ok(true))) { run_cancellation.cancel(); }
+                        }
+                    }
+                }
+            }
+        };
         if let Ok(mut active) = self.active_runs.lock() {
             active.remove(&claim.run.id);
         }
+        let result = match result {
+            RemoteAutomationOutcome::Completed(result) => result,
+            RemoteAutomationOutcome::Deferred if run_cancellation.is_cancelled() => {
+                AutomationRunResult::cancelled()
+            }
+            RemoteAutomationOutcome::Deferred => {
+                let status = self.store.defer(claim).await?;
+                self.changed(Some(claim.run.action_id));
+                let _ = self
+                    .progress
+                    .send(AutomationProgress::state(&claim.run, status));
+                return Ok(());
+            }
+        };
         if self.store.finish(claim, &result).await? {
-            self.changed();
+            self.changed(Some(claim.run.action_id));
             self.raise_failure_alert(claim, &result).await;
             if let Some(sender) = progress {
-                // Preserve the terminal item even when the bounded queue is full.
-                // An abandoned viewer must not hold this task or its slot forever.
-                let _ = tokio::time::timeout(
-                    Duration::from_secs(5),
-                    sender.send(AutomationProgress::completed(&claim.run, &result)),
-                )
-                .await;
+                let _ = sender.send(AutomationProgress::completed(&claim.run, &result));
             }
         }
         Ok(())
     }
     pub async fn cancel(&self, action_id: Uuid, run_id: Uuid) -> Result<(), AutomationError> {
-        let token = self
+        // Persist first; an in-memory miss can be the instant between claiming
+        // the queue row and registering its local cancellation token.
+        self.store.cancel(action_id, run_id).await?;
+        if let Some(token) = self
             .active_runs
             .lock()
             .map_err(|_| {
                 AutomationError::Storage("Automation cancellation state is poisoned.".to_owned())
             })?
             .get(&run_id)
-            .cloned();
-        if let Some(token) = token {
-            let run = self.store.get_run(action_id, run_id).await?;
-            if run.status != crate::AutomationRunStatus::Running {
-                return Err(AutomationError::Conflict(
-                    "Automation run is not active.".to_owned(),
-                ));
-            }
+        {
             token.cancel();
-            return Ok(());
         }
-        self.store.cancel(action_id, run_id).await
+        self.changed(Some(action_id));
+        Ok(())
     }
     pub(super) async fn execute(
         &self,
         claim: &AutomationRunClaim,
         cancellation: &CancellationToken,
-        progress: Option<&mpsc::Sender<AutomationProgress>>,
-    ) -> AutomationRunResult {
-        if let Err(error) = self.options.validate_execution(claim.run.timeout_seconds) {
-            return AutomationRunResult::failed(None, error.to_string());
+        progress: Option<&tokio::sync::broadcast::Sender<AutomationProgress>>,
+    ) -> RemoteAutomationOutcome {
+        if cancellation.is_cancelled() {
+            return AutomationRunResult::cancelled().into();
         }
-        if matches!(claim.run.trigger.as_str(), "Schedule" | "Webhook")
-            && let Err(error) = self.ensure_paid_trigger().await
+        if let Err(error) = self.options.validate_execution(claim.run.timeout_seconds) {
+            return AutomationRunResult::failed(None, error.to_string()).into();
+        }
+        if (matches!(claim.run.trigger.as_str(), "Schedule" | "Webhook")
+            || matches!(claim.run.executor, AutomationExecutor::Automatic))
+            && let Err(error) = self.ensure_automated_operations().await
         {
-            return AutomationRunResult::failed(None, error.to_string());
+            return AutomationRunResult::failed(None, error.to_string()).into();
         }
         if claim.run.code_snapshot.is_none() {
-            return AutomationRunResult::failed(None, "Execution claim has no source code.".into());
+            return AutomationRunResult::failed(None, "Execution claim has no source code.".into())
+                .into();
         }
+        let Some(attempt_id) = claim.run.attempt_id else {
+            return AutomationRunResult::failed(
+                None,
+                "Automation claim has no attempt identity.".into(),
+            )
+            .into();
+        };
         let token = match self
             .token_issuer
             .issue(
                 ActorId::new(claim.run.run_as_actor_id),
                 claim.run.id,
+                attempt_id,
                 Duration::from_secs(claim.run.timeout_seconds as u64 + 60),
             )
             .await
@@ -93,142 +136,45 @@ impl AutomationService {
                 return AutomationRunResult::failed(
                     None,
                     format!("Run-as authorization failed: {error}"),
-                );
+                )
+                .into();
             }
         };
-        let directory = self.work_root.join(claim.run.id.to_string());
-        let source = automation_source(
-            &self.internal_base_url,
-            &token,
-            &claim.run,
-            &self.endpoint_catalog_json,
-        );
-        let mut workspace = match self
-            .workspace
-            .prepare(&directory, self.cache_directory.as_deref(), &source)
+        let local = matches!(claim.run.executor, AutomationExecutor::Core);
+        let base_url = if local {
+            &self.internal_base_url
+        } else {
+            &self.remote_base_url
+        };
+        let script = crate::sandbox::AutomationScript {
+            run_id: claim.run.id,
+            source: automation_source(base_url, &token, &claim.run, &self.endpoint_catalog_json),
+            token,
+            args_json: claim.run.args_json.clone(),
+            base_url: base_url.clone(),
+            timeout_seconds: claim.run.timeout_seconds,
+            maximum_log_bytes: self.maximum_log_bytes,
+        };
+        if local {
+            return self
+                .sandbox
+                .execute(script, cancellation, progress)
+                .await
+                .into();
+        }
+        let Some(remote) = &self.remote else {
+            return AutomationRunResult::failed(
+                None,
+                "Agent automation execution is unavailable.".into(),
+            )
+            .into();
+        };
+        match remote
+            .execute(claim, script, &self.progress, cancellation)
             .await
         {
-            Ok(workspace) => workspace,
-            Err(error) => return AutomationRunResult::failed(None, error),
-        };
-        let directory = workspace.directory();
-        let script = workspace.entrypoint();
-        let mut args = vec![
-            OsString::from("run"),
-            OsString::from("--no-prompt"),
-            // Do not discover operator/parent-workspace configuration or locks.
-            OsString::from("--no-config"),
-            OsString::from("--no-lock"),
-            OsString::from(format!("--allow-read={}", directory.display())),
-            OsString::from(format!("--allow-write={}", directory.display())),
-            OsString::from("--allow-env=NO_COLOR,DENO_DIR"),
-        ];
-        let allow_net = self
-            .allow_net
-            .as_deref()
-            .unwrap_or_else(|| allow_net_authority(&self.internal_base_url))
-            .trim();
-        if !allow_net.is_empty() {
-            args.push(format!("--allow-net={allow_net}").into());
-        }
-        args.push(script.as_os_str().to_owned());
-        let mut request = ProcessRequest::new(self.deno_path.clone())
-            .args(args)
-            .current_dir(directory)
-            .env("HOME", directory.as_os_str())
-            .env("TMPDIR", directory.as_os_str())
-            .env("DENO_DIR", directory.join("deno-cache").as_os_str())
-            .env("NO_COLOR", "1")
-            .env("CITADEL_ACTION_ARGS", &claim.run.args_json)
-            .limits(ProcessLimits {
-                timeout: Duration::from_secs(claim.run.timeout_seconds as u64),
-                maximum_stdout_bytes: self.maximum_log_bytes,
-                maximum_stderr_bytes: self.maximum_log_bytes,
-                output_limit_policy: OutputLimitPolicy::Truncate,
-            });
-        if let Some(cache) = &self.cache_directory {
-            request = request.env("DENO_DIR", cache.as_os_str());
-        }
-        let output = if let Some(sender) = progress {
-            let (chunks, mut receiver) = mpsc::channel(8);
-            let consume = async {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                while let Some(chunk) = receiver.recv().await {
-                    let chunk: citadel_execution::ProcessChunk = chunk;
-                    let pending = if chunk.stream == "stderr" {
-                        &mut stderr
-                    } else {
-                        &mut stdout
-                    };
-                    pending.extend_from_slice(&chunk.bytes);
-                    if let Some(end) = pending.iter().rposition(|byte| *byte == b'\n') {
-                        let text =
-                            redact_run_logs(&String::from_utf8_lossy(&pending[..=end]), &token);
-                        pending.drain(..=end);
-                        progress::send(
-                            sender,
-                            AutomationProgress {
-                                run_id: Some(claim.run.id),
-                                stream: Some(text),
-                                ..Default::default()
-                            },
-                            cancellation,
-                        )
-                        .await;
-                    }
-                }
-                for pending in [stdout, stderr] {
-                    if !pending.is_empty() {
-                        let text = redact_run_logs(&String::from_utf8_lossy(&pending), &token);
-                        progress::send(
-                            sender,
-                            AutomationProgress {
-                                run_id: Some(claim.run.id),
-                                stream: Some(text),
-                                ..Default::default()
-                            },
-                            cancellation,
-                        )
-                        .await;
-                    }
-                }
-            };
-            let (output, ()) = tokio::join!(
-                self.process.run(request.output(chunks), cancellation),
-                consume
-            );
-            output
-        } else {
-            self.process.run(request, cancellation).await
-        };
-        let _ = workspace.cleanup().await;
-        match output {
-            Ok(output) => {
-                let logs = redact_run_logs(
-                    &joined_logs(
-                        &output.stdout,
-                        &output.stderr,
-                        output.stdout_truncated || output.stderr_truncated,
-                    ),
-                    &token,
-                );
-                if output.succeeded() {
-                    AutomationRunResult::success(output.exit_code, logs)
-                } else {
-                    let mut result = AutomationRunResult::failed(output.exit_code, logs);
-                    result.error = Some(format!(
-                        "Deno exited with code {}.",
-                        output
-                            .exit_code
-                            .map_or_else(|| "unknown".into(), |code| code.to_string())
-                    ));
-                    result
-                }
-            }
-            Err(ProcessError::Cancelled) => AutomationRunResult::cancelled(),
-            Err(ProcessError::Timeout(_)) => AutomationRunResult::timed_out(),
-            Err(error) => AutomationRunResult::failed(None, error.to_string()),
+            Ok(result) => result,
+            Err(error) => AutomationRunResult::failed(None, error.to_string()).into(),
         }
     }
 }
