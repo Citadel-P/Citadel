@@ -17,10 +17,11 @@ impl AutomationService {
                 "Draft code is only accepted for tests and must contain between 1 byte and 256 KiB.".into(),
             ));
         }
-        let configured = match timeout_seconds {
-            Some(seconds) => seconds,
-            None => self.store.get(id).await?.timeout_seconds,
-        };
+        let action = self.store.get(id).await?;
+        if matches!(action.executor, AutomationExecutor::Automatic) {
+            self.ensure_automated_operations().await?;
+        }
+        let configured = timeout_seconds.unwrap_or(action.timeout_seconds);
         self.options.validate_execution(configured)?;
         let service = self.clone();
         let trigger = trigger.to_owned();

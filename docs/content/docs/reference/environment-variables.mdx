@@ -243,7 +243,7 @@ under the same data root. Offline recovery never generates replacement keys.
 | `CITADEL_BACKUPS_ALLOWED_CORE_PATH_<n>` | `<data root>/backups/repositories`; indices 0–127, numeric order, sparse indices allowed; paths retain spaces and commas |
 | `CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS` | `120` seconds |
 | `CITADEL_BACKUPS_MAX_LOG_BYTES` / `CITADEL_BACKUPS_MAX_LOG_LINE_BYTES` | `1048576` / `8192` bytes |
-| `CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS` / `CITADEL_BACKUPS_SOURCE_LEASE_SECONDS` | `300` / `300` seconds |
+| `CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS` / `CITADEL_BACKUPS_SOURCE_LEASE_SECONDS` | `300` / `300` seconds; minimum `90` each, renewed every `30` seconds |
 | `CITADEL_RESTIC_IMAGE` | `restic/restic:0.18.1` |
 | `CITADEL_VOLUME_HELPER_IMAGE` | Optional helper image override |
 

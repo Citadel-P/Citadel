@@ -85,6 +85,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         build_agent_pool_id: None,
     };
     input.validate().unwrap();
+    admission::verify_target_fairness(&pool, actor, &input).await;
     completion::verify(&pool, actor, &input).await;
     attempts::verify(&pool, actor, &input).await;
     admission::verify(&pool, actor, &input).await;
@@ -786,8 +787,6 @@ async fn assert_local_build_skips_registry(
         }
     })
     .await;
-    shutdown.cancel();
-    daemon.await.unwrap();
     let result = result.expect("local build and Git synchronization finish");
     assert_eq!(
         result.status,
@@ -803,5 +802,113 @@ async fn assert_local_build_skips_registry(
     );
     let args = std::fs::read_to_string(root.join("docker-stub.args")).unwrap();
     assert!(args.contains(&result.image_references[0]));
+    let store = PostgresBuildRepository::new(pool.clone());
+    assert!(store.finish(claim, &result, None).await.unwrap());
+    for scenario in ["context", "dockerfile", "secret"] {
+        let mut input = BuildProjectConfiguration::from(&claim.project);
+        input.name = format!("invalid-{scenario}-{}", Uuid::now_v7());
+        if scenario == "context" {
+            input.context_path = Some("missing-context".into());
+        }
+        if scenario == "dockerfile" {
+            input.dockerfile_path = Some("missing-Dockerfile".into());
+        }
+        let project = store
+            .create(ActorId::new(claim.run.triggered_by_actor_id), &input)
+            .await
+            .unwrap();
+        store
+            .enqueue(
+                ActorId::new(claim.run.triggered_by_actor_id),
+                project.id,
+                "Manual",
+            )
+            .await
+            .unwrap();
+        let mut invalid = store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .unwrap();
+        if scenario == "secret" {
+            invalid
+                .project
+                .build_secrets
+                .push(citadel_builds::BuildSecretSpec {
+                    id: "missing".into(),
+                    secret_id: Uuid::now_v7(),
+                });
+        }
+        std::fs::remove_file(root.join("docker-stub.args")).ok();
+        let execution = executor.execute(&invalid, &citadel_builds::NoopBuildLogSink, &token);
+        let synchronize = async {
+            loop {
+                if git.process_one(&token).await.unwrap() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        };
+        let failed = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            tokio::pin!(execution);
+            tokio::select! {result=&mut execution=>result,()=synchronize=>execution.await}
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            failed.status,
+            citadel_builds::BuildRunStatus::Failed,
+            "{scenario}"
+        );
+        assert!(
+            !root.join("docker-stub.args").exists(),
+            "invalid preparation must not dispatch Docker"
+        );
+        assert!(store.finish(&invalid, &failed, None).await.unwrap());
+        let held: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM buildexecutorreservations WHERE runid=$1")
+                .bind(invalid.run.id)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        assert_eq!(held, 0, "{scenario}");
+        let retry = store
+            .enqueue(
+                ActorId::new(claim.run.triggered_by_actor_id),
+                project.id,
+                "Manual",
+            )
+            .await
+            .unwrap();
+        let next = store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(next.run.id, retry.id);
+        assert!(store.finish(&next, &failed, None).await.unwrap());
+        sqlx::query("DELETE FROM activityevents WHERE resourceid=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM buildruns WHERE buildprojectid=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM resourcetags WHERE resourcetype='Build' AND resourceid=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM buildprojects WHERE id=$1")
+            .bind(project.id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    shutdown.cancel();
+    daemon.await.unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }

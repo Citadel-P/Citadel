@@ -30,6 +30,9 @@ use std::{sync::Arc, time::Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[path = "automation_http_execution/placement_license.rs"]
+mod placement_license;
+
 #[path = "automation_http_execution/queueing.rs"]
 mod queueing;
 
@@ -123,6 +126,7 @@ async fn automation_http_streams_executes_cancels_and_persists_real_process_resu
     }))).await;
     assert_eq!(oversized.status(), StatusCode::BAD_REQUEST);
     webhooks::verify(&app, &admin, &db, &store, &service, &webhook_license).await;
+    placement_license::verify(&app, &admin, &store, &service, &webhook_license).await;
     // Manual/Test runs use the same durable workers as scheduled/webhook runs.
     let mut workers = tokio::task::JoinSet::new();
     for _ in 0..service.options().max_parallel_runs {

@@ -708,3 +708,67 @@ async fn lookup_deployment_and_swarm_service_bindings_are_scoped_and_read_author
     }
     close(f).await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn automation_agent_lookup_accepts_source_context_and_filters_access() {
+    let f = fixture().await;
+    let reader = subject(&f).await;
+    let action = Uuid::now_v7();
+    sqlx::query("INSERT INTO actions(id,name,code,alertonfailure,enabled,scheduleenabled,scheduletimezone,timeoutseconds,createdbyactorid,runasactorid) VALUES($1,'lookup action','',false,true,false,'UTC',60,$2,$2)")
+        .bind(action).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let mut platforms = Vec::new();
+    for connector in ["Agent", "EdgeAgent", "Local", "Agent"] {
+        let id = Uuid::now_v7();
+        sqlx::query("INSERT INTO platforms(id,address,name,connectortype,platformdescriptor,status,cpucount,imagecount,memtotal,networkcount,volumecount) VALUES($1,$2,$2,$3,'{}','Online',0,0,0,0,0)")
+            .bind(id).bind(format!("lookup-{id}")).bind(connector).execute(&f.pool).await.unwrap();
+        platforms.push(id);
+    }
+    let query = "TargetResourceType=AutomationAgent&SourceResourceType=AutomationAction";
+    assert!(ids(&lookup(&f, &reader, query).await).is_empty());
+    for id in &platforms[..3] {
+        grant(&f, reader.actor_id.value(), ResourceType::Platform, *id, 0).await;
+    }
+    let rows = lookup(&f, &reader, query).await;
+    let mut found = ids(&rows);
+    found.sort();
+    let mut expected = platforms[..2].to_vec();
+    expected.sort();
+    assert_eq!(found, expected, "exclude local and inaccessible platforms");
+    assert_eq!(
+        rows,
+        lookup(&f, &reader, "TargetResourceType=AutomationAgent").await
+    );
+    let edit_query = format!("{query}&SourceResourceId={action}");
+    assert_eq!(
+        send(
+            &f,
+            &format!("/api/v1/lookup?{edit_query}"),
+            Some(reader.clone())
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    grant(
+        &f,
+        reader.actor_id.value(),
+        ResourceType::AutomationAction,
+        action,
+        0,
+    )
+    .await;
+    assert_eq!(rows, lookup(&f, &reader, &edit_query).await);
+    let missing_query = format!("{query}&SourceResourceId={}", Uuid::now_v7());
+    assert_eq!(
+        send(
+            &f,
+            &format!("/api/v1/lookup?{missing_query}"),
+            Some(f.administrator.clone())
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    close(f).await;
+}

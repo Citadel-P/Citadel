@@ -1,7 +1,7 @@
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
-import { DuplicateWorkload } from '@/features/resource-copies/duplicate-workload';
+import { DuplicateWorkload } from '@/components/custom/resource-copies/duplicate-workload';
 import { ResourceCopyKind } from '@/api/generated/api.types';
 import { ResourceBackupIndicator } from '@/features/backup-policies/resource-backup-indicator';
 import { StateIndicator } from '@/components/custom/state-indicator';

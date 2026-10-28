@@ -41,6 +41,7 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
     let mut runs = Vec::new();
     for _ in 0..2 {
         input.name = format!("parallel-{}", Uuid::now_v7());
+        input.platform_id = Some(independent_platform(&pool).await);
         let project = store.create(actor, &input).await.unwrap();
         runs.push(store.enqueue(actor, project.id, "Manual").await.unwrap().id);
     }
@@ -81,6 +82,15 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
         );
     }
     pool.close().await;
+}
+
+async fn independent_platform(pool: &sqlx::PgPool) -> Uuid {
+    // These tests isolate the global preparation/tracking budgets. A single
+    // configured target intentionally permits only one concurrent preparation.
+    let platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$1::text,'Local',0,0,0,$1::text,0,'{\"$type\":\"Docker\"}','Online',0)")
+        .bind(platform).execute(pool).await.unwrap();
+    platform
 }
 
 async fn fixture() -> (
@@ -385,6 +395,7 @@ async fn two_preparations_can_track_six_executions_and_drain() {
         let mut runs = vec![];
         for _ in 0..6 {
             input.name = format!("dispatch-{}", Uuid::now_v7());
+            input.platform_id = Some(independent_platform(&pool).await);
             let project = store.create(actor, &input).await.unwrap();
             runs.push(store.enqueue(actor, project.id, "Manual").await.unwrap().id);
         }

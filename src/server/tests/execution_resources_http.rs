@@ -1438,6 +1438,7 @@ struct AllowBackupExecution;
 impl BackupSourcePlanner for FakeBackupPlanner {
     fn cleanup_staging<'a>(
         &'a self,
+        _claim: &'a citadel_backups::BackupClaim,
         plan: &'a citadel_backups::BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), citadel_backups::BackupError>> {
         Box::pin(async move {

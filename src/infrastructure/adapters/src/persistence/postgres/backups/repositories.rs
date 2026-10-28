@@ -278,7 +278,7 @@ impl PostgresBackupPersistence {
     ) -> BoxFuture<'_, Result<(), BackupError>> {
         Box::pin(async move {
             sqlx::query(
-                "DELETE FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2",
+                "DELETE FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND cleanupconfirmed AND NOT coreworkactive AND NOT EXISTS(SELECT 1 FROM dataexecutorreservations WHERE ownerid=$2)",
             )
             .bind(repository_id)
             .bind(operation_id)

@@ -1,4 +1,6 @@
 //! Real protocol operations on the disposable daemon supplied by test-agent-compatibility.sh.
+#[path = "compatibility/scaling.rs"]
+mod scaling;
 #[path = "compatibility/swarm.rs"]
 mod swarm;
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -438,6 +440,45 @@ async fn direct_and_edge_build_pools_execute_real_docker_operations() {
         let image = format!("registry:5000/compat-{profile}:{}", id.simple());
         let context = fixture.root.join(profile);
         std::fs::create_dir(&context).unwrap();
+        std::fs::write(
+            context.join("Dockerfile"),
+            "FROM compatibility-base:local\nRUN exit 7\n",
+        )
+        .unwrap();
+        image_result(
+            wire.stream(
+                Kind::ImageBuildStream,
+                "/citadel.images.v1.ImageService/Build",
+                BuildImageRequest {
+                    admission_authority_id: ready.admission_authority_id.clone(),
+                    admission_generation: ready.admission_generation,
+                    run_id: Uuid::now_v7().to_string(),
+                    attempt_id: Uuid::now_v7().to_string(),
+                    context_directory: context.display().to_string(),
+                    dockerfile_path: context.join("Dockerfile").display().to_string(),
+                    timeout_seconds: 60,
+                    ..Default::default()
+                },
+            )
+            .await,
+            false,
+        )
+        .await;
+        let after_failure: CheckBuildHostResponse = wire
+            .unary(
+                Kind::ImageCheckBuildHost,
+                "/citadel.images.v1.ImageService/CheckBuildHost",
+                (),
+            )
+            .await;
+        assert_eq!(
+            (
+                after_failure.occupied_builds,
+                after_failure.uncertain_builds
+            ),
+            (0, 0),
+            "a confirmed failed Dockerfile must release capacity without Agent restart"
+        );
         std::fs::write(context.join("Dockerfile"), "FROM compatibility-base:local\nRUN --mount=type=secret,id=fixture,required=true test -s /run/secrets/fixture && echo built > /marker\nCMD [\"sleep\",\"300\"]\n").unwrap();
         let archive = tokio::process::Command::new("tar")
             .args(["-C", context.to_str().unwrap(), "-cf", "-", "."])

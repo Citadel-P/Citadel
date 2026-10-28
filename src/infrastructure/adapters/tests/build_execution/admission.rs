@@ -11,6 +11,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         let mut input = input.clone();
         input.name = format!("host-admission-{index}-{}", Uuid::now_v7());
         input.retention_run_count = Some(1);
+        let alias = Uuid::now_v7();
+        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
+            .bind(alias).bind(format!("alias-{alias}")).execute(pool).await.unwrap();
+        input.platform_id = Some(alias);
         let project = store.create(actor, &input).await.unwrap();
         let run = store.enqueue(actor, project.id, "Manual").await.unwrap();
         let claim = store
@@ -659,4 +663,152 @@ async fn verify_cleanup_routing(pool: &sqlx::PgPool, candidate: &BuildCleanupAtt
         .execute(pool)
         .await
         .unwrap();
+}
+
+pub(super) async fn verify_target_fairness(
+    pool: &sqlx::PgPool,
+    actor: ActorId,
+    input: &BuildProjectConfiguration,
+) {
+    let store = PostgresBuildRepository::new(pool.clone());
+    let mut runs = Vec::new();
+    for i in 0..5 {
+        let mut input = input.clone();
+        input.name = format!("fair-target-{i}-{}", Uuid::now_v7());
+        if i == 4 {
+            let alias = Uuid::now_v7();
+            sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
+                .bind(alias).bind(format!("healthy-{alias}")).execute(pool).await.unwrap();
+            input.platform_id = Some(alias);
+        }
+        let project = store.create(actor, &input).await.unwrap();
+        runs.push(store.enqueue(actor, project.id, "Manual").await.unwrap());
+    }
+    let old = store
+        .claim_next(Utc::now() - Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(old.run.id, runs[0].id);
+    // Keep the slow connection in Preparing. The second preparation slot must
+    // go to the independent target, without waiting for its 30-second timeout.
+    let healthy = store
+        .claim_next(Utc::now() - Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(healthy.run.id, runs[4].id);
+    assert!(
+        store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let mut deferred = success_result('a');
+    deferred.status = BuildRunStatus::Queued;
+    deferred.error_code = Some("build.capacity_wait".into());
+    assert!(store.finish(&old, &deferred, None).await.unwrap());
+    assert!(
+        store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .is_none(),
+        "target cooldown covers sibling projects, not just the failed run"
+    );
+    sqlx::query("UPDATE buildruns SET nextattemptat=clock_timestamp() WHERE id=$1")
+        .bind(old.run.id)
+        .execute(pool)
+        .await
+        .unwrap();
+    let resumed = store
+        .claim_next(Utc::now() - Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        resumed.run.id, runs[1].id,
+        "untouched work precedes deferred retries"
+    );
+    let host = BuildExecutorCapacity {
+        daemon_id: format!("fair-{}", Uuid::now_v7()),
+        authority_id: Uuid::now_v7(),
+        build_slots: 2,
+        heavy_slots: 2,
+        admission_generation: 1,
+    };
+    assert_eq!(
+        store.reserve_preparation(&resumed, &host).await.unwrap(),
+        BuildAdmission::Reserved
+    );
+    assert!(
+        store
+            .claim_next(Utc::now() - Duration::minutes(5))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    store
+        .dispatch_executor(&resumed, &"a".repeat(40))
+        .await
+        .unwrap();
+    // Dispatch ends the probe guard even while the run status is Preparing.
+    // The daemon governor, not the target guard, limits executing builds.
+    let sibling = store
+        .claim_next(Utc::now() - Duration::minutes(5))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(sibling.run.id, runs[2].id);
+    assert_eq!(
+        store
+            .reserve_executor(&sibling, &host, &"a".repeat(40))
+            .await
+            .unwrap(),
+        BuildAdmission::Reserved
+    );
+    assert_eq!(
+        store
+            .executor_occupancy(&host.daemon_id)
+            .await
+            .unwrap()
+            .reserved,
+        2
+    );
+    assert!(
+        store
+            .record_executor_cleanup(&resumed, &host)
+            .await
+            .unwrap()
+    );
+    assert!(
+        store
+            .record_executor_cleanup(&sibling, &host)
+            .await
+            .unwrap()
+    );
+    for claim in [healthy, resumed, sibling] {
+        assert!(
+            store
+                .finish(&claim, &success_result('a'), None)
+                .await
+                .unwrap()
+        );
+    }
+    for run in runs {
+        let _ = store.cancel_queued(run.id).await.unwrap();
+        for query in [
+            "DELETE FROM activityevents WHERE resourceid=$1",
+            "DELETE FROM buildruns WHERE buildprojectid=$1",
+            "DELETE FROM resourcetags WHERE resourcetype='Build' AND resourceid=$1",
+            "DELETE FROM buildprojects WHERE id=$1",
+        ] {
+            sqlx::query(query)
+                .bind(run.build_project_id)
+                .execute(pool)
+                .await
+                .unwrap();
+        }
+    }
 }

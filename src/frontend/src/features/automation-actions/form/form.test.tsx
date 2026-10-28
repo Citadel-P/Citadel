@@ -4,11 +4,11 @@ import { fireEvent, screen } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { AutomationActionForm } from './form';
 
-const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), mutate: vi.fn(), read: vi.fn() }));
+const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), mutate: vi.fn(), read: vi.fn(), paid: false }));
 
 vi.mock('@/features/license/use-license-entitlements', () => ({
   useLicenseEntitlements: () => ({
-    hasCapability: () => false,
+    hasCapability: () => mocks.paid,
   }),
 }));
 
@@ -34,7 +34,7 @@ vi.mock('@/lib/monaco', () => ({
 }));
 
 vi.mock('@/components/custom/common', () => ({
-  ResourceSelectorField: () => null,
+  ResourceSelectorField: ({ placeholder }: { placeholder?: string }) => (placeholder ? <div>{placeholder}</div> : null),
 }));
 
 vi.mock('@/components/custom/timezone-select', () => ({
@@ -82,11 +82,51 @@ const action: AuthorizedAction = {
 
 describe('AutomationActionForm licensing', () => {
   beforeEach(() => {
+    mocks.paid = false;
     localStorage.clear();
     mocks.open.mockClear();
     mocks.save.mockClear();
     mocks.mutate.mockClear();
     mocks.read.mockReset();
+  });
+
+  it('locks only Automatic without the entitlement', async () => {
+    const { user } = renderCitadel(<AutomationActionForm mode="edit" resource={action} />);
+    await user.click(screen.getByRole('combobox', { name: 'Run on' }));
+    expect(screen.getByRole('option', { name: /Automatic/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('option', { name: /Core/ })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('option', { name: /Specific agent/ })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('option', { name: /Automatic/ })).toHaveTextContent('Team');
+  });
+
+  it('keeps saved Automatic visible after downgrade and allows switching to Core', async () => {
+    const { user } = renderCitadel(
+      <AutomationActionForm mode="edit" resource={{ ...action, executor: { kind: 'Automatic' } }} />,
+    );
+    expect(
+      screen.getByText('Automatic requires Team. Choose Core or a specific agent to run this action.'),
+    ).toBeVisible();
+    await user.click(screen.getByRole('combobox', { name: 'Run on' }));
+    await user.click(screen.getByRole('option', { name: /Core/ }));
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ executor: { kind: 'Core' } }));
+  });
+
+  it('describes placement choices and saves Automatic without choosing agents', async () => {
+    mocks.paid = true;
+    const { user } = renderCitadel(<AutomationActionForm mode="edit" resource={action} />);
+    await user.click(screen.getByRole('combobox', { name: 'Run on' }));
+    expect(screen.getByText('Run on the Citadel Core server.')).toBeVisible();
+    expect(screen.getByText('Always run on the agent you select.')).toBeVisible();
+    expect(screen.getByText('Let Citadel choose an eligible agent with available capacity.')).toBeVisible();
+    await user.click(screen.getByRole('option', { name: /Specific agent/ }));
+    expect(screen.getByText('Select agent')).toBeVisible();
+    await user.click(screen.getByRole('combobox', { name: 'Run on' }));
+    await user.click(screen.getByRole('option', { name: /Automatic/ }));
+    expect(screen.queryByText('Select agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Select eligible agents')).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ executor: { kind: 'Automatic' } }));
   });
 
   it('tests edited code and arguments without saving the action', async () => {

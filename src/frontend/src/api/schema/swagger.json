@@ -2032,13 +2032,6 @@
           },
           {
             "properties": {
-              "agentIds": {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "kind": {
                 "enum": [
                   "Automatic"
@@ -2047,7 +2040,6 @@
               }
             },
             "required": [
-              "agentIds",
               "kind"
             ],
             "type": "object"

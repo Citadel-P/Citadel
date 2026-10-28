@@ -130,7 +130,7 @@ pub(super) async fn build(runtime: &Runtime, r: BuildImageRequest) -> Result<Out
         };
         tokio::pin!(operation);
         let outcome=loop{tokio::select!{result=&mut operation=>break result,Some(item)=rx.recv()=>yield item}};
-        if outcome.is_ok() || outcome.as_ref().is_err_and(|error| error.is_known_not_started()) { permit.complete(outcome.is_ok()); }
+        if outcome.is_ok() || outcome.as_ref().is_err_and(|error| error.execution_finished()) { permit.complete(outcome.is_ok()); }
         while let Ok(item)=rx.try_recv(){yield item;}
         match outcome{Ok(())=>yield ImageBuildResponse{status:Some("completed".into()),..Default::default()},Err(error)=>yield failure(error)}
     })))
@@ -167,7 +167,7 @@ pub(super) async fn push(runtime: &Runtime, r: PushImageRequest) -> Result<Outpu
         };
         tokio::pin!(operation);
         let outcome=loop{tokio::select!{result=&mut operation=>break result,Some(item)=rx.recv()=>yield item}};
-        if outcome.is_ok() || outcome.as_ref().is_err_and(|error| error.is_known_not_started()) { permit.complete(outcome.is_ok()); }
+        if outcome.is_ok() || outcome.as_ref().is_err_and(|error| error.execution_finished()) { permit.complete(outcome.is_ok()); }
         while let Ok(item)=rx.try_recv(){yield item;}
         match outcome{Ok(digest)=>yield ImageBuildResponse{status:Some("completed".into()),id:digest,..Default::default()},Err(error)=>yield failure(error)}
     })))
@@ -229,7 +229,30 @@ mod tests {
 printf '%s\n' "$1" >> "$root/calls"
 if [ "$1" = build ]; then cat >/dev/null; fi"#,
         );
-        let runtime = f.runtime().with_build_capacity(1);
+        let mut runtime = f.runtime().with_build_capacity(1);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let stopped = tokio_util::sync::CancellationToken::new();
+        let server_cancel = stopped.clone();
+        let calls = f.0.join("calls");
+        let server = tokio::spawn(async move {
+            axum::serve(listener,axum::Router::new().fallback(move |uri:axum::http::Uri| {
+                let calls=calls.clone();
+                async move {
+                    if uri.path()=="/version" { return axum::Json(serde_json::json!({"ApiVersion":"1.45","MinAPIVersion":"1.24"})); }
+                    assert!(uri.path().ends_with("/push"));
+                    use std::io::Write;
+                    writeln!(std::fs::OpenOptions::new().append(true).open(calls).unwrap(),"push").unwrap();
+                    axum::Json(serde_json::json!({"aux":{"Digest":format!("sha256:{}","a".repeat(64))}}))
+                }
+            })).with_graceful_shutdown(server_cancel.cancelled_owned()).await.unwrap();
+        });
+        runtime.docker = citadel_docker::client::DockerClient::with_endpoint(
+            format!("http://{address}").parse().unwrap(),
+            Duration::from_secs(3),
+            "/host",
+        )
+        .unwrap();
         let next = runtime.for_command(tokio_util::sync::CancellationToken::new());
         let mut r = request(&runtime);
         r.tags = vec!["fixture:one".into(), "fixture:two".into()];
@@ -289,6 +312,8 @@ if [ "$1" = build ]; then cat >/dev/null; fi"#,
             "build\npush\npush\n"
         );
         assert_eq!(runtime.builds.capacity().unwrap(), (1, 0, 0));
+        stopped.cancel();
+        server.await.unwrap();
     }
     #[tokio::test]
     async fn preparation_failures_release_slots_after_cleanup() {

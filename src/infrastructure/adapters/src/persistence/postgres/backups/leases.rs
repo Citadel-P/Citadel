@@ -37,7 +37,7 @@ impl PostgresBackupPersistence {
             // A predicate evaluated before a lock wait is not expiry evidence.
             sqlx::query("SELECT ownerrunid FROM backuprepositoryleases WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND attemptid=$3 FOR UPDATE")
                 .bind(repository).bind(owner).bind(attempt).fetch_optional(&mut *tx).await.map_err(storage)?;
-            let renewed = sqlx::query("UPDATE backuprepositoryleases SET expiresat=clock_timestamp()+make_interval(secs=>$4::integer) WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND attemptid=$3 AND expiresat>clock_timestamp()")
+            let renewed = sqlx::query("UPDATE backuprepositoryleases SET expiresat=clock_timestamp()+make_interval(secs=>$4::integer) WHERE backuprepositoryid=$1 AND ownerrunid=$2 AND attemptid=$3 AND expiresat>clock_timestamp() AND NOT recoveryfenced")
                 .bind(repository).bind(owner).bind(attempt).bind(self.repository_lease_seconds).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if renewed != 1 {
                 return Ok(false);
@@ -68,7 +68,7 @@ impl PostgresBackupPersistence {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             // Only a proven pre-execution refusal can defer; any uncertain host
             // reservation prevents deleting the immutable item rows.
-            let changed = sqlx::query("UPDATE backupruns SET status='Queued',startedat=NULL,nextattemptat=CURRENT_TIMESTAMP+INTERVAL '15 seconds',errorcode='CapacityBusy',errormessage='Waiting for source storage or execution host capacity.' WHERE id=$1 AND attemptid=$2 AND status='Running' AND NOT EXISTS(SELECT 1 FROM backuprunitems WHERE backuprunid=$1 AND status<>'Queued') AND NOT EXISTS(SELECT 1 FROM dataexecutorreservations WHERE ownerid=$1)")
+            let changed = sqlx::query("UPDATE backupruns SET status='Queued',startedat=NULL,nextattemptat=CURRENT_TIMESTAMP+INTERVAL '15 seconds',errorcode='CapacityBusy',errormessage='Waiting for source storage or execution host capacity.' WHERE id=$1 AND attemptid=$2 AND status='Running' AND NOT EXISTS(SELECT 1 FROM backuprunitems WHERE backuprunid=$1 AND status<>'Queued') AND NOT EXISTS(SELECT 1 FROM dataexecutorreservations WHERE ownerid=$1) AND EXISTS(SELECT 1 FROM backuprepositoryleases WHERE ownerrunid=$1 AND attemptid=$2 AND cleanupconfirmed AND NOT coreworkactive AND NOT recoveryfenced)")
                 .bind(claim.run.id).bind(claim.attempt_id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if changed != 1 {
                 return Ok(false);
@@ -93,7 +93,7 @@ impl PostgresBackupPersistence {
     ) -> BoxFuture<'a, Result<bool, BackupError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let changed = sqlx::query("UPDATE backuprestoreruns SET status='Queued',startedat=NULL,nextattemptat=CURRENT_TIMESTAMP+INTERVAL '15 seconds',errorcode='HostBusy',errormessage='Waiting for an available execution host.' WHERE id=$1 AND attemptid=$2 AND status='Running' AND NOT EXISTS(SELECT 1 FROM dataexecutorreservations WHERE ownerid=$1)")
+            let changed = sqlx::query("UPDATE backuprestoreruns SET status='Queued',startedat=NULL,nextattemptat=CURRENT_TIMESTAMP+INTERVAL '15 seconds',errorcode='HostBusy',errormessage='Waiting for an available execution host.' WHERE id=$1 AND attemptid=$2 AND status='Running' AND NOT EXISTS(SELECT 1 FROM dataexecutorreservations WHERE ownerid=$1) AND EXISTS(SELECT 1 FROM backuprepositoryleases WHERE ownerrunid=$1 AND attemptid=$2 AND cleanupconfirmed AND NOT coreworkactive AND NOT recoveryfenced)")
                 .bind(claim.run.id).bind(claim.attempt_id).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             if changed != 1 {
                 return Ok(false);

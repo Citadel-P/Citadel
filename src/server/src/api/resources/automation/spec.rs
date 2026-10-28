@@ -18,8 +18,5 @@ pub enum AutomationExecutorSchema {
         #[serde(rename = "agentId")]
         agent_id: uuid::Uuid,
     },
-    Automatic {
-        #[serde(rename = "agentIds")]
-        agent_ids: Vec<uuid::Uuid>,
-    },
+    Automatic,
 }

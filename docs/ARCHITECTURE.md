@@ -255,6 +255,14 @@ storage. Build failure observations are optional and enter the durable alert que
 in the successful completion transaction. Shutdown may leave an unresolved claim
 for existing recovery; the in-memory result does not survive a Core crash.
 
+Build selection admits one undispatched preparation/probe per configured target at a time.
+After dispatch, canonical daemon capacity governs concurrent execution.
+A deferred target's cooldown also applies to its queued sibling projects, and
+untouched queue entries precede deferred retries. Other targets can use the
+remaining preparation permits while a connection probe is pending. Backup and
+restore claims scan at most 16 candidates per dispatch when source ownership
+blocks an earlier candidate.
+
 Agent build admission is shared across command contexts and replacement Edge
 sessions. A slot covers the build, its declared pushes and confirmed local
 cleanup. Proven pre-execution failures release slots after confirmed cleanup;
@@ -419,7 +427,10 @@ lease renewals stay concurrent with execution while their database requests are
 pending. Backup and restore results share the same bounded
 completion retry policy. Restic dependencies are reusable; ownership and mutable
 admission/cleanup state belong to an explicit operation context for each run.
-
+Each claim call scans at most 16 source-blocked candidates, so independent backup
+or restore work can start without another notification. Accepted repository and
+source lease TTLs are at least 90 seconds, with a 30-second heartbeat and bounded
+10-second renewal request.
 
 Data reservations and build reservations share one authenticated daemon authority.
 Agent data admission covers an item/restore/maintenance operation across helper
@@ -430,7 +441,12 @@ budget. Local Docker execution also records daemon/authority reservations; the
 Core process has one authority shared by its build and backup executors. A new
 Core authority cannot overwrite occupancy retained by an old process or Agent.
 Automation actions select Core (default), a specific Agent, or automatic placement
-within an explicit eligible Agent set. Core Deno slots and remote tracking slots
+among eligible Agents discovered using the run-as identity’s Execute permissions.
+Automatic placement uses the existing Automated Operations entitlement, checked
+when selecting it, starting a manual/test run, and before worker dispatch.
+Downgrade retains configuration and permits switching to fixed placement; cancellation
+and cleanup remain available. Discovery is bounded and rotates candidates between attempts; authorization is
+rechecked before dispatch. Core Deno slots and remote tracking slots
 are independent. Remote Deno processes share Agent heavy capacity with builds and
 backups; Core persists ownership before sending the script over signed Direct or
 authenticated Edge transport. Both require HTTPS for credential-bearing work.
@@ -450,8 +466,9 @@ queued-to-running transition, and workers observe it before starting a process.
 Queued runs survive restart; interrupted executions fail without being replayed.
 
 Before the first external operation, a busy/offline backup host or busy restore
-source returns the run to its original queue position with a 15-second eligibility
-delay. This releases tracking and business leases, preserves the resolved source
+source returns the run to the queue with a 15-second eligibility delay. Retried
+candidates sort by their next eligibility time so a full page of blocked work
+cannot monopolize later dispatches. This releases tracking and business leases, preserves the resolved source
 plan, and never defers a partially executed backup. After work starts, the parent
 retains storage ownership while its sequential items wait for their next host.
 
@@ -459,4 +476,29 @@ An Agent records helper names before submitting Docker create. Cancellation of
 that request is not a definitive create result: a later 404 alone cannot release
 its reservation. Confirmed helper identity/removal or a definitive create response
 is required. Same-authority reconciliation fences delayed commands. Restarted
-Agents and uncertain local helpers require manual operator review.
+Agents and Local helpers without sufficient identity or cleanup evidence require
+manual operator review.
+
+Backup storage recovery enumerates repository owners independently of host
+reservations. Admission and recovery serialize on the run and repository lease;
+recovery fences further dispatch. An explicit cleanup receipt survives removal
+of the final host reservation, until parent completion or recovery releases
+repository/source ownership. Missing reservation rows alone never authorize
+release. Core staging and direct Restic work mark the owner unsafe before they
+start and clear that marker only after owned work and staging cleanup finish.
+An interrupted Core process with unconfirmed direct work remains quarantined.
+Staging directories are not deleted solely because of their age.
+
+Local Docker data helpers have an operation-owned journal. Creation intent is
+persisted before Docker create; the immutable container ID is recorded before
+start. Recovery verifies the original daemon and operation label and removes
+only that helper ID. Delayed starts then fail against a removed ID, while fenced
+attempts cannot create another helper. An unacknowledged create with no observed
+container, unavailable Docker, or a changed daemon keeps ownership reserved.
+
+Failed builds release capacity only when a matching BuildKit history record
+confirms terminal execution and temporary files are cleaned. A successful CLI
+cleanup or nonzero exit alone is insufficient. Pushes consume Docker's structured
+response stream; complete terminal responses differ from truncated streams,
+timeouts and transport loss. Unsupported build-history inspection retains the
+reservation rather than guessing that execution stopped.

@@ -402,6 +402,7 @@ impl BackupExecutor for Runtime {
 impl BackupSourcePlanner for Runtime {
     fn cleanup_staging<'a>(
         &'a self,
+        _claim: &'a citadel_backups::BackupClaim,
         _: &'a BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), BackupError>> {
         Box::pin(async move {

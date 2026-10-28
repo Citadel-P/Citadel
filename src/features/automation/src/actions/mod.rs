@@ -5,4 +5,4 @@ mod policy;
 pub use commands::AutomationActionConfiguration;
 pub use model::AutomationAction;
 pub use patch::{UpdateAutomationActionInput, UpdateAutomationActionMetadata};
-pub use policy::changes_paid_trigger;
+pub use policy::changes_paid_configuration;

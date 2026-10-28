@@ -214,7 +214,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 424);
+        assert_eq!(operations(&full), 427);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -226,6 +226,29 @@ mod tests {
             assert_eq!(operation["x-citadel-principal"], "human");
         }
         assert_eq!(operations(&public), 317);
+        for (path, method, operation_id) in [
+            (
+                "/api/v1/buildRuns/{id}/recovery",
+                "get",
+                "getBuildRunRecovery",
+            ),
+            (
+                "/api/v1/buildRuns/{id}/recovery",
+                "post",
+                "resolveBuildRunCleanup",
+            ),
+            (
+                "/api/v1/automation/actions/{id}/runs/{runId}/recovery",
+                "post",
+                "resolveAutomationRunCleanup",
+            ),
+        ] {
+            assert!(public["paths"].get(path).is_none());
+            let operation = &full["paths"][path][method];
+            assert_eq!(operation["operationId"], operation_id);
+            assert_eq!(operation["security"], json!([{"Bearer": []}]));
+            assert_eq!(operation["x-citadel-principal"], "administrator");
+        }
         for doc in [&full, &public] {
             let refresh = &doc["paths"]["/api/v1/platforms/{platformId}/swarm/refresh"]["post"];
             assert_eq!(refresh["operationId"], "refreshSwarmInventory");

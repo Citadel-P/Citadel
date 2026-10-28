@@ -14,7 +14,7 @@ postgres=postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c
 cleanup() {
   result=$?
   trap - EXIT
-  for role in runner builder registry postgres worker daemon; do
+  for role in runner builder registry postgres worker scaling daemon; do
     if (( result != 0 )); then docker logs "$fixture-$role" 2>/dev/null || true; fi
     docker rm -fv "$fixture-$role" >/dev/null 2>&1 || true
   done
@@ -90,9 +90,13 @@ docker run -d --privileged --name "$fixture-worker" --hostname "$fixture-worker"
   --network "$fixture" --network-alias worker -e DOCKER_TLS_CERTDIR= "$dind" \
   --tls=false --host=tcp://0.0.0.0:2375 --host=unix:///var/run/docker.sock \
   --insecure-registry=registry:5000 >/dev/null
+docker run -d --privileged --name "$fixture-scaling" --hostname "$fixture-scaling" \
+  --network "$fixture" --network-alias scaling -e DOCKER_TLS_CERTDIR= "$dind" \
+  --tls=false --host=tcp://0.0.0.0:2375 --host=unix:///var/run/docker.sock >/dev/null
 for _ in {1..60}; do
   if docker exec "$fixture-daemon" docker info >/dev/null 2>&1 && \
     docker exec "$fixture-worker" docker info >/dev/null 2>&1 && \
+    docker exec "$fixture-scaling" docker info >/dev/null 2>&1 && \
     docker exec "$fixture-postgres" pg_isready -U citadel_test >/dev/null 2>&1; then break; fi
   sleep 1
 done
@@ -107,12 +111,16 @@ docker exec "$fixture-daemon" docker tag alpine:3.24 compatibility-base:local
 docker exec "$fixture-daemon" docker save compatibility-base:local | \
   docker exec -i "$fixture-worker" docker load >/dev/null
 
+docker exec "$fixture-daemon" docker save compatibility-base:local | \
+  docker exec -i "$fixture-scaling" docker load >/dev/null
+
 for binary in "${binaries[@]}"; do
   binary=$(realpath "$binary")
-  timeout --signal=TERM 10m docker run --name "$fixture-runner" --network "$fixture" --no-healthcheck \
+  timeout --signal=TERM 10m docker run --name "$fixture-runner" --network "$fixture" --network-alias runner --no-healthcheck \
     --mount "type=bind,src=$binary,dst=/app/compatibility-tests,readonly" \
     --tmpfs /app/data --env DOCKER_HOST=tcp://daemon:2375 \
     --env CITADEL_COMPAT_WORKER_HOST=tcp://worker:2375 \
+    --env CITADEL_SCALING_DOCKER_HOSTS=tcp://daemon:2375,tcp://worker:2375,tcp://scaling:2375 \
     --env CITADEL_AGENT_TEST_DATABASE_URL=postgres://citadel_test:fixture@postgres:5432/citadel_agent_test \
     --entrypoint /app/compatibility-tests "$image" --ignored --nocapture --test-threads=1
   docker rm -fv "$fixture-runner" >/dev/null

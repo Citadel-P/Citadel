@@ -44,7 +44,7 @@ fn configured_limits_reach_startup_and_generated_keys_survive_restarts() {
         ("CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS", "30"),
         ("CITADEL_BACKUPS_MAX_LOG_BYTES", "2048"),
         ("CITADEL_BACKUPS_ALLOWED_CORE_PATH_0", "/mnt/backup"),
-        ("CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS", "60"),
+        ("CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS", "90"),
         ("CITADEL_BUILDS_RUN_RETENTION_DAYS", "12"),
         ("CITADEL_MFA_MAX_FAILED_ATTEMPTS", "3"),
     ];
@@ -85,7 +85,7 @@ fn configured_limits_reach_startup_and_generated_keys_survive_restarts() {
         config["execution"]["backups"]["allowedCorePaths"],
         serde_json::json!(["/mnt/backup"])
     );
-    assert_eq!(config["execution"]["backups"]["repositoryLeaseSeconds"], 60);
+    assert_eq!(config["execution"]["backups"]["repositoryLeaseSeconds"], 90);
     assert_eq!(config["execution"]["buildRetentionDays"], 12);
     assert_eq!(config["mfaMaximumFailedAttempts"], 3);
     let jwt = std::fs::read_to_string(root.join("jwtsecret")).unwrap();

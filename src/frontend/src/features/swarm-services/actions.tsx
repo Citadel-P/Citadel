@@ -1,4 +1,4 @@
-import { DuplicateWorkloadAction } from '@/features/resource-copies/duplicate-actions';
+import { DuplicateWorkloadAction } from '@/components/custom/resource-copies/duplicate-actions';
 import { ResourceCopyKind } from '@/api/generated/api.types';
 import { Eye, Rocket, RefreshCw, Zap, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';

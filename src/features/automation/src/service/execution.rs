@@ -104,8 +104,9 @@ impl AutomationService {
         if let Err(error) = self.options.validate_execution(claim.run.timeout_seconds) {
             return AutomationRunResult::failed(None, error.to_string()).into();
         }
-        if matches!(claim.run.trigger.as_str(), "Schedule" | "Webhook")
-            && let Err(error) = self.ensure_paid_trigger().await
+        if (matches!(claim.run.trigger.as_str(), "Schedule" | "Webhook")
+            || matches!(claim.run.executor, AutomationExecutor::Automatic))
+            && let Err(error) = self.ensure_automated_operations().await
         {
             return AutomationRunResult::failed(None, error.to_string()).into();
         }

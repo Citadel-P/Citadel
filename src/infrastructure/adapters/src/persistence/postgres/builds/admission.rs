@@ -211,7 +211,7 @@ pub(super) async fn settle_reservation(
 ) -> Result<(), BuildError> {
     let confirmed: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM buildexecutorcleanupreceipts receipt JOIN buildexecutorreservations reservation USING(attemptid,runid,daemonid,authorityid,admissiongeneration) WHERE receipt.runid=$1 AND receipt.attemptid=$2)")
         .bind(claim.run.id).bind(claim.attempt_id).fetch_one(&mut **tx).await.map_err(storage)?;
-    let not_dispatched: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM buildexecutorreservations WHERE runid=$1 AND attemptid=$2 AND NOT dispatchstarted)")
+    let not_dispatched: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM buildexecutorreservations WHERE runid=$1 AND attemptid=$2 AND NOT dispatchstarted AND NOT EXISTS(SELECT 1 FROM buildruns WHERE id=$1 AND errorcode='build.cleanup'))")
         .bind(claim.run.id).bind(claim.attempt_id).fetch_one(&mut **tx).await.map_err(storage)?;
     if safe_to_release || confirmed || not_dispatched {
         sqlx::query("DELETE FROM buildexecutorreservations WHERE runid=$1 AND attemptid=$2")

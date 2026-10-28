@@ -229,6 +229,12 @@ impl ResticOperation<'_> {
         self.state
             .execution_started
             .store(true, std::sync::atomic::Ordering::Release);
+        *self
+            .state
+            .local_scope
+            .lock()
+            .map_err(|_| "Local backup ownership is unavailable.")? =
+            Some((operation.clone(), host.clone()));
         Ok(LocalDataScope {
             operation,
             host,
@@ -236,9 +242,19 @@ impl ResticOperation<'_> {
         })
     }
     pub(super) async fn finish_local(&self, scope: LocalDataScope) -> Result<(), String> {
-        if self.cleanup_is_uncertain() {
-            return Err("Local helper cleanup could not be verified. Host and storage capacity remain reserved.".into());
-        }
+        self.reconcile_local_helpers(&scope.operation, &scope.host, None)
+            .await
+            .inspect_err(|_| self.mark_cleanup_uncertain())?;
+        // Every recorded helper has been checked on the same daemon. This also
+        // resolves a cancelled CLI whose immutable helper ID was registered.
+        self.state
+            .cleanup_uncertain
+            .store(false, std::sync::atomic::Ordering::Release);
+        *self
+            .state
+            .local_scope
+            .lock()
+            .map_err(|_| "Local backup ownership is unavailable.")? = None;
         self.executor
             .admission
             .release(&scope.operation, &scope.host)

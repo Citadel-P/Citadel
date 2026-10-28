@@ -10,7 +10,7 @@ mod service;
 mod tasks;
 pub use actions::{
     AutomationAction, AutomationActionConfiguration, UpdateAutomationActionInput,
-    UpdateAutomationActionMetadata, changes_paid_trigger,
+    UpdateAutomationActionMetadata, changes_paid_configuration,
 };
 pub use error::AutomationError;
 pub use options::AutomationOptions;

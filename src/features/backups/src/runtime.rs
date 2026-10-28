@@ -52,6 +52,8 @@ pub struct BackupSourcePlan {
 }
 
 pub trait CitadelSystemBackupBuilder: Send + Sync {
+    /// Errors other than CleanupPending confirm owned processes have stopped and
+    /// staging was removed. An interrupted future supplies no cleanup evidence.
     fn build<'a>(
         &'a self,
         run_id: Uuid,
@@ -110,6 +112,7 @@ pub trait BackupExecutor: Send + Sync {
 pub trait BackupSourcePlanner: Send + Sync {
     fn cleanup_staging<'a>(
         &'a self,
+        claim: &'a BackupClaim,
         plan: &'a BackupSourcePlan,
     ) -> BoxFuture<'a, Result<(), BackupError>>;
     fn preview<'a>(

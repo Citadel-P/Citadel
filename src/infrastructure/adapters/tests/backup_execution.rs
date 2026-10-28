@@ -213,6 +213,8 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         assert!(created.latest_run.is_none());
         policies.push(created);
     }
+    admission::verify_queue_progress_and_owner_recovery(&pool, actor, platform, &repository_input)
+        .await;
     admission::verify(&pool, actor, platform, &repository_input).await;
     admission::verify_source_deferral(&pool, actor, platform, &repository_input).await;
     completion::verify(&pool, actor, platform, repository.id).await;
@@ -949,9 +951,8 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .unwrap();
 }
 
-// These activity fixtures never dispatch a helper. Assert that production
-// recovery retains ownership, then explicitly clear this fixture's hold before
-// exercising another outcome on the same repository.
+// These activity fixtures never dispatch a helper. Exercise production owner
+// recovery before another run on the same repository.
 async fn release_interrupted_fixture(pool: &sqlx::PgPool, claim: &citadel_backups::BackupClaim) {
     let retained: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM backuprepositoryleases WHERE ownerrunid=$1 AND attemptid=$2",
@@ -969,25 +970,19 @@ async fn release_interrupted_fixture(pool: &sqlx::PgPool, claim: &citadel_backup
             .await
             .unwrap();
     assert_eq!(external, 0);
-    sqlx::query("DELETE FROM backupsourceleases WHERE ownerrunid=$1 AND attemptid=$2")
-        .bind(claim.run.id)
-        .bind(claim.attempt_id)
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM backuprepositoryleases WHERE ownerrunid=$1 AND attemptid=$2")
-        .bind(claim.run.id)
-        .bind(claim.attempt_id)
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query(
-        "UPDATE backuppolicies SET controlstate='Idle',currentrunid=NULL WHERE currentrunid=$1",
-    )
-    .bind(claim.run.id)
-    .execute(pool)
-    .await
-    .unwrap();
+    use citadel_backups::BackupDataAdmission;
+    let admission=citadel_adapters::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission::new(pool.clone());
+    admission.pending_cleanup(None).await.unwrap();
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM backuprepositoryleases WHERE ownerrunid=$1")
+            .bind(claim.run.id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        remaining, 0,
+        "unstarted interrupted owner is released by production recovery"
+    );
 }
 
 async fn edge_failure_cleans_helper_on_the_exact_node(
@@ -1005,6 +1000,9 @@ async fn edge_failure_cleans_helper_on_the_exact_node(
     };
     use prost::Message;
     let mut claim = claim.clone();
+    // Protocol-only fixture uses a real maintenance lease, not a synthetic run.
+    claim.run.id = Uuid::now_v7();
+    claim.attempt_id = claim.run.id;
     claim.repository =
         executor_repository(pool, &claim.repository, claim.run.id, claim.attempt_id).await;
     let registry = EdgeRegistry::default();
@@ -1178,6 +1176,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                 triggered_by_actor_id: SYSTEM_ACTOR_ID,
             },
         };
+        claim.attempt_id = claim.run.id;
         let stored =
             executor_repository(pool, &backup.repository, claim.run.id, claim.attempt_id).await;
         claim.repository.id = stored.id;

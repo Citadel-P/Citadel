@@ -8,7 +8,7 @@ impl AutomationService {
     ) -> Result<(), AutomationError> {
         let action = self.store.get(id).await?;
         self.options.validate_execution(action.timeout_seconds)?;
-        self.ensure_paid_trigger().await?;
+        self.ensure_automated_operations().await?;
         self.store
             .enqueue_webhook(id, expected_webhook, args)
             .await?;
@@ -60,7 +60,7 @@ impl AutomationService {
         if !self.options.enabled {
             return Ok(0);
         }
-        match self.ensure_paid_trigger().await {
+        match self.ensure_automated_operations().await {
             Ok(()) => {}
             Err(AutomationError::LicenseRequired) => return Ok(0),
             Err(error) => return Err(error),

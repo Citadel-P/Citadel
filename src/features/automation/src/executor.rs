@@ -14,29 +14,12 @@ pub enum AutomationExecutor {
         #[serde(rename = "agentId")]
         agent_id: Uuid,
     },
-    Automatic {
-        #[serde(rename = "agentIds")]
-        agent_ids: Vec<Uuid>,
-    },
+    Automatic,
 }
 impl AutomationExecutor {
-    pub fn agent_ids(&self) -> &[Uuid] {
-        match self {
-            Self::Core => &[],
-            Self::Agent { agent_id } => std::slice::from_ref(agent_id),
-            Self::Automatic { agent_ids } => agent_ids,
-        }
-    }
     pub fn validate(&self) -> Result<(), AutomationError> {
-        let ids = self.agent_ids();
-        if ids.len() > 64
-            || ids.iter().any(Uuid::is_nil)
-            || ids.iter().collect::<std::collections::HashSet<_>>().len() != ids.len()
-            || matches!(self, Self::Automatic { .. }) && ids.is_empty()
-        {
-            return Err(AutomationError::Validation(
-                "Select between 1 and 64 distinct eligible agents.".into(),
-            ));
+        if matches!(self, Self::Agent { agent_id } if agent_id.is_nil()) {
+            return Err(AutomationError::Validation("Select an agent.".into()));
         }
         Ok(())
     }
@@ -73,5 +56,33 @@ pub trait RemoteAutomationExecutor: Send + Sync {
 impl From<AutomationRunResult> for RemoteAutomationOutcome {
     fn from(result: AutomationRunResult) -> Self {
         Self::Completed(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automatic_needs_no_agent_list_and_normalizes_saved_configuration() {
+        for value in [
+            serde_json::json!({"kind": "Automatic"}),
+            serde_json::json!({"kind": "Automatic", "agentIds": [Uuid::now_v7()]}),
+        ] {
+            let executor: AutomationExecutor = serde_json::from_value(value).unwrap();
+            assert_eq!(executor, AutomationExecutor::Automatic);
+            executor.validate().unwrap();
+            assert_eq!(
+                serde_json::to_value(executor).unwrap(),
+                serde_json::json!({"kind":"Automatic"})
+            );
+        }
+        assert!(
+            AutomationExecutor::Agent {
+                agent_id: Uuid::nil()
+            }
+            .validate()
+            .is_err()
+        );
     }
 }

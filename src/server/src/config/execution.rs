@@ -200,10 +200,10 @@ impl ExecutionConfig {
             repository_lease_seconds: bounded(
                 "CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS",
                 300,
-                30,
+                90,
                 604800,
             )? as i32,
-            source_lease_seconds: bounded("CITADEL_BACKUPS_SOURCE_LEASE_SECONDS", 300, 30, 604800)?
+            source_lease_seconds: bounded("CITADEL_BACKUPS_SOURCE_LEASE_SECONDS", 300, 90, 604800)?
                 as i32,
         };
         Ok(Self {
@@ -335,6 +335,27 @@ mod tests {
             },
             8000,
         )
+    }
+
+    #[test]
+    fn backup_lease_minimum_has_heartbeat_and_timeout_margin() {
+        for key in [
+            "CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS",
+            "CITADEL_BACKUPS_SOURCE_LEASE_SECONDS",
+        ] {
+            for value in ["30", "60", "89"] {
+                assert!(
+                    matches!(parse(&[(key, value)]), Err(ConfigError::Invalid { name, .. }) if name == key)
+                );
+            }
+            let config = parse(&[(key, "90")]).unwrap();
+            let seconds = if key.contains("REPOSITORY") {
+                config.backups.repository_lease_seconds
+            } else {
+                config.backups.source_lease_seconds
+            };
+            assert_eq!(seconds, 90);
+        }
     }
 
     #[test]

@@ -67,6 +67,35 @@ mod tests {
     use std::{cell::Cell, future::pending, time::Duration};
 
     #[tokio::test(start_paused = true)]
+    async fn minimum_ttl_survives_delayed_heartbeats_for_long_running_work() {
+        let cancellation = CancellationToken::new();
+        let expires = Cell::new(tokio::time::Instant::now() + Duration::from_secs(90));
+        let calls = Cell::new(0);
+        let result = with_renewal(
+            &cancellation,
+            async {
+                tokio::time::sleep(Duration::from_secs(600)).await;
+                42
+            },
+            || async {
+                // Both lease types have the same enforced minimum; model the shorter one.
+                tokio::time::sleep(Duration::from_secs(9)).await;
+                let now = tokio::time::Instant::now();
+                if now >= expires.get() {
+                    return Ok(false);
+                }
+                calls.set(calls.get() + 1);
+                expires.set(now + Duration::from_secs(90));
+                Ok(true)
+            },
+        )
+        .await;
+        assert_eq!(result, (42, true));
+        assert!(calls.get() > 10);
+        assert!(!cancellation.is_cancelled());
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn stalled_renewal_does_not_stop_execution_or_completion() {
         let calls = Cell::new(0);
         let cancellation = CancellationToken::new();

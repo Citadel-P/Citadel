@@ -716,6 +716,7 @@ impl LocalDockerBuildExecutor {
             )
             .await?;
         drop(preparation); // Git workspace is materialized; local execution has its own budget.
+        let mut dispatched = false;
         let outcome = async {
             let credentials = match claim.run.registry_id {
                 Some(id) => self
@@ -725,10 +726,23 @@ impl LocalDockerBuildExecutor {
                     .map_err(|error| BuildFailure::Validation(error.to_string()))?,
                 None => None,
             };
+            let context = safe_child(&workspace, &claim.run.context_path).await?;
+            let dockerfile = safe_child(&workspace, &claim.run.dockerfile_path).await?;
+            let references = image_references(claim, &commit)?;
+            let mut secrets = Vec::new();
+            for secret in &claim.project.build_secrets {
+                let value = self
+                    .secrets
+                    .resolve(secret.secret_id, claim.project.id)
+                    .await
+                    .map_err(|error| BuildFailure::Validation(error.to_string()))?;
+                secrets.push((secret.id.clone(), value));
+            }
             self.admission
                 .dispatch_executor(claim, &commit)
                 .await
                 .map_err(|error| BuildFailure::Io(error.to_string()))?;
+            dispatched = true;
             let mut session = DockerBuildSession::open(
                 self.docker.clone(),
                 self.endpoint.clone(),
@@ -741,18 +755,6 @@ impl LocalDockerBuildExecutor {
             )
             .await?;
             let execution = async {
-                let context = safe_child(&workspace, &claim.run.context_path).await?;
-                let dockerfile = safe_child(&workspace, &claim.run.dockerfile_path).await?;
-                let references = image_references(claim, &commit)?;
-                let mut secrets = Vec::new();
-                for secret in &claim.project.build_secrets {
-                    let value = self
-                        .secrets
-                        .resolve(secret.secret_id, claim.project.id)
-                        .await
-                        .map_err(|error| BuildFailure::Validation(error.to_string()))?;
-                    secrets.push((secret.id.clone(), value));
-                }
                 session
                     .build(
                         DockerBuildOptions {
@@ -790,7 +792,14 @@ impl LocalDockerBuildExecutor {
             session.cleanup()?;
             execution
         }
-        .await;
+        .await
+        .map_err(|error: BuildFailure| {
+            if dispatched {
+                error
+            } else {
+                error.not_started()
+            }
+        });
         match tokio::fs::remove_dir_all(&workspace).await {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -799,7 +808,7 @@ impl LocalDockerBuildExecutor {
         if outcome.is_ok()
             || outcome
                 .as_ref()
-                .is_err_and(BuildFailure::is_known_not_started)
+                .is_err_and(BuildFailure::execution_finished)
         {
             self.admission
                 .record_executor_cleanup(claim, &executor)

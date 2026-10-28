@@ -1625,7 +1625,6 @@ export type AutomationExecutorSchema =
       kind: "Agent";
     }
   | {
-      agentIds: string[];
       kind: "Automatic";
     };
 

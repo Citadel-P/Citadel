@@ -141,10 +141,33 @@ impl RemoteAutomationExecutor for AgentAutomationExecutor {
                 .map_err(|_| {
                     AutomationError::Validation("Run-as authorization is no longer valid.".into())
                 })?;
-            let ids = claim.run.executor.agent_ids();
+            let automatic = matches!(
+                claim.run.executor,
+                citadel_automation::AutomationExecutor::Automatic
+            );
+            let ids = match &claim.run.executor {
+                citadel_automation::AutomationExecutor::Agent { agent_id } => vec![*agent_id],
+                citadel_automation::AutomationExecutor::Automatic => {
+                    executors::automatic_candidates(
+                        &self.pool,
+                        principal.actor_id,
+                        principal.is_administrator(),
+                        claim
+                            .run
+                            .attempt_id
+                            .ok_or_else(|| AutomationError::Conflict("Missing attempt.".into()))?,
+                    )
+                    .await?
+                }
+                citadel_automation::AutomationExecutor::Core => {
+                    return Err(AutomationError::Validation(
+                        "Core actions must use the local executor.".into(),
+                    ));
+                }
+            };
             if ids.is_empty() {
                 return Err(AutomationError::Validation(
-                    "Select eligible automation Agents.".into(),
+                    "No eligible automation agents are available to the run-as identity.".into(),
                 ));
             }
             let offset = usize::from(claim.run.id.as_bytes()[15]) % ids.len();
@@ -155,8 +178,11 @@ impl RemoteAutomationExecutor for AgentAutomationExecutor {
                     break;
                 }
                 let id = ids[(offset + index) % ids.len()];
-                let Some(target) = executors::target(&self.pool, id).await? else {
-                    continue;
+                let target = match executors::target(&self.pool, id).await {
+                    Ok(Some(target)) => target,
+                    Ok(None) => continue,
+                    Err(AutomationError::Validation(_)) if automatic => continue,
+                    Err(error) => return Err(error),
                 };
                 let allowed = match target.kind {
                     ResourceType::Platform => self.identity.require_resource::<citadel_automation::permissions::ExecuteAutomationAgent>(&principal, id).await,
@@ -170,8 +196,13 @@ impl RemoteAutomationExecutor for AgentAutomationExecutor {
                 if !target.available {
                     continue;
                 }
-                let Some(client) = self.connect(&target, cancellation).await? else {
-                    continue;
+                let client = match self.connect(&target, cancellation).await {
+                    Ok(Some(client)) => client,
+                    Ok(None) => continue,
+                    // An incompatible candidate must not prevent Automatic from
+                    // trying another agent. Specific selections retain the error.
+                    Err(AutomationError::Validation(_)) if automatic => continue,
+                    Err(error) => return Err(error),
                 };
                 let host = match tokio::time::timeout(
                     Duration::from_secs(10),
@@ -310,7 +341,7 @@ impl RemoteAutomationExecutor for AgentAutomationExecutor {
             }
             if !authorized {
                 return Err(AutomationError::Validation(
-                    "The run-as identity cannot execute on any selected Agent.".into(),
+                    "The run-as identity cannot execute on an eligible agent.".into(),
                 ));
             }
             Ok(RemoteAutomationOutcome::Deferred)

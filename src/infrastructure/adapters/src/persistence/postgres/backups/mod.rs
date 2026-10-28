@@ -3,6 +3,7 @@ mod repository;
 mod rows;
 use rows::*;
 pub mod data_admission;
+mod data_helpers;
 mod leases;
 mod recovery;
 pub(crate) use recovery::{recover_stale, recover_stale_with_mode};

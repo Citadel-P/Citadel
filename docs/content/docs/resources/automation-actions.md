@@ -101,7 +101,7 @@ Set:
 - `Enabled`: whether manual and scheduled runs are allowed
 - `Code`: TypeScript code executed by Deno
 - `Default Args`: JSON object available as `args`
-- `Run on`: Core, a specific Agent, or Automatic among selected eligible Agents
+- `Run on`: Core, a specific Agent, or Automatic among eligible Agents
 - `Run As`: enabled User or Service Account whose current Citadel permissions
   are used for runs
 - `Timeout`: maximum run duration in seconds
@@ -478,10 +478,16 @@ available.
 
 ## Execution host
 
-**Run on** selects Core (the default), a specific Agent, or Automatic with a list
-of eligible Agents. Automatic chooses an available authorized Agent from that
-list. Busy or offline hosts leave work queued; they do not send it to an unrelated
-host. The run-as identity needs Execute permission on the chosen Platform or Agent
+**Run on** selects Core (the default), a specific Agent, or Automatic.
+Automatic requires Team’s **Automated Operations** capability. Core and a specific
+Agent remain available in Community. After license expiry, saved Automatic
+configuration remains editable, but new runs cannot start; choose Core or a
+specific Agent to continue. Already running actions may finish or be cancelled.
+
+Automatic discovers eligible Agents and chooses one with available capacity;
+there is no agent list to configure. A specific Agent selection waits for that
+Agent, while Automatic can choose another eligible Agent. Busy or offline hosts
+leave work queued. Automatic never falls back to Core. The run-as identity needs Execute permission on the chosen Platform or Agent
 pool, as well as permissions for each API operation the script performs.
 
 Agents call Core's public HTTPS API. For example, an action executing on Agent B

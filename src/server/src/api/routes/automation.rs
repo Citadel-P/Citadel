@@ -286,11 +286,11 @@ async fn create(
             .await,
         &headers,
     )?;
-    if citadel_automation::changes_paid_trigger(None, &input) {
+    if citadel_automation::changes_paid_configuration(None, &input) {
         api_result(
             state
                 .automation
-                .ensure_paid_trigger()
+                .ensure_automated_operations()
                 .await
                 .map_err(map_error),
             &headers,
@@ -490,11 +490,11 @@ async fn update_action(
             .await,
         &headers,
     )?;
-    if citadel_automation::changes_paid_trigger(Some(&current), &input) {
+    if citadel_automation::changes_paid_configuration(Some(&current), &input) {
         api_result(
             state
                 .automation
-                .ensure_paid_trigger()
+                .ensure_automated_operations()
                 .await
                 .map_err(map_error),
             &headers,
@@ -666,6 +666,7 @@ async fn enqueue(
         Ok(receiver) => receiver,
         Err(error) => {
             let code = match error {
+                AutomationError::LicenseRequired => 403,
                 AutomationError::Validation(_) => 400,
                 AutomationError::NotFound => 404,
                 AutomationError::Conflict(_) => 409,

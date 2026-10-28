@@ -12,7 +12,13 @@ bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent
 
 The smoke test removes its disposable containers and build image. The compatibility,
 live Docker and Edge intake suites require the pinned Rust toolchain and share a private registry, database
-and two privileged Docker-in-Docker daemons; it removes only its own fixtures.
+and three privileged Docker-in-Docker daemons; it removes only its own fixtures.
+The compatibility suite includes six real builds across three Agents (Direct and
+Edge), two preparation permits, and 12 MiB contexts. An HTTP barrier proves all
+six Docker RUN steps overlap. It checks canonical daemon occupancy through
+platform aliases, bounded logs, and refusal of data and remote automation work
+while the shared heavy-work budget is full. This requires an Agent image built
+from the current checkout; mock-executor tests do not substitute for this run.
 The acceptance test uses the complete Core and Agent images and calls Core's HTTP
 API for setup, Direct/Edge registration, stacks, inventory, reconnect, Core restart
 and revocation. It also exercises Core's three-node Swarm installer and worker
@@ -46,6 +52,23 @@ checkout before running `test-agent-compatibility.sh`. Use a separate directory
 for each architecture and pinned builder, and do not share it between concurrent
 runs. The script retains this explicitly supplied directory while removing its
 temporary fixtures. Without this variable, compilation remains disposable.
+
+Execution recovery regressions use a separate disposable PostgreSQL database:
+
+```bash
+# Set CITADEL_EXECUTION_DATABASE_URL to a new disposable database first.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test build_execution --test backup_execution -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib local_restart_reconciles_exact_helpers_and_fences_late_starts -- --ignored --test-threads=1
+# Explicit opt-in to a disposable Docker endpoint with postgres:17-alpine loaded.
+CITADEL_TEST_DOCKER_ENDPOINT=unix:///var/run/docker.sock cargo test --locked -p citadel-docker --test local_runtime -- --include-ignored
+```
+
+The Local helper test creates only uniquely named fixture helpers and removes
+those helpers afterward. It checks interrupted ownership before admission and
+after cleanup, same-daemon reconciliation, delayed dispatch fencing, unavailable
+Docker, and unrelated helper preservation. Ambiguous creation, unsupported build
+history, and interrupted Core staging/direct Restic work retain ownership rather
+than authorizing replay or lease takeover.
 
 Run these commands from the repository root in PowerShell.
 

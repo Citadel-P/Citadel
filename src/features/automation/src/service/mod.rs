@@ -232,7 +232,7 @@ impl AutomationService {
 }
 
 impl AutomationService {
-    pub async fn ensure_paid_trigger(&self) -> Result<(), AutomationError> {
+    pub async fn ensure_automated_operations(&self) -> Result<(), AutomationError> {
         if let Some(entitlements) = &self.entitlements
             && entitlements.automated_operations().await?
         {

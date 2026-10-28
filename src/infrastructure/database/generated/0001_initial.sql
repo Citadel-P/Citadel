@@ -2467,6 +2467,11 @@ ALTER TABLE backupruns ADD COLUMN sourceplan jsonb;
 ALTER TABLE backupruns ADD COLUMN nextattemptat timestamp with time zone;
 ALTER TABLE backuprestoreruns ADD COLUMN attemptid uuid;
 ALTER TABLE backuprepositoryleases ADD COLUMN attemptid uuid;
+-- Explicit cleanup handoff; absence of executor rows is never cleanup evidence.
+ALTER TABLE backuprepositoryleases ADD COLUMN cleanupconfirmed boolean NOT NULL DEFAULT true;
+ALTER TABLE backuprepositoryleases ADD COLUMN recoveryfenced boolean NOT NULL DEFAULT false;
+ALTER TABLE backuprepositoryleases ADD COLUMN recoverycheckedat timestamp with time zone;
+ALTER TABLE backuprepositoryleases ADD COLUMN coreworkactive boolean NOT NULL DEFAULT false;
 ALTER TABLE backupsourceleases ADD COLUMN attemptid uuid;
 CREATE INDEX ix_backupruns_dispatch ON backupruns(nextattemptat,queuedat,id) WHERE status='Queued';
 
@@ -2512,3 +2517,13 @@ CREATE TABLE automationexecutorreservations (
     lastcheckedat timestamptz
 );
 CREATE INDEX ix_automationexecutorreservations_daemon ON automationexecutorreservations(daemonid);
+
+-- Exact helper identities survive Core restarts; creating a helper does not
+-- authorize starting it until its immutable Docker ID is durably registered.
+CREATE TABLE backupdatahelpers (
+    operationid uuid NOT NULL REFERENCES dataexecutorreservations(operationid) ON DELETE CASCADE,
+    name text NOT NULL,
+    containerid text,
+    cleaned boolean NOT NULL DEFAULT false,
+    PRIMARY KEY(operationid,name)
+);

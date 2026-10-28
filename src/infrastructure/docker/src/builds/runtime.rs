@@ -1,4 +1,4 @@
-//! Docker CLI execution without Git, database, or resource routing dependencies.
+//! Docker build and push execution without Git, database, or resource routing dependencies.
 use super::output;
 use crate::client::DockerEndpoint;
 use citadel_builds::{BuildArgSpec, BuildLogSink, BuildRegistryCredentials};
@@ -20,6 +20,9 @@ pub enum BuildRuntimeError {
     Io(String),
     #[error("{0}")]
     Command(String),
+    /// Daemon terminal evidence was observed; temporary files still require cleanup.
+    #[error(transparent)]
+    Finished(Box<BuildRuntimeError>),
     #[error(transparent)]
     Process(ProcessError),
     /// The build/push subprocess never started. Temporary files still require cleanup.
@@ -29,6 +32,10 @@ pub enum BuildRuntimeError {
     Cleanup,
 }
 impl BuildRuntimeError {
+    pub fn execution_finished(&self) -> bool {
+        matches!(self, Self::NotStarted(_) | Self::Finished(_))
+    }
+
     pub fn is_known_not_started(&self) -> bool {
         matches!(self, Self::NotStarted(_))
     }
@@ -36,21 +43,21 @@ impl BuildRuntimeError {
     pub fn not_started(self) -> Self {
         match self {
             // Missing cleanup evidence always takes precedence over non-execution.
-            Self::Cleanup | Self::NotStarted(_) => self,
+            Self::Cleanup | Self::NotStarted(_) | Self::Finished(_) => self,
             error => Self::NotStarted(Box::new(error)),
         }
     }
 
     pub fn cause(&self) -> &Self {
         match self {
-            Self::NotStarted(error) => error.cause(),
+            Self::NotStarted(error) | Self::Finished(error) => error.cause(),
             error => error,
         }
     }
 
     pub fn code(&self) -> &'static str {
         match self {
-            Self::NotStarted(error) => error.code(),
+            Self::NotStarted(error) | Self::Finished(error) => error.code(),
             Self::Cleanup => "build.cleanup",
             Self::Validation(_) => "build.validation",
             Self::Io(_) => "build.source",
@@ -86,6 +93,8 @@ pub struct DockerBuildSession {
     timeout: Duration,
     maximum_log_bytes: usize,
     password: Option<Zeroizing<String>>,
+    registry_auth: Option<Zeroizing<String>>,
+    build_name: String,
 }
 
 impl DockerBuildSession {
@@ -124,6 +133,8 @@ impl DockerBuildSession {
                 timeout,
                 maximum_log_bytes,
                 password: registry.map(|(_, credentials)| credentials.password.clone()),
+                registry_auth: registry.map(|(host, credentials)| encode_registry_auth(serde_json::json!({"username": credentials.username, "password": credentials.password.as_str(), "serveraddress": host}))),
+                build_name: format!("citadel-{}", uuid::Uuid::now_v7()),
             };
             let authentication = async {
                 if let Some((host, credentials)) = registry {
@@ -200,6 +211,9 @@ impl DockerBuildSession {
             .map_err(|error| BuildRuntimeError::Io(error.to_string()))?;
         file.write_all(&bytes)
             .map_err(|error| BuildRuntimeError::Io(error.to_string()))?;
+        self.registry_auth = Some(encode_registry_auth(
+            serde_json::json!({"identitytoken": token.as_str(), "serveraddress": host}),
+        ));
         self.password = Some(token);
         Ok(())
     }
@@ -293,6 +307,12 @@ impl DockerBuildSession {
                 args.extend(["--secret".into(), format!("id={id},env={name}").into()]);
                 environment.push((name, value.as_str()));
             }
+            // An unguessable, reserved name lets us match authoritative BuildKit
+            // history after a CLI failure without interpreting its error text.
+            args.extend([
+                "--build-arg".into(),
+                format!("BUILDKIT_BUILD_NAME={}", self.build_name).into(),
+            ]);
             args.push(context);
             let mut request = self.request(args)?.env("DOCKER_BUILDKIT", "1");
             if let Some(stdin) = stdin {
@@ -309,7 +329,12 @@ impl DockerBuildSession {
             started = true;
             let result = output::run(request, cancellation, progress, &secrets).await?;
             if !result.succeeded() {
-                return Err(streamed_command_failure("build", result.exit_code));
+                let error = streamed_command_failure("build", result.exit_code);
+                return Err(if self.build_finished().await {
+                    BuildRuntimeError::Finished(Box::new(error))
+                } else {
+                    error
+                });
             }
             Ok(())
         }
@@ -322,42 +347,218 @@ impl DockerBuildSession {
             }
         })
     }
+    async fn build_finished(&self) -> bool {
+        // Unsupported history, truncation, a missing record or a failed probe is
+        // not cleanup evidence. Each probe has bounded output and wall time.
+        let probe = async {
+            let request = self
+                .request(vec![
+                    "buildx".into(),
+                    "history".into(),
+                    "ls".into(),
+                    "--no-trunc".into(),
+                    "--format".into(),
+                    // Emit only this operation, so unrelated retained history
+                    // cannot exhaust the bounded probe output.
+                    format!(
+                        "{{{{if eq .Name \"{}\"}}}}{{{{json .}}}}{{{{end}}}}",
+                        self.build_name
+                    )
+                    .into(),
+                ])
+                .ok()?
+                .limits(limits(Duration::from_secs(5), 64 * 1024));
+            let output = citadel_processes::run(request, &CancellationToken::new())
+                .await
+                .ok()?;
+            if !output.succeeded() || output.stdout_truncated {
+                return None;
+            }
+            let mut matched = None;
+            for (index, line) in output
+                .stdout
+                .split(|b| *b == b'\n')
+                .filter(|line| !line.is_empty())
+                .enumerate()
+            {
+                if index >= 128 {
+                    return None;
+                }
+                let row: serde_json::Value = serde_json::from_slice(line).ok()?;
+                if row
+                    .get("Name")
+                    .or_else(|| row.get("name"))
+                    .and_then(|v| v.as_str())
+                    == Some(&self.build_name)
+                {
+                    if matched.is_some() {
+                        return None;
+                    }
+                    matched = row
+                        .get("Ref")
+                        .or_else(|| row.get("ref"))
+                        .and_then(|v| v.as_str())
+                        .map(str::to_owned);
+                }
+            }
+            let full_reference = matched?;
+            let reference = full_reference.rsplit('/').next()?;
+            if reference.is_empty() || reference.starts_with('-') || reference.len() > 512 {
+                return None;
+            }
+            let request = self
+                .request(vec![
+                    "buildx".into(),
+                    "history".into(),
+                    "inspect".into(),
+                    "--format".into(),
+                    "json".into(),
+                    reference.into(),
+                ])
+                .ok()?
+                .limits(limits(Duration::from_secs(5), 64 * 1024));
+            let output = citadel_processes::run(request, &CancellationToken::new())
+                .await
+                .ok()?;
+            if !output.succeeded() || output.stdout_truncated {
+                return None;
+            }
+            let record: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+            (record["Name"].as_str() == Some(self.build_name.as_str())
+                && record["CompletedAt"]
+                    .as_str()
+                    .is_some_and(|v| !v.is_empty())
+                && matches!(
+                    record["Status"].as_str(),
+                    Some("completed" | "failed" | "canceled")
+                ))
+            .then_some(())
+        };
+        matches!(
+            tokio::time::timeout(Duration::from_secs(11), probe).await,
+            Ok(Some(()))
+        )
+    }
+
     pub async fn push(
         &self,
         reference: &str,
         progress: &dyn BuildLogSink,
         cancellation: &CancellationToken,
     ) -> Result<Option<String>, BuildRuntimeError> {
-        let mut started = false;
-        let result = async {
-            if reference.trim().is_empty() || reference.starts_with('-') {
-                return Err(BuildRuntimeError::Validation(
-                    "Invalid image reference.".into(),
-                ));
-            }
-            let secrets: Vec<_> = self
-                .password
-                .as_ref()
-                .map(|value| value.as_str())
-                .into_iter()
-                .collect();
-            let request = self.request(vec!["push".into(), reference.into()])?;
-            started = true;
-            let result = output::run(request, cancellation, progress, &secrets).await?;
-            if !result.succeeded() {
-                return Err(streamed_command_failure("push", result.exit_code));
-            }
-            Ok(find_digest(&logs(&result.stdout, &result.stderr)))
+        use futures_util::StreamExt;
+        if reference.trim().is_empty() || reference.starts_with('-') {
+            return Err(
+                BuildRuntimeError::Validation("Invalid image reference.".into()).not_started(),
+            );
         }
-        .await;
-        result.map_err(|error| {
-            if !started || matches!(error, BuildRuntimeError::Process(ProcessError::Spawn(_))) {
-                error.not_started()
-            } else {
-                error
+        let client = crate::client::DockerClient::with_endpoint(
+            self.endpoint.clone(),
+            self.timeout,
+            "/host",
+        )
+        .map_err(|error| BuildRuntimeError::Validation(error.to_string()).not_started())?;
+        let execution = async {
+            let mut stream = client
+                .push_image(reference, self.registry_auth.as_deref().map(|v| v.as_str()))
+                .await
+                .map_err(|error| BuildRuntimeError::Command(error.to_string()))?;
+            let mut failure = None;
+            let mut digest = None;
+            let mut remaining_log_bytes = self.maximum_log_bytes;
+            while let Some(message) = stream.next().await {
+                let message =
+                    message.map_err(|error| BuildRuntimeError::Command(error.to_string()))?;
+                if let Some(error) = message.error_detail.map(|v| v.message).or(message.error) {
+                    failure = Some(redact_values(
+                        &error,
+                        &self
+                            .password
+                            .as_ref()
+                            .map(|p| p.as_str())
+                            .into_iter()
+                            .collect::<Vec<_>>(),
+                    ));
+                }
+                if let Some(value) = message
+                    .aux
+                    .and_then(|v| v.get("Digest").and_then(|d| d.as_str()).map(str::to_owned))
+                    && value.len() == 71
+                    && value.starts_with("sha256:")
+                    && value[7..].bytes().all(|b| b.is_ascii_hexdigit())
+                {
+                    digest = Some(value);
+                }
+                // Docker's containerd image store sends the terminal digest in
+                // the status field; the classic store can send an aux document.
+                // Require the exact requested tag and a complete HTTP stream.
+                if digest.is_none() {
+                    digest = message
+                        .status
+                        .as_deref()
+                        .and_then(|status| push_status_digest(reference, status));
+                }
+                if let Some(status) = message.status
+                    && remaining_log_bytes > 0
+                {
+                    let mut message = redact_values(
+                        &format!("{status}\n"),
+                        &self
+                            .password
+                            .as_ref()
+                            .map(|p| p.as_str())
+                            .into_iter()
+                            .collect::<Vec<_>>(),
+                    );
+                    message.truncate(message.floor_char_boundary(remaining_log_bytes));
+                    remaining_log_bytes -= message.len();
+                    progress.append("stdout", &message).await.map_err(|_| {
+                        BuildRuntimeError::Validation("Build log persistence failed.".into())
+                    })?;
+                }
             }
-        })
+            // A complete daemon error stream is terminal evidence. Transport
+            // loss or EOF without an error/digest leaves execution uncertain.
+            if let Some(mut error) = failure {
+                if remaining_log_bytes > 0 {
+                    error.truncate(error.floor_char_boundary(remaining_log_bytes - 1));
+                    progress
+                        .append("stderr", &format!("{error}\n"))
+                        .await
+                        .map_err(|_| {
+                            BuildRuntimeError::Validation("Build log persistence failed.".into())
+                        })?;
+                }
+                return Err(BuildRuntimeError::Finished(Box::new(
+                    BuildRuntimeError::Command(
+                        "Docker push failed. See the build output for details.".into(),
+                    ),
+                )));
+            }
+            digest.map(Some).ok_or_else(|| {
+                BuildRuntimeError::Command("Docker push ended without terminal evidence.".into())
+            })
+        };
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Err(BuildRuntimeError::Process(ProcessError::Cancelled)),
+            result = tokio::time::timeout(self.timeout, execution) => result.unwrap_or(Err(BuildRuntimeError::Process(ProcessError::Timeout(self.timeout)))),
+        }
     }
+}
+
+fn push_status_digest(reference: &str, status: &str) -> Option<String> {
+    let tag = reference
+        .rsplit_once(':')
+        .filter(|(_, tag)| !tag.contains('/'))
+        .map_or("latest", |(_, tag)| tag);
+    let summary = status.strip_prefix(&format!("{tag}: digest: "))?;
+    let (digest, size) = summary.split_once(" size: ")?;
+    (digest.len() == 71
+        && digest.starts_with("sha256:")
+        && digest[7..].bytes().all(|b| b.is_ascii_hexdigit())
+        && size.parse::<u64>().is_ok())
+    .then(|| digest.to_owned())
 }
 
 fn streamed_command_failure(operation: &str, exit_code: Option<i32>) -> BuildRuntimeError {
@@ -464,4 +665,10 @@ pub fn redact_values(value: &str, secrets: &[&str]) -> String {
         redacted = redacted.replace(secret, "[redacted]");
     }
     redact(&redacted)
+}
+
+fn encode_registry_auth(value: serde_json::Value) -> Zeroizing<String> {
+    use base64::Engine;
+    let bytes = Zeroizing::new(serde_json::to_vec(&value).expect("registry credentials serialize"));
+    Zeroizing::new(base64::engine::general_purpose::URL_SAFE.encode(bytes.as_slice()))
 }

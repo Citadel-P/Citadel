@@ -409,10 +409,18 @@ async fn command_contexts_share_capacity_without_sharing_cancellation() {
     let permits = first.mutations.acquire_many(8).await.unwrap();
     first_stop.cancel();
     assert!(!replacement.shutdown.is_cancelled());
-    let operation = replacement.start(Request::new(ContainerIds {
-        ids: vec!["c0".into()],
-    }));
-    tokio::pin!(operation);
+    // Keep polling the command while probing health: pausing it during Docker
+    // API negotiation can otherwise hold the shared negotiation lock forever.
+    let mut operation = tokio::spawn({
+        let replacement = replacement.clone();
+        async move {
+            replacement
+                .start(Request::new(ContainerIds {
+                    ids: vec!["c0".into()],
+                }))
+                .await
+        }
+    });
     assert!(
         tokio::time::timeout(Duration::from_millis(10), &mut operation)
             .await
@@ -421,7 +429,11 @@ async fn command_contexts_share_capacity_without_sharing_cancellation() {
     replacement.check_health(Request::new(())).await.unwrap();
     assert!(!calls.lock().unwrap().iter().any(|p| p.contains("/start")));
     drop(permits);
-    operation.await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), operation)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
     runtime.shutdown.cancel();
     server.await.unwrap();
 }

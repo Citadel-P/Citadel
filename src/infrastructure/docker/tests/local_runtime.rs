@@ -61,10 +61,43 @@ fn endpoint() -> DockerEndpoint {
     "tcp://fixture-docker:2375".parse().unwrap()
 }
 
+async fn push_daemon(
+    body: &'static str,
+    truncated: bool,
+) -> (DockerEndpoint, tokio::task::JoinHandle<()>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap())
+        .parse()
+        .unwrap();
+    let task = tokio::spawn(async move {
+        for _ in 0..2 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                request.push(socket.read_u8().await.unwrap());
+            }
+            let request = String::from_utf8(request).unwrap();
+            let version = request.starts_with("GET /version ");
+            let response = if version {
+                r#"{"ApiVersion":"1.45","MinAPIVersion":"1.24"}"#
+            } else {
+                assert!(request.contains("/push?tag=latest "));
+                assert!(request.to_ascii_lowercase().contains("x-registry-auth:"));
+                body
+            };
+            let size = response.len() + usize::from(!version && truncated) * 128;
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {size}\r\nConnection: close\r\n\r\n{response}").as_bytes()).await.unwrap();
+        }
+    });
+    (endpoint, task)
+}
+
 #[tokio::test]
 async fn build_streams_archive_secrets_and_push_using_private_credentials_and_selected_daemon() {
+    let (daemon,server)=push_daemon("{\"aux\":{\"Digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}\n",false).await;
     let fixture = Fixture::new(
-        r#"
+        &r#"
 root=$(dirname "$0")
 test "$DOCKER_HOST" = tcp://fixture-docker:2375
 test -z "$DOCKER_CONTEXT$DOCKER_TLS_VERIFY$DOCKER_CERT_PATH"
@@ -89,7 +122,8 @@ push)
   printf 'digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' ;;
 *) exit 4 ;;
 esac
-"#,
+"#
+        .replace("tcp://fixture-docker:2375", &daemon.docker_host().unwrap()),
     );
     let cancel = CancellationToken::new();
     let credentials = BuildRegistryCredentials {
@@ -99,7 +133,7 @@ esac
     let logs = Logs::default();
     let session = DockerBuildSession::open(
         fixture.docker(),
-        endpoint(),
+        daemon,
         Some(("https://registry.example/", &credentials)),
         Duration::from_secs(3),
         4096,
@@ -133,7 +167,7 @@ esac
     let args = fixture.read("build-args");
     assert!(args.contains("--file\nbuild/Dockerfile\n--target\nruntime\n"));
     assert!(args.contains("--build-arg\nVALUE=two words\n"));
-    assert!(args.contains("--secret\nid=token,env=CITADEL_BUILDKIT_SECRET_0\n-\n"));
+    assert!(args.contains("--secret\nid=token,env=CITADEL_BUILDKIT_SECRET_0\n"));
     let digest = session
         .push("registry.example/test:latest", &logs, &cancel)
         .await
@@ -142,6 +176,7 @@ esac
         digest.as_deref(),
         Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     );
+    server.await.unwrap();
     let config = PathBuf::from(fixture.read("config-path"));
     assert!(config.exists());
     drop(session);
@@ -153,7 +188,7 @@ esac
 }
 
 #[tokio::test]
-async fn failed_build_and_push_stream_diagnostics_once_and_return_only_a_summary() {
+async fn failed_build_without_daemon_evidence_stays_uncertain_and_logs_once() {
     let fixture = Fixture::new(
         r#"
 if [ "$1" = build ]; then cat >/dev/null; fi
@@ -173,7 +208,7 @@ exit 7
     )
     .await
     .unwrap();
-    for operation in ["build", "push"] {
+    for operation in ["build"] {
         let logs = Logs::default();
         let error = if operation == "build" {
             session
@@ -584,4 +619,199 @@ exec sleep 30
     })
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn push_terminal_failure_releases_but_interrupted_stream_remains_uncertain() {
+    for (body, truncated, finished) in [
+        (
+            "{\"errorDetail\":{\"message\":\"denied by registry\"}}\n",
+            false,
+            true,
+        ),
+        (
+            "{\"errorDetail\":{\"message\":\"denied by registry\"}}\n",
+            true,
+            false,
+        ),
+        ("{\"status\":\"uploading\"}\n", false, false),
+    ] {
+        let (daemon, server) = push_daemon(body, truncated).await;
+        let session = DockerBuildSession::open(
+            "docker",
+            daemon,
+            None,
+            Duration::from_secs(3),
+            4096,
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let logs = Logs::default();
+        let error = session
+            .push("fixture:latest", &logs, &CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert_eq!(error.execution_finished(), finished, "{error}");
+        assert!(!error.is_known_not_started());
+        if finished {
+            assert_eq!(
+                logs.0.lock().unwrap().matches("denied by registry").count(),
+                1
+            );
+        }
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn containerd_push_digest_requires_matching_tag_and_complete_stream() {
+    for (body, truncated, success) in [
+        (
+            "{\"status\":\"latest: digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa size: 855\"}\n",
+            false,
+            true,
+        ),
+        (
+            "{\"status\":\"latest: digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa size: 855\"}\n",
+            true,
+            false,
+        ),
+        (
+            "{\"status\":\"other: digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa size: 855\"}\n",
+            false,
+            false,
+        ),
+    ] {
+        let (daemon, server) = push_daemon(body, truncated).await;
+        let session = DockerBuildSession::open(
+            "docker",
+            daemon,
+            None,
+            Duration::from_secs(3),
+            4096,
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let result = session
+            .push(
+                "fixture:latest",
+                &Logs::default(),
+                &CancellationToken::new(),
+            )
+            .await;
+        if success {
+            assert_eq!(
+                result.unwrap().as_deref(),
+                Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            );
+        } else {
+            assert!(!result.unwrap_err().execution_finished());
+        }
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn failed_build_is_terminal_only_when_exact_daemon_history_confirms_completion() {
+    let fixture = Fixture::new(
+        r#"
+root=$(dirname "$0")
+case "$1" in
+build)
+  for arg in "$@"; do case "$arg" in BUILDKIT_BUILD_NAME=*) printf '%s' "${arg#BUILDKIT_BUILD_NAME=}" > "$root/name";; esac; done
+  cat >/dev/null
+  exit 7;;
+buildx)
+  name=$(cat "$root/name")
+  case "$3" in
+  ls) printf '{"name":"%s","ref":"default/default/exact-ref"}\n' "$name";;
+  inspect) test "$6" = exact-ref; printf '{"Name":"%s","Ref":"exact-ref","CompletedAt":"2026-10-27T00:00:00Z","Status":"failed"}' "$name";;
+  esac;;
+esac
+"#,
+    );
+    let cancel = CancellationToken::new();
+    let session = DockerBuildSession::open(
+        fixture.docker(),
+        endpoint(),
+        None,
+        Duration::from_secs(3),
+        4096,
+        &cancel,
+    )
+    .await
+    .unwrap();
+    let error = session
+        .build(
+            DockerBuildOptions {
+                source: DockerBuildSource::Archive {
+                    data: b"archive".to_vec(),
+                    dockerfile: "Dockerfile",
+                },
+                tags: &[],
+                build_args: &[],
+                target: None,
+                secrets: &[],
+            },
+            &Logs::default(),
+            &cancel,
+        )
+        .await
+        .unwrap_err();
+    assert!(error.execution_finished(), "{error}");
+    assert!(!error.is_known_not_started());
+    assert_eq!(error.code(), "build.command");
+}
+
+#[tokio::test]
+#[ignore = "requires explicit CITADEL_TEST_DOCKER_ENDPOINT and postgres:17-alpine fixture image"]
+async fn real_buildkit_terminal_failure_has_authoritative_history_evidence() {
+    let endpoint = std::env::var("CITADEL_TEST_DOCKER_ENDPOINT")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let fixture = Fixture::new("");
+    let dockerfile = fixture.0.join("Dockerfile");
+    std::fs::write(
+        &dockerfile,
+        "FROM postgres:17-alpine\nRUN echo citadel-terminal-failure; exit 7\n",
+    )
+    .unwrap();
+    let cancel = CancellationToken::new();
+    let session = DockerBuildSession::open(
+        "docker",
+        endpoint,
+        None,
+        Duration::from_secs(60),
+        16384,
+        &cancel,
+    )
+    .await
+    .unwrap();
+    let logs = Logs::default();
+    let error = session
+        .build(
+            DockerBuildOptions {
+                source: DockerBuildSource::Directory {
+                    context: &fixture.0,
+                    dockerfile: &dockerfile,
+                },
+                tags: &[],
+                build_args: &[],
+                target: None,
+                secrets: &[],
+            },
+            &logs,
+            &cancel,
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        error.execution_finished(),
+        "{error}; logs: {}",
+        logs.0.lock().unwrap()
+    );
+    assert!(!error.is_known_not_started());
 }

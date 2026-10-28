@@ -113,7 +113,8 @@ impl BackupService {
                         Err((code, error)) => {
                             let mut message = error.to_string();
                             if code != "SourceBusy"
-                                && let Err(cleanup) = self.planner.cleanup_staging(&plan).await
+                                && let Err(cleanup) =
+                                    self.planner.cleanup_staging(&claim, &plan).await
                             {
                                 message.push_str(&format!(
                                     "; recovery staging cleanup also failed: {cleanup}"

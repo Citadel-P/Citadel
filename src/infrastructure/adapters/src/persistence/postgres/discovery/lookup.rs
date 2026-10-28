@@ -71,6 +71,7 @@ impl PostgresLookupStore {
                 | Kind::Deployment
                 | Kind::Stack
                 | Kind::SwarmService
+                | Kind::AutomationAction
                 | Kind::Alert
                 | Kind::User
         ) {

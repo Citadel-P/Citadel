@@ -1,5 +1,7 @@
 mod admission;
+mod local_helpers;
 use super::restore_storage::RestoreVolumeOwner;
+use crate::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission;
 use citadel_backups::spec::{BackupExecutionLocation, BackupRepositorySpec};
 use citadel_docker::bind_mount::{BIND_BACKUP_SCRIPT, BIND_PATH_PROBE, BIND_RESTORE_SCRIPT};
 use citadel_platforms::PlatformInfoPort;
@@ -45,7 +47,7 @@ use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuar
 pub struct DockerResticBackupExecutor {
     local_authority: Uuid,
     local_budget: citadel_runtime::IoBudget,
-    admission: Arc<dyn BackupDataAdmission>,
+    admission: Arc<PostgresBackupDataAdmission>,
     settings: Option<super::settings::BackupExecutionSettings>,
     docker: OsString,
     restic: OsString,
@@ -92,6 +94,7 @@ struct OperationState {
     cleanup_uncertain: std::sync::atomic::AtomicBool,
     execution_started: std::sync::atomic::AtomicBool,
     waiting_capacity: std::sync::atomic::AtomicBool,
+    local_scope: std::sync::Mutex<Option<(BackupDataOperation, BackupExecutionHost)>>,
 }
 
 /// Immutable executor dependencies are shared; mutable state belongs to one run.
@@ -319,41 +322,69 @@ impl BackupExecutor for DockerResticBackupExecutor {
                 if cancellation.is_cancelled() {
                     break;
                 }
-                let cleanup = async {
-                    let context = ResticOperation::new(
-                        self,
-                        OperationOwner {
-                            repository: operation.repository_id,
-                            run: operation.owner_id,
-                            attempt: operation.attempt_id,
-                        },
-                        false,
-                        None,
-                    );
-                    let BackupExecutionTarget::Agent(agent) = context
-                        .execution_target(
-                            operation.platform_id,
-                            operation.node_id.as_deref(),
-                            cancellation,
+                let context = ResticOperation::new(
+                    self,
+                    OperationOwner {
+                        repository: operation.repository_id,
+                        run: operation.owner_id,
+                        attempt: operation.attempt_id,
+                    },
+                    false,
+                    None,
+                );
+                let target = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    context.execution_target(
+                        operation.platform_id,
+                        operation.node_id.as_deref(),
+                        cancellation,
+                    ),
+                )
+                .await;
+                let confirmed = match target {
+                    Ok(Ok(BackupExecutionTarget::Local)) => {
+                        match tokio::time::timeout(
+                            Duration::from_secs(30),
+                            context.reconcile_local_helpers(&operation, &host, None),
                         )
                         .await
-                        .ok()?
-                    else {
-                        return None;
-                    };
-                    let request = citadel_contracts::citadel::images::v1::DataOperationRequest {
-                        run_id: operation.owner_id.to_string(),
-                        attempt_id: operation.attempt_id.to_string(),
-                        operation_id: operation.id.to_string(),
-                        admission_authority_id: host.authority_id.to_string(),
-                        docker_daemon_id: host.daemon_id.clone(),
-                        admission_generation: host.generation,
-                    };
-                    let response = agent.reconcile_data(request, cancellation).await.ok()?;
-                    if response.state == citadel_contracts::citadel::images::v1::BuildCleanupState::BuildCleanupConfirmed as i32 { self.admission.finish_cleanup(&operation, &host).await.ok()?; }
-                    Some(())
+                        {
+                            Ok(Ok(())) => true,
+                            result => {
+                                let reason = match result {
+                                    Ok(Err(error)) => error,
+                                    _ => {
+                                        "Local Docker cleanup timed out; storage remains reserved."
+                                            .into()
+                                    }
+                                };
+                                let mut message =
+                                    redact(&format!("Local backup cleanup pending: {reason}"));
+                                message.truncate(message.floor_char_boundary(1024));
+                                self.admission
+                                    .record_cleanup_pending(&operation, &message)
+                                    .await?;
+                                false
+                            }
+                        }
+                    }
+                    Ok(Ok(BackupExecutionTarget::Agent(agent))) => {
+                        let request =
+                            citadel_contracts::citadel::images::v1::DataOperationRequest {
+                                run_id: operation.owner_id.to_string(),
+                                attempt_id: operation.attempt_id.to_string(),
+                                operation_id: operation.id.to_string(),
+                                admission_authority_id: host.authority_id.to_string(),
+                                docker_daemon_id: host.daemon_id.clone(),
+                                admission_generation: host.generation,
+                            };
+                        matches!(tokio::time::timeout(Duration::from_secs(5),agent.reconcile_data(request,cancellation)).await,Ok(Ok(response)) if response.state==citadel_contracts::citadel::images::v1::BuildCleanupState::BuildCleanupConfirmed as i32)
+                    }
+                    _ => false,
                 };
-                let _ = tokio::time::timeout(Duration::from_secs(5), cleanup).await;
+                if confirmed {
+                    self.admission.finish_cleanup(&operation, &host).await?;
+                }
             }
             Ok(next)
         })
@@ -511,6 +542,18 @@ impl ResticOperation<'_> {
         {
             result.error_code = Some("HostBusy".into());
             result.error_message = Some("Waiting for an available execution host.".into());
+        }
+        if let Some(directory) = &plan.local_directory
+            && (!matches!(tokio::fs::try_exists(directory).await, Ok(false))
+                || self.cleanup_is_uncertain()
+                || self
+                    .executor
+                    .admission
+                    .finish_core_work(self.owner.repository, self.owner.run, self.owner.attempt)
+                    .await
+                    .is_err())
+        {
+            self.mark_cleanup_uncertain();
         }
         if self.cleanup_is_uncertain() {
             result.error_code = Some("CleanupPending".into());
@@ -1600,6 +1643,18 @@ impl ResticOperation<'_> {
             )
             .await?;
         let id = restore_helper_identity(&output)?;
+        if let Some((operation, host)) = self.local_scope()? {
+            // Keep the recovered immutable identity before removing the helper,
+            // so a crash after removal still leaves durable cleanup evidence.
+            self.executor
+                .admission
+                .register_helper(&operation, name, &id)
+                .await
+                .map_err(|error| error.to_string())?;
+            return self
+                .reconcile_local_helpers(&operation, &host, Some(&id))
+                .await;
+        }
         self.execute(
             vec!["rm".into(), "--force".into(), id.into()],
             vec![],
@@ -2405,7 +2460,7 @@ impl ResticOperation<'_> {
         }
         Ok(())
     }
-    async fn execute(
+    async fn execute_raw(
         &self,
         args: Vec<OsString>,
         env: Vec<(OsString, OsString)>,
@@ -2577,6 +2632,12 @@ impl ResticOperation<'_> {
         }
     }
     async fn cleanup(&self, name: &str) -> Result<(), String> {
+        if let Some((operation, host)) = self.local_scope()? {
+            return self
+                .reconcile_local_helpers(&operation, &host, Some(name))
+                .await
+                .inspect_err(|_| self.mark_cleanup_uncertain());
+        }
         let result = run(
             ProcessRequest::new(self.executor.docker.clone())
                 .args(["rm", "--force", name])
@@ -2919,10 +2980,20 @@ impl ResticOperation<'_> {
                 .await
                 .map_err(BackupError::Validation)?;
             if location == "Core" {
-                return self
+                self.executor
+                    .admission
+                    .begin_core_work(self.owner.repository, self.owner.run, self.owner.attempt)
+                    .await?;
+                let result = self
                     .run_direct_repository_operation(repository, operation, cancellation)
-                    .await
-                    .map_err(BackupError::Storage);
+                    .await;
+                if !self.cleanup_is_uncertain() {
+                    self.executor
+                        .admission
+                        .finish_core_work(self.owner.repository, self.owner.run, self.owner.attempt)
+                        .await?;
+                }
+                return result.map_err(BackupError::Storage);
             }
             let platform_id = platform_id.ok_or_else(|| {
                 BackupError::Validation("A Platform is required for this operation.".into())

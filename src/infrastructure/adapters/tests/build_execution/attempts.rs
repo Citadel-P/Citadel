@@ -59,6 +59,9 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
     // Independent work remains eligible behind the delayed oldest run.
     let mut other_input = input.clone();
     other_input.name = format!("eligible-{}", Uuid::now_v7());
+    let other_platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost/' || $1::text,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)").bind(other_platform).bind(format!("independent-{other_platform}")).execute(pool).await.unwrap();
+    other_input.platform_id = Some(other_platform);
     let other = store.create(actor, &other_input).await.unwrap();
     let other_run = store.enqueue(actor, other.id, "Manual").await.unwrap();
     let other_claim = store
@@ -140,8 +143,16 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
             () = tokio::time::sleep(std::time::Duration::from_millis(50)) => {}
         }
         tx.commit().await.unwrap();
-        assert!(!finish.await.unwrap());
-        assert!(matches!(append.await, Err(BuildError::Conflict(_))));
+        // Both queries may acquire row locks while rechecking the new token.
+        // Keep polling both futures so either can complete its rollback.
+        let (finished, appended) =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                tokio::join!(finish, append)
+            })
+            .await
+            .expect("stale writers must finish after ownership changes");
+        assert!(!finished.unwrap());
+        assert!(matches!(appended, Err(BuildError::Conflict(_))));
     }
     second.attempt_id = replacement;
 
