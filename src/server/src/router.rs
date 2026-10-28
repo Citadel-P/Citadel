@@ -3,10 +3,10 @@ use crate::composition::ServerComponents;
 use axum::{Router, middleware};
 use citadel_server::{
     api::routes::{
-        activities as activities_http, alerts, authentication as identity_http, automation,
-        bindings, deployments, git_repositories as git_catalog, licensing as license_http,
-        oidc as oidc_http, platforms as platforms_http, profile as profile_http, registries,
-        roles as roles_http, service_accounts as service_accounts_http, stacks as stacks_http,
+        activities as activities_http, alerts, authentication as identity_http, bindings,
+        deployments, git_repositories as git_catalog, licensing as license_http, oidc as oidc_http,
+        platforms as platforms_http, profile as profile_http, registries, roles as roles_http,
+        scripts, service_accounts as service_accounts_http, stacks as stacks_http,
         swarm_services as swarm_services_http, tags, teams as teams_http, users as users_http,
         webhooks as webhooks_http,
     },
@@ -58,7 +58,7 @@ pub fn router(
         edge_context,
         alert_store,
         alert_delivery,
-        automation,
+        scripts,
         backups,
         copies,
         users,
@@ -149,7 +149,7 @@ pub fn router(
     ))
     .merge(webhooks_http::router(webhooks_http::WebhooksHttpState {
         git: Arc::clone(&git_execution),
-        automation: Arc::clone(&automation),
+        scripts: Arc::clone(&scripts),
         backups: Some(backups.clone()),
         builds: Some(builds.clone()),
         stacks: Some(stacks.clone()),
@@ -157,9 +157,9 @@ pub fn router(
         audit: Some(audit),
         alerts: Some(alert_store.clone()),
     }))
-    .merge(automation::router(automation::AutomationHttpState {
+    .merge(scripts::router(scripts::ScriptHttpState {
         identity: Arc::clone(&identity),
-        automation,
+        scripts,
     }))
     .merge(citadel_server::api::routes::builds::router(
         citadel_server::api::routes::builds::BuildsHttpState {

@@ -1,7 +1,7 @@
 use super::*;
 
 pub trait IdentityStore: Send + Sync {
-    fn automation_attempt_active(
+    fn script_attempt_active(
         &self,
         actor: ActorId,
         run: Uuid,

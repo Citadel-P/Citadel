@@ -32,7 +32,7 @@ unreleased proposals must be identified separately.
 | Git and registries | Registry and repository configuration, webhook reception/authentication, source synchronization and pending-update detection; manual deployment/apply |
 | Identity | Local sign-in, MFA, existing OIDC login, users, teams and the built-in Admin, Operator and Viewer roles |
 | Recovery | Backup repository and policy definitions, on-demand backup and restore, manual rollback and reconciliation |
-| Automation | Define, test and manually run automation actions |
+| Scripts | Define, test and manually run scripts |
 | Alerts and visibility | Seeded system rules, notification channels and their external delivery, logs, history, activities and existing alerts |
 | Build pools | Define, inspect, test and manage pool configuration; execution through external pools is not included |
 

@@ -62,8 +62,8 @@ const resources = [
     title: "Put routine work on a schedule",
     description:
       "Connect actions into repeatable workflows. Run them manually, or use Team for schedules and webhook triggers.",
-    href: "/docs/resources/automation-actions",
-    link: "Automation",
+    href: "/docs/resources/scripts",
+    link: "Script",
   },
   {
     icon: HardDrive,

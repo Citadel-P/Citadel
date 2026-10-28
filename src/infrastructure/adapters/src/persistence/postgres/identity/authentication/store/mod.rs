@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::persistence::postgres::activities::store::insert_activity;
 use crate::persistence::postgres::activities::store::invalid_activity;
 
-mod default_automations;
+mod default_scripts;
 mod installation;
 
 #[derive(Clone)]
@@ -39,14 +39,14 @@ impl PostgresIdentityStore {
 }
 
 impl IdentityStore for PostgresIdentityStore {
-    fn automation_attempt_active(
+    fn script_attempt_active(
         &self,
         actor: ActorId,
         run: Uuid,
         attempt: Uuid,
     ) -> BoxFuture<'_, Result<bool, IdentityError>> {
         Box::pin(async move {
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM actionruns WHERE id=$1 AND attemptid=$2 AND runasactorid=$3 AND status='Running' AND NOT cancelrequested)")
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM scriptruns WHERE id=$1 AND attemptid=$2 AND runasactorid=$3 AND status='Running' AND NOT cancelrequested)")
                 .bind(run).bind(attempt).bind(actor.value()).fetch_one(&self.pool).await.map_err(storage)
         })
     }
@@ -162,7 +162,7 @@ WHERE id = 1 AND initializedat IS NULL
             if completed != 1 {
                 return Err(IdentityError::SetupAlreadyComplete);
             }
-            default_automations::insert(&mut transaction, administrator.actor_id().value())
+            default_scripts::insert(&mut transaction, administrator.actor_id().value())
                 .await
                 .map_err(storage)?;
             let activity = ActivityEvent::new_user_event(

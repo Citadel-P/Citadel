@@ -16,10 +16,10 @@ pub(crate) fn authorize_http(auth: &AuthenticatedBearer, path: &str) -> Result<(
     {
         return Err(IdentityError::Forbidden);
     }
-    if auth.automation_run_id.is_some()
+    if auth.script_run_id.is_some()
         && ([
             "/api/v1/authentication",
-            "/api/v1/automation",
+            "/api/v1/scripts",
             "/api/v1/installation",
             "/api/v1/resourcebindings/secrets",
             "/api/v1/resourcebindings/secret-providers",
@@ -52,8 +52,8 @@ pub(crate) async fn authenticate_realtime(
 
 fn authorize_realtime(auth: &AuthenticatedBearer) -> Result<(), IdentityError> {
     // Realtime is a browser connection with both subscriptions and execution
-    // commands. Service accounts and automation runs use the scoped HTTP API.
-    if !auth.principal.is_human() || auth.automation_run_id.is_some() {
+    // commands. Service accounts and script runs use the scoped HTTP API.
+    if !auth.principal.is_human() || auth.script_run_id.is_some() {
         return Err(IdentityError::Forbidden);
     }
     Ok(())
@@ -75,7 +75,7 @@ mod tests {
                 credential_id: None,
                 roles: vec!["Admin".into()],
             },
-            automation_run_id: run.then(Uuid::now_v7),
+            script_run_id: run.then(Uuid::now_v7),
         }
     }
 
@@ -99,7 +99,7 @@ mod tests {
         for path in [
             "/api/v1/platforms",
             "/api/v1/stacks/id/apply",
-            "/api/v1/automation/actions",
+            "/api/v1/scripts",
             "/api/v1/serviceAccounts",
             "/api/v1/profile-other",
             "/hubs-other",
@@ -109,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    fn automation_restrictions_apply_to_user_and_service_account_runs() {
+    fn script_restrictions_apply_to_user_and_service_account_runs() {
         for kind in [
             AuthenticatedPrincipalType::User,
             AuthenticatedPrincipalType::ServiceAccount,
@@ -117,7 +117,8 @@ mod tests {
             let auth = authenticated(kind, true);
             for path in [
                 "/api/v1/authentication/logout",
-                "/API/V1/AUTOMATION/actions",
+                "/api/v1/scripts",
+                "/API/V1/SCRIPTS/id/run",
                 "/API/V1/INSTALLATION/settings",
                 "/api/v1/resourceBindings/secrets",
                 "/api/v1/resourceBindings/SECRET-PROVIDERS/id",
@@ -134,7 +135,7 @@ mod tests {
                 "/api/v1/platforms",
                 "/api/v1/stacks/id/apply",
                 "/api/v1/containers/id/logs",
-                "/api/v1/automation-other",
+                "/api/v1/scripts-other",
                 "/api/v1/resourceBindings/secrets-other",
             ] {
                 assert!(authorize_http(&auth, path).is_ok(), "{path}");
@@ -161,7 +162,7 @@ mod tests {
             "/api/v1/profile",
             "/api/v1/installation/settings",
             "/hubs",
-            "/api/v1/automation",
+            "/api/v1/scripts",
             "/api/v1/resourceBindings/secrets",
             "/api/v1/containers/id/terminal",
         ] {

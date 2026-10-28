@@ -8,13 +8,13 @@ use citadel_adapters::connectors::agent::client::AgentClient;
 use citadel_adapters::persistence::postgres::notifications::PostgresNotifications;
 use citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
 use citadel_alerts::{AlertDeliveryService, AlertEventSink};
-use citadel_automation::AutomationService;
 use citadel_backups::BackupService;
 use citadel_builds::BuildService;
 use citadel_deployments::DeploymentService;
 use citadel_docker::client::DockerClient;
 use citadel_git::GitRepositoryExecutionService;
 use citadel_runtime::{QueueOverflowPolicy, TaskSupervisor, bounded_channel};
+use citadel_scripts::ScriptService;
 use citadel_stacks::StackService;
 use citadel_swarm_services::SwarmServiceService;
 use sqlx::PgPool;
@@ -54,7 +54,7 @@ pub struct WorkerDependencies {
     pub swarm_services: Arc<SwarmServiceService>,
     pub stacks: Arc<StackService>,
     pub git: Arc<GitRepositoryExecutionService>,
-    pub automation: Arc<AutomationService>,
+    pub scripts: Arc<ScriptService>,
     pub builds: Arc<BuildService>,
     pub backups: Arc<BackupService>,
     pub alerts: Arc<citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository>,
@@ -123,7 +123,7 @@ pub async fn register(
         swarm_services,
         stacks,
         git,
-        automation,
+        scripts,
         builds,
         backups,
         alerts,
@@ -221,23 +221,20 @@ pub async fn register(
         ),
     );
     supervisor.spawn(
-        "automation-runs",
-        crate::workers::automation::automation_runs(
+        "scripts-runs",
+        crate::workers::scripts::script_runs(
             cancellation.child_token(),
-            Arc::clone(&automation),
-            notifications.subscribe(citadel_runtime::RuntimeSignal::Automation),
+            Arc::clone(&scripts),
+            notifications.subscribe(citadel_runtime::RuntimeSignal::Script),
         ),
     );
     supervisor.spawn(
-        "automation-cleanup",
-        crate::workers::automation::automation_cleanup(
-            cancellation.child_token(),
-            Arc::clone(&automation),
-        ),
+        "scripts-cleanup",
+        crate::workers::scripts::script_cleanup(cancellation.child_token(), Arc::clone(&scripts)),
     );
     supervisor.spawn(
-        "automation-scheduler",
-        crate::workers::automation::automation_scheduler(cancellation.child_token(), automation),
+        "scripts-scheduler",
+        crate::workers::scripts::script_scheduler(cancellation.child_token(), scripts),
     );
     supervisor.spawn(
         "platform-threshold-alerts",

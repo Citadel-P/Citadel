@@ -237,11 +237,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn typed_automation_patch_reports_the_invalid_field() {
-        let body = problem::<citadel_automation::UpdateAutomationActionInput>(
-            br#"{"timeoutSeconds":"bad"}"#,
-        )
-        .await;
+    async fn typed_script_patch_reports_the_invalid_field() {
+        let body =
+            problem::<citadel_scripts::UpdateScriptInput>(br#"{"timeoutSeconds":"bad"}"#).await;
         assert!(
             body["errors"]["$.timeoutSeconds"][0]
                 .as_str()

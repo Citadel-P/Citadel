@@ -34,23 +34,6 @@ export const resources = {
   completeOidcLogin: { method: "GET", key: "completeOidcLogin", namespace: "api", path: "/api/v1/authentication/oidc/{id}/callback", tag: "Authentication", group: "authentication", params: ["id","query","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: ["code","state","error","error_description"], requiredQueryParams: [], hasBody: false },
   beginOidcLogin: { method: "GET", key: "beginOidcLogin", namespace: "api", path: "/api/v1/authentication/oidc/{id}/login", tag: "Authentication", group: "authentication", params: ["id","query","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: ["returnUrl"], requiredQueryParams: [], hasBody: false },
   refreshToken: { method: "GET", key: "refreshToken", namespace: "api", path: "/api/v1/authentication/refresh", tag: "Authentication", group: "authentication", params: ["params"], pathParams: [], requiredParams: [], queryParams: [], requiredQueryParams: [], hasBody: false },
-  listAutomationActions: { method: "GET", key: "listAutomationActions", namespace: "api", path: "/api/v1/automation/actions", tag: "AutomationActions", group: "automationActions", params: ["query","params"], pathParams: [], requiredParams: [], queryParams: ["tags"], requiredQueryParams: [], hasBody: false },
-  createAutomationAction: { method: "POST", key: "createAutomationAction", namespace: "api", path: "/api/v1/automation/actions", tag: "AutomationActions", group: "automationActions", params: ["data","params"], pathParams: [], requiredParams: ["data"], queryParams: [], requiredQueryParams: [], hasBody: true },
-  renameAutomationAction: { method: "POST", key: "renameAutomationAction", namespace: "api", path: "/api/v1/automation/actions/rename", tag: "AutomationActions", group: "automationActions", params: ["data","params"], pathParams: [], requiredParams: ["data"], queryParams: [], requiredQueryParams: [], hasBody: true },
-  deleteAutomationAction: { method: "DELETE", key: "deleteAutomationAction", namespace: "api", path: "/api/v1/automation/actions/{id}", tag: "AutomationActions", group: "automationActions", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
-  getAutomationAction: { method: "GET", key: "getAutomationAction", namespace: "api", path: "/api/v1/automation/actions/{id}", tag: "AutomationActions", group: "automationActions", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
-  updateAutomationAction: { method: "PATCH", key: "updateAutomationAction", namespace: "api", path: "/api/v1/automation/actions/{id}", tag: "AutomationActions", group: "automationActions", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
-  updateAutomationActionMetadata: { method: "PATCH", key: "updateAutomationActionMetadata", namespace: "api", path: "/api/v1/automation/actions/{id}/_metadata", tag: "AutomationActions", group: "automationActions", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
-  getAutomationActionDuplicateDraft: { method: "GET", key: "getAutomationActionDuplicateDraft", namespace: "api", path: "/api/v1/automation/actions/{id}/duplicate-draft", tag: "AutomationActions", group: "automationActions", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
-  runAutomationAction: { method: "POST", key: "runAutomationAction", namespace: "api", path: "/api/v1/automation/actions/{id}/run", tag: "AutomationActions", group: "automationActions", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
-  listAutomationActionRuns: { method: "GET", key: "listAutomationActionRuns", namespace: "api", path: "/api/v1/automation/actions/{id}/runs", tag: "AutomationActions", group: "automationActions", params: ["id","query","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: ["limit"], requiredQueryParams: [], hasBody: false },
-  getAutomationActionRun: { method: "GET", key: "getAutomationActionRun", namespace: "api", path: "/api/v1/automation/actions/{id}/runs/{runId}", tag: "AutomationActions", group: "automationActions", params: ["id","runId","params"], pathParams: ["id","runId"], requiredParams: ["id","runId"], queryParams: [], requiredQueryParams: [], hasBody: false },
-  cancelAutomationActionRun: { method: "POST", key: "cancelAutomationActionRun", namespace: "api", path: "/api/v1/automation/actions/{id}/runs/{runId}/cancel", tag: "AutomationActions", group: "automationActions", params: ["id","runId","params"], pathParams: ["id","runId"], requiredParams: ["id","runId"], queryParams: [], requiredQueryParams: [], hasBody: false },
-  getAutomationActionRunLogs: { method: "GET", key: "getAutomationActionRunLogs", namespace: "api", path: "/api/v1/automation/actions/{id}/runs/{runId}/logs", tag: "AutomationActions", group: "automationActions", params: ["id","runId","params"], pathParams: ["id","runId"], requiredParams: ["id","runId"], queryParams: [], requiredQueryParams: [], hasBody: false },
-  resolveAutomationRunCleanup: { method: "POST", key: "resolveAutomationRunCleanup", namespace: "api", path: "/api/v1/automation/actions/{id}/runs/{runId}/recovery", tag: "AutomationActions", group: "automationActions", params: ["id","runId","data","params"], pathParams: ["id","runId"], requiredParams: ["id","runId","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
-  getAutomationActionTags: { method: "GET", key: "getAutomationActionTags", namespace: "api", path: "/api/v1/automation/actions/{id}/tags", tag: "AutomationActions", group: "automationActions", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
-  replaceAutomationActionTags: { method: "PUT", key: "replaceAutomationActionTags", namespace: "api", path: "/api/v1/automation/actions/{id}/tags", tag: "AutomationActions", group: "automationActions", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
-  testAutomationAction: { method: "POST", key: "testAutomationAction", namespace: "api", path: "/api/v1/automation/actions/{id}/test", tag: "AutomationActions", group: "automationActions", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
   listBackupPolicies: { method: "GET", key: "listBackupPolicies", namespace: "api", path: "/api/v1/backupPolicies", tag: "BackupPolicies", group: "backupPolicies", params: ["query","params"], pathParams: [], requiredParams: [], queryParams: ["tags"], requiredQueryParams: [], hasBody: false },
   createBackupPolicy: { method: "POST", key: "createBackupPolicy", namespace: "api", path: "/api/v1/backupPolicies", tag: "BackupPolicies", group: "backupPolicies", params: ["data","params"], pathParams: [], requiredParams: ["data"], queryParams: [], requiredQueryParams: [], hasBody: true },
   getPlatformBackupSummaries: { method: "GET", key: "getPlatformBackupSummaries", namespace: "api", path: "/api/v1/backupPolicies/platform-summaries", tag: "BackupPolicies", group: "backupPolicies", params: ["query","params"], pathParams: [], requiredParams: ["query"], queryParams: ["platformIds"], requiredQueryParams: ["platformIds"], hasBody: false },
@@ -328,6 +311,23 @@ export const resources = {
   renameRole: { method: "POST", key: "renameRole", namespace: "api", path: "/api/v1/roles/rename", tag: "Roles", group: "roles", params: ["data","params"], pathParams: [], requiredParams: ["data"], queryParams: [], requiredQueryParams: [], hasBody: true },
   getRole: { method: "GET", key: "getRole", namespace: "api", path: "/api/v1/roles/{id}", tag: "Roles", group: "roles", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
   updateRolePermissions: { method: "PATCH", key: "updateRolePermissions", namespace: "api", path: "/api/v1/roles/{id}/permissions", tag: "Roles", group: "roles", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  listScripts: { method: "GET", key: "listScripts", namespace: "api", path: "/api/v1/scripts", tag: "Scripts", group: "scripts", params: ["query","params"], pathParams: [], requiredParams: [], queryParams: ["tags"], requiredQueryParams: [], hasBody: false },
+  createScript: { method: "POST", key: "createScript", namespace: "api", path: "/api/v1/scripts", tag: "Scripts", group: "scripts", params: ["data","params"], pathParams: [], requiredParams: ["data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  renameScript: { method: "POST", key: "renameScript", namespace: "api", path: "/api/v1/scripts/rename", tag: "Scripts", group: "scripts", params: ["data","params"], pathParams: [], requiredParams: ["data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  deleteScript: { method: "DELETE", key: "deleteScript", namespace: "api", path: "/api/v1/scripts/{id}", tag: "Scripts", group: "scripts", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
+  getScript: { method: "GET", key: "getScript", namespace: "api", path: "/api/v1/scripts/{id}", tag: "Scripts", group: "scripts", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
+  updateScript: { method: "PATCH", key: "updateScript", namespace: "api", path: "/api/v1/scripts/{id}", tag: "Scripts", group: "scripts", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  updateScriptMetadata: { method: "PATCH", key: "updateScriptMetadata", namespace: "api", path: "/api/v1/scripts/{id}/_metadata", tag: "Scripts", group: "scripts", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  getScriptDuplicateDraft: { method: "GET", key: "getScriptDuplicateDraft", namespace: "api", path: "/api/v1/scripts/{id}/duplicate-draft", tag: "Scripts", group: "scripts", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
+  runScript: { method: "POST", key: "runScript", namespace: "api", path: "/api/v1/scripts/{id}/run", tag: "Scripts", group: "scripts", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  listScriptRuns: { method: "GET", key: "listScriptRuns", namespace: "api", path: "/api/v1/scripts/{id}/runs", tag: "Scripts", group: "scripts", params: ["id","query","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: ["limit"], requiredQueryParams: [], hasBody: false },
+  getScriptRun: { method: "GET", key: "getScriptRun", namespace: "api", path: "/api/v1/scripts/{id}/runs/{runId}", tag: "Scripts", group: "scripts", params: ["id","runId","params"], pathParams: ["id","runId"], requiredParams: ["id","runId"], queryParams: [], requiredQueryParams: [], hasBody: false },
+  cancelScriptRun: { method: "POST", key: "cancelScriptRun", namespace: "api", path: "/api/v1/scripts/{id}/runs/{runId}/cancel", tag: "Scripts", group: "scripts", params: ["id","runId","params"], pathParams: ["id","runId"], requiredParams: ["id","runId"], queryParams: [], requiredQueryParams: [], hasBody: false },
+  getScriptRunLogs: { method: "GET", key: "getScriptRunLogs", namespace: "api", path: "/api/v1/scripts/{id}/runs/{runId}/logs", tag: "Scripts", group: "scripts", params: ["id","runId","params"], pathParams: ["id","runId"], requiredParams: ["id","runId"], queryParams: [], requiredQueryParams: [], hasBody: false },
+  resolveScriptRunCleanup: { method: "POST", key: "resolveScriptRunCleanup", namespace: "api", path: "/api/v1/scripts/{id}/runs/{runId}/recovery", tag: "Scripts", group: "scripts", params: ["id","runId","data","params"], pathParams: ["id","runId"], requiredParams: ["id","runId","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  getScriptTags: { method: "GET", key: "getScriptTags", namespace: "api", path: "/api/v1/scripts/{id}/tags", tag: "Scripts", group: "scripts", params: ["id","params"], pathParams: ["id"], requiredParams: ["id"], queryParams: [], requiredQueryParams: [], hasBody: false },
+  replaceScriptTags: { method: "PUT", key: "replaceScriptTags", namespace: "api", path: "/api/v1/scripts/{id}/tags", tag: "Scripts", group: "scripts", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
+  testScript: { method: "POST", key: "testScript", namespace: "api", path: "/api/v1/scripts/{id}/test", tag: "Scripts", group: "scripts", params: ["id","data","params"], pathParams: ["id"], requiredParams: ["id","data"], queryParams: [], requiredQueryParams: [], hasBody: true },
   globalSearch: { method: "GET", key: "globalSearch", namespace: "api", path: "/api/v1/search", tag: "Search", group: "search", params: ["query","params"], pathParams: [], requiredParams: ["query"], queryParams: ["q","types","limitPerType"], requiredQueryParams: ["q"], hasBody: false },
   archiveServiceAccounts: { method: "DELETE", key: "archiveServiceAccounts", namespace: "api", path: "/api/v1/serviceAccounts", tag: "ServiceAccounts", group: "serviceAccounts", params: ["data","params"], pathParams: [], requiredParams: ["data"], queryParams: [], requiredQueryParams: [], hasBody: true },
   listServiceAccounts: { method: "GET", key: "listServiceAccounts", namespace: "api", path: "/api/v1/serviceAccounts", tag: "ServiceAccounts", group: "serviceAccounts", params: ["query","params"], pathParams: [], requiredParams: [], queryParams: ["Page","PageSize","Name","IncludeArchived"], requiredQueryParams: [], hasBody: false },
@@ -430,7 +430,7 @@ export const resources = {
   getReadiness: { method: "GET", key: "getReadiness", namespace: "ready", path: "/ready", tag: "Diagnostics", group: "diagnostics", params: ["params"], pathParams: [], requiredParams: [], queryParams: [], requiredQueryParams: [], hasBody: false },
 } as const;
 
-export const automationResourceKeys = [
+export const scriptResourceKeys = [
   "listActivities",
   "getActivity",
   "getActor",
@@ -819,9 +819,9 @@ export const automationResourceKeys = [
   "getReadiness",
 ] as const;
 
-export type AutomationResourceName = (typeof automationResourceKeys)[number];
+export type ScriptResourceName = (typeof scriptResourceKeys)[number];
 
-export const automationResources = {
+export const scriptResources = {
   listActivities: resources.listActivities,
   getActivity: resources.getActivity,
   getActor: resources.getActor,
@@ -1210,7 +1210,7 @@ export const automationResources = {
   getReadiness: resources.getReadiness,
 } as const;
 
-export const automationResourceGroups = {
+export const scriptResourceGroups = {
   activities: ["listActivities","getActivity"],
   actors: ["getActor","patchActorEnabled"],
   alertEvents: ["listAlertEvents","acknowledgeAlertEvents","resolveAlertEvents","getUnresolvedAlertEventsCount","getAlertEvent"],
@@ -1251,4 +1251,4 @@ export const automationResourceGroups = {
 } as const;
 
 export type ResourceName = keyof typeof resources;
-export type AutomationResourceGroupName = keyof typeof automationResourceGroups;
+export type ScriptResourceGroupName = keyof typeof scriptResourceGroups;

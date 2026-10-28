@@ -30,7 +30,7 @@ pub(super) async fn ensure_resource_exists_tx(
         TaggableResourceType::Platform => "platforms",
         TaggableResourceType::GitRepository => "gitrepositories",
         TaggableResourceType::Registry => "registries",
-        TaggableResourceType::AutomationAction => "actions",
+        TaggableResourceType::Script => "scripts",
         TaggableResourceType::BackupPolicy => "backuppolicies",
         TaggableResourceType::Build => "buildprojects",
         TaggableResourceType::BuildAgentPool => "buildagentpools",

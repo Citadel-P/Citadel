@@ -243,7 +243,7 @@ pub(crate) fn alert_resource_path(event: &citadel_alerts::AlertEvent) -> Option<
         "Deployment" => "deployments",
         "Stack" => "stacks",
         "GitRepository" => "git-repos",
-        "AutomationAction" => "automation",
+        "Script" => "scripts",
         "Build" => "builds",
         "BackupPolicy" => "backup-policies",
         "SwarmService" => "swarm-services",

@@ -59,8 +59,8 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 | `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Save buffered metrics every 60 seconds |
 | `CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES` | `15` | Access-token lifetime |
 | `CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS` | `30` | Refresh-token lifetime |
-| `CITADEL_AUTOMATIONS_ENABLED` | `true` | Allow automation execution |
-| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Limit concurrent automation runs |
+| `CITADEL_SCRIPTS_ENABLED` | `true` | Allow script execution |
+| `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Limit concurrent script runs |
 
 Leave `CITADEL_JWT_KEY` and `CITADEL_SECRETS_ENCRYPTION_KEY` unset to let Citadel generate
 and save them in `citadel_data`. `CITADEL_JWT_ISSUER` and `CITADEL_JWT_AUDIENCE` normally

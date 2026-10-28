@@ -76,10 +76,10 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
     for token in [&run, &account_run] {
         let claims = codec().decode_access(token).unwrap();
         let action = Uuid::now_v7();
-        sqlx::query("INSERT INTO actions(id,name,code,createdbyactorid,runasactorid,alertonfailure,enabled,scheduleenabled,scheduletimezone,timeoutseconds) VALUES($1,$1::text,'fixture', $2,$2,false,true,false,'UTC',30)")
+        sqlx::query("INSERT INTO scripts(id,name,code,createdbyactorid,runasactorid,alertonfailure,enabled,scheduleenabled,scheduletimezone,timeoutseconds) VALUES($1,$1::text,'fixture', $2,$2,false,true,false,'UTC',30)")
             .bind(action).bind(claims.actor_id.value()).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO actionruns(id,actionid,actionname,argsjson,codehash,codesnapshot,queuedat,runasactorid,status,timeoutseconds,trigger,attemptid) VALUES($1,$2,'fixture','{}','hash','fixture',now(),$3,'Running',30,'Manual',$4)")
-            .bind(claims.automation_run_id).bind(action).bind(claims.actor_id.value()).bind(claims.automation_attempt_id).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO scriptruns(id,scriptid,scriptname,argsjson,codehash,codesnapshot,queuedat,runasactorid,status,timeoutseconds,trigger,attemptid) VALUES($1,$2,'fixture','{}','hash','fixture',now(),$3,'Running',30,'Manual',$4)")
+            .bind(claims.script_run_id).bind(action).bind(claims.actor_id.value()).bind(claims.script_attempt_id).execute(&pool).await.unwrap();
     }
     for token in [&human, &run, &account_token, &account_run] {
         identity
@@ -130,7 +130,7 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
     }
     for token in [&run, &account_run] {
         for path in [
-            "/api/v1/automation/actions",
+            "/api/v1/scripts",
             "/api/v1/resourceBindings/secrets",
             "/api/v1/platforms/id/containers/id/terminal",
         ] {
@@ -209,45 +209,44 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
         .unwrap();
     // Executor permission is checked independently from API permissions and placement.
     {
-        use citadel_automation::{AutomationRepository, RemoteAutomationExecutor};
+        use citadel_scripts::{RemoteScriptExecutor, ScriptRepository};
         let agent = Uuid::now_v7();
         sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Agent',0,0,0,$1::text,0,'{\"$type\":\"Docker\"}','Offline',0)")
             .bind(agent).bind(format!("https://agent-{agent}.invalid")).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES($1,$2,$3,$4,$5,0)")
             .bind(Uuid::now_v7()).bind(user_actor).bind(agent).bind(citadel_primitives::ResourceType::Platform as i32).bind(citadel_primitives::PermissionLevel::Execute as i32).execute(&pool).await.unwrap();
-        let executor = citadel_adapters::external::automation::AgentAutomationExecutor::new(
+        let executor = citadel_adapters::external::scripts::AgentScriptExecutor::new(
             pool.clone(),
             None,
             Default::default(),
             identity.clone(),
             true,
         );
-        let store =
-            citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository::new(
-                pool.clone(),
-            );
+        let store = citadel_adapters::persistence::postgres::scripts::PostgresScriptRepository::new(
+            pool.clone(),
+        );
         let (progress, _) = tokio::sync::broadcast::channel(4);
         for (token, allowed) in [(&run, true), (&account_run, false)] {
             let claims = codec().decode_access(token).unwrap();
-            let run_id = claims.automation_run_id.unwrap();
-            sqlx::query("UPDATE actionruns SET executor=$2 WHERE id=$1")
+            let run_id = claims.script_run_id.unwrap();
+            sqlx::query("UPDATE scriptruns SET executor=$2 WHERE id=$1")
                 .bind(run_id)
                 .bind(json!({"kind":"Agent","agentId":agent}))
                 .execute(&pool)
                 .await
                 .unwrap();
-            let action_id: Uuid = sqlx::query_scalar("SELECT actionid FROM actionruns WHERE id=$1")
+            let script_id: Uuid = sqlx::query_scalar("SELECT scriptid FROM scriptruns WHERE id=$1")
                 .bind(run_id)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-            let claim = citadel_automation::AutomationRunClaim {
-                run: store.get_run(action_id, run_id).await.unwrap(),
+            let claim = citadel_scripts::ScriptRunClaim {
+                run: store.get_run(script_id, run_id).await.unwrap(),
             };
             let outcome = executor
                 .execute(
                     &claim,
-                    citadel_automation::sandbox::AutomationScript {
+                    citadel_scripts::sandbox::ScriptExecution {
                         run_id,
                         source: "console.log('fixture')".into(),
                         token: token.clone(),
@@ -262,26 +261,20 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
                 .await;
             if allowed {
                 assert!(
-                    matches!(
-                        outcome,
-                        Ok(citadel_automation::RemoteAutomationOutcome::Deferred)
-                    ),
+                    matches!(outcome, Ok(citadel_scripts::RemoteScriptOutcome::Deferred)),
                     "authorized offline Agent leaves the run queued"
                 );
             } else {
                 assert!(
-                    matches!(
-                        outcome,
-                        Err(citadel_automation::AutomationError::Validation(_))
-                    ),
+                    matches!(outcome, Err(citadel_scripts::ScriptError::Validation(_))),
                     "run-as credentials do not grant executor permission"
                 );
             }
         }
     }
     let claims = codec().decode_access(&run).unwrap();
-    let run_id = claims.automation_run_id.unwrap();
-    sqlx::query("UPDATE actionruns SET cancelrequested=true WHERE id=$1")
+    let run_id = claims.script_run_id.unwrap();
+    sqlx::query("UPDATE scriptruns SET cancelrequested=true WHERE id=$1")
         .bind(run_id)
         .execute(&pool)
         .await
@@ -291,7 +284,7 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
         "cancelled attempt token is revoked immediately"
     );
     let next_attempt = Uuid::now_v7();
-    sqlx::query("UPDATE actionruns SET cancelrequested=false,attemptid=$2 WHERE id=$1")
+    sqlx::query("UPDATE scriptruns SET cancelrequested=false,attemptid=$2 WHERE id=$1")
         .bind(run_id)
         .bind(next_attempt)
         .execute(&pool)
@@ -302,7 +295,7 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
         "an earlier attempt never regains access"
     );
     let next_token = identity
-        .issue_automation_access_token(
+        .issue_script_access_token(
             claims.actor_id,
             run_id,
             next_attempt,
@@ -316,7 +309,7 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
             .await
             .is_ok()
     );
-    sqlx::query("UPDATE actionruns SET status='Failed' WHERE id=$1")
+    sqlx::query("UPDATE scriptruns SET status='Failed' WHERE id=$1")
         .bind(run_id)
         .execute(&pool)
         .await
@@ -351,14 +344,14 @@ fn jwt(subject: Uuid, actor: Uuid, kind: AuthenticatedPrincipalType, run: bool) 
     let now = chrono::Utc::now();
     codec()
         .encode_access(&AccessTokenClaims {
-            automation_attempt_id: run.then(Uuid::now_v7),
+            script_attempt_id: run.then(Uuid::now_v7),
             session_id: (!run && kind == AuthenticatedPrincipalType::User).then_some(subject),
             subject_id: subject,
             actor_id: ActorId::new(actor),
             principal_type: kind,
             issued_at: now,
             expires_at: now + chrono::Duration::minutes(5),
-            automation_run_id: run.then(Uuid::now_v7),
+            script_run_id: run.then(Uuid::now_v7),
         })
         .unwrap()
 }

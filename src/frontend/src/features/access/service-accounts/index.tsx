@@ -76,7 +76,7 @@ export const ServiceAccounts = ({
       <div className="rounded-md border border-dashed p-8 text-center">
         <p className="font-medium">Service Accounts require a Team license</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Create least-privilege identities for CI/CD, API integrations, Automations, and Backup Policies.
+          Create least-privilege identities for CI/CD, API integrations, Scripts, and Backup Policies.
         </p>
       </div>
     );

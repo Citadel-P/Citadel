@@ -4,4 +4,4 @@ pub mod backups;
 
 pub mod builds;
 
-pub mod automation;
+pub mod scripts;

@@ -114,7 +114,7 @@ class RecoveryStorageTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Missing durable'):
             backend.prepare(self.data)
 
-    def test_accepted_outputs_recover_after_actions_expiry_in_another_run(self):
+    def test_accepted_outputs_recover_after_scripts_expiry_in_another_run(self):
         self.docs()
         self.backend.retain_validation('release-documentation', self.root, self.data)
         target = self.root / 'recovered'

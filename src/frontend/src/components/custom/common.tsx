@@ -910,7 +910,7 @@ export const TargetCell = ({
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
     [ActivityResourceType.SwarmService]: { Icon: Boxes, path: `/swarm-services/edit/${resourceId}` },
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
-    [ActivityResourceType.AutomationAction]: { Icon: Workflow, path: `/automation/edit/${resourceId}` },
+    [ActivityResourceType.Script]: { Icon: Workflow, path: `/scripts/edit/${resourceId}` },
     [ActivityResourceType.Build]: { Icon: Hammer, path: `/builds/edit/${resourceId}` },
     [ActivityResourceType.BuildAgentPool]: { Icon: ServerPlus, path: `/build-pools/edit/${resourceId}` },
     [ActivityResourceType.BackupPolicy]: { Icon: CalendarClock, path: `/backup-policies/edit/${resourceId}` },

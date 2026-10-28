@@ -332,11 +332,11 @@ fn workload_health_updates_only_matching_platform_and_owner_without_deletions() 
 }
 
 #[test]
-fn automation_updates_target_only_the_action_and_its_run_history() {
+fn script_updates_target_only_the_action_and_its_run_history() {
     let action = Uuid::now_v7();
     let mut event = PublishedRuntimeEvent {
         platform_id: None,
-        resource_type: "AutomationAction",
+        resource_type: "Script",
         resource_id: action,
         event_kind: "resourceChanged",
         resource_revision: 1,
@@ -344,7 +344,7 @@ fn automation_updates_target_only_the_action_and_its_run_history() {
         containers: Default::default(),
         payload: json!({}),
     };
-    for prefix in ["automation-action", "automation-runs"] {
+    for prefix in ["script", "scripts-runs"] {
         assert!(
             Group::parse(&format!("{prefix}:{action}"))
                 .unwrap()
@@ -356,20 +356,16 @@ fn automation_updates_target_only_the_action_and_its_run_history() {
                 .affected_by(&event)
         );
     }
-    assert!(
-        Group::parse("automation-actions")
-            .unwrap()
-            .affected_by(&event)
-    );
+    assert!(Group::parse("scripts").unwrap().affected_by(&event));
     event.resource_id = Uuid::nil();
     assert!(
-        Group::parse(&format!("automation-runs:{action}"))
+        Group::parse(&format!("scripts-runs:{action}"))
             .unwrap()
             .affected_by(&event)
     );
     event.resource_type = "Build";
     assert!(
-        !Group::parse(&format!("automation-runs:{action}"))
+        !Group::parse(&format!("scripts-runs:{action}"))
             .unwrap()
             .affected_by(&event)
     );

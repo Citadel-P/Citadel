@@ -2,13 +2,13 @@
 use super::commands::Output;
 use crate::direct::Runtime;
 use citadel_contracts::citadel::{
-    automation::v1::automation_service_server::AutomationService,
     containers::v1::{ExecClientMessage, container_service_server::ContainerService},
     deployments::v1::deployment_service_server::DeploymentService,
     edge::v1::EdgeCommandKind,
     images::v1::image_service_server::ImageService,
     networks::v1::network_service_server::NetworkService,
     platforms::v1::platform_service_server::PlatformService,
+    scripts::v1::script_service_server::ScriptService,
     stacks::v1::stack_service_server::StackService,
     swarm::v1::swarm_service_server::SwarmService,
     volumes::v1::volume_service_server::VolumeService,
@@ -57,9 +57,9 @@ pub(super) async fn execute(
     // No wildcard: a new protocol enum variant must acquire an explicit implementation.
     match kind {
         Unspecified => Err(Status::invalid_argument("An Edge command kind is required")),
-        AutomationCheckHost => unary!(AutomationService, check_host),
-        AutomationRun => stream!(AutomationService, run),
-        AutomationReconcile => unary!(AutomationService, reconcile),
+        ScriptCheckHost => unary!(ScriptService, check_host),
+        ScriptRun => stream!(ScriptService, run),
+        ScriptReconcile => unary!(ScriptService, reconcile),
         PlatformCheckHealth => unary!(PlatformService, check_health),
         PlatformGetInfo => unary!(PlatformService, get_platform_info),
         PlatformStatsStream => stream!(PlatformService, stream_platform_stats),

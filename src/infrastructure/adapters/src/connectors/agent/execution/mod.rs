@@ -1,6 +1,6 @@
 //! Execution operations shared by direct and inbound Agents. Both use the
 //! canonical protobuf messages; Edge changes delivery, not the payload model.
-mod automation;
+mod scripts;
 use crate::connectors::agent::client::AgentBinaryExecOutput;
 use crate::connectors::agent::client::AgentClient;
 use crate::connectors::agent::client::AgentContainerAction;

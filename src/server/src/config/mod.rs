@@ -66,7 +66,7 @@ pub struct Config {
     pub realtime: Option<RealtimeConfig>,
     pub transport: TransportConfig,
     pub identity: IdentityConfig,
-    pub automation: citadel_automation::AutomationOptions,
+    pub scripts: citadel_scripts::ScriptOptions,
     pub node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy,
     pub stats_flush_interval: Duration,
     pub retention_interval: Duration,
@@ -331,7 +331,7 @@ impl Config {
             realtime,
             transport,
             identity,
-            automation: automation_options()?,
+            scripts: script_options()?,
             node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy {
                 removal_grace: Duration::from_secs(
                     positive_usize("CITADEL_EDGE_AGENT_NODE_AGENT_REMOVAL_GRACE_MINUTES", 10)?
@@ -1163,24 +1163,21 @@ fn service_account_limits() -> Result<citadel_identity::ServiceAccountLimitsDeta
     Ok(limits)
 }
 
-fn automation_options() -> Result<citadel_automation::AutomationOptions, ConfigError> {
-    let options = citadel_automation::AutomationOptions {
-        enabled: parse_env("CITADEL_AUTOMATIONS_ENABLED", true)?,
-        max_parallel_runs: parse_env("CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS", 4)?,
-        max_remote_runs: parse_env("CITADEL_AUTOMATIONS_MAX_REMOTE_RUNS", 16)?,
-        default_timeout_seconds: parse_env("CITADEL_AUTOMATIONS_DEFAULT_TIMEOUT_SECONDS", 300)?,
-        max_timeout_seconds: parse_env("CITADEL_AUTOMATIONS_MAX_TIMEOUT_SECONDS", 1800)?,
-        poll_interval: Duration::from_secs(parse_env(
-            "CITADEL_AUTOMATIONS_POLL_INTERVAL_SECONDS",
-            2,
-        )?),
+fn script_options() -> Result<citadel_scripts::ScriptOptions, ConfigError> {
+    let options = citadel_scripts::ScriptOptions {
+        enabled: parse_env("CITADEL_SCRIPTS_ENABLED", true)?,
+        max_parallel_runs: parse_env("CITADEL_SCRIPTS_MAX_PARALLEL_RUNS", 4)?,
+        max_remote_runs: parse_env("CITADEL_SCRIPTS_MAX_REMOTE_RUNS", 16)?,
+        default_timeout_seconds: parse_env("CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS", 300)?,
+        max_timeout_seconds: parse_env("CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS", 1800)?,
+        poll_interval: Duration::from_secs(parse_env("CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS", 2)?),
         schedule_poll_interval: Duration::from_secs(parse_env(
-            "CITADEL_AUTOMATIONS_SCHEDULE_POLL_INTERVAL_SECONDS",
+            "CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS",
             30,
         )?),
     };
     options.validate().map_err(|error| ConfigError::Invalid {
-        name: "Automations",
+        name: "Scripts",
         message: error.to_string(),
     })?;
     Ok(options)

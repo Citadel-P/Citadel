@@ -288,6 +288,23 @@ export enum SearchStatusTone {
   Neutral = "Neutral",
 }
 
+export enum ScriptRunTrigger {
+  Manual = "Manual",
+  Test = "Test",
+  Schedule = "Schedule",
+  Webhook = "Webhook",
+}
+
+export enum ScriptRunStatus {
+  Queued = "Queued",
+  Running = "Running",
+  Succeeded = "Succeeded",
+  Failed = "Failed",
+  TimedOut = "TimedOut",
+  Cancelled = "Cancelled",
+  Rejected = "Rejected",
+}
+
 export enum SchedulingMode {
   Replicated = "Replicated",
   Global = "Global",
@@ -324,7 +341,7 @@ export enum ResourceType {
   Role = "Role",
   Binding = "Binding",
   Tag = "Tag",
-  AutomationAction = "AutomationAction",
+  Script = "Script",
   License = "License",
   BackupRepository = "BackupRepository",
   BackupPolicy = "BackupPolicy",
@@ -480,7 +497,7 @@ export enum LookupResourceType {
   GitRepository = "GitRepository",
   GitAccount = "GitAccount",
   OidcProvider = "OidcProvider",
-  AutomationAction = "AutomationAction",
+  Script = "Script",
   Alert = "Alert",
   AlertChannel = "AlertChannel",
   User = "User",
@@ -495,7 +512,7 @@ export enum LookupResourceType {
   BuildAgentPool = "BuildAgentPool",
   SwarmService = "SwarmService",
   RunAsActor = "RunAsActor",
-  AutomationAgent = "AutomationAgent",
+  ScriptAgent = "ScriptAgent",
   ServiceAccount = "ServiceAccount",
 }
 
@@ -573,7 +590,7 @@ export enum GlobalSearchResourceType {
   Deployment = "Deployment",
   GitRepository = "GitRepository",
   Registry = "Registry",
-  AutomationAction = "AutomationAction",
+  Script = "Script",
   BackupPolicy = "BackupPolicy",
   BackupRepository = "BackupRepository",
   Build = "Build",
@@ -587,7 +604,7 @@ export enum GlobalSearchCategory {
   Deployments = "Deployments",
   Repositories = "Repositories",
   Registries = "Registries",
-  Automations = "Automations",
+  Scripts = "Scripts",
   Backups = "Backups",
   Builds = "Builds",
   SwarmServices = "SwarmServices",
@@ -717,7 +734,7 @@ export enum CheckConfiguration {
 
 export enum BuildRunTrigger {
   Manual = "Manual",
-  Automation = "Automation",
+  Script = "Script",
   Schedule = "Schedule",
   Webhook = "Webhook",
   Dependency = "Dependency",
@@ -768,7 +785,7 @@ export enum BackupSnapshotAvailability {
 export enum BackupRunTrigger {
   Manual = "Manual",
   Schedule = "Schedule",
-  Automation = "Automation",
+  Script = "Script",
   Webhook = "Webhook",
 }
 
@@ -856,23 +873,6 @@ export enum BackupCoverageReason {
   SchedulingUnavailable = "SchedulingUnavailable",
 }
 
-export enum AutomationRunTrigger {
-  Manual = "Manual",
-  Test = "Test",
-  Schedule = "Schedule",
-  Webhook = "Webhook",
-}
-
-export enum AutomationRunStatus {
-  Queued = "Queued",
-  Running = "Running",
-  Succeeded = "Succeeded",
-  Failed = "Failed",
-  TimedOut = "TimedOut",
-  Cancelled = "Cancelled",
-  Rejected = "Rejected",
-}
-
 export enum AutoUpdateStatus {
   Unknown = "Unknown",
   UpToDate = "UpToDate",
@@ -908,7 +908,7 @@ export enum AlertType {
   WebhookDispatchFailed = "WebhookDispatchFailed",
   WebhookGitRepoSyncFailed = "WebhookGitRepoSyncFailed",
   WebhookStackGitDeployFailed = "WebhookStackGitDeployFailed",
-  AutomationActionRunFailed = "AutomationActionRunFailed",
+  ScriptRunFailed = "ScriptRunFailed",
   BuildRunFailed = "BuildRunFailed",
   BackupRunFailed = "BackupRunFailed",
   BuildAgentPoolUnavailable = "BuildAgentPoolUnavailable",
@@ -933,7 +933,7 @@ export enum AlertResourceType {
   Stack = "Stack",
   GitRepository = "GitRepository",
   Webhook = "Webhook",
-  AutomationAction = "AutomationAction",
+  Script = "Script",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   BackupPolicy = "BackupPolicy",
@@ -1000,7 +1000,7 @@ export enum ActivityResourceType {
   AlertRule = "AlertRule",
   GitRepository = "GitRepository",
   OidcProvider = "OidcProvider",
-  AutomationAction = "AutomationAction",
+  Script = "Script",
   User = "User",
   Team = "Team",
   Role = "Role",
@@ -1050,19 +1050,19 @@ export enum ActivityEventType {
   OidcProviderUpdated = "OidcProviderUpdated",
   OidcProviderRenamed = "OidcProviderRenamed",
   OidcProviderDeleted = "OidcProviderDeleted",
-  ActionCreated = "ActionCreated",
-  ActionUpdated = "ActionUpdated",
-  ActionRenamed = "ActionRenamed",
-  ActionDeleted = "ActionDeleted",
-  ActionRunQueued = "ActionRunQueued",
-  ActionRunStarted = "ActionRunStarted",
-  ActionRunCleanupResolved = "ActionRunCleanupResolved",
-  ActionRunSucceeded = "ActionRunSucceeded",
-  ActionRunFailed = "ActionRunFailed",
-  ActionRunTimedOut = "ActionRunTimedOut",
-  ActionRunCancelled = "ActionRunCancelled",
-  ActionRunRejected = "ActionRunRejected",
-  ActionWebhookReceived = "ActionWebhookReceived",
+  ScriptCreated = "ScriptCreated",
+  ScriptUpdated = "ScriptUpdated",
+  ScriptRenamed = "ScriptRenamed",
+  ScriptDeleted = "ScriptDeleted",
+  ScriptRunQueued = "ScriptRunQueued",
+  ScriptRunStarted = "ScriptRunStarted",
+  ScriptRunCleanupResolved = "ScriptRunCleanupResolved",
+  ScriptRunSucceeded = "ScriptRunSucceeded",
+  ScriptRunFailed = "ScriptRunFailed",
+  ScriptRunTimedOut = "ScriptRunTimedOut",
+  ScriptRunCancelled = "ScriptRunCancelled",
+  ScriptRunRejected = "ScriptRunRejected",
+  ScriptWebhookReceived = "ScriptWebhookReceived",
   StackCreated = "StackCreated",
   StackDuplicated = "StackDuplicated",
   StackUpdated = "StackUpdated",
@@ -1164,11 +1164,6 @@ export enum ActivityEventType {
 
 export interface AccessTokenResponse {
   accessToken: string;
-}
-
-export interface ActionList {
-  actions: AuthorizedAction[];
-  capabilities: ResourceCapabilitiesView;
 }
 
 export interface ActivitiesView {
@@ -1490,10 +1485,6 @@ export interface ArchiveServiceAccountsRequest {
   ids: string[];
 }
 
-export type AuthorizedAction = AutomationActionView & {
-  capabilities: ResourceCapabilitiesView;
-};
-
 export type AuthorizedGitAccountView = GitAccountView & {
   capabilities: ResourceCapabilitiesView;
 };
@@ -1515,6 +1506,10 @@ export type AuthorizedRegistryView = RegistryView & {
   isDefault: boolean;
 };
 
+export type AuthorizedScript = ScriptView & {
+  capabilities: ResourceCapabilitiesView;
+};
+
 export type AuthorizedTagView = TagView & {
   capabilities: ResourceCapabilitiesView;
 };
@@ -1526,158 +1521,6 @@ export interface AutoUpdateState {
   lastError?: string | null;
   remoteDigest?: string | null;
   status: AutoUpdateStatus;
-}
-
-export interface AutomationActionActivitySnapshot {
-  alertOnFailure: boolean;
-  code: string;
-  defaultArgsJson: string;
-  description?: string | null;
-  enabled: boolean;
-  executor: any;
-  /** @format uuid */
-  id: string;
-  name: string;
-  /** @format uuid */
-  runAsActorId: string;
-  scheduleCron?: string | null;
-  scheduleEnabled: boolean;
-  scheduleTimeZone: string;
-  /** @format int32 */
-  timeoutSeconds: number;
-  webhook?: WebhookConfig | null;
-}
-
-export interface AutomationActionDuplicateDraftView {
-  draft: AutomationActionInput;
-  sourceName: string;
-}
-
-export interface AutomationActionInput {
-  alertOnFailure: boolean;
-  code: string;
-  defaultArgsJson?: string | null;
-  description?: string | null;
-  /** @format uuid */
-  duplicateSourceId?: string | null;
-  enabled: boolean;
-  executor?: AutomationExecutorSchema;
-  name: string;
-  /** @format uuid */
-  runAsActorId?: string | null;
-  scheduleCron?: string | null;
-  scheduleEnabled: boolean;
-  scheduleTimeZone?: string | null;
-  tagIds?: string[];
-  /** @format int32 */
-  timeoutSeconds?: number | null;
-  webhook?: WebhookConfig | null;
-}
-
-export interface AutomationActionRunLogsView {
-  logs: string;
-  /** @format uuid */
-  runId: string;
-}
-
-export interface AutomationActionView {
-  alertOnFailure: boolean;
-  code: string;
-  controlState: ResourceControlState;
-  /** @format date-time */
-  createdAt: string;
-  /** @format uuid */
-  createdByActorId: string;
-  /** @format uuid */
-  currentRunId: string | null;
-  defaultArgsJson: string;
-  description: string | null;
-  enabled: boolean;
-  executor: AutomationExecutorSchema;
-  /** @format uuid */
-  id: string;
-  /** @format date-time */
-  lastScheduledRunAt: string | null;
-  latestRun: AutomationRunView | null;
-  name: string;
-  /** @format int64 */
-  rowVersion: number;
-  /** @format uuid */
-  runAsActorId: string;
-  scheduleCron: string | null;
-  scheduleEnabled: boolean;
-  scheduleTimeZone: string;
-  tags: ResourcesTagsTagSummary[];
-  /** @format int32 */
-  timeoutSeconds: number;
-  /** @format date-time */
-  updatedAt: string;
-  webhook: WebhookView | null;
-}
-
-export type AutomationExecutorSchema =
-  | {
-      kind: "Core";
-    }
-  | {
-      /** @format uuid */
-      agentId: string;
-      kind: "Agent";
-    }
-  | {
-      kind: "Automatic";
-    };
-
-export interface AutomationProgress {
-  error: AutomationProgressError | null;
-  errorMessage: string | null;
-  progressMessage: string | null;
-  /** @format uuid */
-  runId: string | null;
-  status: AutomationRunStatus | null;
-  stream: string | null;
-}
-
-export interface AutomationProgressError {
-  /** @format int32 */
-  code: number;
-  message: string;
-}
-
-export interface AutomationRunView {
-  /** @format uuid */
-  actionId: string;
-  actionName: string;
-  argsJson: string;
-  /** @format uuid */
-  attemptId: string | null;
-  cleanupPending: boolean;
-  codeHash: string;
-  codeSnapshot: string | null;
-  /** @format int64 */
-  durationMs: number | null;
-  errorMessage: string | null;
-  /** @format uuid */
-  executorId: string | null;
-  /** @format int32 */
-  exitCode: number | null;
-  /** @format date-time */
-  finishedAt: string | null;
-  /** @format uuid */
-  id: string;
-  logs: string | null;
-  /** @format date-time */
-  queuedAt: string;
-  /** @format uuid */
-  runAsActorId: string;
-  /** @format date-time */
-  startedAt: string | null;
-  status: AutomationRunStatus;
-  /** @format int32 */
-  timeoutSeconds: number;
-  trigger: AutomationRunTrigger;
-  /** @format uuid */
-  triggeredByActorId: string | null;
 }
 
 export interface AvailableUpdate {
@@ -5071,7 +4914,7 @@ export type PublicActivityEventInfo =
       $type: "BuildWebhookReceived";
     })
   | (WebhookActivityDetails & {
-      $type: "ActionWebhookReceived";
+      $type: "ScriptWebhookReceived";
     })
   | (WebhookActivityDetails & {
       $type: "BackupPolicyWebhookReceived";
@@ -5516,38 +5359,38 @@ export type PublicActivityEventInfo =
       result: GitRepositorySyncActivitySnapshot;
     }
   | {
-      $type: "ActionCreated";
-      action: AutomationActionActivitySnapshot;
+      $type: "ScriptCreated";
+      script: ScriptActivitySnapshot;
       source?: ActivitySourceResource | null;
     }
   | {
-      $type: "ActionUpdated";
-      newAction: AutomationActionActivitySnapshot;
-      oldAction: AutomationActionActivitySnapshot;
+      $type: "ScriptUpdated";
+      newScript: ScriptActivitySnapshot;
+      oldScript: ScriptActivitySnapshot;
     }
   | {
-      $type: "ActionRenamed";
+      $type: "ScriptRenamed";
       newName: string;
       oldName: string;
     }
   | {
-      $type: "ActionDeleted";
-      action: AutomationActionActivitySnapshot;
+      $type: "ScriptDeleted";
+      script: ScriptActivitySnapshot;
     }
   | {
-      $type: "ActionRunQueued";
+      $type: "ScriptRunQueued";
       /** @format uuid */
       runId: string;
       trigger: string;
     }
   | {
-      $type: "ActionRunStarted";
+      $type: "ScriptRunStarted";
       /** @format uuid */
       runId: string;
       trigger: string;
     }
   | {
-      $type: "ActionRunSucceeded";
+      $type: "ScriptRunSucceeded";
       /** @format int64 */
       durationMs?: number | null;
       /** @format int32 */
@@ -5557,7 +5400,7 @@ export type PublicActivityEventInfo =
       trigger: string;
     }
   | {
-      $type: "ActionRunFailed";
+      $type: "ScriptRunFailed";
       /** @format int64 */
       durationMs?: number | null;
       errorMessage?: string | null;
@@ -5568,7 +5411,7 @@ export type PublicActivityEventInfo =
       trigger: string;
     }
   | {
-      $type: "ActionRunTimedOut";
+      $type: "ScriptRunTimedOut";
       /** @format int64 */
       durationMs?: number | null;
       errorMessage?: string | null;
@@ -5577,13 +5420,13 @@ export type PublicActivityEventInfo =
       trigger: string;
     }
   | {
-      $type: "ActionRunCancelled";
+      $type: "ScriptRunCancelled";
       /** @format uuid */
       runId: string;
       trigger: string;
     }
   | {
-      $type: "ActionRunRejected";
+      $type: "ScriptRunRejected";
       reason: string;
       /** @format uuid */
       runId: string;
@@ -5634,7 +5477,7 @@ export type PublicActivityEventInfo =
       trigger: string;
     }
   | {
-      $type: "ActionRunCleanupResolved";
+      $type: "ScriptRunCleanupResolved";
       /** @format uuid */
       attemptId: string;
       reason: string;
@@ -6016,13 +5859,6 @@ export interface RepositoryLocationInput {
   platformId?: string | null;
 }
 
-export interface ResolveAutomationCleanupInput {
-  acknowledged: boolean;
-  /** @format uuid */
-  attemptId: string;
-  reason: string;
-}
-
 export interface ResolveBuildCleanupInput {
   acknowledged: boolean;
   /** @format uuid */
@@ -6033,6 +5869,13 @@ export interface ResolveBuildCleanupInput {
 export interface ResolveInput {
   ids: string[];
   resolutionNote?: string | null;
+}
+
+export interface ResolveScriptCleanupInput {
+  acknowledged: boolean;
+  /** @format uuid */
+  attemptId: string;
+  reason: string;
 }
 
 export interface ResourceAccessInput {
@@ -6342,7 +6185,7 @@ export interface RunInput {
 }
 
 export interface RunList {
-  runs: AutomationRunView[];
+  runs: ScriptRunView[];
 }
 
 export interface RuntimeConfigFrom {
@@ -6369,6 +6212,163 @@ export interface RuntimeSwarmPeer {
 export interface ScaleSwarmServiceInput {
   /** @format int32 */
   replicas: number;
+}
+
+export interface ScriptActivitySnapshot {
+  alertOnFailure: boolean;
+  code: string;
+  defaultArgsJson: string;
+  description?: string | null;
+  enabled: boolean;
+  executor: any;
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  runAsActorId: string;
+  scheduleCron?: string | null;
+  scheduleEnabled: boolean;
+  scheduleTimeZone: string;
+  /** @format int32 */
+  timeoutSeconds: number;
+  webhook?: WebhookConfig | null;
+}
+
+export interface ScriptDuplicateDraftView {
+  draft: ScriptInput;
+  sourceName: string;
+}
+
+export type ScriptExecutorSchema =
+  | {
+      kind: "Core";
+    }
+  | {
+      /** @format uuid */
+      agentId: string;
+      kind: "Agent";
+    }
+  | {
+      kind: "Automatic";
+    };
+
+export interface ScriptInput {
+  alertOnFailure: boolean;
+  code: string;
+  defaultArgsJson?: string | null;
+  description?: string | null;
+  /** @format uuid */
+  duplicateSourceId?: string | null;
+  enabled: boolean;
+  executor?: ScriptExecutorSchema;
+  name: string;
+  /** @format uuid */
+  runAsActorId?: string | null;
+  scheduleCron?: string | null;
+  scheduleEnabled: boolean;
+  scheduleTimeZone?: string | null;
+  tagIds?: string[];
+  /** @format int32 */
+  timeoutSeconds?: number | null;
+  webhook?: WebhookConfig | null;
+}
+
+export interface ScriptList {
+  capabilities: ResourceCapabilitiesView;
+  scripts: AuthorizedScript[];
+}
+
+export interface ScriptProgress {
+  error: ScriptProgressError | null;
+  errorMessage: string | null;
+  progressMessage: string | null;
+  /** @format uuid */
+  runId: string | null;
+  status: ScriptRunStatus | null;
+  stream: string | null;
+}
+
+export interface ScriptProgressError {
+  /** @format int32 */
+  code: number;
+  message: string;
+}
+
+export interface ScriptRunLogsView {
+  logs: string;
+  /** @format uuid */
+  runId: string;
+}
+
+export interface ScriptRunView {
+  argsJson: string;
+  /** @format uuid */
+  attemptId: string | null;
+  cleanupPending: boolean;
+  codeHash: string;
+  codeSnapshot: string | null;
+  /** @format int64 */
+  durationMs: number | null;
+  errorMessage: string | null;
+  /** @format uuid */
+  executorId: string | null;
+  /** @format int32 */
+  exitCode: number | null;
+  /** @format date-time */
+  finishedAt: string | null;
+  /** @format uuid */
+  id: string;
+  logs: string | null;
+  /** @format date-time */
+  queuedAt: string;
+  /** @format uuid */
+  runAsActorId: string;
+  /** @format uuid */
+  scriptId: string;
+  scriptName: string;
+  /** @format date-time */
+  startedAt: string | null;
+  status: ScriptRunStatus;
+  /** @format int32 */
+  timeoutSeconds: number;
+  trigger: ScriptRunTrigger;
+  /** @format uuid */
+  triggeredByActorId: string | null;
+}
+
+export interface ScriptView {
+  alertOnFailure: boolean;
+  code: string;
+  controlState: ResourceControlState;
+  /** @format date-time */
+  createdAt: string;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format uuid */
+  currentRunId: string | null;
+  defaultArgsJson: string;
+  description: string | null;
+  enabled: boolean;
+  executor: ScriptExecutorSchema;
+  /** @format uuid */
+  id: string;
+  /** @format date-time */
+  lastScheduledRunAt: string | null;
+  latestRun: ScriptRunView | null;
+  name: string;
+  /** @format int64 */
+  rowVersion: number;
+  /** @format uuid */
+  runAsActorId: string;
+  scheduleCron: string | null;
+  scheduleEnabled: boolean;
+  scheduleTimeZone: string;
+  tags: ResourcesTagsTagSummary[];
+  /** @format int32 */
+  timeoutSeconds: number;
+  /** @format date-time */
+  updatedAt: string;
+  webhook: WebhookView | null;
 }
 
 export interface SecretDefinitionView {
@@ -7689,27 +7689,6 @@ export interface TestSecretProviderInput {
   token?: string | null;
 }
 
-export interface UpdateAutomationActionInput {
-  alertOnFailure?: boolean;
-  code?: string;
-  defaultArgsJson?: string | null;
-  description?: string | null;
-  enabled?: boolean;
-  executor?: AutomationExecutorSchema;
-  /** @format uuid */
-  runAsActorId?: string | null;
-  scheduleCron?: string | null;
-  scheduleEnabled?: boolean;
-  scheduleTimeZone?: string | null;
-  /** @format int32 */
-  timeoutSeconds?: number | null;
-  webhook?: WebhookPatch | null;
-}
-
-export interface UpdateAutomationActionMetadata {
-  description?: string | null;
-}
-
 export interface UpdateBackupPolicyInput {
   alertOnFailure?: boolean | null;
   /** @format uuid */
@@ -7797,6 +7776,27 @@ export interface UpdateBuildProjectInput {
 
 export interface UpdateCurrentProfileRequest {
   displayName: string;
+}
+
+export interface UpdateScriptInput {
+  alertOnFailure?: boolean;
+  code?: string;
+  defaultArgsJson?: string | null;
+  description?: string | null;
+  enabled?: boolean;
+  executor?: ScriptExecutorSchema;
+  /** @format uuid */
+  runAsActorId?: string | null;
+  scheduleCron?: string | null;
+  scheduleEnabled?: boolean;
+  scheduleTimeZone?: string | null;
+  /** @format int32 */
+  timeoutSeconds?: number | null;
+  webhook?: WebhookPatch | null;
+}
+
+export interface UpdateScriptMetadata {
+  description?: string | null;
 }
 
 export interface UpdateServiceAccountRequest {
@@ -9355,530 +9355,6 @@ export class Api<
       this.request<AccessTokenResponse, ProblemDetails>({
         path: `/api/v1/authentication/refresh`,
         method: "GET",
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name ListAutomationActions
-     * @summary List Automation Actions
-     * @request GET:/api/v1/automation/actions
-     * @secure
-     * @response `200` `ActionList` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    listAutomationActions: (
-      query?: {
-        tags?: string[];
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<ActionList, ProblemDetails>({
-        path: `/api/v1/automation/actions`,
-        method: "GET",
-        query: query,
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name CreateAutomationAction
-     * @summary Create an Automation Action
-     * @request POST:/api/v1/automation/actions
-     * @secure
-     * @response `200` `AuthorizedAction` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    createAutomationAction: (
-      data: AutomationActionInput,
-      params: RequestParams = {},
-    ) =>
-      this.request<AuthorizedAction, ProblemDetails>({
-        path: `/api/v1/automation/actions`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name RenameAutomationAction
-     * @summary Rename an Automation Action
-     * @request POST:/api/v1/automation/actions/rename
-     * @secure
-     * @response `200` `AuthorizedAction` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    renameAutomationAction: (data: RenameInput, params: RequestParams = {}) =>
-      this.request<AuthorizedAction, ProblemDetails>({
-        path: `/api/v1/automation/actions/rename`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name DeleteAutomationAction
-     * @summary Delete an Automation Action
-     * @request DELETE:/api/v1/automation/actions/{id}
-     * @secure
-     * @response `204` `void` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    deleteAutomationAction: (id: string, params: RequestParams = {}) =>
-      this.request<void, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}`,
-        method: "DELETE",
-        secure: true,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name GetAutomationAction
-     * @summary Get an Automation Action
-     * @request GET:/api/v1/automation/actions/{id}
-     * @secure
-     * @response `200` `AuthorizedAction` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    getAutomationAction: (id: string, params: RequestParams = {}) =>
-      this.request<AuthorizedAction, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name UpdateAutomationAction
-     * @summary Update an Automation Action
-     * @request PATCH:/api/v1/automation/actions/{id}
-     * @secure
-     * @response `200` `AuthorizedAction` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    updateAutomationAction: (
-      id: string,
-      data: UpdateAutomationActionInput,
-      params: RequestParams = {},
-    ) =>
-      this.request<AuthorizedAction, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}`,
-        method: "PATCH",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name UpdateAutomationActionMetadata
-     * @summary Update Automation Action metadata
-     * @request PATCH:/api/v1/automation/actions/{id}/_metadata
-     * @secure
-     * @response `200` `AuthorizedAction` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    updateAutomationActionMetadata: (
-      id: string,
-      data: UpdateAutomationActionMetadata,
-      params: RequestParams = {},
-    ) =>
-      this.request<AuthorizedAction, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/_metadata`,
-        method: "PATCH",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name GetAutomationActionDuplicateDraft
-     * @summary Prepare a disabled configuration copy
-     * @request GET:/api/v1/automation/actions/{id}/duplicate-draft
-     * @secure
-     * @response `200` `AutomationActionDuplicateDraftView` Editable configuration without activation or runtime state
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    getAutomationActionDuplicateDraft: (
-      id: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<AutomationActionDuplicateDraftView, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/duplicate-draft`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name RunAutomationAction
-     * @summary Queue an Automation Action run
-     * @request POST:/api/v1/automation/actions/{id}/run
-     * @secure
-     * @response `200` `(AutomationProgress)[]` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    runAutomationAction: (
-      id: string,
-      data: RunInput | null,
-      params: RequestParams = {},
-    ) =>
-      this.request<AutomationProgress[], ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/run`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name ListAutomationActionRuns
-     * @summary List Automation Action runs
-     * @request GET:/api/v1/automation/actions/{id}/runs
-     * @secure
-     * @response `200` `RunList` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    listAutomationActionRuns: (
-      id: string,
-      query?: {
-        /**
-         * @format int32
-         * @min 1
-         * @max 100
-         * @default 20
-         */
-        limit?: number;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<RunList, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/runs`,
-        method: "GET",
-        query: query,
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name GetAutomationActionRun
-     * @summary Get an Automation Action run
-     * @request GET:/api/v1/automation/actions/{id}/runs/{runId}
-     * @secure
-     * @response `200` `AutomationRunView` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    getAutomationActionRun: (
-      id: string,
-      runId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<AutomationRunView, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/runs/${runId}`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name CancelAutomationActionRun
-     * @summary Cancel an Automation Action run
-     * @request POST:/api/v1/automation/actions/{id}/runs/{runId}/cancel
-     * @secure
-     * @response `204` `void` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    cancelAutomationActionRun: (
-      id: string,
-      runId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<void, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/runs/${runId}/cancel`,
-        method: "POST",
-        secure: true,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name GetAutomationActionRunLogs
-     * @summary Get Automation Action run logs
-     * @request GET:/api/v1/automation/actions/{id}/runs/{runId}/logs
-     * @secure
-     * @response `200` `AutomationActionRunLogsView` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    getAutomationActionRunLogs: (
-      id: string,
-      runId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<AutomationActionRunLogsView, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/runs/${runId}/logs`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name ResolveAutomationRunCleanup
-     * @summary Resolve retained automation capacity after manual cleanup and Agent restart
-     * @request POST:/api/v1/automation/actions/{id}/runs/{runId}/recovery
-     * @secure
-     * @response `204` `void` Capacity released and acknowledgment audited; result unchanged
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    resolveAutomationRunCleanup: (
-      id: string,
-      runId: string,
-      data: ResolveAutomationCleanupInput,
-      params: RequestParams = {},
-    ) =>
-      this.request<void, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/runs/${runId}/recovery`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name GetAutomationActionTags
-     * @summary Get AutomationAction tags
-     * @request GET:/api/v1/automation/actions/{id}/tags
-     * @secure
-     * @response `200` `ResourceTagsResponse` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    getAutomationActionTags: (id: string, params: RequestParams = {}) =>
-      this.request<ResourceTagsResponse, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/tags`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name ReplaceAutomationActionTags
-     * @summary Replace AutomationAction tags
-     * @request PUT:/api/v1/automation/actions/{id}/tags
-     * @secure
-     * @response `200` `ResourceTagsResponse` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    replaceAutomationActionTags: (
-      id: string,
-      data: ReplaceResourceTagsInput,
-      params: RequestParams = {},
-    ) =>
-      this.request<ResourceTagsResponse, ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/tags`,
-        method: "PUT",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags AutomationActions
-     * @name TestAutomationAction
-     * @summary Queue a test Automation Action run
-     * @request POST:/api/v1/automation/actions/{id}/test
-     * @secure
-     * @response `200` `(AutomationProgress)[]` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    testAutomationAction: (
-      id: string,
-      data: RunInput | null,
-      params: RequestParams = {},
-    ) =>
-      this.request<AutomationProgress[], ProblemDetails>({
-        path: `/api/v1/automation/actions/${id}/test`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -18247,6 +17723,512 @@ export class Api<
       this.request<RoleView, ProblemDetails>({
         path: `/api/v1/roles/${id}/permissions`,
         method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name ListScripts
+     * @summary List Scripts
+     * @request GET:/api/v1/scripts
+     * @secure
+     * @response `200` `ScriptList` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listScripts: (
+      query?: {
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ScriptList, ProblemDetails>({
+        path: `/api/v1/scripts`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name CreateScript
+     * @summary Create a Script
+     * @request POST:/api/v1/scripts
+     * @secure
+     * @response `200` `AuthorizedScript` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    createScript: (data: ScriptInput, params: RequestParams = {}) =>
+      this.request<AuthorizedScript, ProblemDetails>({
+        path: `/api/v1/scripts`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name RenameScript
+     * @summary Rename a Script
+     * @request POST:/api/v1/scripts/rename
+     * @secure
+     * @response `200` `AuthorizedScript` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    renameScript: (data: RenameInput, params: RequestParams = {}) =>
+      this.request<AuthorizedScript, ProblemDetails>({
+        path: `/api/v1/scripts/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name DeleteScript
+     * @summary Delete a Script
+     * @request DELETE:/api/v1/scripts/{id}
+     * @secure
+     * @response `204` `void` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    deleteScript: (id: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/scripts/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name GetScript
+     * @summary Get a Script
+     * @request GET:/api/v1/scripts/{id}
+     * @secure
+     * @response `200` `AuthorizedScript` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getScript: (id: string, params: RequestParams = {}) =>
+      this.request<AuthorizedScript, ProblemDetails>({
+        path: `/api/v1/scripts/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name UpdateScript
+     * @summary Update a Script
+     * @request PATCH:/api/v1/scripts/{id}
+     * @secure
+     * @response `200` `AuthorizedScript` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    updateScript: (
+      id: string,
+      data: UpdateScriptInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<AuthorizedScript, ProblemDetails>({
+        path: `/api/v1/scripts/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name UpdateScriptMetadata
+     * @summary Update Script metadata
+     * @request PATCH:/api/v1/scripts/{id}/_metadata
+     * @secure
+     * @response `200` `AuthorizedScript` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    updateScriptMetadata: (
+      id: string,
+      data: UpdateScriptMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<AuthorizedScript, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name GetScriptDuplicateDraft
+     * @summary Prepare a disabled configuration copy
+     * @request GET:/api/v1/scripts/{id}/duplicate-draft
+     * @secure
+     * @response `200` `ScriptDuplicateDraftView` Editable configuration without activation or runtime state
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getScriptDuplicateDraft: (id: string, params: RequestParams = {}) =>
+      this.request<ScriptDuplicateDraftView, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/duplicate-draft`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name RunScript
+     * @summary Queue a Script run
+     * @request POST:/api/v1/scripts/{id}/run
+     * @secure
+     * @response `200` `(ScriptProgress)[]` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    runScript: (
+      id: string,
+      data: RunInput | null,
+      params: RequestParams = {},
+    ) =>
+      this.request<ScriptProgress[], ProblemDetails>({
+        path: `/api/v1/scripts/${id}/run`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name ListScriptRuns
+     * @summary List Script runs
+     * @request GET:/api/v1/scripts/{id}/runs
+     * @secure
+     * @response `200` `RunList` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listScriptRuns: (
+      id: string,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 20
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<RunList, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/runs`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name GetScriptRun
+     * @summary Get a Script run
+     * @request GET:/api/v1/scripts/{id}/runs/{runId}
+     * @secure
+     * @response `200` `ScriptRunView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getScriptRun: (id: string, runId: string, params: RequestParams = {}) =>
+      this.request<ScriptRunView, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/runs/${runId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name CancelScriptRun
+     * @summary Cancel a Script run
+     * @request POST:/api/v1/scripts/{id}/runs/{runId}/cancel
+     * @secure
+     * @response `204` `void` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    cancelScriptRun: (id: string, runId: string, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/runs/${runId}/cancel`,
+        method: "POST",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name GetScriptRunLogs
+     * @summary Get Script run logs
+     * @request GET:/api/v1/scripts/{id}/runs/{runId}/logs
+     * @secure
+     * @response `200` `ScriptRunLogsView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getScriptRunLogs: (id: string, runId: string, params: RequestParams = {}) =>
+      this.request<ScriptRunLogsView, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/runs/${runId}/logs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name ResolveScriptRunCleanup
+     * @summary Resolve retained scripts capacity after manual cleanup and Agent restart
+     * @request POST:/api/v1/scripts/{id}/runs/{runId}/recovery
+     * @secure
+     * @response `204` `void` Capacity released and acknowledgment audited; result unchanged
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    resolveScriptRunCleanup: (
+      id: string,
+      runId: string,
+      data: ResolveScriptCleanupInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/runs/${runId}/recovery`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name GetScriptTags
+     * @summary Get Script tags
+     * @request GET:/api/v1/scripts/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsResponse` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getScriptTags: (id: string, params: RequestParams = {}) =>
+      this.request<ResourceTagsResponse, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/tags`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name ReplaceScriptTags
+     * @summary Replace Script tags
+     * @request PUT:/api/v1/scripts/{id}/tags
+     * @secure
+     * @response `200` `ResourceTagsResponse` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    replaceScriptTags: (
+      id: string,
+      data: ReplaceResourceTagsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ResourceTagsResponse, ProblemDetails>({
+        path: `/api/v1/scripts/${id}/tags`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Scripts
+     * @name TestScript
+     * @summary Queue a test Script run
+     * @request POST:/api/v1/scripts/{id}/test
+     * @secure
+     * @response `200` `(ScriptProgress)[]` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    testScript: (
+      id: string,
+      data: RunInput | null,
+      params: RequestParams = {},
+    ) =>
+      this.request<ScriptProgress[], ProblemDetails>({
+        path: `/api/v1/scripts/${id}/test`,
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,

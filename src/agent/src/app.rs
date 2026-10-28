@@ -77,7 +77,7 @@ impl Agent {
                     self.config.data_slots,
                     self.config.heavy_slots,
                 )
-                .with_automation(self.config.automation_slots, terminal_tasks.clone()),
+                .with_scripts(self.config.script_slots, terminal_tasks.clone()),
                 direct.hub_public_key,
                 &direct.audience,
             )),

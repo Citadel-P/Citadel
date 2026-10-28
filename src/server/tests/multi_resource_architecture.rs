@@ -23,12 +23,12 @@ fn sources(path: &Path) -> Vec<PathBuf> {
 #[test]
 fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    for feature in ["builds", "git", "backups", "automation", "alerts"] {
+    for feature in ["builds", "git", "backups", "scripts", "alerts"] {
         for path in sources(&crates.join("features").join(feature).join("src")) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
-                "AutomationActionView",
-                "AutomationRunView",
+                "ScriptView",
+                "ScriptRunView",
                 "AlertChannelView",
                 "AlertRuleView",
                 "AlertEventView",
@@ -62,7 +62,7 @@ fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
         );
     }
     for (feature, resources) in [
-        ("automation", &["actions", "runs"][..]),
+        ("scripts", &["definitions", "runs"][..]),
         ("alerts", &["channels", "rules", "events"][..]),
         ("builds", &["projects", "runs", "agent_pools"][..]),
         ("git", &["accounts", "repositories"][..]),
@@ -87,7 +87,7 @@ fn migrated_resources_keep_transport_and_detached_tasks_out_of_features() {
 #[test]
 fn migrated_postgres_maps_semantic_data_without_http_projection() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    for feature in ["builds", "git", "backups", "automation", "alerts"] {
+    for feature in ["builds", "git", "backups", "scripts", "alerts"] {
         for path in sources(
             &crates
                 .join("infrastructure/adapters/src/persistence/postgres")
@@ -95,8 +95,8 @@ fn migrated_postgres_maps_semantic_data_without_http_projection() {
         ) {
             let source = std::fs::read_to_string(&path).unwrap();
             for forbidden in [
-                "AutomationActionView",
-                "AutomationRunView",
+                "ScriptView",
+                "ScriptRunView",
                 "AlertChannelView",
                 "AlertRuleView",
                 "AlertEventView",

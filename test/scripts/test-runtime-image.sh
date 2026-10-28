@@ -77,19 +77,19 @@ set -eu
 GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/docker-library/hello-world.git HEAD >/dev/null
 ssh -V
 mkdir /tmp/runtime-fixture
-cat > /tmp/runtime-fixture/action.ts <<'TS'
+cat > /tmp/runtime-fixture/script.ts <<'TS'
 const message: string = 'runtime fixture';
 await Deno.writeTextFile('/tmp/runtime-fixture/payload', message);
 if (await Deno.readTextFile('/tmp/runtime-fixture/payload') !== message) throw new Error('File round trip failed');
 try {
   await Deno.readTextFile('/etc/os-release');
-  throw new Error('Read escaped the automation sandbox');
+  throw new Error('Read escaped the scripts sandbox');
 } catch (error) {
   if (!(error instanceof Deno.errors.NotCapable)) throw error;
 }
 TS
 deno run --no-prompt --allow-read=/tmp/runtime-fixture --allow-write=/tmp/runtime-fixture \
-  --allow-env=NO_COLOR,DENO_DIR /tmp/runtime-fixture/action.ts
+  --allow-env=NO_COLOR,DENO_DIR /tmp/runtime-fixture/script.ts
 export RESTIC_REPOSITORY=/tmp/restic-repository RESTIC_PASSWORD=runtime-test-only
 restic init >/dev/null
 restic backup --json /tmp/runtime-fixture/payload >/dev/null

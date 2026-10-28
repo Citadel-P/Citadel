@@ -2,8 +2,8 @@ use super::*;
 use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
 use citadel_adapters::persistence::postgres::{
     activities::store::PostgresActivityStore, alerts::PostgresAlertRepository,
-    automation::PostgresAutomationRepository, backups::PostgresBackupPersistence,
-    builds::PostgresBuildRepository, deployments::PostgresDeploymentRepository,
+    backups::PostgresBackupPersistence, builds::PostgresBuildRepository,
+    deployments::PostgresDeploymentRepository, scripts::PostgresScriptRepository,
     stacks::PostgresStackRepository, swarm_services::PostgresSwarmServiceRepository,
 };
 use citadel_identity::{
@@ -39,7 +39,7 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
         deployments: Arc::new(PostgresDeploymentRepository::new(f.pool.clone())),
         stacks: Arc::new(PostgresStackRepository::new(f.pool.clone())),
         services: Arc::new(PostgresSwarmServiceRepository::new(f.pool.clone())),
-        automation: Arc::new(PostgresAutomationRepository::new(f.pool.clone())),
+        scripts: Arc::new(PostgresScriptRepository::new(f.pool.clone())),
         builds: Arc::new(PostgresBuildRepository::new(f.pool.clone())),
         backups: Arc::new(PostgresBackupPersistence::new(f.pool.clone())),
         activities: Arc::new(citadel_activities::ActivityService::new(Arc::new(
@@ -58,14 +58,14 @@ pub(super) async fn token(f: &Fixture, p: &ActorPrincipal) -> String {
     JwtSessionTokenCodec::new(&[7; 32], "fixture".into(), "fixture".into())
         .unwrap()
         .encode_access(&AccessTokenClaims {
-            automation_attempt_id: None,
+            script_attempt_id: None,
             session_id: Some(session_id),
             subject_id: p.subject_id,
             actor_id: p.actor_id,
             principal_type: p.principal_type,
             issued_at: Utc::now(),
             expires_at: Utc::now() + Duration::minutes(5),
-            automation_run_id: None,
+            script_run_id: None,
         })
         .unwrap()
 }
@@ -1990,20 +1990,20 @@ async fn platform_realtime_capabilities_match_http_and_remain_actor_specific() {
 
 #[tokio::test]
 #[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
-async fn automation_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
-    use citadel_automation::{AutomationActionConfiguration, AutomationRepository};
+async fn script_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
+    use citadel_scripts::{ScriptConfiguration, ScriptRepository};
     let f = fixture().await;
     let reader = reader(&f);
-    let store = PostgresAutomationRepository::new(f.pool.clone());
+    let store = PostgresScriptRepository::new(f.pool.clone());
     let actor = f.administrator.actor_id;
-    let mut input: AutomationActionConfiguration = serde_json::from_value(json!({
-        "name": "Realtime automation", "code": "console.log('fixture')",
+    let mut input: ScriptConfiguration = serde_json::from_value(json!({
+        "name": "Realtime scripts", "code": "console.log('fixture')",
         "enabled": true, "scheduleEnabled": false, "alertOnFailure": false
     }))
     .unwrap();
     input.validate(actor).unwrap();
     let action = store.create(actor, &input).await.unwrap();
-    let group = Group::parse(&format!("automation-runs:{}", action.id)).unwrap();
+    let group = Group::parse(&format!("scripts-runs:{}", action.id)).unwrap();
     let mut denied = f.administrator.clone();
     denied.actor_id = ActorId::new(f.actor_id);
     denied.roles.clear();
@@ -2012,10 +2012,10 @@ async fn automation_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
         Err(citadel_server::realtime::RealtimeReadError::Authorization)
     ));
     let initial = reader.read(&f.administrator, &group, None).await.unwrap();
-    assert_eq!(initial.events[0].target, "AutomationRunWindow");
+    assert_eq!(initial.events[0].target, "ScriptRunWindow");
     assert_eq!(
         initial.events[0].arguments[0],
-        json!({"actionId": action.id, "ids": []})
+        json!({"scriptId": action.id, "ids": []})
     );
 
     let run = store
@@ -2035,10 +2035,10 @@ async fn automation_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
         .execute(&f.pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO automationexecutorreservations(attemptid,runid,daemonid,authorityid,admissiongeneration,agentid,agenttype) VALUES($1,$2,$3,$4,1,$5,$6)")
+    sqlx::query("INSERT INTO scriptexecutorreservations(attemptid,runid,daemonid,authorityid,admissiongeneration,agentid,agenttype) VALUES($1,$2,$3,$4,1,$5,$6)")
         .bind(Uuid::now_v7()).bind(run.id).bind(daemon).bind(authority).bind(f.platform_id)
         .bind(ResourceType::Platform as i32).execute(&f.pool).await.unwrap();
-    sqlx::query("UPDATE actions SET controlstate='Processing',currentrunid=$2 WHERE id=$1")
+    sqlx::query("UPDATE scripts SET controlstate='Processing',currentrunid=$2 WHERE id=$1")
         .bind(action.id)
         .bind(run.id)
         .execute(&f.pool)
@@ -2055,7 +2055,7 @@ async fn automation_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
     let retained = reader.read(&f.administrator, &group, None).await.unwrap();
     assert_eq!(retained.rows[0].rows[0]["status"], "Cancelled");
     assert_eq!(retained.rows[0].rows[0]["cleanupPending"], true);
-    sqlx::query("DELETE FROM automationexecutorreservations WHERE runid=$1")
+    sqlx::query("DELETE FROM scriptexecutorreservations WHERE runid=$1")
         .bind(run.id)
         .execute(&f.pool)
         .await
@@ -2068,7 +2068,7 @@ async fn automation_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
     assert_eq!(recovered.rows[0].rows[0]["cleanupPending"], false);
     // A valid window can exceed one frame when arguments need JSON escaping.
     let args = json!({"value": "\\".repeat(32_000)});
-    sqlx::query("INSERT INTO actionruns(id,actionid,actionname,trigger,status,runasactorid,argsjson,codehash,codesnapshot,timeoutseconds,queuedat,finishedat) SELECT gen_random_uuid(),$1,'Large args','Manual','Succeeded',$2,$3,'fixture','export default async () => {};',30,now()-make_interval(secs=>n),now() FROM generate_series(1,51) n")
+    sqlx::query("INSERT INTO scriptruns(id,scriptid,scriptname,trigger,status,runasactorid,argsjson,codehash,codesnapshot,timeoutseconds,queuedat,finishedat) SELECT gen_random_uuid(),$1,'Large args','Manual','Succeeded',$2,$3,'fixture','export default async () => {};',30,now()-make_interval(secs=>n),now() FROM generate_series(1,51) n")
         .bind(action.id).bind(actor.value()).bind(args).execute(&f.pool).await.unwrap();
     let window = reader.read(&f.administrator, &group, None).await.unwrap();
     assert_eq!(window.rows[0].rows.len(), 50);
@@ -2083,7 +2083,7 @@ async fn automation_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
     for row in &window.rows[0].rows {
         assert!(serde_json::to_vec(row).unwrap().len() < 4 * 1024 * 1024);
     }
-    sqlx::query("DELETE FROM actionruns WHERE actionid=$1")
+    sqlx::query("DELETE FROM scriptruns WHERE scriptid=$1")
         .bind(action.id)
         .execute(&f.pool)
         .await

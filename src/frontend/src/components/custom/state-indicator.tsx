@@ -2,7 +2,7 @@ import { memo, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import {
   AlertRuleStatus,
-  AutomationRunStatus,
+  ScriptRunStatus,
   BackupRunItemStatus,
   BackupRestoreStatus,
   BackupRunStatus,
@@ -36,10 +36,10 @@ type StateValue =
   | BackupRunItemStatus
   | BackupRestoreStatus
   | GitRepositoryStatus
-  | AutomationRunStatus;
+  | ScriptRunStatus;
 
 type StateIndicatorKind =
-  | 'automationActionRun'
+  | 'scriptRun'
   | 'backupRun'
   | 'backupRestore'
   | 'buildAgentPoolValidation'
@@ -54,19 +54,19 @@ type StatusStyle = {
   tooltip: string;
 };
 
-const getAutomationActionRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
+const getScriptRunStatusStyle = (value: StateValue): StatusStyle | undefined => {
   switch (value) {
-    case AutomationRunStatus.Queued:
+    case ScriptRunStatus.Queued:
       return { colorClass: 'bg-yellow-500', tooltip: 'Queued' };
-    case AutomationRunStatus.Running:
+    case ScriptRunStatus.Running:
       return { colorClass: 'bg-blue-500', tooltip: 'Running' };
-    case AutomationRunStatus.Succeeded:
+    case ScriptRunStatus.Succeeded:
       return { colorClass: 'bg-green-500', tooltip: 'Succeeded' };
-    case AutomationRunStatus.Failed:
-    case AutomationRunStatus.TimedOut:
+    case ScriptRunStatus.Failed:
+    case ScriptRunStatus.TimedOut:
       return { colorClass: 'bg-red-500', tooltip: String(value) };
-    case AutomationRunStatus.Cancelled:
-    case AutomationRunStatus.Rejected:
+    case ScriptRunStatus.Cancelled:
+    case ScriptRunStatus.Rejected:
       return { colorClass: 'bg-gray-500', tooltip: String(value) };
     default:
       return undefined;
@@ -263,8 +263,8 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
     };
   }
 
-  if (kind === 'automationActionRun') {
-    return getAutomationActionRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+  if (kind === 'scriptRun') {
+    return getScriptRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
   }
 
   if (kind === 'backupRun') {
@@ -350,15 +350,15 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
       return { colorClass: 'bg-blue-400', tooltip: 'Uninitialized' };
     case BackupRepositoryStatus.Unknown:
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
-    // Automation action runs
-    case AutomationRunStatus.Queued:
-    case AutomationRunStatus.Running:
-    case AutomationRunStatus.Succeeded:
-    case AutomationRunStatus.Failed:
-    case AutomationRunStatus.TimedOut:
-    case AutomationRunStatus.Cancelled:
-    case AutomationRunStatus.Rejected:
-      return getAutomationActionRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
+    // Script runs
+    case ScriptRunStatus.Queued:
+    case ScriptRunStatus.Running:
+    case ScriptRunStatus.Succeeded:
+    case ScriptRunStatus.Failed:
+    case ScriptRunStatus.TimedOut:
+    case ScriptRunStatus.Cancelled:
+    case ScriptRunStatus.Rejected:
+      return getScriptRunStatusStyle(value) ?? { colorClass: 'bg-gray-400', tooltip: String(value) };
     case BuildRunStatus.Queued:
     case BuildRunStatus.Preparing:
     case BuildRunStatus.Running:
@@ -425,7 +425,7 @@ export const StateIndicator = memo(
       const badgeKind: StateBadgeKind =
         kind === 'container' || kind === 'swarmTask' || kind === 'swarmNode'
           ? kind
-          : kind === 'buildRun' || kind === 'automationActionRun' || kind === 'backupRun' || kind === 'backupRestore'
+          : kind === 'buildRun' || kind === 'scriptRun' || kind === 'backupRun' || kind === 'backupRestore'
             ? 'run'
             : 'default';
       return (

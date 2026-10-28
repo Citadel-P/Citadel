@@ -8,7 +8,7 @@ defines the source, builder, image tags, and optional Registry destination;
 each run records its commit, output, and logs.
 
 Use a Build Project for Dockerfile builds. Use
-[Automation Actions](/docs/resources/automation-actions) for scripts that call
+[Scripts](/docs/resources/scripts) for scripts that call
 Citadel APIs or coordinate operational tasks.
 
 ## Build your first image
@@ -54,7 +54,7 @@ requires **Elastic Build Execution**.
 
 Push a small application change and verify both the Build run and the resulting
 Deployment or Stack operation. Build success and deployment success are separate
-outcomes. Use this built-in flow when it fits; an Automation script is only needed
+outcomes. Use this built-in flow when it fits; a script is only needed
 for additional coordination. A queued build response does not mean its image is
 ready to deploy.
 

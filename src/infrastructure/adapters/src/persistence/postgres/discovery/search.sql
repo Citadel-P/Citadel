@@ -177,7 +177,7 @@ RegistryCandidates AS (
     ORDER BY MatchRank, lower(registry.Name), registry.Id
     LIMIT $7
 ),
-AutomationActionCandidates AS (
+ScriptCandidates AS (
     SELECT
         action.Id,
         CASE
@@ -185,7 +185,7 @@ AutomationActionCandidates AS (
             WHEN action.Name ILIKE $5 ESCAPE E'\\' THEN 1
             ELSE 2
         END AS MatchRank
-    FROM Actions action
+    FROM scripts action
     WHERE $15 = ANY($3)
       AND action.Name ILIKE $6 ESCAPE E'\\'
       AND (
@@ -499,13 +499,13 @@ Matches AS (
         NULL::integer AS ParentResourceType,
         NULL::text AS ParentName,
         candidate.MatchRank
-    FROM AutomationActionCandidates candidate
-    JOIN Actions action ON action.Id = candidate.Id
-    LEFT JOIN ActionRuns currentRun ON currentRun.Id = action.CurrentRunId
+    FROM ScriptCandidates candidate
+    JOIN scripts action ON action.Id = candidate.Id
+    LEFT JOIN ScriptRuns currentRun ON currentRun.Id = action.CurrentRunId
     LEFT JOIN LATERAL (
         SELECT runs.Status
-        FROM ActionRuns runs
-        WHERE runs.ActionId = action.Id
+        FROM ScriptRuns runs
+        WHERE runs.ScriptId = action.Id
         ORDER BY runs.QueuedAt DESC, runs.Id DESC
         LIMIT 1
     ) latestRun ON TRUE

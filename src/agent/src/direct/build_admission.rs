@@ -98,10 +98,10 @@ impl BuildAdmission {
             .generation)
     }
 
-    pub(super) fn reserve_automation(
+    pub(super) fn reserve_scripts(
         &self,
-        ledger: &super::automation::Admission,
-        request: &citadel_contracts::citadel::automation::v1::AutomationAttempt,
+        ledger: &super::scripts::Admission,
+        request: &citadel_contracts::citadel::scripts::v1::ScriptAttempt,
         cancel: tokio_util::sync::CancellationToken,
     ) -> Result<bool, Status> {
         let state = self

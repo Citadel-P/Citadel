@@ -2,7 +2,7 @@ use super::*;
 use citadel_platforms::containers::{ContainerAction, DeleteContainerOptions};
 
 #[tokio::test]
-async fn container_actions_use_generated_routes_preserve_delete_options_and_accept_304() {
+async fn container_scripts_use_generated_routes_preserve_delete_options_and_accept_304() {
     let path = temp_socket();
     let listener = UnixListener::bind(&path).unwrap();
     let server = tokio::spawn(async move {

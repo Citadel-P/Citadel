@@ -48,7 +48,7 @@ export type OverrideResourceType =
   | ResourceType.Tag
   | ResourceType.BackupPolicy
   | ResourceType.BackupRepository
-  | ResourceType.AutomationAction
+  | ResourceType.Script
   | ResourceType.Build
   | ResourceType.BuildAgentPool;
 
@@ -85,7 +85,7 @@ export const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.Tag,
   ResourceType.BackupPolicy,
   ResourceType.BackupRepository,
-  ResourceType.AutomationAction,
+  ResourceType.Script,
   ResourceType.Build,
   ResourceType.BuildAgentPool,
 ];
@@ -164,11 +164,11 @@ export const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideReso
     readItems: readItemsFrom('policies'),
     getEditPath: (resourceId) => `/backup-policies/edit/${resourceId}`,
   },
-  [ResourceType.AutomationAction]: {
-    icon: CitadelIcons.AutomationAction,
-    listQuery: 'listAutomationActions',
-    readItems: readItemsFrom('actions'),
-    getEditPath: (resourceId) => `/automation/edit/${resourceId}`,
+  [ResourceType.Script]: {
+    icon: CitadelIcons.Script,
+    listQuery: 'listScripts',
+    readItems: readItemsFrom('scripts'),
+    getEditPath: (resourceId) => `/scripts/edit/${resourceId}`,
   },
   [ResourceType.Build]: {
     icon: CitadelIcons.Build,

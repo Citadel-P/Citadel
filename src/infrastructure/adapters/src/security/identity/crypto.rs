@@ -93,9 +93,9 @@ struct JwtClaims {
     exp: i64,
     jti: Uuid,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    automation_run_id: Option<Uuid>,
+    script_run_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    automation_attempt_id: Option<Uuid>,
+    script_attempt_id: Option<Uuid>,
 }
 
 impl JwtSessionTokenCodec {
@@ -147,8 +147,8 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
             nbf: claims.issued_at.timestamp(),
             exp: claims.expires_at.timestamp(),
             jti: Uuid::now_v7(),
-            automation_run_id: claims.automation_run_id,
-            automation_attempt_id: claims.automation_attempt_id,
+            script_run_id: claims.script_run_id,
+            script_attempt_id: claims.script_attempt_id,
         })
     }
 
@@ -161,8 +161,8 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
             principal_type: claims.principal_type.ok_or(IdentityError::Credential)?,
             issued_at: timestamp(claims.iat)?,
             expires_at: timestamp(claims.exp)?,
-            automation_run_id: claims.automation_run_id,
-            automation_attempt_id: claims.automation_attempt_id,
+            script_run_id: claims.script_run_id,
+            script_attempt_id: claims.script_attempt_id,
         })
     }
 
@@ -180,8 +180,8 @@ impl SessionTokenCodec for JwtSessionTokenCodec {
             nbf: claims.issued_at.timestamp(),
             exp: claims.expires_at.timestamp(),
             jti: Uuid::now_v7(),
-            automation_run_id: None,
-            automation_attempt_id: None,
+            script_run_id: None,
+            script_attempt_id: None,
         })
     }
 
@@ -428,15 +428,15 @@ mod tests {
                 principal_type: AuthenticatedPrincipalType::User,
                 issued_at: now,
                 expires_at: now + chrono::Duration::minutes(15),
-                automation_run_id: None,
-                automation_attempt_id: None,
+                script_run_id: None,
+                script_attempt_id: None,
             })
             .unwrap();
         assert!(codec.decode_access(&access).is_ok());
         assert!(codec.decode_refresh(&access).is_err());
 
         let run_id = Uuid::now_v7();
-        let automation = codec
+        let scripts = codec
             .encode_access(&AccessTokenClaims {
                 session_id: None,
                 subject_id: Uuid::now_v7(),
@@ -444,12 +444,12 @@ mod tests {
                 principal_type: AuthenticatedPrincipalType::ServiceAccount,
                 issued_at: now,
                 expires_at: now + chrono::Duration::minutes(1),
-                automation_run_id: Some(run_id),
-                automation_attempt_id: Some(Uuid::now_v7()),
+                script_run_id: Some(run_id),
+                script_attempt_id: Some(Uuid::now_v7()),
             })
             .unwrap();
         assert_eq!(
-            codec.decode_access(&automation).unwrap().automation_run_id,
+            codec.decode_access(&scripts).unwrap().script_run_id,
             Some(run_id)
         );
     }

@@ -848,7 +848,7 @@ const UsedByPanel = ({ serviceAccountId }: { serviceAccountId: string }) => {
   const usages = useRead('listServiceAccountUsages', { id: serviceAccountId });
   const items = usages.data?.data ?? [];
   const pathFor = (resourceType: ResourceType, id: string) => {
-    if (resourceType === ResourceType.AutomationAction) return `/automation/edit/${id}`;
+    if (resourceType === ResourceType.Script) return `/scripts/edit/${id}`;
     if (resourceType === ResourceType.BackupPolicy) return `/backup-policies/edit/${id}`;
     return undefined;
   };

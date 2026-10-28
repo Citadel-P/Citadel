@@ -160,7 +160,7 @@ async fn failed_baseline_rolls_back_schema_preserves_data_and_can_retry() {
 
 async fn action(connection: &mut PgConnection) -> Uuid {
     let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO actions(id,alertonfailure,code,createdbyactorid,enabled,name,runasactorid,scheduleenabled,scheduletimezone,timeoutseconds) VALUES($1,FALSE,'','00000000-0000-0000-0000-000000000001',TRUE,$2,'00000000-0000-0000-0000-000000000001',FALSE,'UTC',60)")
+    sqlx::query("INSERT INTO scripts(id,alertonfailure,code,createdbyactorid,enabled,name,runasactorid,scheduleenabled,scheduletimezone,timeoutseconds) VALUES($1,FALSE,'','00000000-0000-0000-0000-000000000001',TRUE,$2,'00000000-0000-0000-0000-000000000001',FALSE,'UTC',60)")
         .bind(id).bind(id.to_string()).execute(connection).await.unwrap();
     id
 }
@@ -171,7 +171,7 @@ async fn insert_run(
     status: &str,
 ) -> Result<Uuid, sqlx::Error> {
     let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO actionruns(id,actionid,actionname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger) VALUES($1,$2,'parity','','','00000000-0000-0000-0000-000000000001',$3,60,'Manual')")
+    sqlx::query("INSERT INTO scriptruns(id,scriptid,scriptname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger) VALUES($1,$2,'parity','','','00000000-0000-0000-0000-000000000001',$3,60,'Manual')")
         .bind(id).bind(action).bind(status).execute(connection).await?;
     Ok(id)
 }
@@ -181,7 +181,7 @@ fn assert_active_conflict(error: sqlx::Error) {
         .as_database_error()
         .expect("PostgreSQL constraint failure");
     assert_eq!(error.code().as_deref(), Some("23505"));
-    assert_eq!(error.constraint(), Some("ix_actionruns_active_action"));
+    assert_eq!(error.constraint(), Some("ix_scriptruns_active_action"));
 }
 
 // PreReleaseUpgradeTests.CandidateMigration_ShouldEnforceSingleActiveActionRunPerAction,
@@ -204,7 +204,7 @@ async fn database_enforces_active_run_state_matrix_and_allows_terminal_history()
             for terminal in ["Succeeded", "Failed", "Cancelled", "Rejected"] {
                 insert_run(&mut connection, action, terminal).await.unwrap();
             }
-            sqlx::query("UPDATE actionruns SET status='Succeeded' WHERE id=$1")
+            sqlx::query("UPDATE scriptruns SET status='Succeeded' WHERE id=$1")
                 .bind(first)
                 .execute(&mut connection)
                 .await
@@ -238,7 +238,7 @@ async fn concurrent_direct_inserts_allow_only_one_active_run_per_action() {
     let results = [left_result, right_result];
     assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 1);
     assert_active_conflict(results.into_iter().find_map(Result::err).unwrap());
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM actionruns WHERE actionid=$1")
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM scriptruns WHERE scriptid=$1")
         .bind(id)
         .fetch_one(&mut left)
         .await

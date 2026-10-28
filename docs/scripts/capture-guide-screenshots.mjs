@@ -118,7 +118,7 @@ const policy = fixture("BackupPolicyView", {
   alertOnFailure: true,
   capabilities: caps,
 });
-const action = fixture("AutomationActionView", {
+const action = fixture("ScriptView", {
   id: id(7),
   name: "Scheduled inventory check",
   code: 'console.log("Inventory check", args.environment);',
@@ -260,8 +260,8 @@ const routes = {
     ],
     warnings: [],
   },
-  [`/automation/actions/${id(7)}`]: action,
-  "/automation/actions": { actions: [action], capabilities: caps },
+  [`/scripts/${id(7)}`]: action,
+  "/scripts": { scripts: [action], capabilities: caps },
   "/alertRules": { alertRules: [], capabilities: caps },
   "/alertRules/channels": { channels: [], capabilities: caps },
   "/roles": { roles: [role], capabilities: caps },
@@ -492,7 +492,7 @@ try {
     ["git", `stacks/edit/${id(2)}#config`],
     ["swarm", `platforms/edit/${id(1)}#config`],
     ["backup", `backup-policies/edit/${id(6)}#config`],
-    ["automation", `automation/edit/${id(7)}#config`],
+    ["scripts", `scripts/edit/${id(7)}#config`],
     ["roles", "access/roles"],
     ["restore", `backup-policies/edit/${recoveryPolicy.id}#runs`],
     ["access", `access/users/edit/${demoUser.id}#config`],
@@ -534,10 +534,10 @@ try {
         page.locator("#source"),
         page.locator("#destination"),
       );
-    if (name === "automation") {
+    if (name === "scripts") {
       await expect(page.locator("#runtime")).toContainText("Operations runner");
       await capture(
-        "automation-runtime-schedule",
+        "scripts-runtime-schedule",
         page.locator("#runtime"),
         page.locator("#schedule"),
       );

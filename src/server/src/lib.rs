@@ -20,8 +20,8 @@ pub mod realtime_groups;
 pub mod transport;
 pub mod workers;
 
-pub fn automation_endpoint_catalog_json() -> String {
-    api::endpoint_catalog::automation_catalog_json()
+pub fn script_endpoint_catalog_json() -> String {
+    api::endpoint_catalog::script_catalog_json()
 }
 
 use serde::Serialize;

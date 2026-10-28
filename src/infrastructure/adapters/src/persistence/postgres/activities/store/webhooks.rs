@@ -20,8 +20,8 @@ impl WebhookActivitySink for PostgresActivityStore {
                 ActivityResourceType::Stack => {
                     "SELECT s.name,r.platformid FROM stacks s LEFT JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE s.id=$1"
                 }
-                ActivityResourceType::AutomationAction => {
-                    "SELECT name,NULL::uuid platformid FROM actions WHERE id=$1"
+                ActivityResourceType::Script => {
+                    "SELECT name,NULL::uuid platformid FROM scripts WHERE id=$1"
                 }
                 ActivityResourceType::BackupPolicy => {
                     "SELECT name,NULL::uuid platformid FROM backuppolicies WHERE id=$1"

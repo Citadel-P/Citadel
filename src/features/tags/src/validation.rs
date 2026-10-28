@@ -9,7 +9,7 @@ impl TaggableResourceType {
             Self::Platform => "Platform",
             Self::GitRepository => "GitRepository",
             Self::Registry => "Registry",
-            Self::AutomationAction => "AutomationAction",
+            Self::Script => "Script",
             Self::BackupPolicy => "BackupPolicy",
             Self::Build => "Build",
             Self::BuildAgentPool => "BuildAgentPool",

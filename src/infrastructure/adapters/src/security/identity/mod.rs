@@ -1,4 +1,4 @@
-pub mod automation_token;
+pub mod script_token;
 
 pub mod backup_authorization;
 

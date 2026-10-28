@@ -80,7 +80,7 @@ for ownership, earlier public snapshots and release review.
 | Users and teams | Included | Included | Included |
 | Custom access control | Existing custom access and retained Service Accounts remain visible and removable after downgrade, but expansion, machine authentication, and run-as use are unavailable | Custom roles, scoped access, non-human identities, API tokens, and run-as execution | Team capability plus future organizational identity and access governance |
 | Authentication | Local authentication, MFA, and existing OIDC | Same as Community | Future enterprise identity lifecycle, such as SCIM and enforced organizational SSO |
-| Automation actions | Define, test, and run manually on Core or a specific Agent | Automatic Agent selection plus manual, scheduled, and webhook-triggered execution | Team capabilities plus future approval and change-control policies |
+| Scripts | Define, test, and run manually on Core or a specific Agent | Automatic Agent selection plus manual, scheduled, and webhook-triggered execution | Team capabilities plus future approval and change-control policies |
 | Backups | Define policies, run on demand, and restore | On-demand, scheduled, and webhook-triggered backups | Team capabilities plus future governed and validated recovery workflows |
 | Webhooks and GitOps | Receive and authenticate repository webhooks, synchronize source, and show pending updates | Automatically build, deploy, apply, run an action, or start a backup from a webhook | Future approval and organization-wide deployment policy |
 | Build execution | Manual builds on existing Local, Agent, and Edge Agent platforms; build-pool configuration remains manageable | Execute builds through external build pools | Future governed elastic capacity and organizational build policy |
@@ -143,12 +143,12 @@ people need more precise access control.
 Consider Team when you need any of the following:
 
 - non-human API identities for CI/CD runners or external integrations
-- stable Service Account run-as identities for Automation Actions or Backup
+- stable Service Account run-as identities for Scripts or Backup
   Policies
 - custom roles instead of only Admin, Operator, and Viewer
 - different permissions for particular resources or teams
 - backups that run without an administrator starting them
-- automation triggered by a schedule or webhook
+- scripts triggered by a schedule or webhook
 - webhook-triggered builds, deployments, and stack applies
 - builds that execute through an external build pool
 - custom alert rules beyond Citadel's seeded system rules
@@ -183,7 +183,7 @@ unattended paid workflows, custom access configuration, or commercial support.
 Before removing the Team license, review:
 
 - custom roles and resource overrides that remain assigned
-- automation schedules and webhook triggers that will pause
+- script schedules and webhook triggers that will pause
 - backup schedules and webhook triggers that will pause
 - webhook-triggered builds, deployments, and stack applies that will pause
 - queued external build-pool runs that will not start
@@ -223,13 +223,13 @@ Community includes the core Citadel product:
 - users, teams, and the built-in Admin, Operator, and Viewer roles
 - backup repositories and backup policy definitions
 - on-demand backup and restore
-- automation action definitions, testing, and manual execution
+- script definitions, testing, and manual execution
 - built-in alerts, notification channels, and external delivery from seeded
   system rules
 - manual drift checks, updates, reconciliation, and rollback
 - access to resource history, logs, alerts, and activities
 
-Community has no license-enforced platform, user, backup-policy, or automation
+Community has no license-enforced platform, user, backup-policy, or scripts
 count limits.
 
 Technical safeguards such as request-size limits, operation concurrency,
@@ -244,7 +244,7 @@ collaboration.
 | Capability | What Team Adds |
 | --- | --- |
 | Custom access control | Custom roles, custom permissions, resource overrides, scoped access grants, Service Accounts, API credentials, and Service Account run-as execution |
-| Automated operations | Schedules and webhooks that execute automation actions, backups, builds, deployments, or stack applies |
+| Automated operations | Schedules and webhooks that execute scripts, backups, builds, deployments, or stack applies |
 | Advanced alerting | Custom alert rules and advanced conditions including quiet hours, cooldowns, thresholds, required matches, severity, and resource scoping |
 | Operational guardrails | Continuous drift monitoring, opt-in automatic reconciliation, and resource auto-update safeguards |
 | Elastic build execution | Builds dispatched through external build pools that provide dedicated, remote, or ephemeral builder compute |
@@ -383,7 +383,7 @@ After the grace period:
 - paid webhooks may still be received and authenticated, but they cannot start a
   mutating operation
 - queued paid-trigger runs that have not started do not begin
-- Automatic automation runs that have not started cannot dispatch; Core and specific Agent placement remain available
+- Automatic script runs that have not started cannot dispatch; Core and specific Agent placement remain available
 - queued external build-pool runs do not lease or provision builder capacity
 - external builds already running may finish or be cancelled
 - custom alert rules are paused
@@ -489,14 +489,14 @@ Check:
 - whether `Automated Operations` is included
 - whether the individual schedule or webhook is configured and enabled
 
-Manual automation on Core or a specific Agent, on-demand backups, and restores
+Manual scripts on Core or a specific Agent, on-demand backups, and restores
 remain available. Automatic Agent selection requires Automated Operations.
 
 ### A Webhook Is Accepted But Does Not Execute
 
 Community can receive and authenticate repository webhooks, synchronize source,
 and report an available update. Starting a build, deployment, stack apply,
-automation action, or backup from a webhook requires `Automated Operations`.
+script, or backup from a webhook requires `Automated Operations`.
 
 ### A Build Pool Is Ready But Cannot Run A Build
 

@@ -1,7 +1,7 @@
-import { AutomationRunStatus, BackupRestoreStatus, BackupRunStatus, BuildRunStatus } from '@/api/generated/api.types';
+import { ScriptRunStatus, BackupRestoreStatus, BackupRunStatus, BuildRunStatus } from '@/api/generated/api.types';
 import { StateBadge } from './state-badge';
 
-type RunStatus = AutomationRunStatus | BackupRunStatus | BackupRestoreStatus | BuildRunStatus;
+type RunStatus = ScriptRunStatus | BackupRunStatus | BackupRestoreStatus | BuildRunStatus;
 
 const STATUS_LABELS: Record<string, string> = {
   [BackupRunStatus.ApplyingRetention]: 'Applying retention',

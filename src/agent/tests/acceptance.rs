@@ -557,7 +557,7 @@ async fn start_core(f: &mut Fixture, core: &str) -> (String, String) {
             "-e",
             "CITADEL_CORE_AGENT_ALLOW_INSECURE=true",
             "-e",
-            "CITADEL_AUTOMATIONS_ENABLED=false",
+            "CITADEL_SCRIPTS_ENABLED=false",
             "-e",
             "CITADEL_STATS_POLL_INTERVAL_SECONDS=1",
             "-e",

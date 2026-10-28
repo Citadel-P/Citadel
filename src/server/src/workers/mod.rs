@@ -1,5 +1,4 @@
 pub(crate) mod alerts;
-pub(crate) mod automation;
 pub(crate) mod backup_coverage;
 pub(crate) mod backups;
 pub(crate) mod build_consumers;
@@ -10,6 +9,7 @@ pub(crate) mod deployments;
 pub mod edge;
 pub(crate) mod git;
 pub(crate) mod platforms;
+pub(crate) mod scripts;
 pub(crate) mod stacks;
 pub(crate) mod swarm_services;
 pub(crate) mod volume_helpers;

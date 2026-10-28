@@ -205,7 +205,7 @@ type EditableResourceType =
   | 'GitRepository'
   | 'Platform'
   | 'Registry'
-  | 'AutomationAction'
+  | 'Script'
   | 'Build'
   | 'BuildAgentPool'
   | 'BackupPolicy'
@@ -217,7 +217,7 @@ const replaceTagEndpoint = {
   GitRepository: 'replaceGitRepositoryTags',
   Platform: 'replacePlatformTags',
   Registry: 'replaceRegistryTags',
-  AutomationAction: 'replaceAutomationActionTags',
+  Script: 'replaceScriptTags',
   Build: 'replaceBuildTags',
   BuildAgentPool: 'replaceBuildAgentPoolTags',
   BackupPolicy: 'replaceBackupPolicyTags',
@@ -343,7 +343,7 @@ const buildReplaceVariables = (resourceType: EditableResourceType, resourceId: s
     case 'GitRepository':
     case 'Platform':
     case 'Registry':
-    case 'AutomationAction':
+    case 'Script':
     case 'Build':
     case 'BuildAgentPool':
     case 'BackupPolicy':

@@ -91,10 +91,10 @@ project does not isolate an external database configured by an override.
 | --- | --- | --- |
 | `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Platform metric collection interval, in seconds |
 | `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Metric persistence interval, in seconds |
-| `CITADEL_AUTOMATIONS_ENABLED` | `true` | Enables Automation Action execution |
-| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Shared Automation Action execution slots; see [concurrency limits](#concurrency-limits) |
-| `CITADEL_AUTOMATIONS_DEFAULT_TIMEOUT_SECONDS` | `300` | Default Action timeout |
-| `CITADEL_AUTOMATIONS_MAX_TIMEOUT_SECONDS` | `1800` | Maximum Action timeout |
+| `CITADEL_SCRIPTS_ENABLED` | `true` | Enables Script execution |
+| `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Shared Script execution slots; see [concurrency limits](#concurrency-limits) |
+| `CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS` | `300` | Default script timeout |
+| `CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS` | `1800` | Maximum script timeout |
 | `CITADEL_LOG_FORMAT` | `Text` | Core log format: `Text` or `Json` |
 
 These settings do not override resource permissions, enabled states, or license
@@ -108,17 +108,17 @@ For common configuration changes, see
 ## Concurrency limits
 
 Core prepares and tracks work; the execution host admits the expensive operation.
-Automation scripts continue to run on Core.
+Scripts run on Core or an Agent according to their Run on setting.
 
 | Setting | Default | What it limits |
 | --- | --- | --- |
 | `CITADEL_BUILDS_PREPARATION_SLOTS` | `2` | Git preparation and outbound build contexts on Core; accepts 1–16 |
 | `CITADEL_BUILDS_TRACKING_SLOTS` | `16` | Active build controllers, including retained completion results; accepts 1–128 |
 | `CITADEL_BACKUPS_TRACKING_SLOTS` | `16` | Active backup, restore and repository operation controllers combined; accepts 1–128 |
-| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Core Deno runs, including manual runs and tests; accepts 1–64 |
+| `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Core Deno runs, including manual runs and tests; accepts 1–64 |
 | `CITADEL_AGENT_BUILD_SLOTS` | `2` | Complete builds on an Agent, including registry pushes and cleanup; accepts 1–64 |
 | `CITADEL_AGENT_DATA_SLOTS` | `2` | Backup items, restores and repository maintenance on an Agent; accepts 1–64 |
-| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Builds, data operations and automations combined on an Agent; accepts 1–64 |
+| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Builds, data operations and scripts combined on an Agent; accepts 1–64 |
 
 A small installation can keep these defaults. Three independent Agents with two
 build slots and two heavy-work slots each can execute six builds while Core
@@ -149,7 +149,7 @@ Agent to change them.
 Builds wait when a host is offline or busy. A known pre-execution refusal retries
 with a 5–15 second backoff, preserving a commit once resolved. All queued builds,
 including those waiting for pool capacity, expire after 24 hours. Ambiguous
-execution is never automatically replayed. All automation runs, including manual
+execution is never automatically replayed. All script runs, including manual
 runs and tests, queue when their selected execution hosts are full or offline. Closing a progress sheet
 does not cancel its run.
 
@@ -229,12 +229,12 @@ under the same data root. Offline recovery never generates replacement keys.
 | --- | --- |
 | `CITADEL_DOCKER_PATH` / `CITADEL_RESTIC_PATH` / `CITADEL_SHOUTRRR_PATH` | `docker` / `restic` / `shoutrrr` |
 | `CITADEL_DENO_PATH` | `deno` |
-| `CITADEL_INTERNAL_BASE_URL` | `http://127.0.0.1:<resolved HTTP listen port>`; Automation API origin, separate from the public browser URL. Allow its hostname in `CITADEL_HTTP_ALLOWED_HOSTS`. Direct TLS requires an explicit reachable HTTPS origin and a certificate trusted by Deno; [setup and trust limits](/docs/operations/tls-and-secure-agent-transport#automation-api-access). |
+| `CITADEL_INTERNAL_BASE_URL` | `http://127.0.0.1:<resolved HTTP listen port>`; Script API origin, separate from the public browser URL. Allow its hostname in `CITADEL_HTTP_ALLOWED_HOSTS`. Direct TLS requires an explicit reachable HTTPS origin and a certificate trusted by Deno; [setup and trust limits](/docs/operations/tls-and-secure-agent-transport#script-api-access). |
 | `CITADEL_GIT_KNOWN_HOSTS_PATH` | `<data root>/git-known-hosts` |
-| `CITADEL_AUTOMATIONS_WORK_DIR` / `CITADEL_AUTOMATIONS_DENO_CACHE_DIR` | `<data root>/automations/runs` / `<data root>/automations/deno-cache` |
-| `CITADEL_AUTOMATIONS_ALLOW_NET` | Optional Deno network allowlist; existing comma-separated format |
-| `CITADEL_AUTOMATIONS_MAX_LOG_BYTES` | `1048576` bytes, clamped to 1024–16777216 |
-| `CITADEL_AUTOMATIONS_POLL_INTERVAL_SECONDS` / `CITADEL_AUTOMATIONS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
+| `CITADEL_SCRIPTS_WORK_DIR` / `CITADEL_SCRIPTS_DENO_CACHE_DIR` | `<data root>/scripts/runs` / `<data root>/scripts/deno-cache` |
+| `CITADEL_SCRIPTS_ALLOW_NET` | Optional Deno network allowlist; existing comma-separated format |
+| `CITADEL_SCRIPTS_MAX_LOG_BYTES` | `1048576` bytes, clamped to 1024–16777216 |
+| `CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS` / `CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
 | `CITADEL_BUILDS_PREPARATION_SLOTS` / `CITADEL_BUILDS_TRACKING_SLOTS` | `2` / `16`; [build concurrency](#concurrency-limits) |
 | `CITADEL_BUILDS_RUN_CLEANUP_ENABLED` / `CITADEL_BUILDS_RUN_RETENTION_DAYS` | `true` / `90` days; disabling cleanup disables retention |
 | `CITADEL_BACKUPS_ENABLED` / `CITADEL_BACKUPS_TRACKING_SLOTS` | `true` / `16`; backup, restore, and repository operation tracking combined, see [concurrency limits](#concurrency-limits) |
@@ -307,13 +307,13 @@ Preserve the Agent's data volume. Dedicated Build Pool setup commands can select
 profile-specific key and identity paths; keep those generated values. Core also
 supplies Swarm node bootstrap and identity variables automatically.
 
-### Automation execution capacity
+### Script execution capacity
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `CITADEL_AUTOMATIONS_MAX_PARALLEL_RUNS` | `4` | Deno processes running locally on Core. |
-| `CITADEL_AUTOMATIONS_MAX_REMOTE_RUNS` | `16` | Remote action runs Core tracks concurrently (1–256); no local Deno process is created for them. |
-| `CITADEL_AGENT_AUTOMATION_SLOTS` | `4` | Concurrent Deno actions on each Agent (1–64), also bounded by `CITADEL_AGENT_HEAVY_SLOTS`. |
+| `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Deno processes running locally on Core. |
+| `CITADEL_SCRIPTS_MAX_REMOTE_RUNS` | `16` | Remote script runs Core tracks concurrently (1–256); no local Deno process is created for them. |
+| `CITADEL_AGENT_SCRIPT_SLOTS` | `4` | Concurrent Deno scripts on each Agent (1–64), also bounded by `CITADEL_AGENT_HEAVY_SLOTS`. |
 
 All triggers enter the durable queue. A busy host defers work; the Core local
 limit does not prevent execution on a free Agent. Increase Agent capacity only

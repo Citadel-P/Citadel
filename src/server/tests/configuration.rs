@@ -354,7 +354,7 @@ fn configuration_values_probe() {
     assert!(config.identity.jwt_key.expose() == b"explicit-signing-key-with-at-least-32-bytes");
     assert!(config.identity.secret_encryption_key.expose() == (1..=32).collect::<Vec<u8>>());
     assert_eq!(
-        config.execution.automation.internal_base_url,
+        config.execution.scripts.internal_base_url,
         "http://127.0.0.1:18443"
     );
     assert_eq!(config.listen_address.port(), 18443);

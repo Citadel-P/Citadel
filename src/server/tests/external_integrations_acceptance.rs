@@ -5,19 +5,17 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_adapters::filesystem::stacks::materializer::GitStackSourceMaterializer;
 use citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore;
-use citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository;
 use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRepository;
 use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
+use citadel_adapters::persistence::postgres::scripts::PostgresScriptRepository;
 use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
 use citadel_adapters::persistence::postgres::stacks::bindings::PostgresStackBindingResolver;
 use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
-use citadel_automation::{
-    AutomationError, AutomationRunTokenIssuer, AutomationRuntimeConfig, AutomationService,
-};
 use citadel_docker::client::DockerClient;
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
 use citadel_identity::SYSTEM_ACTOR_ID;
 use citadel_primitives::ActorId;
+use citadel_scripts::{ScriptError, ScriptRunTokenIssuer, ScriptRuntimeConfig, ScriptService};
 use citadel_server::api::routes::{webhooks as webhooks_http, webhooks::WebhooksHttpState};
 use citadel_stacks::{
     NoopStackChangeNotifier, StackEntitlements, StackError, StackRepository, StackService,
@@ -47,16 +45,16 @@ impl StackEntitlements for Entitlements {
         Box::pin(async { Ok(true) })
     }
 }
-struct NoAutomation;
-impl AutomationRunTokenIssuer for NoAutomation {
+struct NoScript;
+impl ScriptRunTokenIssuer for NoScript {
     fn issue<'a>(
         &'a self,
         _: ActorId,
         _: Uuid,
         _attempt_id: Uuid,
         _: Duration,
-    ) -> BoxFuture<'a, Result<String, AutomationError>> {
-        Box::pin(async { panic!("This acceptance fixture does not run automations") })
+    ) -> BoxFuture<'a, Result<String, ScriptError>> {
+        Box::pin(async { panic!("This acceptance fixture does not run scripts") })
     }
 }
 
@@ -224,14 +222,14 @@ Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(citadel_runtime::
         assert_runtime(&docker,stack.id,"one").await;
         inspection_tests::verify(&pool, &docker, &provider, platform, stack.id, "one").await;
 
-    let automation_shutdown = tokio_util::sync::CancellationToken::new();
-    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
+    let script_shutdown = tokio_util::sync::CancellationToken::new();
+    let script_tasks = citadel_runtime::DynamicTasks::new(script_shutdown.clone());
 
-        let automation=Arc::new(AutomationService::new(std::sync::Arc::new(citadel_processes::SystemProcess), std::sync::Arc::new(citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),
-        Arc::new(citadel_server::tasks::automation::TrackedAutomationTasks::new(automation_tasks.clone())),
-        automation_shutdown.clone(),Arc::new(PostgresAutomationRepository::new(pool.clone())),Arc::new(NoAutomation),AutomationRuntimeConfig{
-            deno_path:"deno".into(),work_root:root.join("automation"),internal_base_url:"http://unused".into(),endpoint_catalog_json:"[]".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));
-        let app=webhooks_http::router(WebhooksHttpState{git:git.clone(),automation,backups:None,builds:None,stacks:Some(stacks.clone()),services:None,alerts:None,audit:Some(Arc::new(PostgresActivityStore::new(pool.clone())))});
+        let scripts=Arc::new(ScriptService::new(std::sync::Arc::new(citadel_processes::SystemProcess), std::sync::Arc::new(citadel_adapters::filesystem::script_workspace::LocalScriptWorkspace::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),
+        Arc::new(citadel_server::tasks::scripts::TrackedScriptTasks::new(script_tasks.clone())),
+        script_shutdown.clone(),Arc::new(PostgresScriptRepository::new(pool.clone())),Arc::new(NoScript),ScriptRuntimeConfig{
+            deno_path:"deno".into(),work_root:root.join("scripts"),internal_base_url:"http://unused".into(),endpoint_catalog_json:"[]".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));
+        let app=webhooks_http::router(WebhooksHttpState{git:git.clone(),scripts,backups:None,builds:None,stacks:Some(stacks.clone()),services:None,alerts:None,audit:Some(Arc::new(PostgresActivityStore::new(pool.clone())))});
         let listener=tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
         let port=listener.local_addr().unwrap().port();
         let token=shutdown.child_token();

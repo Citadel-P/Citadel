@@ -1,13 +1,13 @@
 use super::*;
 use crate::realtime::topic::Topic;
 use citadel_activities::{ActivityFilter, ActivityService};
-use citadel_automation::AutomationRepository;
 use citadel_backups::BackupPersistence;
 use citadel_builds::BuildRepository;
 use citadel_deployments::DeploymentRepository;
 use citadel_identity::IdentityService;
 use citadel_platforms::PlatformReadService;
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+use citadel_scripts::ScriptRepository;
 use citadel_stacks::StackRepository;
 use citadel_swarm_services::SwarmServiceRepository;
 use std::sync::Arc;
@@ -36,7 +36,7 @@ pub struct ApplicationGroupReader {
     pub deployments: Arc<dyn DeploymentRepository>,
     pub stacks: Arc<dyn StackRepository>,
     pub services: Arc<dyn SwarmServiceRepository>,
-    pub automation: Arc<dyn AutomationRepository>,
+    pub scripts: Arc<dyn ScriptRepository>,
     pub builds: Arc<dyn BuildRepository>,
     pub backups: Arc<dyn BackupPersistence>,
     pub activities: Arc<ActivityService>,
@@ -427,9 +427,7 @@ impl ApplicationGroupReader {
             Topic::Stack(..) | Topic::Stacks | Topic::StackInfo(..) => Stack,
             Topic::SwarmService(..) | Topic::SwarmServices(..) => SwarmService,
             Topic::GitRepo(..) | Topic::GitRepositories => GitRepository,
-            Topic::AutomationAction(..) | Topic::AutomationActions | Topic::AutomationRuns(..) => {
-                AutomationAction
-            }
+            Topic::Script(..) | Topic::Scripts | Topic::ScriptRuns(..) => Script,
             Topic::BackupRepository(..) | Topic::BackupRepositories => BackupRepository,
             Topic::BackupPolicy(..)
             | Topic::BackupPolicies
@@ -1112,44 +1110,44 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            Topic::AutomationRuns(action_id) => {
+            Topic::ScriptRuns(script_id) => {
                 let runs = self
-                    .automation
-                    .list_runs(*action_id, 50)
+                    .scripts
+                    .list_runs(*script_id, 50)
                     .await
                     .map_err(failure)?
                     .into_iter()
-                    .map(crate::api::resources::automation::views::AutomationRunView::try_from)
+                    .map(crate::api::resources::scripts::views::ScriptRunView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
                 // Send the window identities before the standard row events. This
                 // removes stale rows on rejoin without putting 50 argument payloads
                 // into one WebSocket frame.
                 let ids: Vec<_> = runs.iter().map(|run| run.id).collect();
-                let mut snapshot = rows("AutomationRunInfoUpdated", runs, RowStyle::Update)?;
+                let mut snapshot = rows("ScriptRunInfoUpdated", runs, RowStyle::Update)?;
                 snapshot.events.push(ClientEvent::new(
-                    "AutomationRunWindow",
-                    vec![json!({"actionId": action_id, "ids": ids})],
+                    "ScriptRunWindow",
+                    vec![json!({"scriptId": script_id, "ids": ids})],
                 ));
                 Ok(snapshot)
             }
-            Topic::AutomationActions => rows(
-                "AutomationActionInfoUpdated",
-                crate::api::resources::automation::authorized::authorized_actions(
-                    self.automation.as_ref(),
+            Topic::Scripts => rows(
+                "ScriptInfoUpdated",
+                crate::api::resources::scripts::authorized::authorized_scripts(
+                    self.scripts.as_ref(),
                     p,
-                    self.automation.list(actor, admin).await.map_err(failure)?,
+                    self.scripts.list(actor, admin).await.map_err(failure)?,
                 )
                 .await
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            Topic::AutomationAction(..) => rows(
-                "AutomationActionInfoUpdated",
-                crate::api::resources::automation::authorized::authorized_actions(
-                    self.automation.as_ref(),
+            Topic::Script(..) => rows(
+                "ScriptInfoUpdated",
+                crate::api::resources::scripts::authorized::authorized_scripts(
+                    self.scripts.as_ref(),
                     p,
-                    vec![self.automation.get(id.unwrap()).await.map_err(failure)?],
+                    vec![self.scripts.get(id.unwrap()).await.map_err(failure)?],
                 )
                 .await
                 .map_err(failure)?,

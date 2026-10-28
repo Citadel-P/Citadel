@@ -15,9 +15,7 @@ impl ActivityEvent {
             }
             ActivityResourceType::Stack => ActivityEventInfo::StackWebhookReceived(details),
             ActivityResourceType::Build => ActivityEventInfo::BuildWebhookReceived(details),
-            ActivityResourceType::AutomationAction => {
-                ActivityEventInfo::ActionWebhookReceived(details)
-            }
+            ActivityResourceType::Script => ActivityEventInfo::ScriptWebhookReceived(details),
             ActivityResourceType::BackupPolicy => {
                 ActivityEventInfo::BackupPolicyWebhookReceived(details)
             }
@@ -306,7 +304,7 @@ impl ActivityEvent {
         Ok(event)
     }
 
-    pub fn new_automation_event(
+    pub fn new_script_event(
         resource_id: Uuid,
         resource_name: String,
         actor_id: ActorId,
@@ -314,18 +312,18 @@ impl ActivityEvent {
         created_at: DateTime<Utc>,
     ) -> Result<Self, ActivityInvariantError> {
         let status = match &info {
-            ActivityEventInfo::ActionRunQueued { .. }
-            | ActivityEventInfo::ActionRunStarted { .. } => ActivityStatus::Information,
-            ActivityEventInfo::ActionRunFailed { .. }
-            | ActivityEventInfo::ActionRunTimedOut { .. } => ActivityStatus::Failure,
-            ActivityEventInfo::ActionRunCancelled { .. }
-            | ActivityEventInfo::ActionRunRejected { .. } => ActivityStatus::Warning,
+            ActivityEventInfo::ScriptRunQueued { .. }
+            | ActivityEventInfo::ScriptRunStarted { .. } => ActivityStatus::Information,
+            ActivityEventInfo::ScriptRunFailed { .. }
+            | ActivityEventInfo::ScriptRunTimedOut { .. } => ActivityStatus::Failure,
+            ActivityEventInfo::ScriptRunCancelled { .. }
+            | ActivityEventInfo::ScriptRunRejected { .. } => ActivityStatus::Warning,
             _ => ActivityStatus::Success,
         };
         Self::new_resource_event(
             resource_id,
             resource_name,
-            ActivityResourceType::AutomationAction,
+            ActivityResourceType::Script,
             actor_id,
             info,
             status,

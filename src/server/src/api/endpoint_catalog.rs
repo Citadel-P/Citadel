@@ -1,11 +1,11 @@
-//! Shared route metadata for startup policy, Automation and API documentation.
+//! Shared route metadata for startup policy, Script and API documentation.
 //! Each route factory is visited separately. Only endpoint metadata is retained;
 //! full document merging, compatibility schemas and JSON rendering are explicit docs work.
 use std::{collections::BTreeMap, sync::LazyLock};
 use utoipa::openapi::OpenApi;
 
 pub(crate) fn visit_documents(mut visit: impl FnMut(OpenApi)) {
-    visit(crate::api::routes::automation::documented_routes().into_openapi());
+    visit(crate::api::routes::scripts::documented_routes().into_openapi());
     visit(crate::api::routes::stacks::documented_routes().into_openapi());
     visit(crate::api::routes::licensing::documented_routes().into_openapi());
     visit(crate::api::routes::deployments::documented_routes().into_openapi());
@@ -84,7 +84,7 @@ static ENDPOINTS: LazyLock<Vec<Endpoint>> = LazyLock::new(|| {
     endpoints.into_values().collect()
 });
 
-pub(crate) fn automation_catalog_json() -> String {
+pub(crate) fn script_catalog_json() -> String {
     let endpoints: Vec<_> = ENDPOINTS.iter().filter_map(|endpoint| {
         let path = endpoint.path.strip_prefix("/api/v1/")?;
         let id = endpoint.operation_id.as_ref()?;
@@ -130,7 +130,7 @@ mod tests {
             assert_eq!(setup_exempt(path), exempt, "{path}");
         }
         assert_eq!(
-            automation_catalog_json(),
+            script_catalog_json(),
             serde_json::to_string(&expected).unwrap()
         );
         assert!(!setup_exempt("/api/v1/unknown"));

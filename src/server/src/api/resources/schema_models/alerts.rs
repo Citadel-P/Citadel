@@ -49,7 +49,7 @@ enum_schema!(
         WebhookDispatchFailed,
         WebhookGitRepoSyncFailed,
         WebhookStackGitDeployFailed,
-        AutomationActionRunFailed,
+        ScriptRunFailed,
         BuildRunFailed,
         BackupRunFailed,
         BuildAgentPoolUnavailable,

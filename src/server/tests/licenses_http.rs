@@ -485,14 +485,14 @@ async fn realtime_transition_notification_is_authenticated_versioned_and_metadat
         .bind(session_id).bind(fixture.administrator.subject_id).execute(&fixture.pool).await.unwrap();
     let token = codec
         .encode_access(&AccessTokenClaims {
-            automation_attempt_id: None,
+            script_attempt_id: None,
             session_id: Some(session_id),
             subject_id: fixture.administrator.subject_id,
             actor_id: fixture.administrator.actor_id,
             principal_type: AuthenticatedPrincipalType::User,
             issued_at: now,
             expires_at: now + Duration::minutes(5),
-            automation_run_id: None,
+            script_run_id: None,
         })
         .unwrap();
     let (mut socket, _) =

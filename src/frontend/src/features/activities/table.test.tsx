@@ -100,7 +100,7 @@ describe('ActivitiesTable', () => {
     ['GitRepoWebhookReceived', 'GitRepository'],
     ['StackWebhookReceived', 'Stack'],
     ['SwarmServiceWebhookReceived', 'SwarmService'],
-    ['ActionWebhookReceived', 'AutomationAction'],
+    ['ScriptWebhookReceived', 'Script'],
     ['BackupPolicyWebhookReceived', 'BackupPolicy'],
   ])('shows the shared warning summary for %s', (eventType, resourceType) => {
     const activity = {

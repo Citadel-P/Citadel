@@ -59,7 +59,7 @@ WITH actor_scope AS (
                   WHEN 'Registry' THEN 3
                   WHEN 'GitRepository' THEN 4
                   WHEN 'AlertRule' THEN 6
-                  WHEN 'AutomationAction' THEN 13
+                  WHEN 'Script' THEN 13
                   WHEN 'BackupPolicy' THEN 16
                   WHEN 'Volume' THEN 0
                   WHEN 'Build' THEN 18
@@ -243,7 +243,7 @@ pub(crate) fn invalid_activity(error: ActivityInvariantError) -> IdentityError {
 
 // Configuration snapshots are audit data, not a second credential store. Apply
 // this once at the persistence boundary for old/new Stack, Service, Build and
-// Automation snapshots; leave the actual resource configuration untouched.
+// Script snapshots; leave the actual resource configuration untouched.
 fn redact_webhook_credentials(value: &mut Value) {
     match value {
         Value::Object(fields) => {

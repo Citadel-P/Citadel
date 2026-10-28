@@ -50,7 +50,7 @@ impl GlobalSearchReader for PostgresGlobalSearchStore {
                 .bind(ResourceType::Deployment as i32)
                 .bind(ResourceType::GitRepository as i32)
                 .bind(ResourceType::Registry as i32)
-                .bind(ResourceType::AutomationAction as i32)
+                .bind(ResourceType::Script as i32)
                 .bind(ResourceType::BackupPolicy as i32)
                 .bind(ResourceType::BackupRepository as i32)
                 .bind(ResourceType::Build as i32)

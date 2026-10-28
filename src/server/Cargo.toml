@@ -29,7 +29,7 @@ base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 citadel-adapters = { path = "../infrastructure/adapters" }
-citadel-automation = { path = "../features/automation" }
+citadel-scripts = { path = "../features/scripts" }
 citadel-alerts = { path = "../features/alerts" }
 citadel-builds = { path = "../features/builds" }
 citadel-backups = { path = "../features/backups" }

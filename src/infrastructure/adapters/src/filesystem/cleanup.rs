@@ -1,1 +1,1 @@
-pub(super) use citadel_automation_runtime::workspace_cleanup::DirectoryCleanup;
+pub(super) use citadel_scripts_runtime::workspace_cleanup::DirectoryCleanup;

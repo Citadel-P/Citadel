@@ -79,11 +79,11 @@ try {
     if (-not $healthy) { throw 'The external execution PostgreSQL fixture did not become healthy.' }
 
     Invoke-Rust @('fmt', '--all', '--', '--check')
-    Invoke-Rust @('clippy', '--locked', '-p', 'citadel-execution', '-p', 'citadel-git', '-p', 'citadel-automation', '-p', 'citadel-builds', '-p', 'citadel-alerts', '-p', 'citadel-backups', '-p', 'citadel-adapters', '-p', 'citadel-server', '--lib', '--', '-D', 'warnings')
+    Invoke-Rust @('clippy', '--locked', '-p', 'citadel-execution', '-p', 'citadel-git', '-p', 'citadel-scripts', '-p', 'citadel-builds', '-p', 'citadel-alerts', '-p', 'citadel-backups', '-p', 'citadel-adapters', '-p', 'citadel-server', '--lib', '--', '-D', 'warnings')
     Invoke-Rust @('clippy', '--locked', '-p', 'citadel-processes', '--test', 'process_runner', '-p', 'citadel-adapters', '--test', 'agent_mutations', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'execution_resources_http', '--', '-D', 'warnings')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-execution', '-p', 'citadel-processes', '-p', 'citadel-runtime')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-git')
-    Invoke-Rust @('test', '--locked', '-p', 'citadel-automation')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-scripts')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-builds')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-alerts')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-backups')
@@ -98,7 +98,7 @@ try {
     Invoke-Rust @('test', '--locked', '-p', 'citadel-docker', '--test', 'docker_transport')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'agent_build_pool')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_sessions')
-    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'automation_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'backup_source_discovery', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')
+    Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'git_repository_execution', '--test', 'script_execution', '--test', 'build_execution', '--test', 'backup_execution', '--test', 'backup_source_discovery', '--test', 'alert_persistence', '--test', 'secret_value_resolution', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-server', '--test', 'resources_http', '--test', 'execution_resources_http', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'edge_transport', '--', '--ignored', '--test-threads=1')
     Invoke-Rust @('test', '--locked', '-p', 'citadel-adapters', '--test', 'stack_webhooks', '--', '--ignored', '--test-threads=1')

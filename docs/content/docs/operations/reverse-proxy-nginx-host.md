@@ -195,14 +195,14 @@ listener prints the peer and exits; Docker removes the temporary container.
 Set `CITADEL_HTTP_TRUSTED_PROXIES` to that address and recreate Core with `docker compose up -d`.
 Verify it again if you recreate the Docker network or change rootless networking.
 
-## Check Automation API access
+## Check Script API access
 
-`CITADEL_PUBLIC_URL` is the browser origin. Automation Actions call Core through
+`CITADEL_PUBLIC_URL` is the browser origin. Scripts call Core through
 `CITADEL_INTERNAL_BASE_URL`, which defaults to `http://127.0.0.1:8000` with this
 listener configuration. Keep `127.0.0.1` in `CITADEL_HTTP_ALLOWED_HOSTS` so that
 internal calls pass host validation; Core's private listener bindings remain in place.
 
-Create a manual Automation Action using an identity with Platform Read access:
+Create a manual Script using an identity with Platform Read access:
 
 ```typescript
 const result = await citadel.api.listPlatforms();
@@ -211,4 +211,4 @@ console.log("Accessible Platforms:", result.platforms.map(platform => platform.n
 
 Run it and confirm the Platform names (or an empty list) in the Action logs.
 A console-only Action does not test this connection. For HTTPS-only Core, follow
-[Direct TLS Automation setup](/docs/operations/tls-and-secure-agent-transport#automation-api-access).
+[Direct TLS Script setup](/docs/operations/tls-and-secure-agent-transport#script-api-access).

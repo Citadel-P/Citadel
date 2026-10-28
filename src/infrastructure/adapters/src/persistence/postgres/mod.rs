@@ -9,7 +9,7 @@ pub mod builds;
 pub mod git;
 
 pub mod alerts;
-pub mod automation;
+pub mod scripts;
 
 pub(crate) mod authorization;
 pub mod bindings;

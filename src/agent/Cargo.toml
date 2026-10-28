@@ -7,8 +7,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-citadel-automation-runtime = { path = "../infrastructure/automation" }
-citadel-automation = { path = "../features/automation" }
+citadel-scripts-runtime = { path = "../infrastructure/scripts" }
+citadel-scripts = { path = "../features/scripts" }
 citadel-processes = { path = "../infrastructure/processes" }
 citadel-docker = { path = "../infrastructure/docker" }
 citadel-runtime = { path = "../infrastructure/runtime" }

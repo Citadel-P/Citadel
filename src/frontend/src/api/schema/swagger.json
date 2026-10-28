@@ -12,24 +12,6 @@
         ],
         "type": "object"
       },
-      "ActionList": {
-        "properties": {
-          "actions": {
-            "items": {
-              "$ref": "#/components/schemas/AuthorizedAction"
-            },
-            "type": "array"
-          },
-          "capabilities": {
-            "$ref": "#/components/schemas/ResourceCapabilitiesView"
-          }
-        },
-        "required": [
-          "actions",
-          "capabilities"
-        ],
-        "type": "object"
-      },
       "ActivitiesView": {
         "properties": {
           "pagedResult": {
@@ -102,19 +84,19 @@
           "OidcProviderUpdated",
           "OidcProviderRenamed",
           "OidcProviderDeleted",
-          "ActionCreated",
-          "ActionUpdated",
-          "ActionRenamed",
-          "ActionDeleted",
-          "ActionRunQueued",
-          "ActionRunStarted",
-          "ActionRunCleanupResolved",
-          "ActionRunSucceeded",
-          "ActionRunFailed",
-          "ActionRunTimedOut",
-          "ActionRunCancelled",
-          "ActionRunRejected",
-          "ActionWebhookReceived",
+          "ScriptCreated",
+          "ScriptUpdated",
+          "ScriptRenamed",
+          "ScriptDeleted",
+          "ScriptRunQueued",
+          "ScriptRunStarted",
+          "ScriptRunCleanupResolved",
+          "ScriptRunSucceeded",
+          "ScriptRunFailed",
+          "ScriptRunTimedOut",
+          "ScriptRunCancelled",
+          "ScriptRunRejected",
+          "ScriptWebhookReceived",
           "StackCreated",
           "StackDuplicated",
           "StackUpdated",
@@ -224,7 +206,7 @@
           "AlertRule",
           "GitRepository",
           "OidcProvider",
-          "AutomationAction",
+          "Script",
           "User",
           "Team",
           "Role",
@@ -1040,7 +1022,7 @@
           "Stack",
           "GitRepository",
           "Webhook",
-          "AutomationAction",
+          "Script",
           "Build",
           "BuildAgentPool",
           "BackupPolicy",
@@ -1392,7 +1374,7 @@
           "WebhookDispatchFailed",
           "WebhookGitRepoSyncFailed",
           "WebhookStackGitDeployFailed",
-          "AutomationActionRunFailed",
+          "ScriptRunFailed",
           "BuildRunFailed",
           "BackupRunFailed",
           "BuildAgentPoolUnavailable",
@@ -1486,24 +1468,6 @@
           "ids"
         ],
         "type": "object"
-      },
-      "AuthorizedAction": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/AutomationActionView"
-          },
-          {
-            "properties": {
-              "capabilities": {
-                "$ref": "#/components/schemas/ResourceCapabilitiesView"
-              }
-            },
-            "required": [
-              "capabilities"
-            ],
-            "type": "object"
-          }
-        ]
       },
       "AuthorizedGitAccountView": {
         "allOf": [
@@ -1599,6 +1563,24 @@
           }
         ]
       },
+      "AuthorizedScript": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ScriptView"
+          },
+          {
+            "properties": {
+              "capabilities": {
+                "$ref": "#/components/schemas/ResourceCapabilitiesView"
+              }
+            },
+            "required": [
+              "capabilities"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "AuthorizedTagView": {
         "allOf": [
           {
@@ -1660,619 +1642,6 @@
           "Failed"
         ],
         "type": "string"
-      },
-      "AutomationActionActivitySnapshot": {
-        "properties": {
-          "alertOnFailure": {
-            "type": "boolean"
-          },
-          "code": {
-            "type": "string"
-          },
-          "defaultArgsJson": {
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "executor": {},
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "runAsActorId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "scheduleCron": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduleEnabled": {
-            "type": "boolean"
-          },
-          "scheduleTimeZone": {
-            "type": "string"
-          },
-          "timeoutSeconds": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "webhook": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/WebhookConfig"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "code",
-          "defaultArgsJson",
-          "enabled",
-          "scheduleEnabled",
-          "scheduleTimeZone",
-          "timeoutSeconds",
-          "alertOnFailure",
-          "runAsActorId",
-          "executor"
-        ],
-        "type": "object"
-      },
-      "AutomationActionDuplicateDraftView": {
-        "properties": {
-          "draft": {
-            "$ref": "#/components/schemas/AutomationActionInput"
-          },
-          "sourceName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "sourceName",
-          "draft"
-        ],
-        "type": "object"
-      },
-      "AutomationActionInput": {
-        "properties": {
-          "alertOnFailure": {
-            "type": "boolean"
-          },
-          "code": {
-            "type": "string"
-          },
-          "defaultArgsJson": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "duplicateSourceId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "executor": {
-            "$ref": "#/components/schemas/AutomationExecutorSchema"
-          },
-          "name": {
-            "type": "string"
-          },
-          "runAsActorId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduleCron": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduleEnabled": {
-            "type": "boolean"
-          },
-          "scheduleTimeZone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "tagIds": {
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "timeoutSeconds": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "webhook": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/WebhookConfig"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "name",
-          "code",
-          "enabled",
-          "scheduleEnabled",
-          "alertOnFailure"
-        ],
-        "type": "object"
-      },
-      "AutomationActionRunLogsView": {
-        "properties": {
-          "logs": {
-            "type": "string"
-          },
-          "runId": {
-            "format": "uuid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "runId",
-          "logs"
-        ],
-        "type": "object"
-      },
-      "AutomationActionView": {
-        "properties": {
-          "alertOnFailure": {
-            "type": "boolean"
-          },
-          "code": {
-            "type": "string"
-          },
-          "controlState": {
-            "$ref": "#/components/schemas/ResourceControlState"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "createdByActorId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "currentRunId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "defaultArgsJson": {
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "executor": {
-            "$ref": "#/components/schemas/AutomationExecutorSchema"
-          },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "lastScheduledRunAt": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "latestRun": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/AutomationRunView"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "rowVersion": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "runAsActorId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "scheduleCron": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduleEnabled": {
-            "type": "boolean"
-          },
-          "scheduleTimeZone": {
-            "type": "string"
-          },
-          "tags": {
-            "items": {
-              "$ref": "#/components/schemas/resources.tags.TagSummary"
-            },
-            "type": "array"
-          },
-          "timeoutSeconds": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "webhook": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/WebhookView"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "description",
-          "code",
-          "defaultArgsJson",
-          "enabled",
-          "scheduleEnabled",
-          "scheduleCron",
-          "scheduleTimeZone",
-          "webhook",
-          "timeoutSeconds",
-          "alertOnFailure",
-          "executor",
-          "runAsActorId",
-          "controlState",
-          "currentRunId",
-          "rowVersion",
-          "createdByActorId",
-          "createdAt",
-          "updatedAt",
-          "lastScheduledRunAt",
-          "tags",
-          "latestRun"
-        ],
-        "type": "object"
-      },
-      "AutomationExecutorSchema": {
-        "oneOf": [
-          {
-            "properties": {
-              "kind": {
-                "enum": [
-                  "Core"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "agentId": {
-                "format": "uuid",
-                "type": "string"
-              },
-              "kind": {
-                "enum": [
-                  "Agent"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "agentId",
-              "kind"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "kind": {
-                "enum": [
-                  "Automatic"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind"
-            ],
-            "type": "object"
-          }
-        ]
-      },
-      "AutomationProgress": {
-        "properties": {
-          "error": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/AutomationProgressError"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "errorMessage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "progressMessage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "runId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/AutomationRunStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "stream": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "runId",
-          "status",
-          "stream",
-          "progressMessage",
-          "errorMessage",
-          "error"
-        ],
-        "type": "object"
-      },
-      "AutomationProgressError": {
-        "properties": {
-          "code": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "message"
-        ],
-        "type": "object"
-      },
-      "AutomationRunStatus": {
-        "enum": [
-          "Queued",
-          "Running",
-          "Succeeded",
-          "Failed",
-          "TimedOut",
-          "Cancelled",
-          "Rejected"
-        ],
-        "type": "string"
-      },
-      "AutomationRunTrigger": {
-        "enum": [
-          "Manual",
-          "Test",
-          "Schedule",
-          "Webhook"
-        ],
-        "type": "string"
-      },
-      "AutomationRunView": {
-        "properties": {
-          "actionId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "actionName": {
-            "type": "string"
-          },
-          "argsJson": {
-            "type": "string"
-          },
-          "attemptId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "cleanupPending": {
-            "type": "boolean"
-          },
-          "codeHash": {
-            "type": "string"
-          },
-          "codeSnapshot": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "durationMs": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "errorMessage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "executorId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "exitCode": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "finishedAt": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "logs": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "queuedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "runAsActorId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "startedAt": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "$ref": "#/components/schemas/AutomationRunStatus"
-          },
-          "timeoutSeconds": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "trigger": {
-            "$ref": "#/components/schemas/AutomationRunTrigger"
-          },
-          "triggeredByActorId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "executorId",
-          "attemptId",
-          "cleanupPending",
-          "actionId",
-          "actionName",
-          "trigger",
-          "status",
-          "runAsActorId",
-          "triggeredByActorId",
-          "argsJson",
-          "codeSnapshot",
-          "codeHash",
-          "timeoutSeconds",
-          "queuedAt",
-          "startedAt",
-          "finishedAt",
-          "durationMs",
-          "exitCode",
-          "logs",
-          "errorMessage"
-        ],
-        "type": "object"
       },
       "AvailableUpdate": {
         "properties": {
@@ -3566,7 +2935,7 @@
         "enum": [
           "Manual",
           "Schedule",
-          "Automation",
+          "Script",
           "Webhook"
         ],
         "type": "string"
@@ -5005,7 +4374,7 @@
       "BuildRunTrigger": {
         "enum": [
           "Manual",
-          "Automation",
+          "Script",
           "Schedule",
           "Webhook",
           "Dependency"
@@ -10318,7 +9687,7 @@
           "Deployments",
           "Repositories",
           "Registries",
-          "Automations",
+          "Scripts",
           "Backups",
           "Builds",
           "SwarmServices"
@@ -10416,7 +9785,7 @@
           "Deployment",
           "GitRepository",
           "Registry",
-          "AutomationAction",
+          "Script",
           "BackupPolicy",
           "BackupRepository",
           "Build",
@@ -12187,7 +11556,7 @@
           "GitRepository",
           "GitAccount",
           "OidcProvider",
-          "AutomationAction",
+          "Script",
           "Alert",
           "AlertChannel",
           "User",
@@ -12202,7 +11571,7 @@
           "BuildAgentPool",
           "SwarmService",
           "RunAsActor",
-          "AutomationAgent",
+          "ScriptAgent",
           "ServiceAccount"
         ],
         "type": "string"
@@ -16030,7 +15399,7 @@
                 "properties": {
                   "$type": {
                     "enum": [
-                      "ActionWebhookReceived"
+                      "ScriptWebhookReceived"
                     ],
                     "type": "string"
                   }
@@ -18030,12 +17399,12 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionCreated"
+                  "ScriptCreated"
                 ],
                 "type": "string"
               },
-              "action": {
-                "$ref": "#/components/schemas/AutomationActionActivitySnapshot"
+              "script": {
+                "$ref": "#/components/schemas/ScriptActivitySnapshot"
               },
               "source": {
                 "oneOf": [
@@ -18049,7 +17418,7 @@
               }
             },
             "required": [
-              "action",
+              "script",
               "$type"
             ],
             "type": "object"
@@ -18058,20 +17427,20 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionUpdated"
+                  "ScriptUpdated"
                 ],
                 "type": "string"
               },
-              "newAction": {
-                "$ref": "#/components/schemas/AutomationActionActivitySnapshot"
+              "newScript": {
+                "$ref": "#/components/schemas/ScriptActivitySnapshot"
               },
-              "oldAction": {
-                "$ref": "#/components/schemas/AutomationActionActivitySnapshot"
+              "oldScript": {
+                "$ref": "#/components/schemas/ScriptActivitySnapshot"
               }
             },
             "required": [
-              "oldAction",
-              "newAction",
+              "oldScript",
+              "newScript",
               "$type"
             ],
             "type": "object"
@@ -18080,7 +17449,7 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRenamed"
+                  "ScriptRenamed"
                 ],
                 "type": "string"
               },
@@ -18102,16 +17471,16 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionDeleted"
+                  "ScriptDeleted"
                 ],
                 "type": "string"
               },
-              "action": {
-                "$ref": "#/components/schemas/AutomationActionActivitySnapshot"
+              "script": {
+                "$ref": "#/components/schemas/ScriptActivitySnapshot"
               }
             },
             "required": [
-              "action",
+              "script",
               "$type"
             ],
             "type": "object"
@@ -18120,30 +17489,7 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRunQueued"
-                ],
-                "type": "string"
-              },
-              "runId": {
-                "format": "uuid",
-                "type": "string"
-              },
-              "trigger": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "runId",
-              "trigger",
-              "$type"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "$type": {
-                "enum": [
-                  "ActionRunStarted"
+                  "ScriptRunQueued"
                 ],
                 "type": "string"
               },
@@ -18166,7 +17512,30 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRunSucceeded"
+                  "ScriptRunStarted"
+                ],
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "trigger": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "trigger",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "ScriptRunSucceeded"
                 ],
                 "type": "string"
               },
@@ -18203,7 +17572,7 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRunFailed"
+                  "ScriptRunFailed"
                 ],
                 "type": "string"
               },
@@ -18246,7 +17615,7 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRunTimedOut"
+                  "ScriptRunTimedOut"
                 ],
                 "type": "string"
               },
@@ -18282,7 +17651,7 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRunCancelled"
+                  "ScriptRunCancelled"
                 ],
                 "type": "string"
               },
@@ -18305,7 +17674,7 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRunRejected"
+                  "ScriptRunRejected"
                 ],
                 "type": "string"
               },
@@ -18504,7 +17873,7 @@
             "properties": {
               "$type": {
                 "enum": [
-                  "ActionRunCleanupResolved"
+                  "ScriptRunCleanupResolved"
                 ],
                 "type": "string"
               },
@@ -19984,27 +19353,6 @@
         ],
         "type": "object"
       },
-      "ResolveAutomationCleanupInput": {
-        "additionalProperties": false,
-        "properties": {
-          "acknowledged": {
-            "type": "boolean"
-          },
-          "attemptId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "attemptId",
-          "reason",
-          "acknowledged"
-        ],
-        "type": "object"
-      },
       "ResolveBuildCleanupInput": {
         "properties": {
           "acknowledged": {
@@ -20043,6 +19391,27 @@
         },
         "required": [
           "ids"
+        ],
+        "type": "object"
+      },
+      "ResolveScriptCleanupInput": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "attemptId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attemptId",
+          "reason",
+          "acknowledged"
         ],
         "type": "object"
       },
@@ -20945,7 +20314,7 @@
           "Role",
           "Binding",
           "Tag",
-          "AutomationAction",
+          "Script",
           "License",
           "BackupRepository",
           "BackupPolicy",
@@ -21247,7 +20616,7 @@
         "properties": {
           "runs": {
             "items": {
-              "$ref": "#/components/schemas/AutomationRunView"
+              "$ref": "#/components/schemas/ScriptRunView"
             },
             "type": "array"
           }
@@ -21359,6 +20728,637 @@
           "Global"
         ],
         "type": "string"
+      },
+      "ScriptActivitySnapshot": {
+        "properties": {
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "defaultArgsJson": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "executor": {},
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "runAsActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scheduleCron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "scheduleTimeZone": {
+            "type": "string"
+          },
+          "timeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WebhookConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "defaultArgsJson",
+          "enabled",
+          "scheduleEnabled",
+          "scheduleTimeZone",
+          "timeoutSeconds",
+          "alertOnFailure",
+          "runAsActorId",
+          "executor"
+        ],
+        "type": "object"
+      },
+      "ScriptDuplicateDraftView": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/ScriptInput"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceName",
+          "draft"
+        ],
+        "type": "object"
+      },
+      "ScriptExecutorSchema": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "Core"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "agentId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "Agent"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "agentId",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "Automatic"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ScriptInput": {
+        "properties": {
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "defaultArgsJson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duplicateSourceId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/ScriptExecutorSchema"
+          },
+          "name": {
+            "type": "string"
+          },
+          "runAsActorId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scheduleCron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "scheduleTimeZone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tagIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timeoutSeconds": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WebhookConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "code",
+          "enabled",
+          "scheduleEnabled",
+          "alertOnFailure"
+        ],
+        "type": "object"
+      },
+      "ScriptList": {
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilitiesView"
+          },
+          "scripts": {
+            "items": {
+              "$ref": "#/components/schemas/AuthorizedScript"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "scripts",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "ScriptProgress": {
+        "properties": {
+          "error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScriptProgressError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "progressMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScriptRunStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stream": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "runId",
+          "status",
+          "stream",
+          "progressMessage",
+          "errorMessage",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ScriptProgressError": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ScriptRunLogsView": {
+        "properties": {
+          "logs": {
+            "type": "string"
+          },
+          "runId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "logs"
+        ],
+        "type": "object"
+      },
+      "ScriptRunStatus": {
+        "enum": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "TimedOut",
+          "Cancelled",
+          "Rejected"
+        ],
+        "type": "string"
+      },
+      "ScriptRunTrigger": {
+        "enum": [
+          "Manual",
+          "Test",
+          "Schedule",
+          "Webhook"
+        ],
+        "type": "string"
+      },
+      "ScriptRunView": {
+        "properties": {
+          "argsJson": {
+            "type": "string"
+          },
+          "attemptId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupPending": {
+            "type": "boolean"
+          },
+          "codeHash": {
+            "type": "string"
+          },
+          "codeSnapshot": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "executorId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exitCode": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "logs": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queuedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "runAsActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scriptId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scriptName": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScriptRunStatus"
+          },
+          "timeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ScriptRunTrigger"
+          },
+          "triggeredByActorId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "executorId",
+          "attemptId",
+          "cleanupPending",
+          "scriptId",
+          "scriptName",
+          "trigger",
+          "status",
+          "runAsActorId",
+          "triggeredByActorId",
+          "argsJson",
+          "codeSnapshot",
+          "codeHash",
+          "timeoutSeconds",
+          "queuedAt",
+          "startedAt",
+          "finishedAt",
+          "durationMs",
+          "exitCode",
+          "logs",
+          "errorMessage"
+        ],
+        "type": "object"
+      },
+      "ScriptView": {
+        "properties": {
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdByActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "currentRunId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "defaultArgsJson": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/ScriptExecutorSchema"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastScheduledRunAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latestRun": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScriptRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "rowVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "runAsActorId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scheduleCron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "scheduleTimeZone": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/resources.tags.TagSummary"
+            },
+            "type": "array"
+          },
+          "timeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WebhookView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "code",
+          "defaultArgsJson",
+          "enabled",
+          "scheduleEnabled",
+          "scheduleCron",
+          "scheduleTimeZone",
+          "webhook",
+          "timeoutSeconds",
+          "alertOnFailure",
+          "executor",
+          "runAsActorId",
+          "controlState",
+          "currentRunId",
+          "rowVersion",
+          "createdByActorId",
+          "createdAt",
+          "updatedAt",
+          "lastScheduledRunAt",
+          "tags",
+          "latestRun"
+        ],
+        "type": "object"
       },
       "SearchStatusTone": {
         "enum": [
@@ -26800,87 +26800,6 @@
         ],
         "type": "object"
       },
-      "UpdateAutomationActionInput": {
-        "additionalProperties": false,
-        "properties": {
-          "alertOnFailure": {
-            "type": "boolean"
-          },
-          "code": {
-            "type": "string"
-          },
-          "defaultArgsJson": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "executor": {
-            "$ref": "#/components/schemas/AutomationExecutorSchema"
-          },
-          "runAsActorId": {
-            "format": "uuid",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduleCron": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduleEnabled": {
-            "type": "boolean"
-          },
-          "scheduleTimeZone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "timeoutSeconds": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "webhook": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/WebhookPatch"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "UpdateAutomationActionMetadata": {
-        "additionalProperties": false,
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
       "UpdateBackupPolicyInput": {
         "properties": {
           "alertOnFailure": {
@@ -27262,6 +27181,87 @@
           "StartFirst"
         ],
         "type": "string"
+      },
+      "UpdateScriptInput": {
+        "additionalProperties": false,
+        "properties": {
+          "alertOnFailure": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "defaultArgsJson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "executor": {
+            "$ref": "#/components/schemas/ScriptExecutorSchema"
+          },
+          "runAsActorId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scheduleCron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "scheduleTimeZone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeoutSeconds": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WebhookPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "UpdateScriptMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
       },
       "UpdateServiceAccountRequest": {
         "properties": {
@@ -32262,2053 +32262,6 @@
         ],
         "x-citadel-principal": "anonymous",
         "x-citadel-public": false,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions": {
-      "get": {
-        "operationId": "listAutomationActions",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "tags",
-            "required": false,
-            "schema": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActionList"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "List Automation Actions",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      },
-      "post": {
-        "operationId": "createAutomationAction",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AutomationActionInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizedAction"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Create an Automation Action",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/rename": {
-      "post": {
-        "operationId": "renameAutomationAction",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenameInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizedAction"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Rename an Automation Action",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}": {
-      "delete": {
-        "operationId": "deleteAutomationAction",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Delete an Automation Action",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      },
-      "get": {
-        "operationId": "getAutomationAction",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizedAction"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Get an Automation Action",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      },
-      "patch": {
-        "operationId": "updateAutomationAction",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAutomationActionInput"
-              }
-            },
-            "application/merge-patch+json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAutomationActionInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizedAction"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Update an Automation Action",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/_metadata": {
-      "patch": {
-        "operationId": "updateAutomationActionMetadata",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAutomationActionMetadata"
-              }
-            },
-            "application/merge-patch+json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAutomationActionMetadata"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizedAction"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Update Automation Action metadata",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/duplicate-draft": {
-      "get": {
-        "operationId": "getAutomationActionDuplicateDraft",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AutomationActionDuplicateDraftView"
-                }
-              }
-            },
-            "description": "Editable configuration without activation or runtime state"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Prepare a disabled configuration copy",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/run": {
-      "post": {
-        "operationId": "runAutomationAction",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/RunInput"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AutomationProgress"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Queue an Automation Action run",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/runs": {
-      "get": {
-        "operationId": "listAutomationActionRuns",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "format": "int32",
-              "maximum": 100,
-              "minimum": 1,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunList"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "List Automation Action runs",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/runs/{runId}": {
-      "get": {
-        "operationId": "getAutomationActionRun",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "runId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AutomationRunView"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Get an Automation Action run",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/runs/{runId}/cancel": {
-      "post": {
-        "operationId": "cancelAutomationActionRun",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "runId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Cancel an Automation Action run",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/runs/{runId}/logs": {
-      "get": {
-        "operationId": "getAutomationActionRunLogs",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "runId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AutomationActionRunLogsView"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Get Automation Action run logs",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/runs/{runId}/recovery": {
-      "post": {
-        "operationId": "resolveAutomationRunCleanup",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "runId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResolveAutomationCleanupInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Capacity released and acknowledgment audited; result unchanged"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Resolve retained automation capacity after manual cleanup and Agent restart",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "administrator",
-        "x-citadel-public": false,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/tags": {
-      "get": {
-        "operationId": "getAutomationActionTags",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResourceTagsResponse"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Get AutomationAction tags",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      },
-      "put": {
-        "operationId": "replaceAutomationActionTags",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReplaceResourceTagsInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResourceTagsResponse"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Replace AutomationAction tags",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/automation/actions/{id}/test": {
-      "post": {
-        "operationId": "testAutomationAction",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/RunInput"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AutomationProgress"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Queue a test Automation Action run",
-        "tags": [
-          "AutomationActions"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
         "x-citadel-setup-exempt": false
       }
     },
@@ -67686,6 +65639,2053 @@
         ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts": {
+      "get": {
+        "operationId": "listScripts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptList"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List Scripts",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      },
+      "post": {
+        "operationId": "createScript",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedScript"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Create a Script",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/rename": {
+      "post": {
+        "operationId": "renameScript",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedScript"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Rename a Script",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}": {
+      "delete": {
+        "operationId": "deleteScript",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Delete a Script",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      },
+      "get": {
+        "operationId": "getScript",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedScript"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get a Script",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      },
+      "patch": {
+        "operationId": "updateScript",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScriptInput"
+              }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScriptInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedScript"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update a Script",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/_metadata": {
+      "patch": {
+        "operationId": "updateScriptMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScriptMetadata"
+              }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScriptMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizedScript"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update Script metadata",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/duplicate-draft": {
+      "get": {
+        "operationId": "getScriptDuplicateDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptDuplicateDraftView"
+                }
+              }
+            },
+            "description": "Editable configuration without activation or runtime state"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Prepare a disabled configuration copy",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/run": {
+      "post": {
+        "operationId": "runScript",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/RunInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScriptProgress"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Queue a Script run",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/runs": {
+      "get": {
+        "operationId": "listScriptRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunList"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List Script runs",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/runs/{runId}": {
+      "get": {
+        "operationId": "getScriptRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptRunView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get a Script run",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/runs/{runId}/cancel": {
+      "post": {
+        "operationId": "cancelScriptRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Cancel a Script run",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/runs/{runId}/logs": {
+      "get": {
+        "operationId": "getScriptRunLogs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptRunLogsView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Script run logs",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/runs/{runId}/recovery": {
+      "post": {
+        "operationId": "resolveScriptRunCleanup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveScriptCleanupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Capacity released and acknowledgment audited; result unchanged"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Resolve retained scripts capacity after manual cleanup and Agent restart",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/tags": {
+      "get": {
+        "operationId": "getScriptTags",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceTagsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Script tags",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      },
+      "put": {
+        "operationId": "replaceScriptTags",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceResourceTagsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceTagsResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Replace Script tags",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/scripts/{id}/test": {
+      "post": {
+        "operationId": "testScript",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/RunInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScriptProgress"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Queue a test Script run",
+        "tags": [
+          "Scripts"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
         "x-citadel-setup-exempt": false
       }
     },

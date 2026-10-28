@@ -64,9 +64,9 @@ const MenuItems: IMenuItem[] = [
         route: '/swarm-services',
       },
       {
-        icon: renderIcon(CitadelIcons.AutomationAction),
-        label: 'Automation',
-        route: '/automation',
+        icon: renderIcon(CitadelIcons.Script),
+        label: 'Scripts',
+        route: '/scripts',
       },
     ],
   },

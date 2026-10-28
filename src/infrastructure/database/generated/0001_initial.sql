@@ -107,7 +107,7 @@ CREATE TABLE secretproviders (
     CONSTRAINT pk_secretproviders PRIMARY KEY (id)
 );
 
-CREATE TABLE actions (
+CREATE TABLE scripts (
     id uuid NOT NULL,
     alertonfailure boolean NOT NULL,
     code text NOT NULL,
@@ -129,9 +129,9 @@ CREATE TABLE actions (
     timeoutseconds integer NOT NULL,
     updatedat timestamp with time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     webhook jsonb,
-    CONSTRAINT pk_actions PRIMARY KEY (id),
-    CONSTRAINT fk_actions_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_actions_actors_runasactorid FOREIGN KEY (runasactorid) REFERENCES actors (id) ON DELETE RESTRICT
+    CONSTRAINT pk_scripts PRIMARY KEY (id),
+    CONSTRAINT fk_scripts_actors_createdbyactorid FOREIGN KEY (createdbyactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_scripts_actors_runasactorid FOREIGN KEY (runasactorid) REFERENCES actors (id) ON DELETE RESTRICT
 );
 
 CREATE TABLE alertchannels (
@@ -724,10 +724,10 @@ CREATE TABLE secretdefinitions (
     CONSTRAINT fk_secretdefinitions_secretproviders_providerid FOREIGN KEY (providerid) REFERENCES secretproviders (id) ON DELETE RESTRICT
 );
 
-CREATE TABLE actionruns (
+CREATE TABLE scriptruns (
     id uuid NOT NULL,
-    actionid uuid NOT NULL,
-    actionname text NOT NULL,
+    scriptid uuid NOT NULL,
+    scriptname text NOT NULL,
     argsjson jsonb NOT NULL DEFAULT ('{}'::jsonb),
     codehash text NOT NULL,
     codesnapshot text NOT NULL,
@@ -743,10 +743,10 @@ CREATE TABLE actionruns (
     timeoutseconds integer NOT NULL,
     trigger text NOT NULL,
     triggeredbyactorid uuid,
-    CONSTRAINT pk_actionruns PRIMARY KEY (id),
-    CONSTRAINT fk_actionruns_actions_actionid FOREIGN KEY (actionid) REFERENCES actions (id) ON DELETE CASCADE,
-    CONSTRAINT fk_actionruns_actors_runasactorid FOREIGN KEY (runasactorid) REFERENCES actors (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_actionruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE SET NULL
+    CONSTRAINT pk_scriptruns PRIMARY KEY (id),
+    CONSTRAINT fk_scriptruns_scripts_scriptid FOREIGN KEY (scriptid) REFERENCES scripts (id) ON DELETE CASCADE,
+    CONSTRAINT fk_scriptruns_actors_runasactorid FOREIGN KEY (runasactorid) REFERENCES actors (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_scriptruns_actors_triggeredbyactorid FOREIGN KEY (triggeredbyactorid) REFERENCES actors (id) ON DELETE SET NULL
 );
 
 CREATE TABLE alertevents (
@@ -1560,7 +1560,7 @@ INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, descri
 VALUES ('019d0000-0001-7000-8001-000000000017', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Git Auto Deploy Failed - Stack', '[]', NULL, 'Critical', NULL, 'StackGitAutoDeployFailed');
 
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
-VALUES ('019d0000-0001-7000-8001-000000000018', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Automation Action Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'AutomationActionRunFailed');
+VALUES ('019d0000-0001-7000-8001-000000000018', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'Script Run Failed', '[]', NULL, 'Critical', 'Enabled', NULL, 'ScriptRunFailed');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
 VALUES ('019d0000-0001-7000-8001-000000000019', NULL, TIMESTAMPTZ '2026-01-01T00:00:00Z', '00000000-0000-0000-0000-000000000001', NULL, '[]', 'License Entered Grace Period', '[]', NULL, 'Warning', 'Enabled', NULL, 'LicenseEnteredGracePeriod');
 INSERT INTO alertrules (id, cooldownseconds, createdat, createdbyactorid, description, limitedto, name, quiethours, requiredmatches, severity, status, threshold, type)
@@ -1698,27 +1698,27 @@ VALUES ('40000000-0000-0000-0000-000000000002', '#f87171', TIMESTAMPTZ '2026-01-
 INSERT INTO teams (id, actorid, name)
 VALUES ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000003', 'Operators');
 
-CREATE INDEX ix_actionruns_actionid_queuedat ON actionruns (actionid, queuedat DESC, id DESC) INCLUDE (status);
+CREATE INDEX ix_scriptruns_scriptid_queuedat ON scriptruns (scriptid, queuedat DESC, id DESC) INCLUDE (status);
 
-CREATE UNIQUE INDEX ix_actionruns_active_action ON actionruns (actionid) WHERE status IN ('Queued', 'Running');
+CREATE UNIQUE INDEX ix_scriptruns_active_action ON scriptruns (scriptid) WHERE status IN ('Queued', 'Running');
 
-CREATE INDEX ix_actionruns_runasactorid ON actionruns (runasactorid);
+CREATE INDEX ix_scriptruns_runasactorid ON scriptruns (runasactorid);
 
-CREATE INDEX ix_actionruns_status_queuedat ON actionruns (status, queuedat);
+CREATE INDEX ix_scriptruns_status_queuedat ON scriptruns (status, queuedat);
 
-CREATE INDEX ix_actionruns_triggeredbyactorid ON actionruns (triggeredbyactorid);
+CREATE INDEX ix_scriptruns_triggeredbyactorid ON scriptruns (triggeredbyactorid);
 
-CREATE INDEX ix_actions_controlstate_controlstartedat ON actions (controlstate, controlstartedat);
+CREATE INDEX ix_scripts_controlstate_controlstartedat ON scripts (controlstate, controlstartedat);
 
-CREATE INDEX ix_actions_createdbyactorid ON actions (createdbyactorid);
+CREATE INDEX ix_scripts_createdbyactorid ON scripts (createdbyactorid);
 
-CREATE INDEX ix_actions_globalsearch_name_trgm ON actions USING gin (name gin_trgm_ops);
+CREATE INDEX ix_scripts_globalsearch_name_trgm ON scripts USING gin (name gin_trgm_ops);
 
-CREATE UNIQUE INDEX ix_actions_name ON actions (name);
+CREATE UNIQUE INDEX ix_scripts_name ON scripts (name);
 
-CREATE INDEX ix_actions_runasactorid ON actions (runasactorid);
+CREATE INDEX ix_scripts_runasactorid ON scripts (runasactorid);
 
-CREATE INDEX ix_actions_schedule ON actions (enabled, scheduleenabled, schedulecron);
+CREATE INDEX ix_scripts_schedule ON scripts (enabled, scheduleenabled, schedulecron);
 
 CREATE INDEX ix_activityevents_createdbyactorid ON activityevents (createdbyactorid);
 
@@ -2497,16 +2497,16 @@ ALTER TABLE backuprestoreruns ADD COLUMN nextattemptat timestamp with time zone;
 CREATE INDEX ix_backuprestoreruns_nextattempt ON backuprestoreruns(nextattemptat,queuedat,id) WHERE status='Queued';
 
 -- Cancellation remains observable if a queued run is claimed concurrently.
-ALTER TABLE actionruns ADD COLUMN cancelrequested boolean NOT NULL DEFAULT false;
+ALTER TABLE scriptruns ADD COLUMN cancelrequested boolean NOT NULL DEFAULT false;
 
-ALTER TABLE actions ADD COLUMN executor jsonb NOT NULL DEFAULT '{"kind":"Core"}';
-ALTER TABLE actionruns ADD COLUMN executor jsonb NOT NULL DEFAULT '{"kind":"Core"}';
-ALTER TABLE actionruns ADD COLUMN attemptid uuid;
-ALTER TABLE actionruns ADD COLUMN executorid uuid;
-ALTER TABLE actionruns ADD COLUMN nexteligibleat timestamptz;
-CREATE TABLE automationexecutorreservations (
+ALTER TABLE scripts ADD COLUMN executor jsonb NOT NULL DEFAULT '{"kind":"Core"}';
+ALTER TABLE scriptruns ADD COLUMN executor jsonb NOT NULL DEFAULT '{"kind":"Core"}';
+ALTER TABLE scriptruns ADD COLUMN attemptid uuid;
+ALTER TABLE scriptruns ADD COLUMN executorid uuid;
+ALTER TABLE scriptruns ADD COLUMN nexteligibleat timestamptz;
+CREATE TABLE scriptexecutorreservations (
     attemptid uuid PRIMARY KEY,
-    runid uuid NOT NULL UNIQUE REFERENCES actionruns(id),
+    runid uuid NOT NULL UNIQUE REFERENCES scriptruns(id),
     daemonid varchar(256) NOT NULL REFERENCES buildexecutors(daemonid),
     authorityid uuid NOT NULL,
     admissiongeneration bigint NOT NULL CHECK(admissiongeneration > 0),
@@ -2516,7 +2516,7 @@ CREATE TABLE automationexecutorreservations (
     cleanupconfirmed boolean NOT NULL DEFAULT false,
     lastcheckedat timestamptz
 );
-CREATE INDEX ix_automationexecutorreservations_daemon ON automationexecutorreservations(daemonid);
+CREATE INDEX ix_scriptexecutorreservations_daemon ON scriptexecutorreservations(daemonid);
 
 -- Exact helper identities survive Core restarts; creating a helper does not
 -- authorize starting it until its immutable Docker ID is durably registered.

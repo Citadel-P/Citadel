@@ -5,7 +5,7 @@ use citadel_adapters::{
     persistence::postgres::builds::PostgresBuildRepository,
 };
 use citadel_builds::*;
-use citadel_contracts::citadel::automation::v1::*;
+use citadel_contracts::citadel::scripts::v1::*;
 use futures_util::future::BoxFuture;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -363,23 +363,23 @@ async fn six_real_remote_builds_overlap_with_two_preparation_permits() {
             refused.admission,
             BuildAdmissionResult::BuildAdmissionCapacityBusyNotStarted as i32
         );
-        let automation_host: AutomationHost = wire
+        let script_host: ScriptHost = wire
             .unary(
-                Kind::AutomationCheckHost,
-                "/citadel.automation.v1.AutomationService/CheckHost",
+                Kind::ScriptCheckHost,
+                "/citadel.scripts.v1.ScriptService/CheckHost",
                 (),
             )
             .await;
-        let mut automation = wire
-            .stream::<_, AutomationEvent>(
-                Kind::AutomationRun,
-                "/citadel.automation.v1.AutomationService/Run",
-                AutomationRequest {
-                    attempt: Some(AutomationAttempt {
+        let mut scripts = wire
+            .stream::<_, ScriptEvent>(
+                Kind::ScriptRun,
+                "/citadel.scripts.v1.ScriptService/Run",
+                ScriptRequest {
+                    attempt: Some(ScriptAttempt {
                         run_id: Uuid::now_v7().to_string(),
                         attempt_id: Uuid::now_v7().to_string(),
-                        authority_id: automation_host.authority_id,
-                        generation: automation_host.generation,
+                        authority_id: script_host.authority_id,
+                        generation: script_host.generation,
                     }),
                     source: "throw new Error('capacity refusal must precede execution');".into(),
                     token: "fixture-never-used".into(),
@@ -390,16 +390,16 @@ async fn six_real_remote_builds_overlap_with_two_preparation_permits() {
                 },
             )
             .await;
-        let refusal = tokio::time::timeout(Duration::from_secs(10), automation.next())
+        let refusal = tokio::time::timeout(Duration::from_secs(10), scripts.next())
             .await
             .unwrap()
             .unwrap()
             .unwrap();
         assert!(
             refusal.not_started,
-            "builds must share heavy capacity with remote automation"
+            "builds must share heavy capacity with remote scripts"
         );
-        assert!(automation.next().await.is_none());
+        assert!(scripts.next().await.is_none());
     }
     release.send(true).unwrap();
     tokio::time::timeout(Duration::from_secs(90), async {

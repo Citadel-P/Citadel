@@ -11,10 +11,10 @@
     "label": "Alert Channel",
     "specificPermissionLabels": {}
   },
-  "AutomationAction": {
+  "Script": {
     "maximumLevel": "Execute",
     "specificPermissions": {},
-    "label": "Automation",
+    "label": "Script",
     "specificPermissionLabels": {}
   },
   "BackupPolicy": {

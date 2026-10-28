@@ -300,7 +300,7 @@ async fn every_direct_rpc_is_registered_and_requires_authentication() {
     let host = Harness::start().await;
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let protos = [
-        include_str!("../../infrastructure/contracts/proto/automation_service.proto"),
+        include_str!("../../infrastructure/contracts/proto/script_service.proto"),
         include_str!("../../infrastructure/contracts/proto/container_service.proto"),
         include_str!("../../infrastructure/contracts/proto/deployment_service.proto"),
         include_str!("../../infrastructure/contracts/proto/image_service.proto"),

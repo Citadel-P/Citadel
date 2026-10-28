@@ -37,7 +37,7 @@ impl ServiceAccountRepository for PostgresServiceAccountRepository {
         actor_id: ActorId,
     ) -> BoxFuture<'_, Result<Vec<citadel_identity::RunAsActorUsageDetails>, IdentityError>> {
         Box::pin(async move {
-            let rows: Vec<(Uuid, String, i32, bool)> = sqlx::query_as("SELECT id,name,13 AS resourcetype,enabled AS isactive FROM actions WHERE runasactorid=$1 UNION ALL SELECT id,name,16 AS resourcetype,(enabled AND archivedat IS NULL) AS isactive FROM backuppolicies WHERE runasactorid=$1 ORDER BY resourcetype,name,id")
+            let rows: Vec<(Uuid, String, i32, bool)> = sqlx::query_as("SELECT id,name,13 AS resourcetype,enabled AS isactive FROM scripts WHERE runasactorid=$1 UNION ALL SELECT id,name,16 AS resourcetype,(enabled AND archivedat IS NULL) AS isactive FROM backuppolicies WHERE runasactorid=$1 ORDER BY resourcetype,name,id")
                 .bind(actor_id.value()).fetch_all(&self.pool).await.map_err(storage)?;
             Ok(rows
                 .into_iter()
@@ -46,7 +46,7 @@ impl ServiceAccountRepository for PostgresServiceAccountRepository {
                         id,
                         name,
                         resource_type: if kind == 13 {
-                            ResourceType::AutomationAction
+                            ResourceType::Script
                         } else {
                             ResourceType::BackupPolicy
                         },
@@ -438,7 +438,7 @@ FOR UPDATE
             let blockers = sqlx::query_scalar::<_, i64>(
                 r#"
 SELECT
-    (SELECT COUNT(*) FROM actions
+    (SELECT COUNT(*) FROM scripts
      WHERE runasactorid = ANY($1) AND enabled AND (scheduleenabled OR webhook IS NOT NULL))
   + (SELECT COUNT(*) FROM backuppolicies
      WHERE runasactorid = ANY($1) AND archivedat IS NULL AND enabled

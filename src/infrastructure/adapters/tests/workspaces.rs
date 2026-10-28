@@ -1,9 +1,9 @@
 use citadel_adapters::filesystem::{
-    automation_workspace::LocalAutomationWorkspace, git_workspace::LocalGitWorkspace,
+    git_workspace::LocalGitWorkspace, script_workspace::LocalScriptWorkspace,
 };
-use citadel_automation::workspace::AutomationWorkspacePort;
 use citadel_git::workspace::GitWorkspacePort;
 use citadel_runtime::DynamicTasks;
+use citadel_scripts::workspace::ScriptWorkspacePort;
 use std::{path::PathBuf, time::Duration};
 use tokio_util::sync::CancellationToken;
 
@@ -80,16 +80,16 @@ async fn git_staging_publishes_atomically_and_cleans_abandoned_clones() {
 }
 
 #[tokio::test]
-async fn automation_scripts_are_private_and_cleanup_covers_abandonment() {
+async fn script_scripts_are_private_and_cleanup_covers_abandonment() {
     let tasks = DynamicTasks::new(CancellationToken::new());
     let root = Root::new();
     let run = root.0.join("run");
-    let workspace = LocalAutomationWorkspace::new(tasks.clone())
+    let workspace = LocalScriptWorkspace::new(tasks.clone())
         .prepare(&run, None, "short-lived credential")
         .await
         .unwrap();
     assert_eq!(
-        tokio::fs::read_to_string(workspace.directory().join("action.ts"))
+        tokio::fs::read_to_string(workspace.directory().join("script.ts"))
             .await
             .unwrap(),
         "short-lived credential"
@@ -98,7 +98,7 @@ async fn automation_scripts_are_private_and_cleanup_covers_abandonment() {
         tokio::fs::read_to_string(workspace.entrypoint())
             .await
             .unwrap(),
-        "const action = new URL('./action.ts', import.meta.url).href;\nawait import(action);\n"
+        "const action = new URL('./script.ts', import.meta.url).href;\nawait import(action);\n"
     );
     #[cfg(unix)]
     {
@@ -109,7 +109,7 @@ async fn automation_scripts_are_private_and_cleanup_covers_abandonment() {
         );
     }
     assert!(
-        LocalAutomationWorkspace::new(tasks.clone())
+        LocalScriptWorkspace::new(tasks.clone())
             .prepare(&run, None, "replacement")
             .await
             .is_err()
@@ -121,7 +121,7 @@ async fn automation_scripts_are_private_and_cleanup_covers_abandonment() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn automation_does_not_follow_an_existing_workspace_symlink() {
+async fn script_does_not_follow_an_existing_workspace_symlink() {
     let tasks = DynamicTasks::new(CancellationToken::new());
     let root = Root::new();
     let external = root.0.join("external");
@@ -129,11 +129,11 @@ async fn automation_does_not_follow_an_existing_workspace_symlink() {
     let run = root.0.join("run");
     std::os::unix::fs::symlink(&external, &run).unwrap();
     assert!(
-        LocalAutomationWorkspace::new(tasks.clone())
+        LocalScriptWorkspace::new(tasks.clone())
             .prepare(&run, None, "secret")
             .await
             .is_err()
     );
-    assert!(!external.join("action.ts").exists());
+    assert!(!external.join("script.ts").exists());
     assert!(external.exists());
 }

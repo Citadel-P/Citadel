@@ -36,7 +36,7 @@ Pools use the same Agent executable; Swarm-node Agents use a restricted profile.
 | `src/infrastructure/adapters/` | PostgreSQL, remote Agent routing, filesystem and security implementations |
 | `src/infrastructure/docker/` | Shared local Docker, Compose/build execution and transport mapping for Core and Agent |
 | `src/infrastructure/database/` | Declarative schema, migrations and migration runner |
-| `src/infrastructure/automation/` | Shared private script workspace and owned cleanup adapter for Core and Agents |
+| `src/infrastructure/scripts/` | Shared private script workspace and owned cleanup adapter for Core and Agents |
 | `src/infrastructure/contracts/` | Core/Agent protobufs and generated bindings |
 | `src/infrastructure/docker-api/` | Generated Docker protocol client and pinned source schema |
 | `src/infrastructure/processes/` | Bounded subprocess execution, cancellation and cleanup |
@@ -219,7 +219,7 @@ Authorization failures still fail closed. Process snapshots are transient; no da
 history or separate polling worker is involved. Health history loads through its HTTP query;
 the authenticated health group sends small invalidation notifications on join,
 reconnect and committed changes, rather than carrying the retained records.
-Automation run history loads through HTTP, then an action-authorized realtime
+Script run history loads through HTTP, then an action-authorized realtime
 group replaces the latest 50-run window on join, reconnect and committed run or
 cleanup changes. Live snapshots update the frontend query cache and cancel older
 HTTP reads. Resource subscriptions own synchronization; execution, cancellation
@@ -361,7 +361,7 @@ connections and streams. Raw observations may be shared across subscribers, but
 permission decisions and presentation remain actor-specific. Manual ACL changes
 outside these mutation paths require cache invalidation, such as restarting Core.
 
-Credential files and Git/Automation workspaces belong to infrastructure adapters.
+Credential files and Git/Script workspaces belong to infrastructure adapters.
 Use private staging, bounded subprocesses and cleanup on success, failure and
 cancellation. Git SSH requires verified host keys; do not disable host verification.
 API responses, logs and activity snapshots must not disclose stored secrets.
@@ -440,7 +440,7 @@ capacity. Local build/backup/staging work shares one process-wide heavy-work
 budget. Local Docker execution also records daemon/authority reservations; the
 Core process has one authority shared by its build and backup executors. A new
 Core authority cannot overwrite occupancy retained by an old process or Agent.
-Automation actions select Core (default), a specific Agent, or automatic placement
+Scripts select Core (default), a specific Agent, or automatic placement
 among eligible Agents discovered using the run-as identity’s Execute permissions.
 Automatic placement uses the existing Automated Operations entitlement, checked
 when selecting it, starting a manual/test run, and before worker dispatch.

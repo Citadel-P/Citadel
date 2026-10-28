@@ -195,9 +195,9 @@ The same Core certificate serves the API and Edge gRPC listeners. It must be
 valid for the hosts in both `CITADEL_PUBLIC_URL` and
 `CITADEL_EDGE_PUBLIC_GRPC_URL`.
 
-## Automation API access
+## Script API access
 
-The browser origin (`CITADEL_PUBLIC_URL`) and Automation API origin
+The browser origin (`CITADEL_PUBLIC_URL`) and Script API origin
 (`CITADEL_INTERNAL_BASE_URL`) serve different clients. With a reverse proxy, the
 internal default is cleartext loopback on the HTTP listener port; allow
 `127.0.0.1` explicitly in `CITADEL_HTTP_ALLOWED_HOSTS`. With Direct TLS, that
@@ -206,12 +206,12 @@ listener accepts HTTPS only, so set `CITADEL_INTERNAL_BASE_URL` explicitly to
 that endpoint, and the certificate must match its hostname.
 
 Use a publicly trusted certificate with its intermediate chain for this setup.
-The Automation Deno subprocess runs with a cleared, restricted environment:
+The Script Deno subprocess runs with a cleared, restricted environment:
 Core's Agent CA settings do not apply, and `DENO_CERT` and
 `DENO_TLS_CA_STORE` are not forwarded to it. The shared process runner may pass
 `SSL_CERT_FILE`/`SSL_CERT_DIR`, but that does not select Deno’s system trust store;
 [Deno defaults to Mozilla roots](https://docs.deno.com/runtime/reference/env_variables/). Custom/private-CA trust for
-Automation API calls is not currently configurable through this path. Agent CA
+Script API calls is not currently configurable through this path. Agent CA
 trust is a separate setting and does not establish Deno trust. Do not bypass
 certificate or hostname verification.
 

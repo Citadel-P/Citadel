@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Columns2, Rows4 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-export { configureAutomationActionEditor } from './automation_action';
+export { configureScriptEditor } from './script';
 
 // --- Configuration Constants ---
 const LINE_HEIGHT_PX = 18;

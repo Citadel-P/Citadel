@@ -69,7 +69,7 @@ impl BuildProjectBuilderKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, utoipa::ToSchema)]
 pub enum BuildRunTrigger {
     Manual,
-    Automation,
+    Script,
     Schedule,
     Webhook,
     Dependency,

@@ -6,23 +6,22 @@ use axum::{
 use chrono::{Duration, Utc};
 use citadel_adapters::{
     persistence::postgres::{
-        automation::PostgresAutomationRepository,
         bindings::PostgresBindingRepository,
         git::{
             accounts::PostgresGitAccountRepository,
             repositories::PostgresGitRepositoryExecutionPersistence,
         },
         identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
+        scripts::PostgresScriptRepository,
     },
     security::identity::{
-        automation_token::IdentityAutomationRunTokenIssuer,
         crypto::{
             AesGcmSecretProtector, Argon2PasswordHasher, JwtSessionTokenCodec,
             OpaqueServiceAccountTokenCodec,
         },
+        script_token::IdentityScriptRunTokenIssuer,
     },
 };
-use citadel_automation::{AutomationRepository, AutomationRuntimeConfig, AutomationService};
 use citadel_bindings::SecretService;
 use citadel_database::MigrationRunner;
 use citadel_git::{GitAccountService, GitCli, GitRepositoryExecutionService};
@@ -31,14 +30,15 @@ use citadel_identity::{
     NoopServiceAccountLastUsedTracker, SYSTEM_ACTOR_ID, SystemClock,
 };
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
+use citadel_scripts::{ScriptRepository, ScriptRuntimeConfig, ScriptService};
 use citadel_server::api::routes::{
-    automation as automation_http,
-    automation::AutomationHttpState,
     bindings, git_accounts as git_accounts_http,
     git_accounts::GitAccountsHttpState,
     git_repositories as git_repositories_http,
     git_repositories::{GitCatalogHttpState, GitRepositoriesHttpState},
-    registries, tags, webhooks as webhooks_http,
+    registries, scripts as script_http,
+    scripts::ScriptHttpState,
+    tags, webhooks as webhooks_http,
     webhooks::WebhooksHttpState,
 };
 use serde_json::{Value, json};
@@ -111,30 +111,28 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         std::time::Duration::from_secs(60),
     ));
     let cancellation = tokio_util::sync::CancellationToken::new();
-    let automation_shutdown = tokio_util::sync::CancellationToken::new();
-    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
+    let script_shutdown = tokio_util::sync::CancellationToken::new();
+    let script_tasks = citadel_runtime::DynamicTasks::new(script_shutdown.clone());
 
-    let automation = Arc::new(AutomationService::new(
+    let scripts = Arc::new(ScriptService::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
         std::sync::Arc::new(
-            citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(
+            citadel_adapters::filesystem::script_workspace::LocalScriptWorkspace::new(
                 citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             ),
         ),
-        Arc::new(
-            citadel_server::tasks::automation::TrackedAutomationTasks::new(
-                automation_tasks.clone(),
-            ),
-        ),
-        automation_shutdown.clone(),
-        Arc::new(PostgresAutomationRepository::new(pool.clone())),
-        Arc::new(IdentityAutomationRunTokenIssuer::new(Arc::clone(&identity))),
-        AutomationRuntimeConfig {
+        Arc::new(citadel_server::tasks::scripts::TrackedScriptTasks::new(
+            script_tasks.clone(),
+        )),
+        script_shutdown.clone(),
+        Arc::new(PostgresScriptRepository::new(pool.clone())),
+        Arc::new(IdentityScriptRunTokenIssuer::new(Arc::clone(&identity))),
+        ScriptRuntimeConfig {
             deno_path: "deno".into(),
             work_root: std::env::temp_dir()
-                .join(format!("citadel-automation-http-{}", Uuid::now_v7())),
+                .join(format!("citadel-scripts-http-{}", Uuid::now_v7())),
             internal_base_url: "http://127.0.0.1:8000".to_owned(),
-            endpoint_catalog_json: citadel_server::automation_endpoint_catalog_json(),
+            endpoint_catalog_json: citadel_server::script_endpoint_catalog_json(),
             maximum_log_bytes: 64 * 1024,
             stale_after: std::time::Duration::from_secs(60),
         },
@@ -184,7 +182,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     }))
     .merge(webhooks_http::router(WebhooksHttpState {
         git: Arc::clone(&git_execution),
-        automation: Arc::clone(&automation),
+        scripts: Arc::clone(&scripts),
         backups: None,
         builds: None,
         stacks: None,
@@ -192,9 +190,9 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         audit: None,
         alerts: None,
     }))
-    .merge(automation_http::router(AutomationHttpState {
+    .merge(script_http::router(ScriptHttpState {
         identity,
-        automation,
+        scripts,
     }));
     assert_eq!(
         request(&app, Method::GET, "/api/v1/tags", None, None)
@@ -239,7 +237,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     };
     let suffix = Uuid::now_v7().simple().to_string();
 
-    // Port AutomationActionTags_ShouldCreateFilterByTagNameAndReplace.
+    // Port ScriptTags_ShouldCreateFilterByTagNameAndReplace.
     let mut action_tags = Vec::new();
     for color in ["blue", "green"] {
         let response = request(
@@ -247,7 +245,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             Method::POST,
             "/api/v1/tags",
             Some(administrator.clone()),
-            Some(json!({"name":format!("automation-{color}-{suffix}"),"color":"#3366FF"})),
+            Some(json!({"name":format!("scripts-{color}-{suffix}"),"color":"#3366FF"})),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -256,10 +254,10 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
 
     workload_tags::verify(&app, &pool, &administrator, &action_tags).await;
 
-    let automation_response = request(
+    let script_response = request(
         &app,
         Method::POST,
-        "/api/v1/automation/actions",
+        "/api/v1/scripts",
         Some(administrator.clone()),
         Some(json!({
             "name":format!("execution-action-{suffix}"),
@@ -278,14 +276,14 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         })),
     )
     .await;
-    assert_eq!(automation_response.status(), StatusCode::OK);
-    let automation_action = response_json(automation_response).await;
-    let automation_id = automation_action["id"].as_str().unwrap();
-    let automation_uuid = Uuid::parse_str(automation_id).unwrap();
-    assert_eq!(automation_action["tags"][0]["id"], action_tags[0]["id"]);
-    assert_eq!(automation_action["capabilities"]["canExecute"], true);
-    assert!(automation_action["latestRun"].is_null());
-    let duplicate_path = format!("/api/v1/automation/actions/{automation_id}/duplicate-draft");
+    assert_eq!(script_response.status(), StatusCode::OK);
+    let script = response_json(script_response).await;
+    let script_id = script["id"].as_str().unwrap();
+    let script_uuid = Uuid::parse_str(script_id).unwrap();
+    assert_eq!(script["tags"][0]["id"], action_tags[0]["id"]);
+    assert_eq!(script["capabilities"]["canExecute"], true);
+    assert!(script["latestRun"].is_null());
+    let duplicate_path = format!("/api/v1/scripts/{script_id}/duplicate-draft");
     assert_eq!(
         request(&app, Method::GET, &duplicate_path, None, None)
             .await
@@ -309,7 +307,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     );
     let draft_response = response_json(response).await;
     let mut draft = draft_response["draft"].clone();
-    assert_eq!(draft["duplicateSourceId"], automation_id);
+    assert_eq!(draft["duplicateSourceId"], script_id);
     assert_eq!(draft["enabled"], false);
     assert_eq!(draft["scheduleEnabled"], false);
     assert!(draft["webhook"].is_null());
@@ -320,7 +318,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         request(
             &app,
             Method::POST,
-            "/api/v1/automation/actions",
+            "/api/v1/scripts",
             Some(administrator.clone()),
             Some(forged)
         )
@@ -332,7 +330,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let response = request(
         &app,
         Method::POST,
-        "/api/v1/automation/actions",
+        "/api/v1/scripts",
         Some(administrator.clone()),
         Some(draft),
     )
@@ -342,15 +340,12 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     assert_eq!(copied["enabled"], false);
     assert_eq!(copied["runAsActorId"], administrator_actor_id.to_string());
     assert!(copied["latestRun"].is_null());
-    assert_ne!(copied["id"], automation_id);
+    assert_ne!(copied["id"], script_id);
     assert_eq!(
         request(
             &app,
             Method::DELETE,
-            &format!(
-                "/api/v1/automation/actions/{}",
-                copied["id"].as_str().unwrap()
-            ),
+            &format!("/api/v1/scripts/{}", copied["id"].as_str().unwrap()),
             Some(administrator.clone()),
             None
         )
@@ -364,7 +359,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         request(
             &app,
             Method::PATCH,
-            &format!("/api/v1/automation/actions/{automation_id}"),
+            &format!("/api/v1/scripts/{script_id}"),
             Some(administrator.clone()),
             Some(
                 json!({"scheduleEnabled":true,"scheduleCron":"* * * * *","scheduleTimeZone":"UTC"})
@@ -374,8 +369,8 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .status(),
         StatusCode::FORBIDDEN
     );
-    let schedule: bool = sqlx::query_scalar("SELECT scheduleenabled FROM actions WHERE id=$1")
-        .bind(automation_uuid)
+    let schedule: bool = sqlx::query_scalar("SELECT scheduleenabled FROM scripts WHERE id=$1")
+        .bind(script_uuid)
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -385,7 +380,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             &app,
             Method::GET,
             &format!(
-                "/api/v1/automation/actions?tags={}",
+                "/api/v1/scripts?tags={}",
                 action_tags[index]["name"].as_str().unwrap()
             ),
             Some(administrator.clone()),
@@ -394,14 +389,14 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            response_json(response).await["actions"]
+            response_json(response).await["scripts"]
                 .as_array()
                 .unwrap()
                 .len(),
             expected
         );
     }
-    let tags_path = format!("/api/v1/automation/actions/{automation_id}/tags");
+    let tags_path = format!("/api/v1/scripts/{script_id}/tags");
     let response = request(
         &app,
         Method::PUT,
@@ -439,7 +434,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let metadata_response = request(
         &app,
         Method::PATCH,
-        &format!("/api/v1/automation/actions/{automation_id}/_metadata"),
+        &format!("/api/v1/scripts/{script_id}/_metadata"),
         Some(administrator.clone()),
         Some(json!({"description":"metadata only"})),
     )
@@ -451,7 +446,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     );
     let activity_count: i64 =
         sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1")
-            .bind(automation_uuid)
+            .bind(script_uuid)
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -462,16 +457,16 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let renamed = request(
         &app,
         Method::POST,
-        "/api/v1/automation/actions/rename",
+        "/api/v1/scripts/rename",
         Some(administrator.clone()),
-        Some(json!({"id":automation_id,"name":format!("execution-renamed-{suffix}")})),
+        Some(json!({"id":script_id,"name":format!("execution-renamed-{suffix}")})),
     )
     .await;
     assert_eq!(renamed.status(), StatusCode::OK);
     let updated = request(
         &app,
         Method::PATCH,
-        &format!("/api/v1/automation/actions/{automation_id}"),
+        &format!("/api/v1/scripts/{script_id}"),
         Some(administrator.clone()),
         Some(json!({"description":null,"timeoutSeconds":45})),
     )
@@ -483,18 +478,18 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let unsupported_update = request(
         &app,
         Method::PATCH,
-        &format!("/api/v1/automation/actions/{automation_id}"),
+        &format!("/api/v1/scripts/{script_id}"),
         Some(administrator.clone()),
         Some(json!({"name":"bypass-rename"})),
     )
     .await;
     assert_eq!(unsupported_update.status(), StatusCode::BAD_REQUEST);
     // Keep this fixture's run queued for the cancellation endpoint. Actual HTTP
-    // execution/progress is covered with real Deno by automation_http_execution.
-    let queued = PostgresAutomationRepository::new(pool.clone())
+    // execution/progress is covered with real Deno by script_http_execution.
+    let queued = PostgresScriptRepository::new(pool.clone())
         .enqueue(
             administrator.actor_id,
-            automation_uuid,
+            script_uuid,
             "Manual",
             &json!({"mode":"manual"}),
             None,
@@ -506,7 +501,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         request(
             &app,
             Method::GET,
-            &format!("/api/v1/automation/actions/{automation_id}/runs/{run_id}"),
+            &format!("/api/v1/scripts/{script_id}/runs/{run_id}"),
             Some(administrator.clone()),
             None,
         )
@@ -518,7 +513,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         request(
             &app,
             Method::POST,
-            &format!("/api/v1/automation/actions/{automation_id}/runs/{run_id}/cancel"),
+            &format!("/api/v1/scripts/{script_id}/runs/{run_id}/cancel"),
             Some(administrator.clone()),
             None,
         )
@@ -529,7 +524,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let deleted = request(
         &app,
         Method::DELETE,
-        &format!("/api/v1/automation/actions/{automation_id}"),
+        &format!("/api/v1/scripts/{script_id}"),
         Some(administrator.clone()),
         None,
     )
@@ -538,7 +533,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     let events: Vec<(String, Value)> = sqlx::query_as(
         "SELECT eventtype,info::jsonb FROM activityevents WHERE resourceid=$1 ORDER BY createdat,id",
     )
-    .bind(automation_uuid)
+    .bind(script_uuid)
     .fetch_all(&pool)
     .await
     .unwrap();
@@ -548,19 +543,19 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             .map(|(kind, _)| kind.as_str())
             .collect::<Vec<_>>(),
         [
-            "ActionCreated",
-            "ActionRenamed",
-            "ActionUpdated",
-            "ActionRunQueued",
-            "ActionRunCancelled",
-            "ActionDeleted"
+            "ScriptCreated",
+            "ScriptRenamed",
+            "ScriptUpdated",
+            "ScriptRunQueued",
+            "ScriptRunCancelled",
+            "ScriptDeleted"
         ]
     );
     assert_eq!(
         events[1].1["NewName"],
         format!("execution-renamed-{suffix}")
     );
-    assert_eq!(events[2].1["NewAction"]["TimeoutSeconds"], 45);
+    assert_eq!(events[2].1["NewScript"]["TimeoutSeconds"], 45);
     assert_eq!(events[4].1["RunId"], run_id);
     let malformed = request_raw(
         &app,

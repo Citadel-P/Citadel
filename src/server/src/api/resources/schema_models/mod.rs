@@ -45,7 +45,6 @@ macro_rules! schema_model {
 
 pub mod activities;
 pub mod alerts;
-pub mod automation;
 pub mod backups;
 pub mod bindings;
 pub mod builds;
@@ -58,6 +57,7 @@ pub mod network_usage;
 pub mod platforms;
 pub mod primitives;
 pub mod registries;
+pub mod scripts;
 pub mod stacks;
 pub mod swarm_services;
 

@@ -81,7 +81,7 @@ mod public_activity_tests {
             "StackDegraded",
             "StackDriftDetected",
             "BuildRunFailed",
-            "AutomationRunFailed",
+            "ScriptRunFailed",
         ] {
             let public = public_activity_info(
                 json!({"$type":event,"Reason":"Container exited","ErrorMessage":"Process failed","Spec":{"Labels":{"Owner":"OPS"},"EnvironmentVariables":{"PATH":"/bin"}}}),

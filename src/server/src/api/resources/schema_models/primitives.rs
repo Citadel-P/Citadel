@@ -117,7 +117,7 @@ enum_schema!(
         Role,
         Binding,
         Tag,
-        AutomationAction,
+        Script,
         License,
         BackupRepository,
         BackupPolicy,

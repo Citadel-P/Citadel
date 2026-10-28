@@ -1,6 +1,6 @@
 pub mod stacks;
 
-pub mod automation_workspace;
 pub mod git_workspace;
+pub mod script_workspace;
 
 mod cleanup;

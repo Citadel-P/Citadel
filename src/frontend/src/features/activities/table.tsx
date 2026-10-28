@@ -130,7 +130,7 @@ function getActivitySummary(info: PublicActivityEventInfo | null | undefined): s
     case 'GitRepoWebhookReceived':
     case 'StackWebhookReceived':
     case 'BuildWebhookReceived':
-    case 'ActionWebhookReceived':
+    case 'ScriptWebhookReceived':
     case 'BackupPolicyWebhookReceived':
       return [
         info.status,

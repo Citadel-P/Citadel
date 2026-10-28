@@ -12,7 +12,7 @@ type NormalizedWebhookConfig = Required<Pick<WebhookCommonConfig, 'enabled' | 'p
   Pick<WebhookCommonConfig, 'secret' | 'branchFilter'>;
 
 type WebhookConfigFieldProps = {
-  resourceType: 'repo' | 'stack' | 'automation-action' | 'backup-policy' | 'build' | 'swarm-service';
+  resourceType: 'repo' | 'stack' | 'script' | 'backup-policy' | 'build' | 'swarm-service';
   resourceId?: string;
   execution: 'pull' | 'deploy' | 'run' | 'update';
   value?: WebhookConfigValue | null;

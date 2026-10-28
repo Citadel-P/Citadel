@@ -65,8 +65,8 @@ for (const pathStr in doc.paths) {
   }
 }
 
-const automationEndpoints = endpoints.filter((endpoint) => isAutomationEndpointAllowed(endpoint.path, endpoint.tag));
-const automationGroups = automationEndpoints.reduce<Record<string, string[]>>((acc, endpoint) => {
+const scriptEndpoints = endpoints.filter((endpoint) => isScriptEndpointAllowed(endpoint.path, endpoint.tag));
+const scriptGroups = scriptEndpoints.reduce<Record<string, string[]>>((acc, endpoint) => {
   acc[endpoint.group] ??= [];
   acc[endpoint.group].push(endpoint.key);
   return acc;
@@ -77,25 +77,25 @@ const body =
   'export const resources = {\n' +
   endpoints.map((endpoint) => `  ${endpoint.key}: ${tsEndpoint(endpoint)},`).join('\n') +
   '\n} as const;\n\n' +
-  'export const automationResourceKeys = [\n' +
-  automationEndpoints.map((endpoint) => `  "${endpoint.key}",`).join('\n') +
+  'export const scriptResourceKeys = [\n' +
+  scriptEndpoints.map((endpoint) => `  "${endpoint.key}",`).join('\n') +
   '\n] as const;\n\n' +
-  'export type AutomationResourceName = (typeof automationResourceKeys)[number];\n\n' +
-  'export const automationResources = {\n' +
-  automationEndpoints.map((endpoint) => `  ${endpoint.key}: resources.${endpoint.key},`).join('\n') +
+  'export type ScriptResourceName = (typeof scriptResourceKeys)[number];\n\n' +
+  'export const scriptResources = {\n' +
+  scriptEndpoints.map((endpoint) => `  ${endpoint.key}: resources.${endpoint.key},`).join('\n') +
   '\n} as const;\n\n' +
-  'export const automationResourceGroups = {\n' +
-  Object.entries(automationGroups)
+  'export const scriptResourceGroups = {\n' +
+  Object.entries(scriptGroups)
     .map(([group, keys]) => `  ${group}: ${JSON.stringify(keys)},`)
     .join('\n') +
   '\n} as const;\n\n' +
   'export type ResourceName = keyof typeof resources;\n' +
-  'export type AutomationResourceGroupName = keyof typeof automationResourceGroups;\n';
+  'export type ScriptResourceGroupName = keyof typeof scriptResourceGroups;\n';
 
 fs.writeFileSync(OUTPUT_PATH, header + body);
 
 console.log(`Generated ${OUTPUT_PATH} with ${endpoints.length} endpoints.`);
-console.log(`Generated ${automationEndpoints.length} automation endpoints.`);
+console.log(`Generated ${scriptEndpoints.length} scripts endpoints.`);
 
 function tsEndpoint(endpoint: Endpoint) {
   return `{ method: "${endpoint.method}", key: "${endpoint.key}", namespace: "${endpoint.namespace}", path: ${JSON.stringify(endpoint.path)}, tag: ${JSON.stringify(
@@ -112,14 +112,14 @@ function toGroupName(tag: string) {
   return tag[0].toLowerCase() + tag.slice(1);
 }
 
-function isAutomationEndpointAllowed(pathStr: string, tag: string) {
-  if (tag === 'Authentication' || tag === 'AutomationActions' || tag === 'WebhookListener') return false;
+function isScriptEndpointAllowed(pathStr: string, tag: string) {
+  if (tag === 'Authentication' || tag === 'Scripts' || tag === 'WebhookListener') return false;
 
   const lower = pathStr.toLowerCase();
   return (
     !lower.startsWith('/api/v1/authentication') &&
     !lower.startsWith('/api/v1/installation') &&
-    !lower.startsWith('/api/v1/automation') &&
+    !lower.startsWith('/api/v1/scripts') &&
     !lower.startsWith('/api/v1/resourcebindings/secrets') &&
     !lower.startsWith('/api/v1/resourcebindings/secret-providers') &&
     !lower.includes('/terminal') &&

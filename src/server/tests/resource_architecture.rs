@@ -227,7 +227,7 @@ fn sensitive_workspace_io_belongs_to_infrastructure() {
     for relative in [
         "features/git/src/cli.rs",
         "features/git/src/repositories/execution/credentials.rs",
-        "features/automation/src/service/execution.rs",
+        "features/scripts/src/service/execution.rs",
         "features/backups/src/service/backups.rs",
     ] {
         let source = std::fs::read_to_string(crates.join(relative)).unwrap();

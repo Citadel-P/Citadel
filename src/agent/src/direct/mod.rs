@@ -1,6 +1,5 @@
 //! Direct transport and protobuf boundaries over the shared local runtime.
 mod auth;
-mod automation;
 mod build_admission;
 mod container_config;
 mod container_mapping;
@@ -12,6 +11,7 @@ mod images;
 mod networks;
 mod platforms;
 mod sampling;
+mod scripts;
 mod stack_source;
 mod stacks;
 mod swarm;
@@ -40,8 +40,8 @@ pub struct Runtime {
     mutations: Arc<tokio::sync::Semaphore>,
     builds: build_admission::BuildAdmission,
     data: data_admission::DataAdmission,
-    automations: automation::Admission,
-    automation_root: std::path::PathBuf,
+    scripts: scripts::Admission,
+    script_root: std::path::PathBuf,
     deno_path: std::ffi::OsString,
     tasks: citadel_runtime::DynamicTasks,
     heavy: Arc<tokio::sync::Semaphore>,
@@ -59,8 +59,8 @@ impl Runtime {
     ) -> Self {
         let heavy = Arc::new(tokio::sync::Semaphore::new(2));
         Self {
-            automations: automation::Admission::new(4, heavy.clone()),
-            automation_root: "/app/data/automation".into(),
+            scripts: scripts::Admission::new(4, heavy.clone()),
+            script_root: "/app/data/scripts".into(),
             deno_path: "deno".into(),
             tasks: citadel_runtime::DynamicTasks::new(shutdown.clone()),
             builds: build_admission::BuildAdmission::with_heavy(2, heavy.clone()),
@@ -94,16 +94,16 @@ impl Runtime {
         self.heavy_capacity = heavy;
         self.builds = build_admission::BuildAdmission::with_heavy(build, self.heavy.clone());
         self.data = data_admission::DataAdmission::new(data, self.heavy.clone());
-        self.automations = automation::Admission::new(self.automations.limit(), self.heavy.clone());
+        self.scripts = scripts::Admission::new(self.scripts.limit(), self.heavy.clone());
         self
     }
 
-    pub(crate) fn with_automation(
+    pub(crate) fn with_scripts(
         mut self,
         slots: usize,
         tasks: citadel_runtime::DynamicTasks,
     ) -> Self {
-        self.automations = automation::Admission::new(slots, self.heavy.clone());
+        self.scripts = scripts::Admission::new(slots, self.heavy.clone());
         self.tasks = tasks;
         self
     }
@@ -133,7 +133,7 @@ impl Runtime {
 pub(crate) fn router(runtime: Runtime, key: VerifyingKey, audience: &str) -> Router {
     let verifier = auth::Verifier::new(key, audience).with_shutdown(runtime.shutdown.clone());
     tonic::service::Routes::new(citadel_contracts::citadel::containers::v1::container_service_server::ContainerServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
-        .add_service(citadel_contracts::citadel::automation::v1::automation_service_server::AutomationServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
+        .add_service(citadel_contracts::citadel::scripts::v1::script_service_server::ScriptServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::platforms::v1::platform_service_server::PlatformServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::deployments::v1::deployment_service_server::DeploymentServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::images::v1::image_service_server::ImageServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))

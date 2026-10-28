@@ -55,9 +55,9 @@ async fn usages_resolve_the_account_actor_and_include_inactive_execution_depende
         serde_json::json!([])
     );
     let action = Uuid::now_v7();
-    let action_name = format!("Action-{action}");
-    sqlx::query("INSERT INTO actions(id,name,code,enabled,scheduleenabled,scheduletimezone,timeoutseconds,alertonfailure,createdbyactorid,runasactorid) VALUES($1,$4,'',true,false,'UTC',60,false,$2,$3)")
-        .bind(action).bind(f.administrator.actor_id.value()).bind(actor).bind(&action_name).execute(&f.pool).await.unwrap();
+    let script_name = format!("Action-{action}");
+    sqlx::query("INSERT INTO scripts(id,name,code,enabled,scheduleenabled,scheduletimezone,timeoutseconds,alertonfailure,createdbyactorid,runasactorid) VALUES($1,$4,'',true,false,'UTC',60,false,$2,$3)")
+        .bind(action).bind(f.administrator.actor_id.value()).bind(actor).bind(&script_name).execute(&f.pool).await.unwrap();
     let secret = Uuid::now_v7();
     let repository = Uuid::now_v7();
     let policy = Uuid::now_v7();
@@ -72,7 +72,7 @@ async fn usages_resolve_the_account_actor_and_include_inactive_execution_depende
     sqlx::query("INSERT INTO backuppolicies(id,name,normalizedname,backuprepositoryid,createdbyactorid,runasactorid,source,enabled,archivedat) VALUES($1,'Policy',$2,$3,$4,$5,'{}',true,CURRENT_TIMESTAMP)")
         .bind(policy).bind(policy.to_string()).bind(repository).bind(f.administrator.actor_id.value()).bind(actor).execute(&f.pool).await.unwrap();
     let expected = serde_json::json!([
-        {"id":action,"name":action_name,"resourceType":"AutomationAction","isActive":true},
+        {"id":action,"name":script_name,"resourceType":"Script","isActive":true},
         {"id":policy,"name":"Policy","resourceType":"BackupPolicy","isActive":false}
     ]);
     let response = send(&f, Method::GET, &path, None, Some(f.administrator.clone())).await;
@@ -125,7 +125,7 @@ async fn lifecycle_routes_persist_assignments_archive_and_safe_activities() {
     let fixture = fixture(true).await;
     let marker = Uuid::now_v7().simple().to_string();
     let role_id = seed_role(&fixture.pool, &format!("runner-{marker}")).await;
-    let team_id = seed_team(&fixture.pool, &format!("automation-{marker}")).await;
+    let team_id = seed_team(&fixture.pool, &format!("scripts-{marker}")).await;
     let target_id = Uuid::now_v7();
 
     let created = send_json(
