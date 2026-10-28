@@ -70,13 +70,13 @@ export const globalSearchResourceMetadata: Record<GlobalSearchResourceType, Reso
     listPath: '/registries',
     getDetailsPath: (id) => `/registries/edit/${id}`,
   },
-  [GlobalSearchResourceType.AutomationAction]: {
-    category: GlobalSearchCategory.Automations,
-    label: 'Automations',
-    singularLabel: 'Automation',
-    icon: iconFor(GlobalSearchResourceType.AutomationAction),
-    listPath: '/automation',
-    getDetailsPath: (id) => `/automation/edit/${id}`,
+  [GlobalSearchResourceType.Script]: {
+    category: GlobalSearchCategory.Scripts,
+    label: 'Scripts',
+    singularLabel: 'Script',
+    icon: iconFor(GlobalSearchResourceType.Script),
+    listPath: '/scripts',
+    getDetailsPath: (id) => `/scripts/edit/${id}`,
   },
   [GlobalSearchResourceType.BackupPolicy]: {
     category: GlobalSearchCategory.Backups,
@@ -150,10 +150,10 @@ export const globalSearchCategories: CategorySearchMetadata[] = [
     listPath: '/registries',
   },
   {
-    category: GlobalSearchCategory.Automations,
-    label: 'Automations',
-    icon: iconFor(GlobalSearchResourceType.AutomationAction),
-    listPath: '/automation',
+    category: GlobalSearchCategory.Scripts,
+    label: 'Scripts',
+    icon: iconFor(GlobalSearchResourceType.Script),
+    listPath: '/scripts',
   },
   {
     category: GlobalSearchCategory.Backups,

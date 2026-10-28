@@ -78,7 +78,7 @@ Supported resources:
 - platforms
 - git repositories
 - registries
-- automation actions
+- scripts
 - backup policies
 - build projects
 - build pools

@@ -46,7 +46,7 @@ database_string_enum! {
         AlertRule,
         GitRepository,
         OidcProvider,
-        AutomationAction,
+        Script,
         User,
         Team,
         Role,
@@ -99,19 +99,19 @@ database_string_enum! {
         OidcProviderUpdated,
         OidcProviderRenamed,
         OidcProviderDeleted,
-        ActionCreated,
-        ActionUpdated,
-        ActionRenamed,
-        ActionDeleted,
-        ActionRunQueued,
-        ActionRunStarted,
-        ActionRunCleanupResolved,
-        ActionRunSucceeded,
-        ActionRunFailed,
-        ActionRunTimedOut,
-        ActionRunCancelled,
-        ActionRunRejected,
-        ActionWebhookReceived,
+        ScriptCreated,
+        ScriptUpdated,
+        ScriptRenamed,
+        ScriptDeleted,
+        ScriptRunQueued,
+        ScriptRunStarted,
+        ScriptRunCleanupResolved,
+        ScriptRunSucceeded,
+        ScriptRunFailed,
+        ScriptRunTimedOut,
+        ScriptRunCancelled,
+        ScriptRunRejected,
+        ScriptWebhookReceived,
         StackCreated,
         StackDuplicated,
         StackUpdated,
@@ -252,19 +252,19 @@ impl ActivityEventType {
             | Self::OidcProviderUpdated
             | Self::OidcProviderRenamed
             | Self::OidcProviderDeleted => ActivityResourceType::OidcProvider,
-            Self::ActionCreated
-            | Self::ActionUpdated
-            | Self::ActionRenamed
-            | Self::ActionDeleted
-            | Self::ActionRunQueued
-            | Self::ActionRunCleanupResolved
-            | Self::ActionRunStarted
-            | Self::ActionRunSucceeded
-            | Self::ActionRunFailed
-            | Self::ActionRunTimedOut
-            | Self::ActionRunCancelled
-            | Self::ActionRunRejected
-            | Self::ActionWebhookReceived => ActivityResourceType::AutomationAction,
+            Self::ScriptCreated
+            | Self::ScriptUpdated
+            | Self::ScriptRenamed
+            | Self::ScriptDeleted
+            | Self::ScriptRunQueued
+            | Self::ScriptRunCleanupResolved
+            | Self::ScriptRunStarted
+            | Self::ScriptRunSucceeded
+            | Self::ScriptRunFailed
+            | Self::ScriptRunTimedOut
+            | Self::ScriptRunCancelled
+            | Self::ScriptRunRejected
+            | Self::ScriptWebhookReceived => ActivityResourceType::Script,
             Self::StackCreated
             | Self::StackDuplicated
             | Self::StackUpdated

@@ -328,14 +328,12 @@ impl citadel_swarm_services::ServiceAutomationEntitlements for PostgresLicenseEn
     }
 }
 
-impl citadel_automation::AutomationEntitlements for PostgresLicenseEntitlementService {
-    fn automated_operations(
-        &self,
-    ) -> BoxFuture<'_, Result<bool, citadel_automation::AutomationError>> {
+impl citadel_scripts::ScriptEntitlements for PostgresLicenseEntitlementService {
+    fn automated_operations(&self) -> BoxFuture<'_, Result<bool, citadel_scripts::ScriptError>> {
         Box::pin(async move {
             self.enabled(LicenseCapability::AutomatedOperations)
                 .await
-                .map_err(|error| citadel_automation::AutomationError::Storage(error.to_string()))
+                .map_err(|error| citadel_scripts::ScriptError::Storage(error.to_string()))
         })
     }
 }

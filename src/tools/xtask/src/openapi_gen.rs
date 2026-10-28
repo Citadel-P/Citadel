@@ -319,7 +319,7 @@ mod tests {
         let full = document(false);
         let schemas = &full["components"]["schemas"];
         for name in [
-            "AutomationActionView",
+            "ScriptView",
             "BackupPolicyView",
             "BuildAgentPoolView",
             "BuildProjectView",
@@ -387,7 +387,7 @@ mod tests {
         for (id, view) in [
             ("getBuildProject", "AuthorizedProject"),
             ("getBuildAgentPool", "AuthorizedPool"),
-            ("getAutomationAction", "AuthorizedAction"),
+            ("getScript", "AuthorizedScript"),
         ] {
             let response =
                 &operations[id].value["responses"]["200"]["content"]["application/json"]["schema"];
@@ -460,10 +460,10 @@ mod tests {
     }
 
     #[test]
-    fn automation_patch_and_logs_use_native_dtos() {
+    fn script_patch_and_logs_use_native_dtos() {
         let doc = document(false);
         let schemas = &doc["components"]["schemas"];
-        let patch = &schemas["UpdateAutomationActionInput"];
+        let patch = &schemas["UpdateScriptInput"];
         assert_eq!(patch["additionalProperties"], false);
         assert_eq!(patch["properties"]["code"]["type"], "string");
         assert!(
@@ -471,12 +471,12 @@ mod tests {
                 .get("required")
                 .is_none_or(|value| value.as_array().is_some_and(Vec::is_empty))
         );
-        let metadata = &schemas["UpdateAutomationActionMetadata"];
+        let metadata = &schemas["UpdateScriptMetadata"];
         assert_eq!(metadata["properties"].as_object().unwrap().len(), 1);
         assert!(metadata["properties"].get("description").is_some());
         assert_eq!(metadata["additionalProperties"], false);
         assert_eq!(
-            schemas["AutomationActionRunLogsView"]["properties"]["logs"]["type"],
+            schemas["ScriptRunLogsView"]["properties"]["logs"]["type"],
             "string"
         );
     }

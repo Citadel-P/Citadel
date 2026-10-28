@@ -87,7 +87,7 @@ export function useMutate<TResource extends KnownResourceName>(
 export const useResourceParamType = (): { type: ResourceType; tab?: ResourceType } => {
   const { type, tab } = useParams();
 
-  if (type === 'automation') return { type: 'AutomationAction' };
+  if (type === 'scripts') return { type: 'Script' };
 
   const matchPlural = (value?: string) =>
     value ? Object.values(PluralResourceMap).find((plural) => plural.toLowerCase() === value.toLowerCase()) : undefined;

@@ -66,7 +66,7 @@ export const ROLE_PERMISSION_RESOURCES = [
   ResourceType.Tag,
   ResourceType.BackupPolicy,
   ResourceType.BackupRepository,
-  ResourceType.AutomationAction,
+  ResourceType.Script,
   ResourceType.Build,
   ResourceType.BuildAgentPool,
 ] as const;
@@ -120,7 +120,7 @@ export const RESOURCE_ICONS: Record<RolePermissionResourceType, ResourceIcon> = 
   [ResourceType.Tag]: CitadelIcons.Tag,
   [ResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
   [ResourceType.BackupRepository]: CitadelIcons.BackupRepository,
-  [ResourceType.AutomationAction]: CitadelIcons.AutomationAction,
+  [ResourceType.Script]: CitadelIcons.Script,
   [ResourceType.Build]: CitadelIcons.Build,
   [ResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
 };

@@ -58,8 +58,8 @@ fn queue_contract_matches_accepted_triggers() {
         let input: QueueInput = serde_json::from_value(json!({"trigger":trigger})).unwrap();
         assert_eq!(input.trigger.unwrap().as_str(), trigger);
     }
-    assert!(serde_json::from_value::<QueueInput>(json!({"trigger":"Automation"})).is_err());
-    assert!(serde_json::from_value::<BackupRunTrigger>(json!("Automation")).is_ok());
+    assert!(serde_json::from_value::<QueueInput>(json!({"trigger":"Script"})).is_err());
+    assert!(serde_json::from_value::<BackupRunTrigger>(json!("Script")).is_ok());
 }
 
 #[test]

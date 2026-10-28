@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn container_actions_have_one_shared_semantic_mapping() {
+fn container_scripts_have_one_shared_semantic_mapping() {
     for (action, expected) in [
         ("create", Some(ContainerChange::Created)),
         ("start", Some(ContainerChange::Running)),

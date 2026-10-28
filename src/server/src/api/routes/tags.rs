@@ -440,10 +440,10 @@ resource_tag_handlers!(
 resource_tag_handlers!(
     #[utoipa::path(
     get,
-    path = "/api/v1/automation/actions/{id}/tags",
-    operation_id = "getAutomationActionTags",
-    tag = "AutomationActions",
-    summary = "Get AutomationAction tags",
+    path = "/api/v1/scripts/{id}/tags",
+    operation_id = "getScriptTags",
+    tag = "Scripts",
+    summary = "Get Script tags",
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
@@ -455,10 +455,10 @@ resource_tag_handlers!(
     get_action_tags,
     #[utoipa::path(
     put,
-    path = "/api/v1/automation/actions/{id}/tags",
-    operation_id = "replaceAutomationActionTags",
-    tag = "AutomationActions",
-    summary = "Replace AutomationAction tags",
+    path = "/api/v1/scripts/{id}/tags",
+    operation_id = "replaceScriptTags",
+    tag = "Scripts",
+    summary = "Replace Script tags",
     request_body = crate::api::resources::tags::requests::ReplaceResourceTagsInput,
     responses(
         (status = 200, description = "Success", body = ResourceTagsResponse, content_type = "application/json"),
@@ -469,8 +469,8 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_action_tags,
-    TaggableResourceType::AutomationAction,
-    ResourceType::AutomationAction
+    TaggableResourceType::Script,
+    ResourceType::Script
 );
 
 resource_tag_handlers!(

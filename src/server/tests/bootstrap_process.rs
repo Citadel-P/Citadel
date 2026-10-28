@@ -267,8 +267,8 @@ async fn password_file_bootstrap_initializes_once_and_ignores_removed_file_after
     assert!(!restarted.stop().await.contains(PASSWORD));
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM users WHERE name='bootstrap-admin' AND email='bootstrap@example.test'").fetch_one(&pool).await.unwrap(),1);
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM actorroles ar JOIN users u ON ar.actorid=u.actorid JOIN roles r ON r.id=ar.roleid WHERE u.name='bootstrap-admin' AND r.name='Admin'").fetch_one(&pool).await.unwrap(),1);
-    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM actions WHERE name IN ('Prune images','Restart unhealthy stacks') AND NOT enabled AND NOT scheduleenabled").fetch_one(&pool).await.unwrap(),2);
-    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM resourcetags rt JOIN actions a ON a.id=rt.resourceid WHERE rt.resourcetype='AutomationAction'").fetch_one(&pool).await.unwrap(),3);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM scripts WHERE name IN ('Prune images','Restart unhealthy stacks') AND NOT enabled AND NOT scheduleenabled").fetch_one(&pool).await.unwrap(),2);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM resourcetags rt JOIN scripts a ON a.id=rt.resourceid WHERE rt.resourcetype='Script'").fetch_one(&pool).await.unwrap(),3);
     let activity: Value = sqlx::query_scalar(
         "SELECT info::jsonb FROM activityevents WHERE eventtype='InitialAdministratorCreated'",
     )
@@ -357,14 +357,14 @@ async fn concurrent_interactive_setup_has_one_winner_and_one_set_of_disabled_def
     );
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT count(*) FROM actions WHERE NOT enabled AND NOT scheduleenabled"
+            "SELECT count(*) FROM scripts WHERE NOT enabled AND NOT scheduleenabled"
         )
         .fetch_one(&pool)
         .await
         .unwrap(),
         2
     );
-    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM actions a JOIN instancesetupstates s ON s.initialadministratoractorid=a.runasactorid").fetch_one(&pool).await.unwrap(),2);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM scripts a JOIN instancesetupstates s ON s.initialadministratoractorid=a.runasactorid").fetch_one(&pool).await.unwrap(),2);
     let activity: Value = sqlx::query_scalar(
         "SELECT info::jsonb FROM activityevents WHERE eventtype='InitialAdministratorCreated'",
     )
@@ -385,7 +385,7 @@ async fn default_action_persistence_failure_rolls_back_entire_setup() {
         .unwrap();
     let pool = PgPool::connect(&fixture.database_url).await.unwrap();
     let mut baseline = Vec::new();
-    for table in ["users", "actors", "actions", "actorroles"] {
+    for table in ["users", "actors", "scripts", "actorroles"] {
         let count: i64 =
             sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
                 .fetch_one(&pool)

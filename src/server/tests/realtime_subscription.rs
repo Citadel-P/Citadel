@@ -402,7 +402,7 @@ async fn global_subscription_receives_metadata_free_resource_invalidations() {
         "Network",
         "Build",
         "BackupPolicy",
-        "AutomationAction",
+        "Script",
         "Alert",
         "User",
         "Team",

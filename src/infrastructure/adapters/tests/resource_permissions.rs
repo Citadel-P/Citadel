@@ -1,9 +1,9 @@
 use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
-use citadel_adapters::persistence::postgres::automation::PostgresAutomationRepository;
+use citadel_adapters::persistence::postgres::scripts::PostgresScriptRepository;
 use citadel_alerts::{AlertChannelConfiguration, AlertRepository};
-use citadel_automation::{AutomationActionConfiguration, AutomationRepository};
 use citadel_database::MigrationRunner;
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
+use citadel_scripts::{ScriptConfiguration, ScriptRepository};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -32,14 +32,14 @@ async fn migrated_lists_and_capabilities_reject_invalid_permission_levels() {
         )
         .await
         .unwrap();
-    let automation = PostgresAutomationRepository::new(pool.clone());
-    let mut input: AutomationActionConfiguration = serde_json::from_value(json!({
+    let scripts = PostgresScriptRepository::new(pool.clone());
+    let mut input: ScriptConfiguration = serde_json::from_value(json!({
         "name":format!("ordinal-{}", actor.value()), "code":"console.log('ok')",
         "enabled":true,"scheduleEnabled":false,"alertOnFailure":false
     }))
     .unwrap();
     input.validate(actor).unwrap();
-    let action = automation.create(actor, &input).await.unwrap();
+    let action = scripts.create(actor, &input).await.unwrap();
     // Create grants are unrelated to this reader: test only the explicit ACLs.
     let reader = ActorId::new(Uuid::now_v7());
     sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
@@ -49,7 +49,7 @@ async fn migrated_lists_and_capabilities_reject_invalid_permission_levels() {
         .unwrap();
     for (kind, id) in [
         (ResourceType::AlertChannel, channel.id),
-        (ResourceType::AutomationAction, action.id),
+        (ResourceType::Script, action.id),
     ] {
         sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,0,$3,$4,0)")
             .bind(Uuid::now_v7()).bind(reader.value()).bind(id).bind(kind as i32)
@@ -80,22 +80,22 @@ async fn migrated_lists_and_capabilities_reject_invalid_permission_levels() {
             "Alert level {raw}"
         );
         assert_eq!(
-            automation
+            scripts
                 .list(reader, false)
                 .await
                 .unwrap()
                 .iter()
                 .any(|a| a.id == action.id),
             visible,
-            "Automation level {raw}"
+            "Script level {raw}"
         );
-        let permissions = automation.permissions(reader, &[action.id]).await;
+        let permissions = scripts.permissions(reader, &[action.id]).await;
         if matches!(raw, 3 | 7) {
             // Lists filter corrupt grants out; loading explicit capabilities
             // rejects invalid persisted enum values instead of granting access.
             assert!(matches!(
                 permissions,
-                Err(citadel_automation::AutomationError::Storage(message))
+                Err(citadel_scripts::ScriptError::Storage(message))
                     if message.contains("unknown persisted PermissionLevel")
             ));
         } else {

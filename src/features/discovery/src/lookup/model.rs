@@ -11,7 +11,7 @@ pub enum LookupResourceType {
     GitRepository,
     GitAccount,
     OidcProvider,
-    AutomationAction,
+    Script,
     Alert,
     AlertChannel,
     User,
@@ -26,7 +26,7 @@ pub enum LookupResourceType {
     BuildAgentPool,
     SwarmService,
     RunAsActor,
-    AutomationAgent,
+    ScriptAgent,
     ServiceAccount,
 }
 
@@ -42,7 +42,7 @@ impl LookupResourceType {
         Self::GitRepository,
         Self::GitAccount,
         Self::OidcProvider,
-        Self::AutomationAction,
+        Self::Script,
         Self::Alert,
         Self::AlertChannel,
         Self::User,
@@ -57,7 +57,7 @@ impl LookupResourceType {
         Self::BuildAgentPool,
         Self::SwarmService,
         Self::RunAsActor,
-        Self::AutomationAgent,
+        Self::ScriptAgent,
         Self::ServiceAccount,
     ];
 }

@@ -71,7 +71,7 @@ impl PostgresLookupStore {
                 | Kind::Deployment
                 | Kind::Stack
                 | Kind::SwarmService
-                | Kind::AutomationAction
+                | Kind::Script
                 | Kind::Alert
                 | Kind::User
         ) {
@@ -169,7 +169,7 @@ impl LookupReader for PostgresLookupStore {
                         .collect::<Result<_, LookupError>>()?,
                 ));
             }
-            if request.target == AutomationAgent {
+            if request.target == ScriptAgent {
                 let mut rows = self
                     .rows(
                         caller,
@@ -288,7 +288,7 @@ fn metadata(
         Team => ("teams", ResourceType::Team),
         Role => ("roles", ResourceType::Role),
         OidcProvider => ("oidcproviders", ResourceType::User),
-        AutomationAction => ("actions", ResourceType::AutomationAction),
+        Script => ("scripts", ResourceType::Script),
         Alert => ("alertrules", ResourceType::Alert),
         AlertChannel => ("alertchannels", ResourceType::AlertChannel),
         BackupRepository => ("backuprepositories", ResourceType::BackupRepository),

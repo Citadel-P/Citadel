@@ -74,7 +74,7 @@ WITH resource_lookup(resourceid, resourcetype, resourcename) AS (
     UNION ALL SELECT id, 6, name FROM alertrules
     UNION ALL SELECT id, 7, name FROM alertchannels
     UNION ALL SELECT id, 12, name FROM tags
-    UNION ALL SELECT id, 13, name FROM actions
+    UNION ALL SELECT id, 13, name FROM scripts
     UNION ALL SELECT id, 15, name FROM backuprepositories
     UNION ALL SELECT id, 16, name FROM backuppolicies
     UNION ALL SELECT id, 18, name FROM buildprojects

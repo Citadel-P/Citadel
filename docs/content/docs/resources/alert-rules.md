@@ -465,7 +465,7 @@ Choose a type based on the condition you need to investigate:
 | Stack drift | `StackDriftDetected`, `StackDriftAutoReconciled` |
 | Stack Git and configuration | `StackGitUpdateAvailable`, `StackGitAutoUpdated`, `StackGitAutoDeployFailed`, `StackConfigurationResolutionFailed` |
 | Webhook | `WebhookAuthenticationFailed`, `WebhookDispatchFailed`, `WebhookGitRepoSyncFailed`, `WebhookStackGitDeployFailed` |
-| Automation | `AutomationActionRunFailed` |
+| Scripts | `ScriptRunFailed` |
 | Backups | `BackupRunFailed` |
 | Builds | `BuildRunFailed`, `BuildAgentPoolUnavailable` |
 | License | `LicenseEnteredGracePeriod`, `LicenseExpired` |
@@ -504,9 +504,9 @@ For sustained resource pressure:
 - Required Matches: `3` or higher
 - Cooldown: `900` seconds or higher
 
-For failed automation:
+For failed scripts:
 
-- Type: `AutomationActionRunFailed`
+- Type: `ScriptRunFailed`
 - Severity: `Warning` or `Critical`
 - Scope: important actions
 - Channels: the team that owns the action
@@ -554,7 +554,7 @@ If a rule does not trigger:
   open incident. A higher-severity matching rule can also take precedence.
 - For CPU, RAM, and disk rules, confirm fresh readings meet the threshold and
   required match count. Missing metrics are not evidence of recovery.
-- For stack, deployment, webhook, and automation rules, confirm the underlying feature is enabled and producing events.
+- For stack, deployment, webhook, and scripts rules, confirm the underlying feature is enabled and producing events.
 - For custom rules, confirm **Advanced Alerting** is available.
 
 If alerts are too noisy:

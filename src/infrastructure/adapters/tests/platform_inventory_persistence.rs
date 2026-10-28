@@ -1250,19 +1250,19 @@ async fn maintenance_recovers_disabled_orphans_and_purges_only_expired_terminal_
         .unwrap();
     sqlx::query("UPDATE images SET controlstate='Processing',controlstartedat=EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-120 WHERE platformid=$1").bind(platform).execute(&pool).await.unwrap();
     let action = Uuid::now_v7();
-    sqlx::query("INSERT INTO actions(id,name,createdbyactorid,runasactorid,code,enabled,scheduleenabled,scheduletimezone,timeoutseconds,alertonfailure,controlstate) VALUES($1,$2,$3,$3,'',false,false,'UTC',30,false,'Processing')")
+    sqlx::query("INSERT INTO scripts(id,name,createdbyactorid,runasactorid,code,enabled,scheduleenabled,scheduletimezone,timeoutseconds,alertonfailure,controlstate) VALUES($1,$2,$3,$3,'',false,false,'UTC',30,false,'Processing')")
         .bind(action).bind(action.to_string()).bind(actor).execute(&pool).await.unwrap();
     let expired = Uuid::now_v7();
     let active = Uuid::now_v7();
     for (id, status) in [(expired, "Succeeded"), (active, "Queued")] {
-        sqlx::query("INSERT INTO actionruns(id,actionid,actionname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger,finishedat) VALUES($1,$2,'test','hash','',$3,$4,30,'Manual',CURRENT_TIMESTAMP-INTERVAL '91 days')")
+        sqlx::query("INSERT INTO scriptruns(id,scriptid,scriptname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger,finishedat) VALUES($1,$2,'test','hash','',$3,$4,30,'Manual',CURRENT_TIMESTAMP-INTERVAL '91 days')")
             .bind(id).bind(action).bind(actor).bind(status).execute(&pool).await.unwrap();
     }
     citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
         .await
         .unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, String>("SELECT controlstate FROM actions WHERE id=$1")
+        sqlx::query_scalar::<_, String>("SELECT controlstate FROM scripts WHERE id=$1")
             .bind(action)
             .fetch_one(&pool)
             .await
@@ -1283,14 +1283,14 @@ async fn maintenance_recovers_disabled_orphans_and_purges_only_expired_terminal_
         .await
         .unwrap();
     assert!(
-        !sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM actionruns WHERE id=$1)")
+        !sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM scriptruns WHERE id=$1)")
             .bind(expired)
             .fetch_one(&pool)
             .await
             .unwrap()
     );
     assert!(
-        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM actionruns WHERE id=$1)")
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM scriptruns WHERE id=$1)")
             .bind(active)
             .fetch_one(&pool)
             .await
@@ -1518,15 +1518,15 @@ async fn startup_recovers_recent_abandoned_runs_but_periodic_maintenance_preserv
     let action = Uuid::now_v7();
     let run = Uuid::now_v7();
     let actor = citadel_identity::SYSTEM_ACTOR_ID;
-    sqlx::query("INSERT INTO actions(id,name,createdbyactorid,runasactorid,code,enabled,scheduleenabled,scheduletimezone,timeoutseconds,alertonfailure,controlstate,currentrunid) VALUES($1,$2,$3,$3,'',false,false,'UTC',3600,false,'Processing',$4)")
+    sqlx::query("INSERT INTO scripts(id,name,createdbyactorid,runasactorid,code,enabled,scheduleenabled,scheduletimezone,timeoutseconds,alertonfailure,controlstate,currentrunid) VALUES($1,$2,$3,$3,'',false,false,'UTC',3600,false,'Processing',$4)")
         .bind(action).bind(action.to_string()).bind(actor).bind(run).execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO actionruns(id,actionid,actionname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger,startedat) VALUES($1,$2,'fixture','hash','',$3,'Running',3600,'Manual',CURRENT_TIMESTAMP)")
+    sqlx::query("INSERT INTO scriptruns(id,scriptid,scriptname,codehash,codesnapshot,runasactorid,status,timeoutseconds,trigger,startedat) VALUES($1,$2,'fixture','hash','',$3,'Running',3600,'Manual',CURRENT_TIMESTAMP)")
         .bind(run).bind(action).bind(actor).execute(&pool).await.unwrap();
     citadel_adapters::persistence::postgres::maintenance::reconcile(&pool)
         .await
         .unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, String>("SELECT status FROM actionruns WHERE id=$1")
+        sqlx::query_scalar::<_, String>("SELECT status FROM scriptruns WHERE id=$1")
             .bind(run)
             .fetch_one(&pool)
             .await
@@ -1542,7 +1542,7 @@ async fn startup_recovers_recent_abandoned_runs_but_periodic_maintenance_preserv
         .await
         .unwrap();
     assert_eq!(
-        sqlx::query_scalar::<_, String>("SELECT status FROM actionruns WHERE id=$1")
+        sqlx::query_scalar::<_, String>("SELECT status FROM scriptruns WHERE id=$1")
             .bind(run)
             .fetch_one(&pool)
             .await
@@ -1550,7 +1550,7 @@ async fn startup_recovers_recent_abandoned_runs_but_periodic_maintenance_preserv
         "Failed"
     );
     assert_eq!(
-        sqlx::query_scalar::<_, String>("SELECT controlstate FROM actions WHERE id=$1")
+        sqlx::query_scalar::<_, String>("SELECT controlstate FROM scripts WHERE id=$1")
             .bind(action)
             .fetch_one(&pool)
             .await

@@ -75,7 +75,7 @@ impl EdgeAgent {
         let state = State::load(&config)?;
         let shutdown = CancellationToken::new();
         let runtime = crate::direct::Runtime::new(docker.clone(), shutdown.clone(), None)
-            .with_automation(
+            .with_scripts(
                 if config.core_url.scheme() == "https" {
                     4
                 } else {
@@ -93,14 +93,14 @@ impl EdgeAgent {
         })
     }
 
-    pub fn with_automation(mut self, slots: usize, tasks: citadel_runtime::DynamicTasks) -> Self {
+    pub fn with_scripts(mut self, slots: usize, tasks: citadel_runtime::DynamicTasks) -> Self {
         // Never advertise credential-bearing script execution over plaintext Edge.
         let slots = if self.config.core_url.scheme() == "https" {
             slots
         } else {
             0
         };
-        self.runtime = self.runtime.with_automation(slots, tasks);
+        self.runtime = self.runtime.with_scripts(slots, tasks);
         self
     }
     pub fn with_execution_capacity(mut self, build: usize, data: usize, heavy: usize) -> Self {

@@ -15,7 +15,7 @@ another dialog; use the header button in that case.
    per resource type. With an empty query, select a category to open its list.
 
 Search includes Platforms, Stacks, Deployments, managed Swarm Services, Git
-Repositories, Registries, Automation Actions, Backup Policies and Repositories,
+Repositories, Registries, Scripts, Backup Policies and Repositories,
 Build Projects, and Build Pools. Some types also match a useful field such as a
 Platform address, Git URL, Registry host, or Build branch.
 

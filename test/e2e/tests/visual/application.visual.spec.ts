@@ -12,7 +12,7 @@ const visualTagPrefix = 'e2e-visual-';
 const visualTags = [
   { name: `${visualTagPrefix}production`, color: '#2563EB' },
   { name: `${visualTagPrefix}protected`, color: '#DC2626' },
-  { name: `${visualTagPrefix}automation`, color: '#16A34A' },
+  { name: `${visualTagPrefix}scripts`, color: '#16A34A' },
 ];
 
 test.beforeEach(async ({ page }) => {

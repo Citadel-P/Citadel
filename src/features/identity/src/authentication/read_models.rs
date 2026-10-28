@@ -46,7 +46,7 @@ pub struct UserSessionRecord {
 #[derive(Debug, Clone)]
 pub struct AuthenticatedBearer {
     pub principal: ActorPrincipal,
-    pub automation_run_id: Option<Uuid>,
+    pub script_run_id: Option<Uuid>,
 }
 
 impl std::fmt::Debug for LoginOutcome {

@@ -295,12 +295,18 @@ currently configured.
 The pre-release migration catalog contains only `0001_initial.sql`, generated
 from `src/infrastructure/database/src/schema/schema.sql`. It includes workload
 statistics, alert observation ordering, secret-use grants, and build, backup,
-restore and automation execution ownership/capacity changes.
+restore and script execution ownership/capacity changes.
 
 This consolidated baseline requires a fresh database. It cannot upgrade a database
 that recorded an earlier baseline checksum or the former `0002`–`0011` sequence.
 Recreating a database is a separate, explicit operator action; development tasks
 never reset storage.
+
+The script-execution resource is now `Script`, with `/api/v1/scripts` routes,
+`scripts` and `scriptruns` tables, and `CITADEL_SCRIPTS_*` Core settings. Update
+Core, Agents, and the frontend together; the previous Automation API, Agent
+protocol names, and configuration keys are not aliases. Existing pre-release
+data needs an explicit conversion when restoring into the new baseline.
 
 For an explicitly authorized pre-release baseline reset, restore captured product
 records into a fresh database while retaining its new migration journal and the
@@ -455,7 +461,7 @@ run `python3 -m unittest discover -s test/release -p test_version.py -v`.
 
 The initial schema includes build dispatch ownership, renewable backup
 attempt/source/repository ownership, shared daemon capacity for data helpers,
-restore admission backoff, and automation executor reservations. A terminal run
+restore admission backoff, and scripts executor reservations. A terminal run
 or expired lease does not prove remote work stopped. Cleanup receipts retain
 same-authority evidence; uncertain work remains blocked until verified.
 Let active builds, backups, restores and repository operations finish before

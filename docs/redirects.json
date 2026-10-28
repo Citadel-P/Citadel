@@ -52,8 +52,8 @@
   "/docs/guides/alert-rules": {
     "to": "/docs/resources/alert-rules"
   },
-  "/docs/guides/automation-actions": {
-    "to": "/docs/resources/automation-actions"
+  "/docs/guides/scripts": {
+    "to": "/docs/resources/scripts"
   },
   "/docs/concepts": {
     "to": "/docs/resources"

@@ -388,7 +388,7 @@ over the run icon to read its status. Policies that have never run show
 The policy's **Run As** identity supplies permissions for scheduled and
 webhook-triggered runs. Choose an enabled User or, preferably for unattended
 operation, a least-privileged Service Account. Manual runs use the
-authenticated caller; runs started by an Automation Action use that Action
+authenticated caller; runs started by a Script use that Action
 run's identity.
 
 A Service Account run-as identity requires Team's **Custom access control**
@@ -520,7 +520,7 @@ platform.
 A Citadel system backup protects Citadel configuration and recovery keys; use
 [control-plane recovery](/docs/operations/control-plane-recovery) for the full
 backup and restore procedure. It does not archive all of `/app/data`. Git caches, stack
-workspaces, automation working directories, logs, and backup staging files are
+workspaces, scripts working directories, logs, and backup staging files are
 recreated from database state or external systems and are deliberately
 excluded.
 

@@ -14,7 +14,7 @@ async fn initialize(fixture: &Fixture, server: &Server, name: &str) -> reqwest::
 // Initialize_Should_Create_Admin_Complete_Setup_And_Start_Session, repeat rejection.
 #[tokio::test]
 #[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission; starts an isolated Core process"]
-async fn interactive_setup_persists_identity_session_and_exact_automation_defaults() {
+async fn interactive_setup_persists_identity_session_and_exact_script_defaults() {
     let fixture = Fixture::new().await;
     let mut server = fixture.start(false, false);
     assert_eq!(fixture.ready(&mut server).await["requiresSetup"], true);
@@ -141,8 +141,8 @@ async fn interactive_setup_persists_identity_session_and_exact_automation_defaul
 SELECT jsonb_build_object('name',a.name,'runAsActorId',a.runasactorid,
  'createdByActorId',a.createdbyactorid,'enabled',a.enabled,'scheduleEnabled',a.scheduleenabled,
  'scheduleCron',a.schedulecron,'tags',COALESCE((SELECT jsonb_agg(t.name ORDER BY t.name)
- FROM resourcetags rt JOIN tags t ON t.id=rt.tagid WHERE rt.resourceid=a.id AND rt.resourcetype='AutomationAction'),'[]'::jsonb))
-FROM actions a ORDER BY a.name
+ FROM resourcetags rt JOIN tags t ON t.id=rt.tagid WHERE rt.resourceid=a.id AND rt.resourcetype='Script'),'[]'::jsonb))
+FROM scripts a ORDER BY a.name
 "#).fetch_all(&pool).await.unwrap();
     assert_eq!(
         actions,

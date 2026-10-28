@@ -361,7 +361,7 @@ impl ContainerMutationRuntime for Runtime {
 // persisted observed state, and direct Swarm Task protection.
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
-async fn container_actions_preserve_ids_permissions_and_persist_observed_state() {
+async fn container_scripts_preserve_ids_permissions_and_persist_observed_state() {
     let mut f = fixture().await;
     let runtime = Arc::new(Runtime::default());
     let service = Arc::new(ContainerMutationService::new(

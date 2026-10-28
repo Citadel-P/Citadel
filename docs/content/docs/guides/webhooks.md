@@ -3,7 +3,7 @@ title: "Webhooks"
 description: "Configure provider and shared-secret webhooks for supported Citadel resources."
 ---
 
-Webhooks let external systems notify Citadel through a public listener URL. Citadel uses webhooks to trigger resource-owned actions such as syncing a Git repository, deploying a Git stack, queuing a build, running an automation action, queuing a backup policy, or checking a managed Swarm Service image for updates.
+Webhooks let external systems notify Citadel through a public listener URL. Citadel uses webhooks to trigger resource-owned actions such as syncing a Git repository, deploying a Git stack, queuing a build, running a script, queuing a backup policy, or checking a managed Swarm Service image for updates.
 
 Citadel does not have a separate "Webhook" resource page. Webhook settings live on the resource that will be triggered.
 
@@ -31,7 +31,7 @@ mutating operation:
 
 - deploy a Git stack
 - queue a build
-- run an automation action
+- run a script
 - queue a backup policy
 - check or automatically apply a managed Swarm Service image update
 - start a deployment or stack apply
@@ -58,7 +58,7 @@ Supported URL segments:
 | Git repository | `repo` | `pull` | Queue repository sync |
 | Git stack | `stack` | `deploy` | Queue or run Git stack update/deploy behavior; execution requires Automated Operations |
 | Build project | `build` | `run` | Queue a build run; execution requires Automated Operations |
-| Automation action | `automation-action` | `run` | Queue an action run; execution requires Automated Operations |
+| Scripts | `script` | `run` | Queue a script run; execution requires Automated Operations |
 | Backup policy | `backup-policy` | `run` | Queue a backup run; execution requires Automated Operations |
 | Managed Swarm Service | `swarm-service` | `update` | Check the configured external image tag and follow the Service update behavior |
 
@@ -76,7 +76,7 @@ Examples:
 https://citadel.example.com/listener/github/repo/019f0000-0000-7000-9000-000000000001/pull
 https://citadel.example.com/listener/github/stack/019f0000-0000-7000-9000-000000000002/deploy
 https://citadel.example.com/listener/github/build/019f0000-0000-7000-9000-000000000003/run
-https://citadel.example.com/listener/gitlab/automation-action/019f0000-0000-7000-9000-000000000004/run
+https://citadel.example.com/listener/gitlab/script/019f0000-0000-7000-9000-000000000004/run
 https://citadel.example.com/listener/github/backup-policy/019f0000-0000-7000-9000-000000000005/run
 https://citadel.example.com/listener/generic/swarm-service/019f0000-0000-7000-9000-000000000006/update
 ```
@@ -164,10 +164,10 @@ Defaults:
 - Git repository webhook: repository default branch
 - Git stack webhook: stack webhook branch filter, or the stack branch when the filter is empty
 - Build project webhook: build branch
-- Automation action webhook: no default branch unless you configure one
+- Script webhook: no default branch unless you configure one
 - Backup policy webhook: no default branch unless you configure one
 
-For automation actions and backup policies, leave the branch filter empty when a non-Git system is calling the webhook and the payload does not contain a Git branch.
+For scripts and backup policies, leave the branch filter empty when a non-Git system is calling the webhook and the payload does not contain a Git branch.
 
 ## Git Repository Webhooks
 
@@ -201,7 +201,7 @@ Deploying from a Git stack webhook requires `Automated Operations`. Community
 can still receive the webhook, synchronize the repository, and report a pending
 update.
 
-Web editor stacks do not support stack deploy webhooks. Use an automation action webhook if you need a custom trigger for a web editor stack.
+Web editor stacks do not support stack deploy webhooks. Use a script webhook if you need a custom trigger for a web editor stack.
 
 Behavior:
 
@@ -251,13 +251,13 @@ For monorepos, keep the build context scoped to the service directory. If the pr
 
 For build project setup, see [Builds](/docs/resources/builds).
 
-## Automation Action Webhooks
+## Script Webhooks
 
-Automation action webhooks queue an action run.
+Script webhooks queue an action run.
 
 Queueing the action requires `Automated Operations`.
 
-Use this when an external Git provider or another system should trigger a small Citadel automation script.
+Use this when an external Git provider or another system should trigger a small Citadel script.
 
 Behavior:
 
@@ -274,7 +274,7 @@ If the payload is not a JSON object, Citadel wraps it as:
 }
 ```
 
-For automation action setup, see [Automation actions](/docs/resources/automation-actions).
+For script setup, see [Scripts](/docs/resources/scripts).
 
 ## Backup Policy Webhooks
 
@@ -315,7 +315,7 @@ All supported webhook targets use the same delivery activity policy:
 - `StackWebhookReceived`
 - `SwarmServiceWebhookReceived`
 - `BuildWebhookReceived`
-- `ActionWebhookReceived`
+- `ScriptWebhookReceived`
 - `BackupPolicyWebhookReceived`
 
 Activities can include request id, provider event type, delivery id, branch, commit SHA, repository name, dispatch status, and no-op reason.

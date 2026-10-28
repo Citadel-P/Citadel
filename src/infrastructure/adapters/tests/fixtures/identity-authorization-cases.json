@@ -41,7 +41,7 @@
     "Role": { "maximumLevel": "Execute", "specifics": {} },
     "Binding": { "maximumLevel": "Execute", "specifics": {} },
     "Tag": { "maximumLevel": "Execute", "specifics": {} },
-    "AutomationAction": { "maximumLevel": "Execute", "specifics": {} },
+    "Script": { "maximumLevel": "Execute", "specifics": {} },
     "License": { "maximumLevel": "Execute", "specifics": {} },
     "BackupRepository": { "maximumLevel": "Execute", "specifics": {} },
     "BackupPolicy": {

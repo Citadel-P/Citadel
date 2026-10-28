@@ -238,9 +238,9 @@ mod tests {
                 "resolveBuildRunCleanup",
             ),
             (
-                "/api/v1/automation/actions/{id}/runs/{runId}/recovery",
+                "/api/v1/scripts/{id}/runs/{runId}/recovery",
                 "post",
-                "resolveAutomationRunCleanup",
+                "resolveScriptRunCleanup",
             ),
         ] {
             assert!(public["paths"].get(path).is_none());
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(page["schema"]["minimum"].as_f64(), Some(1.0));
     }
     #[test]
-    fn automation_webhook_schema_uses_the_server_description() {
+    fn script_webhook_schema_uses_the_server_description() {
         use utoipa::PartialSchema;
         // Utoipa may wrap an inline enum in allOf when adding its default.
         fn enum_values<'a>(schema: &'a Value, schemas: &'a Value) -> Option<&'a Value> {
@@ -378,9 +378,9 @@ mod tests {
                 ]))
             );
             for (owner, contract) in [
-                ("AutomationActionInput", "WebhookConfig"),
-                ("UpdateAutomationActionInput", "WebhookPatch"),
-                ("AutomationActionView", "WebhookView"),
+                ("ScriptInput", "WebhookConfig"),
+                ("UpdateScriptInput", "WebhookPatch"),
+                ("ScriptView", "WebhookView"),
             ] {
                 let webhook = &schemas[owner]["properties"]["webhook"];
                 let alternatives = webhook["oneOf"].as_array().unwrap();

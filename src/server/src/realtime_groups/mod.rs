@@ -248,8 +248,8 @@ impl Group {
                 event.resource_type == "SwarmService"
             }
             Topic::GitRepo(..) | Topic::GitRepositories => event.resource_type == "GitRepository",
-            Topic::AutomationAction(..) | Topic::AutomationActions | Topic::AutomationRuns(..) => {
-                event.resource_type == "AutomationAction" && event.affects_resource(self.id())
+            Topic::Script(..) | Topic::Scripts | Topic::ScriptRuns(..) => {
+                event.resource_type == "Script" && event.affects_resource(self.id())
             }
             Topic::BackupPolicy(..)
             | Topic::BackupPolicies

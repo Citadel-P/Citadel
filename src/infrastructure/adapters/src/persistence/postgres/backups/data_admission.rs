@@ -119,16 +119,16 @@ impl BackupDataAdmission for PostgresBackupDataAdmission {
             .map_err(storage)?;
             let (builds, data): (i64,i64) = sqlx::query_as("SELECT (SELECT count(*) FROM buildexecutorreservations WHERE daemonid=$1),(SELECT count(*) FROM dataexecutorreservations WHERE daemonid=$1)")
                 .bind(&host.daemon_id).fetch_one(&mut *tx).await.map_err(storage)?;
-            let automation: i64 = sqlx::query_scalar(
-                "SELECT count(*) FROM automationexecutorreservations WHERE daemonid=$1",
+            let scripts: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM scriptexecutorreservations WHERE daemonid=$1",
             )
             .bind(&host.daemon_id)
             .fetch_one(&mut *tx)
             .await
             .map_err(storage)?;
-            if (builds + data + automation > 0 && authority != host.authority_id)
+            if (builds + data + scripts > 0 && authority != host.authority_id)
                 || data >= i64::from(host.data_slots)
-                || builds + data + automation >= i64::from(host.heavy_slots)
+                || builds + data + scripts >= i64::from(host.heavy_slots)
             {
                 return Ok(false);
             }

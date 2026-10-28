@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { clientSignatures } from '../../scripts/client-signatures';
-import { resources, automationResourceKeys } from '@/api/generated/resources';
+import { resources, scriptResourceKeys } from '@/api/generated/resources';
 import { Api } from '@/api/generated/api.types';
 
 it('metadata matches every generated method in its real namespace', () => {
@@ -19,9 +19,9 @@ it('metadata matches every generated method in its real namespace', () => {
   );
 });
 
-it('keeps administrator installation settings out of the automation API', () => {
+it('keeps administrator installation settings out of the scripts API', () => {
   expect(resources.getInstallationSettings.path).toBe('/api/v1/installation/settings');
   expect(resources.patchInstallationSettings.path).toBe('/api/v1/installation/settings');
-  expect(automationResourceKeys).not.toContain('getInstallationSettings');
-  expect(automationResourceKeys).not.toContain('patchInstallationSettings');
+  expect(scriptResourceKeys).not.toContain('getInstallationSettings');
+  expect(scriptResourceKeys).not.toContain('patchInstallationSettings');
 });

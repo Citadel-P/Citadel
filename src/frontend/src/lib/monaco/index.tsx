@@ -2,7 +2,7 @@ import { lazy, Suspense, type ComponentProps, type ComponentType } from 'react';
 import Loader from '@/components/ui/loader';
 
 export type { MonacoDiagnostic, SupportedLanguage } from './editors';
-export { configureAutomationActionEditor } from './automation_action';
+export { configureScriptEditor } from './script';
 
 let editors: ReturnType<typeof initializeEditors> | undefined;
 const loadEditors = () => (editors ??= initializeEditors());

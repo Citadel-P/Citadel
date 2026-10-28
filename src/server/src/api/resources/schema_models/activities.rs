@@ -136,7 +136,7 @@ pub enum ActivityEventInfoSchema {
         crate::api::resources::schema_models::activities::WebhookActivityDetailsSchema,
     ),
 
-    ActionWebhookReceived(
+    ScriptWebhookReceived(
         crate::api::resources::schema_models::activities::WebhookActivityDetailsSchema,
     ),
 
@@ -776,52 +776,52 @@ pub enum ActivityEventInfoSchema {
         result: citadel_activities::GitRepositorySyncActivitySnapshot,
     },
 
-    ActionCreated {
+    ScriptCreated {
         #[serde(default, rename = "Source", skip_serializing_if = "Option::is_none")]
         #[schema(value_type = Option<crate::api::resources::schema_models::activities::ActivitySourceResourceSchema>)]
         source: Option<citadel_activities::ActivitySourceResource>,
-        #[serde(rename = "Action")]
-        #[schema(value_type = crate::api::resources::schema_models::activities::AutomationActionActivitySnapshotSchema)]
-        action: citadel_activities::AutomationActionActivitySnapshot,
+        #[serde(rename = "Script")]
+        #[schema(value_type = crate::api::resources::schema_models::activities::ScriptActivitySnapshotSchema)]
+        script: citadel_activities::ScriptActivitySnapshot,
     },
 
-    ActionUpdated {
-        #[serde(rename = "OldAction")]
-        #[schema(value_type = crate::api::resources::schema_models::activities::AutomationActionActivitySnapshotSchema)]
-        old_action: citadel_activities::AutomationActionActivitySnapshot,
-        #[serde(rename = "NewAction")]
-        #[schema(value_type = crate::api::resources::schema_models::activities::AutomationActionActivitySnapshotSchema)]
-        new_action: citadel_activities::AutomationActionActivitySnapshot,
+    ScriptUpdated {
+        #[serde(rename = "OldScript")]
+        #[schema(value_type = crate::api::resources::schema_models::activities::ScriptActivitySnapshotSchema)]
+        old_script: citadel_activities::ScriptActivitySnapshot,
+        #[serde(rename = "NewScript")]
+        #[schema(value_type = crate::api::resources::schema_models::activities::ScriptActivitySnapshotSchema)]
+        new_script: citadel_activities::ScriptActivitySnapshot,
     },
 
-    ActionRenamed {
+    ScriptRenamed {
         #[serde(rename = "OldName")]
         old_name: String,
         #[serde(rename = "NewName")]
         new_name: String,
     },
 
-    ActionDeleted {
-        #[serde(rename = "Action")]
-        #[schema(value_type = crate::api::resources::schema_models::activities::AutomationActionActivitySnapshotSchema)]
-        action: citadel_activities::AutomationActionActivitySnapshot,
+    ScriptDeleted {
+        #[serde(rename = "Script")]
+        #[schema(value_type = crate::api::resources::schema_models::activities::ScriptActivitySnapshotSchema)]
+        script: citadel_activities::ScriptActivitySnapshot,
     },
 
-    ActionRunQueued {
+    ScriptRunQueued {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
         trigger: String,
     },
 
-    ActionRunStarted {
+    ScriptRunStarted {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
         trigger: String,
     },
 
-    ActionRunSucceeded {
+    ScriptRunSucceeded {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -832,7 +832,7 @@ pub enum ActivityEventInfoSchema {
         duration_ms: Option<i64>,
     },
 
-    ActionRunFailed {
+    ScriptRunFailed {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -845,7 +845,7 @@ pub enum ActivityEventInfoSchema {
         error_message: Option<String>,
     },
 
-    ActionRunTimedOut {
+    ScriptRunTimedOut {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -856,14 +856,14 @@ pub enum ActivityEventInfoSchema {
         error_message: Option<String>,
     },
 
-    ActionRunCancelled {
+    ScriptRunCancelled {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
         trigger: String,
     },
 
-    ActionRunRejected {
+    ScriptRunRejected {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -925,7 +925,7 @@ pub enum ActivityEventInfoSchema {
         error_message: Option<String>,
     },
 
-    ActionRunCleanupResolved {
+    ScriptRunCleanupResolved {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "AttemptId")]
@@ -1116,8 +1116,8 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             citadel_activities::ActivityEventInfo::BuildWebhookReceived(field_0) => {
                 Self::BuildWebhookReceived(field_0.into())
             }
-            citadel_activities::ActivityEventInfo::ActionWebhookReceived(field_0) => {
-                Self::ActionWebhookReceived(field_0.into())
+            citadel_activities::ActivityEventInfo::ScriptWebhookReceived(field_0) => {
+                Self::ScriptWebhookReceived(field_0.into())
             }
             citadel_activities::ActivityEventInfo::BackupPolicyWebhookReceived(field_0) => {
                 Self::BackupPolicyWebhookReceived(field_0.into())
@@ -1519,80 +1519,80 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             citadel_activities::ActivityEventInfo::GitRepoCloned { git_repo, result } => {
                 Self::GitRepoCloned { git_repo, result }
             }
-            citadel_activities::ActivityEventInfo::ActionCreated { action, source } => {
-                Self::ActionCreated { action, source }
+            citadel_activities::ActivityEventInfo::ScriptCreated { script, source } => {
+                Self::ScriptCreated { script, source }
             }
-            citadel_activities::ActivityEventInfo::ActionUpdated {
-                old_action,
-                new_action,
-            } => Self::ActionUpdated {
-                old_action,
-                new_action,
+            citadel_activities::ActivityEventInfo::ScriptUpdated {
+                old_script,
+                new_script,
+            } => Self::ScriptUpdated {
+                old_script,
+                new_script,
             },
-            citadel_activities::ActivityEventInfo::ActionRenamed { old_name, new_name } => {
-                Self::ActionRenamed { old_name, new_name }
+            citadel_activities::ActivityEventInfo::ScriptRenamed { old_name, new_name } => {
+                Self::ScriptRenamed { old_name, new_name }
             }
-            citadel_activities::ActivityEventInfo::ActionDeleted { action } => {
-                Self::ActionDeleted { action }
+            citadel_activities::ActivityEventInfo::ScriptDeleted { script } => {
+                Self::ScriptDeleted { script }
             }
-            citadel_activities::ActivityEventInfo::ActionRunQueued { run_id, trigger } => {
-                Self::ActionRunQueued { run_id, trigger }
+            citadel_activities::ActivityEventInfo::ScriptRunQueued { run_id, trigger } => {
+                Self::ScriptRunQueued { run_id, trigger }
             }
-            citadel_activities::ActivityEventInfo::ActionRunCleanupResolved {
+            citadel_activities::ActivityEventInfo::ScriptRunCleanupResolved {
                 run_id,
                 attempt_id,
                 reason,
-            } => Self::ActionRunCleanupResolved {
+            } => Self::ScriptRunCleanupResolved {
                 run_id,
                 attempt_id,
                 reason,
             },
-            citadel_activities::ActivityEventInfo::ActionRunStarted { run_id, trigger } => {
-                Self::ActionRunStarted { run_id, trigger }
+            citadel_activities::ActivityEventInfo::ScriptRunStarted { run_id, trigger } => {
+                Self::ScriptRunStarted { run_id, trigger }
             }
-            citadel_activities::ActivityEventInfo::ActionRunSucceeded {
+            citadel_activities::ActivityEventInfo::ScriptRunSucceeded {
                 run_id,
                 trigger,
                 exit_code,
                 duration_ms,
-            } => Self::ActionRunSucceeded {
+            } => Self::ScriptRunSucceeded {
                 run_id,
                 trigger,
                 exit_code,
                 duration_ms,
             },
-            citadel_activities::ActivityEventInfo::ActionRunFailed {
+            citadel_activities::ActivityEventInfo::ScriptRunFailed {
                 run_id,
                 trigger,
                 exit_code,
                 duration_ms,
                 error_message,
-            } => Self::ActionRunFailed {
+            } => Self::ScriptRunFailed {
                 run_id,
                 trigger,
                 exit_code,
                 duration_ms,
                 error_message,
             },
-            citadel_activities::ActivityEventInfo::ActionRunTimedOut {
+            citadel_activities::ActivityEventInfo::ScriptRunTimedOut {
                 run_id,
                 trigger,
                 duration_ms,
                 error_message,
-            } => Self::ActionRunTimedOut {
+            } => Self::ScriptRunTimedOut {
                 run_id,
                 trigger,
                 duration_ms,
                 error_message,
             },
-            citadel_activities::ActivityEventInfo::ActionRunCancelled { run_id, trigger } => {
-                Self::ActionRunCancelled { run_id, trigger }
+            citadel_activities::ActivityEventInfo::ScriptRunCancelled { run_id, trigger } => {
+                Self::ScriptRunCancelled { run_id, trigger }
             }
-            citadel_activities::ActivityEventInfo::ActionRunRejected {
+            citadel_activities::ActivityEventInfo::ScriptRunRejected {
                 run_id,
                 trigger,
                 reason,
-            } => Self::ActionRunRejected {
+            } => Self::ScriptRunRejected {
                 run_id,
                 trigger,
                 reason,
@@ -1773,7 +1773,7 @@ enum_schema!(
         AlertRule,
         GitRepository,
         OidcProvider,
-        AutomationAction,
+        Script,
         User,
         Team,
         Role,
@@ -1828,19 +1828,19 @@ enum_schema!(
         OidcProviderUpdated,
         OidcProviderRenamed,
         OidcProviderDeleted,
-        ActionCreated,
-        ActionUpdated,
-        ActionRenamed,
-        ActionDeleted,
-        ActionRunQueued,
-        ActionRunStarted,
-        ActionRunCleanupResolved,
-        ActionRunSucceeded,
-        ActionRunFailed,
-        ActionRunTimedOut,
-        ActionRunCancelled,
-        ActionRunRejected,
-        ActionWebhookReceived,
+        ScriptCreated,
+        ScriptUpdated,
+        ScriptRenamed,
+        ScriptDeleted,
+        ScriptRunQueued,
+        ScriptRunStarted,
+        ScriptRunCleanupResolved,
+        ScriptRunSucceeded,
+        ScriptRunFailed,
+        ScriptRunTimedOut,
+        ScriptRunCancelled,
+        ScriptRunRejected,
+        ScriptWebhookReceived,
         StackCreated,
         StackDuplicated,
         StackUpdated,
@@ -2463,11 +2463,11 @@ schema_model! {
 }
 
 schema_model! {
-    citadel_activities::AutomationActionActivitySnapshot =>
+    citadel_activities::ScriptActivitySnapshot =>
     #[derive(serde::Serialize, utoipa::ToSchema)]
     #[serde(rename_all = "PascalCase")]
-    #[schema(as = AutomationActionActivitySnapshot)]
-    pub struct AutomationActionActivitySnapshotSchema {
+    #[schema(as = ScriptActivitySnapshot)]
+    pub struct ScriptActivitySnapshotSchema {
         pub id: Uuid,
         pub name: String,
         pub description: Option<String>,

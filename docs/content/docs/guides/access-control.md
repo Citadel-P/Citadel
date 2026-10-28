@@ -130,7 +130,7 @@ they use the same permission model but cannot sign in through the browser.
 ## Review Access Changes
 
 When a person leaves, disable their User and review Team memberships and direct
-grants. Check Automation Actions and Backup Policies that run as that User;
+grants. Check Scripts and Backup Policies that run as that User;
 move required unattended work to a suitably scoped Service Account. Disabling
 one User does not revoke credentials belonging to a separate Service Account.
 

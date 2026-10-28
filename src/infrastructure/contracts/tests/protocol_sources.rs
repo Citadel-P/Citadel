@@ -2,16 +2,18 @@ use sha2::{Digest, Sha256};
 
 #[test]
 fn protocol_sources_preserve_the_accepted_wire_contract() {
+    // The pre-release Script rename changes service/message names only;
+    // execution field numbers and Edge command discriminants are retained.
     let sources = [
         (
-            "automation_service.proto",
-            include_str!("../proto/automation_service.proto"),
-            "b9aa5f1f60dc8b7b4ee66e70727e012a52d5cd1facc17a9b38c8993faf215aa2",
+            "script_service.proto",
+            include_str!("../proto/script_service.proto"),
+            "4fffd0e3ec41c89921749d525ecabd3c3a452561dd1ce72b710f0ae85788e0e6",
         ),
         (
             "edge_agent_service.proto",
             include_str!("../proto/edge_agent_service.proto"),
-            "736b865e294f73dc272c1cd2768ac1b4ab99b249066d06674fae5bb2c92a3009",
+            "d3aef861ec91fb951f9f3e17bb556d46fd9583b64b47d48d2a4ed177baac55f3",
         ),
         (
             "shared_models.proto",

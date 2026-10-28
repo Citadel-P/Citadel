@@ -158,14 +158,14 @@ impl PostgresBuildRepository {
             .fetch_one(&mut *tx)
             .await
             .map_err(storage)?;
-            let automation: i64 = sqlx::query_scalar(
-                "SELECT count(*) FROM automationexecutorreservations WHERE daemonid=$1",
+            let scripts: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM scriptexecutorreservations WHERE daemonid=$1",
             )
             .bind(&executor.daemon_id)
             .fetch_one(&mut *tx)
             .await
             .map_err(storage)?;
-            if occupied + data + automation > 0 && authority != executor.authority_id {
+            if occupied + data + scripts > 0 && authority != executor.authority_id {
                 return Ok(BuildAdmission::CleanupPending);
             }
             sqlx::query(
@@ -179,7 +179,7 @@ impl PostgresBuildRepository {
             .await
             .map_err(storage)?;
             if occupied >= i64::from(executor.build_slots)
-                || occupied + data + automation >= i64::from(executor.heavy_slots)
+                || occupied + data + scripts >= i64::from(executor.heavy_slots)
             {
                 tx.commit().await.map_err(storage)?;
                 return Ok(if uncertain > 0 {

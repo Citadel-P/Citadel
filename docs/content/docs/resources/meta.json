@@ -12,7 +12,7 @@
     "registries",
     "git-repositories",
     "backups",
-    "automation-actions",
+    "scripts",
     "alert-rules"
   ]
 }

@@ -4,9 +4,9 @@
 pub const EDGE_AGENT_PROTOCOL_VERSION: i32 = 2;
 
 pub mod citadel {
-    pub mod automation {
+    pub mod scripts {
         pub mod v1 {
-            tonic::include_proto!("citadel.automation.v1");
+            tonic::include_proto!("citadel.scripts.v1");
         }
     }
     pub mod edge {

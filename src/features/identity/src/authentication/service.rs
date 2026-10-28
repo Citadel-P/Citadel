@@ -269,14 +269,14 @@ impl IdentityService {
             return Err(IdentityError::InvalidCredentials);
         }
         let access = self.tokens.encode_access(&AccessTokenClaims {
-            automation_attempt_id: None,
+            script_attempt_id: None,
             session_id: Some(claims.session_id),
             subject_id: user.user_id,
             actor_id: user.actor_id,
             principal_type: AuthenticatedPrincipalType::User,
             issued_at: now,
             expires_at: now + self.access_token_lifetime,
-            automation_run_id: None,
+            script_run_id: None,
         })?;
         Ok(SessionTokens {
             access_token: access,
@@ -364,7 +364,7 @@ impl IdentityService {
         if token.starts_with("cit_sa_") {
             return Ok(AuthenticatedBearer {
                 principal: self.authenticate_service_account(token).await?,
-                automation_run_id: None,
+                script_run_id: None,
             });
         }
         let claims = self
@@ -374,13 +374,13 @@ impl IdentityService {
         if claims.expires_at <= self.clock.now() {
             return Err(IdentityError::InvalidCredentials);
         }
-        if let Some(run) = claims.automation_run_id {
+        if let Some(run) = claims.script_run_id {
             let attempt = claims
-                .automation_attempt_id
+                .script_attempt_id
                 .ok_or(IdentityError::InvalidCredentials)?;
             if !self
                 .store
-                .automation_attempt_active(claims.actor_id, run, attempt)
+                .script_attempt_active(claims.actor_id, run, attempt)
                 .await?
             {
                 return Err(IdentityError::InvalidCredentials);
@@ -388,14 +388,14 @@ impl IdentityService {
         }
 
         if claims.principal_type == AuthenticatedPrincipalType::ServiceAccount
-            && claims.automation_run_id.is_none()
+            && claims.script_run_id.is_none()
         {
             return Err(IdentityError::InvalidCredentials);
         }
-        // Browser access is bound to its revocable refresh session. Automation
+        // Browser access is bound to its revocable refresh session. Script
         // tokens retain their separately scoped run lifetime and authorization.
         if claims.principal_type == AuthenticatedPrincipalType::User
-            && claims.automation_run_id.is_none()
+            && claims.script_run_id.is_none()
         {
             let session_id = claims.session_id.ok_or(IdentityError::InvalidCredentials)?;
             if self
@@ -419,7 +419,7 @@ impl IdentityService {
             .ok_or(IdentityError::InvalidCredentials)?;
         Ok(AuthenticatedBearer {
             principal,
-            automation_run_id: claims.automation_run_id,
+            script_run_id: claims.script_run_id,
         })
     }
 
@@ -480,11 +480,11 @@ impl IdentityService {
         Ok(principal)
     }
 
-    pub async fn issue_automation_access_token(
+    pub async fn issue_script_access_token(
         &self,
         run_as_actor_id: ActorId,
-        automation_run_id: Uuid,
-        automation_attempt_id: Uuid,
+        script_run_id: Uuid,
+        script_attempt_id: Uuid,
         lifetime: Duration,
     ) -> Result<String, IdentityError> {
         let target = self
@@ -509,8 +509,8 @@ impl IdentityService {
             principal_type: target.principal_type,
             issued_at,
             expires_at: issued_at + lifetime,
-            automation_run_id: Some(automation_run_id),
-            automation_attempt_id: Some(automation_attempt_id),
+            script_run_id: Some(script_run_id),
+            script_attempt_id: Some(script_attempt_id),
         })
     }
 
@@ -706,14 +706,14 @@ impl IdentityService {
         let expires_at = now + self.refresh_token_lifetime;
         let session_id = Uuid::now_v7();
         let access_token = self.tokens.encode_access(&AccessTokenClaims {
-            automation_attempt_id: None,
+            script_attempt_id: None,
             session_id: Some(session_id),
             subject_id: user.user_id,
             actor_id: user.actor_id,
             principal_type: AuthenticatedPrincipalType::User,
             issued_at: now,
             expires_at: now + self.access_token_lifetime,
-            automation_run_id: None,
+            script_run_id: None,
         })?;
         let refresh_token = self.tokens.encode_refresh(&RefreshTokenClaims {
             session_id,

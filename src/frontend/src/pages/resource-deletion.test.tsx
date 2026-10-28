@@ -1,11 +1,11 @@
 import type {
-  AuthorizedAction,
+  AuthorizedScript,
   BackupPolicyView,
   BackupRepositoryView,
   AuthorizedPool,
   AuthorizedProject,
 } from '@/api/generated/api.types';
-import { AutomationActionInfoActions } from '@/features/automation-actions/actions';
+import { ScriptInfoActions } from '@/features/scripts/actions';
 import { BackupPolicyInfoActions } from '@/features/backup-policies/actions';
 import { BackupRepositoryInfoActions } from '@/features/backup-repositories/actions';
 import { BuildPoolInfoActions } from '@/features/build-pools/actions';
@@ -20,11 +20,11 @@ import { useLocation } from 'react-router';
 const resource = { id: 'r1', name: 'Delete check' };
 const cases = [
   {
-    route: '/automation',
-    api: 'automation/actions',
-    read: 'getAutomationAction',
-    list: 'listAutomationActions',
-    action: <AutomationActionInfoActions.delete resource={resource as AuthorizedAction} />,
+    route: '/scripts',
+    api: 'scripts',
+    read: 'getScript',
+    list: 'listScripts',
+    action: <ScriptInfoActions.delete resource={resource as AuthorizedScript} />,
   },
   {
     route: '/backup-policies',

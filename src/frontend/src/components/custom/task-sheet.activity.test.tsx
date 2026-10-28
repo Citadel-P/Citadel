@@ -86,6 +86,7 @@ describe('TaskSheet activity details', () => {
     ['User', 'User renamed from old-name to new-name.'],
     ['Team', 'Team renamed from old-name to new-name.'],
     ['Role', 'Role renamed from old-name to new-name.'],
+    ['Script', 'Script renamed from old-name to new-name.'],
   ] as const)('renders a %s rename as a concise message', (resourceType, expected) => {
     mocks.activity = {
       ...mocks.activity,
@@ -106,7 +107,7 @@ describe('TaskSheet activity details', () => {
   });
 
   it.each([
-    ['ActionWebhookReceived', 'AutomationAction'],
+    ['ScriptWebhookReceived', 'Script'],
     ['BackupPolicyWebhookReceived', 'BackupPolicy'],
   ] as const)('shows delivery details for %s', (eventType, resourceType) => {
     mocks.activity = {

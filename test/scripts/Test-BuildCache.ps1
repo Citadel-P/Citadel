@@ -52,13 +52,13 @@ Assert ($script:calls.Count -eq 2 -and $warnings.Count -eq 1) 'In-use cache must
 foreach ($file in Get-ChildItem -LiteralPath @($PSScriptRoot, (Join-Path $PSScriptRoot '../performance')) -Filter '*.ps1') {
     $parseErrors = $null
     $tokens = $null
-    $ast = [Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
+    $ast = [Management.Script.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
     Assert ($parseErrors.Count -eq 0) "PowerShell syntax error in $($file.Name): $parseErrors"
     $content = Get-Content -LiteralPath $file.FullName -Raw
     if ($file.FullName -ne $PSCommandPath -and $file.Name -like 'Test-*' -and $content.Contains('New-CitadelBuildCacheName')) {
         Assert (-not $content.Contains("'citadel-rust-target:")) "Shared target remains in $($file.Name)"
         $finalizers = $ast.FindAll({ param($node)
-            $node -is [Management.Automation.Language.TryStatementAst] -and
+            $node -is [Management.Script.Language.TryStatementAst] -and
             $node.Finally -and $node.Finally.Extent.Text.Contains('Remove-CitadelBuildCache')
         }, $true)
         Assert ($finalizers.Count -eq 1) "Missing cleanup finalizer in $($file.Name)"

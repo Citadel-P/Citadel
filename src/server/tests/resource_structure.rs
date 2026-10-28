@@ -21,7 +21,7 @@ fn features_use_resource_roles_without_domain_application_layers() {
         "git",
         "builds",
         "backups",
-        "automation",
+        "scripts",
         "alerts",
         "platforms",
         "tags",
@@ -277,7 +277,7 @@ fn architectural_groups_enforce_inward_dependencies() {
             }
         }
     }
-    for feature in ["execution", "git", "automation"] {
+    for feature in ["execution", "git", "scripts"] {
         for path in feature_sources(&features.join(feature).join("src")) {
             let source = std::fs::read_to_string(&path).unwrap();
             assert!(

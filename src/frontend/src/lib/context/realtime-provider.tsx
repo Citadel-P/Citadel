@@ -43,7 +43,7 @@ const liveBackedQueryKeys = new Set([
   'getStackStats',
   'listActivities',
   'listAlertEvents',
-  'listAutomationActions',
+  'listScripts',
   'listBackupPolicies',
   'listBackupRepositories',
   'listBackupRestoreRuns',

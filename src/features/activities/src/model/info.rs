@@ -84,7 +84,7 @@ pub enum ActivityEventInfo {
     GitRepoWebhookReceived(WebhookActivityDetails),
     StackWebhookReceived(WebhookActivityDetails),
     BuildWebhookReceived(WebhookActivityDetails),
-    ActionWebhookReceived(WebhookActivityDetails),
+    ScriptWebhookReceived(WebhookActivityDetails),
     BackupPolicyWebhookReceived(WebhookActivityDetails),
     SwarmServiceWebhookReceived(WebhookActivityDetails),
     UserProfileUpdated {
@@ -551,41 +551,41 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Result")]
         result: GitRepositorySyncActivitySnapshot,
     },
-    ActionCreated {
+    ScriptCreated {
         #[serde(default, rename = "Source", skip_serializing_if = "Option::is_none")]
         source: Option<ActivitySourceResource>,
-        #[serde(rename = "Action")]
-        action: AutomationActionActivitySnapshot,
+        #[serde(rename = "Script")]
+        script: ScriptActivitySnapshot,
     },
-    ActionUpdated {
-        #[serde(rename = "OldAction")]
-        old_action: AutomationActionActivitySnapshot,
-        #[serde(rename = "NewAction")]
-        new_action: AutomationActionActivitySnapshot,
+    ScriptUpdated {
+        #[serde(rename = "OldScript")]
+        old_script: ScriptActivitySnapshot,
+        #[serde(rename = "NewScript")]
+        new_script: ScriptActivitySnapshot,
     },
-    ActionRenamed {
+    ScriptRenamed {
         #[serde(rename = "OldName")]
         old_name: String,
         #[serde(rename = "NewName")]
         new_name: String,
     },
-    ActionDeleted {
-        #[serde(rename = "Action")]
-        action: AutomationActionActivitySnapshot,
+    ScriptDeleted {
+        #[serde(rename = "Script")]
+        script: ScriptActivitySnapshot,
     },
-    ActionRunQueued {
+    ScriptRunQueued {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
         trigger: String,
     },
-    ActionRunStarted {
+    ScriptRunStarted {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
         trigger: String,
     },
-    ActionRunSucceeded {
+    ScriptRunSucceeded {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -595,7 +595,7 @@ pub enum ActivityEventInfo {
         #[serde(rename = "DurationMs")]
         duration_ms: Option<i64>,
     },
-    ActionRunFailed {
+    ScriptRunFailed {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -607,7 +607,7 @@ pub enum ActivityEventInfo {
         #[serde(rename = "ErrorMessage")]
         error_message: Option<String>,
     },
-    ActionRunTimedOut {
+    ScriptRunTimedOut {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -617,13 +617,13 @@ pub enum ActivityEventInfo {
         #[serde(rename = "ErrorMessage")]
         error_message: Option<String>,
     },
-    ActionRunCancelled {
+    ScriptRunCancelled {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
         trigger: String,
     },
-    ActionRunRejected {
+    ScriptRunRejected {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "Trigger")]
@@ -679,7 +679,7 @@ pub enum ActivityEventInfo {
         #[serde(rename = "ErrorMessage")]
         error_message: Option<String>,
     },
-    ActionRunCleanupResolved {
+    ScriptRunCleanupResolved {
         #[serde(rename = "RunId")]
         run_id: Uuid,
         #[serde(rename = "AttemptId")]
@@ -1259,7 +1259,7 @@ impl ActivityEventInfo {
             Self::GitRepoWebhookReceived(_) => ActivityEventType::GitRepoWebhookReceived,
             Self::StackWebhookReceived(_) => ActivityEventType::StackWebhookReceived,
             Self::BuildWebhookReceived(_) => ActivityEventType::BuildWebhookReceived,
-            Self::ActionWebhookReceived(_) => ActivityEventType::ActionWebhookReceived,
+            Self::ScriptWebhookReceived(_) => ActivityEventType::ScriptWebhookReceived,
             Self::BackupPolicyWebhookReceived(_) => ActivityEventType::BackupPolicyWebhookReceived,
             Self::SwarmServiceWebhookReceived(_) => ActivityEventType::SwarmServiceWebhookReceived,
             Self::UserProfileUpdated { .. } => ActivityEventType::UserProfileUpdated,
@@ -1381,18 +1381,18 @@ impl ActivityEventInfo {
             Self::GitRepoDeleted { .. } => ActivityEventType::GitRepoDeleted,
             Self::GitRepoPulled { .. } => ActivityEventType::GitRepoPulled,
             Self::GitRepoCloned { .. } => ActivityEventType::GitRepoCloned,
-            Self::ActionCreated { .. } => ActivityEventType::ActionCreated,
-            Self::ActionUpdated { .. } => ActivityEventType::ActionUpdated,
-            Self::ActionRenamed { .. } => ActivityEventType::ActionRenamed,
-            Self::ActionDeleted { .. } => ActivityEventType::ActionDeleted,
-            Self::ActionRunQueued { .. } => ActivityEventType::ActionRunQueued,
-            Self::ActionRunCleanupResolved { .. } => ActivityEventType::ActionRunCleanupResolved,
-            Self::ActionRunStarted { .. } => ActivityEventType::ActionRunStarted,
-            Self::ActionRunSucceeded { .. } => ActivityEventType::ActionRunSucceeded,
-            Self::ActionRunFailed { .. } => ActivityEventType::ActionRunFailed,
-            Self::ActionRunTimedOut { .. } => ActivityEventType::ActionRunTimedOut,
-            Self::ActionRunCancelled { .. } => ActivityEventType::ActionRunCancelled,
-            Self::ActionRunRejected { .. } => ActivityEventType::ActionRunRejected,
+            Self::ScriptCreated { .. } => ActivityEventType::ScriptCreated,
+            Self::ScriptUpdated { .. } => ActivityEventType::ScriptUpdated,
+            Self::ScriptRenamed { .. } => ActivityEventType::ScriptRenamed,
+            Self::ScriptDeleted { .. } => ActivityEventType::ScriptDeleted,
+            Self::ScriptRunQueued { .. } => ActivityEventType::ScriptRunQueued,
+            Self::ScriptRunCleanupResolved { .. } => ActivityEventType::ScriptRunCleanupResolved,
+            Self::ScriptRunStarted { .. } => ActivityEventType::ScriptRunStarted,
+            Self::ScriptRunSucceeded { .. } => ActivityEventType::ScriptRunSucceeded,
+            Self::ScriptRunFailed { .. } => ActivityEventType::ScriptRunFailed,
+            Self::ScriptRunTimedOut { .. } => ActivityEventType::ScriptRunTimedOut,
+            Self::ScriptRunCancelled { .. } => ActivityEventType::ScriptRunCancelled,
+            Self::ScriptRunRejected { .. } => ActivityEventType::ScriptRunRejected,
             Self::BuildAgentPoolConnected { .. } => ActivityEventType::BuildAgentPoolConnected,
             Self::BuildAgentPoolDisconnected { .. } => {
                 ActivityEventType::BuildAgentPoolDisconnected

@@ -101,7 +101,7 @@ Also retain:
 - the password for every restic repository, stored outside Citadel;
 - externally managed OIDC, Vault, S3, registry, and Git credentials.
 
-Do not include Git caches, stack workspaces, automation working directories,
+Do not include Git caches, stack workspaces, scripts working directories,
 logs, or backup staging folders. Citadel rebuilds those from database state and
 the original external systems.
 
@@ -261,7 +261,7 @@ docker compose -p "$recovery_project" logs --tail=100 server
 Include your TLS overlay in all Compose commands if configured. Keep using the
 recovery project name for later commands. Leave the original Core stopped while
 checking the recovered instance. Starting Core also starts its background
-workers and schedules; review the restored automation settings as part of recovery.
+workers and schedules; review the restored scripts settings as part of recovery.
 
 Confirm that:
 

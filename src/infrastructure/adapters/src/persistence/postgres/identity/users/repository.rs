@@ -62,7 +62,7 @@ WITH resource_lookup(resourceid, resourcetype, resourcename) AS (
     UNION ALL SELECT id, 12, name FROM tags
     UNION ALL SELECT id, 15, name FROM backuprepositories
     UNION ALL SELECT id, 16, name FROM backuppolicies
-    UNION ALL SELECT id, 13, name FROM actions
+    UNION ALL SELECT id, 13, name FROM scripts
     UNION ALL SELECT id, 18, name FROM buildprojects
     UNION ALL SELECT id, 19, name FROM buildagentpools
     UNION ALL SELECT id, 20, name FROM swarmservices

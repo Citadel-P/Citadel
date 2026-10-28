@@ -7,7 +7,7 @@ pub enum TaggableResourceType {
     Platform,
     GitRepository,
     Registry,
-    AutomationAction,
+    Script,
     BackupPolicy,
     Build,
     BuildAgentPool,

@@ -99,12 +99,27 @@ ssh -V
 bash --version >/dev/null
 test -s /etc/ssl/certs/ca-certificates.crt
 test "$(readlink /app/Citadel.Agent.VolumeHelper)" = /usr/local/bin/citadel-volume-helper
-for program in deno pg_dump shoutrrr; do
+for program in pg_dump shoutrrr; do
   if command -v "$program" >/dev/null; then
     echo "Unexpected Core runtime tool: $program" >&2
     exit 1
   fi
 done
+mkdir /tmp/script-fixture
+cat > /tmp/script-fixture/script.ts <<'TS'
+const message: string = 'agent script fixture';
+await Deno.writeTextFile('/tmp/script-fixture/payload', message);
+if (await Deno.readTextFile('/tmp/script-fixture/payload') !== message) throw new Error('File round trip failed');
+try {
+  await Deno.readTextFile('/etc/os-release');
+  throw new Error('Read escaped the script sandbox');
+} catch (error) {
+  if (!(error instanceof Deno.errors.NotCapable)) throw error;
+}
+TS
+deno run --no-prompt --no-config --no-lock --no-npm --deny-import \
+  --allow-read=/tmp/script-fixture --allow-write=/tmp/script-fixture \
+  --allow-env=NO_COLOR,DENO_DIR /tmp/script-fixture/script.ts
 docker version
 docker compose version
 docker buildx version
@@ -124,4 +139,4 @@ restic restore latest --target /tmp/restored >/dev/null
 cmp /tmp/build-fixture/payload /tmp/restored/tmp/build-fixture/payload
 SH
 
-echo 'Agent version, HTTP/TLS/Edge health, shutdown, Git submodules, Docker build, Compose, volume helper and Restic smoke checks passed.'
+echo 'Agent version, HTTP/TLS/Edge health, shutdown, Git submodules, Deno TypeScript sandbox, Docker build, Compose, volume helper and Restic smoke checks passed.'

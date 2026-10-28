@@ -163,7 +163,7 @@ pub enum GlobalSearchCategory {
     Deployments,
     Repositories,
     Registries,
-    Automations,
+    Scripts,
     Backups,
     Builds,
     SwarmServices,

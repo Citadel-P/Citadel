@@ -16,7 +16,7 @@ pub enum BackupRepositoryType {
 pub enum BackupRunTrigger {
     Manual,
     Schedule,
-    Automation,
+    Script,
     Webhook,
 }
 

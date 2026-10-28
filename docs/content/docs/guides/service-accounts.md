@@ -1,6 +1,6 @@
 ---
 title: "Service Accounts"
-description: "Create scoped machine identities and tokens for integrations and automation."
+description: "Create scoped machine identities and tokens for integrations and scripts."
 ---
 
 Service Accounts give CI/CD runners, deployment pipelines, and other external
@@ -106,7 +106,7 @@ exceptional, explicitly reviewed integration.
 ### Use
 
 The **Use** capability lets a User select a Service Account as the execution
-identity for an Automation Action, Backup Policy, or another supported run-as
+identity for a Script, Backup Policy, or another supported run-as
 resource.
 
 It does not create a token and does not let the User make arbitrary requests as
@@ -206,11 +206,11 @@ Disabling an account that is used by active scheduled resources is allowed.
 The confirmation identifies those active consumers because their future runs
 will fail until the account is re-enabled or replaced.
 
-Archiving can be blocked when an active Automation Action, Backup Policy, or
+Archiving can be blocked when an active Script, Backup Policy, or
 another resource still uses the account. Replace its **Run As** selection or
 disable/archive the dependent resource first. Historical runs remain readable.
 
-## Use With Automation Actions
+## Use With Scripts
 
 Select an enabled Service Account in an Action's **Run As** field when the
 Action should use stable non-human permissions.
@@ -230,7 +230,7 @@ the caller cannot replace the code or run-as account in the run request.
 Citadel creates a short-lived internal token for each Action run. It does not
 copy or expose the Service Account's persistent API token to the script.
 
-See [Automation Actions](/docs/resources/automation-actions) for Action configuration and
+See [Scripts](/docs/resources/scripts) for Script configuration and
 execution behavior.
 
 ## Use With Backup Policies
@@ -243,7 +243,7 @@ This requires the **Custom access control** capability. Scheduled and
 webhook-triggered backups also require **Automated Operations**.
 
 Manual backups use the authenticated caller. Backups requested from an
-Automation Action use that Action run's identity.
+Script use that Action run's identity.
 
 See [Backups](/docs/resources/backups) for source, repository, scheduling, and restore
 behavior.

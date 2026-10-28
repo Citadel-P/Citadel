@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_directory = PathBuf::from(std::env::var("OUT_DIR")?);
     let protos: Vec<_> = [
         "shared_models.proto",
-        "automation_service.proto",
+        "script_service.proto",
         "platform_service.proto",
         "container_service.proto",
         "deployment_service.proto",

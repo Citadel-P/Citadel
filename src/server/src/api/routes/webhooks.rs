@@ -15,7 +15,7 @@ use citadel_activities::WebhookActivitySource;
 
 use citadel_alerts::{AlertEventSink, AlertObservation};
 
-use citadel_automation::{AutomationError, AutomationService};
+use citadel_scripts::{ScriptError, ScriptService};
 
 use citadel_builds::BuildError;
 
@@ -45,7 +45,7 @@ const SYSTEM_ACTOR_ID: ActorId = ActorId::new(Uuid::from_u128(1));
 #[derive(Clone)]
 pub struct WebhooksHttpState {
     pub git: Arc<GitRepositoryExecutionService>,
-    pub automation: Arc<AutomationService>,
+    pub scripts: Arc<ScriptService>,
     pub backups: Option<Arc<citadel_backups::BackupService>>,
     pub builds: Option<Arc<citadel_builds::BuildService>>,
     pub stacks: Option<Arc<citadel_stacks::StackService>>,
@@ -260,10 +260,8 @@ fn audit_resource(resource: &str) -> Option<citadel_activities::ActivityResource
     use citadel_activities::ActivityResourceType;
     if resource.eq_ignore_ascii_case("repo") {
         Some(ActivityResourceType::GitRepository)
-    } else if resource.eq_ignore_ascii_case("action")
-        || resource.eq_ignore_ascii_case("automation-action")
-    {
-        Some(ActivityResourceType::AutomationAction)
+    } else if resource.eq_ignore_ascii_case("script") {
+        Some(ActivityResourceType::Script)
     } else if resource.eq_ignore_ascii_case("backup-policy")
         || resource.eq_ignore_ascii_case("backupPolicy")
     {
@@ -348,16 +346,8 @@ async fn dispatch(
             )),
         };
     }
-    if (resource.eq_ignore_ascii_case("action")
-        || resource.eq_ignore_ascii_case("automation-action"))
-        && execution.eq_ignore_ascii_case("run")
-    {
-        let action = state
-            .automation
-            .store()
-            .get(id)
-            .await
-            .map_err(automation_error)?;
+    if (resource.eq_ignore_ascii_case("script")) && execution.eq_ignore_ascii_case("run") {
+        let action = state.scripts.store().get(id).await.map_err(script_error)?;
         let config = action
             .webhook
             .as_ref()
@@ -373,15 +363,15 @@ async fn dispatch(
         let args = normalize_payload(body);
         // Queue durably, using the configured run-as Actor, not the caller's token.
         // A short HTTP acknowledgement must not own or cancel the script process.
-        return match state.automation.queue_webhook(id, config, &args).await {
+        return match state.scripts.queue_webhook(id, config, &args).await {
             Ok(()) => Ok(WebhookDispatch::default()),
-            Err(AutomationError::Conflict(_)) => Ok(WebhookDispatch::noop(
-                "Action is disabled, busy, or its webhook configuration changed.",
+            Err(ScriptError::Conflict(_)) => Ok(WebhookDispatch::noop(
+                "Script is disabled, busy, or its webhook configuration changed.",
             )),
-            Err(AutomationError::LicenseRequired) => Ok(WebhookDispatch::noop(
+            Err(ScriptError::LicenseRequired) => Ok(WebhookDispatch::noop(
                 "Automated operations require an active license entitlement.",
             )),
-            Err(error) => Err(automation_error(error)),
+            Err(error) => Err(script_error(error)),
         };
     }
     if (resource.eq_ignore_ascii_case("backup-policy")
@@ -444,10 +434,10 @@ fn backup_error(error: citadel_backups::BackupError) -> (StatusCode, &'static st
     }
 }
 
-fn automation_error(error: AutomationError) -> (StatusCode, &'static str) {
+fn script_error(error: ScriptError) -> (StatusCode, &'static str) {
     match error {
-        AutomationError::NotFound => (StatusCode::NOT_FOUND, "Webhook not found."),
-        AutomationError::Validation(_) => (StatusCode::BAD_REQUEST, "Webhook payload is invalid."),
+        ScriptError::NotFound => (StatusCode::NOT_FOUND, "Webhook not found."),
+        ScriptError::Validation(_) => (StatusCode::BAD_REQUEST, "Webhook payload is invalid."),
         _ => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Webhook dispatch failed.",
@@ -1037,8 +1027,7 @@ mod audit_tests {
             ("build", Build),
             ("build-project", Build),
             ("buildProject", Build),
-            ("action", AutomationAction),
-            ("automation-action", AutomationAction),
+            ("script", Script),
             ("backup-policy", BackupPolicy),
             ("backupPolicy", BackupPolicy),
         ] {

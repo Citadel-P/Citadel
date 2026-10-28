@@ -60,7 +60,7 @@ impl LookupQuery {
                 Platform | Registry | GitRepository | ResourceBinding
             ),
             Some(SwarmService) => self.target == ResourceBinding,
-            Some(AutomationAction) => self.target == AutomationAgent,
+            Some(Script) => self.target == ScriptAgent,
             Some(User) => matches!(self.target, Team | Role),
             Some(Platform) => matches!(
                 self.target,
@@ -73,7 +73,7 @@ impl LookupQuery {
                     | Stack
                     | GitRepository
                     | SwarmService
-                    | AutomationAction
+                    | Script
                     | Build
                     | BackupPolicy
                     | AlertChannel
@@ -161,8 +161,8 @@ mod tests {
     }
 
     #[test]
-    fn automation_agent_lookup_supports_create_and_edit_contexts() {
-        for source in [None, Some(Kind::AutomationAction)] {
+    fn script_agent_lookup_supports_create_and_edit_contexts() {
+        for source in [None, Some(Kind::Script)] {
             for source_id in [None, Some(Uuid::now_v7())] {
                 if source.is_none() && source_id.is_some() {
                     continue;
@@ -170,7 +170,7 @@ mod tests {
                 let request = LookupQuery {
                     source,
                     source_id,
-                    target: Kind::AutomationAgent,
+                    target: Kind::ScriptAgent,
                     platform_id: None,
                 };
                 assert!(request.validate(false).is_ok());
@@ -178,7 +178,7 @@ mod tests {
             }
         }
         let unsupported = LookupQuery {
-            source: Some(Kind::AutomationAction),
+            source: Some(Kind::Script),
             source_id: None,
             target: Kind::Registry,
             platform_id: None,

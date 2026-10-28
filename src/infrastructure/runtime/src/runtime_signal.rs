@@ -2,7 +2,7 @@
 #[derive(Clone, Copy, Debug)]
 pub enum RuntimeSignal {
     Targets,
-    Automation,
+    Script,
     Builds,
     Backups,
     Restores,
@@ -21,7 +21,7 @@ pub enum RuntimeSignal {
 impl RuntimeSignal {
     pub const ALL: [Self; 16] = [
         Self::Targets,
-        Self::Automation,
+        Self::Script,
         Self::Builds,
         Self::Backups,
         Self::Restores,
@@ -40,7 +40,7 @@ impl RuntimeSignal {
     pub const fn channel(self) -> &'static str {
         match self {
             Self::Targets => "citadel_platform_targets",
-            Self::Automation => "citadel_automation_work",
+            Self::Script => "citadel_script_work",
             Self::Builds => "citadel_build_work",
             Self::Backups => "citadel_backup_work",
             Self::Restores => "citadel_restore_work",

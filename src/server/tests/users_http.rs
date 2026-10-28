@@ -279,7 +279,7 @@ async fn user_reads_require_a_human_administrator_even_with_user_execute_permiss
     let service_account = ActorPrincipal {
         subject_id: Uuid::now_v7(),
         actor_id: ActorId::new(Uuid::now_v7()),
-        name: "automation".to_owned(),
+        name: "scripts".to_owned(),
         principal_type: AuthenticatedPrincipalType::ServiceAccount,
         credential_id: Some(Uuid::now_v7()),
         roles: vec!["Admin".to_owned()],
@@ -379,7 +379,7 @@ async fn user_mutations_reject_non_administrators_and_service_accounts() {
         ActorPrincipal {
             subject_id: Uuid::now_v7(),
             actor_id: ActorId::new(Uuid::now_v7()),
-            name: "automation".to_owned(),
+            name: "scripts".to_owned(),
             principal_type: AuthenticatedPrincipalType::ServiceAccount,
             credential_id: Some(Uuid::now_v7()),
             roles: vec!["Admin".to_owned()],

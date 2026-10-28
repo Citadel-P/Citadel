@@ -40,7 +40,7 @@ import {
   ActivityStatus,
   BuildProjectActivitySnapshot,
   ApplyStackInput,
-  AutomationProgress,
+  ScriptProgress,
   BackupRunItemStatus,
   BackupRunItemView,
   BackupRunStatus,
@@ -108,7 +108,7 @@ type BackupRestoreRunLogsParams = {
   name: string;
   status: string;
 };
-type AutomationActionRunParams = {
+type ScriptRunParams = {
   id: string;
   name: string;
   mode: 'run' | 'test';
@@ -128,7 +128,7 @@ export type TaskSpec =
   | { kind: 'backupRunLogs'; payload: BackupRunLogsParams }
   | { kind: 'backupRestoreRun'; payload: BackupRestoreRunParams }
   | { kind: 'backupRestoreRunLogs'; payload: BackupRestoreRunLogsParams }
-  | { kind: 'automationActionRun'; payload: AutomationActionRunParams };
+  | { kind: 'scriptRun'; payload: ScriptRunParams };
 
 export interface TaskSheetState {
   open: boolean;
@@ -631,7 +631,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   BuildRunTimedOut: (info) => <BuildRunActivityDetails info={info} status="Timed out" />,
 
-  ActionRunCleanupResolved: (info) => (
+  ScriptRunCleanupResolved: (info) => (
     <KeyValueBlock
       label="Cleanup resolution"
       value={[
@@ -662,7 +662,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   BuildWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
-  ActionWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
+  ScriptWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
   BackupPolicyWebhookReceived: (info) => <WebhookActivityDetails info={info} />,
 
@@ -815,40 +815,40 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
     <SpecViewer spec={info.provider} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
 
-  ActionCreated: (info, activity) => (
+  ScriptCreated: (info, activity) => (
     <>
       {info.source && <DuplicateSource source={info.source} />}
-      <SpecViewer spec={info.action} resourceId={activity.resourceId} title="Initial configuration" />
+      <SpecViewer spec={info.script} resourceId={activity.resourceId} title="Initial configuration" />
     </>
   ),
 
-  ActionUpdated: (info) => (
-    <MonacoDiff original={info.oldAction} modified={info.newAction} format="json" title="Configuration changes" />
+  ScriptUpdated: (info) => (
+    <MonacoDiff original={info.oldScript} modified={info.newScript} format="json" title="Configuration changes" />
   ),
 
-  ActionRenamed: (info) => (
+  ScriptRenamed: (info) => (
     <span className="text-sm text-muted-foreground">
-      Action renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+      Script renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
     </span>
   ),
 
-  ActionDeleted: (info, activity) => (
-    <SpecViewer spec={info.action} resourceId={activity.resourceId} title="Deleted configuration" />
+  ScriptDeleted: (info, activity) => (
+    <SpecViewer spec={info.script} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
 
-  ActionRunQueued: (info) => <AutomationRunDetails info={info} status="Queued" />,
+  ScriptRunQueued: (info) => <ScriptRunDetails info={info} status="Queued" />,
 
-  ActionRunStarted: (info) => <AutomationRunDetails info={info} status="Started" />,
+  ScriptRunStarted: (info) => <ScriptRunDetails info={info} status="Started" />,
 
-  ActionRunSucceeded: (info) => <AutomationRunDetails info={info} status="Succeeded" />,
+  ScriptRunSucceeded: (info) => <ScriptRunDetails info={info} status="Succeeded" />,
 
-  ActionRunFailed: (info) => <AutomationRunDetails info={info} status="Failed" />,
+  ScriptRunFailed: (info) => <ScriptRunDetails info={info} status="Failed" />,
 
-  ActionRunTimedOut: (info) => <AutomationRunDetails info={info} status="Timed out" />,
+  ScriptRunTimedOut: (info) => <ScriptRunDetails info={info} status="Timed out" />,
 
-  ActionRunCancelled: (info) => <AutomationRunDetails info={info} status="Cancelled" />,
+  ScriptRunCancelled: (info) => <ScriptRunDetails info={info} status="Cancelled" />,
 
-  ActionRunRejected: (info) => <AutomationRunDetails info={info} status="Rejected" />,
+  ScriptRunRejected: (info) => <ScriptRunDetails info={info} status="Rejected" />,
 };
 
 function DuplicateSource({ source }: { source: Extract<PublicActivityEventInfo, { source: unknown }>['source'] }) {
@@ -923,7 +923,7 @@ function KeyValueBlock({ label, value }: { label: string; value: string | string
   );
 }
 
-function AutomationRunDetails({ info, status }: { info: any; status: string }) {
+function ScriptRunDetails({ info, status }: { info: any; status: string }) {
   const details = [
     `Status: ${status}`,
     `Run ID: ${info.runId}`,
@@ -965,7 +965,7 @@ function WebhookActivityDetails({
     | InfoOf<'GitRepoWebhookReceived'>
     | InfoOf<'StackWebhookReceived'>
     | InfoOf<'BuildWebhookReceived'>
-    | InfoOf<'ActionWebhookReceived'>
+    | InfoOf<'ScriptWebhookReceived'>
     | InfoOf<'BackupPolicyWebhookReceived'>
     | InfoOf<'SwarmServiceWebhookReceived'>;
 }) {
@@ -991,7 +991,7 @@ function compactWebhookDetails(
     | InfoOf<'GitRepoWebhookReceived'>
     | InfoOf<'StackWebhookReceived'>
     | InfoOf<'BuildWebhookReceived'>
-    | InfoOf<'ActionWebhookReceived'>
+    | InfoOf<'ScriptWebhookReceived'>
     | InfoOf<'BackupPolicyWebhookReceived'>
     | InfoOf<'SwarmServiceWebhookReceived'>,
   message: string,
@@ -1441,10 +1441,10 @@ function BackupRunLogOutput({
   );
 }
 
-function AutomationActionRunTaskRenderer({ payload }: { payload: AutomationActionRunParams; type: ResourceType }) {
-  const state = useAutomationActionRunProgress(payload);
+function ScriptRunTaskRenderer({ payload }: { payload: ScriptRunParams; type: ResourceType }) {
+  const state = useScriptRunProgress(payload);
   const title = payload.mode === 'test' ? 'Test Action' : 'Run Action';
-  return <TaskStreamLayout title={title} refName={payload.name} type="AutomationAction" state={state as any} />;
+  return <TaskStreamLayout title={title} refName={payload.name} type="Script" state={state as any} />;
 }
 
 function SwarmNodeAgentsTaskRenderer({ payload }: { payload: SwarmNodeAgentParams; type: ResourceType }) {
@@ -1472,7 +1472,7 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   backupRunLogs: BackupRunLogsTaskRenderer,
   backupRestoreRun: BackupRestoreRunTaskRenderer,
   backupRestoreRunLogs: BackupRestoreRunLogsTaskRenderer,
-  automationActionRun: AutomationActionRunTaskRenderer,
+  scriptRun: ScriptRunTaskRenderer,
   activity: ActivityTaskRenderer,
   alertEvent: AlertEventTaskRenderer,
 };
@@ -1786,7 +1786,7 @@ function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
   return state;
 }
 
-function useAutomationActionRunProgress(params: AutomationActionRunParams) {
+function useScriptRunProgress(params: ScriptRunParams) {
   const { id, mode } = params;
 
   const request: RunInput = useMemo(() => {
@@ -1797,12 +1797,12 @@ function useAutomationActionRunProgress(params: AutomationActionRunParams) {
     return { argsJson: params.argsJson, code: params.code };
   }, [params]);
 
-  const state = useStreamProgress<RunInput, AutomationProgress>({
-    endpoint: `api/v1/automation/actions/${encodeURIComponent(id)}/${mode}`,
+  const state = useStreamProgress<RunInput, ScriptProgress>({
+    endpoint: `api/v1/scripts/${encodeURIComponent(id)}/${mode}`,
     request,
-    successMessage: mode === 'test' ? 'Automation test run finished' : 'Automation action finished',
-    errorMessageDefault: mode === 'test' ? 'Failed to run automation test' : 'Failed to run automation action',
-    pendingMessage: mode === 'test' ? 'Starting automation test...' : 'Starting automation action...',
+    successMessage: mode === 'test' ? 'Script test run finished' : 'Script finished',
+    errorMessageDefault: mode === 'test' ? 'Failed to run script test' : 'Failed to run script',
+    pendingMessage: mode === 'test' ? 'Starting script test...' : 'Starting script...',
     getError: (item) => item.errorMessage ?? item.error?.message,
   });
 

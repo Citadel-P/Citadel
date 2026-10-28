@@ -224,7 +224,7 @@ const alertResourceIconStyles: Record<AlertResourceType, string> = {
   [AlertResourceType.Stack]: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   [AlertResourceType.GitRepository]: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
   [AlertResourceType.Webhook]: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
-  [AlertResourceType.AutomationAction]: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  [AlertResourceType.Script]: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   [AlertResourceType.BackupPolicy]: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   [AlertResourceType.Build]: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   [AlertResourceType.BuildAgentPool]: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',

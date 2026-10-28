@@ -188,7 +188,7 @@ async fn lookup_validation_admin_precedence_and_all_add_targets_match_dotnet() {
         "Stack",
         "Registry",
         "GitRepository",
-        "AutomationAction",
+        "Script",
         "Alert",
         "User",
         "UserActor",
@@ -711,11 +711,11 @@ async fn lookup_deployment_and_swarm_service_bindings_are_scoped_and_read_author
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
-async fn automation_agent_lookup_accepts_source_context_and_filters_access() {
+async fn script_agent_lookup_accepts_source_context_and_filters_access() {
     let f = fixture().await;
     let reader = subject(&f).await;
     let action = Uuid::now_v7();
-    sqlx::query("INSERT INTO actions(id,name,code,alertonfailure,enabled,scheduleenabled,scheduletimezone,timeoutseconds,createdbyactorid,runasactorid) VALUES($1,'lookup action','',false,true,false,'UTC',60,$2,$2)")
+    sqlx::query("INSERT INTO scripts(id,name,code,alertonfailure,enabled,scheduleenabled,scheduletimezone,timeoutseconds,createdbyactorid,runasactorid) VALUES($1,'lookup action','',false,true,false,'UTC',60,$2,$2)")
         .bind(action).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
     let mut platforms = Vec::new();
     for connector in ["Agent", "EdgeAgent", "Local", "Agent"] {
@@ -724,7 +724,7 @@ async fn automation_agent_lookup_accepts_source_context_and_filters_access() {
             .bind(id).bind(format!("lookup-{id}")).bind(connector).execute(&f.pool).await.unwrap();
         platforms.push(id);
     }
-    let query = "TargetResourceType=AutomationAgent&SourceResourceType=AutomationAction";
+    let query = "TargetResourceType=ScriptAgent&SourceResourceType=Script";
     assert!(ids(&lookup(&f, &reader, query).await).is_empty());
     for id in &platforms[..3] {
         grant(&f, reader.actor_id.value(), ResourceType::Platform, *id, 0).await;
@@ -737,7 +737,7 @@ async fn automation_agent_lookup_accepts_source_context_and_filters_access() {
     assert_eq!(found, expected, "exclude local and inaccessible platforms");
     assert_eq!(
         rows,
-        lookup(&f, &reader, "TargetResourceType=AutomationAgent").await
+        lookup(&f, &reader, "TargetResourceType=ScriptAgent").await
     );
     let edit_query = format!("{query}&SourceResourceId={action}");
     assert_eq!(
@@ -750,14 +750,7 @@ async fn automation_agent_lookup_accepts_source_context_and_filters_access() {
         .status(),
         StatusCode::NOT_FOUND
     );
-    grant(
-        &f,
-        reader.actor_id.value(),
-        ResourceType::AutomationAction,
-        action,
-        0,
-    )
-    .await;
+    grant(&f, reader.actor_id.value(), ResourceType::Script, action, 0).await;
     assert_eq!(rows, lookup(&f, &reader, &edit_query).await);
     let missing_query = format!("{query}&SourceResourceId={}", Uuid::now_v7());
     assert_eq!(

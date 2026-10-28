@@ -1,6 +1,5 @@
 //! One-time composition graph, consumed into narrow HTTP states and owned jobs.
 mod alerts;
-mod automation;
 pub(crate) mod background;
 mod backups;
 mod builds;
@@ -9,6 +8,7 @@ mod connectors;
 mod identity;
 mod licensing;
 mod platforms;
+mod scripts;
 mod workloads;
 use citadel_activities::ActivityService;
 use citadel_adapters::connectors::agent::client::AgentClient;
@@ -20,7 +20,6 @@ use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepos
 use citadel_adapters::persistence::postgres::licensing::store::PostgresLicenseEntitlementService;
 use citadel_adapters::persistence::postgres::stacks::PostgresStackRepository;
 use citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository;
-use citadel_automation::AutomationService;
 use citadel_backups::BackupService;
 use citadel_bindings::SecretService;
 use citadel_builds::BuildService;
@@ -32,6 +31,7 @@ use citadel_identity::{
     ServiceAccountService, TeamMutationService, TeamReadService, UserReadService,
 };
 use citadel_licensing::LicenseService;
+use citadel_scripts::ScriptService;
 use citadel_server::{
     Readiness,
     api::routes::platforms as platforms_http,
@@ -93,7 +93,7 @@ pub struct ServerComponents {
     pub edge_registry: citadel_adapters::connectors::edge::EdgeRegistry,
     pub alert_store: Arc<PostgresAlertRepository>,
     pub alert_delivery: Arc<dyn citadel_alerts::AlertDelivery>,
-    pub automation: Arc<AutomationService>,
+    pub scripts: Arc<ScriptService>,
     pub backups: Arc<BackupService>,
     pub copies: Arc<citadel_resource_copies::CopyService>,
     pub users: Arc<UserReadService>,
@@ -213,8 +213,7 @@ impl ServerComponents {
             alert_delivery,
             alert_deliveries,
         } = alerts::build(config, &runtime, &entitlements);
-        let automation =
-            automation::build(config, &runtime, &identity, &entitlements, &alert_store)?;
+        let scripts = scripts::build(config, &runtime, &identity, &entitlements, &alert_store)?;
         let backups = backups::build(
             config,
             &runtime,
@@ -290,7 +289,7 @@ impl ServerComponents {
                     deployments: Arc::new(PostgresDeploymentRepository::new(pool.clone())),
                     stacks: Arc::new(PostgresStackRepository::new(pool.clone())),
                     services: Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
-                    automation: Arc::clone(automation.store()),
+                    scripts: Arc::clone(scripts.store()),
                     builds: Arc::clone(builds.store()),
                     backups: Arc::clone(backups.store()),
                     activities: Arc::clone(&activities),
@@ -354,7 +353,7 @@ impl ServerComponents {
                 edge_registry,
                 alert_store,
                 alert_delivery,
-                automation,
+                scripts,
                 backups,
                 copies,
                 users,

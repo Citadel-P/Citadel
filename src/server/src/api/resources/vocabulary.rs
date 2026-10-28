@@ -60,7 +60,7 @@ pub enum LookupResourceTypeSchema {
     GitRepository,
     GitAccount,
     OidcProvider,
-    AutomationAction,
+    Script,
     Alert,
     AlertChannel,
     User,
@@ -75,7 +75,7 @@ pub enum LookupResourceTypeSchema {
     BuildAgentPool,
     SwarmService,
     RunAsActor,
-    AutomationAgent,
+    ScriptAgent,
     ServiceAccount,
 }
 

@@ -121,7 +121,7 @@ viewport; guide crops use 4x pixel density so narrow dialogs meet the minimum
 without enlarging a bitmap. README captures use 1x density. The shared screenshot
 writer checks the PNG width after each capture and fails if it is too small.
 
-To refresh the Git Stack, Swarm coverage, backup policy, automation, and Role
+To refresh the Git Stack, Swarm coverage, backup policy, scripts, and Role
 screenshots, including restore selection, resource access, deployment failures,
 Email/Discord notification dialogs, network map, container health details,
 and volume browser, start the frontend development server and run from the repository root:

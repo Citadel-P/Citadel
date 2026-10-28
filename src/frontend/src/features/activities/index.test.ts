@@ -1,7 +1,31 @@
-import { ActivityResourceType } from '@/api/generated/api.types';
+import { ActivityEventType, ActivityResourceType } from '@/api/generated/api.types';
 import { getActivityEventOptions, getActivityResourceOptions } from './index';
 
 describe('activity resource options', () => {
+  it('offers script lifecycle, run and webhook events when filtering by Script', () => {
+    const options = getActivityEventOptions(ActivityResourceType.Script);
+
+    expect(options).toEqual(
+      expect.arrayContaining([
+        ActivityEventType.ScriptCreated,
+        ActivityEventType.ScriptUpdated,
+        ActivityEventType.ScriptRenamed,
+        ActivityEventType.ScriptDeleted,
+        ActivityEventType.ScriptRunQueued,
+        ActivityEventType.ScriptRunStarted,
+        ActivityEventType.ScriptRunSucceeded,
+        ActivityEventType.ScriptRunFailed,
+        ActivityEventType.ScriptRunTimedOut,
+        ActivityEventType.ScriptRunCancelled,
+        ActivityEventType.ScriptRunRejected,
+        ActivityEventType.ScriptRunCleanupResolved,
+        ActivityEventType.ScriptWebhookReceived,
+      ]),
+    );
+    expect(options).not.toContain(ActivityEventType.DeploymentCreated);
+    expect(options).not.toContain(ActivityEventType.BuildRunFailed);
+  });
+
   it('offers failed backup runs globally and for backup policies, but not other resources', () => {
     const option = { value: 'BackupRunFailed', label: 'Backup run failed' };
     expect(getActivityEventOptions('All')).toContainEqual(option);

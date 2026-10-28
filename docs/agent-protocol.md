@@ -80,7 +80,7 @@ Read configuration once at startup. Docker can load the templates with
 | CITADEL_AGENT_MODE | case-insensitive `edge` selects Edge; otherwise Direct; whitespace is not trimmed | all |
 | CITADEL_AGENT_PORT | 9000 when absent/blank; otherwise integer 1–65535 | all; health listener in Edge |
 | CITADEL_AGENT_BUILD_SLOTS | 2; integer 1–64, reserved across build, pushes and cleanup | Direct / ordinary Edge / Edge Build Pool |
-| CITADEL_AGENT_AUTOMATION_SLOTS | 4; integer 1–64, sharing the host heavy-work budget | Direct / ordinary Edge / Edge Build Pool |
+| CITADEL_AGENT_SCRIPT_SLOTS | 4; integer 1–64, sharing the host heavy-work budget | Direct / ordinary Edge / Edge Build Pool |
 | CITADEL_AGENT_DATA_SLOTS | 2; integer 1–64, retained across data helper phases | Direct / Edge / Swarm-node Edge |
 | CITADEL_AGENT_HEAVY_SLOTS | 2; integer 1–64, shared build and data pressure | All Agent modes |
 | CITADEL_CORE_PUBLIC_KEY | required base64 raw Ed25519 public key | Direct |
@@ -369,9 +369,9 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 <!-- operations -->
 | RPC | Request | Response | Stream | Edge command | Number | Swarm | Runtime reference | Checks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| citadel.automation.v1.AutomationService/CheckHost | google.protobuf.Empty | citadel.automation.v1.AutomationHost | unary | AUTOMATION_CHECK_HOST | 120 | denied | ../../../agent/src/direct/automation.rs:check_host | G1 |
-| citadel.automation.v1.AutomationService/Run | citadel.automation.v1.AutomationRequest | citadel.automation.v1.AutomationEvent | server | AUTOMATION_RUN | 121 | denied | ../../../agent/src/direct/automation.rs:run | G1 |
-| citadel.automation.v1.AutomationService/Reconcile | citadel.automation.v1.AutomationAttempt | citadel.automation.v1.AutomationCleanup | unary | AUTOMATION_RECONCILE | 122 | denied | ../../../agent/src/direct/automation.rs:reconcile | G1 |
+| citadel.scripts.v1.ScriptService/CheckHost | google.protobuf.Empty | citadel.scripts.v1.ScriptHost | unary | SCRIPT_CHECK_HOST | 120 | denied | ../../../agent/src/direct/scripts.rs:check_host | G1 |
+| citadel.scripts.v1.ScriptService/Run | citadel.scripts.v1.ScriptRequest | citadel.scripts.v1.ScriptEvent | server | SCRIPT_RUN | 121 | denied | ../../../agent/src/direct/scripts.rs:run | G1 |
+| citadel.scripts.v1.ScriptService/Reconcile | citadel.scripts.v1.ScriptAttempt | citadel.scripts.v1.ScriptCleanup | unary | SCRIPT_RECONCILE | 122 | denied | ../../../agent/src/direct/scripts.rs:reconcile | G1 |
 | citadel.containers.v1.ContainerService/List | citadel.containers.v1.ListContainersRequest | citadel.containers.v1.ListContainersResponse | unary | CONTAINER_LIST | 10 | allowed | client/finite.rs:list_container_models | G2 |
 | citadel.containers.v1.ContainerService/Start | citadel.containers.v1.ContainerIds | google.protobuf.Empty | unary | CONTAINER_START | 14 | allowed | client/finite.rs:start_container | G1 |
 | citadel.containers.v1.ContainerService/Stop | citadel.containers.v1.ContainerIds | google.protobuf.Empty | unary | CONTAINER_STOP | 15 | allowed | client/finite.rs:change_container_state | G1 |
@@ -574,12 +574,12 @@ rechecked in pages of 16, with five-second probes and 30 seconds between pages.
 Same-authority cleanup releases host and storage locks without replaying the run
 or changing its terminal outcome. Unreachable or restarted Agents retain holds.
 
-### Automation execution
+### Script execution
 
 Direct and ordinary Edge Agents execute Deno actions under the same sandbox as
-Core. Swarm-node sessions cannot check, run, or reconcile automation work.
+Core. Swarm-node sessions cannot check, run, or reconcile scripts work.
 Remote actions require HTTPS for Core's public API and Agent transport; plaintext
-Edge Agents advertise no automation slots. Direct calls retain signed-body
+Edge Agents advertise no scripts slots. Direct calls retain signed-body
 verification and configured CA trust. Agents need a trusted public Core HTTPS
 certificate; private CAs must be installed in the Agent's system trust store.
 

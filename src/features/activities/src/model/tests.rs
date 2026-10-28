@@ -1,20 +1,20 @@
 use super::*;
 
 #[test]
-fn automation_activity_preserves_wire_identity_and_status() {
+fn script_activity_preserves_wire_identity_and_status() {
     let resource = Uuid::now_v7();
     let actor = ActorId::new(Uuid::now_v7());
     let run = Uuid::now_v7();
     for (info, expected) in [
         (
-            ActivityEventInfo::ActionRunQueued {
+            ActivityEventInfo::ScriptRunQueued {
                 run_id: run,
                 trigger: "Manual".into(),
             },
             ActivityStatus::Information,
         ),
         (
-            ActivityEventInfo::ActionRunSucceeded {
+            ActivityEventInfo::ScriptRunSucceeded {
                 run_id: run,
                 trigger: "Manual".into(),
                 exit_code: Some(0),
@@ -23,7 +23,7 @@ fn automation_activity_preserves_wire_identity_and_status() {
             ActivityStatus::Success,
         ),
         (
-            ActivityEventInfo::ActionRunFailed {
+            ActivityEventInfo::ScriptRunFailed {
                 run_id: run,
                 trigger: "Manual".into(),
                 exit_code: Some(7),
@@ -33,7 +33,7 @@ fn automation_activity_preserves_wire_identity_and_status() {
             ActivityStatus::Failure,
         ),
         (
-            ActivityEventInfo::ActionRunCancelled {
+            ActivityEventInfo::ScriptRunCancelled {
                 run_id: run,
                 trigger: "Manual".into(),
             },
@@ -41,13 +41,10 @@ fn automation_activity_preserves_wire_identity_and_status() {
         ),
     ] {
         let event =
-            ActivityEvent::new_automation_event(resource, "Action".into(), actor, info, Utc::now())
+            ActivityEvent::new_script_event(resource, "Action".into(), actor, info, Utc::now())
                 .unwrap();
         assert_eq!(event.status(), expected);
-        assert_eq!(
-            event.resource_type(),
-            ActivityResourceType::AutomationAction
-        );
+        assert_eq!(event.resource_type(), ActivityResourceType::Script);
         let info = serde_json::to_value(event.info()).unwrap();
         assert_eq!(info["RunId"], run.to_string());
         assert_eq!(info["Trigger"], "Manual");
@@ -211,7 +208,7 @@ fn webhook_severity_distinguishes_expected_skips_from_blocked_deliveries() {
         ActivityResourceType::GitRepository,
         ActivityResourceType::Stack,
         ActivityResourceType::SwarmService,
-        ActivityResourceType::AutomationAction,
+        ActivityResourceType::Script,
         ActivityResourceType::BackupPolicy,
     ] {
         for (status, reason, expected) in [
@@ -386,10 +383,7 @@ fn webhook_activities_keep_dotnet_discriminators_and_safe_shared_metadata() {
         ),
         (ActivityResourceType::Stack, "StackWebhookReceived"),
         (ActivityResourceType::Build, "BuildWebhookReceived"),
-        (
-            ActivityResourceType::AutomationAction,
-            "ActionWebhookReceived",
-        ),
+        (ActivityResourceType::Script, "ScriptWebhookReceived"),
         (
             ActivityResourceType::BackupPolicy,
             "BackupPolicyWebhookReceived",

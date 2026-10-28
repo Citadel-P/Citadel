@@ -111,7 +111,7 @@ export const AlertRuleForm = ({
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
     AlertType.SwarmServiceOperationFailed,
-    AlertType.AutomationActionRunFailed,
+    AlertType.ScriptRunFailed,
     AlertType.BuildRunFailed,
     AlertType.BackupRunFailed,
     AlertType.LicenseEnteredGracePeriod,
@@ -121,7 +121,7 @@ export const AlertRuleForm = ({
 
   const resourceFromAlertType = useCallback((): ResourceType => {
     if (!merged.type) return 'Platform';
-    if (merged.type.startsWith('AutomationAction')) return 'AutomationAction';
+    if (merged.type.startsWith('Script')) return 'Script';
     if (merged.type.startsWith('Webhook')) return 'Webhook';
     if (merged.type.startsWith('License')) return 'License';
     if (merged.type === AlertType.BuildAgentPoolUnavailable) return 'BuildAgentPool';

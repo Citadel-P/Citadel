@@ -3,9 +3,9 @@ use citadel_docker::client::events::ContainerChange;
 use citadel_docker::client::events::RuntimeEventKind;
 use std::fs;
 
-mod automation;
 mod build_output;
 mod containers;
+mod scripts;
 pub(crate) use build_output::{BuildStreamSummary, consume_image_build_stream};
 #[cfg(test)]
 mod key_rotation_tests;

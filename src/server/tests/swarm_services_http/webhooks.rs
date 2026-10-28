@@ -404,14 +404,14 @@ fn router(
 ) -> Router {
     use citadel_adapters::{
         persistence::postgres::{
-            automation::PostgresAutomationRepository,
             git::{
                 accounts::PostgresGitAccountRepository,
                 repositories::PostgresGitRepositoryExecutionPersistence,
             },
+            scripts::PostgresScriptRepository,
         },
         security::identity::{
-            automation_token::IdentityAutomationRunTokenIssuer, crypto::AesGcmSecretProtector,
+            crypto::AesGcmSecretProtector, script_token::IdentityScriptRunTokenIssuer,
         },
     };
     let git = Arc::new(citadel_git::GitRepositoryExecutionService::new(
@@ -432,25 +432,23 @@ fn router(
         std::env::temp_dir().join(format!("unused-service-webhook-git-{}", Uuid::now_v7())),
         std::time::Duration::from_secs(60),
     ));
-    let automation_shutdown = tokio_util::sync::CancellationToken::new();
-    let automation_tasks = citadel_runtime::DynamicTasks::new(automation_shutdown.clone());
+    let script_shutdown = tokio_util::sync::CancellationToken::new();
+    let script_tasks = citadel_runtime::DynamicTasks::new(script_shutdown.clone());
 
-    let automation = Arc::new(citadel_automation::AutomationService::new(
+    let scripts = Arc::new(citadel_scripts::ScriptService::new(
         std::sync::Arc::new(citadel_processes::SystemProcess),
         std::sync::Arc::new(
-            citadel_adapters::filesystem::automation_workspace::LocalAutomationWorkspace::new(
+            citadel_adapters::filesystem::script_workspace::LocalScriptWorkspace::new(
                 citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             ),
         ),
-        Arc::new(
-            citadel_server::tasks::automation::TrackedAutomationTasks::new(
-                automation_tasks.clone(),
-            ),
-        ),
-        automation_shutdown.clone(),
-        Arc::new(PostgresAutomationRepository::new(pool.clone())),
-        Arc::new(IdentityAutomationRunTokenIssuer::new(identity)),
-        citadel_automation::AutomationRuntimeConfig {
+        Arc::new(citadel_server::tasks::scripts::TrackedScriptTasks::new(
+            script_tasks.clone(),
+        )),
+        script_shutdown.clone(),
+        Arc::new(PostgresScriptRepository::new(pool.clone())),
+        Arc::new(IdentityScriptRunTokenIssuer::new(identity)),
+        citadel_scripts::ScriptRuntimeConfig {
             deno_path: "deno".into(),
             work_root: std::env::temp_dir(),
             internal_base_url: "http://127.0.0.1:8000".into(),
@@ -462,7 +460,7 @@ fn router(
     citadel_server::api::routes::webhooks::router(
         citadel_server::api::routes::webhooks::WebhooksHttpState {
             git,
-            automation,
+            scripts,
             backups: None,
             builds: None,
             stacks: None,

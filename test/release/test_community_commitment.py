@@ -29,7 +29,7 @@ class CommunityCommitmentTests(unittest.TestCase):
         self.assertIn("dated public notice before the affected release", self.normalized)
         self.assertIn("Paid-license expiry must not delete configuration", self.normalized)
 
-    def test_proposed_free_automation_is_not_described_as_shipped(self):
+    def test_proposed_free_script_is_not_described_as_shipped(self):
         self.assertIn("Scheduled backups and webhook-triggered deployments still require Team.", self.normalized)
         review = (ROOT / "docs/COMMUNITY-PACKAGING-REVIEW.md").read_text(encoding="utf-8")
         self.assertIn("not an approved entitlement change", review)

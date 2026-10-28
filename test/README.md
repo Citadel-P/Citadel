@@ -10,13 +10,15 @@ docker build -t citadel-core:acceptance -f Dockerfile .
 bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local
 ```
 
-The smoke test removes its disposable containers and build image. The compatibility,
-live Docker and Edge intake suites require the pinned Rust toolchain and share a private registry, database
+The smoke test checks the packaged Deno runtime and its file-access restrictions,
+alongside Agent startup and runtime tools. It removes its disposable containers
+and build image. The compatibility, live Docker and Edge intake suites require
+the pinned Rust toolchain and share a private registry, database
 and three privileged Docker-in-Docker daemons; it removes only its own fixtures.
 The compatibility suite includes six real builds across three Agents (Direct and
 Edge), two preparation permits, and 12 MiB contexts. An HTTP barrier proves all
 six Docker RUN steps overlap. It checks canonical daemon occupancy through
-platform aliases, bounded logs, and refusal of data and remote automation work
+platform aliases, bounded logs, and refusal of data and remote scripts work
 while the shared heavy-work budget is full. This requires an Agent image built
 from the current checkout; mock-executor tests do not substitute for this run.
 The acceptance test uses the complete Core and Agent images and calls Core's HTTP
@@ -162,7 +164,7 @@ Test names and fixture variables describe the subsystem they exercise:
 | Platform inventory and reads | `CITADEL_PLATFORM_DATABASE_URL` |
 | Resource metadata | `CITADEL_METADATA_DATABASE_URL` |
 | Deployments, Stacks and Swarm workloads | `CITADEL_WORKLOAD_DATABASE_URL` |
-| Git, Builds, Backups, Automation and Alerts execution | `CITADEL_EXECUTION_DATABASE_URL` |
+| Git, Builds, Backups, Script and Alerts execution | `CITADEL_EXECUTION_DATABASE_URL` |
 | Statistics persistence | `CITADEL_STATISTICS_DATABASE_URL` |
 | Migrations and parity | `CITADEL_TEST_DATABASE_URL` (separate fresh database, CREATE DATABASE permission) |
 
@@ -386,7 +388,7 @@ Run `./test/scripts/Test-ExternalExecution.ps1` from the repository
 root. It verifies the bounded child-process primitive, Git argument and cache
 safety, encrypted Git-account persistence, authorized HTTP lifecycle, and
 generated OpenAPI parity against a disposable PostgreSQL database. The gate also
-covers Git synchronization, Automation/Build/Backup execution, Alert persistence,
+covers Git synchronization, Script/Build/Backup execution, Alert persistence,
 Edge enrollment/transport, node projection isolation and authorized HTTP/realtime
 responses. Agent command responders are test peers, not released Agents.
 
@@ -514,11 +516,11 @@ durations, and result-persistence attempt counts/durations. Edge transfer,
 control and output buffered-byte gauges follow buffer ownership through drop.
 Database gauges are sampled by maintenance; they are not admission authority.
 
-### Automation placement and credentials
+### Script placement and credentials
 
 Use a disposable `CITADEL_EXECUTION_DATABASE_URL` for the adapter test
 `remote_attempts_fence_tokens_deferral_shared_capacity_and_recovery` and the Server
-`automation_http_execution` integration target. The latter also needs
+`script_http_execution` integration target. The latter also needs
 `CITADEL_DENO_PATH`. Run each against its own empty fixture database because queue
 claims intentionally cover all actions.
 

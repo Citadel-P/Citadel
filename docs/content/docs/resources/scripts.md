@@ -1,0 +1,513 @@
+---
+title: "Scripts"
+description: "Create, authorize, run, and troubleshoot Citadel scripts."
+---
+
+Scripts let you run small TypeScript programs inside Citadel.
+
+Use scripts for operational tasks that you want to run from Citadel, schedule, or trigger from another system.
+
+Examples:
+
+- apply a stack
+- run a maintenance check
+- call Citadel APIs in a repeatable way
+- accept a webhook payload and dispatch a Citadel operation
+
+Scripts run through Citadel permissions. They are not raw shell scripts and they do not get host or Docker access.
+
+## Run a prepared script
+
+This example checks access to one Stack, then lets you explicitly enable its
+deployment. Ask the application's maintainer to review scripts you do not maintain.
+
+### 1. Prepare the Script and identity
+
+1. Open **Scripts** and select **Add Script**.
+2. Enter a name and choose an enabled **Run as** User or Service Account under
+   **Execution → Runtime**. The initial check needs Read access to the selected
+   Stack; deploying it also requires Execute and Apply. See [access control](/docs/guides/access-control).
+3. Leave the Script, schedule, and webhook disabled while preparing the example.
+4. Set **Default Args** to the following object, replacing the ID with your
+   Stack's ID:
+
+```json
+{
+  "stackId": "019f0000-0000-7000-9000-000000000000",
+  "dryRun": true
+}
+```
+
+Selecting a Service Account requires **Use** permission on that account and
+Team's **Custom access control** capability. The person testing or running the
+Script also needs Execute access to the Script itself.
+
+### 2. Add the script and test
+
+Paste this into **Code**, save the Script, then select **Test**:
+
+```ts
+const stackId = args.stackId;
+if (typeof stackId !== "string" || !stackId) {
+  throw new Error("Set stackId to the Stack's ID in Default Args.");
+}
+
+await citadel.api.getStack(stackId);
+
+if (args.dryRun !== false) {
+  console.log("Access check passed; no deployment requested.");
+} else {
+  await citadel.api.applyStack({ id: stackId });
+  console.log("Apply returned successfully; check the Stack's operation and health.");
+}
+```
+
+Confirm **Succeeded** and the access-check message in **Runs**. Closing the
+progress sheet does not cancel the run. This checks Read access only; it does not
+prove that the identity can deploy the Stack.
+
+`dryRun` is a convention implemented by this script. **Test** itself can perform
+real operations, including with unsaved editor changes. Citadel does not simulate
+or undo a Script's API calls.
+
+### 3. Run the operation
+
+Set `dryRun` to `false` only when you intend to deploy the selected Stack. Enable
+the Script, save, then select **Run**. Check the Script's result and the Stack's
+operation history, running services, and application endpoint.
+
+After verifying the manual operation, configure a [schedule](#schedule) or
+[webhook](#webhook) if needed. These triggers require **Automated Operations**.
+Save reviewed code and arguments before enabling them; webhook payloads must
+supply the fields the script expects.
+
+## Open Scripts
+
+Open **Scripts** to see each Script's enabled state, triggers, latest run,
+and available operations. Open a Script for its configuration and run history.
+
+## Create A Script
+
+Select:
+
+```text
+Scripts -> Add Script
+```
+
+Set:
+
+- `Name`: stable script name shown in activity and run history
+- `Description`: optional note for other admins
+- `Enabled`: whether manual and scheduled runs are allowed
+- `Code`: TypeScript code executed by Deno
+- `Default Args`: JSON object available as `args`
+- `Run on`: Core, a specific Agent, or Automatic among eligible Agents
+- `Run As`: enabled User or Service Account whose current Citadel permissions
+  are used for runs
+- `Timeout`: maximum run duration in seconds
+- `Alert On Failure`: record failed or timed-out runs as alert-worthy events
+
+Save the script before using manual, scheduled, or webhook triggers.
+
+## Duplicate configuration
+
+Choose **Duplicate configuration**, edit the prefilled form, then select
+**Review copy**. The new Script is disabled with its schedule and webhook off;
+its run-as identity defaults to you. Enable and configure its triggers only
+after reviewing the script and arguments.
+
+Code and arguments are copied as written. Resource IDs, URLs and credentials
+inside them are not remapped, so the copy may still target the original
+resources. Runs, access grants and webhook credentials are not copied. The
+creation activity identifies the source Script. You need permission to read
+the source and create Scripts.
+
+## Script Globals
+
+Script code can use these globals:
+
+```ts
+citadel
+args
+run
+console
+```
+
+`args` is the JSON object configured on the script or passed by a trigger.
+
+`run` contains run metadata:
+
+```ts
+console.log(run.id);
+console.log(run.scriptName);
+console.log(run.trigger);
+```
+
+`citadel` is a preconfigured helper for Citadel API calls. You do not need to add a base URL or token.
+
+```ts
+const deployments = await citadel.get("/api/v1/deployments");
+console.log(deployments);
+```
+
+The code editor knows the built-in globals and uses Citadel's generated API types for completions on `citadel`, `args`, and `run`.
+
+Use the generated operation names through `citadel.api`:
+
+```ts
+const platforms = await citadel.api.listPlatforms();
+const repositories = await citadel.api.listGitRepositories();
+console.log(platforms, repositories);
+```
+
+For deployment and stack operations, replace the placeholder IDs below with
+real resource IDs. Rollback also needs the ID of a previous healthy release:
+
+```ts
+await citadel.api.applyDeployment({
+  id: "<deployment-id>"
+});
+
+await citadel.api.applyStack({
+  id: "<stack-id>"
+});
+
+await citadel.api.rollbackStack({
+  stackId: "<stack-id>",
+  releaseId: "<healthy-release-id>"
+});
+```
+
+These are separate examples; include only the operation your Script needs.
+The request body must match the Citadel API endpoint. The current runtime
+does not expose the `apply` and `rollback` shortcuts or the `repositories`
+alias suggested by some editor completions; use the operation names above.
+
+## Arguments
+
+**Default Args** must be a JSON object, not an array or a plain string. Validate
+required fields before calling an API, as in the [prepared Script](#run-a-prepared-script).
+Use an explicit check such as `args.dryRun !== false` when an absent field should
+leave an operation disabled.
+
+Path parameters are positional in the runtime helper, for example
+`citadel.api.getStack(stackId)`. Request bodies are objects, for example
+`citadel.api.applyStack({ id: stackId })`. Use the endpoint's request shape;
+an accepted request may queue work that must be checked separately.
+
+## Test Run
+
+Use `Test` on the script edit page to queue a test run.
+
+Test runs:
+
+- create a script run with trigger `Test`
+- can run even when the script is disabled
+- use the current editor code and **Default Args**, including unsaved changes
+- use the saved **Run as** identity; save identity changes before testing
+- write logs to the Runs tab
+
+Testing does not save draft code. Save the reviewed version before a normal Run,
+schedule, or webhook should use it. A disabled Script can still be tested, so
+disabling it is not a way to make tests read-only.
+
+Testing unsaved code also requires permission to use the saved **Run as**
+identity: your own User, a Service Account you can **Use**, or administrator
+access. Execute access alone still permits running the saved code. If the Script
+changes while a draft is being authorized, reload it and retry the test.
+
+## Manual Run
+
+Use `Run` to queue a normal manual run.
+
+Manual runs require the script to be enabled.
+
+If the same script is already running, Citadel rejects the new run instead of running the same script twice.
+
+Manual and test runs wait in the queue when execution slots are full. They show
+live output in the progress sheet, but continue if that sheet or connection closes.
+Use Cancel to stop a queued or running script. Cancellation does not undo operations
+the script has already completed. Check the Runs tab before retrying.
+
+## Schedule
+
+Schedules require Team's `Automated Operations` capability.
+
+Save and enable the Script, then enable **Schedule** to run it automatically.
+The schedule uses saved code, arguments, and the configured execution identity.
+
+Set:
+
+- `Enabled`
+- `Cron`
+- `Time Zone`
+
+Example cron values:
+
+```text
+*/15 * * * *     every 15 minutes
+0 * * * *        hourly
+0 2 * * *        daily at 02:00
+0 2 * * 1        Mondays at 02:00
+```
+
+![Script runtime and schedule with an Operations runner identity, a 120 second timeout, failure alerts, and a weekday UTC schedule](/screenshots/scripts-runtime-schedule.png)
+
+This demo Script uses the `Operations runner` identity, a 120-second timeout,
+and `0 8 * * 1-5` to run at 08:00 UTC on weekdays. Review **Run as** and its
+permissions together with the schedule before enabling unattended execution.
+
+When a scheduled run is due, Citadel queues a script run with trigger `Schedule`.
+
+If the script is already running, Citadel records a rejected run instead of starting a duplicate.
+
+## Webhook
+
+Webhook-triggered execution requires Team's `Automated Operations` capability.
+
+Enable `Webhook` to let a Git webhook queue the script.
+
+For the shared listener model, authentication options, URL shape, and troubleshooting, see [Webhooks](/docs/guides/webhooks).
+
+Select the provider and authentication format, set an optional branch filter, and copy the listener URL into the Git provider webhook settings.
+
+Webhook URL shape:
+
+```text
+https://citadel.example.com/listener/github/script/<script-id>/run
+```
+
+For GitLab, use `/listener/gitlab/script/<script-id>/run`.
+
+If the request body is a JSON object, Citadel passes it to the script as `args`. Push event metadata remains available in the payload, and the branch filter applies to the `ref` branch.
+
+Example webhook body:
+
+```json
+{
+  "ref": "refs/heads/main",
+  "after": "9fceb02...",
+  "repository": {
+    "full_name": "acme/app"
+  }
+}
+```
+
+Script code:
+
+```ts
+const branch = args.ref?.replace("refs/heads/", "");
+console.log(`Triggered by ${args.repository?.full_name} on ${branch}`);
+```
+
+## Runs Tab
+
+The Runs tab shows recent script runs.
+
+Columns include:
+
+- status
+- trigger
+- queued time
+- duration
+- exit code
+
+Select the log button on a run to inspect logs.
+
+Run statuses:
+
+- `Queued`: waiting for a worker
+- `Running`: Deno process is active
+- `Succeeded`: process exited successfully
+- `Failed`: process exited with an error
+- `TimedOut`: timeout was reached
+- `Cancelled`: cancellation was requested
+- `Rejected`: Citadel refused to start the run
+
+Logs include output from:
+
+```ts
+console.log()
+console.error()
+```
+
+Citadel caps logs and redacts obvious sensitive values such as bearer tokens and password-like fields.
+
+## Activities Tab
+
+The Activities tab shows audit history for the script.
+
+Activity events include:
+
+- created
+- updated
+- renamed
+- deleted
+- enabled or disabled
+- run queued
+- run started
+- run succeeded
+- run failed
+- run timed out
+- run cancelled
+- run rejected
+
+Updated script events show a Monaco diff of the old and new script values.
+
+## Permissions
+
+Scripts use the `Script` permission resource.
+
+Callers need permission to:
+
+- view scripts
+- create scripts
+- update scripts
+- delete scripts
+- run or test scripts
+
+A Script runs as its configured **Run as** User or Service Account. Citadel
+checks that identity's current Roles, enabled Team memberships, resource access,
+and license capabilities when the Script calls Citadel APIs.
+
+| Identity | What it controls |
+| --- | --- |
+| Person or integration starting a run | Must have Execute permission on the Script |
+| Saved **Run as** identity | Supplies access to the resources and operations called by the script |
+| Editor selecting a Service Account | Needs **Use** permission on that account |
+
+An administrator clicking Run does not make the script administrative when its
+Run-as identity has narrower permissions. Conversely, Execute access to an
+Script allows a caller to invoke its saved operation under that identity.
+
+Manual and API-triggered run history distinguishes the identity that requested
+the run from the identity that executed it. For example:
+
+```text
+Triggered by ci-release
+Ran as production-deployer
+```
+
+Selecting a Service Account or changing executable Script configuration under
+that account requires permission to **Use** it. Running an already saved Script
+requires Execute permission on the Script. Normal run requests cannot replace
+its saved code or run-as identity. Test requests can supply draft code; see
+[Test Run](#test-run).
+
+Using a Service Account requires Team's **Custom access control** capability.
+Schedules and webhook-triggered execution under that account additionally
+require **Automated Operations**. If the Custom access control capability becomes
+unavailable, Citadel preserves the binding as `Paused by license` and rejects
+new runs before starting the script.
+
+Citadel does not store a User access/refresh token or a persistent Service
+Account token inside the Script. It creates a restricted, short-lived token for
+each run.
+
+Use a least-privileged Service Account for schedules and webhooks so unattended
+execution does not depend on a human account. See
+[Service Accounts](/docs/guides/service-accounts).
+
+## Safety Notes
+
+Scripts are TypeScript programs, not shell scripts.
+
+Each run has a private temporary workspace. File imports, including imports from
+other modules, are restricted to that workspace by Deno's runtime permissions.
+Workspace files are removed after the run.
+
+Scripts cannot:
+
+- run shell commands
+- use terminal or exec endpoints
+- access arbitrary host files
+- access arbitrary networks
+- read Citadel secrets directly
+- modify scripts endpoints through the script run token
+
+Use scripts for Citadel API scripts, not host administration.
+
+## Troubleshooting
+
+`Script is already in progress.`
+
+The same script already has a queued or running run. Wait for it to finish or cancel the active run.
+
+`Scripts are disabled.`
+
+An administrator disabled scripts globally in Citadel configuration.
+
+`Deno executable was not found.`
+
+The script runtime is unavailable. Contact a Citadel administrator.
+
+`Default arguments must be a valid JSON object.`
+
+The args editor must contain an object such as `{}` or `{ "stackId": "..." }`, not an array or plain string.
+
+`Script timed out.`
+
+The script ran longer than the configured timeout. Increase the timeout or change the script to complete faster.
+
+`Forbidden` from a Citadel API call.
+
+The configured run-as User or Service Account does not currently have
+permission for the operation the script attempted.
+
+`Run-as identity is disabled or unavailable.`
+
+Enable the configured identity or select another enabled User or Service
+Account. Citadel does not fall back to the Script creator or System.
+
+## License Availability
+
+Community can:
+
+- create and edit script definitions
+- test a script
+- start an enabled script manually
+- view runs and logs
+
+Schedules and webhook-triggered script execution require Team's
+`Automated Operations` capability. A webhook may be received and authenticated
+without that capability, but it cannot queue the script run.
+
+If the capability becomes unavailable, existing schedule and webhook
+configuration remains stored and is shown as paused. Manual and test runs remain
+available.
+
+## Execution host
+
+**Run on** selects Core (the default), a specific Agent, or Automatic.
+Automatic requires Team’s **Automated Operations** capability. Core and a specific
+Agent remain available in Community. After license expiry, saved Automatic
+configuration remains editable, but new runs cannot start; choose Core or a
+specific Agent to continue. Already running scripts may finish or be cancelled.
+
+Automatic discovers eligible Agents and chooses one with available capacity;
+there is no agent list to configure. A specific Agent selection waits for that
+Agent, while Automatic can choose another eligible Agent. Busy or offline hosts
+leave work queued. Automatic never falls back to Core. The run-as identity needs Execute permission on the chosen Platform or Agent
+pool, as well as permissions for each API operation the script performs.
+
+Agents call Core's public HTTPS API. For example, a script executing on Agent B
+can stop a stack on Agent A through the normal Citadel API. Core still checks the
+run-as user's permissions and routes the stack operation to A. No administrator
+credentials or Docker sockets are passed to the script.
+
+Remote execution requires trusted HTTPS connections to Core and the Agent. Scripts
+use the same Deno sandbox as Core, with network access restricted to Core. Existing
+Core-only extra network allowances are not inherited by Agents. Remote module
+imports follow the same network allowlist; npm package resolution is disabled.
+
+Run records include the selected executor. The Runs tab shows **Cleanup pending** if execution ended without
+confirmed cleanup. Citadel never automatically reruns an uncertain attempt.
+Reconnection normally resolves cleanup. After an Agent restart, administrators can
+use **Resolve cleanup** after checking that the old script has stopped and the
+original Agent has restarted on the same Docker host. The acknowledgment is audited;
+it releases retained capacity without changing the run result.
+
+Run history and script status update through realtime after their initial load.
+Reconnecting refreshes the run window, including cleanup changes made while
+disconnected. While realtime is unavailable, views retain their last data until
+reconnection or a page refresh.

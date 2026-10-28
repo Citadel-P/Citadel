@@ -72,7 +72,7 @@ function SearchSection() {
       [AlertResourceType.Stack]: CitadelIcons.Stack,
       [AlertResourceType.SwarmService]: CitadelIcons.SwarmService,
       [AlertResourceType.Webhook]: CitadelIcons.Webhook,
-      [AlertResourceType.AutomationAction]: CitadelIcons.AutomationAction,
+      [AlertResourceType.Script]: CitadelIcons.Script,
       [AlertResourceType.Build]: CitadelIcons.Build,
       [AlertResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
       [AlertResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
@@ -164,7 +164,7 @@ function SearchSection() {
 }
 
 function getAlertTypeResourceType(type: AlertType): AlertResourceType {
-  if (type.startsWith('AutomationAction')) return AlertResourceType.AutomationAction;
+  if (type.startsWith('Script')) return AlertResourceType.Script;
   if (type.startsWith('Webhook')) return AlertResourceType.Webhook;
   if (type.startsWith('License')) return AlertResourceType.License;
   if (type.startsWith('Backup')) return AlertResourceType.BackupPolicy;

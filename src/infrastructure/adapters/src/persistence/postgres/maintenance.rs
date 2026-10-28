@@ -17,12 +17,12 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
     let mut tx = pool.begin().await?;
     // Existing recovery predicates protect live runs until their execution deadlines.
     let before = chrono::Utc::now();
-    if !crate::persistence::postgres::automation::recover_interrupted(&mut tx, before)
+    if !crate::persistence::postgres::scripts::recover_interrupted(&mut tx, before)
         .await
         .map_err(protocol)?
         .is_empty()
     {
-        changed.extend(["AutomationAction"]);
+        changed.extend(["Script"]);
     }
     if crate::persistence::postgres::builds::recover(&mut tx, before)
         .await
@@ -65,8 +65,8 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
             "UPDATE images SET controlstate='Idle',controlstartedat=NULL,controltriggeredby=NULL,rowversion=rowversion+1 WHERE controlstate='Processing' AND controlstartedat<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-60)::bigint",
         ),
         (
-            "AutomationAction",
-            "UPDATE actions a SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE controlstate='Processing' AND NOT EXISTS(SELECT 1 FROM automationexecutorreservations held WHERE held.runid=a.currentrunid) AND NOT EXISTS(SELECT 1 FROM actionruns r WHERE r.id=a.currentrunid AND r.status IN('Queued','Running'))",
+            "Script",
+            "UPDATE scripts a SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE controlstate='Processing' AND NOT EXISTS(SELECT 1 FROM scriptexecutorreservations held WHERE held.runid=a.currentrunid) AND NOT EXISTS(SELECT 1 FROM scriptruns r WHERE r.id=a.currentrunid AND r.status IN('Queued','Running'))",
         ),
         (
             "BuildProject",
@@ -100,7 +100,7 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
     // locks short and retaining every active run and referenced build artifact.
     for sql in STATS_RETENTION_SQL.into_iter().chain([
         "DELETE FROM activityevents WHERE id IN(SELECT id FROM activityevents WHERE createdat<CURRENT_TIMESTAMP-INTERVAL '90 days' LIMIT 5000)",
-        "DELETE FROM actionruns WHERE id IN(SELECT r.id FROM actionruns r WHERE finishedat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND status NOT IN('Queued','Running') AND NOT EXISTS(SELECT 1 FROM actions a WHERE a.currentrunid=r.id) LIMIT 5000)",
+        "DELETE FROM scriptruns WHERE id IN(SELECT r.id FROM scriptruns r WHERE finishedat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND status NOT IN('Queued','Running') AND NOT EXISTS(SELECT 1 FROM scripts a WHERE a.currentrunid=r.id) LIMIT 5000)",
     ]) {
         deleted += sqlx::query(sql).execute(pool).await?.rows_affected();
     }
@@ -129,7 +129,7 @@ fn protocol(error: impl std::fmt::Display) -> sqlx::Error {
 pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let before = chrono::Utc::now();
-    crate::persistence::postgres::automation::recover_interrupted_with_mode(&mut tx, before, true)
+    crate::persistence::postgres::scripts::recover_interrupted_with_mode(&mut tx, before, true)
         .await
         .map_err(protocol)?;
     crate::persistence::postgres::backups::recover_stale_with_mode(&mut tx, before, true)

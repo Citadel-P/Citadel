@@ -8,7 +8,7 @@ pub enum Topic {
     Deployments,
     Stacks,
     GitRepositories,
-    AutomationActions,
+    Scripts,
     BackupRepositories,
     BackupPolicies,
     BuildProjects,
@@ -23,8 +23,8 @@ pub enum Topic {
     SwarmService(Uuid),
     SwarmServices(Uuid),
     GitRepo(Uuid),
-    AutomationAction(Uuid),
-    AutomationRuns(Uuid),
+    Script(Uuid),
+    ScriptRuns(Uuid),
     BackupPolicy(Uuid),
     BackupRepository(Uuid),
     BackupRuns(Uuid),
@@ -71,7 +71,7 @@ impl Topic {
             ["deployments"] => Self::Deployments,
             ["stacks"] => Self::Stacks,
             ["git-repositories"] => Self::GitRepositories,
-            ["automation-actions"] => Self::AutomationActions,
+            ["scripts"] => Self::Scripts,
             ["backup-repositories"] => Self::BackupRepositories,
             ["backup-policies"] => Self::BackupPolicies,
             ["build-projects"] => Self::BuildProjects,
@@ -88,8 +88,8 @@ impl Topic {
             ["swarm-service", id] => Self::SwarmService(non_nil(id)?),
             ["swarm-services", id] => Self::SwarmServices(non_nil(id)?),
             ["git-repo", id] => Self::GitRepo(non_nil(id)?),
-            ["automation-action", id] => Self::AutomationAction(non_nil(id)?),
-            ["automation-runs", id] => Self::AutomationRuns(non_nil(id)?),
+            ["script", id] => Self::Script(non_nil(id)?),
+            ["scripts-runs", id] => Self::ScriptRuns(non_nil(id)?),
             ["backup-policy", id] => Self::BackupPolicy(non_nil(id)?),
             ["backup-repository", id] => Self::BackupRepository(non_nil(id)?),
             ["backup-runs", id] => Self::BackupRuns(non_nil(id)?),
@@ -138,7 +138,7 @@ impl Topic {
             Self::Deployments => "deployments",
             Self::Stacks => "stacks",
             Self::GitRepositories => "git-repositories",
-            Self::AutomationActions => "automation-actions",
+            Self::Scripts => "scripts",
             Self::BackupRepositories => "backup-repositories",
             Self::BackupPolicies => "backup-policies",
             Self::BuildProjects => "build-projects",
@@ -153,8 +153,8 @@ impl Topic {
             Self::SwarmService(_) => "swarm-service",
             Self::SwarmServices(_) => "swarm-services",
             Self::GitRepo(_) => "git-repo",
-            Self::AutomationAction(_) => "automation-action",
-            Self::AutomationRuns(_) => "automation-runs",
+            Self::Script(_) => "script",
+            Self::ScriptRuns(_) => "scripts-runs",
             Self::BackupPolicy(_) => "backup-policy",
             Self::BackupRepository(_) => "backup-repository",
             Self::BackupRuns(_) => "backup-runs",
@@ -189,8 +189,8 @@ impl Topic {
             | Self::SwarmService(id)
             | Self::SwarmServices(id)
             | Self::GitRepo(id)
-            | Self::AutomationAction(id)
-            | Self::AutomationRuns(id)
+            | Self::Script(id)
+            | Self::ScriptRuns(id)
             | Self::BackupPolicy(id)
             | Self::BackupRepository(id)
             | Self::BackupRuns(id)
@@ -268,7 +268,7 @@ mod tests {
             "deployments",
             "stacks",
             "git-repositories",
-            "automation-actions",
+            "scripts",
             "backup-repositories",
             "backup-policies",
             "build-projects",
@@ -287,8 +287,8 @@ mod tests {
             "swarm-service",
             "swarm-services",
             "git-repo",
-            "automation-action",
-            "automation-runs",
+            "script",
+            "scripts-runs",
             "backup-policy",
             "backup-repository",
             "backup-runs",
