@@ -10,8 +10,10 @@ docker build -t citadel-core:acceptance -f Dockerfile .
 bash test/scripts/test-agent-acceptance.sh citadel-core:acceptance citadel-agent:local
 ```
 
-The smoke test removes its disposable containers and build image. The compatibility,
-live Docker and Edge intake suites require the pinned Rust toolchain and share a private registry, database
+The smoke test checks the packaged Deno runtime and its file-access restrictions,
+alongside Agent startup and runtime tools. It removes its disposable containers
+and build image. The compatibility, live Docker and Edge intake suites require
+the pinned Rust toolchain and share a private registry, database
 and three privileged Docker-in-Docker daemons; it removes only its own fixtures.
 The compatibility suite includes six real builds across three Agents (Direct and
 Edge), two preparation permits, and 12 MiB contexts. An HTTP barrier proves all
