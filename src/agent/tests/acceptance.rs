@@ -19,22 +19,31 @@ const REGISTRY: &str =
     "registry@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0";
 
 async fn docker(args: &[&str]) -> String {
-    let output = tokio::time::timeout(
-        Duration::from_secs(120),
-        tokio::process::Command::new("docker")
-            .args(args)
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await
-    .expect("Docker command timed out")
-    .unwrap();
-    assert!(
-        output.status.success(),
-        "docker {args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    docker_with_attempts(args, 1).await
+}
+
+// Retry only explicitly requested image pulls, never test operations or assertions.
+async fn docker_with_attempts(args: &[&str], attempts: u32) -> String {
+    for attempt in 1..=attempts {
+        let output = tokio::time::timeout(
+            Duration::from_secs(120),
+            tokio::process::Command::new("docker")
+                .args(args)
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await
+        .expect("Docker command timed out")
+        .unwrap();
+        if output.status.success() {
+            return String::from_utf8(output.stdout).unwrap().trim().to_owned();
+        }
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(attempt < attempts, "docker {args:?}: {error}");
+        eprintln!("docker {args:?} attempt {attempt}/{attempts} failed: {error}");
+        tokio::time::sleep(Duration::from_secs(2 * u64::from(attempt))).await;
+    }
+    unreachable!("Docker commands require at least one attempt")
 }
 
 struct Fixture {
@@ -240,7 +249,7 @@ impl Fixture {
         )
         .await;
         self.daemon_ready(role).await;
-        docker(&["exec", &hostname, "docker", "pull", "alpine:3.24"]).await;
+        docker_with_attempts(&["exec", &hostname, "docker", "pull", "alpine:3.24"], 3).await;
     }
     async fn daemon_ready(&self, role: &str) {
         let hostname = self.container(role);

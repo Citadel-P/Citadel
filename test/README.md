@@ -39,6 +39,8 @@ production token expiration and authorization remain intact. Citadel targets one
 current Core/Agent/frontend build, with no historical image matrix.
 The Swarm image-transfer regression also checks digest-pinned inputs in a clean
 Docker daemon, verifying that save/load preserves the selected image identity.
+Explicit image pulls retry up to three times for registry failures; test operations
+and assertions are never retried.
 Run it independently with:
 
 ```bash
