@@ -120,7 +120,39 @@ async fn rustfs_edge_volume_backup_restore_and_retention_use_the_authenticated_s
     .await;
 }
 
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL, Docker and CITADEL_TEST_AGENT_IMAGE"]
+async fn filesystem_agent_backup_restore_and_retention_never_use_core_docker() {
+    volume_round_trip(None, Transport::Agent).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL, Docker and CITADEL_TEST_AGENT_IMAGE"]
+async fn filesystem_edge_backup_restore_and_retention_use_the_authenticated_session() {
+    volume_round_trip(None, Transport::Edge).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL, Docker and CITADEL_TEST_AGENT_IMAGE"]
+async fn filesystem_agent_directory_backup_restore_and_retention() {
+    volume_round_trip_storage(None, Transport::Agent, true).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable PostgreSQL, Docker and CITADEL_TEST_AGENT_IMAGE"]
+async fn filesystem_edge_directory_backup_restore_and_retention() {
+    volume_round_trip_storage(None, Transport::Edge, true).await;
+}
+
 async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
+    volume_round_trip_storage(s3_endpoint, transport, false).await;
+}
+
+async fn volume_round_trip_storage(
+    s3_endpoint: Option<String>,
+    transport: Transport,
+    bind_repository: bool,
+) {
     let use_agent = transport != Transport::Local;
     let fixture_image = if use_agent {
         std::env::var("CITADEL_TEST_AGENT_IMAGE").unwrap()
@@ -142,8 +174,15 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
         .await
         .unwrap();
     let suffix = Uuid::now_v7().simple().to_string();
+    let platform = Uuid::now_v7();
     let source = format!("citadel-backup-test-{suffix}-source");
     let repository_volume = format!("citadel-backup-test-{suffix}-repository");
+    let repository_directory = format!("/tmp/citadel-backup-test-{suffix}");
+    let repository_path = if bind_repository {
+        &repository_directory
+    } else {
+        &repository_volume
+    };
     let target = format!("citadel-backup-test-{suffix}-restored");
     let agent_name = format!("citadel-backup-test-{suffix}-agent");
     let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
@@ -151,8 +190,12 @@ async fn volume_round_trip(s3_endpoint: Option<String>, transport: Transport) {
     let mut edge_server = None;
     let result = AssertUnwindSafe(async {
         for name in [&source, &repository_volume] { docker(&["volume", "create", name], None).await; }
+        if bind_repository {
+            docker(&["run", "--rm", "--volume", "/tmp:/host-tmp", "--entrypoint", "sh", &fixture_image, "-ec",
+                "mkdir /host-tmp/$1; ln -s /host-tmp/$1 /host-tmp/$1-link", "sh", &format!("citadel-backup-test-{suffix}")], None).await;
+        }
         docker(&["run", "--rm", "-i", "--volume", &format!("{source}:/fixture"), "--entrypoint", "sh", &fixture_image, "-ec", "cat > /fixture/payload.txt; mkdir -p /fixture/private/nested; cp /fixture/payload.txt /fixture/private/nested/item; ln -s payload.txt /fixture/link; chown -hR 1000:1001 /fixture; chmod 751 /fixture; chmod 750 /fixture/private /fixture/private/nested; chmod 640 /fixture/payload.txt /fixture/private/nested/item"], Some(PAYLOAD)).await;
-        let platform = Uuid::now_v7(); let secret = Uuid::now_v7();
+        let secret = Uuid::now_v7();
         sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
             .bind(platform).bind(format!("acceptance-{suffix}")).execute(&pool).await.unwrap();
         let agent = if transport == Transport::Edge {
@@ -237,7 +280,7 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         let actor = ActorId::new(SYSTEM_ACTOR_ID);
         let store = PostgresBackupPersistence::new(pool.clone());
         let mut input = BackupRepositoryConfiguration { name: format!("repo-{suffix}"), password_secret_id: secret,
-            spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_volume})).unwrap() };
+            spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":repository_path})).unwrap() };
         if let Some(endpoint) = &s3_endpoint {
             input.spec = serde_json::from_value(json!({"$type":"S3Compatible","endpoint":endpoint,"bucket":"citadel-backups","allowInsecureHttp":true,
                 "prefix":suffix,"accessKeySecretId":ACCESS_KEY_ID,"secretKeySecretId":SECRET_KEY_ID})).unwrap();
@@ -251,7 +294,19 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         ));
         let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
         let cancellation = CancellationToken::new();
+        if use_agent && s3_endpoint.is_none() {
+            let error = repository_operation(&store, &executor, &repository, "Initialize", "Platform", Some(Uuid::now_v7()), &cancellation).await.unwrap_err();
+            assert!(error.to_string().contains("configured Platform"));
+            let mut unavailable = repository.clone();
+            if let citadel_backups::spec::BackupRepositorySpec::FileSystem { path, .. } = &mut unavailable.spec { path.push_str("-missing"); }
+            assert!(repository_operation(&store, &executor, &unavailable, "Initialize", "Platform", Some(platform), &cancellation).await.is_err());
+            if bind_repository {
+                if let citadel_backups::spec::BackupRepositorySpec::FileSystem { path, .. } = &mut unavailable.spec { *path = format!("{repository_directory}-link"); }
+                assert!(repository_operation(&store, &executor, &unavailable, "Initialize", "Platform", Some(platform), &cancellation).await.is_err());
+            }
+        }
         repository_operation(&store, &executor, &repository, "Initialize", "Platform", Some(platform), &cancellation).await.unwrap();
+        repository_operation(&store, &executor, &repository, "Validate", "Platform", Some(platform), &cancellation).await.unwrap();
         let operation_id=Uuid::now_v7();
         assert!(store.acquire_repository_operation(repository.id, operation_id, "Initialize", Utc::now()+chrono::Duration::minutes(5)).await.unwrap());
         store.record_repository_operation(repository.id, citadel_backups::BackupRepositoryOperation { operation_id, operation: "Initialize", location: "Platform", platform_id: Some(platform), succeeded: true, message: None }).await.unwrap();
@@ -281,6 +336,21 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
             target_volume_name: target.clone(), target_host_path: None, overwrite_existing: false, target_docker_node_id: None, source_backup_run_item_id: None }).await.unwrap();
         let restore = store.claim_restore(Utc::now() - chrono::Duration::hours(1)).await.unwrap().unwrap();
         assert_eq!(restore.run.id, queued.id);
+        if use_agent && s3_endpoint.is_none() {
+            let mut wrong_host = restore.clone();
+            wrong_host.run.target_platform_id = Uuid::now_v7();
+            let rejected = executor.restore(&wrong_host, &cancellation).await;
+            assert_eq!(rejected.status, citadel_backups::BackupRestoreStatus::Failed);
+            assert!(rejected.error_message.unwrap().contains("configured Platform"));
+            if !bind_repository {
+                let mut overlap = restore.clone();
+                overlap.run.target_volume_name = repository_volume.clone();
+                overlap.run.overwrite_existing = true;
+                let rejected = executor.restore(&overlap, &cancellation).await;
+                assert_eq!(rejected.status, citadel_backups::BackupRestoreStatus::Failed);
+                assert!(rejected.error_message.unwrap().contains("repository volume"));
+            }
+        }
         let restored = executor.restore(&restore, &cancellation).await;
         store.finish_restore(&restore, &restored).await.unwrap();
         assert_eq!(restored.status, citadel_backups::BackupRestoreStatus::Succeeded, "{:?}", restored.error_message);
@@ -331,6 +401,21 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
             .unwrap()
             .unwrap();
     }
+    // Enrollment forbids assigning one Docker daemon to two Platforms. Once
+    // this fixture's Agent is gone, release only its recorded daemon identity
+    // so the next round trip can enroll on the same disposable test host.
+    if transport == Transport::Edge {
+        citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdgeStore::new(
+            pool.clone(),
+        )
+        .revoke(&citadel_adapters::connectors::edge::EdgeTarget::platform(
+            platform,
+        ))
+        .await
+        .unwrap();
+        sqlx::query("UPDATE platforms SET platformdescriptor=platformdescriptor::jsonb - 'daemonId' WHERE id=$1")
+            .bind(platform).execute(&pool).await.unwrap();
+    }
     // Only UUID-scoped fixture volumes are removed; never prune the daemon.
     for name in [&source, &repository_volume, &target] {
         let _ = run(
@@ -341,6 +426,25 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
                     ..Default::default()
                 }),
             &CancellationToken::new(),
+        )
+        .await;
+    }
+    if bind_repository {
+        docker(
+            &[
+                "run",
+                "--rm",
+                "--volume",
+                "/tmp:/host-tmp",
+                "--entrypoint",
+                "sh",
+                &fixture_image,
+                "-ec",
+                "rm -r /host-tmp/$1; rm /host-tmp/$1-link",
+                "sh",
+                &format!("citadel-backup-test-{suffix}"),
+            ],
+            None,
         )
         .await;
     }

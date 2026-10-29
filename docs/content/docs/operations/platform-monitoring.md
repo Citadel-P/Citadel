@@ -25,7 +25,7 @@ Charts use straight segments and leave gaps where readings are missing. The Y
 axis shows percentages or byte units. Metrics are retained for seven days; a new
 or disconnected resource may have less history.
 
-History uses averages: 10-second buckets up to one hour, 30-second buckets up
+History and live charts use averages: 10-second buckets up to one hour, 30-second buckets up
 to six hours, one-minute buckets up to one day, five-minute buckets up to three
 days, and 15-minute buckets for longer ranges. These averages can smooth brief
 spikes; narrow the range for finer detail.
@@ -34,6 +34,11 @@ Statistics API endpoints accept `minutes=15|60|360|1440|10080`, or inclusive Uni
 second bounds `from` and `to`. Omitting `to` uses the current time. Existing
 `hours=24|48|72` requests remain supported, and omitting all range parameters
 keeps the API's 24-hour default. Do not combine range formats.
+
+Current usage values remain instantaneous. Live observations accumulate into
+averages without discarding samples when a Stats tab stays open. Saved history takes precedence
+in overlapping buckets; the bucket already in progress when the tab opens stays
+at its saved average until history is reloaded. Subsequent buckets update live.
 
 ## History across deployments
 

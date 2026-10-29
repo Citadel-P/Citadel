@@ -412,6 +412,15 @@ reconnects, active-state spinners, and returning from a completed copy.
 The `resource_copies::recovery` regression injects lost claim acknowledgements
 and completion-write failures against disposable PostgreSQL; it also verifies
 finalization and cleanup during a paused copy, cancellation and worker shutdown.
+
+`-AgentImage <candidate>` without `-UseRustFs` tests filesystem repositories
+through a Direct Agent; adding `-UseEdgeAgent` tests the authenticated Edge session.
+Both cover existing named volumes and host directories, initialization, validation,
+backup, restore, retention, wrong-host rejection, missing storage, symlink rejection,
+and repository/restore-volume overlap, with Core's Docker connection unavailable.
+The directory fixtures are UUID-scoped under the Docker host's `/tmp` and removed
+after the test. Tests run sequentially against the disposable database.
+
 `-UseRustFs -AgentImage <candidate>` and `-UseEdgeAgent` run those same
 copy checks through real authenticated Agents with Core's Docker connection
 unavailable. `-MultiNode` additionally copies a pinned managed Swarm Service,

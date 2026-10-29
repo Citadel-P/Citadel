@@ -34,7 +34,7 @@ async fn bind_mount_directory_and_file_round_trip_with_overwrite_guards() {
         docker(&["volume", "create", &repository_volume], None).await;
         let platform = Uuid::now_v7();
         let secret = Uuid::now_v7();
-        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
             .bind(platform).bind(format!("bind-{suffix}")).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,$2,'InternalEncrypted')")
             .bind(secret).bind(format!("bind-{suffix}")).execute(&pool).await.unwrap();

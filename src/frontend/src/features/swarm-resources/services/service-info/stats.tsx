@@ -1,3 +1,5 @@
+import { latestLiveStat } from '@/lib/stats-buckets';
+import { statsBucketSeconds } from '@/lib/stats-range';
 import { ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { StatsChartRange } from '@/components/custom/stats-chart-range';
@@ -18,6 +20,8 @@ export const ServiceStats = ({
   const live = useServiceStatsStream(
     service.platformId,
     containerProjectionIds ?? stats.observedContainerProjectionIds,
+    statsBucketSeconds(stats.range.bounds),
+    stats.range.hours * 3600,
   );
   const problem = (stats.error as { error?: ProblemDetails } | undefined)?.error;
 
@@ -33,7 +37,7 @@ export const ServiceStats = ({
     );
   }
 
-  const latestStat = live.stats.at(-1) ?? stats.baseStats.at(-1);
+  const latestStat = latestLiveStat(live.stats) ?? stats.baseStats.at(-1);
   const missingNodes = stats.missingDockerNodeIds.join(', ');
   const observedTasks = Math.max(stats.observedTasks, live.observedContainers);
   const complete = stats.complete || (stats.expectedTasks > 0 && live.observedContainers >= stats.expectedTasks);

@@ -224,6 +224,20 @@ const replaceTagEndpoint = {
   SwarmService: 'replaceSwarmServiceTags',
 } as const satisfies Record<EditableResourceType, KnownResourceName>;
 
+// Tag assignments affect list membership, resource details, and tag usage counts.
+const tagResourceReads = {
+  Deployment: ['listDeployments', 'getDeployment', 'getDeploymentConfig', 'getDeploymentTags'],
+  Stack: ['listStacks', 'getStack', 'getStackConfig', 'getStackTags'],
+  GitRepository: ['listGitRepositories', 'getGitRepository', 'getGitRepositoryConfig', 'getGitRepositoryTags'],
+  Platform: ['listPlatforms', 'getPlatfom', 'getPlatformTags'],
+  Registry: ['listRegistries', 'getRegistryConfig', 'getRegistryTags'],
+  Script: ['listScripts', 'getScript', 'getScriptTags'],
+  Build: ['listBuildProjects', 'getBuildProject', 'getBuildTags'],
+  BuildAgentPool: ['listBuildAgentPools', 'getBuildAgentPool', 'getBuildAgentPoolTags'],
+  BackupPolicy: ['listBackupPolicies', 'getBackupPolicy', 'getBackupPolicyTags'],
+  SwarmService: ['listManagedSwarmServices', 'getManagedSwarmService', 'getSwarmServiceTags'],
+} as const satisfies Record<EditableResourceType, readonly KnownResourceName[]>;
+
 export const ResourceHeaderTagsEditor = ({
   resourceType,
   resourceId,
@@ -261,7 +275,17 @@ export const ResourceHeaderTagsEditor = ({
     setDraft({ key: initialTagIdsKey, tagIds });
     await replaceTags.mutateAsync(buildReplaceVariables(resourceType, resourceId, tagIds) as any);
     toast.success(successMessage);
-    await queryClient.invalidateQueries();
+    const [list, ...details] = tagResourceReads[resourceType];
+    await queryClient.invalidateQueries({
+      predicate: ({ queryKey }) => {
+        const [key, args] = queryKey as [string, { id?: string; deploymentId?: string; stackId?: string }?];
+        return (
+          key === 'listTags' ||
+          key === list ||
+          (details.some((detail) => detail === key) && (args?.id ?? args?.deploymentId ?? args?.stackId) === resourceId)
+        );
+      },
+    });
   };
 
   const selectTag = (tagId: string) => replace([...selectedTagIds, tagId], 'Tag added');

@@ -60,6 +60,86 @@ pub(super) async fn before_ready(
             StatusCode::BAD_REQUEST
         );
     }
+    for (connector, kind) in [
+        ("Agent", "Docker"),
+        ("EdgeAgent", "Docker"),
+        ("Agent", "DockerSwarm"),
+    ] {
+        let platform = Uuid::now_v7();
+        sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,$3,0,0,0,$2,0,$4,'Online',0)")
+            .bind(platform).bind(format!("repository-target-{platform}")).bind(connector)
+            .bind(json!({"$type":kind})).execute(pool).await.unwrap();
+        let spec = json!({"$type":"FileSystem","location":"Platform","platformId":platform,"path":"/srv/backups"});
+        let response = request(app, Method::POST, "/api/v1/backupRepositories", Some(admin.clone()),
+            Some(json!({"name":format!("filesystem-{platform}"),"passwordSecretId":repository["passwordSecretId"],"spec":spec}))).await;
+        if kind == "DockerSwarm" {
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+            assert!(String::from_utf8_lossy(&body).contains("S3-compatible"));
+            let response = request(
+                app,
+                Method::PATCH,
+                &path,
+                Some(admin.clone()),
+                Some(json!({"spec":spec})),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        } else {
+            let created = response_json(response).await;
+            assert_eq!(created["spec"]["platformId"], platform.to_string());
+            let endpoint = format!(
+                "/api/v1/backupRepositories/{}",
+                created["id"].as_str().unwrap()
+            );
+            let response = request(
+                app,
+                Method::PATCH,
+                &endpoint,
+                Some(admin.clone()),
+                Some(json!({"spec":{"$type":"FileSystem","location":"Platform","platformId":platform,"path":"backup-repository"}})),
+            )
+            .await;
+            assert_eq!(
+                response_json(response).await["spec"]["path"],
+                "backup-repository"
+            );
+            assert_eq!(
+                request(app, Method::DELETE, &endpoint, Some(admin.clone()), None)
+                    .await
+                    .status(),
+                StatusCode::NO_CONTENT
+            );
+        }
+    }
+    let local: Uuid =
+        sqlx::query_scalar("SELECT id FROM platforms WHERE connectortype='Local' LIMIT 1")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let response = request(app, Method::POST, "/api/v1/backupRepositories", Some(admin.clone()), Some(json!({
+        "name":format!("local-filesystem-{id}"),
+        "passwordSecretId":repository["passwordSecretId"],
+        "spec":{"$type":"FileSystem","location":"Platform","platformId":local,"path":"/srv/backups"}
+    }))).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let created = response_json(response).await;
+    assert_eq!(created["spec"]["platformId"], local.to_string());
+    assert_eq!(
+        request(
+            app,
+            Method::DELETE,
+            &format!(
+                "/api/v1/backupRepositories/{}",
+                created["id"].as_str().unwrap()
+            ),
+            Some(admin.clone()),
+            None
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
     let mut spec = repository["spec"].clone();
     spec["path"] = json!(" /tmp/changed-backups ");
     let store = PostgresBackupPersistence::new(pool.clone());

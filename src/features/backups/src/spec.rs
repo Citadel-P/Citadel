@@ -133,6 +133,9 @@ impl BackupRepositorySpec {
                         "Filesystem Backup Repository location is invalid.".into(),
                     ));
                 }
+                if *location == BackupExecutionLocation::Platform {
+                    validate_repository_mount_path(path)?;
+                }
             }
             Self::S3Compatible {
                 endpoint,
@@ -459,6 +462,24 @@ mod tests {
     }
 }
 
+/// Platform repositories are existing host directories or Docker named volumes.
+pub fn validate_repository_mount_path(path: &str) -> Result<(), crate::BackupError> {
+    if path.starts_with('/') {
+        return validate_bind_path(path);
+    }
+    if path.len() < 2
+        || !path.as_bytes()[0].is_ascii_alphanumeric()
+        || !path
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
+    {
+        return Err(crate::BackupError::Validation(
+            "Repository path must be an absolute host directory or a Docker volume name.".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Bind paths are explicit Linux host paths, never Docker short-mount expressions.
 pub fn validate_bind_path(path: &str) -> Result<(), crate::BackupError> {
     let forbidden = [
@@ -501,6 +522,33 @@ pub fn bind_mount_execution_key(platform: Uuid, node: Option<&str>) -> String {
 #[cfg(test)]
 mod bind_mount_tests {
     use super::*;
+    #[test]
+    fn repository_mount_paths_accept_only_safe_host_paths_or_volume_names() {
+        for path in [
+            "backups",
+            "repo_01.data",
+            "/srv/backups",
+            "/mnt/backup-disk/daily",
+        ] {
+            assert!(validate_repository_mount_path(path).is_ok(), "{path}");
+        }
+        for path in [
+            "",
+            "a",
+            "../backups",
+            "daily/core",
+            "/",
+            "/srv/../etc",
+            "/srv/backups/",
+            "/run/docker.sock",
+            "repo:/source",
+            "repo,name",
+            "repo\n",
+        ] {
+            assert!(validate_repository_mount_path(path).is_err(), "{path}");
+        }
+    }
+
     #[test]
     fn bind_paths_reject_ambiguous_or_unsafe_mount_expressions() {
         for path in [

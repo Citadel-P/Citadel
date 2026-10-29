@@ -38,8 +38,8 @@ existing repository allows editing that repository, not creating another one.
 | Backup execution | Supported repository |
 | --- | --- |
 | Citadel control plane or Local-connector workload | Core filesystem or S3-compatible |
-| Local-connector workload with a repository path on that Docker host | Platform filesystem |
-| Regular Agent, Edge Agent, or Swarm Node Agent | S3-compatible |
+| Standalone Docker workload on Local, Direct Agent, or Edge Agent | Platform filesystem on the same host, or S3-compatible |
+| Docker Swarm workload | S3-compatible |
 
 The S3 endpoint must be reachable from the target's backup helper, not just your
 browser or Core. Keep the repository password separately accessible for recovery;
@@ -307,7 +307,7 @@ Restore history is shown in the same **Runs** tab under **Restore runs**. Use th
 Repository and platform rules for restore:
 
 - A Core filesystem repository can restore to the local platform only.
-- A Platform filesystem repository restores on the same local platform that owns that repository path. Agent-based filesystem restore is not supported.
+- A Platform filesystem repository restores on the same standalone Docker platform that owns that repository path, including Direct and Edge Agents.
 - An S3-compatible repository can restore to local, regular agent, or edge agent platforms because the restore runs from the target platform.
 - A Swarm volume snapshot can be restored only to a new named volume on an explicit current Node. Citadel does not overwrite a Swarm volume or automatically attach the restored volume to a Stack or Service.
 - Citadel control-plane snapshots are restored offline while Core is stopped. They are not restored into a Docker volume through the web UI.
@@ -324,10 +324,10 @@ A backup repository is the destination where snapshots are stored.
 repositories use a bucket, such as MinIO or AWS S3. Choose a supported execution
 location using the table in [Prepare the repository](#1-prepare-the-repository).
 
-Remote regular Agent, Edge Agent, and Swarm Node Agent backup execution currently
-requires **S3-compatible storage**. Filesystem repository fields may appear in
-the UI, but the Agent executor rejects them. Use filesystem repositories only
-for Citadel control-plane backups or workloads reached through the Local connector.
+Standalone Local, Direct Agent, and Edge Agent platforms support filesystem
+repositories. Backup, restore, initialization, validation, and retention execute
+on the configured platform; Core does not mount or copy the remote repository.
+Docker Swarm backups and cross-platform restores require **S3-compatible storage**.
 
 ### S3-Compatible Repository Settings
 
@@ -360,9 +360,16 @@ Examples:
 Filesystem repository paths are resolved where the repository is executed:
 
 - **Core filesystem** paths are on the Citadel Core host or inside the Core container volume.
-- **Platform filesystem** paths are on the Docker host reached through the Local connector.
+- **Platform filesystem** paths are on the selected Local, Direct Agent, or Edge Agent Docker host. An absolute path selects a host directory; a name such as `citadel-backups` selects a Docker named volume.
 
-For example, a Platform filesystem repository path of `/srv/backup-01` on a local
+On Agents, create the directory or named volume before initializing the repository.
+Host paths must be normalized absolute paths, outside system/runtime directories,
+without symlink components. Missing paths are rejected rather than created on
+the wrong host. Repository storage must not overlap the backup source or restore
+target. A filesystem repository belongs to one platform; a different platform
+cannot access it merely by using the same path.
+
+For example, a Platform filesystem repository path of `/srv/backup-01` on an Agent
 platform stores the restic repository on that Docker host. The repository contains
 folders such as `config`, `data`, `index`, `keys`, `locks`, and `snapshots`.
 
@@ -585,9 +592,9 @@ a discovered bind mount in a workload's backup card or **Container overview**.
    inside the application container. Resolve relative Compose paths first.
 2. On Swarm, select the exact Node containing the data. The same path on two
    Nodes is two sources. A direct host-path policy stays on that Node; a workload policy resolves current Task placement for each run.
-3. Select a repository and run the policy. Regular and Edge Agents, including
-   Swarm Node Agents, require S3-compatible repositories. Local Docker supports
-   the existing filesystem and S3 repository options.
+3. Select a repository and run the policy. Standalone Local, Direct Agent, and
+   Edge Agent platforms support filesystem repositories on the same host or S3.
+   Swarm Node Agents require S3-compatible repositories.
 
 Creating a bind policy and executing it both require **Write** permission on the
 Platform, in addition to normal policy/repository permissions. Host paths may
@@ -709,7 +716,7 @@ name: identical names on different Nodes can contain different data.
 | Repository test fails | Verify the destination, restic password, storage credentials, and connectivity from the configured execution location. |
 | Docker cannot access the backup repository folder | Check the repository path on the Docker host and the Docker daemon's filesystem permissions. A directory inside Core's container is not automatically available to backup helpers. Use a host-accessible filesystem repository or S3-compatible storage. The failure message retains the original Docker details. |
 | Policy has no eligible data | Review the preview for the intended volumes and bind mounts, synchronize workload inventory, and check discovery warnings and host-path permissions. |
-| Remote filesystem repository is rejected | Use S3-compatible storage for Agent, Edge Agent, or Swarm Node execution. |
+| Agent filesystem repository is unavailable | Create the configured directory or named volume on the repository’s Agent host. Check its permissions and avoid symlink paths. Backup and restore must use that same platform; Swarm and cross-platform operations require S3. |
 | A run failed or its progress connection closed | Inspect its entry in Runs and the logs before retrying; check whether it already completed. |
 | Restore target is rejected | Check target Platform/Node access and existing-volume restrictions under [Restores](#restores). |
 | Restored files exist but the application fails | Check application consistency, ownership, image/configuration compatibility, and the application's recovery steps. A file restore alone does not verify application recovery. |

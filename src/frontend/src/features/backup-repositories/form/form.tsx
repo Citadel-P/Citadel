@@ -5,7 +5,6 @@ import {
   BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
-  LookupResourceType,
   PlatformView,
   ResourceType,
   S3BucketLookup,
@@ -60,7 +59,7 @@ export const createDefaultInput = (): BackupRepositoryFormInput => ({
 export const repositoryTypes = {
   FileSystem: {
     label: 'Filesystem',
-    description: 'Store repository data on a Core-mounted path.',
+    description: 'Store repository data on Core or a connected Docker host.',
     icon: FolderLock,
   },
   S3Compatible: {
@@ -92,7 +91,7 @@ export const fileSystemLocationOptions = {
   },
   Platform: {
     label: 'Platform filesystem',
-    description: 'Store snapshots on a selected Docker platform host.',
+    description: 'Store snapshots on a Local, Agent, or Edge Agent Docker host.',
   },
 } as const;
 
@@ -228,20 +227,19 @@ export function BackupRepositoryForm({
                             label: 'Platform',
                             required: true,
                             disabled: specDisabled,
-                            description: 'Platform whose host filesystem stores this repository.',
+                            description:
+                              'Snapshots stay on this Docker host. Swarm backups require an S3-compatible repository.',
                             validate: (value) =>
                               selectedLocation === BackupExecutionLocation.Platform && !value
                                 ? 'Platform is required'
                                 : null,
                             render: (value, set) => (
-                              <ResourceSelectorField
-                                targetType={LookupResourceType.Platform}
+                              <FileSystemPlatformSelector
                                 selected={value ?? undefined}
                                 disabled={specDisabled}
                                 onSelect={(platform: PlatformView | undefined) =>
                                   set({ spec: { platformId: platform?.id ?? null } as any })
                                 }
-                                placeholder="Select Platform"
                               />
                             ),
                           }),
@@ -255,12 +253,16 @@ export function BackupRepositoryForm({
                       description:
                         selectedLocation === BackupExecutionLocation.Core
                           ? 'Core filesystem path. Relative paths are created under the configured Core backup repository root.'
-                          : 'Platform host path where the repository will be stored.',
+                          : 'Existing absolute directory or Docker volume name on the selected host. Agent paths are not paths inside Core.',
                       render: (value, set) => (
                         <FieldInput
                           value={value ?? ''}
                           disabled={specDisabled}
-                          placeholder="daily/core"
+                          placeholder={
+                            selectedLocation === BackupExecutionLocation.Core
+                              ? 'daily/core'
+                              : '/srv/backups or backup-volume'
+                          }
                           onChange={(path) => set({ spec: { path } as any })}
                         />
                       ),
@@ -467,6 +469,29 @@ export function RepositoryTypeSelector({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+export function FileSystemPlatformSelector({
+  selected,
+  disabled,
+  onSelect,
+}: {
+  selected?: string;
+  disabled?: boolean;
+  onSelect: (platform: PlatformView | undefined) => void;
+}) {
+  const { data, isLoading } = useRead('listPlatforms');
+  const platforms = data?.data.platforms ?? [];
+  return (
+    <ResourceSelectorField
+      items={platforms.filter((platform) => platform.platformDescriptor?.$type === 'Docker')}
+      selected={platforms.find((platform) => platform.id === selected) ?? selected}
+      disabled={disabled || isLoading}
+      onSelect={onSelect}
+      placeholder={isLoading ? 'Loading platforms...' : 'Select Platform'}
+      emptyMessage="No standalone Docker platforms available."
+    />
   );
 }
 

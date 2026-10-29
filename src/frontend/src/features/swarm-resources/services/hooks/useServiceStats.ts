@@ -1,9 +1,10 @@
+import { appendLiveStatBucket } from '@/lib/stats-buckets';
 import { ContainerStatView } from '@/api/generated/api.types';
 import { useStatsRange } from '@/hooks/useStatsRange';
 import { StatsQueryState } from '@/features/docker-resources/containers/container-info/container-stats';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { appendBoundedLiveStat, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
+import { STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -40,7 +41,12 @@ export const useServiceStatsWindow = (platformId: string, serviceId: string): Sw
   };
 };
 
-export const useServiceStatsStream = (platformId: string, containerIds: string[]) => {
+export const useServiceStatsStream = (
+  platformId: string,
+  containerIds: string[],
+  seconds = 10,
+  windowSeconds = 3600,
+) => {
   const [liveStats, setLiveStats] = useState<{
     identity: string;
     latestByContainer: Map<string, ContainerStatView>;
@@ -70,11 +76,16 @@ export const useServiceStatsStream = (platformId: string, containerIds: string[]
         return {
           identity,
           latestByContainer,
-          stats: appendBoundedLiveStat(previous.identity === identity ? previous.stats : [], aggregate),
+          stats: appendLiveStatBucket(
+            previous.identity === identity ? previous.stats : [],
+            aggregate,
+            seconds,
+            windowSeconds,
+          ),
         };
       });
     },
-    [idSet, identity],
+    [idSet, identity, seconds, windowSeconds],
   );
   const setupEventListeners = useCallback(
     (connection: RealtimeConnection) => connection.on('ContainersStatsUpdated', handleStats),

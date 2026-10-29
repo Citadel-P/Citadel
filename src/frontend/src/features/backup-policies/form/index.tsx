@@ -4,7 +4,7 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { ResourceHeaderTagsEditor } from '@/features/tags/components';
 import { ActivitiesTab } from '@/features/activities';
 import { hasCapability } from '@/lib/resource-capabilities';
-import { useRead } from '@/lib/hooks';
+import { useBackupPolicyGroup } from '../hooks/useBackupPolicyGroup';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { BackupPolicyInfoActions } from '../actions';
 import { BackupPolicyForm } from './form';
@@ -74,7 +74,7 @@ export const BackupPolicyFormComponents: RequiredFormComponents<BackupPolicyForm
       },
     ],
     useData(id: string) {
-      const { data, isLoading, error, refetch, isFetching } = useRead('getBackupPolicy', { id });
+      const { data, isLoading, error, refetch, isFetching } = useBackupPolicyGroup(id);
       return { error, refetch, isFetching, item: data?.data as BackupPolicyFormResource | undefined, isLoading };
     },
   },

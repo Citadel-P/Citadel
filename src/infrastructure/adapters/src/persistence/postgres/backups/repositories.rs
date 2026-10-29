@@ -10,6 +10,7 @@ impl PostgresBackupPersistence {
             let id = Uuid::now_v7();
             let kind = input.spec.kind();
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            validate_filesystem_platform(&mut tx, &input.spec).await?;
             for secret in input.secret_ids() {
                 crate::persistence::postgres::bindings::access::authorize_and_grant(
                     &mut tx,
@@ -109,6 +110,7 @@ impl PostgresBackupPersistence {
                 .map_err(|error| BackupError::Validation(error.to_string()))?;
             }
             if input.spec != current.spec {
+                validate_filesystem_platform(&mut tx, &input.spec).await?;
                 let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM backuprepositoryleases WHERE backuprepositoryid=$1)")
                     .bind(id).fetch_one(&mut *tx).await.map_err(storage)?;
                 if active {
@@ -343,4 +345,34 @@ impl PostgresBackupPersistence {
             Ok(repository)
         })
     }
+}
+
+// Filesystem destinations are supported by Core and Local Docker only. Check
+// before persisting, so a saved repository is not doomed to fail initialization.
+async fn validate_filesystem_platform(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    spec: &citadel_backups::spec::BackupRepositorySpec,
+) -> Result<(), BackupError> {
+    if let citadel_backups::spec::BackupRepositorySpec::FileSystem {
+        location: citadel_backups::spec::BackupExecutionLocation::Platform,
+        platform_id,
+        ..
+    } = spec
+    {
+        let id = platform_id
+            .ok_or_else(|| BackupError::Validation("Repository Platform is required.".into()))?;
+        let kind: Option<String> = sqlx::query_scalar(
+            "SELECT platformdescriptor->>'$type' FROM platforms WHERE id=$1 FOR SHARE",
+        )
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(storage)?;
+        match kind.as_deref() {
+            Some("Docker") => {}
+            Some(_) => return Err(BackupError::Validation("Filesystem Backup Repositories require a standalone Docker platform. Use an S3-compatible repository for Docker Swarm backups.".into())),
+            None => return Err(BackupError::Validation("The selected Platform was not found.".into())),
+        }
+    }
+    Ok(())
 }

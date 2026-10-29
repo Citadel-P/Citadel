@@ -9,7 +9,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($AgentImage -and -not $UseRustFs) { throw 'Agent backup acceptance requires -UseRustFs.' }
 if ($UseEdgeAgent -and -not $AgentImage) { throw '-UseEdgeAgent requires -AgentImage.' }
 if ($MultiNode -and (-not $UseRustFs -or -not $AgentImage -or $UseEdgeAgent)) { throw '-MultiNode requires -UseRustFs and -AgentImage, without -UseEdgeAgent.' }
 if ($AgentImage) {
@@ -91,6 +90,14 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the disposable backup bucket.' }
     }
 
+    $testFilter = if ($MultiNode) { 'worker_volume_backs_up' }
+    elseif ($UseEdgeAgent -and $UseRustFs) { 'rustfs_edge_volume' }
+    elseif ($UseEdgeAgent) { 'filesystem_edge_' }
+    elseif ($AgentImage -and $UseRustFs) { 'rustfs_agent_volume' }
+    elseif ($AgentImage) { 'filesystem_agent_' }
+    elseif ($UseRustFs) { 'rustfs_volume' }
+    else { 'local_volume' }
+
     # Retain the vscode UID for cache ownership; group 0 can read Desktop's
     # real socket even in a workspace created before the proxy fix.
     & docker exec --user "${testUid}:0" --workdir /workspace `
@@ -102,7 +109,7 @@ try {
         --env "CITADEL_TEST_AGENT_NETWORK=$network" `
         --env "CITADEL_TEST_CORE_HOST=$DevContainer" `
         --env "CITADEL_TEST_CORE_IP=$coreIp" `
-        $DevContainer cargo test --locked -p citadel-adapters --test backup_restic_acceptance $(if ($MultiNode) { 'worker_volume_backs_up' } elseif ($UseEdgeAgent) { 'rustfs_edge_volume' } elseif ($AgentImage) { 'rustfs_agent_volume' } elseif ($UseRustFs) { 'rustfs_volume' } else { 'local_volume' }) -- --ignored
+        $DevContainer cargo test --locked -p citadel-adapters --test backup_restic_acceptance $testFilter -- --ignored --test-threads=1
     if ($LASTEXITCODE -ne 0) { throw 'The real Docker/Restic backup acceptance test failed.' }
 }
 finally {

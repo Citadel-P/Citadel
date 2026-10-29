@@ -1,3 +1,5 @@
+import { latestLiveStat } from '@/lib/stats-buckets';
+import { statsBucketSeconds } from '@/lib/stats-range';
 import { ProblemDetails } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { StatsChartRange } from '@/components/custom/stats-chart-range';
@@ -8,7 +10,12 @@ import { useTaskStatsStream, useTaskStatsWindow } from '../hooks/useTaskStats';
 export const TaskStats = ({ task }: { task: SwarmTaskInfoView }) => {
   const stats = useTaskStatsWindow(task.platformId, task.id);
   const containerProjectionId = stats.containerProjectionId;
-  const liveStats = useTaskStatsStream(task.platformId, containerProjectionId);
+  const liveStats = useTaskStatsStream(
+    task.platformId,
+    containerProjectionId,
+    statsBucketSeconds(stats.range.bounds),
+    stats.range.hours * 3600,
+  );
   const problem = (stats.error as { error?: ProblemDetails } | undefined)?.error;
 
   if (problem) {
@@ -23,7 +30,7 @@ export const TaskStats = ({ task }: { task: SwarmTaskInfoView }) => {
     );
   }
 
-  const latestStat = liveStats.at(-1) ?? stats.baseStats.at(-1);
+  const latestStat = latestLiveStat(liveStats) ?? stats.baseStats.at(-1);
   return (
     <ContainerStatsCharts
       resource={{ state: task.state, containerStat: latestStat }}

@@ -17,33 +17,36 @@ export const useStackGroup = (stackId: string) => {
         void queryClient.cancelQueries({ queryKey: driftQueryKey });
         return;
       }
+      const previous = queryClient.getQueryData<ResourceResponse<'getStack'>>(['getStack', { stackId }])?.data;
       const activityInfo = stack.latestActivityView?.info;
       const info = Array.isArray(activityInfo) ? { ...activityInfo[1], $type: activityInfo[0] } : activityInfo;
-      queryClient.setQueryData<ResourceResponse<'getStack'>>(['getStack', { stackId }], (current) =>
-        current?.data
-          ? {
-              ...current,
-              data: {
-                ...current.data,
-                name: stack.name,
-                backupCoverage: stack.backupCoverage ?? current.data.backupCoverage,
-                copyEligibility: stack.copyEligibility ?? current.data.copyEligibility,
-                status: stack.status,
-                description: stack.description,
-                controlState: stack.controlState,
-                driftPolicy: stack.driftPolicy,
-                stackUpdateState: stack.stackUpdateState,
-                platformStatus: stack.platformStatus,
-                platformName: stack.platformName,
-                latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,
-              },
-            }
-          : current,
-      );
+      const filter = { queryKey: ['getStack', { stackId }], exact: true };
+      void queryClient.cancelQueries(filter);
+      queryClient.setQueryData<{ data: StackView }>(filter.queryKey, (current) => ({
+        ...current,
+        data: {
+          ...current?.data,
+          ...stack,
+          backupCoverage: stack.backupCoverage ?? current?.data.backupCoverage,
+          copyEligibility: stack.copyEligibility ?? current?.data.copyEligibility,
+          capabilities: stack.capabilities ?? current?.data.capabilities ?? null,
+          latestActivityView: stack.latestActivityView ? { ...stack.latestActivityView, info } : null,
+        },
+      }));
 
       if (stack.controlState === ResourceControlState.Processing) {
         void queryClient.cancelQueries({ queryKey: driftQueryKey });
-      } else {
+      } else if (
+        !previous ||
+        previous.controlState !== stack.controlState ||
+        previous.status !== stack.status ||
+        previous.platformId !== stack.platformId ||
+        previous.platformStatus !== stack.platformStatus ||
+        previous.currentStackReleaseId !== stack.currentStackReleaseId ||
+        JSON.stringify(previous.driftPolicy) !== JSON.stringify(stack.driftPolicy) ||
+        (previous.latestActivityView?.id !== stack.latestActivityView?.id &&
+          stack.latestActivityView?.eventType?.startsWith('StackDrift'))
+      ) {
         void queryClient.invalidateQueries({ queryKey: driftQueryKey });
       }
     },

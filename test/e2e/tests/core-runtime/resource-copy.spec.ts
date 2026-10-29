@@ -19,7 +19,7 @@ test('snapshot copy works through the browser and a Core crash cannot finalize a
     await dialog.getByRole('combobox', { name: 'Data source' }).click();
     await page.getByRole('option', { name: 'Use an existing backup', exact: true }).click();
     await dialog.getByRole('button', { name: 'Choose backups' }).click();
-    await dialog.getByRole('combobox').click();
+    await dialog.getByRole('combobox', { name: fixture.source, exact: true }).click();
     await page.getByRole('option', { name: new RegExp(fixture.name) }).click();
     await dialog.getByRole('button', { name: 'Review copy' }).click();
     await expect(dialog.getByRole('button', { name: 'Create copy' })).toBeDisabled();

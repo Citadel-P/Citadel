@@ -682,6 +682,30 @@ mod bind_tests {
         helper
     }
 
+    #[test]
+    fn swarm_helpers_still_reject_host_local_repositories() {
+        let platform = Uuid::now_v7();
+        let mut request = helper(platform, "/srv/data", false);
+        assert!(backup_helper(&request, platform));
+        request.mounts.push(Mount {
+            source: Some("backups".into()),
+            target: Some("/repository".into()),
+            r#type: Some("volume".into()),
+            read_only: Some(false),
+            ..Default::default()
+        });
+        assert!(!backup_helper(&request, platform));
+        let mut exec = command(
+            BIND_BACKUP_SCRIPT.replace("/data", "/source"),
+            &["backup", "--json", "/source"],
+            true,
+        );
+        assert!(bind_script_exec(&exec));
+        exec.env
+            .insert("RESTIC_REPOSITORY".into(), "/repository".into());
+        assert!(!bind_script_exec(&exec));
+    }
+
     fn command(script: String, args: &[&str], credentials: bool) -> ExecBinaryRequest {
         let mut cmd = vec!["/bin/sh".into(), "-c".into(), script, "sh".into()];
         cmd.extend(args.iter().map(|arg| arg.to_string()));

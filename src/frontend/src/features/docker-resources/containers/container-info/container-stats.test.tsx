@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { ContainerStateStatus, type ContainerRuntimeView, type ContainerStatView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
-import { ContainerStats, DeploymentStats } from './container-stats';
+import { ContainerStats, ContainerStatsCharts, DeploymentStats } from './container-stats';
 
 vi.mock('@/lib/hooks', () => ({ useRead: vi.fn() }));
 vi.mock('./stats/memory-usage', () => ({
@@ -49,4 +49,29 @@ it('keeps individual container live history scoped to its instance', () => {
   expect(readings().map((s) => s.cpuUsage)).toEqual([5, 20]);
   rerender(<ContainerStats resource={container('new', stat(now - 10, 30))} />);
   expect(readings().map((s) => s.cpuUsage)).toEqual([5]);
+});
+
+it('renders five-minute live averages beside saved 48-hour history', () => {
+  const now = 180000;
+  const baseStats = [stat(now - 600, 1)];
+  const liveStats = Array.from({ length: 30 }, (_, index) => stat(now - 300 + index * 10, index === 0 ? 28 : 1));
+  render(
+    <ContainerStatsCharts
+      resource={container('current', liveStats.at(-1)!)}
+      liveStats={liveStats}
+      query={{
+        baseStats,
+        isLoading: false,
+        range: {
+          selection: { kind: 'relative', minutes: 2880 },
+          setSelection: vi.fn(),
+          bounds: { from: now - 172800, to: now },
+          query: { hours: 48, minutes: undefined, from: undefined, to: undefined },
+          live: true,
+          hours: 48,
+        },
+      }}
+    />,
+  );
+  expect(readings().map((s) => s.cpuUsage)).toEqual([1, 1.9]);
 });

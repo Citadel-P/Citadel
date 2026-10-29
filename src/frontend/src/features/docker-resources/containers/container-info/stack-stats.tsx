@@ -1,3 +1,4 @@
+import { appendLiveStatBucket, averageStatBuckets } from '@/lib/stats-buckets';
 import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
 import { StatsChartRange, useStatsChartBounds } from '@/components/custom/stats-chart-range';
 import { useStatsRange } from '@/hooks/useStatsRange';
@@ -21,12 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useRead } from '@/lib/hooks';
-import {
-  appendBoundedLiveStat,
-  getLiveStatsPointLimit,
-  mergeStatsByCreated,
-  STREAMED_STATS_QUERY_OPTIONS,
-} from '@/lib/live-stats';
+import { mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
 import { normalizeDockerId } from '@/lib/utils';
 import dayjs from 'dayjs';
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -198,6 +194,23 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
     [containers, data?.data?.services, liveStats, range.live, bucketSeconds],
   );
 
+  const currentSeries = useMemo(
+    () =>
+      range.live
+        ? buildServiceSeries(
+            (data?.data?.services ?? []).map((service) => ({ ...service, stats: [] })),
+            containers,
+            Object.fromEntries(
+              containers.flatMap((container) =>
+                container.containerStat ? [[normalizeDockerId(container.id), [container.containerStat]]] : [],
+              ),
+            ),
+            bucketSeconds,
+          )
+        : undefined,
+    [containers, data?.data?.services, range.live, bucketSeconds],
+  );
+
   // Replacement/scale events change membership, not the workload's history.
   const membership = containers
     .map((container) => container.id)
@@ -233,9 +246,9 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
       });
     });
 
-    appendLiveStats(setLiveStats, activeIds, updates, getLiveStatsPointLimit(longestWindow), longestWindow * 60 * 60);
+    appendLiveStats(setLiveStats, activeIds, updates, bucketSeconds, longestWindow * 60 * 60);
     lastStatRef.current = Object.fromEntries(Object.entries(lastStatRef.current).filter(([id]) => activeIds.has(id)));
-  }, [containers, longestWindow]);
+  }, [containers, longestWindow, bucketSeconds]);
 
   const updateMetricView = useCallback((kind: MetricKind, update: Partial<MetricViewState>) => {
     setMetricViews((current) => ({
@@ -253,6 +266,7 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
             <StackMetricCard
               key={metric.kind}
               series={series}
+              currentSeries={currentSeries}
               isLoading={isLoading}
               metric={metric}
               selectedContainer={view.selectedContainer}
@@ -267,12 +281,14 @@ const StackStatsContent = ({ stackId, containers }: StackStatsProps) => {
 
 const StackMetricCard = ({
   series,
+  currentSeries,
   isLoading,
   metric,
   selectedContainer,
   onSelectedContainerChange,
 }: {
   series: ContainerSeries[];
+  currentSeries?: ContainerSeries[];
   isLoading: boolean;
   metric: MetricConfig;
   selectedContainer: ContainerSelection;
@@ -291,7 +307,9 @@ const StackMetricCard = ({
     [effectiveContainer, metric, series, bounds.from, bounds.to],
   );
   const chartConfig = useMemo(() => buildChartConfig(metric), [metric]);
-  const latest = chartData.at(-1);
+  const latest = currentSeries
+    ? buildMetricChartData(currentSeries, metric, effectiveContainer, { start: bounds.from, end: bounds.to }).at(-1)
+    : chartData.at(-1);
 
   return isLoading ? (
     <Skeleton className="h-72 w-full rounded-xl" />
@@ -480,7 +498,7 @@ export const buildServiceSeries = (
         (stat) =>
           // Keep saved historical totals authoritative. A partial live observation
           // must not replace the complete total while another replica is reporting.
-          stat.created >= latestHistoryBucket && reportingReplicas.get(stat.created) === group.length,
+          stat.created > latestHistoryBucket && reportingReplicas.get(stat.created) === group.length,
       )
       .map((stat) => ({
         ...stat,
@@ -552,7 +570,7 @@ const buildAggregatedMetricChartData = (
   const latestContainerPointByBucket = new Map<string, ChartDatum & { sampleCreated: number }>();
 
   containers.forEach((container) => {
-    container.stats.forEach((stat) => {
+    averageStatBuckets(container.stats, bucketSeconds).forEach((stat) => {
       const created = Number(stat.created ?? 0);
       if (!created || created < range.start || created > range.end) return;
 
@@ -610,14 +628,14 @@ const appendLiveStats = (
   setLiveStats: Dispatch<SetStateAction<Record<string, ContainerStatView[]>>>,
   activeIds: Set<string>,
   updates: { id: string; stat: ContainerStatView }[],
-  maxPoints: number,
+  bucketSeconds: number,
   maxAgeSeconds: number,
 ) => {
   setLiveStats((current) => {
     const next = Object.fromEntries(Object.entries(current).filter(([id]) => activeIds.has(id)));
 
     updates.forEach(({ id, stat }) => {
-      next[id] = appendBoundedLiveStat(next[id] ?? [], stat, maxPoints, maxAgeSeconds);
+      next[id] = appendLiveStatBucket(next[id] ?? [], stat, bucketSeconds, maxAgeSeconds);
     });
 
     const removedInactiveContainer = Object.keys(next).length !== Object.keys(current).length;

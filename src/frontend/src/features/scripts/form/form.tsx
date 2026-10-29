@@ -359,7 +359,7 @@ export function ScriptForm({
                             value={option.value}
                             textValue={option.label}
                             disabled={option.value === 'Automatic' && !automatedOperationsEnabled}>
-                            <div className="flex flex-col">
+                            <div className="flex w-full min-w-0 flex-col">
                               <LicensedFeatureLabel
                                 className="font-medium"
                                 requiredLicense={
@@ -547,16 +547,7 @@ export function ScriptForm({
         original={original}
         update={update}
         setUpdate={setUpdate}
-        onSave={(value) =>
-          handleSave({
-            ...value,
-            // Form edits merge nested objects; discard fields from the previous placement type.
-            executor:
-              value.executor?.kind === 'Agent'
-                ? { kind: 'Agent', agentId: value.executor.agentId }
-                : { kind: value.executor?.kind ?? 'Core' },
-          })
-        }
+        onSave={handleSave}
         pending={isPending}
         disabled={disabled}
         saveDisabled={!!duplicateFrom && (duplicateLoading || !duplicate)}

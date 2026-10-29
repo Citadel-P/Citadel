@@ -5,12 +5,11 @@ import {
   BackupRepositoryView,
   S3BucketLookup,
   BackupExecutionLocation,
-  LookupResourceType,
   PlatformView,
   ResourceControlState,
   ResourceType,
 } from '@/api/generated/api.types';
-import { IntegrationAddCard, IntegrationCard, ResourceSelectorField } from '@/components/custom/common';
+import { IntegrationAddCard, IntegrationCard } from '@/components/custom/common';
 import { DropdownActionButton, RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -53,6 +52,7 @@ import {
   createFileSystemSpec,
   createS3Spec,
   fileSystemLocationOptions,
+  FileSystemPlatformSelector,
   getRepositoryOperationContext,
   RepositoryTypeSelector,
   SecretSelector,
@@ -538,16 +538,13 @@ function RepositoryDialog({
                   {fileSystemLocation === BackupExecutionLocation.Platform && (
                     <div className="space-y-2">
                       <Label>Platform</Label>
-                      <ResourceSelectorField
-                        targetType={LookupResourceType.Platform}
+                      <FileSystemPlatformSelector
                         selected={fileSystemSpec.platformId ?? undefined}
                         disabled={specDisabled}
                         onSelect={(platform: PlatformView | undefined) => setSpec({ platformId: platform?.id ?? null })}
-                        placeholder="Select Platform"
                       />
                       <p className="text-xs text-muted-foreground">
-                        The backup repository is stored on this platform host. Use this for regular or edge agent
-                        filesystem backups.
+                        Snapshots stay on this Docker host. Swarm backups require an S3-compatible repository.
                       </p>
                     </div>
                   )}
@@ -558,13 +555,17 @@ function RepositoryDialog({
                       className="max-w-full"
                       value={fileSystemSpec.path ?? ''}
                       disabled={specDisabled}
-                      placeholder={fileSystemLocation === BackupExecutionLocation.Core ? 'daily/core' : '/srv/backups'}
+                      placeholder={
+                        fileSystemLocation === BackupExecutionLocation.Core
+                          ? 'daily/core'
+                          : '/srv/backups or backup-volume'
+                      }
                       onChange={(path) => setSpec({ path })}
                     />
                     <p className="text-xs text-muted-foreground">
                       {fileSystemLocation === BackupExecutionLocation.Core
                         ? 'Relative paths are created under the configured Core backup repository root.'
-                        : 'Use a host path that exists on the selected platform or can be created by the backup runner.'}
+                        : 'Existing absolute directory or Docker volume name on the selected host. Agent paths are not paths inside Core.'}
                     </p>
                   </div>
                 </div>

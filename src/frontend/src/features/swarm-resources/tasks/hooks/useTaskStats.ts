@@ -1,9 +1,10 @@
+import { appendLiveStatBucket } from '@/lib/stats-buckets';
 import { ContainerStatView } from '@/api/generated/api.types';
 import { useStatsRange } from '@/hooks/useStatsRange';
 import { StatsQueryState } from '@/features/docker-resources/containers/container-info/container-stats';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { appendBoundedLiveStat, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
+import { STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -33,7 +34,12 @@ export const useTaskStatsWindow = (platformId: string, taskId: string): SwarmTas
   };
 };
 
-export const useTaskStatsStream = (platformId: string, containerProjectionId?: string) => {
+export const useTaskStatsStream = (
+  platformId: string,
+  containerProjectionId?: string,
+  seconds = 10,
+  windowSeconds = 3600,
+) => {
   const [stream, setStream] = useState<{ containerProjectionId?: string; stats: ContainerStatView[] }>({ stats: [] });
 
   const handleStats = useCallback(
@@ -48,13 +54,15 @@ export const useTaskStatsStream = (platformId: string, containerProjectionId?: s
       };
       setStream((previous) => ({
         containerProjectionId,
-        stats: appendBoundedLiveStat(
+        stats: appendLiveStatBucket(
           previous.containerProjectionId === containerProjectionId ? previous.stats : EMPTY_STATS,
           timestamped,
+          seconds,
+          windowSeconds,
         ),
       }));
     },
-    [containerProjectionId],
+    [containerProjectionId, seconds, windowSeconds],
   );
   const setupEventListeners = useCallback(
     (connection: RealtimeConnection) => connection.on('ContainersStatsUpdated', handleStats),

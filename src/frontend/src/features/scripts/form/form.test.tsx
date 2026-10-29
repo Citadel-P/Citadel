@@ -99,6 +99,35 @@ describe('ScriptForm licensing', () => {
     expect(screen.getByRole('option', { name: /Automatic/ })).toHaveTextContent('Team');
   });
 
+  it.each(['Core', 'Automatic'] as const)('clears changes after switching from %s to Agent and back', async (kind) => {
+    mocks.paid = true;
+    const { user } = renderCitadel(<ScriptForm mode="edit" resource={{ ...script, executor: { kind } }} />);
+
+    await user.click(screen.getByRole('combobox', { name: 'Run on' }));
+    await user.click(screen.getByRole('option', { name: /Specific agent/ }));
+    expect(screen.getByText('Select agent')).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Preview Changes' })[0]).toBeEnabled();
+
+    await user.click(screen.getByRole('combobox', { name: 'Run on' }));
+    await user.click(screen.getByRole('option', { name: new RegExp(kind) }));
+
+    expect(screen.queryByText('Select agent')).not.toBeInTheDocument();
+    for (const button of screen.getAllByRole('button', { name: /^(Save|Preview Changes)$/ })) {
+      expect(button).toBeDisabled();
+    }
+  });
+
+  it('drops the saved agent ID when changing to Core', async () => {
+    const { user } = renderCitadel(
+      <ScriptForm mode="edit" resource={{ ...script, executor: { kind: 'Agent', agentId: script.id } }} />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Run on' }));
+    await user.click(screen.getByRole('option', { name: /Core/ }));
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ executor: { kind: 'Core' } }));
+  });
+
   it('keeps saved Automatic visible after downgrade and allows switching to Core', async () => {
     const { user } = renderCitadel(
       <ScriptForm mode="edit" resource={{ ...script, executor: { kind: 'Automatic' } }} />,

@@ -12,6 +12,10 @@ import { BuildRunsTab } from './runs';
 import { BuildsTable } from '../table';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 
+vi.mock('@/components/custom/log-viewer', () => ({
+  LogViewer: ({ logs }: { logs: unknown }) => <pre>{JSON.stringify(logs)}</pre>,
+}));
+
 const projectId = '00000000-0000-0000-0000-000000000201';
 const runId = '00000000-0000-0000-0000-000000000202';
 
@@ -132,4 +136,71 @@ it('renders the build list when a queued run has no platform snapshot', async ()
   } satisfies AuthorizedProject;
   renderCitadel(<BuildsTable items={[project]} actions={{}} isLoading={false} />);
   expect(await screen.findByText('platform-fallback')).toBeVisible();
+});
+
+it('streams build logs without fetching them on status changes and catches up after reconnect', async () => {
+  const run = {
+    id: runId,
+    buildProjectId: projectId,
+    projectNameSnapshot: 'Application',
+    status: 'Queued',
+    trigger: 'Manual',
+    queuedAt: '2026-10-04T12:00:00Z',
+    imageReferences: [],
+  };
+  let savedLogs: unknown[] = [];
+  const readLogs = vi.fn(() => HttpResponse.json({ logs: savedLogs }));
+  server.use(
+    http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('http://localhost/api/v1/buildRuns', () => HttpResponse.json({ runs: [run] })),
+    http.get(`http://localhost/api/v1/buildRuns/${runId}`, () => HttpResponse.json(run)),
+    http.get(`http://localhost/api/v1/buildRuns/${runId}/logs`, readLogs),
+  );
+  const fake = new FakeRealtimeConnection();
+  const { queryClient } = renderCitadel(<BuildRunsTab resource={{ id: projectId } as AuthorizedProject} />, {
+    route: `/builds/edit/${projectId}?runId=${runId}#runs`,
+    groups: {
+      connectionFactory: () => fake.asRealtimeConnection(),
+      startConnection: (connection) => connection.start(),
+    },
+  });
+  await screen.findByRole('dialog');
+  await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', `build-run:${runId}`));
+  await waitFor(() => expect(readLogs).toHaveBeenCalled());
+  await waitFor(() => expect(queryClient.isFetching({ queryKey: ['getBuildRunLogs'] })).toBe(0));
+  const readsBefore = readLogs.mock.calls.length;
+  await act(async () => {
+    fake.emit('BuildRunInfoUpdated', { ...run, status: 'Running' }, 'update');
+    fake.emit('BuildRunLogsAppended', runId, [
+      {
+        id: 'log-1',
+        buildRunId: runId,
+        createdAt: '2026-10-04T12:00:01Z',
+        stream: 'stdout',
+        message: 'Live build output',
+      },
+    ]);
+  });
+  expect(await screen.findByText(/Live build output/)).toBeVisible();
+  expect(readLogs).toHaveBeenCalledTimes(readsBefore);
+  savedLogs = [
+    {
+      id: 'log-2',
+      buildRunId: runId,
+      createdAt: '2026-10-04T12:00:02Z',
+      stream: 'stdout',
+      message: 'Missed while offline',
+    },
+  ];
+  act(() => {
+    fake.reconnecting();
+    fake.reconnected();
+  });
+  expect(await screen.findByText(/Missed while offline/)).toBeVisible();
+  expect(readLogs).toHaveBeenCalledTimes(readsBefore + 1);
+  await act(async () => fake.reconnecting());
+  await act(async () => fake.reconnected());
+  await waitFor(() => expect(readLogs).toHaveBeenCalledTimes(readsBefore + 2));
+  await waitFor(() => expect(queryClient.isFetching({ queryKey: ['getBuildRunLogs'] })).toBe(0));
+  expect(readLogs).toHaveBeenCalledTimes(readsBefore + 2);
 });

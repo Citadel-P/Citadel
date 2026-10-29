@@ -31,8 +31,8 @@ it('keeps service history after containers disappear and sums live replicas once
     history,
     [container('new'), container('replica')],
     {
-      new: [sample(111, 10), sample(119, 20)],
-      replica: [sample(115, 50)],
+      new: [sample(121, 10), sample(129, 20)],
+      replica: [sample(125, 50)],
     },
     10,
   );
@@ -40,7 +40,8 @@ it('keeps service history after containers disappear and sums live replicas once
   expect(series[0].name).toBe('web');
   expect(series[0].stats.map((s) => [s.created, s.cpuUsage])).toEqual([
     [100, 5],
-    [110, 70],
+    [110, 30],
+    [120, 65],
   ]);
   expect(buildServiceSeries(history, [], {}, 10)[0].stats).toEqual(history[0].stats);
   expect(buildServiceSeries([], [container('unmapped')], { unmapped: [sample(111, 999)] }, 10)).toEqual([]);
@@ -136,4 +137,15 @@ it('waits for an older history request before refreshing changed membership', ()
   >);
   rerender(<StackStats stackId="stack" containers={[container('replacement')]} />);
   expect(refetch).toHaveBeenCalledTimes(1);
+});
+
+it('keeps current stack usage separate from the chart averages', () => {
+  const now = Math.floor(Date.now() / 1000);
+  vi.mocked(useRead).mockReturnValue({
+    data: { data: { services: [{ serviceName: 'web', containerIds: ['a'], stats: [sample(now - 60, 1)] }] } },
+    isLoading: false,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useRead>);
+  render(<StackStats stackId="stack" containers={[{ ...container('a'), containerStat: sample(now, 42) }]} />);
+  expect(screen.getByText('42.00%')).toBeVisible();
 });

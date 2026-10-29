@@ -31,11 +31,20 @@ describe('ResourceHeaderTagsEditor', () => {
       }),
     );
 
-    const { user } = renderCitadel(
+    const { user, queryClient } = renderCitadel(
       <ResourceHeaderTagsEditor resourceType="SwarmService" resourceId={serviceId} tags={[tag]} />,
     );
 
+    const changed = ['getManagedSwarmService', { id: serviceId }];
+    const filteredList = ['listManagedSwarmServices', { query: { tags: ['production'] } }];
+    const otherService = ['getManagedSwarmService', { id: 'other-service' }];
+    const unrelated = ['getApplicationInfo', {}];
+    for (const key of [changed, filteredList, otherService, unrelated]) queryClient.setQueryData(key, { data: {} });
     await user.click(await screen.findByTitle('Remove production tag'));
     await waitFor(() => expect(submitted).toEqual({ tagIds: [] }));
+    await waitFor(() => expect(queryClient.getQueryState(changed)?.isInvalidated).toBe(true));
+    expect(queryClient.getQueryState(filteredList)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(otherService)?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(unrelated)?.isInvalidated).toBe(false);
   });
 });

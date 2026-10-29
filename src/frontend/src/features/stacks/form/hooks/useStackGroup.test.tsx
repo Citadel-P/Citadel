@@ -92,7 +92,7 @@ describe('useStackGroup recovery', () => {
   });
 });
 
-it('does not refetch drift for processing or deleted stacks, but still refreshes normal updates', async () => {
+it('refreshes drift only for relevant changes and recovers after reconnect', async () => {
   const stack = { id: 'stack-1', name: 'Demo stack', status: 'Healthy', controlState: 'Idle' };
   const drift = vi.fn(() => HttpResponse.json({ hasDrift: false, drifts: [] }));
   server.use(
@@ -119,6 +119,8 @@ it('does not refetch drift for processing or deleted stacks, but still refreshes
   await waitFor(() => expect(drift).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', 'stack:stack-1'));
 
+  await act(async () => fake.emit('StackInfoUpdated', { ...stack, description: 'Changed description' }, 'update'));
+  expect(drift).toHaveBeenCalledTimes(1);
   await act(async () => fake.emit('StackInfoUpdated', { ...stack, controlState: 'Processing' }, 'update'));
   expect(drift).toHaveBeenCalledTimes(1);
 
@@ -126,10 +128,29 @@ it('does not refetch drift for processing or deleted stacks, but still refreshes
   await waitFor(() => expect(drift).toHaveBeenCalledTimes(2));
   await screen.findByText('Demo stack: ready');
 
+  await act(async () =>
+    fake.emit(
+      'StackInfoUpdated',
+      {
+        ...stack,
+        latestActivityView: { id: 'drift-activity', eventType: 'StackDriftDetected' },
+      },
+      'update',
+    ),
+  );
+  await waitFor(() => expect(drift).toHaveBeenCalledTimes(3));
+  await screen.findByText('Demo stack: ready');
+  act(() => {
+    fake.reconnecting();
+    fake.reconnected();
+  });
+  await waitFor(() => expect(drift).toHaveBeenCalledTimes(4));
+  await screen.findByText('Demo stack: ready');
+
   const invalidate = vi.spyOn(view.queryClient, 'invalidateQueries');
   await act(async () => fake.emit('StackInfoUpdated', { id: 'stack-1' }, 'delete'));
   expect(invalidate).not.toHaveBeenCalled();
-  expect(drift).toHaveBeenCalledTimes(2);
+  expect(drift).toHaveBeenCalledTimes(4);
   expect(screen.getByText('Demo stack: ready')).toBeVisible();
 });
 
@@ -188,4 +209,27 @@ it('refreshes copy eligibility through the resource group and preserves it in pa
       data: { copyEligibility: eligibility },
     });
   }
+});
+
+it('applies a new release snapshot without a second stack read', async () => {
+  const read = vi.fn(() => HttpResponse.json(initial));
+  server.use(http.get('http://localhost/api/v1/stacks/:id', read));
+  const fake = new FakeRealtimeConnection();
+  const { queryClient } = renderCitadel(<Probe />, {
+    groups: {
+      connectionFactory: () => fake.asRealtimeConnection(),
+      startConnection: (connection) => connection.start(),
+    },
+  });
+  await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent(initial.status));
+  await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', `stack:${initial.id}`));
+  const next = {
+    ...initial,
+    currentStackReleaseId: 'new-release',
+    version: '2',
+    spec: { ...initial.spec, name: 'updated' },
+  };
+  act(() => fake.emit('StackInfoUpdated', next, 'update'));
+  expect(queryClient.getQueryData(['getStack', { stackId: initial.id }])).toMatchObject({ data: next });
+  expect(read).toHaveBeenCalledTimes(1);
 });
