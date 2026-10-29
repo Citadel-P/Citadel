@@ -1287,3 +1287,96 @@ async fn tracked_group_connections_still_reauthenticate_on_the_safety_interval()
         server.await.unwrap().unwrap();
     }
 }
+
+#[tokio::test]
+async fn application_info_changes_only_notify_administrator_users() {
+    use citadel_server::realtime_groups::{Group, GroupReadPort, GroupSnapshot};
+    struct Reader {
+        inner: FakeReader,
+        principal_type: AuthenticatedPrincipalType,
+        admin: bool,
+    }
+    impl RealtimeReadPort for Reader {
+        fn authenticate<'a>(
+            &'a self,
+            token: &'a str,
+        ) -> BoxFuture<'a, Result<ActorPrincipal, RealtimeReadError>> {
+            Box::pin(async move {
+                let mut principal = self.inner.authenticate(token).await?;
+                principal.principal_type = self.principal_type;
+                if !self.admin {
+                    principal.roles.clear();
+                }
+                Ok(principal)
+            })
+        }
+        fn authorize_platform<'a>(
+            &'a self,
+            principal: &'a ActorPrincipal,
+            id: Uuid,
+        ) -> BoxFuture<'a, Result<PlatformView, RealtimeReadError>> {
+            self.inner.authorize_platform(principal, id)
+        }
+        fn list_containers(
+            &self,
+            id: Uuid,
+        ) -> BoxFuture<'_, Result<Vec<ContainerView>, RealtimeReadError>> {
+            self.inner.list_containers(id)
+        }
+    }
+    impl GroupReadPort for Reader {
+        fn read<'a>(
+            &'a self,
+            _: &'a ActorPrincipal,
+            _: &'a Group,
+            _: Option<&'a citadel_server::realtime::PublishedRuntimeEvent>,
+        ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+            Box::pin(async { Ok(GroupSnapshot::default()) })
+        }
+    }
+    for (principal_type, admin, notified) in [
+        (AuthenticatedPrincipalType::User, true, true),
+        (AuthenticatedPrincipalType::User, false, false),
+        (AuthenticatedPrincipalType::ServiceAccount, true, false),
+    ] {
+        let reader = Arc::new(Reader {
+            inner: FakeReader {
+                platform: platform(Uuid::now_v7()),
+                allowed: Arc::new(AtomicBool::new(true)),
+            },
+            principal_type,
+            admin,
+        });
+        let shutdown = CancellationToken::new();
+        let service = RealtimeService::new(
+            &config(),
+            reader.clone(),
+            Arc::new(Metrics::default()),
+            shutdown.clone(),
+        )
+        .with_groups(reader);
+        let hub = service.hub();
+        let (address, server) = start_server(service, shutdown.clone()).await;
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+                .await
+                .unwrap();
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":TOKEN}).to_string().into())).await.unwrap();
+        assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+        hub.publish_resource_change("ApplicationInfo", Uuid::nil(), "resourceChanged");
+        // A following event acts as a barrier: no timing-based absence assertion.
+        hub.publish_resource_change("License", Uuid::nil(), "licenseStateChanged");
+        if notified {
+            let event = receive_json(&mut socket).await;
+            assert_eq!(event["target"], "ApplicationInfoChanged");
+            assert_eq!(event["arguments"], json!([]));
+        }
+        assert_eq!(
+            receive_json(&mut socket).await["target"],
+            "LicenseStateChanged"
+        );
+        socket.close(None).await.unwrap();
+        shutdown.cancel();
+        server.await.unwrap().unwrap();
+    }
+}

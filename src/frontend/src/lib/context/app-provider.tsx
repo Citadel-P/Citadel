@@ -57,9 +57,7 @@ const AppProviderContent: React.FC<{
 };
 
 export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  // Read Core's cached result regularly so a completed background check reaches open browsers.
-  // This does not trigger a GitHub release check.
-  const { data: applicationInfo } = useRead('getApplicationInfo', undefined, { refetchInterval: 60 * 1000 });
+  const { data: applicationInfo } = useRead('getApplicationInfo', undefined, { staleTime: Infinity });
 
   return (
     <RealtimeProvider realtimeTransport={applicationInfo?.data.realtimeTransport}>

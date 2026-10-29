@@ -100,8 +100,8 @@ Agents and Edge Agents do not make these requests.
 installed version, instance identifiers, configuration, credentials, or usage
 data. Version comparison happens inside Core. GitHub receives normal HTTPS
 connection information, including your server's outbound IP address. The browser
-only reads Core's cached result, refreshing it every minute while the page is
-active. Opening release notes or the guide visits the linked website.
+reads Core's cached result initially, then refreshes it when Core sends a realtime
+change notification or the realtime connection reconnects. Opening release notes or the guide visits the linked website.
 
 Checks require outbound HTTPS to `api.github.com`. A failed or rate-limited
 request does not interrupt Citadel; the last successful result is kept until the

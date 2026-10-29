@@ -325,7 +325,11 @@ impl ServerComponents {
                 git_repositories,
                 backup_coverage,
                 edge_service,
-                updates: citadel_server::release_updates::UpdateChecker::default(),
+                updates: citadel_server::release_updates::UpdateChecker::default()
+                    .with_change_handler(citadel_server::realtime::change_callback(
+                        realtime_hub.clone(),
+                        "ApplicationInfo",
+                    )),
                 docker,
                 pool,
                 cancellation,

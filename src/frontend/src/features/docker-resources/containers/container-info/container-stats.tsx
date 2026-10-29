@@ -1,9 +1,10 @@
 import { ContainerStateStatus, ContainerStatView, ContainerRuntimeView } from '@/api/generated/api.types';
 import { StatsChartRange } from '@/components/custom/stats-chart-range';
 import { useStatsRange, type StatsRangeState } from '@/hooks/useStatsRange';
-import { filterStatsRange } from '@/lib/stats-range';
+import { filterStatsRange, statsBucketSeconds } from '@/lib/stats-range';
 import { useRead } from '@/lib/hooks';
-import { appendBoundedLiveStat, mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
+import { STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
+import { appendLiveStatBucket, mergeStatsBuckets } from '@/lib/stats-buckets';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import MemoryUsage from './stats/memory-usage';
 import CpuUsage from './stats/cpu-usage';
@@ -24,7 +25,11 @@ export type StatsQueryState = {
 };
 
 export const ContainerStatsCharts = ({ resource, query, liveStats }: StatsPanelProps) => {
-  const combined = useCombinedStats(query.baseStats, query.range.live ? liveStats : []);
+  const combined = useCombinedStats(
+    query.baseStats,
+    query.range.live ? liveStats : [],
+    statsBucketSeconds(query.range.bounds),
+  );
   const stats = filterStatsRange(combined, query.range.bounds);
   const chartResource = query.range.live ? resource : { ...resource, state: 'Running', containerStat: stats.at(-1) };
   return (
@@ -46,7 +51,9 @@ export const ContainerStatsCharts = ({ resource, query, liveStats }: StatsPanelP
   );
 };
 
-const useLiveStats = (resource: ContainerRuntimeView | undefined, historyId = resource?.id) => {
+const useLiveStats = (resource: ContainerRuntimeView | undefined, range: StatsRangeState, historyId = resource?.id) => {
+  const seconds = statsBucketSeconds(range.bounds);
+  const windowSeconds = range.hours * 3600;
   const [liveStats, setLiveStats] = useState<Omit<ContainerStatView, 'containerId'>[]>([]);
   const lastStatRef = useRef<ContainerStatView | undefined>(resource?.containerStat);
   const resourceIdRef = useRef<string | undefined>(historyId);
@@ -68,13 +75,18 @@ const useLiveStats = (resource: ContainerRuntimeView | undefined, historyId = re
     if (isRunning && stat && stat !== lastStatRef.current) {
       lastStatRef.current = stat;
       setLiveStats((prev) =>
-        appendBoundedLiveStat(prev, {
-          ...stat,
-          created: Number(stat.created) > 0 ? stat.created : Math.floor(Date.now() / 1000),
-        }),
+        appendLiveStatBucket(
+          prev,
+          {
+            ...stat,
+            created: Number(stat.created) > 0 ? stat.created : Math.floor(Date.now() / 1000),
+          },
+          seconds,
+          windowSeconds,
+        ),
       );
     }
-  }, [resource?.containerStat, resource?.state]);
+  }, [resource?.containerStat, resource?.state, seconds, windowSeconds]);
 
   return liveStats;
 };
@@ -82,7 +94,8 @@ const useLiveStats = (resource: ContainerRuntimeView | undefined, historyId = re
 const useCombinedStats = (
   baseStats: Omit<ContainerStatView, 'containerId'>[],
   liveStats: Omit<ContainerStatView, 'containerId'>[],
-) => useMemo(() => mergeStatsByCreated(baseStats ?? [], liveStats), [baseStats, liveStats]);
+  seconds: number,
+) => useMemo(() => mergeStatsBuckets(baseStats ?? [], liveStats, seconds), [baseStats, liveStats, seconds]);
 
 const useContainerStatsWindow = (containerId: string | undefined): StatsQueryState => {
   const range = useStatsRange();
@@ -121,8 +134,8 @@ const useDeploymentStatsWindow = (deploymentId: string, containerId: string | un
 };
 
 export const ContainerStats = ({ resource }: { resource: ContainerRuntimeView | undefined }) => {
-  const liveStats = useLiveStats(resource);
   const query = useContainerStatsWindow(resource?.id);
+  const liveStats = useLiveStats(resource, query.range);
 
   return <ContainerStatsCharts resource={resource} query={query} liveStats={liveStats} />;
 };
@@ -134,8 +147,8 @@ export const DeploymentStats = ({
   resource: ContainerRuntimeView | undefined;
   deploymentId: string;
 }) => {
-  const liveStats = useLiveStats(resource, deploymentId);
   const query = useDeploymentStatsWindow(deploymentId, resource?.id);
+  const liveStats = useLiveStats(resource, query.range, deploymentId);
 
   return <ContainerStatsCharts resource={resource} query={query} liveStats={liveStats} />;
 };

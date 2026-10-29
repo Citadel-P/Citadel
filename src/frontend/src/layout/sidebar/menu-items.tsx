@@ -63,6 +63,12 @@ const MenuItems: IMenuItem[] = [
         label: 'Swarm Services',
         route: '/swarm-services',
       },
+    ],
+  },
+  {
+    group: 'Automation',
+    separator: false,
+    items: [
       {
         icon: renderIcon(CitadelIcons.Script),
         label: 'Scripts',

@@ -543,6 +543,33 @@ describe('RealtimeProvider', () => {
     expect(queryFn).toHaveBeenCalledTimes(2);
   });
 
+  it('refreshes application info on connection, release changes, and reconnect', async () => {
+    const fake = new FakeRealtimeConnection();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['getApplicationInfo', { id: 'resource-1' }], 'initial');
+    const queryFn = vi
+      .fn()
+      .mockResolvedValueOnce('connected snapshot')
+      .mockResolvedValueOnce('new release')
+      .mockResolvedValueOnce('updates disabled');
+    render(
+      <RealtimeTestRoot fake={fake} queryClient={queryClient}>
+        <LiveQuerySubscriber queryFn={queryFn} queryKey="getApplicationInfo" />
+      </RealtimeTestRoot>,
+    );
+    expect(await screen.findByText('connected snapshot')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    act(() => fake.emit('ApplicationInfoChanged'));
+    expect(await screen.findByText('new release')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(2);
+    act(() => {
+      fake.reconnecting();
+      fake.reconnected();
+    });
+    expect(await screen.findByText('updates disabled')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(3);
+  });
+
   it('does not refetch an inactive live-backed query after reconnecting', async () => {
     const fake = new FakeRealtimeConnection();
     const queryClient = new QueryClient({
@@ -634,7 +661,8 @@ describe('RealtimeProvider', () => {
     });
     act(() => socket.message({ protocolVersion: 1, kind: 'subscribed' }));
     await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getApplicationInfo'] });
+    invalidate.mockClear();
     act(() => socket.message({ protocolVersion: 1, kind: 'event', target: 'LicenseStateChanged', arguments: [] }));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['getLicenseEntitlements'] });
     invalidate.mockClear();

@@ -49,6 +49,10 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   const [liveLogState, setLiveLogState] = useState<{ runId?: string; entries: BuildLogEntry[] }>({ entries: [] });
   const lastFetchedRef = useRef<BuildRunView[]>([]);
   const consumedRunIdRef = useRef<string | undefined>(undefined);
+  const joinedLogRunId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!logRunId) joinedLogRunId.current = undefined;
+  }, [logRunId]);
   const selectedRunArgs = useMemo(() => ({ id: logRunId ?? '' }), [logRunId]);
   const selectedRunQuery = useRead('getBuildRun', selectedRunArgs, {
     enabled: Boolean(logRunId),
@@ -130,7 +134,6 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
 
       if (logRunId === run.id) {
         queryClient.setQueryData(['getBuildRun', { id: run.id }], { data: run });
-        queryClient.invalidateQueries({ queryKey: ['getBuildRunLogs'] });
         queryClient.invalidateQueries({ queryKey: ['getBuildRunRecovery', { id: run.id }] });
       }
     },
@@ -178,13 +181,13 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   );
 
   const handleRunGroupJoined = useCallback(() => {
-    if (!logRunId) return;
+    if (!logRunId || joinedLogRunId.current === logRunId) return;
+    joinedLogRunId.current = logRunId;
 
-    queryClient.invalidateQueries({ queryKey: ['getBuildRun', { id: logRunId }] });
-    queryClient.invalidateQueries({ queryKey: ['getBuildRunLogs', { id: logRunId }] });
+    // Fill the initial GET/subscription gap. The provider refreshes history on reconnect.
+    queryClient.invalidateQueries({ queryKey: ['getBuildRunLogs', { id: logRunId }], exact: true });
     queryClient.invalidateQueries({ queryKey: ['getBuildRunRecovery', { id: logRunId }] });
-    queryClient.invalidateQueries({ queryKey: ['listBuildRuns', readArgs] });
-  }, [logRunId, queryClient, readArgs]);
+  }, [logRunId, queryClient]);
 
   useRealtimeGroup({
     groupName: `build-runs:${resource.id}`,

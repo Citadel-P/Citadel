@@ -19,7 +19,7 @@ function UpdateNotice() {
   return <span>{applicationInfo ? (applicationInfo.availableUpdate?.version ?? 'No update') : 'Loading'}</span>;
 }
 
-it('picks up a background release check after the initial application-info read', async () => {
+it('loads application info once without periodic polling', async () => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   let completed = false;
   const read = vi.fn(() =>
@@ -44,8 +44,8 @@ it('picks up a background release check after the initial application-info read'
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    expect(await screen.findByText('0.1.1')).toBeVisible();
-    expect(read).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('No update')).toBeVisible();
+    expect(read).toHaveBeenCalledOnce();
   } finally {
     unmount();
     vi.useRealTimers();

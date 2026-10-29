@@ -720,6 +720,18 @@ impl ResticOperation<'_> {
                 }
             };
         }
+        for item in &plan.items {
+            self.validate_repository_target(&claim.repository, "Platform", Some(item.platform_id))
+                .await
+                .map_err(|error| (error, vec![], vec![]))?;
+            validate_repository_storage(
+                &claim.repository,
+                item.docker_node_id.as_deref(),
+                item.host_path.as_deref(),
+                &item.volume_name,
+            )
+            .map_err(|error| (error, vec![], vec![]))?;
+        }
         let mut logs = Vec::new();
         let mut results = Vec::with_capacity(plan.items.len());
         for item in &plan.items {
@@ -1046,10 +1058,15 @@ impl ResticOperation<'_> {
                 .await
                 .map_err(|error| (error, vec![]))?;
         }
+        let repository_mount = self
+            .agent_repository_mount(agent, item.platform_id, &claim.repository, cancellation)
+            .await
+            .map_err(|error| (error, vec![]))?;
         let container_id = self
             .create_agent_helper(
                 agent,
                 item.platform_id,
+                repository_mount,
                 Some((
                     item.host_path.as_deref().unwrap_or(&item.volume_name),
                     true,
@@ -1188,8 +1205,18 @@ impl ResticOperation<'_> {
         // Repository checks and retention need no source-volume mount, but must
         // run on the selected Agent, not accidentally on Core's Docker socket.
         let environment = self.agent_repository_environment(repository).await?;
+        let repository_mount = self
+            .agent_repository_mount(agent, platform_id, repository, cancellation)
+            .await?;
         let container_id = self
-            .create_agent_helper(agent, platform_id, None, timeout, cancellation)
+            .create_agent_helper(
+                agent,
+                platform_id,
+                repository_mount,
+                None,
+                timeout,
+                cancellation,
+            )
             .await?;
         let result = async {
             agent
@@ -1372,6 +1399,18 @@ impl ResticOperation<'_> {
         claim: &RestoreClaim,
         cancellation: &CancellationToken,
     ) -> Result<Vec<BackupLog>, String> {
+        self.validate_repository_target(
+            &claim.repository,
+            "Platform",
+            Some(claim.run.target_platform_id),
+        )
+        .await?;
+        validate_repository_storage(
+            &claim.repository,
+            claim.run.target_docker_node_id.as_deref(),
+            claim.run.target_host_path.as_deref(),
+            &claim.run.target_volume_name,
+        )?;
         let target = self
             .execution_target(
                 claim.run.target_platform_id,
@@ -1725,6 +1764,7 @@ impl ResticOperation<'_> {
             .create_agent_helper(
                 agent,
                 platform,
+                None,
                 Some(("/", true, true, "/source")),
                 Duration::from_secs(30),
                 cancellation,
@@ -1878,11 +1918,20 @@ impl ResticOperation<'_> {
                     cancellation,
                 )
                 .await?;
+                let repository_mount = self
+                    .agent_repository_mount(
+                        &agent,
+                        claim.run.target_platform_id,
+                        &claim.repository,
+                        cancellation,
+                    )
+                    .await?;
                 let timeout = self.executor.restore_timeout();
                 let id = self
                     .create_agent_helper(
                         &agent,
                         claim.run.target_platform_id,
+                        repository_mount,
                         Some((path, false, true, "/target")),
                         timeout,
                         cancellation,
@@ -1944,11 +1993,19 @@ impl ResticOperation<'_> {
         agent: &AgentExecutionClient,
         platform: Uuid,
         snapshot: &str,
+        repository_mount: Option<Mount>,
         environment: &std::collections::HashMap<String, String>,
         cancellation: &CancellationToken,
     ) -> Result<(String, String), String> {
         let container_id = self
-            .create_agent_helper(agent, platform, None, Duration::from_secs(60), cancellation)
+            .create_agent_helper(
+                agent,
+                platform,
+                repository_mount,
+                None,
+                Duration::from_secs(60),
+                cancellation,
+            )
             .await?;
         let result = async {
             agent
@@ -2003,12 +2060,21 @@ impl ResticOperation<'_> {
             .and_then(|item| item.restic_snapshot_id.as_deref())
             .or(claim.source.restic_snapshot_id.as_deref())
             .ok_or_else(|| "Backup Run has no Restic snapshot ID.".to_owned())?;
+        let repository_mount = self
+            .agent_repository_mount(
+                agent,
+                claim.run.target_platform_id,
+                &claim.repository,
+                cancellation,
+            )
+            .await?;
         let environment = self.agent_repository_environment(&claim.repository).await?;
         let (snapshot, root) = self
             .agent_snapshot_root(
                 agent,
                 claim.run.target_platform_id,
                 snapshot,
+                repository_mount.clone(),
                 &environment,
                 cancellation,
             )
@@ -2034,6 +2100,7 @@ impl ResticOperation<'_> {
             .create_agent_helper(
                 agent,
                 claim.run.target_platform_id,
+                repository_mount,
                 Some((&claim.run.target_volume_name, false, false, &mount_target)),
                 timeout,
                 cancellation,
@@ -2106,10 +2173,37 @@ impl ResticOperation<'_> {
         result
     }
 
+    async fn agent_repository_mount(
+        &self,
+        agent: &AgentExecutionClient,
+        platform: Uuid,
+        repository: &BackupRepository,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<Mount>, String> {
+        let mount = filesystem_agent_mount(&repository.spec, platform)?;
+        if let Some(mount) = &mount {
+            let path = mount.source.as_deref().expect("repository mount source");
+            if mount.r#type.as_deref() == Some("bind") {
+                self.validate_agent_bind_path(agent, platform, path, cancellation)
+                    .await?;
+            } else if !agent
+                .volume_exists(path, cancellation)
+                .await
+                .map_err(|error| error.to_string())?
+            {
+                return Err(format!(
+                    "Repository volume '{path}' does not exist on the configured Agent. Create it before initializing the repository."
+                ));
+            }
+        }
+        Ok(mount)
+    }
+
     async fn create_agent_helper(
         &self,
         agent: &AgentExecutionClient,
         platform_id: Uuid,
+        repository_mount: Option<Mount>,
         volume: Option<(&str, bool, bool, &str)>,
         timeout: Duration,
         cancellation: &CancellationToken,
@@ -2185,7 +2279,7 @@ impl ResticOperation<'_> {
                             propagation: Some("rprivate".into()), non_recursive: Some(name != "/"), create_mountpoint: Some(false), ..Default::default()
                         }),
                         volume_options: None,
-                    }).collect(),
+                    }).chain(repository_mount).collect(),
                     cap_add: capabilities,
                     cap_drop: vec!["ALL".to_owned()],
                     security_opt: vec!["no-new-privileges".to_owned()],
@@ -2207,27 +2301,28 @@ impl ResticOperation<'_> {
         &self,
         repository: &BackupRepository,
     ) -> Result<std::collections::HashMap<String, String>, String> {
-        let BackupRepositorySpec::S3Compatible {
-            endpoint,
-            bucket,
-            prefix,
-            access_key_secret_id,
-            secret_key_secret_id,
-            session_token_secret_id,
-            ..
-        } = &repository.spec
-        else {
-            return Err(
-                "Agent backup execution currently requires an S3-compatible Backup Repository."
-                    .to_owned(),
-            );
-        };
-        let endpoint = endpoint.trim().trim_end_matches('/');
-        let prefix = prefix.as_deref().unwrap_or("").trim_matches('/');
-        let location = if prefix.is_empty() {
-            format!("s3:{endpoint}/{bucket}")
-        } else {
-            format!("s3:{endpoint}/{bucket}/{prefix}")
+        let location = match &repository.spec {
+            BackupRepositorySpec::FileSystem {
+                location: BackupExecutionLocation::Platform,
+                ..
+            } => "/repository".to_owned(),
+            BackupRepositorySpec::FileSystem { .. } => {
+                return Err("Core filesystem repositories cannot be accessed by an Agent.".into());
+            }
+            BackupRepositorySpec::S3Compatible {
+                endpoint,
+                bucket,
+                prefix,
+                ..
+            } => {
+                let endpoint = endpoint.trim().trim_end_matches('/');
+                let prefix = prefix.as_deref().unwrap_or("").trim_matches('/');
+                if prefix.is_empty() {
+                    format!("s3:{endpoint}/{bucket}")
+                } else {
+                    format!("s3:{endpoint}/{bucket}/{prefix}")
+                }
+            }
         };
         let mut environment = std::collections::HashMap::from([
             (
@@ -2241,6 +2336,15 @@ impl ResticOperation<'_> {
             ),
             ("RESTIC_REPOSITORY".to_owned(), location),
         ]);
+        let BackupRepositorySpec::S3Compatible {
+            access_key_secret_id,
+            secret_key_secret_id,
+            session_token_secret_id,
+            ..
+        } = &repository.spec
+        else {
+            return Ok(environment);
+        };
         for (id, key) in [
             (*access_key_secret_id, "AWS_ACCESS_KEY_ID"),
             (*secret_key_secret_id, "AWS_SECRET_ACCESS_KEY"),
@@ -2433,7 +2537,13 @@ impl ResticOperation<'_> {
             "Platform" => {
                 let platform_id = platform_id
                     .ok_or_else(|| "A Platform is required for this operation.".to_owned())?;
-                if repository.repository_type != "S3Compatible" {
+                if matches!(
+                    &repository.spec,
+                    BackupRepositorySpec::FileSystem {
+                        location: BackupExecutionLocation::Core,
+                        ..
+                    }
+                ) {
                     self.executor.targets.require_local(platform_id).await?;
                 }
             }
@@ -2447,10 +2557,6 @@ impl ResticOperation<'_> {
         {
             let repository_platform =
                 repository_platform.ok_or_else(|| "Repository Platform is required.".to_owned())?;
-            self.executor
-                .targets
-                .require_local(repository_platform)
-                .await?;
             if location != "Platform" || platform_id != Some(repository_platform) {
                 return Err(
                     "Filesystem Backup Repository operations must run on their configured Platform."
@@ -2949,6 +3055,62 @@ fn policy_tag(id: Uuid) -> String {
     format!("citadel-policy-{id}")
 }
 
+fn filesystem_agent_mount(
+    spec: &BackupRepositorySpec,
+    platform: Uuid,
+) -> Result<Option<Mount>, String> {
+    let BackupRepositorySpec::FileSystem {
+        location,
+        platform_id,
+        path,
+    } = spec
+    else {
+        return Ok(None);
+    };
+    if *location != BackupExecutionLocation::Platform || *platform_id != Some(platform) {
+        return Err(
+            "Filesystem Backup Repository operations must run on their configured Platform.".into(),
+        );
+    }
+    citadel_backups::spec::validate_repository_mount_path(path)
+        .map_err(|error| error.to_string())?;
+    let bind = path.starts_with('/');
+    Ok(Some(Mount {
+        target: Some("/repository".into()),
+        source: Some(path.clone()),
+        r#type: Some(if bind { "bind" } else { "volume" }.into()),
+        read_only: Some(false),
+        bind_options: bind.then_some(citadel_contracts::citadel::shared_models::v1::BindOptions {
+            propagation: Some("rprivate".into()),
+            non_recursive: Some(true),
+            create_mountpoint: Some(false),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }))
+}
+
+fn validate_repository_storage(
+    repository: &BackupRepository,
+    node: Option<&str>,
+    host_path: Option<&str>,
+    volume: &str,
+) -> Result<(), String> {
+    if let BackupRepositorySpec::FileSystem { path, .. } = &repository.spec {
+        if node.is_some() {
+            return Err("Docker Swarm backups require an S3-compatible Backup Repository.".into());
+        }
+        if let Some(host_path) = host_path {
+            validate_bind_repository(repository, host_path)?;
+        } else if path == volume {
+            return Err(
+                "Backup source or restore target must not be the repository volume.".into(),
+            );
+        }
+    }
+    Ok(())
+}
+
 fn validate_bind_repository(repository: &BackupRepository, path: &str) -> Result<(), String> {
     if let BackupRepositorySpec::FileSystem {
         path: repository_path,
@@ -3142,6 +3304,35 @@ mod tests {
         ) -> BoxFuture<'_, Result<zeroize::Zeroizing<String>, BackupError>> {
             panic!("Rejected paths must not resolve secrets or run Restic")
         }
+    }
+
+    #[test]
+    fn agent_filesystem_mount_is_bound_to_repository_host() {
+        let platform = Uuid::now_v7();
+        for path in ["backup-volume", "/srv/backups"] {
+            let spec = BackupRepositorySpec::FileSystem {
+                location: BackupExecutionLocation::Platform,
+                platform_id: Some(platform),
+                path: path.into(),
+            };
+            let mount = filesystem_agent_mount(&spec, platform).unwrap().unwrap();
+            assert_eq!(mount.source.as_deref(), Some(path));
+            assert_eq!(mount.target.as_deref(), Some("/repository"));
+            assert_eq!(mount.read_only, Some(false));
+            if path.starts_with('/') {
+                assert_eq!(mount.r#type.as_deref(), Some("bind"));
+                assert_eq!(mount.bind_options.unwrap().create_mountpoint, Some(false));
+            } else {
+                assert_eq!(mount.r#type.as_deref(), Some("volume"));
+            }
+            assert!(filesystem_agent_mount(&spec, Uuid::now_v7()).is_err());
+        }
+        let core = BackupRepositorySpec::FileSystem {
+            location: BackupExecutionLocation::Core,
+            platform_id: None,
+            path: "/srv/backups".into(),
+        };
+        assert!(filesystem_agent_mount(&core, platform).is_err());
     }
 
     #[tokio::test]

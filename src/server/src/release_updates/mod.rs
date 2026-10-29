@@ -21,11 +21,29 @@ pub struct AvailableUpdate {
 }
 
 #[derive(Clone, Default)]
-pub struct UpdateChecker(Arc<RwLock<Option<AvailableUpdate>>>);
+pub struct UpdateChecker {
+    available: Arc<RwLock<Option<AvailableUpdate>>>,
+    on_change: Option<Arc<dyn Fn() + Send + Sync>>,
+}
 
 impl UpdateChecker {
     pub async fn available(&self) -> Option<AvailableUpdate> {
-        self.0.read().await.clone()
+        self.available.read().await.clone()
+    }
+
+    pub fn with_change_handler(mut self, on_change: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.on_change = Some(on_change);
+        self
+    }
+
+    async fn set_available(&self, update: Option<AvailableUpdate>) {
+        let mut current = self.available.write().await;
+        if *current != update {
+            *current = update;
+            if let Some(on_change) = &self.on_change {
+                on_change();
+            }
+        }
     }
 
     /// Observe committed installation settings; no request runs before setup.
@@ -53,7 +71,7 @@ impl UpdateChecker {
     ) -> Result<(), std::convert::Infallible> {
         loop {
             if !*enabled.borrow_and_update() {
-                *self.0.write().await = None;
+                self.set_available(None).await;
                 tokio::select! {
                     biased;
                     () = cancellation.cancelled() => return Ok(()),
@@ -91,7 +109,7 @@ impl UpdateChecker {
         }
         .await;
         match result {
-            Ok(update) => *self.0.write().await = update,
+            Ok(update) => self.set_available(update).await,
             // Keep the last successful result; an unavailable endpoint does not
             // mean that the installation is up to date.
             Err(error) => tracing::debug!(%error, "Citadel update check unavailable"),

@@ -1,7 +1,7 @@
 import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
 import { StatsChartRange, useStatsChartBounds } from '@/components/custom/stats-chart-range';
 import { useStatsRange } from '@/hooks/useStatsRange';
-import { filterStatsRange, statsAxis } from '@/lib/stats-range';
+import { filterStatsRange, statsAxis, statsBucketSeconds } from '@/lib/stats-range';
 import {
   PlatformBackupSummary,
   PlatformConnectorType,
@@ -28,7 +28,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useRead } from '@/lib/hooks';
-import { appendBoundedLiveStat, mergeStatsByCreated, STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
+import { STREAMED_STATS_QUERY_OPTIONS } from '@/lib/live-stats';
+import { appendLiveStatBucket, mergeStatsBuckets } from '@/lib/stats-buckets';
 import { cn, toFixedNumber } from '@/lib/utils';
 import dayjs from 'dayjs';
 import {
@@ -72,14 +73,17 @@ type PlatformStatsDatum = {
 
 export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
   const range = useStatsRange();
-  const liveStats = useLiveStats(platform);
-  const normalizedLiveStats = useMemo(() => normalizePlatformStats(liveStats), [liveStats]);
+  const liveStats = useLiveStats(platform, statsBucketSeconds(range.bounds), range.hours * 3600);
   const readArgs = useMemo(() => ({ id: platform.id, query: range.query }), [platform.id, range.query]);
   const { data, isLoading, error } = useRead('getPlatformStats', readArgs, {
     ...STREAMED_STATS_QUERY_OPTIONS,
     enabled: Boolean(platform.id),
   });
-  const combined = useCombinedStats(data?.data?.stats ?? [], range.live ? normalizedLiveStats : []);
+  const combined = useCombinedStats(
+    data?.data?.stats ?? [],
+    range.live ? liveStats : [],
+    statsBucketSeconds(range.bounds),
+  );
   const stats = filterStatsRange(combined, range.bounds);
   const chartPlatform = range.live
     ? platform
@@ -663,12 +667,13 @@ const SystemMetric = ({
   </div>
 );
 
-const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
+const useLiveStats = (platform: PlatformView, seconds: number, windowSeconds: number): PlatformStatsDatum[] => {
   const latestStat = platform.status === PlatformStatus.Online ? platform.stats?.at(0) : undefined;
+  const normalized = latestStat ? normalizePlatformStats([latestStat])[0] : undefined;
   const [live, setLive] = useState(() => ({
     platformId: platform.id,
     latestStat,
-    stats: latestStat ? [latestStat] : [],
+    stats: normalized ? appendLiveStatBucket([], normalized, seconds, windowSeconds) : [],
   }));
 
   if (live.platformId !== platform.id || live.latestStat !== latestStat) {
@@ -676,7 +681,7 @@ const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
     const next = {
       platformId: platform.id,
       latestStat,
-      stats: latestStat ? appendBoundedLiveStat(previousStats, latestStat) : previousStats,
+      stats: normalized ? appendLiveStatBucket(previousStats, normalized, seconds, windowSeconds) : previousStats,
     };
     setLive(next);
     return next.stats;
@@ -685,9 +690,12 @@ const useLiveStats = (platform: PlatformView): PlatformStatView[] => {
   return live.stats;
 };
 
-const useCombinedStats = (baseStats: PlatformStatView[], liveStats: PlatformStatsDatum[]) => {
+const useCombinedStats = (baseStats: PlatformStatView[], liveStats: PlatformStatsDatum[], seconds: number) => {
   const normalizedBaseStats = useMemo(() => normalizePlatformStats(baseStats), [baseStats]);
-  return useMemo(() => mergeStatsByCreated(normalizedBaseStats, liveStats), [liveStats, normalizedBaseStats]);
+  return useMemo(
+    () => mergeStatsBuckets(normalizedBaseStats, liveStats, seconds),
+    [liveStats, normalizedBaseStats, seconds],
+  );
 };
 
 export const normalizePlatformStats = (stats?: PlatformStatView[] | null): PlatformStatsDatum[] =>

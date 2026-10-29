@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -88,6 +89,24 @@ export const controlRuntimeService = async (action: 'pause' | 'unpause' | 'kill'
     'compose', '-f', composeFile, action,
     ...(action === 'kill' ? ['--signal', 'SIGKILL'] : []), service,
   ], { cwd: e2eRoot, env: process.env });
+  if (action === 'unpause' && service === 'docker') {
+    // Docker can still report unhealthy from probes made while paused. Compose
+    // refuses to start dependent services until the health check has recovered.
+    const { stdout } = await execFileAsync(dockerExecutable, [
+      'compose', '-f', composeFile, 'ps', '-q', 'docker',
+    ], { cwd: e2eRoot, env: process.env });
+    const containerId = stdout.trim();
+    if (!containerId) throw new Error('Disposable Docker service was not found');
+    const deadline = Date.now() + 60_000;
+    while (true) {
+      const { stdout: health } = await execFileAsync(dockerExecutable, [
+        'inspect', '--format', '{{.State.Health.Status}}', containerId,
+      ], { cwd: e2eRoot, env: process.env });
+      if (health.trim() === 'healthy') break;
+      if (Date.now() >= deadline) throw new Error('Disposable Docker service did not recover after unpause');
+      await delay(500);
+    }
+  }
 };
 
 export const clearCopyFixtureHistory = async (stackId: string, policyId: string) => {

@@ -135,6 +135,9 @@ Executable background-task startup lives in `server/src/composition/background.r
 worker implementations remain in `server/src/workers/`. HTTP extraction and
 validation belong to `server/src/api/request_validation/`. Citadel release
 notifications live in `server/src/release_updates/`, separate from workload updates.
+Changes to the cached release result notify administrator browsers through
+`ApplicationInfoChanged`. Application info is fetched initially and refreshed on
+that event and realtime connection recovery, without periodic browser polling.
 Running workers receive feature persistence interfaces or typed notification sources,
 never SQLx pools, rows or listeners. PostgreSQL notification decoding and dedicated
 LISTEN connections live in the persistence adapters; reconnect events trigger resync
@@ -318,6 +321,11 @@ of the container projection; Swarm keeps its existing `swarmservicestats` histor
 Queries use the Deployment ID or Stack ID plus service and replica identity, never
 an unscoped container name. The same seven-day bounded retention applies to both.
 Raw container statistics remain tied to their individual container projection.
+Frontend live statistics accumulate sums and counts at the selected history
+resolution before rendering. Replica averages are summed after temporal
+aggregation. Historical buckets remain authoritative on overlap because history
+responses do not include the counts needed to combine partial averages. Current
+usage summaries read the latest observation separately from chart averages.
 
 ## Runtime routing and observations
 
@@ -379,6 +387,11 @@ reconnect reconciliation. Swarm HTTP and live overview payloads share the server
 projection of persisted quorum, platform control and manager/node-local freshness.
 Event-scoped aggregate reads are shared across recipients; capabilities and group
 authorization remain actor-specific.
+
+Task sheets rely on subscribed resource snapshots for Stack, backup policy, and
+run status changes. Build logs load history initially, merge streamed entries,
+and recover missed history on reconnect. Tag assignments invalidate the affected
+resource lists/details and tag usage counts rather than the entire query cache.
 
 Shared resource pages and UI components own layout, status badges, loading states
 and actions. Appearance uses CSS variables and shared density/radius tokens.

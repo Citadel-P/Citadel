@@ -1623,7 +1623,6 @@ function useSwarmNodeAgentProgress(params: SwarmNodeAgentParams) {
 
 function useApplyStackProgress(params: StackDeployParams) {
   const { id, recreate } = params;
-  const queryClient = useQueryClient();
 
   const request: ApplyStackInput = useMemo(() => ({ id, recreate }), [id, recreate]);
 
@@ -1636,13 +1635,6 @@ function useApplyStackProgress(params: StackDeployParams) {
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
     getMessageSeverity: getStackStreamMessageSeverity,
   });
-
-  useEffect(() => {
-    if (!state.isSuccess || state.error) return;
-
-    queryClient.invalidateQueries({ queryKey: ['listStacks'] });
-    queryClient.invalidateQueries({ queryKey: ['getStack', { stackId: id }] });
-  }, [id, queryClient, state.error, state.isSuccess]);
 
   return state;
 }
@@ -1666,7 +1658,6 @@ function getStackStreamMessageSeverity(item: StackStreamItem) {
 
 function useRollbackStackProgress(params: StackRollbackParams) {
   const { stackId, releaseId } = params;
-  const queryClient = useQueryClient();
 
   const request: RollbackStackInput = useMemo(() => ({ stackId, releaseId }), [stackId, releaseId]);
 
@@ -1678,13 +1669,6 @@ function useRollbackStackProgress(params: StackRollbackParams) {
     compactDockerComposeOutput: true,
     getError: (item) => (item.exitCode !== 0 ? item.message : undefined),
   });
-
-  useEffect(() => {
-    if (!state.isSuccess || state.error) return;
-
-    queryClient.invalidateQueries({ queryKey: ['listStacks'] });
-    queryClient.invalidateQueries({ queryKey: ['getStack', { stackId }] });
-  }, [queryClient, stackId, state.error, state.isSuccess]);
 
   return state;
 }
@@ -1719,10 +1703,6 @@ function useBackupRunProgress(params: BackupRunParams) {
   useEffect(() => {
     if (!state.isSuccess && !state.error) return;
 
-    queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
-    queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
-    queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
-    queryClient.invalidateQueries({ queryKey: ['listBackupRuns', { query: { policyId: id, limit: 50 } }] });
     queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
   }, [id, queryClient, state.error, state.isSuccess]);
 
@@ -1777,10 +1757,7 @@ function useBackupRestoreRunProgress(params: BackupRestoreRunParams) {
   useEffect(() => {
     if (!state.isSuccess && !state.error) return;
 
-    queryClient.invalidateQueries({ queryKey: ['listBackupRestoreRuns'] });
-    queryClient.invalidateQueries({ queryKey: ['listBackupRestoreRuns', { query: { backupRunId: id, limit: 50 } }] });
     queryClient.invalidateQueries({ queryKey: ['getBackupRun', { id }] });
-    queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
   }, [id, queryClient, state.error, state.isSuccess]);
 
   return state;

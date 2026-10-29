@@ -70,7 +70,7 @@ async fn stack_preview_and_execution_discover_owned_physical_mounts_without_save
         .unwrap();
     let platform = Uuid::now_v7();
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$3,'Local',1,0,1048576,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$3,'Local',1,0,1048576,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(platform).bind(format!("discovery-{platform}")).bind(format!("unix:///discovery-{platform}.sock")).execute(&pool).await.unwrap();
     let stack = PostgresStackRepository::new(pool.clone()).create(actor, true, &CreateStack {
         name: format!("discovery-{platform}"), platform_id: platform, description: None, stack_source: StackSource::WebEditor,

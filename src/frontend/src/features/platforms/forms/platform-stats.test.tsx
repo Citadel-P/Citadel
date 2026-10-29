@@ -85,6 +85,22 @@ describe('platform current statistics', () => {
     expect(samples[1]).toEqual({ created: 90 });
   });
 
+  it('averages live chart observations while keeping the current usage instantaneous', () => {
+    const { rerender } = render(
+      <PlatformStatsTab platform={{ ...platform, stats: [{ ...current, created: 110, cpuUsage: 28 }] }} />,
+    );
+    rerender(<PlatformStatsTab platform={{ ...platform, stats: [{ ...current, created: 115, cpuUsage: 2 }] }} />);
+    expect(screen.getByText('2.00%')).toBeVisible();
+    const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
+    expect(samples.at(-1).cpuUsage).toBe(15);
+  });
+
+  it('ignores current chart samples without a valid timestamp', () => {
+    render(<PlatformStatsTab platform={{ ...platform, stats: [{ ...current, created: 0 }] }} />);
+    const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
+    expect(samples.map((sample: { created: number }) => sample.created)).toEqual([60]);
+  });
+
   it('does not present history as a current reading when the current sample is unavailable or offline', () => {
     const { rerender } = render(<PlatformStatsTab platform={{ ...platform, stats: [] }} />);
     expect(screen.queryByText('0.51%')).not.toBeInTheDocument();

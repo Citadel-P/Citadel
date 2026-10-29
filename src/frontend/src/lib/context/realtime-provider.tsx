@@ -27,10 +27,11 @@ type CancellationRef = { current: boolean };
 // Details with full realtime snapshots refresh when their groups rejoin.
 // Refetching them here can request a resource just deleted by the user.
 const liveBackedQueryKeys = new Set([
-  'getBackupPolicy',
+  'getApplicationInfo',
   'getBackupRepository',
   'getBuildRun',
   'getBuildRunLogs',
+  'getBuildRunRecovery',
   'getContainerData',
   'getContainerNetworking',
   'listNetworkContainers',
@@ -41,6 +42,7 @@ const liveBackedQueryKeys = new Set([
   'getPlatformStats',
   'getPlatfom',
   'getStackStats',
+  'getStackDrift',
   'listActivities',
   'listAlertEvents',
   'listScripts',
@@ -140,6 +142,10 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       } else {
         setLiveConnectionState('connecting');
       }
+
+      conn.on('ApplicationInfoChanged', () => {
+        void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
+      });
 
       conn.on('LicenseStateChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['getLicenseEntitlements'] });
@@ -248,6 +254,9 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
           if (reconcileAfterConnect) {
             await reconcileLiveQueries();
+          } else {
+            // Cover changes between the initial HTTP read and the live subscription.
+            await queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
           }
 
           return conn;

@@ -236,7 +236,9 @@ async fn application_info_only_exposes_updates_to_administrators() {
     use citadel_identity::{ActorPrincipal, AuthenticatedPrincipalType};
     use tower::ServiceExt;
     let checker = UpdateChecker::default();
-    *checker.0.write().await = available_update("1.0.0", release("v1.1.0")).unwrap();
+    checker
+        .set_available(available_update("1.0.0", release("v1.1.0")).unwrap())
+        .await;
     for (principal_type, roles, expected) in [
         (
             AuthenticatedPrincipalType::User,
@@ -351,4 +353,27 @@ async fn settings_toggle_cancels_checks_clears_notices_and_resumes_without_resta
     task.await.unwrap().unwrap();
     server.abort();
     let _ = server.await;
+}
+
+#[tokio::test]
+async fn release_changes_notify_only_after_the_cached_value_changes() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let notifications = Arc::new(AtomicUsize::new(0));
+    let checker = UpdateChecker::default().with_change_handler(Arc::new({
+        let notifications = notifications.clone();
+        move || {
+            notifications.fetch_add(1, Ordering::SeqCst);
+        }
+    }));
+    let update = available_update("1.0.0", release("v1.1.0")).unwrap();
+    checker.set_available(None).await;
+    assert_eq!(notifications.load(Ordering::SeqCst), 0);
+    checker.set_available(update.clone()).await;
+    assert_eq!(checker.available().await, update);
+    assert_eq!(notifications.load(Ordering::SeqCst), 1);
+    checker.set_available(update).await;
+    assert_eq!(notifications.load(Ordering::SeqCst), 1);
+    checker.set_available(None).await;
+    assert!(checker.available().await.is_none());
+    assert_eq!(notifications.load(Ordering::SeqCst), 2);
 }

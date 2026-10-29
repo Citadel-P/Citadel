@@ -702,7 +702,11 @@ function isObject(item: any): boolean {
 function deepMerge<T>(target: any, source: any): T {
   if (!isObject(target) || !isObject(source)) return (source ?? target) as T;
 
-  if (source.$type && target.$type && source.$type !== target.$type) {
+  // A different union variant replaces the object, including its variant-specific fields.
+  if (
+    (source.$type && target.$type && source.$type !== target.$type) ||
+    (typeof source.kind === 'string' && typeof target.kind === 'string' && source.kind !== target.kind)
+  ) {
     return source as T;
   }
 

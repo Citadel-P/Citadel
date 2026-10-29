@@ -229,7 +229,7 @@ async fn verify_expired_helpers(
 async fn verify_local(pool: &sqlx::PgPool) {
     let platform = Uuid::now_v7();
     let name = format!("citadel-local-browser-{}", platform.simple());
-    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost.docker','Local',0,0,0,$2,0,'{\"$type\":\"DockerStandalone\"}','Online',0)")
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'http://localhost.docker','Local',0,0,0,$2,0,'{\"$type\":\"Docker\"}','Online',0)")
         .bind(platform).bind(&name).execute(pool).await.unwrap();
     let result = AssertUnwindSafe(async {
         docker(&["volume", "create", &name], None).await;
