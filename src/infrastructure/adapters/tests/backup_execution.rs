@@ -740,22 +740,41 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         4096,
         pool.clone(),
     );
+    let plan = BackupSourcePlan {
+        display_name: "fixture".into(),
+        items: vec![BackupSourceItem::new(
+            platform,
+            "volume-one".into(),
+            None,
+            None,
+        )],
+        warnings: vec![],
+        local_directory: None,
+    };
+    let invalid_target = executor
+        .backup(&guarded_claim, &plan, &CancellationToken::new())
+        .await;
+    assert_eq!(invalid_target.error_code.as_deref(), Some("ResticFailed"));
+    assert!(
+        invalid_target
+            .error_message
+            .as_deref()
+            .is_some_and(|message| message.contains("requires Agent execution")),
+        "unexpected rejection: {invalid_target:?}"
+    );
+    assert!(invalid_target.items.is_empty());
+
+    // Remote recovery requires storage reachable by the execution host. Core
+    // filesystem repositories are rejected before checking Agent availability.
+    let mut remote_claim = guarded_claim.clone();
+    remote_claim.repository.repository_type = "S3Compatible".into();
+    remote_claim.repository.spec = serde_json::from_value(json!({
+        "$type": "S3Compatible", "endpoint": "http://s3.test", "bucket": "backups",
+        "accessKeySecretId": secret, "secretKeySecretId": secret, "allowInsecureHttp": true
+    }))
+    .unwrap();
     let rejected = executor
-        .backup(
-            &guarded_claim,
-            &BackupSourcePlan {
-                display_name: "fixture".into(),
-                items: vec![BackupSourceItem::new(
-                    platform,
-                    "volume-one".into(),
-                    None,
-                    None,
-                )],
-                warnings: vec![],
-                local_directory: None,
-            },
-            &CancellationToken::new(),
-        )
+        .backup(&remote_claim, &plan, &CancellationToken::new())
         .await;
     assert_eq!(rejected.status, citadel_backups::BackupRunStatus::Failed);
     assert_eq!(
@@ -763,7 +782,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         Some("HostBusy"),
         "offline pre-execution work must defer"
     );
-    edge_failure_cleans_helper_on_the_exact_node(&pool, executor, &guarded_claim, platform).await;
+    edge_failure_cleans_helper_on_the_exact_node(&pool, executor, &remote_claim, platform).await;
     edge_restore_uses_the_saved_snapshot_root(&pool, &guarded_claim, platform).await;
 
     // The first scheduled run is already queued. Exercise real enqueue paths
