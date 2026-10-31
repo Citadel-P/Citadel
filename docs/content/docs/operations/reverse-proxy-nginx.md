@@ -3,12 +3,15 @@ title: "Nginx in Docker"
 description: "Serve Citadel and Edge Agent connections over HTTPS using Docker Compose and Nginx."
 ---
 
-This example adds Nginx to the [standard Compose installation](/docs/getting-started/install).
+This example adds Nginx to the [standard Compose installation](/getting-started/install).
 One hostname serves the browser, API, and Edge Agent gRPC endpoint. TLS ends at
 Nginx; traffic to Core stays on a dedicated Docker network.
 
 If Nginx already runs as a system service on the Docker host, use
-[Nginx on the host](/docs/operations/reverse-proxy-nginx-host) instead.
+[Nginx on the host](/operations/reverse-proxy-nginx-host) instead.
+
+The proxy reaches `server:8001` on the private Docker network; the optional
+Edge host-port overlay is not needed.
 
 ## Before you start
 
@@ -22,7 +25,7 @@ If Nginx already runs as a system service on the Docker host, use
   the subnet, container addresses, and `CITADEL_HTTP_TRUSTED_PROXIES` together.
 
 For automatic certificate management, see
-[Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy).
+[Reverse proxy with Caddy](/operations/reverse-proxy-caddy).
 
 ## 1. Configure Citadel
 
@@ -31,7 +34,6 @@ Update these entries in `.env`, keeping its other settings:
 ```dotenv
 CITADEL_BIND_ADDRESS=127.0.0.1
 CITADEL_HTTP_PORT=18000
-CITADEL_EDGE_PORT=18001
 
 CITADEL_TRANSPORT_MODE=ReverseProxy
 CITADEL_PUBLIC_URL=https://citadel.example.com
@@ -52,7 +54,7 @@ Clear any existing `CITADEL_TLS_CERTIFICATE_PATH`,
 address. Changing the JWT issuer or audience signs existing users out.
 
 Update explicit CORS origins and OIDC callback URLs if configured; see
-[related URL settings](/docs/operations/tls-and-secure-agent-transport#related-url-settings).
+[related URL settings](/operations/tls-and-secure-agent-transport#related-url-settings).
 
 ## 2. Add Nginx
 
@@ -158,7 +160,7 @@ by default. If a CDN already sets HSTS, configure it in one place to avoid dupli
 
 Nginx forwards Core's browser security headers by default. Preserve them without
 adding duplicate `add_header` directives or hiding them with `proxy_hide_header`.
-See [Browser security headers](/docs/operations/tls-and-secure-agent-transport#browser-security-headers)
+See [Browser security headers](/operations/tls-and-secure-agent-transport#browser-security-headers)
 for the report-only CSP and public-response verification.
 
 `X-Forwarded-For` contains the immediate client's address, matching Core's
@@ -206,7 +208,7 @@ route and HTTP/2 listener. For TLS or upstream errors, inspect Nginx's logs:
 docker compose -f docker-compose.yml -f compose.nginx.yml logs --tail=100 nginx
 ```
 
-See [transport troubleshooting](/docs/operations/tls-and-secure-agent-transport#troubleshooting)
+See [transport troubleshooting](/operations/tls-and-secure-agent-transport#troubleshooting)
 for certificate trust and hostname errors.
 
 ## Check Script API access
@@ -225,4 +227,4 @@ console.log("Accessible Platforms:", result.platforms.map(platform => platform.n
 
 Run it and confirm the Platform names (or an empty list) in the Action logs.
 A console-only Action does not test this connection. For HTTPS-only Core, follow
-[Direct TLS Script setup](/docs/operations/tls-and-secure-agent-transport#script-api-access).
+[Direct TLS Script setup](/operations/tls-and-secure-agent-transport#script-api-access).

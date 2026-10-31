@@ -97,7 +97,7 @@ running Citadel version and included in the installed license.
 ## Community Commitment
 
 Established Community capabilities stay free in later supported releases.
-The [Community commitment](/docs/overview/community-commitment) records the
+The [Community commitment](/overview/community-commitment) records the
 protected baseline, change-notice rules, security and upstream-retirement
 qualifications, and portability limitations. It is a separate product policy;
 it does not amend ELv2 or promise future open-source conversion.

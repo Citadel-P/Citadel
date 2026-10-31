@@ -3,6 +3,22 @@
 import { useEffect } from 'react';
 import { redirectDestination } from '@/lib/doc-redirects.mjs';
 
+export function HomeFragmentRedirect({ basePath }: { basePath: string }) {
+  useEffect(() => {
+    function redirectLicensing() {
+      if (window.location.hash !== '#licensing') return;
+      window.location.replace(redirectDestination(
+        { to: '/overview/licensing' }, '', window.location.search, basePath,
+      ));
+    }
+    redirectLicensing();
+    window.addEventListener('hashchange', redirectLicensing);
+    return () => window.removeEventListener('hashchange', redirectLicensing);
+  }, [basePath]);
+
+  return null;
+}
+
 export function DocRedirect({ rule, basePath }: {
   rule: { to: string; anchors?: Record<string, string> };
   basePath: string;

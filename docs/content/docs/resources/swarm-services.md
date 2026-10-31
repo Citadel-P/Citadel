@@ -5,8 +5,8 @@ description: "Configure, deploy, scale, and monitor independently managed Docker
 
 A Swarm Service stores the desired configuration of one application managed by
 Docker Swarm. Use **Swarm Services** for independently managed Services; use a
-[Stack](/docs/resources/stacks/swarm) when several Services belong to one Compose
-application. Connect a [Swarm Platform](/docs/resources/platforms/docker-swarm)
+[Stack](/resources/stacks/swarm) when several Services belong to one Compose
+application. Connect a [Swarm Platform](/resources/platforms/docker-swarm)
 before creating a Service.
 
 ## Health
@@ -102,7 +102,7 @@ Ready, Active node. The copied Service is pinned to the destination node; networ
 secrets and configs are matched by name and must already exist there. Global,
 multi-replica and unpinned Services are blocked because a local volume name does
 not identify one storage location across nodes. See
-[Copy a workload with data](/docs/resources/backups#copy-a-workload-with-data).
+[Copy a workload with data](/resources/backups#copy-a-workload-with-data).
 
 ### Backup storage
 
@@ -110,14 +110,14 @@ Swarm service storage policies include supported local Docker volumes and bind
 mounts discovered from current Tasks on their exact owning Nodes. Host paths
 require Platform write access for both configuration and execution. Review the
 source preview and discovery warnings. Tmpfs, nested mounts, system/runtime paths,
-and writable layers remain excluded. See [Backups](/docs/resources/backups).
+and writable layers remain excluded. See [Backups](/resources/backups).
 
 Use **Backup Filter** at the right of the resource header to filter by backup status.
 The resource table displays a **Backup** column. Hover over its shield to see
 the same coverage card as on the resource page. Manual-only or disabled policies
 show amber, even after a successful manual run. Green requires an active schedule,
 a ready repository, and a successful available backup for all eligible storage.
-See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages) for all
+See [Backup coverage](/resources/backups#coverage-on-resource-pages) for all
 status meanings and scheduling requirements.
 
 ## Scale A Replicated Service To Zero
@@ -264,9 +264,9 @@ owning Node. The API enforces permissions for each operation.
 
 ## Troubleshooting
 
-For connection and inventory problems, see [Swarm Platform troubleshooting](/docs/resources/platforms/docker-swarm#troubleshooting).
+For connection and inventory problems, see [Swarm Platform troubleshooting](/resources/platforms/docker-swarm#troubleshooting).
 For unavailable Task logs, statistics, or terminals, check
-[Cluster node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage).
+[Cluster node coverage](/resources/platforms/docker-swarm#understand-cluster-node-coverage).
 
 Manage Task lifecycle through its Service or Stack. Citadel does not offer
 direct start, stop, or restart actions on individual Swarm Tasks.

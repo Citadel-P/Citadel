@@ -89,7 +89,7 @@ describe('Sidebar license link', () => {
     );
     expect(screen.getByRole('link', { name: 'Upgrade guide' })).toHaveAttribute(
       'href',
-      'https://docs.citadelplane.com/docs/operations/upgrade-and-rollback/',
+      'https://docs.citadelplane.com/operations/upgrade-and-rollback/',
     );
   });
 

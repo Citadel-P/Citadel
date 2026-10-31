@@ -21,12 +21,12 @@ Platform address, Git URL, Registry host, or Build branch.
 
 Results require Read access. A linked parent is shown only when you can also
 read it. If a resource is missing, try its list page and review
-[access assignments](/docs/guides/access-control#verify-the-teammates-access)
+[access assignments](/guides/access-control#verify-the-teammates-access)
 before assuming it was deleted.
 
 ## Narrow a resource list
 
-Use a list's search and available Platform or [Tag filters](/docs/guides/resource-tags)
+Use a list's search and available Platform or [Tag filters](/guides/resource-tags)
 to narrow the results. Clear filters when a known resource appears to be missing.
 On Deployments and Stacks, **Updates available** shows detected updates; an empty
 result does not prove that every resource has been checked successfully.
@@ -41,7 +41,7 @@ view for its history.
 Find the resource and time in **Activities**, then open the event to inspect its
 details. Use the event's copy-link control when sharing it with a teammate who
 has access. For a failed job, also inspect its run logs; for an alert, follow
-[the investigation workflow](/docs/resources/alert-rules#respond-to-an-alert).
+[the investigation workflow](/resources/alert-rules#respond-to-an-alert).
 
 Saved configuration, a recorded operation, and current runtime state answer
 different questions. Check the running workload and application endpoint before

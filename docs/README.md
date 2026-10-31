@@ -2,11 +2,19 @@
 
 This directory owns both documentation builds:
 
-- `docs/out`: the static Fumadocs product and user documentation, including the embedded ReDoc API reference at `/docs/reference/api/`;
+- `docs/out`: the static Fumadocs product and user documentation, including the embedded ReDoc API reference at `/reference/api/`;
 - `docs/api-out`: the independently deployable, read-only ReDoc API Reference.
 
 They share one npm package and lockfile, but remain separate static outputs and
 can be hosted on different domains.
+
+The site root displays the documentation introduction inside the standard sidebar
+and search layout. Canonical pages use root paths such as `/getting-started/install/`.
+The `/docs/...` paths export redirect pages with canonical destinations,
+`noindex`, and fallback links. Redirects preserve queries and fragments and apply
+the section mappings in `redirects.json`. The **Citadel Docs** brand returns to `/`;
+**Website** opens the main portal at `https://citadelplane.com/`.
+The `/#licensing` link opens `/overview/licensing/`, preserving query parameters.
 
 ## Local development
 
@@ -50,7 +58,9 @@ The main documentation site renders the same public schema directly with ReDoc.
 Its `/api/openapi` route is exported as a static JSON file, so both local
 development and static hosting work without a running Citadel backend or a
 separate API documentation host. The renderer is loaded only on the API page
-and follows the documentation site's light or dark theme. The API page uses
+and follows the documentation site's light or dark theme. ReDoc navigation uses
+hash routes so endpoint links work on static hosting, including after a reload.
+ReDoc's own telemetry is disabled. The API page uses
 a full-width layout with ReDoc's endpoint navigation and a compact Citadel
 header; **Back to docs** returns to the regular documentation layout.
 
@@ -59,21 +69,22 @@ navigation changes.
 
 ## Visual theme
 
-The product documentation, landing page and embedded API reference use slate
-surfaces with blue interaction accents in both light and dark modes. Light-mode
-actions use blue `#2563eb`; dark-mode accents use light blue `#93c5fd`.
+The product documentation and embedded API reference use the original documentation
+backgrounds: light slate `#f8fafc` canvas, white panels, and neutral borders.
+Cyan `#006194` accents and square corners follow the Citadel portal.
+Dark mode uses slate surfaces and blue `#60a5fa` accents.
 `src/app/palette.css` owns the local palette so the documentation builds
-independently; `global.css` maps it to Fumadocs semantic colors. The landing page
-reuses those tokens, while `src/components/api-reference.tsx` supplies matching concrete colors
-to ReDoc (which computes derived colors). Keep both mappings aligned when updating
+independently, with interaction accents aligned with `Citadel.Web/src/frontend/src/layout/palette.css`;
+`global.css` maps it to Fumadocs semantic colors, while
+`api-reference.css` maps it to ReDoc's CSS variables. Keep both mappings aligned when updating
 the palette. Warning/success/error callouts and code syntax colors retain their
 semantic meanings. The separate standalone API build keeps its own ReDoc defaults.
 
-Typography follows the published documentation's Inter/system fallback stack
-without downloading a web font. Article and navigation sizing remain
-Fumadocs-owned. The README and documentation use the blue Citadel logo, matching
-the favicon artwork.
-Reading widths, navigation, search and theme persistence remain Fumadocs-owned.
+Typography uses the original Inter/system font stack without downloading fonts.
+Fumadocs provides the default sizing and reading width: 16px article text,
+14px navigation, and 28px page titles. The README and documentation use
+the blue Citadel logo, matching the favicon artwork.
+Navigation, search and theme persistence remain Fumadocs-owned.
 The docs sidebar uses `src/app/sidebar.css` for compact navigation rows and a
 restrained active state. Search stays above the navigation tree; utility links,
 GitHub and theme controls sit in the sidebar footer. Mobile screens use a compact
@@ -82,7 +93,80 @@ The desktop navigation stays at the viewport's left edge, with the table of
 contents at the right edge. The article is centered between them and keeps a
 bounded reading width.
 
+`scrollbars.css` follows Citadel's frontend scrollbar styling: 4px tracks in
+WebKit/Chromium, native thin tracks in Firefox, and subdued thumbs that brighten
+on hover. Sidebar thumbs appear on hover or keyboard focus on desktop and stay
+available on touch devices, using Fumadocs' existing scroll-area behavior.
+
 ## Static export configuration
+
+### Optional documentation analytics
+
+The production docs use a separate **Citadel Docs** website in the existing
+self-hosted Umami instance. `src/components/analytics` owns opt-in consent and
+best-effort page views and a fixed set of search/feedback events. The root layout provides an allowlist of page paths and
+titles from the documentation source; redirects, unknown paths, search text,
+queries, fragments and referrers are not collected. The embedded API reference
+is included; the separate `api-out` export has no analytics integration.
+
+Collection requires both the build URL and browser origin to be
+`https://docs.citadelplane.com`. The browser fetches the public runtime config at
+`https://analytics.citadelplane.com/docs/config.json`, then sends accepted page
+views and events to `/docs/api/send` on that host. Missing, disabled or invalid configuration
+fails closed. No website ID, secret or additional GitHub Actions variable is
+needed in the build. Existing `DOCS_SITE_URL` publication configuration suffices.
+
+The consent notice and preferences follow the website's opt-in behavior, with
+an independent docs-origin choice, 180-day expiry, cross-tab withdrawal and
+DNT/GPC handling. Requests omit credentials and referrers, time out after four
+seconds and are never retried. See the [visitor privacy page](content/docs/privacy.md).
+
+The analytics provider wraps Fumadocs' root provider so its search dialog shares
+consent with page views. Search uses the existing dialog close/select callbacks;
+no document-wide click scraping or search-query telemetry is involved.
+
+| Event | Meaning and extra fields |
+| --- | --- |
+| `search_used` | Final settled nonempty search when the dialog closes or a result is selected; `result_count` is the number of displayed result entries, capped at 1000. |
+| `search_no_results` | That completed search returned zero entries. |
+| `search_result_opened` | A result was selected by pointer or keyboard; `selected_page` is an allowlisted page path with no query or hash. |
+| `page_helpful` / `page_unhelpful` | Yes/No feedback, attributed to the current page; no additional data. |
+
+Search events are attributed to the page where search was used. Intermediate
+keystrokes, empty queries, pending requests and search failures are not counted.
+A search interaction records its final query's outcome once, so counts do not
+represent every query tried. Helpfulness appears only for consenting readers
+without a blocking privacy signal, on regular pages and the embedded API page.
+Responses are deduplicated per page in memory until reload; no vote history is
+persisted. Delivery is best-effort, without retries or acknowledgement guarantees.
+
+Use `search_no_results / search_used` to assess completed searches with no hits,
+compare `search_result_opened` against `search_used` for result selection, and
+review `page_unhelpful` alongside page views and total feedback by page. These
+are counts from consenting readers, not unique users or proof of successful
+installation. Search terms cannot be reconstructed from this instrumentation;
+use issues and support conversations to understand missing topics.
+
+The collector, Umami registration and scoped 90-day retention are operated by
+the sibling **Citadel.Web** repository's `scripts/analytics/add-docs.py`; its
+`docs/ANALYTICS.md` describes installation and rollback. Deploy that configuration
+before publishing this docs build through the existing release workflow.
+
+Browser regression checks intercept all collector requests against a local
+export and never submit production analytics:
+
+```bash
+npm ci --prefix test/e2e
+npm exec --prefix test/e2e -- playwright install --with-deps chromium
+NEXT_PUBLIC_DOCS_URL=https://docs.citadelplane.com npm run build --prefix docs
+npm run test:analytics --prefix docs
+```
+
+They cover consent/expiry, DNT/GPC, storage failures, clean payloads, navigation,
+cross-tab withdrawal, collector failures, unknown/local pages, mobile controls,
+search outcomes, keyboard selection, query exclusion and page feedback.
+
+### Publication URL
 
 The product site's build URL can include a path, for example
 `http://localhost:3000/Citadel`. Set `NEXT_PUBLIC_DOCS_URL` before building; the
@@ -134,7 +218,7 @@ cd ../..
 node docs/scripts/capture-guide-screenshots.mjs
 ```
 
-Refresh the README and homepage images, including light/dark platform views,
+Refresh the README images, including light/dark platform views,
 statistics, and the network map, with:
 
 ```bash

@@ -104,7 +104,7 @@ The removed tag is no longer assigned to that resource, but it still exists in t
 
 ## Filter By Tags
 
-Use [global search](/docs/guides/finding-resources) to find a resource by name
+Use [global search](/guides/finding-resources) to find a resource by name
 across Citadel, then use Tag filters on its list to narrow related resources.
 
 List pages with a tag filter include:

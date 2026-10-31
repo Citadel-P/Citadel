@@ -26,7 +26,7 @@ deployment. Ask the application's maintainer to review scripts you do not mainta
 1. Open **Scripts** and select **Add Script**.
 2. Enter a name and choose an enabled **Run as** User or Service Account under
    **Execution → Runtime**. The initial check needs Read access to the selected
-   Stack; deploying it also requires Execute and Apply. See [access control](/docs/guides/access-control).
+   Stack; deploying it also requires Execute and Apply. See [access control](/guides/access-control).
 3. Leave the Script, schedule, and webhook disabled while preparing the example.
 4. Set **Default Args** to the following object, replacing the ID with your
    Stack's ID:
@@ -267,7 +267,7 @@ Webhook-triggered execution requires Team's `Automated Operations` capability.
 
 Enable `Webhook` to let a Git webhook queue the script.
 
-For the shared listener model, authentication options, URL shape, and troubleshooting, see [Webhooks](/docs/guides/webhooks).
+For the shared listener model, authentication options, URL shape, and troubleshooting, see [Webhooks](/guides/webhooks).
 
 Select the provider and authentication format, set an optional branch filter, and copy the listener URL into the Git provider webhook settings.
 
@@ -304,15 +304,22 @@ console.log(`Triggered by ${args.repository?.full_name} on ${branch}`);
 
 The Runs tab shows recent script runs.
 
-Columns include:
+The table groups status and trigger under **Run**, and duration and exit code
+under **Result**, alongside the queued time. Select a run's colored play control
+to open its details and logs. Green indicates success; red indicates a failed,
+timed-out, or rejected run. Active runs retain a separate cancellation action.
 
-- status
-- trigger
-- queued time
-- duration
-- exit code
-
-Select the log button on a run to inspect logs.
+The log sheet summarizes the trigger and status below its title. A compact row
+shows who triggered the run, when it was queued, and its duration. The run-as
+account appears only when it differs from the initiator; nonzero exit codes are
+shown for troubleshooting. Labels and values stay together on one line, with
+items wrapping on smaller screens.
+Scheduled and webhook triggers are identified separately from the run-as account.
+Actor names are available to administrators; otherwise, or if an actor lookup is
+unavailable, the sheet shows an abbreviated actor ID with the full ID on hover.
+Queued runs show **Not started**, and running runs show **In progress** until a
+duration is recorded. Failure messages and pending-cleanup information appear
+above the logs. The script log sheet has no floating timestamp or wrapping controls.
 
 Run statuses:
 
@@ -406,7 +413,7 @@ each run.
 
 Use a least-privileged Service Account for schedules and webhooks so unattended
 execution does not depend on a human account. See
-[Service Accounts](/docs/guides/service-accounts).
+[Service Accounts](/guides/service-accounts).
 
 ## Safety Notes
 

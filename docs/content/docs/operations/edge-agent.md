@@ -3,28 +3,21 @@ title: "Edge Agent"
 description: "Enroll and operate the Citadel Edge Agent for remote Docker hosts."
 ---
 
-Edge Agent connects a Docker host to Citadel without exposing an inbound agent port.
+An Edge Agent connects a Docker host to Citadel without exposing an inbound
+Agent port. It opens a persistent outbound gRPC connection to Core, which sends
+Docker operations over that connection.
 
-Use Edge Agent when Citadel Core cannot directly reach the Docker host, such as:
+## When to use Edge Agent
 
-- a remote site behind NAT
-- a home lab or branch network without inbound firewall rules
-- a host that can make outbound HTTPS requests but should not accept management traffic
+Use an Edge Agent for a host behind NAT or a firewall that blocks inbound
+management traffic. If Core can reach the host directly, you can use the
+[regular Agent](/operations/agent), selected as **Agent** in the Platform form.
 
-In Edge Agent mode, the Citadel Agent starts the connection to Citadel Core and keeps an outbound gRPC stream open. Citadel sends Docker operations over that active connection.
+The Edge Agent host needs:
 
-## When To Use Edge Agent
-
-Use Edge Agent when opening an inbound port to the agent is inconvenient or unsafe.
-
-Use the regular inbound agent when Citadel Core can reliably reach the agent address and you prefer a direct Core-to-agent connection.
-
-Edge Agent still requires:
-
-- the agent host can reach Citadel Core
-- the agent container can access the Docker socket
-- the agent data directory is persisted
-- Citadel Core is reachable at the URL used during enrollment
+- outbound access to Core's Edge gRPC endpoint;
+- Docker socket access from the Agent container;
+- a persistent data volume for the Agent's key and enrollment identity.
 
 Citadel permits only one Platform record for each Docker daemon. If the same
 Docker engine is already registered through Local or regular Agent access,
@@ -35,25 +28,29 @@ Docker engine through two Platform records.
 For production, run Citadel Core over HTTPS.
 
 For reverse-proxy, direct Core TLS, and private-CA configuration, see
-[TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport).
+[TLS and secure Agent transport](/operations/tls-and-secure-agent-transport).
 
 ## Builds
 
-Edge-agent platforms can run Citadel build projects over the outbound edge-agent transport.
+Edge Agent Platforms can run Citadel build projects over their existing connection to Core.
 
-Citadel Core resolves the Git repository, packages the selected build context, and sends it through the edge-agent stream. The edge agent then streams the context to Docker and pushes the configured image tags.
+Citadel Core resolves the Git repository, packages the selected build context, and sends it through the Edge Agent stream. The Edge Agent then streams the context to Docker and pushes the configured image tags.
 
 Core's current archive step is limited to **12 MiB**, before the 16 MiB transport
 envelope. It does not apply `.dockerignore`; choose a narrow committed context
-with its Dockerfile inside it. See [Build Context Size](/docs/resources/builds#build-context-size).
+with its Dockerfile inside it. See [Build Context Size](/resources/builds#build-context-size).
 
-Because edge agents use an outbound command channel, cancelling a build closes the active build stream and the Docker Engine API build is cancelled when Docker observes the dropped request.
+Because Edge Agents use an outbound command channel, cancelling a build closes the active build stream and the Docker Engine API build is cancelled when Docker observes the dropped request.
 
 Build Pools can also use Edge Agent mode, but that flow is pool-scoped. Create a self-managed Build Pool, select `Connection mode: Edge Agent`, save the pool, then generate the enrollment command from the pool configuration. A build-pool Edge Agent does not require an Edge Agent platform resource.
 
-## Production gRPC Endpoint
+## Production gRPC endpoint
 
-Edge Agent uses bidirectional gRPC over HTTP/2. The URL in `CITADEL_CORE_URL` must point to the Citadel Edge Agent gRPC endpoint, not the normal HTTP API endpoint.
+Edge Agents use bidirectional gRPC over HTTP/2. Set `CITADEL_CORE_URL` to the
+address supplied by the generated enrollment command. It must route gRPC traffic
+to Core's Edge listener. It can be the same URL used by the browser when the
+reverse proxy routes the two protocols to their respective listeners, as in the
+[Caddy guide](/operations/reverse-proxy-caddy).
 
 In production:
 
@@ -70,7 +67,7 @@ keeps separate API and Edge gRPC listeners. Configure
 
 If the proxy does not support gRPC over HTTP/2, the agent may connect and then fail with HTTP/2 protocol errors.
 
-## Create An Edge Platform
+## Create an Edge Platform
 
 1. Open **Platforms** and select **Add Platform**.
 2. Choose **Docker Standalone** or **Docker Swarm** for the host you are connecting.
@@ -83,7 +80,7 @@ The token is shown once and stored only as a hash. Copy the command before leavi
 the page. If you need new instructions, use **Generate Enrollment Token** in the
 saved Platform. An existing displayed token or enrolled identity changes the action label.
 
-## Run The Agent
+## Run the Agent
 
 Run the command shown by Citadel on the Docker host you want to manage.
 
@@ -133,8 +130,9 @@ The data volume stores the agent key and enrolled identity.
 
 Do not remove the persistent data volume unless you intend to re-enroll the agent.
 
-Core listens for Edge gRPC on container port `8001`. The supplied Compose setup
-maps it to `127.0.0.1:18001` on the host. This local-only binding cannot be reached
+Core listens for Edge gRPC on container port `8001`. The optional
+[Edge overlay](/getting-started/configuration#edge-agent-access) maps it
+to `127.0.0.1:18001` on the host. This local-only binding cannot be reached
 by a remote Agent. Configure a reachable `CITADEL_EDGE_PUBLIC_GRPC_URL` and secure
 network access before enrolling one. Use the generated command rather than
 copying a hard-coded local address.
@@ -165,7 +163,7 @@ Because of this, the data volume is important. If the agent loses its key or ide
 
 Reconnects use exponential backoff with jitter. Short network interruptions should recover automatically without re-enrollment.
 
-## Platform Status
+## Platform status
 
 An Edge Agent platform is online when the agent has an active connection to Citadel Core.
 
@@ -181,7 +179,7 @@ If the agent stops, loses network access, or cannot reach Citadel Core, the plat
 
 Citadel also validates the agent protocol version and advertised capabilities during enrollment and reconnect. If the protocol or required capabilities are incompatible with Core, the connection is rejected with a session rejection message.
 
-## Docker Swarm Node Coverage
+## Docker Swarm node coverage
 
 An ordinary Edge Agent configured for a Docker Swarm Platform represents the
 connected manager. It manages cluster-scoped Swarm resources and supplies the
@@ -206,7 +204,7 @@ also contribute Images, Volumes, and local Networks with their owning Node ident
 Change Task lifecycle through the owning Service or Stack; direct start, stop,
 and restart actions on individual Tasks are not available.
 
-## Docker Operations
+## Docker operations
 
 When you use an Edge Agent platform, Citadel routes supported Docker operations over the agent's active connection.
 
@@ -221,7 +219,7 @@ The Edge Agent does not give Citadel shell access to the host. It only handles t
 
 Supported operations include platform status, container list/logs/stats/inspect/create/start/stop/restart/delete/exec, image list/inspect/pull/build/push/delete, build-host checks, volume list/inspect/create/delete, network list/inspect/create/delete, stack apply, and deployment apply.
 
-## Rotate Enrollment
+## Rotate enrollment
 
 Generate a new enrollment token when:
 
@@ -231,7 +229,7 @@ Generate a new enrollment token when:
 
 Creating a new token does not rotate an already enrolled agent identity. For an enrolled agent, keep the persistent data volume.
 
-## Revoke Access
+## Revoke access
 
 Use revoke when the agent identity should no longer connect.
 
@@ -269,7 +267,7 @@ The agent container must be able to reach the URL from inside Docker. Use the ex
 
 The Edge Agent gRPC endpoint is probably being served through an HTTP/1.1-only route or proxy. Point `CITADEL_CORE_URL` at the HTTP/2 gRPC endpoint and configure the proxy for gRPC pass-through or gRPC upstream forwarding.
 
-## Security Notes
+## Security notes
 
 - Use HTTPS for Citadel Core in production.
 - Treat enrollment tokens as short-lived secrets.

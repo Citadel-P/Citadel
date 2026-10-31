@@ -138,6 +138,10 @@ def compose_override(channel, rootless=None):
     services["server"]["environment"] = {
         "CITADEL_EDGE_AGENT_IMAGE": "${CITADEL_EDGE_AGENT_IMAGE:?Missing Agent digest}",
     }
+    # The host reverse proxy needs the optional Edge listener published.
+    services["server"]["ports"] = [
+        "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_EDGE_PORT:-18001}:${CITADEL_EDGE_GRPC_LISTEN_PORT:-8001}",
+    ]
     if rootless:
         # Replace the full mount list: never inherit the host socket or / mount.
         # Compose 2.24.4+ supports !override (required by operator provisioning).

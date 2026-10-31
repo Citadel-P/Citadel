@@ -104,7 +104,7 @@ permissions, or resource access. Use a Service Account token when an external
 system needs to call authenticated `/api/v1` endpoints, and never paste that
 token into a webhook secret field. Service Account authentication requires
 Team's **Custom access control** capability. See
-[Service Accounts](/docs/guides/service-accounts).
+[Service Accounts](/guides/service-accounts).
 
 ### Generic / CI
 
@@ -224,9 +224,9 @@ Git stack webhook deploy still validates:
 - repository identity matches, when provider metadata is present
 - changed paths are relevant, unless force deploy is enabled
 
-For Git stack setup, see [Git Stacks](/docs/resources/stacks/git).
+For Git stack setup, see [Git Stacks](/resources/stacks/git).
 
-For Git repository and account setup, see [Git repositories and accounts](/docs/resources/git-repositories).
+For Git repository and account setup, see [Git repositories and accounts](/resources/git-repositories).
 
 ## Build Webhooks
 
@@ -249,7 +249,7 @@ Build webhooks use the same one-active-run-per-project rule as manual builds. If
 
 For monorepos, keep the build context scoped to the service directory. If the provider payload includes changed files, unrelated path changes are accepted as no-op deliveries. If the payload omits changed files, Citadel syncs the repository and diffs the latest successful build commit against the new branch head before deciding.
 
-For build project setup, see [Builds](/docs/resources/builds).
+For build project setup, see [Builds](/resources/builds).
 
 ## Script Webhooks
 
@@ -274,7 +274,7 @@ If the payload is not a JSON object, Citadel wraps it as:
 }
 ```
 
-For script setup, see [Scripts](/docs/resources/scripts).
+For script setup, see [Scripts](/resources/scripts).
 
 ## Backup Policy Webhooks
 
@@ -293,7 +293,7 @@ Behavior:
 
 Disabled or archived policies do not run from webhooks.
 
-For backup policy setup, see [Backups](/docs/resources/backups).
+For backup policy setup, see [Backups](/resources/backups).
 
 ## Managed Swarm Service Webhooks
 

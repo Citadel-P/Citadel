@@ -11,9 +11,9 @@ The connected manager is covered for node-local operations. Install node agents
 from **Cluster node coverage** to extend Task logs, terminals, statistics, and
 Volume browsing to other eligible Nodes. Saving a Platform does not install them.
 
-Use [Swarm Services](/docs/resources/swarm-services) for individual managed
-Services or [Swarm Stacks](/docs/resources/stacks/swarm) for Compose applications.
-[Citadel Deployments](/docs/resources/deployments) require Docker Standalone.
+Use [Swarm Services](/resources/swarm-services) for individual managed
+Services or [Swarm Stacks](/resources/stacks/swarm) for Compose applications.
+[Citadel Deployments](/resources/deployments) require Docker Standalone.
 
 ## Before You Begin
 
@@ -159,9 +159,9 @@ with the same local name. Citadel does not infer that an Image present on one
 Node exists on another. Browsing a Volume targets its exact Node; destructive
 Image, Volume, and local Network actions remain disabled.
 
-For applications running on this cluster, see [Swarm Services](/docs/resources/swarm-services)
-and [Swarm Stacks](/docs/resources/stacks/swarm). For existing workloads, see
-[adoption](/docs/guides/adopting-existing-workloads).
+For applications running on this cluster, see [Swarm Services](/resources/swarm-services)
+and [Swarm Stacks](/resources/stacks/swarm). For existing workloads, see
+[adoption](/guides/adopting-existing-workloads).
 
 ## Understand Health And Freshness
 
@@ -278,8 +278,8 @@ after reviewing every consumer.
 - Platform Write: register or edit the connection, change Node availability and labels, and manage Secrets and Configs.
 - Platform Execute: delete eligible overlay Networks.
 
-Managed workloads have their own [Service](/docs/resources/swarm-services#permissions)
-and [Stack](/docs/resources/stacks/swarm#permissions) permissions. The API enforces
+Managed workloads have their own [Service](/resources/swarm-services#permissions)
+and [Stack](/resources/stacks/swarm#permissions) permissions. The API enforces
 these checks even when a UI control is hidden or disabled.
 
 ## Troubleshooting

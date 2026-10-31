@@ -11,7 +11,7 @@ Team merely because it is a company.
 This is Citadel's product policy for official supported releases that publish
 it. It does not amend or replace the source license, waive its restrictions,
 create an automatic hosting permission, or promise future open-source
-conversion. See [source licensing and editions](/docs/overview/licensing).
+conversion. See [source licensing and editions](/overview/licensing).
 
 ## What stays free
 
@@ -44,7 +44,7 @@ must not be used to turn the protected baseline into a paid feature.
 
 ## What is paid today
 
-The [edition comparison](/docs/overview/licensing#edition-comparison) remains
+The [edition comparison](/overview/licensing#edition-comparison) remains
 the reference for implemented behavior in each version.
 
 **Scheduled backups and webhook-triggered deployments still require Team.**

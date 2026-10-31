@@ -175,6 +175,7 @@ export const useContainerLogGroup = ({
   const [errorMessage, setErrorMessage] = useState<string>();
 
   const logsRef = useRef<LogEntry[]>(getCachedLogs(groupName));
+  const replayRemainingRef = useRef(new Map<string, number>());
   const bufferRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevGroupNameRef = useRef<string | undefined>(groupName);
@@ -226,6 +227,17 @@ export const useContainerLogGroup = ({
           const timestamp = line.substring(0, firstSpaceIndex);
           const message = line.substring(firstSpaceIndex + 1);
           if (!message.trim()) continue;
+
+          // Each subscription replays Docker's tail. Consume only occurrences
+          // present before this subscription, retaining real repeated lines.
+          if (replayRemainingRef.current.size > 0) {
+            const remaining = replayRemainingRef.current.get(line) ?? 0;
+            if (remaining > 0) {
+              if (remaining === 1) replayRemainingRef.current.delete(line);
+              else replayRemainingRef.current.set(line, remaining - 1);
+              continue;
+            }
+          }
 
           incoming.push({ timestamp, message });
         } else {
@@ -281,6 +293,14 @@ export const useContainerLogGroup = ({
 
   const setupEventListeners = useCallback(
     (hub: RealtimeConnection) => {
+      const replay = new Map<string, number>();
+      for (const { timestamp, message } of logsRef.current) {
+        if (!DOCKER_TIMESTAMP_ONLY_RE.test(timestamp)) continue;
+        // Docker timestamps contain no spaces, so this restores the exact wire line.
+        const key = `${timestamp} ${message}`;
+        replay.set(key, (replay.get(key) ?? 0) + 1);
+      }
+      replayRemainingRef.current = replay;
       hub.on(logEventName, handleLogs);
       hub.on(logBatchEventName, handleLogs);
       hub.on('LogStreamError', handleStreamError);
@@ -293,8 +313,12 @@ export const useContainerLogGroup = ({
       hub.off(logEventName, handleLogs);
       hub.off(logBatchEventName, handleLogs);
       hub.off('LogStreamError', handleStreamError);
+      // Commit pending lines before a remount can read the cache, and prevent
+      // an old subscription's timer from overwriting a newer cached stream.
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      flush();
     },
-    [handleLogs, handleStreamError, logBatchEventName, logEventName],
+    [flush, handleLogs, handleStreamError, logBatchEventName, logEventName],
   );
 
   useRealtimeGroup({
@@ -308,6 +332,7 @@ export const useContainerLogGroup = ({
   const clearLogs = useCallback(() => {
     logsRef.current = [];
     bufferRef.current = [];
+    replayRemainingRef.current.clear();
     if (flushTimerRef.current) {
       clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;

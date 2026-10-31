@@ -4,7 +4,7 @@ description: "Configure dedicated builder connections and monitor their availabi
 ---
 
 A Build Pool connects Citadel to dedicated builder infrastructure. Select a pool
-in a [Build Project](/docs/resources/builds) when builds should run separately
+in a [Build Project](/resources/builds) when builds should run separately
 from your managed application Platforms.
 
 Creating, testing, and managing a pool is available in Community. Running builds
@@ -28,7 +28,7 @@ For a self-managed VM pool, choose one connection mode.
 **Maximum concurrent builds** controls how many preparing or running builds the
 pool can accept. It defaults to one. A self-managed pool connects to one Agent;
 the setting does not create additional workers or provision machines. Core's
-[build concurrency limit](/docs/reference/environment-variables#concurrency-limits)
+[build concurrency limit](/reference/environment-variables#concurrency-limits)
 also applies across pools and Platforms.
 
 ### Inbound Agent endpoint
@@ -40,9 +40,9 @@ Citadel fills in its unique ID and public key automatically.
 The following manual template is equivalent; copy `<generated-agent-id>` from
 the pool’s setup command. Replace `AGENT_IMAGE` with the image address expected by your Core version and
 `...` with Core's current `CITADEL_CORE_PUBLIC_KEY`, as described in
-[regular Agent setup](/docs/operations/agent#requirements). The HTTP example
+[regular Agent setup](/operations/agent#requirements). The HTTP example
 below is for a trusted private network; use
-[Agent TLS](/docs/operations/tls-and-secure-agent-transport#secure-a-regular-agent)
+[Agent TLS](/operations/tls-and-secure-agent-transport#secure-a-regular-agent)
 when the connection needs encryption.
 
 ```bash
@@ -104,7 +104,8 @@ After the pool is saved, open the pool's configuration and generate an Edge Agen
 The build pool Edge Agent is scoped to the build pool itself. You do not need to create a Platform resource, and there is no Edge Agent platform dropdown for build pools.
 
 The generated command uses the Edge Agent gRPC endpoint. Its container port is
-`8001`; the supplied Compose host mapping is `127.0.0.1:18001`. A remote builder
+`8001`; the optional [Edge overlay](/getting-started/configuration#edge-agent-access)
+publishes it at `127.0.0.1:18001`. A remote builder
 needs a reachable, secured gRPC address rather than the browser port or a local-only address.
 
 Click **Test** on the Build Pool before selecting it in a build project. A ready edge pool confirms that the pool-scoped Edge Agent is connected, advertises build capabilities, and can reach Docker.
@@ -136,7 +137,7 @@ and select the pool. The project defines the repository, build context, Registry
 and output image; the pool supplies the execution host.
 
 If a build cannot start, check the pool's connection and Docker capability status,
-then see [Build Project troubleshooting](/docs/resources/builds#troubleshooting).
+then see [Build Project troubleshooting](/resources/builds#troubleshooting).
 
 Citadel automatically includes `CITADEL_AGENT_ID` in each Direct Agent install
 command. This UUID identifies the Platform or dedicated Build Pool independently

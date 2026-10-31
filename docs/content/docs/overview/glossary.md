@@ -33,4 +33,4 @@ description: "Plain-language meanings for the names you see in the interface."
 | Backup policy | The source, destination, retention, and optional schedule for backups |
 | Control-plane backup | A Citadel system backup containing the database and recovery keys; application data needs separate backups |
 
-See [choose a task](/docs/guides) when you are ready to use these features.
+See [choose a task](/guides) when you are ready to use these features.

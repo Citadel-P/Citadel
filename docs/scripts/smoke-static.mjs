@@ -2,22 +2,22 @@ import { access, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { getDocsBasePath } from '../site-config.mjs';
+import { legacyDocRedirects } from '../src/lib/doc-redirects.mjs';
 
 const requiredFiles = [
   'out/index.html',
-  'out/docs/index.html',
-  'out/docs/getting-started/quick-start/index.html',
-  'out/docs/getting-started/install/index.html',
-  'out/docs/resources/index.html',
-  'out/docs/resources/platforms/docker-swarm/index.html',
-  'out/docs/resources/stacks/swarm/index.html',
-  'out/docs/resources/swarm-services/index.html',
-  'out/docs/resources/build-pools/index.html',
-  'out/docs/guides/access-control/index.html',
-  'out/docs/overview/licensing/index.html',
-  'out/docs/overview/community-commitment/index.html',
-  'out/docs/operations/control-plane-recovery/index.html',
-  'out/docs/reference/api/index.html',
+  'out/getting-started/quick-start/index.html',
+  'out/getting-started/install/index.html',
+  'out/resources/index.html',
+  'out/resources/platforms/docker-swarm/index.html',
+  'out/resources/stacks/swarm/index.html',
+  'out/resources/swarm-services/index.html',
+  'out/resources/build-pools/index.html',
+  'out/guides/access-control/index.html',
+  'out/overview/licensing/index.html',
+  'out/overview/community-commitment/index.html',
+  'out/operations/control-plane-recovery/index.html',
+  'out/reference/api/index.html',
   'out/api/openapi',
   'out/404.html',
   'out/robots.txt',
@@ -42,7 +42,7 @@ for (const [index, html] of pages.entries()) {
 const searchFiles = await findFiles(path.resolve('out'), (file) => /search|orama/i.test(file));
 if (searchFiles.length === 0) throw new Error('The static search index was not exported.');
 const basePath = getDocsBasePath();
-const apiPage = await readFile('out/docs/reference/api/index.html', 'utf8');
+const apiPage = await readFile('out/reference/api/index.html', 'utf8');
 if (!apiPage.includes('aria-label="OpenAPI reference"') ||
     !apiPage.includes(`href="${basePath}/api/openapi"`)) {
   throw new Error('The API page is missing its embedded reference or local schema download.');
@@ -52,17 +52,28 @@ const sourceSchema = JSON.parse(await readFile('../schema/public-v1.json', 'utf8
 if (JSON.stringify(schema) !== JSON.stringify(sourceSchema)) {
   throw new Error('The embedded reference must serve the complete, current public schema.');
 }
-const redirects = JSON.parse(await readFile('redirects.json', 'utf8'));
+const sitemap = await readFile('out/sitemap.xml', 'utf8');
+const siteUrl = (process.env.NEXT_PUBLIC_DOCS_URL || 'http://localhost:3000').replace(/\/+$/, '');
+const canonicalUrls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+assert(canonicalUrls.includes(`${siteUrl}/`), 'The sitemap must contain the documentation homepage.');
+const canonicalRoutes = canonicalUrls.map((url) => {
+  assert(url.startsWith(`${siteUrl}/`), `Unexpected sitemap origin: ${url}`);
+  const route = url.slice(siteUrl.length).replace(/\/$/, '') || '/';
+  assert(route !== '/docs' && !route.startsWith('/docs/'), `Legacy URL in sitemap: ${url}`);
+  return route;
+});
+const redirects = legacyDocRedirects(canonicalRoutes, JSON.parse(await readFile('redirects.json', 'utf8')));
 for (const [legacy, rule] of Object.entries(redirects)) {
   const html = await readFile(path.join('out', legacy, 'index.html'), 'utf8');
-  if (!html.includes(`href="${basePath}${rule.to}/"`)) {
+  assert.match(html, /name="robots" content="noindex/);
+  if (!html.includes(`href="${basePath}${rule.to.replace(/\/$/, '')}/"`)) {
     throw new Error(`${legacy} is missing its static redirect fallback link.`);
   }
 }
 if (!pages[0].includes(`src="${basePath}/logo.svg"`)) {
-  throw new Error('The homepage logo does not use the configured publication path.');
+  throw new Error('The documentation logo does not use the configured publication path.');
 }
-if (!pages[0].includes(`href="${basePath}/docs/getting-started/quick-start/"`)) {
+if (!pages[0].includes(`href="${basePath}/getting-started/quick-start/"`)) {
   throw new Error('The quick-start link does not use the configured publication path.');
 }
 for (const html of pages) {
@@ -80,48 +91,30 @@ for (const html of pages) {
   }
 }
 
-const home = pages[0];
-const licensing = await readFile('out/docs/overview/licensing/index.html', 'utf8');
-const commitment = await readFile('out/docs/overview/community-commitment/index.html', 'utf8');
-const guideRoute = `${basePath}/docs/overview/licensing`;
-const policyRoute = `${basePath}/docs/overview/community-commitment`;
-const section = home.match(/<section\b[^>]*\bid="licensing"[^>]*>[\s\S]*?<\/section>/)?.[0];
-assert(section, 'The homepage must expose a licensing section.');
-assert.match(section, /aria-labelledby="licensing-title"/);
-assert.match(section, /<h2\b[^>]*id="licensing-title"[^>]*>License and editions<\/h2>/);
-assert(home.indexOf('aria-label="Everyday operations"') < home.indexOf(section));
-assert(home.indexOf(section) < home.indexOf('aria-labelledby="start-title"'));
-const sectionText = plainText(section);
-for (const term of [/source-available/i, /Elastic License 2\.0/, /not an OSI-approved open-source license/,
-  /free for personal self-hosting and internal business production use/i]) {
-  assert.match(sectionText, term);
+const introduction = pages[0];
+assert.doesNotMatch(pages[0], /name="robots" content="noindex/);
+assert(pages[0].includes(`rel="canonical" href="${siteUrl}/"`), 'The homepage must have a root canonical URL.');
+assert.doesNotMatch(plainText(pages[0]), /Your containers|Under your control/);
+assert.match(plainText(introduction), /Citadel Docs/);
+assert.match(introduction, /<h1[^>]*>What is Citadel\?<\/h1>/);
+assertLink(introduction, `${basePath}/`, 'Citadel Docs');
+assertLink(introduction, 'https://citadelplane.com/', 'Website');
+for (const route of ['/getting-started/quick-start', '/getting-started/install',
+  '/resources', '/operations/troubleshooting']) {
+  assertLink(introduction, `${basePath}${route}`);
 }
-assert.equal((section.match(/<article\b/g) ?? []).length, 2, 'Keep Community and Team as the only edition cards.');
-const communityCard = section.match(/<article\b[^>]*aria-labelledby="community-title"[^>]*>[\s\S]*?<\/article>/)?.[0];
-const teamCard = section.match(/<article\b[^>]*aria-labelledby="team-title"[^>]*>[\s\S]*?<\/article>/)?.[0];
-assert(communityCard && teamCard, 'Both edition cards must have accessible names.');
-assert.match(plainText(communityCard), /no product-license-enforced limits/i);
-assert.match(plainText(teamCard), /scheduled backups and webhook-triggered deployments require Team/i);
-assert.match(plainText(teamCard), /external build pools/i);
-assert.doesNotMatch(sectionText, /(?:[$€£]\s*\d|checkout|Enterprise|unlicensed)/i);
-assertLink(section, `${guideRoute}#community`);
-assertLink(section, `${guideRoute}#edition-comparison`);
-assertLink(section, policyRoute);
-const licenseLink = pageLinks(section).find(({ text }) => text === 'Read license terms');
-assert(licenseLink, 'Link to the authoritative repository license.');
-assert.match(licenseLink.href, /^https:\/\/github\.com\/Citadel-P\/Citadel\/blob\/[a-f0-9]{40}\/LICENSE$/,
-  'Draft licensing copy must link to the reviewed source revision, not main.');
-assertLink(licensing, licenseLink.href);
-for (const region of [home.match(/<header\b[\s\S]*?<\/header>/)?.[0],
-  home.match(/<nav\b[^>]*aria-label="Footer"[\s\S]*?<\/nav>/)?.[0]]) {
-  assert(region, 'Homepage header and footer must be rendered.');
-  assertLink(region, guideRoute, 'Licensing');
-}
+const licensing = await readFile('out/overview/licensing/index.html', 'utf8');
+const commitment = await readFile('out/overview/community-commitment/index.html', 'utf8');
+const guideRoute = `${basePath}/overview/licensing`;
+const policyRoute = `${basePath}/overview/community-commitment`;
+const licenseLink = pageLinks(licensing).find(({ href }) =>
+  /^https:\/\/github\.com\/Citadel-P\/Citadel\/blob\/[a-f0-9]{40}\/LICENSE$/.test(href));
+assert(licenseLink, 'The licensing guide must link to the reviewed source license revision.');
 for (const html of [licensing, commitment]) {
   assertLink(html, guideRoute, 'Licensing');
   assertLink(html, policyRoute, 'Community commitment');
 }
-assertLink(await readFile('out/docs/index.html', 'utf8'), guideRoute, 'Licensing');
+assertLink(await readFile('out/index.html', 'utf8'), guideRoute, 'Licensing');
 for (const anchor of ['community', 'team', 'edition-comparison', 'source-licensing-and-product-entitlements',
   'community-commitment', 'open-the-license-page', 'request-a-license', 'install-or-replace-a-license',
   'expiration-and-grace-period', 'removing-a-license', 'troubleshooting']) {
@@ -139,7 +132,7 @@ for (const name of ['licensing', 'community-commitment']) {
 assert.equal(overview.pages.indexOf('community-commitment'), overview.pages.indexOf('licensing') + 1);
 const searchIndex = JSON.parse(await readFile('out/api/search', 'utf8'));
 // Search records use app routes; Fumadocs/Next applies basePath when navigating.
-for (const route of ['/docs/overview/licensing', '/docs/overview/community-commitment']) {
+for (const route of ['/overview/licensing', '/overview/community-commitment']) {
   assert(Object.values(searchIndex.docs.docs).some((doc) => doc.url?.replace(/\/$/, '') === route),
     `${route} must be indexed for static search.`);
 }

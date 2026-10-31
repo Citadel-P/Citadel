@@ -4,7 +4,7 @@ description: "Review image and Git changes, deploy deliberately, and handle drif
 ---
 
 Use this workflow for applications managed by Citadel. To update Citadel itself,
-follow [Upgrade and rollback](/docs/operations/upgrade-and-rollback).
+follow [Upgrade and rollback](/operations/upgrade-and-rollback).
 
 ## Choose what to check
 
@@ -31,15 +31,15 @@ Stack lists show detected changes, excluding unknown and failed checks.
 3. For a Git Stack, inspect changed source and watched paths. A pinned commit
    stays pinned. A manual Stack check does not update sibling Stacks; repository
    **Sync** can trigger their configured automatic-deployment policies. Repository
-   [On Clone / On Pull hooks](/docs/resources/git-repositories#clone-and-pull-hooks)
+   [On Clone / On Pull hooks](/resources/git-repositories#clone-and-pull-hooks)
    run during synchronization when configured.
 4. Save any intended configuration change, then deploy or apply. Keep the
    progress view connected and inspect the final operation result.
 5. Verify current containers or Tasks, logs, and the application endpoint. Keep
    the previous artifact and data backup until the new version is verified.
 
-Use [Git update and recovery instructions](/docs/resources/stacks/git#review-and-deploy-an-update)
-or the [Build-to-deployment workflow](/docs/resources/builds#deploy-the-image)
+Use [Git update and recovery instructions](/resources/stacks/git#review-and-deploy-an-update)
+or the [Build-to-deployment workflow](/resources/builds#deploy-the-image)
 for those sources. To change a fixed image version, edit its tag explicitly;
 digest-pinned images do not follow a moving tag.
 
@@ -54,14 +54,14 @@ registry metadata is unavailable—the check fails without automatically deployi
 
 ## Enable automation after the manual path works
 
-Start with **Notify Only** and attach an [alert channel](/docs/resources/alert-rules).
+Start with **Notify Only** and attach an [alert channel](/resources/alert-rules).
 Enable automatic deployment only for the resources and tags you intend to follow.
 Automatic operations require the capabilities described in each resource guide.
 An accepted webhook or successful Build is not proof that the application is ready.
 
 Choose the scope deliberately: Docker Standalone Stacks support service-scoped
 updates; Swarm Stacks apply the complete Stack and use Swarm's rollout settings.
-See [Stack update behavior](/docs/resources/stacks/web-editor#update-behavior).
+See [Stack update behavior](/resources/stacks/web-editor#update-behavior).
 
 ## Handle drift separately
 
@@ -81,8 +81,8 @@ Read the failed operation and current runtime state before retrying. A Stack can
 use a previously healthy release, but rollback does not restore volumes or old
 secret values. Mutable image tags may also resolve differently. Git Stacks need
 an explicit commit selection for exact source recovery. See
-[Stack rollback](/docs/resources/stacks/web-editor#rollback) and
-[Git rollback](/docs/resources/stacks/git#rollback).
+[Stack rollback](/resources/stacks/web-editor#rollback) and
+[Git rollback](/resources/stacks/git#rollback).
 
 For a Deployment, restore the intended saved configuration and previous image
 reference, then redeploy. Verify application data compatibility separately;

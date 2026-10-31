@@ -21,7 +21,7 @@ chmod 600 .env
 ```
 
 Keep both files in this directory. For an existing installation, follow
-[upgrade and rollback](/docs/operations/upgrade-and-rollback) and keep your
+[upgrade and rollback](/operations/upgrade-and-rollback) and keep your
 existing `.env` and Compose project name.
 
 If the download returns `404` because repository access is restricted, open
@@ -32,17 +32,17 @@ and run `chmod 600 .env`.
 
 ## 2. Configure Citadel
 
-Open `.env` in a text editor and set:
+Open `.env` in a text editor and set **`PG_PASSWORD`** to a long, unique
+password containing letters and numbers, without surrounding quotes.
+You can generate one with `openssl rand -hex 32`. This is the only required
+setting and is separate from your Citadel sign-in password.
 
-- **`CITADEL_IMAGE`**: leave blank to use the default `latest` image tag, or set a complete published image address.
-- **`PG_PASSWORD`**: a long, unique database password containing letters and
-  numbers, without surrounding quotes. You can generate one with
-  `openssl rand -hex 32`.
+If port `18000` is already in use, uncomment `CITADEL_HTTP_PORT` and choose
+another port. The local browser URL follows that port automatically.
 
-The database password is separate from your Citadel sign-in password.
-With `CITADEL_IMAGE` blank, Compose uses `ghcr.io/citadel-p/citadel:latest`.
-To pin a specific version instead, set it to the complete image address from
-your chosen [release](https://github.com/Citadel-P/Citadel/releases).
+Compose uses `ghcr.io/citadel-p/citadel:latest` by default. To pin a version,
+add `CITADEL_IMAGE` with the complete image address from your chosen
+[release](https://github.com/Citadel-P/Citadel/releases).
 
 The selected image must be published and accessible to your Docker host.
 Restricted packages require registry access; a tag that has not been published
@@ -53,7 +53,8 @@ to build from a checkout.
 ### Network access
 
 The supplied `.env` uses local HTTP. Its default browser address is
-`http://localhost:18000`; both published ports bind to `127.0.0.1`.
+`http://localhost:18000`; only the browser/API port is published, bound to `127.0.0.1`.
+Edge Agent host access is optional; see [Edge Agent access](/getting-started/configuration#edge-agent-access).
 
 For a shared installation, choose one of these options:
 
@@ -62,18 +63,23 @@ For a shared installation, choose one of these options:
 | Reverse proxy | You already have a proxy that manages HTTPS certificates | `CITADEL_TRANSPORT_MODE=ReverseProxy`, public URLs, trusted proxy addresses, and an HTTP/2 gRPC route if you use Edge Agents |
 | Direct TLS | Citadel will serve HTTPS itself | `CITADEL_TRANSPORT_MODE=Direct`, public URLs, certificates, and `compose.direct-tls.yml` |
 
-Follow [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport)
+Follow [TLS and secure Agent transport](/operations/tls-and-secure-agent-transport)
 for the full settings. Do not simply change the bind address to `0.0.0.0`
 while leaving local HTTP enabled. Set `CITADEL_PUBLIC_URL` to the browser
-address users will actually open. If you use Edge Agents, also set
-`CITADEL_EDGE_PUBLIC_GRPC_URL` to the separate address those Agents can reach.
+address users will actually open. Whenever Core uses HTTPS—through a reverse
+proxy or with its own certificate—it also requires an HTTPS
+`CITADEL_EDGE_PUBLIC_GRPC_URL`, even when you do not use Edge Agents.
+In that case, set it to the same HTTPS URL as `CITADEL_PUBLIC_URL`; no Edge port
+publication or gRPC proxy route is needed. Before connecting Edge Agents,
+configure it to the reachable gRPC endpoint and enable the corresponding route
+or port publication.
 
 For a complete reverse-proxy setup using the same Compose installation, follow
-[Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy).
+[Reverse proxy with Caddy](/operations/reverse-proxy-caddy).
 
 ## 3. Start and check
 
-For local HTTP or a configured reverse proxy, run from your `citadel`
+For local HTTP, run from your `citadel`
 installation directory:
 
 ```bash
@@ -83,7 +89,7 @@ docker compose ps
 ```
 
 For direct TLS, download the overlay described in the
-[TLS guide](/docs/operations/tls-and-secure-agent-transport#direct-core-tls)
+[TLS guide](/operations/tls-and-secure-agent-transport#direct-core-tls)
 and use these commands instead:
 
 ```bash
@@ -93,24 +99,26 @@ docker compose -f docker-compose.yml -f compose.direct-tls.yml ps
 ```
 
 The overlay mounts the certificate directory; the base Compose file controls
-host bindings and ports. Include the overlay in later Compose commands too.
+the browser host binding and port. For Edge Agents, also include the Edge
+overlay as shown in the TLS guide. Include your overlays in later Compose commands too.
+For a reverse proxy, use the Compose commands in your chosen proxy guide.
 
 Wait until `server` and `pg_db` are healthy. For the default local setup, open
 [http://localhost:18000](http://localhost:18000) on the Docker host and create
 your administrator account. There are no default credentials. If you installed
 on a remote server, use the HTTPS address you configured above.
 
-Complete [first-run setup](/docs/getting-started/first-run-setup),
-then [connect your first Platform](/docs/getting-started/first-platform).
+Complete [first-run setup](/getting-started/first-run-setup),
+then [connect your first Platform](/getting-started/first-platform).
 
 ## 4. Protect your installation data
 
 Keep `.env` private. Keep the `citadel_data` and `postgres_data` volumes: together
 they hold accounts, settings, history, and the keys used to protect saved secrets.
-Configure a [control-plane backup](/docs/resources/backups) and keep a copy away
+Configure a [control-plane backup](/resources/backups) and keep a copy away
 from the Docker host. Do not delete these volumes during an upgrade.
 
-See [requirements](/docs/getting-started/requirements),
-[configuration](/docs/getting-started/configuration), and
-[upgrade and rollback](/docs/operations/upgrade-and-rollback) when planning a
+See [requirements](/getting-started/requirements),
+[configuration](/getting-started/configuration), and
+[upgrade and rollback](/operations/upgrade-and-rollback) when planning a
 permanent installation.

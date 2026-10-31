@@ -8,13 +8,13 @@ defines the source, builder, image tags, and optional Registry destination;
 each run records its commit, output, and logs.
 
 Use a Build Project for Dockerfile builds. Use
-[Scripts](/docs/resources/scripts) for scripts that call
+[Scripts](/resources/scripts) for scripts that call
 Citadel APIs or coordinate operational tasks.
 
 ## Build your first image
 
-You need a synced [repository](/docs/resources/git-repositories), a Dockerfile,
-an online builder Platform, and a [registry](/docs/resources/registries) that can
+You need a synced [repository](/resources/git-repositories), a Dockerfile,
+an online builder Platform, and a [registry](/resources/registries) that can
 accept image pushes. Ask the application's maintainer for the build paths.
 
 1. Open **Build Projects**, select **Add Build**, and enter a name.
@@ -33,7 +33,7 @@ application until a Deployment or Stack uses its output.
 
 ### Deploy the image
 
-1. Create or open a [Deployment](/docs/resources/deployments) on a Docker Standalone Platform.
+1. Create or open a [Deployment](/resources/deployments) on a Docker Standalone Platform.
 2. Choose **Build** as its image source and select this Build Project. Configure
    the application's networks, ports, storage, and bindings.
 3. Leave **Redeploy On Build** disabled for the first deployment. Save, then
@@ -101,7 +101,7 @@ Build Pool builds run on a reusable build pool instead of a Docker platform. For
 
 Build Pool execution currently supports only self-managed VM pools using inbound
 or Edge Agents. AWS EC2 provisioning is not implemented; manually provisioned
-AWS VMs can use the self-managed provider. See [Build Pools](/docs/resources/build-pools).
+AWS VMs can use the self-managed provider. See [Build Pools](/resources/build-pools).
 
 Executing a build through a Build Pool requires `Elastic Build Execution`.
 Creating, testing, updating, disabling, or deleting the pool definition does
@@ -109,10 +109,10 @@ not.
 
 ## Prerequisites
 
-Connect the [Git repository](/docs/resources/git-repositories), an online
-[Platform](/docs/resources/platforms) or [Build Pool](/docs/resources/build-pools),
-and a [Registry with push access](/docs/resources/registries). Prepare any
-[stored secrets](/docs/guides/variables-and-secrets) required by the Dockerfile.
+Connect the [Git repository](/resources/git-repositories), an online
+[Platform](/resources/platforms) or [Build Pool](/resources/build-pools),
+and a [Registry with push access](/resources/registries). Prepare any
+[stored secrets](/guides/variables-and-secrets) required by the Dockerfile.
 Keep Git credentials, Registry credentials, and Dockerfile secret mounts separate:
 they authorize different parts of the build.
 
@@ -215,7 +215,7 @@ In monorepos, prefer the smallest service directory as the context instead of us
 
 ## Build Pools
 
-To run builds on dedicated builder infrastructure, configure a [Build Pool](/docs/resources/build-pools)
+To run builds on dedicated builder infrastructure, configure a [Build Pool](/resources/build-pools)
 and select it as the project's runner. The pool documentation covers inbound
 Agent and Edge Agent setup, connection status, and availability alerts.
 
@@ -390,7 +390,7 @@ The activity summary includes the outcome reason. Routine no-ops (no relevant
 changes, no new commit, or a filtered branch or event) do not create activity
 entries; the webhook response still contains the reason.
 
-For the shared listener URL format and provider setup, see [Webhooks](/docs/guides/webhooks).
+For the shared listener URL format and provider setup, see [Webhooks](/guides/webhooks).
 
 ## Logs And History
 

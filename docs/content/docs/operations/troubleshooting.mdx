@@ -25,8 +25,8 @@ docker compose logs --tail=100 server pg_db
 Check Docker is running on the target host. For a regular Agent, check its
 container and whether Core can reach its Agent address. For an Edge Agent,
 check enrollment and whether it can reach Core's **gRPC** address. Follow
-[Agent troubleshooting](/docs/operations/agent#troubleshooting) or
-[Edge Agent troubleshooting](/docs/operations/edge-agent#troubleshooting).
+[Agent troubleshooting](/operations/agent#troubleshooting) or
+[Edge Agent troubleshooting](/operations/edge-agent#troubleshooting).
 
 For Swarm, check manager health and node-agent coverage. Adding another Platform
 record for the same Docker engine will not repair connectivity.
@@ -52,15 +52,15 @@ connection loss releases its live subscriptions and interactive terminal; claime
 deployments and other durable operations continue independently.
 
 If the problem persists behind a reverse proxy, check WebSocket upgrades and
-long-lived connection timeouts. See [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport)
-or the [Caddy example](/docs/operations/reverse-proxy-caddy).
+long-lived connection timeouts. See [TLS and secure Agent transport](/operations/tls-and-secure-agent-transport)
+or the [Caddy example](/operations/reverse-proxy-caddy).
 
 ## An action is unavailable
 
 Check the disabled action's explanation, then review:
 
 - **Access:** your Role and any resource-specific permissions. Seeing a resource
-  does not grant permission for every action; see [access control](/docs/guides/access-control).
+  does not grant permission for every action; see [access control](/guides/access-control).
 - **State:** wait for an operation in progress, restore the Platform connection,
   or refresh stale container information.
 - **Ownership:** manage Swarm Tasks through their Service or Stack. Citadel's
@@ -69,19 +69,19 @@ Check the disabled action's explanation, then review:
   targets. Networks and volumes in use cannot be deleted from their lists.
 
 For an option marked as license-restricted, check
-[feature availability](/docs/overview/licensing). A license change does not
+[feature availability](/overview/licensing). A license change does not
 replace the user's permissions or the action's runtime requirements.
 
 ## A resource or account is missing
 
-Clear list filters and try [global search](/docs/guides/finding-resources).
+Clear list filters and try [global search](/guides/finding-resources).
 Search only returns resources your account can read. Ask an administrator to
 review your Roles, enabled Team memberships, and direct grants if expected access
 is missing. An empty **Updates available** list only means no detected updates
 match the current filters.
 
 For sign-in problems, check the account's enabled state, use an MFA recovery
-code when applicable, or follow [OIDC troubleshooting](/docs/guides/oidc-providers#troubleshooting).
+code when applicable, or follow [OIDC troubleshooting](/guides/oidc-providers#troubleshooting).
 Another administrator can help recover a local account. Restarting Core does
 not reopen setup; do not delete installation data to reset a password.
 
@@ -90,11 +90,11 @@ not reopen setup; do not delete installation data to reset a password.
 The container must be running and your account must have terminal access. Choose
 **sh** if the image does not include **bash**; some minimal images have no shell.
 For a Swarm Task on another Node, verify
-[node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage).
+[node coverage](/resources/platforms/docker-swarm#understand-cluster-node-coverage).
 If logs and statistics also stop updating, check the browser connection above.
 
-See [container tools](/docs/resources/docker/containers) for the normal workflow
-and [volume troubleshooting](/docs/resources/docker/volumes#if-browsing-fails)
+See [container tools](/resources/docker/containers) for the normal workflow
+and [volume troubleshooting](/resources/docker/volumes#if-browsing-fails)
 for file access problems.
 
 ## An application will not deploy
@@ -114,25 +114,25 @@ container does not always mean the application inside it is ready.
 
 Saving a Stack, Deployment, or binding changes Citadel's desired configuration.
 Deploy or apply the consuming resource to change its runtime. Check which image,
-commit, and release actually ran; [update checks](/docs/guides/application-updates)
+commit, and release actually ran; [update checks](/guides/application-updates)
 detect changes without applying them.
 
 For unresolved or stale secret values, use
-[binding troubleshooting](/docs/guides/variables-and-secrets#troubleshooting).
+[binding troubleshooting](/guides/variables-and-secrets#troubleshooting).
 For image pulls or Build pushes, use
-[registry troubleshooting](/docs/resources/registries#troubleshooting).
+[registry troubleshooting](/resources/registries#troubleshooting).
 
 ## An alert arrives, or an expected notification is missing
 
 Open **Alerts** and inspect the event's resource, time, and **Info**. Check the
 resource's current state before acting on an older notification. Acknowledge
 while investigating and resolve after verifying recovery; neither action
-changes the workload. See [responding to an alert](/docs/resources/alert-rules#respond-to-an-alert).
+changes the workload. See [responding to an alert](/resources/alert-rules#respond-to-an-alert).
 
 If no message arrives, first check whether Citadel created an event. No event
 points to rule evaluation, scope, or unavailable observations. An event without
 a message points to channel assignment or delivery. Follow
-[alert troubleshooting](/docs/resources/alert-rules#troubleshooting) for each case.
+[alert troubleshooting](/resources/alert-rules#troubleshooting) for each case.
 
 ## Get help
 

@@ -33,6 +33,7 @@ import { Constants } from '@/lib/constants';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { MonacoEditor, type MonacoDiagnostic } from '@/lib/monaco';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useQueryClient } from '@tanstack/react-query';
 import { GitBranch, Plus, Trash2 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -363,17 +364,21 @@ const BuildSecretsField = ({
             </div>
             <div className="flex min-w-0 flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">Citadel Secret</span>
-              <FieldSelect
-                value={hasSecretSelection ? secret.secretId : undefined}
-                options={secretOptions}
-                disabled={disabled || isLoading || secretOptions.length === 0}
-                placeholder={isLoading ? 'Loading secrets...' : 'Select secret'}
-                onChange={(secretId) => setSecret(index, { secretId })}
-                className="w-full max-w-full"
-              />
-              {!isLoading && secretOptions.length === 0 ? (
+              {disabled ? (
+                <Input value={secret.secretId} disabled className="w-full max-w-full" />
+              ) : (
+                <FieldSelect
+                  value={hasSecretSelection ? secret.secretId : undefined}
+                  options={secretOptions}
+                  disabled={disabled || isLoading || secretOptions.length === 0}
+                  placeholder={isLoading ? 'Loading secrets...' : 'Select secret'}
+                  onChange={(secretId) => setSecret(index, { secretId })}
+                  className="w-full max-w-full"
+                />
+              )}
+              {!disabled && !isLoading && secretOptions.length === 0 ? (
                 <p className="text-xs text-amber-600">Create a Citadel secret before adding build secrets.</p>
-              ) : secret.secretId && !hasSecretSelection ? (
+              ) : !disabled && secret.secretId && !hasSecretSelection ? (
                 <p className="text-xs text-amber-600">Selected secret is no longer available.</p>
               ) : (
                 <p className="text-xs text-muted-foreground">Secret value is resolved only when the run starts.</p>
@@ -488,12 +493,16 @@ export const BuildForm = ({
   );
   const { data: platformsData, isLoading: isLoadingPlatforms } = useRead('listPlatforms');
   const { data: buildPoolsData, isLoading: isLoadingBuildPools } = useRead('listBuildAgentPools');
-  const { data: secretsData, isLoading: isLoadingSecrets } = useRead('listSecretDefinitions', {
-    query: {
-      targetResourceType: ResourceType.Build,
-      targetResourceId: id,
+  const { data: secretsData, isLoading: isLoadingSecrets } = useRead(
+    'listSecretDefinitions',
+    {
+      query: {
+        targetResourceType: ResourceType.Build,
+        targetResourceId: id,
+      },
     },
-  });
+    { enabled: !disabled },
+  );
   const gitRefs = useMemo(() => gitRefsData?.data.refs ?? [], [gitRefsData?.data.refs]);
   const gitBranches = useMemo(
     () => mapBranchOptions(gitBranchesData?.data.branches ?? [], gitRefs),
@@ -940,7 +949,7 @@ export const BuildForm = ({
                 label: 'Build secrets',
                 description:
                   'Map BuildKit secret ids to existing Citadel secrets. Do not put raw secret values in build arguments.',
-                validate: (value) => validateBuildSecrets(value, secrets, isLoadingSecrets),
+                validate: (value) => (disabled ? null : validateBuildSecrets(value, secrets, isLoadingSecrets)),
                 render: (value, set) => (
                   <BuildSecretsField
                     value={value ?? []}

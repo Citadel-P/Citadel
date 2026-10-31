@@ -1,0 +1,41 @@
+/* ReDoc 3 injects :root and :root.dark defaults at runtime. Keep our mappings
+   more specific so both themes use the portal palette regardless of load order. */
+html:root,
+html:root.dark {
+  --font-family-base: var(--font-sans);
+  --font-family-monospaced: var(--font-mono);
+  --border-radius: var(--citadel-radius);
+  --bg-color: var(--citadel-canvas);
+  --bg-color-raised: var(--citadel-surface);
+  --bg-color-hover: var(--citadel-surface-soft);
+  --bg-color-active: var(--citadel-accent-soft);
+  --bg-color-tonal: var(--citadel-surface-soft);
+  --bg-color-tonal-hover: var(--citadel-surface);
+  --bg-color-tonal-active: var(--citadel-accent-soft);
+  --text-color-primary: var(--citadel-text);
+  --text-color-secondary: var(--citadel-text-muted);
+  --text-color-description: var(--citadel-text-muted);
+  --text-color-on-color: var(--citadel-action-text);
+  --border-color-primary: var(--citadel-rule);
+  --border-color-secondary: var(--citadel-rule);
+  --color-hover-base: var(--citadel-surface-soft);
+  --color-primary-base: var(--citadel-action);
+  --color-primary-hover: var(--citadel-action-hover);
+  --color-primary-active: var(--citadel-action-hover);
+  --color-primary-bg: var(--citadel-accent-soft);
+  --color-primary-bg-hover: var(--citadel-accent-soft);
+  --color-primary-border: var(--citadel-control-border);
+  --color-primary-border-hover: var(--citadel-accent);
+  --color-primary-text: var(--citadel-accent);
+  --color-primary-text-hover: var(--citadel-accent);
+  --color-primary-text-active: var(--citadel-accent);
+  --tree-content-color-default: var(--citadel-text-muted);
+  --tree-content-color-hover: var(--citadel-text);
+  --sidebar-bg-color: var(--citadel-surface);
+  --sidebar-width: 240px;
+}
+
+/* Use the documentation header's theme control for the entire page. */
+.docs-api-reference [data-testid='color-mode-switcher'] {
+  display: none;
+}

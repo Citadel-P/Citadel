@@ -159,7 +159,7 @@ During deploy, Citadel:
 
 Auto update for deployments also depends on the selected registry. It checks the configured external image tag for a new digest.
 
-For deployment setup, see [Deployments](/docs/resources/deployments).
+For deployment setup, see [Deployments](/resources/deployments).
 
 ## Using Registries In Web Editor Stacks
 
@@ -169,7 +169,7 @@ The selected Platform determines whether deployment uses Docker Compose or a
 native Swarm Stack. The Compose definition or Build Images bindings determine
 the images used by its services.
 
-For web editor stack setup, see [Web Editor Stacks](/docs/resources/stacks/web-editor).
+For web editor stack setup, see [Web Editor Stacks](/resources/stacks/web-editor).
 
 ## Using Registries In Builds
 
@@ -199,7 +199,7 @@ ghcr.io/acme/platform/api:latest
 Private image pulls need read access. Publishing Build output also needs push
 access to the destination repository.
 
-For build setup, see [Builds](/docs/resources/builds).
+For build setup, see [Builds](/resources/builds).
 
 ## Pulling Images To A Platform
 
@@ -240,7 +240,7 @@ credentials does not recreate running containers.
 
 Inspect the failed operation's logs before retrying. Confirm the resulting image
 reference and application health after a successful deployment; see
-[Update applications](/docs/guides/application-updates).
+[Update applications](/guides/application-updates).
 
 ## Choosing A Registry
 

@@ -9,7 +9,7 @@ Use a stack instead when the workload needs multiple services, Compose networks,
 
 To bring an existing standalone Docker container under Citadel management
 without recreating it first, see
-[Adopt existing workloads](/docs/guides/adopting-existing-workloads).
+[Adopt existing workloads](/guides/adopting-existing-workloads).
 
 ## Health
 
@@ -41,7 +41,7 @@ You need an online Docker Standalone Platform and an image name.
 4. Select **Save**, then **Deploy**. Wait for the operation to finish.
 5. Open the Deployment to check its container and logs.
 
-For a complete example, follow [your first Deployment](/docs/getting-started/first-deployment).
+For a complete example, follow [your first Deployment](/getting-started/first-deployment).
 The sections below explain the other settings. Saving alone does not update the running container.
 
 ## Image Source
@@ -53,7 +53,7 @@ Use this for normal deployments:
 - Registry: the configured Citadel registry to pull from
 - Image reference: the image and tag, for example `nginx:1.27` or `ghcr.io/example/api:1.4.2`
 
-For registry setup, see [Registries](/docs/resources/registries).
+For registry setup, see [Registries](/resources/registries).
 
 Local images are selected from images that already exist on the target Docker host.
 
@@ -79,7 +79,7 @@ You can save a deployment before the selected build has a successful run. The fo
 
 Citadel deploys the stored desired artifact and pins it to its digest when available. It falls back to the latest successful build only when the deployment has not resolved an artifact yet.
 
-For build setup and webhook-triggered builds, see [Builds](/docs/resources/builds).
+For build setup and webhook-triggered builds, see [Builds](/resources/builds).
 
 Auto update is only available for external image sources. It is disabled for local images and for external images pinned by digest, such as `nginx@sha256:...`.
 
@@ -89,7 +89,7 @@ Build images use `Redeploy On Build` instead of registry auto update.
 
 Select the Docker networks the container should join. The networks must already exist on the target platform.
 
-To create one first, follow [Networks](/docs/resources/docker/networks).
+To create one first, follow [Networks](/resources/docker/networks).
 
 Use the same network for containers that need to communicate with each other. Use a public or proxy network when a reverse proxy needs to reach the deployment.
 
@@ -121,7 +121,7 @@ app_data:/data
 
 Use Docker named volumes for application data you want Citadel to track for backup policies.
 
-See [Volumes](/docs/resources/docker/volumes) to create storage or browse its contents.
+See [Volumes](/resources/docker/volumes) to create storage or browse its contents.
 
 Deployment storage policies include explicitly named volume sources and supported bind mounts discovered from the synchronized container, such as `/srv/app/config:/etc/app`. Host-path backups require Platform write access.
 
@@ -145,7 +145,7 @@ PUBLIC_URL=${APP_PUBLIC_URL}
 
 Define referenced values on the deployment `Bindings` tab or as global bindings. At deploy time, Citadel resolves only the referenced keys, injects them into the container environment, and redacts secret values from logs and activity output.
 
-For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets).
+For more detail, see [Variables and secrets](/guides/variables-and-secrets).
 
 ## Auto Update
 
@@ -177,7 +177,7 @@ failed are not shown as having an available update.
 
 Use `Notify Only` for production deployments until the image tag and rollback process are proven. Use explicit version tags for predictable updates.
 
-Follow [Update applications](/docs/guides/application-updates) for the complete
+Follow [Update applications](/guides/application-updates) for the complete
 check, deploy, verify, and recovery workflow.
 
 ## Resources
@@ -287,7 +287,7 @@ data does not require a backup policy; confirm source consistency first. It rest
 into fresh volumes before creating an undeployed Deployment. Existing backups in a
 reachable S3-compatible repository can be restored on another Standalone Platform;
 current-data copies stay on the source Platform. Bind mounts and anonymous mappings must be handled separately;
-see [Copy a workload with data](/docs/resources/backups#copy-a-workload-with-data)
+see [Copy a workload with data](/resources/backups#copy-a-workload-with-data)
 for requirements and recovery.
 
 ## Adopt An Existing Container
@@ -301,7 +301,7 @@ Adoption does not deploy anything. A later Redeploy can recreate the container
 from the reviewed definition. Containers that belong to Docker Compose must be
 imported as complete Stacks instead.
 
-See [Adopt existing workloads](/docs/guides/adopting-existing-workloads) for eligibility, secret
+See [Adopt existing workloads](/guides/adopting-existing-workloads) for eligibility, secret
 handling, unsupported runtime settings, and first Redeploy guidance.
 
 ## Backups
@@ -330,14 +330,14 @@ host data. A direct **Host file or directory** policy can also protect a single
 path. Tmpfs, nested mounts, system/runtime paths, and writable layers remain excluded.
 The protected count covers listed storage targets, not all application state.
 
-For backup setup and restore behavior, see [Backups](/docs/resources/backups).
+For backup setup and restore behavior, see [Backups](/resources/backups).
 
 Use **Backup Filter** at the right of the resource header to filter by backup status.
 The resource table displays a **Backup** column. Hover over its shield to see
 the same coverage card as on the resource page. Manual-only or disabled policies
 show amber, even after a successful manual run. Green requires an active schedule,
 a ready repository, and a successful available backup for all eligible storage.
-See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages) for all
+See [Backup coverage](/resources/backups#coverage-on-resource-pages) for all
 status meanings and scheduling requirements.
 
 ## Diagnose a Failed Deployment
@@ -370,7 +370,7 @@ requires a running container and no Deployment operation in progress.
 
 Expand **Processes** below the Inspect data to view the container's running
 processes. This section requires Platform Read and Inspect permission and uses
-the same cached snapshots and live updates as the [container Processes view](/docs/resources/docker/containers#processes).
+the same cached snapshots and live updates as the [container Processes view](/resources/docker/containers#processes).
 
 If the Platform is offline, live tools are unavailable. Previously loaded
 container details are marked as last known; retained statistics and **Activities**

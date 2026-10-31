@@ -3,7 +3,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PlayCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export function LastRunCell({ status, children }: { status?: string; children?: ReactNode }) {
+export function LastRunCell({
+  status,
+  children,
+  labelPrefix = 'Last run',
+}: {
+  status?: string;
+  children?: ReactNode;
+  labelPrefix?: string;
+}) {
   if (!status) return <span className="text-sm text-muted-foreground">No runs</span>;
 
   const label = status.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
@@ -20,7 +28,7 @@ export function LastRunCell({ status, children }: { status?: string; children?: 
     <div className="inline-flex items-center gap-2 text-sm">
       <Tooltip>
         <TooltipTrigger asChild>
-          <span role="img" aria-label={`Last run: ${displayStatus}`} className="inline-flex">
+          <span role="img" aria-label={`${labelPrefix}: ${displayStatus}`} className="inline-flex">
             <PlayCircle aria-hidden="true" className={`size-3.5 ${iconColor}`} />
           </span>
         </TooltipTrigger>

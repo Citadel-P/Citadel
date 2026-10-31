@@ -24,7 +24,7 @@
 :is(#nd-sidebar, #nd-sidebar-mobile) button[aria-expanded] {
   min-height: 34px;
   padding-block: 6px;
-  border-radius: 6px;
+  border-radius: var(--citadel-radius);
   overflow-wrap: normal;
 }
 
@@ -46,7 +46,7 @@
 
 :is(#nd-sidebar, #nd-sidebar-mobile) a[data-active='true']::before {
   width: 2px;
-  border-radius: 2px;
+  border-radius: var(--citadel-radius);
 }
 
 :is(#nd-sidebar, #nd-sidebar-mobile) :is(a, button):focus-visible {
@@ -69,7 +69,7 @@
   align-items: center;
   gap: 4px;
   min-height: 32px;
-  border-radius: 4px;
+  border-radius: var(--citadel-radius);
   color: var(--citadel-text-muted);
   font-size: 0.75rem;
   line-height: 1.25rem;

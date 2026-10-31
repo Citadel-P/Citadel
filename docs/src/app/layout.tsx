@@ -1,4 +1,6 @@
 import { Provider } from '@/components/provider';
+import { Analytics } from '@/components/analytics/analytics';
+import { source } from '@/lib/source';
 import { docsAssetUrl, getSiteUrl } from '@/lib/shared';
 import type { Metadata } from 'next';
 import './global.css';
@@ -17,7 +19,14 @@ export default function Layout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
-        <Provider>{children}</Provider>
+        <Analytics
+          siteUrl={getSiteUrl()}
+          routes={Object.fromEntries(
+            source.getPages().map((page) => [page.url.replace(/\/$/, '') || '/', page.data.title]),
+          )}
+        >
+          <Provider>{children}</Provider>
+        </Analytics>
       </body>
     </html>
   );

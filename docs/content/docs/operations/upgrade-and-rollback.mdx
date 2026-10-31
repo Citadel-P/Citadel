@@ -14,13 +14,13 @@ verified data import. Preserve the original database and recovery keys until
 recovery is verified.
 
 Use the matching current Core, Agent, and frontend build. See
-[development database changes](/docs/reference/releases#development-database-changes)
+[development database changes](/reference/releases#development-database-changes)
 for baseline and recovery considerations.
 Never rewrite applied migration history or checksums to force an upgrade.
 
 ## Release notifications
 
-[Update checks](/docs/getting-started/configuration#allow-update-checks) are enabled
+[Update checks](/getting-started/configuration#allow-update-checks) are enabled
 by default. Administrators can change the installation-wide choice in **Profile →
 Instance settings**. `CITADEL_UPDATE_CHECKS_ENABLED=false` forces checks off.
 Administrators see newer releases in their installed channel on
@@ -41,7 +41,7 @@ Updates remain manual. With checks disabled, follow the
    restores to finish; arrange a maintenance window for scheduled operations.
 3. Run a **Citadel system** policy and wait for success. Record its snapshot ID
    and verify that you can export it using credentials stored outside Citadel.
-   Follow [control-plane recovery](/docs/operations/control-plane-recovery#create-a-backup).
+   Follow [control-plane recovery](/operations/control-plane-recovery#create-a-backup).
 4. Keep the current Compose files, overlays, private `.env`, external recovery
    keys, and exact Core and Agent image references with the recovery record.
    Rehearse recovery before relying on this as your rollback plan.
@@ -49,12 +49,12 @@ Updates remain manual. With checks disabled, follow the
 The control-plane bundle includes the PostgreSQL dump, Citadel configuration and
 required recovery keys. Keep an exported copy and its recovery credentials outside
 the installation being upgraded. GitHub release attachments describe the published
-images; they do not contain a backup of your installation. Application data needs its own [workload backups](/docs/resources/backups); recovering Core
+images; they do not contain a backup of your installation. Application data needs its own [workload backups](/resources/backups); recovering Core
 does not revert application databases or volume contents.
 
 ## Upgrade
 
-If **`CITADEL_IMAGE`** is blank, pulling selects the currently published `latest`
+If **`CITADEL_IMAGE`** is unset or blank, pulling selects the currently published `latest`
 image tag. Confirm that this is the version you intend to install.
 If you pinned a version, change it to the complete image address for your chosen
 release, for example `ghcr.io/citadel-p/citadel:VERSION` with `VERSION` replaced.
@@ -63,6 +63,11 @@ Keep your existing Compose project name and volumes. Downloading a fresh `.env`
 or changing `COMPOSE_PROJECT_NAME` can start a separate installation instead of
 upgrading the existing one. Apply any Compose changes required by the release
 notes to your existing files.
+
+If you replace the base installer Compose file and need host access to the Edge
+listener, include [the Edge overlay](/getting-started/configuration#edge-agent-access).
+The base installer publishes only the browser/API port. Containerized proxies
+using `server:8001` do not need host publication.
 
 From your installation directory, check the configuration and pull Core before
 replacing the running container:
@@ -110,7 +115,7 @@ Changing the image back does **not** undo database changes.
 | Database compatibility is unknown or a migration prevents downgrade | Stop Core and restore the pre-upgrade control-plane bundle into a clean environment using its recorded image. |
 
 For data recovery, follow the complete
-[control-plane recovery procedure](/docs/operations/control-plane-recovery#restore-into-a-clean-environment).
+[control-plane recovery procedure](/operations/control-plane-recovery#restore-into-a-clean-environment).
 Keep the failed installation's volumes intact until recovery is verified.
 Restoring an earlier snapshot loses Citadel configuration and history recorded
 after that snapshot. Workloads may have changed independently, so compare their

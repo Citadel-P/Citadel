@@ -230,7 +230,7 @@ the caller cannot replace the code or run-as account in the run request.
 Citadel creates a short-lived internal token for each Action run. It does not
 copy or expose the Service Account's persistent API token to the script.
 
-See [Scripts](/docs/resources/scripts) for Script configuration and
+See [Scripts](/resources/scripts) for Script configuration and
 execution behavior.
 
 ## Use With Backup Policies
@@ -245,7 +245,7 @@ webhook-triggered backups also require **Automated Operations**.
 Manual backups use the authenticated caller. Backups requested from an
 Script use that Action run's identity.
 
-See [Backups](/docs/resources/backups) for source, repository, scheduling, and restore
+See [Backups](/resources/backups) for source, repository, scheduling, and restore
 behavior.
 
 ## Service Account Tokens And Webhook Secrets
@@ -261,7 +261,7 @@ Do not paste a Service Account token into a webhook secret field. Use a Service
 Account token when calling an authenticated `/api/v1` endpoint, and use the
 generated webhook secret only with that resource's listener URL.
 
-See [Webhooks](/docs/guides/webhooks) for provider-specific listener authentication.
+See [Webhooks](/guides/webhooks) for provider-specific listener authentication.
 
 ## Troubleshooting
 

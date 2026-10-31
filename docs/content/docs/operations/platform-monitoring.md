@@ -7,10 +7,10 @@ Citadel reports CPU, memory, network, and Docker storage filesystem usage for
 Local, regular Agent, and Platform Edge Agent connections.
 
 Open the Platform's **Stats** tab for host history, or a
-[container's **Stats** tab](/docs/resources/docker/containers#inspect-a-container)
+[container's **Stats** tab](/resources/docker/containers#inspect-a-container)
 for an individual workload. If the header reports interrupted live updates,
 displayed information may be outdated; follow
-[connection troubleshooting](/docs/operations/troubleshooting#live-updates-stop).
+[connection troubleshooting](/operations/troubleshooting#live-updates-stop).
 
 ## Choose a time range
 
@@ -68,7 +68,7 @@ readings do not replace a complete saved total.
 3. For CPU or memory pressure, inspect the busy containers' **Stats** and logs.
    For disk pressure, check the filesystem described below before removing data.
 4. After addressing the cause, confirm fresh readings and application health,
-   then review the alert's [resolution state](/docs/resources/alert-rules#respond-to-an-alert).
+   then review the alert's [resolution state](/resources/alert-rules#respond-to-an-alert).
 
 Assign notification channels to the built-in capacity rules under
 **Settings → Alert Rules** to receive future alerts. Custom thresholds and
@@ -109,8 +109,8 @@ When both thresholds match, the Critical rule takes precedence. Configure
 channels on both rules if you need notifications at both severities; cooldown
 does not send periodic reminders for an open incident.
 
-Inspect unused [images](/docs/resources/docker/images) and
-[volumes](/docs/resources/docker/volumes) before deleting anything. Other files
+Inspect unused [images](/resources/docker/images) and
+[volumes](/resources/docker/volumes) before deleting anything. Other files
 on the same filesystem can also consume space, so Docker cleanup may not remove
 the cause. Confirm that a volume's data is no longer needed before deleting it.
 
@@ -124,7 +124,7 @@ The platform summary counts backup policies attached to that platform through a
 Docker volume, bind mount, stack, deployment, or managed Swarm Service. Citadel control-plane backups are
 instance-wide, so they are shown on the main **Backups** page and are not
 included in a platform's total. See
-[Backups](/docs/resources/backups#backup-counts) for details.
+[Backups](/resources/backups#backup-counts) for details.
 
 ## Container Mount
 

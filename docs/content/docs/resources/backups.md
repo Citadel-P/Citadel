@@ -12,7 +12,7 @@ restic-compatible repositories.
 A backup needs a **repository** (where it is stored) and a **policy** (what it saves).
 This workflow backs up application data and restores a separate copy for testing.
 For Citadel's database and security keys, use a separate **Citadel system** policy
-and follow [control-plane recovery](/docs/operations/control-plane-recovery).
+and follow [control-plane recovery](/operations/control-plane-recovery).
 
 For this example, you need an online Platform, a Docker volume, and permission
 to manage backup repositories and policies. Confirm the application's data lives
@@ -84,8 +84,8 @@ new policies. You also need access to the selected repository and backup source.
 If **Add Policy** is disabled while an existing policy is editable, check the
 user's Role permissions under **Access → Roles** and their Role and Team
 assignments. Repository permissions do not grant Backup Policy permissions.
-See [Roles and resource overrides](/docs/guides/access-control#roles-and-resource-overrides-have-different-scopes)
-for the difference in scope, and [Backup API capabilities](/docs/reference/permissions#backup-api-capabilities)
+See [Roles and resource overrides](/guides/access-control#roles-and-resource-overrides-have-different-scopes)
+for the difference in scope, and [Backup API capabilities](/reference/permissions#backup-api-capabilities)
 for interpreting list responses.
 
 1. Create a policy and choose **Docker volume** under **Source → Back up**.
@@ -125,7 +125,7 @@ support Live consistency only; see [Swarm requirements](#docker-swarm).
 Docker volume snapshots restore into Docker named volumes. Bind-mount snapshots
 restore into host paths; see [bind-mount restores](#bind-mount-backups-and-restores).
 Citadel system snapshots use the offline
-[control-plane recovery procedure](/docs/operations/control-plane-recovery).
+[control-plane recovery procedure](/operations/control-plane-recovery).
 
 Runs marked **Succeeded with warnings** can also be restored when the selected
 snapshot succeeded and is still available. Review the warnings for excluded
@@ -314,7 +314,7 @@ Repository and platform rules for restore:
 
 For the PostgreSQL dump, security assets, clean-environment restore sequence,
 and recovery drill requirements, see
-[Control-plane recovery](/docs/operations/control-plane-recovery).
+[Control-plane recovery](/operations/control-plane-recovery).
 
 ## Backup Repositories
 
@@ -404,7 +404,7 @@ capability. Scheduled and webhook-triggered policies additionally require
 unavailable, Citadel preserves the binding as `Paused by license` and does not
 start new runs under it.
 
-See [Service Accounts](/docs/guides/service-accounts) for creating an account, assigning
+See [Service Accounts](/guides/service-accounts) for creating an account, assigning
 access, and understanding **Use** permission. Backup Policies never store the
 Service Account's persistent API token.
 
@@ -525,7 +525,7 @@ platform.
 ## Citadel system backups
 
 A Citadel system backup protects Citadel configuration and recovery keys; use
-[control-plane recovery](/docs/operations/control-plane-recovery) for the full
+[control-plane recovery](/operations/control-plane-recovery) for the full
 backup and restore procedure. It does not archive all of `/app/data`. Git caches, stack
 workspaces, scripts working directories, logs, and backup staging files are
 recreated from database state or external systems and are deliberately
@@ -664,7 +664,7 @@ Webhook-triggered backups require Team's `Automated Operations` capability.
 
 Enable **Webhook** on a backup policy when an external system should queue the backup.
 
-For the shared listener model, authentication options, URL shape, and troubleshooting, see [Webhooks](/docs/guides/webhooks).
+For the shared listener model, authentication options, URL shape, and troubleshooting, see [Webhooks](/guides/webhooks).
 
 Common uses:
 
