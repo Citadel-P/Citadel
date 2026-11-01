@@ -187,6 +187,53 @@ mod tests {
         assert!(compose_requirements(Some(&spec("services: {api: {extends: base}}"))).is_none());
     }
     #[test]
+    fn successful_apply_does_not_override_observed_container_health() {
+        let applied = spec("services: {counter: {image: 'python:3.13-alpine'}}");
+        for (probe, expected) in [
+            (HealthStatus::Starting, WorkloadHealthStatus::Starting),
+            (HealthStatus::Unhealthy, WorkloadHealthStatus::Unhealthy),
+            (HealthStatus::Healthy, WorkloadHealthStatus::Healthy),
+        ] {
+            let member = HealthMember {
+                stop_requested_at: None,
+                status: HealthStatus::Unknown,
+                container_id: None,
+                docker_container_id: Some("counter-1".into()),
+                task_id: None,
+                platform_id: uuid::Uuid::nil(),
+                node_id: None,
+                name: "counter-1".into(),
+                service: "counter".into(),
+                state: "Running".into(),
+                available: true,
+                completed_job: false,
+                observation: Some(ContainerHealthObservation {
+                    configuration: CheckConfiguration::Enabled,
+                    result: Some(probe),
+                    observed_at: 1_000,
+                    last_check_at: None,
+                    failing_streak: None,
+                    exit_code: None,
+                    oom_killed: None,
+                    restart_count: None,
+                    started_at: None,
+                    finished_at: None,
+                }),
+            };
+            let health = assess(
+                vec![member],
+                Some(&applied),
+                None,
+                crate::StackReleaseStatus::Healthy,
+                true,
+                false,
+                1_000,
+            );
+            assert_eq!(health.status, expected);
+            assert!(health.coverage_complete);
+        }
+    }
+    #[test]
     fn missing_swarm_service_and_mixed_release_never_establish_complete_topology() {
         let service = AppliedServiceHealth {
             service: "api".into(),

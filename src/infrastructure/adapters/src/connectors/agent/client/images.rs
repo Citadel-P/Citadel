@@ -1,8 +1,44 @@
 use super::*;
 use citadel_contracts::citadel::images::v1::{
     GetExposedPortsRequest, GetExposedPortsResponse, InspectImageRequest, InspectImageResponse,
+    PullImageResponse,
 };
 use citadel_platforms::images::{ImageContainer, ImageInspection, ImageInspectionPort, ImageLayer};
+
+// Pull has its own wire schema and completes when the transport finishes. It
+// does not emit the admission/completion receipts used by image builds.
+pub(crate) async fn consume_image_pull_stream<S>(
+    mut stream: S,
+    cancellation: &CancellationToken,
+) -> Result<(), RuntimeCapabilityError>
+where
+    S: futures_util::Stream<Item = Result<PullImageResponse, tonic::Status>> + Unpin,
+{
+    loop {
+        let item = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(cancelled_error()),
+            item = stream.next() => item,
+        };
+        let Some(item) = item else { return Ok(()) };
+        let item = item.map_err(normalize_status)?;
+        let message = item
+            .error_message
+            .filter(|message| !message.trim().is_empty())
+            .or_else(|| {
+                item.error
+                    .and_then(|error| error.message)
+                    .filter(|message| !message.trim().is_empty())
+            });
+        if let Some(message) = message {
+            return Err(RuntimeCapabilityError::new(
+                RuntimeErrorKind::Remote,
+                message,
+                false,
+            ));
+        }
+    }
+}
 
 impl AgentClient {
     pub async fn inspect_image_document(

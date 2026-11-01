@@ -203,10 +203,8 @@ impl AgentExecutionClient {
                     .await
             }
             Self::Edge(session) => {
-                use citadel_contracts::citadel::images::v1::{
-                    ImageBuildResponse, PullImageRequest,
-                };
-                let frames = stream::<_, ImageBuildResponse>(
+                use citadel_contracts::citadel::images::v1::{PullImageRequest, PullImageResponse};
+                let frames = stream::<_, PullImageResponse>(
                     session,
                     EdgeCommandKind::ImagePullStream,
                     PullImageRequest {
@@ -216,14 +214,11 @@ impl AgentExecutionClient {
                     },
                     cancellation,
                 )?;
-                crate::connectors::agent::client::consume_image_build_stream(
+                crate::connectors::agent::client::images::consume_image_pull_stream(
                     frames,
-                    0,
-                    None,
                     cancellation,
                 )
-                .await?;
-                Ok(())
+                .await
             }
         }
     }

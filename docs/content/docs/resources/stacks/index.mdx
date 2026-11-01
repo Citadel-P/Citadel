@@ -14,6 +14,11 @@ and Inspect permission and use the [container Processes view](/resources/docker/
 
 ## Health
 
+On Docker Standalone, deployment completes when Compose and any deployment hooks
+succeed. Containers may still be starting at that point. The **Health** indicator
+tracks their healthchecks separately and can show **Starting** or **Unhealthy**
+after a successful deployment.
+
 The **Health** icon in the table and beside **Backup** summarizes current
 containers. Hover or select it for counts and coverage; **View details** lets you
 choose a container from a dropdown with health status icons and view its history.

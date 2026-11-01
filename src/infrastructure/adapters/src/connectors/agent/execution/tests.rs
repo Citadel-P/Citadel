@@ -5,7 +5,10 @@ use crate::connectors::edge::EdgeTarget;
 use citadel_contracts::citadel::{
     containers::v1::{ExecExit, ExecOutput},
     edge::v1::core_envelope,
-    images::v1::{BuildImageRequest, ImageBuildResponse, PushImageRequest},
+    images::v1::{
+        BuildImageRequest, ImageBuildResponse, JsonErrorReply, JsonProgressReply, PullImageRequest,
+        PullImageResponse, PushImageRequest,
+    },
 };
 use futures_util::StreamExt;
 use uuid::Uuid;
@@ -146,31 +149,180 @@ async fn edge_deployment_uses_the_direct_agent_request_and_result_mapping() {
 }
 
 #[tokio::test]
-async fn edge_pull_reads_error_frames_even_when_output_is_not_retained() {
-    let registry = EdgeRegistry::default();
-    let (session, mut receiver) = registry
-        .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
-        .unwrap();
-    let client = AgentExecutionClient::Edge(session.clone());
-    let cancellation = CancellationToken::new();
-    let (result, ()) = tokio::join!(
-        client.pull_deployment_image("nginx", None, &cancellation),
-        async {
-            let envelope = receiver.recv().await.unwrap();
-            let id = Uuid::parse_str(&envelope.command_id).unwrap();
-            session.output(
-                id,
-                ImageBuildResponse {
-                    error_message: Some("pull rejected".into()),
-                    ..Default::default()
+async fn edge_pull_accepts_agent_progress_and_cached_image_responses() {
+    for downloading in [true, false] {
+        let registry = EdgeRegistry::default();
+        let (session, mut receiver) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        let client = AgentExecutionClient::Edge(session.clone());
+        let cancellation = CancellationToken::new();
+        let (result, ()) = tokio::join!(
+            client.pull_deployment_image("redis:7", Some("registry-auth".into()), &cancellation),
+            async {
+                let envelope = receiver.recv().await.unwrap();
+                let id = Uuid::parse_str(&envelope.command_id).unwrap();
+                let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                    panic!("expected pull command")
+                };
+                assert_eq!(command.kind, EdgeCommandKind::ImagePullStream as i32);
+                let request = PullImageRequest::decode(command.payload.as_slice()).unwrap();
+                assert_eq!(request.from_image, "redis:7");
+                assert_eq!(request.auth.as_deref(), Some("registry-auth"));
+                if downloading {
+                    session.output(
+                        id,
+                        PullImageResponse {
+                            status: Some("Downloading".into()),
+                            id: Some("layer-id".into()),
+                            from: Some("redis".into()),
+                            progress_message: Some("1024/2048".into()),
+                            progress: Some(JsonProgressReply {
+                                current: Some(1024),
+                                total: Some(2048),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        }
+                        .encode_to_vec(),
+                    );
                 }
-                .encode_to_vec(),
-            );
-            session.complete(id, true);
+                // Pull completes through the Edge envelope, not a build receipt.
+                session.output(
+                    id,
+                    PullImageResponse {
+                        status: Some("Status: Image is up to date for redis:7".into()),
+                        ..Default::default()
+                    }
+                    .encode_to_vec(),
+                );
+                session.complete(id, true);
+            }
+        );
+        result.unwrap();
+        assert_eq!(session.pending_count(), 0);
+        assert!(receiver.try_recv().is_err(), "pull must not be replayed");
+    }
+}
+
+#[tokio::test]
+async fn edge_pull_preserves_agent_error_messages() {
+    for (error_message, structured) in [
+        (Some("pull rejected"), false),
+        (None, true),
+        (Some("  "), true),
+    ] {
+        let registry = EdgeRegistry::default();
+        let (session, mut receiver) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        let client = AgentExecutionClient::Edge(session.clone());
+        let cancellation = CancellationToken::new();
+        let (result, ()) = tokio::join!(
+            client.pull_deployment_image("redis:7", None, &cancellation),
+            async {
+                let envelope = receiver.recv().await.unwrap();
+                let id = Uuid::parse_str(&envelope.command_id).unwrap();
+                session.output(
+                    id,
+                    PullImageResponse {
+                        error_message: error_message.map(str::to_owned),
+                        error: structured.then(|| JsonErrorReply {
+                            code: Some(403),
+                            message: Some("pull rejected".into()),
+                        }),
+                        ..Default::default()
+                    }
+                    .encode_to_vec(),
+                );
+                // A successful transport completion cannot hide a Docker error.
+                session.complete(id, true);
+            }
+        );
+        let error = result.unwrap_err();
+        assert_eq!(error.kind, RuntimeErrorKind::Remote);
+        assert!(error.to_string().contains("pull rejected"), "{error}");
+        assert!(!error.retryable);
+        assert_eq!(session.pending_count(), 0);
+        assert!(receiver.try_recv().is_err(), "pull must not be replayed");
+    }
+}
+
+#[tokio::test]
+async fn edge_pull_cancellation_releases_the_pending_command() {
+    for before_send in [true, false] {
+        let registry = EdgeRegistry::default();
+        let (session, mut receiver) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        let client = AgentExecutionClient::Edge(session.clone());
+        let cancellation = CancellationToken::new();
+        if before_send {
+            cancellation.cancel();
         }
-    );
-    assert!(result.is_err());
-    assert_eq!(session.pending_count(), 0);
+        let (result, ()) = tokio::join!(
+            client.pull_deployment_image("redis:7", None, &cancellation),
+            async {
+                if !before_send {
+                    let envelope = receiver.recv().await.unwrap();
+                    assert!(matches!(
+                        envelope.body,
+                        Some(core_envelope::Body::Command(_))
+                    ));
+                    cancellation.cancel();
+                }
+            }
+        );
+        assert_eq!(result.unwrap_err().kind, RuntimeErrorKind::Cancelled);
+        assert_eq!(session.pending_count(), 0);
+        if !before_send {
+            let envelope = receiver.try_recv().unwrap();
+            assert!(matches!(
+                envelope.body,
+                Some(core_envelope::Body::CancelCommand(_))
+            ));
+        }
+        assert!(receiver.try_recv().is_err());
+    }
+}
+
+#[tokio::test]
+async fn edge_pull_rejects_invalid_payloads_and_failed_or_disconnected_commands() {
+    for (failure, expected_kind) in [
+        ("malformed", RuntimeErrorKind::Remote),
+        ("failed", RuntimeErrorKind::Remote),
+        ("disconnected", RuntimeErrorKind::Unavailable),
+    ] {
+        let registry = EdgeRegistry::default();
+        let (session, mut receiver) = registry
+            .register(EdgeTarget::platform(Uuid::now_v7()), Uuid::now_v7())
+            .unwrap();
+        let client = AgentExecutionClient::Edge(session.clone());
+        let cancellation = CancellationToken::new();
+        let (result, ()) = tokio::join!(
+            client.pull_deployment_image("redis:7", None, &cancellation),
+            async {
+                let envelope = receiver.recv().await.unwrap();
+                let id = Uuid::parse_str(&envelope.command_id).unwrap();
+                match failure {
+                    "malformed" => {
+                        session.output(id, vec![0xff]);
+                        session.complete(id, true);
+                    }
+                    "failed" => session.complete(id, false),
+                    _ => session.close(),
+                }
+            }
+        );
+        assert_eq!(result.unwrap_err().kind, expected_kind, "{failure}");
+        assert_eq!(session.pending_count(), 0);
+        while let Ok(envelope) = receiver.try_recv() {
+            assert!(
+                !matches!(envelope.body, Some(core_envelope::Body::Command(_))),
+                "failed pull must not be replayed"
+            );
+        }
+    }
 }
 
 // EdgeAgentConnectorTests parity: transport must retain the canonical request

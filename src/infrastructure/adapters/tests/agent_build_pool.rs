@@ -133,6 +133,32 @@ impl ImageService for BuildHost {
         if input.from_image == "fail:latest" {
             return Err(Status::unavailable("ambiguous pull failure"));
         }
+        if matches!(
+            input.from_image.as_str(),
+            "redis:progress" | "redis:rejected"
+        ) {
+            assert_eq!(input.auth.as_deref(), Some("encoded-auth"));
+            let rejected = input.from_image == "redis:rejected";
+            return Ok(Response::new(Box::pin(futures_util::stream::iter([
+                Ok(PullImageResponse {
+                    status: Some("Downloading".into()),
+                    progress: Some(JsonProgressReply {
+                        current: Some(1024),
+                        total: Some(2048),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                Ok(PullImageResponse {
+                    status: Some("Pull complete".into()),
+                    error: rejected.then(|| JsonErrorReply {
+                        code: Some(403),
+                        message: Some("pull rejected".into()),
+                    }),
+                    ..Default::default()
+                }),
+            ]))));
+        }
         assert_eq!(input.from_image, "nginx:latest");
         assert_eq!(input.auth.as_deref(), Some("encoded-auth"));
         Ok(Response::new(Box::pin(async_stream::stream! {
@@ -194,6 +220,39 @@ async fn image_pull_stream_preserves_progress_and_cancels_without_retrying() {
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     stop.cancel();
     task.abort();
+}
+
+#[tokio::test]
+async fn deployment_pull_consumes_progress_and_errors_without_build_receipts_or_retries() {
+    let (address, calls, stop, task) = host("28.0.0").await;
+    let client = AgentClient::connect(
+        &address,
+        AgentRequestSigner::from_bytes(&[31; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let cancel = CancellationToken::new();
+    client
+        .pull_deployment_image("redis:progress", Some("encoded-auth".into()), &cancel)
+        .await
+        .unwrap();
+    let error = client
+        .pull_deployment_image("redis:rejected", Some("encoded-auth".into()), &cancel)
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind, citadel_platforms::RuntimeErrorKind::Remote);
+    assert_eq!(error.message, "pull rejected");
+    assert!(!error.retryable);
+    let error = client
+        .pull_deployment_image("fail:latest", None, &cancel)
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind, citadel_platforms::RuntimeErrorKind::Unavailable);
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    stop.cancel();
+    task.await.unwrap();
 }
 
 async fn host(
