@@ -53,7 +53,7 @@ impl EdgeRuntime {
                     fetch_interval_ms: interval_ms,
                 }
                 .encode_to_vec(),
-                Duration::from_secs(3600),
+                super::OBSERVATION_STREAM_TIMEOUT,
                 true,
             )
             .map_err(super::EdgeError::runtime)?;
@@ -150,7 +150,7 @@ impl citadel_platforms::PlatformStatsPort for EdgeRuntime {
                 .command(
                     EdgeCommandKind::PlatformStatsStream,
                     request.encode_to_vec(),
-                    Duration::from_secs(3600),
+                    super::OBSERVATION_STREAM_TIMEOUT,
                     true,
                 )
                 .map_err(super::EdgeError::runtime)?;

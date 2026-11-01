@@ -26,24 +26,23 @@ pub async fn observe_platform_metrics(
     alerts: &dyn AlertEventSink,
     platform_id: uuid::Uuid,
     sample: &PlatformMetricSample,
-    compatibility: &str,
+    core_version: &str,
 ) -> Result<(), AlertError> {
     let name = &sample.name;
     let version = sample.agent_version.as_deref().unwrap_or_default();
     if !version.is_empty() {
-        let compatible = version
-            .strip_prefix(compatibility)
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with(['.', '-', '+']));
+        // Build metadata does not change a release; patch and prerelease do.
+        let same_release = version.split('+').next() == core_version.split('+').next();
         let observation = AlertObservation {
             alert_type: "PlatformVersionMismatch".into(),
-            info: serde_json::json!({"PlatformName":name,"AgentVersion":version,"CoreVersion":compatibility,"HumanMessage":format!("Platform '{name}' Agent version {version} differs from Core compatibility version {compatibility}.")}),
+            info: serde_json::json!({"PlatformName":name,"AgentVersion":version,"CoreVersion":core_version,"HumanMessage":format!("Platform '{name}' Agent version {version} differs from Core version {core_version}.")}),
             resource_id: platform_id,
             resource_name: name.to_owned(),
             resource_type: "Platform".into(),
             deduplication_component: "version".into(),
             observed_at: chrono::Utc::now(),
             value: None,
-            matched: !compatible,
+            matched: !same_release,
         };
         alerts.observe(&observation).await?;
     }
@@ -79,3 +78,6 @@ pub async fn observe_platform_metrics(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

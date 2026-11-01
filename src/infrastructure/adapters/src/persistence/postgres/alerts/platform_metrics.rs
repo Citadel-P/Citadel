@@ -7,17 +7,13 @@ use sqlx::{PgPool, Row};
 
 pub struct PostgresPlatformAlertBatchStore {
     pool: PgPool,
-    compatibility: String,
+    core_version: String,
 }
 impl PostgresPlatformAlertBatchStore {
     pub fn new(pool: PgPool, core_version: &str) -> Self {
         Self {
             pool,
-            compatibility: core_version
-                .split('.')
-                .take(2)
-                .collect::<Vec<_>>()
-                .join("."),
+            core_version: core_version.to_owned(),
         }
     }
     pub async fn observe_latest(
@@ -32,7 +28,7 @@ impl PostgresPlatformAlertBatchStore {
                 alerts,
                 platform,
                 &sample(&row).map_err(storage)?,
-                &self.compatibility,
+                &self.core_version,
             )
             .await?;
         }
@@ -46,7 +42,7 @@ impl PlatformAlertBatchStore for PostgresPlatformAlertBatchStore {
         batch_size: i64,
     ) -> BoxFuture<'a, Result<usize, AlertError>> {
         async move {
-            flush_pending(&self.pool, alerts, batch_size, &self.compatibility)
+            flush_pending(&self.pool, alerts, batch_size, &self.core_version)
                 .await
                 .map_err(storage)
         }
@@ -84,7 +80,7 @@ async fn flush_pending(
     pool: &PgPool,
     alerts: &dyn AlertEventSink,
     batch_size: i64,
-    compatibility: &str,
+    core_version: &str,
 ) -> Result<usize, sqlx::Error> {
     let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::AlertFlush.start();
     let mut tx = pool.begin().await?;
@@ -109,7 +105,7 @@ async fn flush_pending(
         .bind(&ids).bind(&revisions).fetch_all(&mut *tx).await?;
     for row in rows {
         let platform = row.try_get("id")?;
-        observe_platform_metrics(alerts, platform, &sample(&row)?, compatibility)
+        observe_platform_metrics(alerts, platform, &sample(&row)?, core_version)
             .await
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     }
@@ -120,4 +116,22 @@ async fn flush_pending(
         .await?;
     tx.commit().await?;
     Ok(ids.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn batch_store_preserves_full_core_version_for_observations() {
+        // No connection is opened: only the version supplied to the store matters.
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@localhost/unused")
+            .unwrap();
+        for version in ["0.1.1", "0.1.1-dev.2+source.abc"] {
+            let store = PostgresPlatformAlertBatchStore::new(pool.clone(), version);
+            assert_eq!(store.core_version, version);
+        }
+        pool.close().await;
+    }
 }
