@@ -470,6 +470,12 @@ Choose a type based on the condition you need to investigate:
 | Builds | `BuildRunFailed`, `BuildAgentPoolUnavailable` |
 | License | `LicenseEnteredGracePeriod`, `LicenseExpired` |
 
+`PlatformVersionMismatch` compares the Platform Agent's full release version with
+Core, including patch and prerelease identifiers. For example, Core `0.1.1` with
+Agent `0.1.0`, or `0.1.1` with `0.1.1-dev.1`, matches this condition. Build metadata
+after `+` is ignored. The condition clears when a new Platform metrics observation
+reports a matching version. Platforms without a reported Agent version are skipped.
+
 `BuildAgentPoolUnavailable` uses an **Unavailable grace period (seconds)** threshold,
 rather than a percentage. See [Build Pool availability](/resources/build-pools#build-pool-connection-and-availability)
 for the built-in rule's grace period and recovery behavior.

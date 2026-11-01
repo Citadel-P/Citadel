@@ -282,6 +282,14 @@ impl StackUpdateRuntime {
                         {
                             continue;
                         }
+                        if !image_ids.insert(container.image_id.clone()) {
+                            continue;
+                        }
+                        if image_ids.len() > 16 {
+                            return Err(StackError::Conflict(
+                                "Too many deployed image variants to compare.".into(),
+                            ));
+                        }
                         let image = images.get(container.image_id.as_str()).ok_or_else(|| {
                             StackError::Conflict(format!(
                                 "The deployed image for service '{}' is unavailable.",
@@ -294,15 +302,23 @@ impl StackUpdateRuntime {
                                 && let Some((_, digest)) = digest.rsplit_once('@')
                             {
                                 digests.insert(digest.to_owned());
-                                image_ids.insert(image.id.clone());
                                 identified = true;
                             }
                         }
                         if !identified {
-                            return Err(StackError::Conflict(format!(
-                                "A deployed image for service '{}' has no comparable repository digest.",
-                                check.service_name
-                            )));
+                            let inspector = self
+                                .runtime
+                                .runtime
+                                .images(
+                                    stack.platform_id.ok_or(StackError::NotFound)?,
+                                    None,
+                                    cancel,
+                                )
+                                .await
+                                .map_err(runtime_failure)?;
+                            digests.insert(
+                                deployed_content_digest(&inspector, &image.id, cancel).await?,
+                            );
                         }
                     }
                     if digests.len() != 1 {
@@ -434,6 +450,31 @@ impl StackUpdateRuntime {
             .state)
         })
     }
+}
+
+/// A running container can retain an untagged image after a newer pull moves its
+/// tag and removes RepoDigests. Inspect that exact image, never the current tag.
+async fn deployed_content_digest(
+    runtime: &dyn citadel_platforms::images::ImageInspectionPort,
+    image_id: &str,
+    cancel: &CancellationToken,
+) -> Result<String, StackError> {
+    let image = runtime
+        .inspect_image(image_id, cancel)
+        .await
+        .map_err(runtime_failure)?;
+    if image.id != image_id {
+        return Err(StackError::Conflict(
+            "The deployed image identity changed during the check.".into(),
+        ));
+    }
+    image.content_digest.filter(|digest| {
+        digest.strip_prefix("sha256:").is_some_and(|hash| {
+            hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+    }).ok_or_else(|| StackError::Conflict(
+        "The deployed image has no comparable repository or manifest digest. Image update status cannot be determined.".into(),
+    ))
 }
 /// Reads only the applied revision from the local Git cache. This never synchronizes a branch.
 pub(crate) async fn stack_image_checks(
@@ -588,6 +629,111 @@ mod tests {
     use super::*;
     use citadel_platforms::RuntimeSwarmService;
     use citadel_stacks::{ManualStackImageCheck, StackImageKey};
+
+    struct Inspector {
+        image: citadel_platforms::images::ImageInspection,
+        expected_id: String,
+    }
+    impl citadel_platforms::images::ImageInspectionPort for Inspector {
+        fn exposed_ports<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Vec<String>, citadel_platforms::RuntimeCapabilityError>> {
+            unreachable!()
+        }
+        fn inspect_image<'a>(
+            &'a self,
+            id: &'a str,
+            cancel: &'a CancellationToken,
+        ) -> BoxFuture<
+            'a,
+            Result<
+                citadel_platforms::images::ImageInspection,
+                citadel_platforms::RuntimeCapabilityError,
+            >,
+        > {
+            Box::pin(async move {
+                assert_eq!(
+                    id, self.expected_id,
+                    "inspect the deployed ID, never the moved tag"
+                );
+                if cancel.is_cancelled() {
+                    return Err(citadel_platforms::RuntimeCapabilityError::new(
+                        citadel_platforms::RuntimeErrorKind::Cancelled,
+                        "cancelled",
+                        false,
+                    ));
+                }
+                Ok(self.image.clone())
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn untagged_running_image_preserves_its_immutable_content_baseline() {
+        // Voting App on the demo: a newer pull moved redis:7-alpine, leaving
+        // the running image without tags/RepoDigests but with an OCI descriptor.
+        let id = "sha256:57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541";
+        let inspector = Inspector {
+            expected_id: id.into(),
+            image: citadel_platforms::images::ImageInspection {
+                id: id.into(),
+                content_digest: Some(id.into()),
+                os: "linux".into(),
+                architecture: "amd64".into(),
+                ..Default::default()
+            },
+        };
+        assert_eq!(
+            deployed_content_digest(&inspector, id, &CancellationToken::new())
+                .await
+                .unwrap(),
+            id
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_invalid_or_mismatched_image_identity_cannot_become_a_baseline() {
+        let id = format!("sha256:{}", "a".repeat(64));
+        let mut inspector = Inspector {
+            expected_id: id.clone(),
+            image: citadel_platforms::images::ImageInspection {
+                id: id.clone(),
+                ..Default::default()
+            },
+        };
+        let cancel = CancellationToken::new();
+        // A classic config ID must never be sent to the manifest endpoint.
+        inspector.image.config_digest = Some(id.clone());
+        assert!(
+            deployed_content_digest(&inspector, &id, &cancel)
+                .await
+                .is_err()
+        );
+        for invalid in ["sha256:short", "sha256:zzzz", "", "redis:7-alpine"] {
+            inspector.image.content_digest = Some(invalid.into());
+            assert!(
+                deployed_content_digest(&inspector, &id, &cancel)
+                    .await
+                    .is_err()
+            );
+        }
+        inspector.image.content_digest = Some(id.clone());
+        inspector.image.id = "different-image".into();
+        assert!(
+            deployed_content_digest(&inspector, &id, &cancel)
+                .await
+                .is_err()
+        );
+        inspector.image.id = id.clone();
+        cancel.cancel();
+        assert!(
+            deployed_content_digest(&inspector, &id, &cancel)
+                .await
+                .is_err()
+        );
+    }
 
     fn check() -> ManualStackImageCheck {
         ManualStackImageCheck {

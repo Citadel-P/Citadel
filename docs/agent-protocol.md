@@ -196,6 +196,13 @@ owned by the session. SIGTERM and Ctrl+C stop listeners and outbound work with
 a ten-second shutdown limit. These limits are implementation constants, not
 additional deployment settings.
 
+Core's inventory and statistics monitoring uses one-hour command deadlines and
+renews its observation cycle after 55 minutes on the same authenticated session.
+Renewal cancels the old observation commands, invalidates cached container health,
+and bootstraps inventory through the existing reconciliation path to cover the
+stream gap. Expected renewal is not reported as an interrupted synchronization;
+command failures before renewal still propagate to the supervisor.
+
 Core accounts for outbound Edge requests separately from incoming output backlog.
 The shared transfer allowance is 32 MiB across all sessions, charging twice the
 payload size to cover the raw request and its encoded copy. Queued frames retain

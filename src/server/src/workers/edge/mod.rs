@@ -2,6 +2,7 @@ use crate::realtime::RealtimeHub;
 use citadel_adapters::connectors::edge::EdgeRegistry;
 use citadel_adapters::connectors::edge::EdgeRuntime;
 use citadel_adapters::connectors::edge::EdgeSession;
+use citadel_adapters::connectors::edge::OBSERVATION_STREAM_TIMEOUT;
 use citadel_adapters::connectors::edge::observations::EdgeObservationPersistence;
 use citadel_contracts::citadel::edge::v1::EdgeCommandKind;
 use citadel_platforms::jobs::observations::RuntimeProjectionStore;
@@ -103,18 +104,34 @@ async fn monitor(
         }
     }
     let interval = settings.monitoring_interval;
-    tokio::try_join!(
-        observe(
-            session.clone(),
-            stores.clone(),
-            realtime.clone(),
-            scans,
-            settings,
-            cancellation
-        ),
-        observe_stats(session, stats, interval, cancellation),
-    )?;
-    Ok(())
+    observation_cycle(async {
+        tokio::try_join!(
+            observe(
+                session.clone(),
+                stores.clone(),
+                realtime.clone(),
+                scans,
+                settings,
+                cancellation
+            ),
+            observe_stats(session, stats, interval, cancellation),
+        )?;
+        Ok(())
+    })
+    .await
+}
+
+/// End a healthy observation cycle before its transport deadlines. The supervisor
+/// restarts it on the same session, fencing old health and bootstrapping inventory
+/// through the existing recovery path. Dropping the cycle cancels its commands.
+async fn observation_cycle(
+    observation: impl std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    tokio::select! {
+        biased;
+        result = observation => result,
+        () = tokio::time::sleep(OBSERVATION_STREAM_TIMEOUT - Duration::from_secs(300)) => Ok(()),
+    }
 }
 
 async fn observe_stats(
@@ -186,7 +203,7 @@ async fn observe_events(
     let mut events = session.command(
         EdgeCommandKind::PlatformDaemonEventsStream,
         vec![],
-        Duration::from_secs(3600),
+        OBSERVATION_STREAM_TIMEOUT,
         true,
     )?;
     use citadel_platforms::jobs::{RecoveryReason, RuntimeRecoveryCoordinator};
@@ -405,6 +422,9 @@ fn edge_state_event(event: &citadel_adapters::connectors::agent::client::AgentDa
 
 #[cfg(test)]
 mod event_tests;
+
+#[cfg(test)]
+mod renewal_tests;
 
 mod reconciliation;
 use reconciliation::observe;

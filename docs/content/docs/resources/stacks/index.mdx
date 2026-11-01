@@ -92,6 +92,12 @@ Swarm Services.
 
 ## Image updates
 
+Checks compare the images deployed in the Stack with the registry tags.
+If a newer pull moves a tag away from a running image, Citadel uses that image's
+immutable manifest digest when available. If Docker no longer provides enough
+metadata for a reliable comparison, the check reports an error rather than
+marking the image up to date.
+
 **Redeploy** pulls the service images and, when a Registry is configured, refreshes
 the image-update status against the deployed images. This also applies when
 scheduled update checks are disabled. A newer image can still be reported if the
