@@ -64,7 +64,7 @@ import {
   Unlink,
   User,
   Users,
-  Workflow,
+  FileBraces,
   X,
 } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -910,7 +910,7 @@ export const TargetCell = ({
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
     [ActivityResourceType.SwarmService]: { Icon: Boxes, path: `/swarm-services/edit/${resourceId}` },
     [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
-    [ActivityResourceType.Script]: { Icon: Workflow, path: `/scripts/edit/${resourceId}` },
+    [ActivityResourceType.Script]: { Icon: FileBraces, path: `/scripts/edit/${resourceId}` },
     [ActivityResourceType.Build]: { Icon: Hammer, path: `/builds/edit/${resourceId}` },
     [ActivityResourceType.BuildAgentPool]: { Icon: ServerPlus, path: `/build-pools/edit/${resourceId}` },
     [ActivityResourceType.BackupPolicy]: { Icon: CalendarClock, path: `/backup-policies/edit/${resourceId}` },

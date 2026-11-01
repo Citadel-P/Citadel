@@ -7,9 +7,9 @@ Open a **Platform**, then **Containers** to see its Docker workloads, including
 containers created outside Citadel. You need access to the Platform or owning
 workload; individual tools also require the relevant permissions.
 
-To create an application, use a [Deployment](/docs/resources/deployments) for one
-container or a [Stack](/docs/resources/stacks) for Compose. To manage an existing
-application's configuration, use [adoption](/docs/guides/adopting-existing-workloads).
+To create an application, use a [Deployment](/resources/deployments) for one
+container or a [Stack](/resources/stacks) for Compose. To manage an existing
+application's configuration, use [adoption](/guides/adopting-existing-workloads).
 
 Search the container table by name, full or partial container ID, image ID,
 image name or tag, or the name of an owning Deployment, Stack, or Service you
@@ -34,7 +34,7 @@ Open the container's detail page and choose the information you need:
 | **Stats** | Check CPU, memory, and network usage |
 
 For memory accounting and host capacity, see
-[Platform monitoring](/docs/operations/platform-monitoring).
+[Platform monitoring](/operations/platform-monitoring).
 
 In **Container overview**, select the name or count in **Networks** to open the
 container’s connections map. Select a network for details, or maximize the sheet
@@ -45,7 +45,7 @@ In **Container overview**, each Docker-managed volume has a backup coverage indi
 including anonymous volumes with generated names. Hover or
 keyboard-focus the icon to see whether it is protected, unprotected, needs
 attention, or has unavailable coverage. See
-[Backup coverage](/docs/resources/backups#coverage-on-resource-pages).
+[Backup coverage](/resources/backups#coverage-on-resource-pages).
 
 Deployment policies include declared named volumes and supported bind mounts.
 Runtime-only anonymous volumes need a direct volume policy or coverage through
@@ -55,7 +55,7 @@ list, coverage indicators, and policy links. Workload policies can cover these
 paths together; individual host-path policies are also available. Host-path
 backups require Platform write access and exact Node targeting on Swarm.
 Tmpfs, nested mounts, system/runtime paths, and writable layers remain excluded. See
-[Bind-mount backups and restores](/docs/resources/backups#bind-mount-backups-and-restores).
+[Bind-mount backups and restores](/resources/backups#bind-mount-backups-and-restores).
 
 Use **Backup Filter** to filter by backup status.
 The resource table displays a **Backup** column. Hover over its shield to see
@@ -67,7 +67,7 @@ volumes or bind mounts. Missing or stale container coverage is shown as unavaila
 Manual-only or disabled policies
 show amber, even after a successful manual run. Green requires an active schedule,
 a ready repository, and a successful available backup for all eligible storage.
-See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages) for all
+See [Backup coverage](/resources/backups#coverage-on-resource-pages) for all
 status meanings and scheduling requirements.
 
 ## Container health
@@ -159,8 +159,15 @@ empty, check whether the application writes to standard output or standard error
 and whether its Docker logging driver supports reading logs. Files written only
 inside the container do not automatically appear here.
 
+Each connection loads the last 100 lines per container, then follows new output.
+The browser keeps up to 5,000 displayed lines for each of eight recently viewed
+log groups. Reopening a view or reconnecting merges replayed history with that
+cache using Docker timestamps and message occurrence counts, so replay does not
+multiply cached lines. Repeated messages in the source remain visible. Reloading
+the page clears this in-memory history; **Clear** clears the current view.
+
 For several services together, use the Stack's logs. If multiple live views stop
-updating, check the [browser connection](/docs/operations/troubleshooting#live-updates-stop).
+updating, check the [browser connection](/operations/troubleshooting#live-updates-stop).
 
 ## Open a terminal
 
@@ -213,11 +220,11 @@ actions depend on current state, ownership, permissions, and connectivity.
 For configuration or image changes, use **Deploy** or **Redeploy** on the owning
 Deployment or Stack. Citadel system containers are protected from ordinary
 container lifecycle actions. Swarm Task containers are controlled through their
-owning [Service](/docs/resources/swarm-services) or [Stack](/docs/resources/stacks/swarm).
+owning [Service](/resources/swarm-services) or [Stack](/resources/stacks/swarm).
 
 For Swarm logs, terminals, and statistics on other Nodes, check
-[Cluster node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage).
-If an action is disabled, see [troubleshooting](/docs/operations/troubleshooting#an-action-is-unavailable).
+[Cluster node coverage](/resources/platforms/docker-swarm#understand-cluster-node-coverage).
+If an action is disabled, see [troubleshooting](/operations/troubleshooting#an-action-is-unavailable).
 
 ### Processes
 

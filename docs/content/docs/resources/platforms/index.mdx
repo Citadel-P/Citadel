@@ -11,8 +11,8 @@ monitoring. Adding a Platform connects to existing infrastructure.
 
 | Type | What it connects to | Managed workloads |
 | --- | --- | --- |
-| [Docker Standalone](/docs/resources/platforms/docker-standalone) | One Docker engine | Deployments and Compose Stacks |
-| [Docker Swarm](/docs/resources/platforms/docker-swarm) | An active manager in an existing Swarm cluster | Swarm Services and Swarm Stacks |
+| [Docker Standalone](/resources/platforms/docker-standalone) | One Docker engine | Deployments and Compose Stacks |
+| [Docker Swarm](/resources/platforms/docker-swarm) | An active manager in an existing Swarm cluster | Swarm Services and Swarm Stacks |
 
 Citadel does not initialize or join a Swarm cluster. Connect to its manager
 after creating the cluster.
@@ -22,19 +22,19 @@ after creating the cluster.
 | Connector | Use it when |
 | --- | --- |
 | Local | Docker runs on the Citadel host and its socket is mounted into Core |
-| [Agent](/docs/operations/agent) | Core can reach an Agent running on the Docker host |
-| [Edge Agent](/docs/operations/edge-agent) | The host needs to connect outbound to Core |
+| [Agent](/operations/agent) | Core can reach an Agent running on the Docker host |
+| [Edge Agent](/operations/edge-agent) | The host needs to connect outbound to Core |
 
 Use one Platform per Docker engine. Citadel supports one Local Platform per
 installation. A Swarm Platform represents the cluster through its manager;
-[node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage)
+[node coverage](/resources/platforms/docker-swarm#understand-cluster-node-coverage)
 extends node-local operations to its other eligible Nodes.
 
 ## Connect and operate a Platform
 
-Follow [Connect a Docker host](/docs/getting-started/first-platform) for the first
+Follow [Connect a Docker host](/getting-started/first-platform) for the first
 connection. Then use the page for your Platform type to configure and manage it.
 
-- [Platform monitoring](/docs/operations/platform-monitoring) explains connection status, metrics, and alerts.
-- [Access control](/docs/guides/access-control) explains who can view or manage the Platform.
-- [Adopt existing workloads](/docs/guides/adopting-existing-workloads) brings eligible applications under Citadel management.
+- [Platform monitoring](/operations/platform-monitoring) explains connection status, metrics, and alerts.
+- [Access control](/guides/access-control) explains who can view or manage the Platform.
+- [Adopt existing workloads](/guides/adopting-existing-workloads) brings eligible applications under Citadel management.

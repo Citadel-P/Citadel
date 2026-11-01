@@ -3,14 +3,17 @@ title: "Reverse proxy with Caddy"
 description: "Serve Citadel and Edge Agent connections over HTTPS using Docker Compose and Caddy."
 ---
 
-This example adds Caddy to the [standard Compose installation](/docs/getting-started/install).
+This example adds Caddy to the [standard Compose installation](/getting-started/install).
 One hostname serves the browser, API, and Edge Agent gRPC endpoint. Caddy handles
 certificates; Citadel's internal listeners remain on a private Docker network.
+
+The proxy reaches `server:8001` on the private Docker network; the optional
+Edge host-port overlay is not needed.
 
 ## Before you start
 
 - Prepare the installation's `docker-compose.yml` and `.env`, including its
-  database credentials, secret keys, and published Citadel image.
+  database password. Citadel generates and persists its secret keys automatically.
 - Replace `citadel.example.com` below with a hostname you control. Its DNS records
   must point to this Docker host, including any IPv6 record you publish.
 - Make TCP ports `80` and `443` available to Caddy and reachable for certificate
@@ -19,7 +22,7 @@ certificates; Citadel's internal listeners remain on a private Docker network.
   addresses together if they overlap with your existing networks.
 
 For private certificates or another proxy, use the
-[transport guide](/docs/operations/tls-and-secure-agent-transport).
+[transport guide](/operations/tls-and-secure-agent-transport).
 
 ## 1. Configure Citadel
 
@@ -28,7 +31,6 @@ Update these entries in the installation's `.env`, keeping its other settings:
 ```dotenv
 CITADEL_BIND_ADDRESS=127.0.0.1
 CITADEL_HTTP_PORT=18000
-CITADEL_EDGE_PORT=18001
 
 CITADEL_TRANSPORT_MODE=ReverseProxy
 CITADEL_PUBLIC_URL=https://citadel.example.com
@@ -51,7 +53,7 @@ out; they can sign in again at the HTTPS address.
 
 If you configured explicit `CITADEL_HTTP_CORS_ORIGIN_*` origins, update them for the HTTPS address.
 For OIDC sign-in, also update the provider's registered callback URL; see
-[related URL settings](/docs/operations/tls-and-secure-agent-transport#related-url-settings).
+[related URL settings](/operations/tls-and-secure-agent-transport#related-url-settings).
 
 ## 2. Add Caddy
 
@@ -135,7 +137,7 @@ docker compose -f docker-compose.yml -f compose.caddy.yml ps
 ```
 
 Always include both Compose files in later update commands. Follow
-[upgrade and rollback](/docs/operations/upgrade-and-rollback) before changing an
+[upgrade and rollback](/operations/upgrade-and-rollback) before changing an
 existing installation's images.
 
 ## 4. Check the connection
@@ -158,7 +160,7 @@ docker compose -f docker-compose.yml -f compose.caddy.yml logs --tail=100 caddy
 ```
 
 Check DNS, inbound ports, and Core health before retrying. See
-[transport troubleshooting](/docs/operations/tls-and-secure-agent-transport#troubleshooting)
+[transport troubleshooting](/operations/tls-and-secure-agent-transport#troubleshooting)
 for certificate trust and hostname errors.
 
 ## Check Script API access
@@ -177,4 +179,4 @@ console.log("Accessible Platforms:", result.platforms.map(platform => platform.n
 
 Run it and confirm the Platform names (or an empty list) in the Action logs.
 A console-only Action does not test this connection. For HTTPS-only Core, follow
-[Direct TLS Script setup](/docs/operations/tls-and-secure-agent-transport#script-api-access).
+[Direct TLS Script setup](/operations/tls-and-secure-agent-transport#script-api-access).

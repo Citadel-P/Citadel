@@ -8,7 +8,7 @@ export default function NotFound() {
       <p className="mt-3 text-fd-muted-foreground">
         The page may have moved or may not belong to this Citadel release.
       </p>
-      <Link className="mt-7 rounded-md bg-fd-primary px-4 py-2 text-fd-primary-foreground" href="/docs">
+      <Link className="mt-7 rounded-md bg-fd-primary px-4 py-2 text-fd-primary-foreground" href="/">
         Browse documentation
       </Link>
     </main>

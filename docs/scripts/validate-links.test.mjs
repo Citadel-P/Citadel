@@ -18,7 +18,7 @@ async function validate(text) {
 }
 
 test('MDX navigation cards cannot point at missing pages', async () => {
-  const result = await validate('<Card href="/docs/missing" />');
+  const result = await validate('<Card href="/missing" />');
   assert.equal(result.status, 1);
   assert.match(result.stderr, /missing internal page/);
 });
@@ -31,14 +31,14 @@ test('headings inside example code are not valid navigation anchors', async () =
 
 test('examples do not create false broken links and real duplicate headings resolve', async () => {
   const result = await validate(
-    '## Start\n## Start\n[Second](#start-1)\n<Card href="/docs#start" />\n' +
-    '```md\n[Example](/docs/missing)\n```',
+    '## Start\n## Start\n[Second](#start-1)\n<Card href="/#start" />\n' +
+    '```md\n[Example](/missing)\n```',
   );
   assert.equal(result.status, 0, result.stderr);
 });
 
 test('nested Markdown links are reported as malformed', async () => {
-  const result = await validate('[[Start](/docs)](/docs)');
+  const result = await validate('[[Start](/)](/)');
   assert.equal(result.status, 1);
   assert.match(result.stderr, /malformed nested Markdown link/);
 });

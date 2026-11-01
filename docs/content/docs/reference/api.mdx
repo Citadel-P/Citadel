@@ -13,14 +13,15 @@ installed version when building integrations.
 
 Protected operations use an `Authorization: Bearer <token>` header. Depending on the
 operation, use a user JWT or a Service Account token with the required access.
-For an integration, prefer a dedicated [Service Account](/docs/guides/service-accounts)
+For an integration, prefer a dedicated [Service Account](/guides/service-accounts)
 with narrowly scoped permissions. Service Accounts require the **Custom Access
 Control** license capability. User JWTs remain subject to the operation's own
 permissions and capability requirements. Keep tokens out of source files and logs.
 
 This reference does not send API requests or store credentials. To try requests
 against your own installation, set `CITADEL_HTTP_OPENAPI_ENABLED=true` in `.env` and recreate
-Core with `docker compose up -d server`. Include your TLS overlay if you use one.
+Core with `docker compose up -d server`. Include all proxy, TLS, and Edge overlays
+used by your installation.
 Swagger UI is then available at `/swagger/`, with the public schema at
 `/openapi/public/v1.json`.
 
@@ -32,7 +33,7 @@ contract. Read the release notes before upgrading an integration.
 ## Verify an integration
 
 Start with a read operation using a dedicated identity, as shown in
-[Service Account API access](/docs/guides/service-accounts#call-the-citadel-api).
+[Service Account API access](/guides/service-accounts#call-the-citadel-api).
 Verify both the resources it can read and an unrelated resource it should not
 access before adding mutation calls. Use the installed instance's public schema
 for request shapes and supported operations.

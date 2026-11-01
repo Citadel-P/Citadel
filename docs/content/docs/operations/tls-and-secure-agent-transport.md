@@ -8,7 +8,7 @@ and Agent commands. Use TLS whenever that traffic leaves one trusted machine or
 private network.
 
 For the complete `.env` preparation workflow and application-setting reference,
-see [Docker Compose configuration](/docs/getting-started/configuration).
+see [Docker Compose configuration](/getting-started/configuration).
 
 Citadel supports three Core transport modes:
 
@@ -34,6 +34,15 @@ Choose public addresses for:
 
 - the Citadel UI and API;
 - the Edge Agent gRPC endpoint.
+
+When Core uses HTTPS through a proxy (`ReverseProxy`) or serves TLS itself
+(`Direct`), both `CITADEL_PUBLIC_URL` and `CITADEL_EDGE_PUBLIC_GRPC_URL` must be
+HTTPS URLs. These modes describe Core's TLS setup; Agent connection types are
+configured separately. Core validates both URLs at startup, even if the
+Edge listener is not published. Without Edge Agents, you can set both to the
+browser HTTPS URL and omit Edge port publishing and the gRPC proxy route.
+Include each configured hostname in `CITADEL_HTTP_ALLOWED_HOSTS`. Before using
+Edge Agents, configure a reachable gRPC endpoint and update the Edge URL to match.
 
 Citadel Core keeps two internal listeners:
 
@@ -62,9 +71,9 @@ Choose the guide that matches where your proxy runs:
 
 | Setup | Guide |
 | --- | --- |
-| Caddy in Docker, with automatic HTTPS | [Reverse proxy with Caddy](/docs/operations/reverse-proxy-caddy) |
-| Nginx in Docker, on a private proxy network | [Nginx in Docker](/docs/operations/reverse-proxy-nginx) |
-| Nginx installed directly on the Docker host | [Nginx on the host](/docs/operations/reverse-proxy-nginx-host) |
+| Caddy in Docker, with automatic HTTPS | [Reverse proxy with Caddy](/operations/reverse-proxy-caddy) |
+| Nginx in Docker, on a private proxy network | [Nginx in Docker](/operations/reverse-proxy-nginx) |
+| Nginx installed directly on the Docker host | [Nginx on the host](/operations/reverse-proxy-nginx-host) |
 
 Preserve API error responses through the proxy so Citadel can display their
 details. For nginx, use `proxy_intercept_errors off;` in the Citadel proxy
@@ -114,18 +123,18 @@ Keep Core ports `8000` and `8001` on the private proxy network. If a proxy
 installed directly on the host requires published ports, bind them to
 `127.0.0.1` instead of every interface.
 
-The installation's `docker-compose.yml` publishes Core's listeners on host
-loopback ports `18000` and `18001` by default; it does not include a reverse
-proxy. A proxy running on the host can use those ports. A containerized proxy
+The installation's `docker-compose.yml` publishes the browser/API listener on
+host loopback port `18000`. For a host proxy serving Edge Agents, also include
+[the Edge overlay](/getting-started/configuration#edge-agent-access) to
+publish port `18001`. The installer does not include a reverse proxy. A containerized proxy
 needs a shared private Docker network and upstreams `server:8000` and
 `server:8001`; its own `localhost` does not reach Core.
 
 Configure the proxy, trusted proxy addresses, and public URLs before starting
-Core in `ReverseProxy` mode. Run from your installation directory:
-
-```bash
-docker compose -f docker-compose.yml up -d
-```
+Core in `ReverseProxy` mode. Use the Compose commands in the
+[host Nginx](/operations/reverse-proxy-nginx-host),
+[containerized Nginx](/operations/reverse-proxy-nginx), or
+[Caddy](/operations/reverse-proxy-caddy) guide to include the required overlays.
 
 The Edge Agent service name is:
 
@@ -146,10 +155,13 @@ Place the certificate and key in `./tls`, or set
 `CITADEL_TLS_HOST_DIRECTORY` to another directory. The direct-TLS Compose
 overlay mounts it read-only at `/etc/citadel/tls`.
 
-Download the overlay into your installation directory:
+This example includes Edge Agent access. Download both overlays into your
+installation directory (omit `compose.edge.yml` from downloads and commands
+if you do not need Edge Agents, but keep an HTTPS `CITADEL_EDGE_PUBLIC_GRPC_URL`):
 
 ```bash
 curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/compose.direct-tls.yml -o compose.direct-tls.yml
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/compose.edge.yml -o compose.edge.yml
 ```
 
 Set:
@@ -175,14 +187,18 @@ CITADEL_CORE_AGENT_ALLOW_INSECURE=true
 ```
 
 From your installation directory, include the direct-TLS overlay to mount the certificates.
-The base Compose file publishes the configured host ports and checks listener health:
+The base Compose file publishes the browser port and checks listener health;
+the Edge overlay publishes the separate gRPC port:
 
 ```bash
 docker compose \
   -f docker-compose.yml \
   -f compose.direct-tls.yml \
+  -f compose.edge.yml \
   up -d
 ```
+
+Include these overlays in later Compose commands too.
 
 The health check uses HTTPS over loopback and skips certificate verification.
 Its only purpose is to verify that the local Core listener is ready; Core
@@ -242,8 +258,9 @@ CITADEL_HTTP_ALLOWED_HOSTS=localhost;host.docker.internal
 CITADEL_CORE_AGENT_ALLOW_INSECURE=true
 ```
 
-The supplied Compose setup maps the container ports to host ports `18000` and
-`18001`, bound to loopback. This gRPC URL is local-only; remote Agents need a
+The source-development Compose setup maps both listeners to loopback host ports
+`18000` and `18001`. The published-image installer exposes only `18000` unless
+you include `compose.edge.yml`. This gRPC URL is local-only; remote Agents need a
 reachable, secured address. Citadel logs a warning while this mode is active. Do not expose this setup to
 an untrusted LAN or the internet.
 

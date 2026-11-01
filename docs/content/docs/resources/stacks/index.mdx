@@ -10,7 +10,7 @@ it runs as a native Docker Stack.
 In **Inspect**, expand **Processes** below the inspection data. For a Standalone
 Stack, it follows the selected container. For a Swarm Stack, select a Service and
 then choose a running Task inside Processes. Process reads require Platform Read
-and Inspect permission and use the [container Processes view](/docs/resources/docker/containers#processes).
+and Inspect permission and use the [container Processes view](/resources/docker/containers#processes).
 
 ## Health
 
@@ -68,8 +68,8 @@ error alone does not mean the Stack operation failed; check its status and histo
 
 | Source | Use it when |
 | --- | --- |
-| [Web Editor](/docs/resources/stacks/web-editor) | You want to store and edit Compose content in Citadel |
-| [Git](/docs/resources/stacks/git) | Your Compose files belong in a versioned repository |
+| [Web Editor](/resources/stacks/web-editor) | You want to store and edit Compose content in Citadel |
+| [Git](/resources/stacks/git) | Your Compose files belong in a versioned repository |
 
 Both sources support Standalone and Swarm Platforms. Source selection controls
 where Citadel gets the configuration; the Platform determines how it deploys it.
@@ -78,11 +78,11 @@ where Citadel gets the configuration; the Platform determines how it deploys it.
 
 On Docker Standalone, the source pages describe container lifecycle actions,
 drift checks, and deployment settings. For a cluster, also read
-[Swarm Stacks](/docs/resources/stacks/swarm) for Compose compatibility, rollout
+[Swarm Stacks](/resources/stacks/swarm) for Compose compatibility, rollout
 behavior, Task operations, and rollback limitations.
 
-Use [Deployments](/docs/resources/deployments) for individual Standalone containers
-or [Swarm Services](/docs/resources/swarm-services) for independently managed
+Use [Deployments](/resources/deployments) for individual Standalone containers
+or [Swarm Services](/resources/swarm-services) for independently managed
 Swarm Services.
 
 ## Image updates
@@ -126,7 +126,7 @@ Compose declarations. Shared volumes are restored once. Copying to another
 Standalone Platform requires existing backups in a reachable S3-compatible
 repository. Current-data copies stay on the source Platform. Git sources, Swarm
 Stacks, bind mounts and storage indirection that cannot be resolved safely are
-blocked. See [Copy a workload with data](/docs/resources/backups#copy-a-workload-with-data).
+blocked. See [Copy a workload with data](/resources/backups#copy-a-workload-with-data).
 
 ## Backup coverage
 
@@ -135,7 +135,7 @@ tab. Hover, focus, or click it to see coverage for each resolved Docker volume
 and bind mount, including the most recent successful backup when available.
 Use **Configure backup** to open the central policy form with the Stack or an
 uncovered storage target selected. Existing policy links also show coverage from
-shared-volume policies. See [Backups](/docs/resources/backups#coverage-on-resource-pages)
+shared-volume policies. See [Backups](/resources/backups#coverage-on-resource-pages)
 for status meanings and configuration.
 
 On standalone Docker, Stack policies discover actual volume names from owned,
@@ -152,15 +152,15 @@ The resource table displays a **Backup** column. Hover over its shield to see
 the same coverage card as on the resource page. Manual-only or disabled policies
 show amber, even after a successful manual run. Green requires an active schedule,
 a ready repository, and a successful available backup for all eligible storage.
-See [Backup coverage](/docs/resources/backups#coverage-on-resource-pages) for all
+See [Backup coverage](/resources/backups#coverage-on-resource-pages) for all
 status meanings and scheduling requirements.
 
 ## Get started
 
-- [Deploy your first Stack](/docs/getting-started/first-stack).
-- [Adopt an existing Compose project or Docker Stack](/docs/guides/adopting-existing-workloads).
-- [Configure variables and secrets](/docs/guides/variables-and-secrets).
-- [Back up application data](/docs/resources/backups).
+- [Deploy your first Stack](/getting-started/first-stack).
+- [Adopt an existing Compose project or Docker Stack](/guides/adopting-existing-workloads).
+- [Configure variables and secrets](/guides/variables-and-secrets).
+- [Back up application data](/resources/backups).
 
 ## Local command trust boundary
 

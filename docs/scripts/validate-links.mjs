@@ -13,7 +13,7 @@ for (const file of await walk(contentRoot)) {
     .replace(/(^|\/)index$/, '$1')
     .replace(/\/$/, '');
   const text = withoutCodeBlocks(await readFile(file, 'utf8'));
-  pages.set(`/docs${route ? `/${route}` : ''}`, {
+  pages.set(`/${route}`, {
     relative,
     anchors: headingAnchors(text),
   });
@@ -44,9 +44,9 @@ for (const [route, page] of pages) {
       validateAnchor(page, route, target.slice(1));
       continue;
     }
-    if (!target.startsWith('/docs')) continue;
+    if (!target.startsWith('/') || target.startsWith('//')) continue;
     const [targetRouteRaw, anchor] = target.split('#', 2);
-    const targetRoute = targetRouteRaw.replace(/\/$/, '') || '/docs';
+    const targetRoute = targetRouteRaw.replace(/\/$/, '') || '/';
     const destination = pages.get(targetRoute);
     if (!destination) {
       errors.push(`${page.relative}: missing internal page ${targetRoute}`);

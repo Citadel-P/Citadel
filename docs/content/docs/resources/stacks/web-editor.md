@@ -7,12 +7,12 @@ Web Editor Stacks deploy Compose YAML stored in Citadel as a Docker Compose
 project on a Standalone Platform or a native Stack on a Swarm Platform. Use
 this when the application does not need a Git repository workflow.
 
-Use deployments instead when the workload is a single Docker container and does not need Compose. See [Deployments](/docs/resources/deployments).
+Use deployments instead when the workload is a single Docker container and does not need Compose. See [Deployments](/resources/deployments).
 
-Use Git stacks instead when the Compose files should be reviewed, versioned, and deployed from a repository. See [Git Stacks](/docs/resources/stacks/git).
+Use Git stacks instead when the Compose files should be reviewed, versioned, and deployed from a repository. See [Git Stacks](/resources/stacks/git).
 
 To import a Docker Compose project that is already running without applying it
-again during onboarding, see [Adopt existing workloads](/docs/guides/adopting-existing-workloads).
+again during onboarding, see [Adopt existing workloads](/guides/adopting-existing-workloads).
 
 ## Deploy a Compose file
 
@@ -29,7 +29,7 @@ instead of embedding credentials. Compose content containing literal credentials
 is excluded from the browser draft; required secret references and MariaDB/MySQL
 random-root-password flags can be restored.
 
-Try [your first Stack](/docs/getting-started/first-stack) if you do not have a Compose file yet.
+Try [your first Stack](/getting-started/first-stack) if you do not have a Compose file yet.
 On Swarm, Citadel checks whether the Compose fields can be represented by native Swarm services.
 
 ## Compose example
@@ -51,7 +51,7 @@ volumes:
 ```
 
 Saving changes does not update the running application. Select **Deploy** or
-**Redeploy** to apply them. Use [volume browsing](/docs/resources/docker/volumes#browse-and-download-files)
+**Redeploy** to apply them. Use [volume browsing](/resources/docker/volumes#browse-and-download-files)
 to inspect the named volume's contents.
 
 ## Compose File
@@ -93,7 +93,7 @@ Generated env file path:
 - Set it only when the Compose project or scripts need a predictable env file path.
 - The path is relative to the Docker Compose run directory.
 
-For more detail, see [Variables and secrets](/docs/guides/variables-and-secrets).
+For more detail, see [Variables and secrets](/guides/variables-and-secrets).
 
 ## Update Behavior
 
@@ -109,7 +109,7 @@ Registry credentials.
 - `Auto Deploy Services`: pull updated images and redeploy only changed services. Available for Docker Standalone only.
 - `Auto Deploy Stack`: pull updated images and redeploy the full stack.
 
-For registry setup, see [Registries](/docs/resources/registries).
+For registry setup, see [Registries](/resources/registries).
 
 Image update checks only work for services with image references that can be resolved as repository and tag pairs. Pinned digest-only images are not checked as tag updates.
 
@@ -161,7 +161,7 @@ Service-scoped deployment is supported only for Docker Standalone Stacks.
 For a Swarm Stack, leave **Redeploy On Build** disabled and deploy the complete
 Stack manually after the desired build image changes.
 
-For build setup and webhook-triggered builds, see [Builds](/docs/resources/builds).
+For build setup and webhook-triggered builds, see [Builds](/resources/builds).
 
 ## Project Name
 
@@ -231,7 +231,7 @@ capability.
 The manual **Reconcile drift** action also requires Operational Guardrails and
 an enabled drift policy. Inspect the report first: an intentionally stopped
 container should not be restarted merely to clear a warning. See
-[handling drift](/docs/guides/application-updates#handle-drift-separately).
+[handling drift](/guides/application-updates#handle-drift-separately).
 
 ## Rollback
 
@@ -242,7 +242,7 @@ If the current Compose editor has newer changes, rollback does not deploy those 
 Rollback does not restore application volumes or historical secret values.
 Bindings are resolved again, and mutable image tags can point to newer images.
 Review those dependencies before rollback. Swarm Secret and Config limitations
-are described in the [Swarm guide](/docs/resources/stacks/swarm#create-and-deploy-a-swarm-stack).
+are described in the [Swarm guide](/resources/stacks/swarm#create-and-deploy-a-swarm-stack).
 
 ## When To Use Web Editor Stacks
 

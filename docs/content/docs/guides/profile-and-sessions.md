@@ -5,7 +5,7 @@ description: "Update your profile, change your password, and review browser sess
 
 Open **Profile** from your account menu to manage your own account. You do not
 need administrator access. Administrators manage other accounts through
-[Access control](/docs/guides/access-control).
+[Access control](/guides/access-control).
 
 ## Update your profile
 
@@ -51,14 +51,14 @@ the current session is retained when Citadel can identify it.
 
 For an account whose password is managed by an identity provider, change it
 there. Citadel does not provide a local password-change form for that account.
-See [OIDC providers](/docs/guides/oidc-providers).
+See [OIDC providers](/guides/oidc-providers).
 
 Under **Security → Two-factor authentication**, select **Manage two-factor
 authentication** to enroll an authenticator or manage recovery codes in a dialog.
 The badge beside the heading shows whether MFA is enabled or disabled. It shows
 **Unavailable** if the status cannot be read or the account cannot use local-password MFA.
 If the status cannot be loaded, the management dialog offers **Retry**.
-Follow the [two-factor guide](/docs/guides/two-factor-authentication)
+Follow the [two-factor guide](/guides/two-factor-authentication)
 before replacing or losing access to a device.
 
 ## Review active sessions

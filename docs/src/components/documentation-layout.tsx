@@ -8,10 +8,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { appName, docsAssetUrl } from '@/lib/shared';
+import { AnalyticsPreferences } from '@/components/analytics/analytics';
 
 export function DocumentationLayout({ children, ...props }: DocsLayoutProps) {
   const pathname = usePathname();
-  if (pathname.replace(/\/$/, '') !== '/docs/reference/api') {
+  if (pathname.replace(/\/$/, '') !== '/reference/api') {
     const utilityLinks = (props.links ?? []).filter(
       (item): item is MainItemType => !item.type || item.type === 'main',
     );
@@ -47,6 +48,7 @@ export function DocumentationLayout({ children, ...props }: DocsLayoutProps) {
                   {item.external && <ArrowUpRight aria-hidden="true" />}
                 </Link>
               ))}
+              <AnalyticsPreferences />
             </nav>
           ),
         }}
@@ -58,17 +60,18 @@ export function DocumentationLayout({ children, ...props }: DocsLayoutProps) {
 
   return (
     <div className="min-w-0 w-full">
-      <header className="sticky top-0 z-50 flex h-16 items-center justify-between gap-4 border-b border-fd-border bg-fd-background px-4 sm:px-6">
+      <header className="sticky top-0 z-50 flex min-h-16 flex-wrap items-center justify-between gap-4 border-b border-fd-border bg-fd-background px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <Image src={docsAssetUrl('/logo.svg')} alt="" width={24} height={24} aria-hidden="true" />
-          {appName}
+          {appName} Docs
         </Link>
-        <nav aria-label="API reference navigation" className="flex items-center gap-4">
-          <Link href="/docs" className="flex items-center gap-2 text-sm text-fd-muted-foreground hover:text-fd-foreground">
+        <nav aria-label="API reference navigation" className="flex flex-wrap items-center gap-4">
+          <Link href="/" className="flex items-center gap-2 text-sm text-fd-muted-foreground hover:text-fd-foreground">
             <ArrowLeft aria-hidden="true" className="size-4" />
             Back to docs
           </Link>
           <ThemeSwitch />
+          <AnalyticsPreferences />
         </nav>
       </header>
       {children}

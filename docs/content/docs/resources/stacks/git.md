@@ -8,22 +8,22 @@ projects on Standalone Platforms or native Stacks on Swarm Platforms. They
 support repositories with one application and monorepos containing several
 independent applications.
 
-Configure the Git repository and any required Git account before creating a Git stack. See [Git repositories and accounts](/docs/resources/git-repositories).
+Configure the Git repository and any required Git account before creating a Git stack. See [Git repositories and accounts](/resources/git-repositories).
 
-Use deployments instead when the workload is a single Docker container and does not need Compose. See [Deployments](/docs/resources/deployments).
+Use deployments instead when the workload is a single Docker container and does not need Compose. See [Deployments](/resources/deployments).
 
-Use web editor stacks instead when the Compose YAML should be stored and edited directly in Citadel. See [Web Editor Stacks](/docs/resources/stacks/web-editor).
+Use web editor stacks instead when the Compose YAML should be stored and edited directly in Citadel. See [Web Editor Stacks](/resources/stacks/web-editor).
 
 To import a Compose project that is already running and use a Git repository
 as its authoritative source, see
-[Adopt existing workloads](/docs/guides/adopting-existing-workloads).
+[Adopt existing workloads](/guides/adopting-existing-workloads).
 
 ## Deploy from a repository
 
 You need a connected Platform and a repository that has synced successfully in
 **Repositories**. Ask the application's maintainer for its Compose file path.
 
-1. In **Repositories**, [connect the repository](/docs/resources/git-repositories#connect-a-repository)
+1. In **Repositories**, [connect the repository](/resources/git-repositories#connect-a-repository)
    and confirm its initial sync succeeds. For private source, configure its Git Account first.
 2. Open **Stacks**, select **Add Stack**, enter a name, and choose **Git** as the source.
 3. Select the Platform, repository, and branch. Leave **Commit** empty to track
@@ -45,7 +45,7 @@ policy is enabled. Start with manual deployment while you check the configuratio
 
 Use this workflow with **Disabled** or **Notify Only** update behavior and no
 deploy webhook. Repository sync executes configured
-[On Clone / On Pull hooks](/docs/resources/git-repositories#clone-and-pull-hooks)
+[On Clone / On Pull hooks](/resources/git-repositories#clone-and-pull-hooks)
 on Core; generated working-tree files are not included in Stack inputs.
 It can trigger other Stacks whose automatic deployment policies are enabled.
 
@@ -139,7 +139,7 @@ or env-file changes. Save the Stack before browsing the updated configuration.
 
 Browsing and comparison use the local Git object database. They do not
 synchronize the repository, run hooks, deploy the Stack, or change update
-state. See [Git repositories and accounts](/docs/resources/git-repositories) for content and cache limitations.
+state. See [Git repositories and accounts](/resources/git-repositories) for content and cache limitations.
 
 ## Git source requirements
 
@@ -293,7 +293,7 @@ Service-scoped deployment is supported only for Docker Standalone Stacks.
 For a Swarm Stack, leave **Redeploy On Build** disabled and deploy the complete
 Stack manually after the desired build image changes.
 
-For build setup and webhook-triggered builds, see [Builds](/docs/resources/builds).
+For build setup and webhook-triggered builds, see [Builds](/resources/builds).
 
 ## Webhooks
 
@@ -302,7 +302,7 @@ Repository webhooks trigger repository sync. Git stack webhooks trigger deploy f
 Repository synchronization and pending-update detection remain Community.
 Applying the stack from the webhook requires `Automated Operations`.
 
-For the shared listener model, authentication options, URL shape, and troubleshooting, see [Webhooks](/docs/guides/webhooks).
+For the shared listener model, authentication options, URL shape, and troubleshooting, see [Webhooks](/guides/webhooks).
 
 For Git stacks, webhook deploy still validates:
 

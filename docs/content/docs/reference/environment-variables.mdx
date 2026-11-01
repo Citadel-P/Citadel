@@ -5,7 +5,7 @@ description: "Configure Core, Direct Agents, and Edge Agents, including executio
 
 Citadel runtime settings use `CITADEL_` followed by uppercase words separated
 by single underscores. Standard tool settings such as `RUST_LOG`, `DOCKER_HOST`
-and `PG_*` retain their names. The `.env` downloaded in the [installation guide](/docs/getting-started/install)
+and `PG_*` retain their names. The `.env` downloaded in the [installation guide](/getting-started/install)
 contains the settings needed to start Citadel. Add optional settings from this
 reference as needed. The defaults are for local HTTP; configure TLS before
 sharing an installation.
@@ -21,13 +21,15 @@ Core's `.env` does not configure remote Agents.
 | --- | --- | --- |
 | `CITADEL_IMAGE` | Optional | Blank or unset uses `ghcr.io/citadel-p/citadel:latest`; set a complete image address to override |
 | `CITADEL_BIND_ADDRESS` | Optional | Host bind address; defaults to `127.0.0.1` |
-| `CITADEL_HTTP_PORT`, `CITADEL_EDGE_PORT` | Optional | Host ports; default to `18000` and `18001` |
+| `CITADEL_HTTP_PORT` | Optional | Browser/API host port; defaults to `18000` |
+| `CITADEL_EDGE_PORT` | Edge host-port overlay | Edge host port; defaults to `18001`; the base installer does not publish it |
 | `PG_HOST` | External or renamed PostgreSQL | PostgreSQL hostname; Compose defaults to `pg_db` |
-| `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` | Always | PostgreSQL credentials and database |
-| `CITADEL_TRANSPORT_MODE` | Always | `ReverseProxy`, `Direct`, or development-only `Disabled` |
-| `CITADEL_PUBLIC_URL` | Always | Canonical browser and API origin |
-| `CITADEL_EDGE_PUBLIC_GRPC_URL` | Edge Agent use | Public Edge gRPC address |
-| `CITADEL_HTTP_ALLOWED_HOSTS` | Always | Semicolon-separated hostnames accepted by Core |
+| `PG_PASSWORD` | Always | PostgreSQL password; set before starting |
+| `PG_USER`, `PG_DATABASE` | Optional in the installer | Both default to `citadel`; preserve existing values on upgrades |
+| `CITADEL_TRANSPORT_MODE` | Network access | How Core serves traffic: HTTPS through a proxy (`ReverseProxy`), TLS served by Core itself (`Direct`), or local HTTP (`Disabled`, installer default) |
+| `CITADEL_PUBLIC_URL` | Network access | Canonical browser and API origin; installer defaults to `http://localhost:` plus `CITADEL_HTTP_PORT` |
+| `CITADEL_EDGE_PUBLIC_GRPC_URL` | Whenever Core uses HTTPS, even without Edge Agents | HTTPS address for Edge Agent connections; without Edge Agents, use the browser HTTPS URL and leave Edge port publishing disabled |
+| `CITADEL_HTTP_ALLOWED_HOSTS` | Network access | Semicolon-separated hostnames accepted by Core; installer defaults to `localhost;127.0.0.1` |
 | `CITADEL_HTTP_TRUSTED_PROXIES` | Reverse proxy | Immediate trusted proxy address |
 | `CITADEL_HTTP_TRUSTED_PROXY_NETWORKS` | Reverse proxy alternative | Immediate trusted proxy network |
 | `CITADEL_TLS_CERTIFICATE_PATH` | Direct TLS | PEM certificate chain inside Core |
@@ -59,7 +61,7 @@ restart alone does not load a changed Compose environment.
 
 No Citadel telemetry or instance data is sent. GitHub receives normal connection
 information, including the outbound IP address. See
-[update checks and privacy](/docs/getting-started/configuration#allow-update-checks)
+[update checks and privacy](/getting-started/configuration#allow-update-checks)
 for details and how to turn checks on or off.
 
 ## Database and persistent paths
@@ -82,7 +84,7 @@ database password in `.env` does not reset the password of an existing database.
 | `CITADEL_PG_RESTORE_PATH` | `pg_restore` | PostgreSQL restore executable used by offline `restore-system` |
 
 Preserve original keys and verify the database target before
-[control-plane recovery](/docs/operations/control-plane-recovery). A new Compose
+[control-plane recovery](/operations/control-plane-recovery). A new Compose
 project does not isolate an external database configured by an override.
 
 ## Jobs and diagnostics
@@ -92,7 +94,7 @@ project does not isolate an external database configured by an override.
 | `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Platform metric collection interval, in seconds |
 | `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Metric persistence interval, in seconds |
 | `CITADEL_SCRIPTS_ENABLED` | `true` | Enables Script execution |
-| `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Shared Script execution slots; see [concurrency limits](#concurrency-limits) |
+| `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Script runs executing locally on Core; remote runs have a separate limit, see [script execution capacity](#script-execution-capacity) |
 | `CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS` | `300` | Default script timeout |
 | `CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS` | `1800` | Maximum script timeout |
 | `CITADEL_LOG_FORMAT` | `Text` | Core log format: `Text` or `Json` |
@@ -101,9 +103,9 @@ These settings do not override resource permissions, enabled states, or license
 requirements. Resource schedules are configured on the resource itself.
 
 For first-run password-file bootstrap, use the complete
-[unattended setup procedure](/docs/getting-started/first-run-setup#unattended-setup).
+[unattended setup procedure](/getting-started/first-run-setup#unattended-setup).
 For common configuration changes, see
-[Docker Compose configuration](/docs/getting-started/configuration).
+[Docker Compose configuration](/getting-started/configuration).
 
 ## Concurrency limits
 
@@ -219,9 +221,11 @@ container. The launcher derives this source from its native `CITADEL_DOCKER_SOCK
 | `CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY` | `10000` |
 | `CITADEL_BOOTSTRAP_ADMIN_NAME` / `CITADEL_BOOTSTRAP_ADMIN_EMAIL` / `CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Optional unattended setup; resolved only when setup is required |
 
-Carry existing JWT/encryption key bytes into the named settings when changing
-configuration. Generated keys remain in `jwtsecret` and `secret-encryption-key`
-under the same data root. Offline recovery never generates replacement keys.
+Keep generated keys in `jwtsecret` and `secret-encryption-key` under the persistent
+data root. Routine configuration changes do not require copying them into `.env`.
+If you explicitly configured `CITADEL_JWT_KEY` or `CITADEL_SECRETS_ENCRYPTION_KEY`,
+preserve those values across upgrades and recovery. Offline recovery never
+generates replacement keys.
 
 ## Execution tools, paths and scheduling
 
@@ -229,7 +233,7 @@ under the same data root. Offline recovery never generates replacement keys.
 | --- | --- |
 | `CITADEL_DOCKER_PATH` / `CITADEL_RESTIC_PATH` / `CITADEL_SHOUTRRR_PATH` | `docker` / `restic` / `shoutrrr` |
 | `CITADEL_DENO_PATH` | `deno` |
-| `CITADEL_INTERNAL_BASE_URL` | `http://127.0.0.1:<resolved HTTP listen port>`; Script API origin, separate from the public browser URL. Allow its hostname in `CITADEL_HTTP_ALLOWED_HOSTS`. Direct TLS requires an explicit reachable HTTPS origin and a certificate trusted by Deno; [setup and trust limits](/docs/operations/tls-and-secure-agent-transport#script-api-access). |
+| `CITADEL_INTERNAL_BASE_URL` | `http://127.0.0.1:<resolved HTTP listen port>`; Script API origin, separate from the public browser URL. Allow its hostname in `CITADEL_HTTP_ALLOWED_HOSTS`. Direct TLS requires an explicit reachable HTTPS origin and a certificate trusted by Deno; [setup and trust limits](/operations/tls-and-secure-agent-transport#script-api-access). |
 | `CITADEL_GIT_KNOWN_HOSTS_PATH` | `<data root>/git-known-hosts` |
 | `CITADEL_SCRIPTS_WORK_DIR` / `CITADEL_SCRIPTS_DENO_CACHE_DIR` | `<data root>/scripts/runs` / `<data root>/scripts/deno-cache` |
 | `CITADEL_SCRIPTS_ALLOW_NET` | Optional Deno network allowlist; existing comma-separated format |
@@ -266,9 +270,13 @@ under the same data root. Offline recovery never generates replacement keys.
 
 ## Direct Agent settings
 
+A Direct Agent is the **Agent** connector in the Platform form, also called a
+regular or inbound Agent in these guides. Core initiates the connection to it;
+this connection type is separate from Core's TLS mode.
+
 Set these on the Agent container. The generated setup command supplies its
-identity and Core public key; follow the [Direct Agent guide](/docs/operations/agent)
-and [TLS configuration](/docs/operations/tls-and-secure-agent-transport).
+identity and Core public key; follow the [Direct Agent guide](/operations/agent)
+and [TLS configuration](/operations/tls-and-secure-agent-transport).
 
 | Setting | Default / requirement | Purpose |
 | --- | --- | --- |
@@ -278,7 +286,7 @@ and [TLS configuration](/docs/operations/tls-and-secure-agent-transport).
 | `CITADEL_AGENT_PORT` | `9000` | Agent listener port inside the container |
 | `CITADEL_AGENT_BUILD_SLOTS` | `2` | Complete build attempts on this Agent, including pushes; accepts 1–64 |
 | `CITADEL_AGENT_DATA_SLOTS` | `2` | Data operations including helper cleanup; accepts 1–64 |
-| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Shared build/data occupancy; accepts 1–64 |
+| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Builds, data operations, and scripts combined on an Agent; accepts 1–64 |
 | `CITADEL_AGENT_TLS_MODE` | `Disabled` | `Direct` enables TLS and requires the certificate and key below |
 | `CITADEL_AGENT_TLS_CERTIFICATE_PATH` / `CITADEL_AGENT_TLS_PRIVATE_KEY_PATH` | Required for Direct TLS | PEM certificate chain and private key inside the Agent container |
 | `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker endpoint used by the Agent; also applies to Edge Agents |
@@ -287,7 +295,7 @@ and [TLS configuration](/docs/operations/tls-and-secure-agent-transport).
 ## Edge Agent settings
 
 Set these on the Edge Agent container. Use the command generated by Citadel;
-see the [Edge Agent guide](/docs/operations/edge-agent). Edge mode does not read
+see the [Edge Agent guide](/operations/edge-agent). Edge mode does not read
 the Direct-only identity, Core public-key, or listener TLS settings above.
 
 | Setting | Default / requirement | Purpose |
@@ -295,8 +303,8 @@ the Direct-only identity, Core public-key, or listener TLS settings above.
 | `CITADEL_AGENT_MODE` | `edge` required | Selects the outbound Edge connection |
 | `CITADEL_AGENT_BUILD_SLOTS` | `2` | Shared build capacity across Edge commands and replacement connections; accepts 1–64 |
 | `CITADEL_AGENT_DATA_SLOTS` | `2` | Data operations including helper cleanup; accepts 1–64 |
-| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Shared build/data occupancy; accepts 1–64 |
-| `CITADEL_CORE_URL` | Required | Core's Edge gRPC origin, not its browser/API endpoint |
+| `CITADEL_AGENT_HEAVY_SLOTS` | `2` | Builds, data operations, and scripts combined on an Agent; accepts 1–64 |
+| `CITADEL_CORE_URL` | Required | Core's Edge gRPC URL; it can share the browser URL when a proxy routes gRPC to the Edge listener |
 | `CITADEL_EDGE_AGENT_PROFILE` | `edge-agent` | `edge-build-agent` selects a dedicated Build Pool Agent; Swarm node profiles are generated by Core |
 | `CITADEL_EDGE_ENROLLMENT_TOKEN` | Required for initial enrollment | Enrollment credential from Citadel; an enrolled Agent reconnects using its persisted identity |
 | `CITADEL_EDGE_CORE_CA_CERTIFICATE_PATH` | Optional | PEM trust bundle for an HTTPS Core endpoint using a private CA |
@@ -307,7 +315,7 @@ Preserve the Agent's data volume. Dedicated Build Pool setup commands can select
 profile-specific key and identity paths; keep those generated values. Core also
 supplies Swarm node bootstrap and identity variables automatically.
 
-### Script execution capacity
+## Script execution capacity
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

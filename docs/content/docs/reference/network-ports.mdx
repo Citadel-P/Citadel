@@ -5,14 +5,17 @@ description: "Find the browser address and the ports needed by Agents and Docker
 
 In the supplied local Compose setup, open
 [http://localhost:18000](http://localhost:18000) in your browser. Port `18001`
-is for Edge Agent connections; it is not another web page.
+is optional, for Edge Agent connections; it is not another web page.
+Enable host access with the [Edge overlay](/getting-started/configuration#edge-agent-access)
+when using a host proxy or direct TLS. Containerized proxies can reach the
+Edge listener over their private Docker network.
 
 ## Default connections
 
 | Connection | Host port in the supplied setup | Container port | Direction |
 | --- | --- | --- | --- |
 | Browser and API | `127.0.0.1:18000` | `8000` | Browser or reverse proxy to Core |
-| Edge Agent gRPC | `127.0.0.1:18001` | `8001` | Edge Agent or its reverse proxy to Core |
+| Edge Agent gRPC | Not published by default; `127.0.0.1:18001` with the Edge overlay | `8001` | Edge Agent or its reverse proxy to Core |
 | Regular Agent | Chosen on the Agent host, usually `9000` | `9000` | Core to Agent |
 | PostgreSQL | Not published | `5432` | Core to the database on its private Docker network |
 | Docker engine | Not a TCP port in the supplied setup | `/var/run/docker.sock` | Local Core or Agent to Docker |
@@ -27,12 +30,12 @@ and Compose port mappings.
 `localhost` always means the machine making the connection. A remote Agent
 cannot reach your Core by using Core's `localhost` address. Configure a hostname
 or IP it can reach and protect that connection with TLS or a trusted private
-network, as described in the [TLS guide](/docs/operations/tls-and-secure-agent-transport).
+network, as described in the [TLS guide](/operations/tls-and-secure-agent-transport).
 
 - A regular Agent needs an inbound connection from Core to its Agent port.
 - An Edge Agent needs an outbound, long-lived HTTP/2 gRPC connection to Core.
 - A Swarm cluster has its own Docker networking requirements; connecting it to Citadel does not change those requirements.
 
-Use the generated [Agent](/docs/operations/agent) or
-[Edge Agent](/docs/operations/edge-agent) setup command. Keep PostgreSQL and the
+Use the generated [Agent](/operations/agent) or
+[Edge Agent](/operations/edge-agent) setup command. Keep PostgreSQL and the
 Docker socket private.

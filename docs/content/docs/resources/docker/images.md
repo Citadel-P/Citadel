@@ -4,7 +4,7 @@ description: "Pull and inspect Docker images on a Platform and remove images you
 ---
 
 Open a **Platform**, then **Images** to view images available on its Docker host.
-A [Registry](/docs/resources/registries) supplies images; this page shows the
+A [Registry](/resources/registries) supplies images; this page shows the
 copies stored on the host.
 
 The compact table groups the image name and primary tag in the **Image** column,
@@ -33,7 +33,7 @@ connection cancels the manual pull request. Docker may already have downloaded
 some or all of the image, so refresh inventory before retrying.
 
 Pulling downloads an image; it does not start a container or update an existing
-application. Use a [Deployment](/docs/resources/deployments#image-source) to run
+application. Use a [Deployment](/resources/deployments#image-source) to run
 it, or the owning workload's update controls to apply a newer version.
 
 ## Inspect an image
@@ -121,7 +121,7 @@ Otherwise, update or redeploy the owning workload yourself.
 An image can show **Up to date** while a workload still shows **Update available**:
 the host has downloaded the new image, but the workload is still using the old
 one. Pulling does not clear the workload's update status. See
-[Update applications](/docs/guides/application-updates) for checking, applying,
+[Update applications](/guides/application-updates) for checking, applying,
 and automating workload updates.
 
 Citadel uses the image's associated Registry when it matches and you can access
@@ -197,5 +197,5 @@ inventory while preserving the old local image and its saved dependencies.
 
 If a pull fails, read the operation error and check the image name, tag, Registry
 credentials, and network access from the target Docker host. See
-[Registries](/docs/resources/registries) for authentication
+[Registries](/resources/registries) for authentication
 and private Registry setup.

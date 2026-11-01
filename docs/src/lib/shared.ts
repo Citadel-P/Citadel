@@ -1,6 +1,6 @@
 export const appName = 'Citadel';
 export { docsAssetUrl } from '../../site-config.mjs';
-export const docsRoute = '/docs';
+export const docsRoute = '/';
 export const gitConfig = {
   user: 'Citadel-P',
   repo: 'Citadel',

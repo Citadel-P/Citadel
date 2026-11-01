@@ -62,6 +62,60 @@ beforeEach(() => {
   );
 });
 
+it('shows existing secret references without loading secret definitions for viewers', async () => {
+  const secretId = '00000000-0000-0000-0000-000000000202';
+  const secretRequests = vi.fn();
+  server.use(
+    http.get('http://localhost/api/v1/resourceBindings/secrets', () => {
+      secretRequests();
+      return HttpResponse.json({ type: 'forbidden' }, { status: 403 });
+    }),
+  );
+  const { queryClient } = renderCitadel(
+    <Routes>
+      <Route
+        path="/builds/edit/:id"
+        element={
+          <BuildForm
+            mode="edit"
+            disabled
+            resource={{
+              ...project,
+              capabilities: { canRead: true, canWrite: false, canExecute: false },
+              buildSecrets: [{ id: 'npmrc', secretId }],
+            }}
+          />
+        }
+      />
+    </Routes>,
+    { route: `/builds/edit/${project.id}` },
+  );
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  expect(secretRequests).not.toHaveBeenCalled();
+  expect(screen.getByDisplayValue(secretId)).toBeDisabled();
+  expect(screen.queryByText(/no longer available/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Create a Citadel secret before/)).not.toBeInTheDocument();
+});
+
+it('loads available secret definitions scoped to the build for editors', async () => {
+  const secretRequests = vi.fn();
+  server.use(
+    http.get('http://localhost/api/v1/resourceBindings/secrets', ({ request }) => {
+      secretRequests(Object.fromEntries(new URL(request.url).searchParams));
+      return HttpResponse.json({ secrets: [] });
+    }),
+  );
+  renderCitadel(
+    <Routes>
+      <Route path="/builds/edit/:id" element={<BuildForm mode="edit" resource={project} />} />
+    </Routes>,
+    { route: `/builds/edit/${project.id}` },
+  );
+  await waitFor(() =>
+    expect(secretRequests).toHaveBeenCalledWith({ targetResourceType: 'Build', targetResourceId: project.id }),
+  );
+});
+
 it('defaults to pushing and hides the required registry fields when disabled', async () => {
   const { user } = renderCitadel(<BuildForm mode="add" />, { route: '/builds/add' });
   const toggle = screen.getByRole('switch', { name: 'Push to registry' });

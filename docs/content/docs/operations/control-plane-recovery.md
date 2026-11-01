@@ -24,9 +24,9 @@ unusable installation, start with [Required Inputs](#required-inputs), then
 
 This procedure restores Citadel's management state. It does not restore Docker
 workload volumes, application databases, or the hosts themselves. Protect those
-separately with [workload backups](/docs/resources/backups).
+separately with [workload backups](/resources/backups).
 
-## System Containers
+## System containers
 
 On the local Docker Platform, Citadel marks its Core and PostgreSQL containers
 as **System**. On remote Platforms, generated regular Agent and Platform Edge
@@ -40,7 +40,8 @@ Citadel does not expose start, stop, pause, resume, restart, or delete controls
 for System containers. This prevents a bulk action or direct API request from
 disabling the control plane or remote connection that must report and recover
 the operation. Manage local Core and PostgreSQL containers from the Docker host
-with the Compose file used to install Citadel:
+with the Compose files used to install Citadel. Include the same project option
+and all proxy, TLS, and Edge overlays in each command:
 
 ```bash
 docker compose ps
@@ -64,10 +65,10 @@ Use `docker compose down` only when intentionally stopping the complete
 installation. The System label is a safety boundary in Citadel, not a
 replacement for restricting access to the Docker host.
 
-## Current Availability
+## Current availability
 
 Citadel creates complete control-plane backup bundles from the **Citadel
-backup** source in the backup-policy UI. Each restic snapshot contains a
+system** source in the backup-policy UI. Each restic snapshot contains a
 PostgreSQL custom-format dump, a recovery manifest, checksums, and every
 required file-backed recovery key.
 
@@ -77,7 +78,7 @@ It requires the original secret-encryption key and explicit confirmation. It
 does not copy recovery keys into the data volume; the procedure below does that
 first. Test recovery before relying on it in production.
 
-## Required Inputs
+## Required inputs
 
 For the default file-backed configuration, preserve these paths from the
 `/app/data` volume:
@@ -105,7 +106,7 @@ Do not include Git caches, stack workspaces, scripts working directories,
 logs, or backup staging folders. Citadel rebuilds those from database state and
 the original external systems.
 
-## Create A Backup
+## Create a backup
 
 1. Create or select a Core filesystem or S3-compatible backup repository.
 2. Store its restic password, repository location, and any storage credentials
@@ -141,7 +142,7 @@ Keys supplied through `CITADEL_JWT_KEY` or `CITADEL_SECRETS_ENCRYPTION_KEY` are 
 `manifest.json` under `requiredExternalConfiguration` and are not copied into
 the bundle. Recover their original values from your secret manager.
 
-## Export A Recovery Bundle
+## Export a recovery bundle
 
 Install restic on the recovery host. Configure `RESTIC_REPOSITORY` and its
 password through `RESTIC_PASSWORD` or `RESTIC_PASSWORD_FILE`, using the same
@@ -181,7 +182,7 @@ Keep the export private: it can contain keys that decrypt stored secrets and
 authenticate Core to Agents. The offline command below verifies every checksum
 before modifying PostgreSQL.
 
-## Restore Into A Clean Environment
+## Restore into a clean environment
 
 Use an empty PostgreSQL database and an empty Citadel data volume. The restore
 command can replace existing database objects; the confirmation flag is not a
@@ -197,12 +198,18 @@ settings. Remove it to use the example's new `pg_db`, or point it explicitly
 at an empty recovery database. Likewise, the commands below assume the default
 data path `/app/data`; adapt them if you use `CITADEL_DATA_ROOT`.
 
+Include the appropriate proxy, TLS, and Edge overlays in every Compose command
+below, for both the original and recovery installations.
+
 1. Prepare a separate recovery installation directory with copies of your
    Compose file and private `.env`. Pin `CITADEL_IMAGE` to the exact image
    recorded when the backup was created; compare it with `coreVersion` in
    `manifest.json`. Do not use a moving `latest` tag for recovery. Preserve
    the original external keys listed in `requiredExternalConfiguration`,
-   and copy your TLS overlay and certificates if needed.
+   and copy all installation overlays and their referenced files, including proxy
+   configuration and TLS certificates. Keep recovery storage separate as described
+   above. If the recovery stack includes a proxy, resolve any host-port or static
+   network-address conflicts with the original proxy before starting it.
 
 2. From the **original installation directory**, stop Core. Stop every other
    Core instance that uses that database too:
@@ -250,17 +257,18 @@ It never generates a replacement key. A new key cannot decrypt the restored
 secrets. Wait for `Citadel system recovery bundle restored successfully.`
 before continuing.
 
-5. Start the recovered Core and check its status:
+5. Start the recovered installation, including its proxy if configured, and
+   check its status:
 
 ```bash
-docker compose -p "$recovery_project" up -d --wait server
+docker compose -p "$recovery_project" up -d --wait
 docker compose -p "$recovery_project" ps
 docker compose -p "$recovery_project" logs --tail=100 server
 ```
 
-Include your TLS overlay in all Compose commands if configured. Keep using the
-recovery project name for later commands. Leave the original Core stopped while
-checking the recovered instance. Starting Core also starts its background
+Keep using the recovery project name and its overlays for later commands.
+Leave the original Core stopped while checking the recovered instance.
+Starting Core also starts its background
 workers and schedules; review the restored scripts settings as part of recovery.
 
 Confirm that:
@@ -296,7 +304,7 @@ Record the snapshot, image versions, required external keys, and time taken to
 recover. An offline restore success validates the bundle and database import;
 sign-in and functional checks establish whether the recovered instance is usable.
 
-## Failure Rules
+## Failure rules
 
 Do not start Core when:
 

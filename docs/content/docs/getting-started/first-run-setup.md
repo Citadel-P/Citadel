@@ -6,9 +6,9 @@ description: "Complete Citadel setup and create the initial administrator."
 Citadel does not ship with a default administrator username or password.
 
 For a Docker Compose installation, prepare the production environment before
-starting Core. See [Docker Compose configuration](/docs/getting-started/configuration).
+starting Core. See [Docker Compose configuration](/getting-started/configuration).
 
-## Interactive Setup
+## Interactive setup
 
 Start Citadel and open its normal browser URL. A new installation redirects to
 `/setup`.
@@ -30,13 +30,13 @@ enforced by server configuration cannot be weakened during setup.
 
 Update checks send no Citadel telemetry and never install updates. Core waits
 until the setup choices have been saved before making a release-check request.
-See [update checks and privacy](/docs/getting-started/configuration#allow-update-checks).
+See [update checks and privacy](/getting-started/configuration#allow-update-checks).
 
 Select **Create administrator**. Citadel creates the account with the built-in
 Admin role and signs you in. Setup cannot be opened again after it succeeds.
 
 The password should be unique to Citadel and stored in a password manager.
-After setup, use [Profile](/docs/guides/profile-and-sessions) for personal settings,
+After setup, use [Profile](/guides/profile-and-sessions) for personal settings,
 password changes, and active browser sessions.
 
 ### Configure password length
@@ -49,10 +49,10 @@ CITADEL_PASSWORDS_MINIMUM_LENGTH=15
 
 The minimum defaults to **15** and accepts values from **8 to 128**. The maximum
 password length remains **128** characters. After changing `.env`, run
-`docker compose up -d` from your installation directory, including your TLS
-overlay if configured, then reload the setup page.
+`docker compose up -d` from your installation directory, including all proxy,
+TLS, and Edge overlays used by your installation, then reload the setup page.
 
-## Two-Factor Authentication
+## Two-factor authentication
 
 Two-factor authentication is optional by default. It can be enabled later from
 **Profile → Security**. Administrators can change the installation-wide policy
@@ -70,10 +70,10 @@ The available policies are:
 - `RequiredForAdministrators`
 - `RequiredForAllUsers`
 
-See [Two-factor authentication](/docs/guides/two-factor-authentication) for enrollment and recovery-code
+See [Two-factor authentication](/guides/two-factor-authentication) for enrollment and recovery-code
 instructions.
 
-## Unattended Setup
+## Unattended setup
 
 Automated installations can initialize Citadel from a password file. The
 password is not accepted directly through an environment variable.

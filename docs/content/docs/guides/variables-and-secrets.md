@@ -21,7 +21,7 @@ Saving a binding does not change an existing container's environment. Reapply
 the consuming workload when you intend to use the new value. Use global bindings
 only when the value should be inherited by multiple resources.
 
-Managed [Swarm Services](/docs/resources/swarm-services) support variable and
+Managed [Swarm Services](/resources/swarm-services) support variable and
 secret bindings delivered through environment variables. Reapply the Service to
 use changed values. Citadel bindings resolve values for the Service specification;
 they are separate from native Docker Secrets mounted into containers. The Stack
@@ -286,7 +286,7 @@ Use **Environment variable** for Citadel-managed secret bindings. For a Swarm
 application that needs file-based secrets, create a Docker Secret from the
 Platform's **Secrets** page and reference it as an external secret in Compose.
 This is separate from a Citadel stored-secret binding. See
-[Swarm Secrets and Configs](/docs/resources/platforms/docker-swarm#manage-secrets-and-configs).
+[Swarm Secrets and Configs](/resources/platforms/docker-swarm#manage-secrets-and-configs).
 
 Mounted-file bindings are also unavailable for global entries and Deployments.
 
@@ -321,7 +321,7 @@ CITADEL_SECRETS_ENCRYPTION_KEY=
 When the value is empty, Citadel generates a key at
 `/app/data/secret-encryption-key` in the supplied container. A custom
 `CITADEL_DATA_ROOT` changes that directory. Preserve the key with the database
-using [control-plane backups](/docs/operations/control-plane-recovery).
+using [control-plane backups](/operations/control-plane-recovery).
 
 You can also provide your own base64-encoded 32-byte key:
 

@@ -1,0 +1,69 @@
+/* Match src/frontend/src/main.css: 4px tracks, quiet thumbs, stronger hover. */
+:root {
+  --docs-scrollbar-thumb: color-mix(
+    in oklab,
+    var(--citadel-text) 30%,
+    transparent
+  );
+  --docs-scrollbar-thumb-hover: color-mix(
+    in oklab,
+    var(--citadel-text) 50%,
+    transparent
+  );
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--docs-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 4px;
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: var(--citadel-radius);
+  background: var(--docs-scrollbar-thumb);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--docs-scrollbar-thumb-hover);
+}
+
+@supports selector(::-webkit-scrollbar) {
+  /* Chromium otherwise prefers its native thin width over the 4px rule. */
+  * {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+
+/* Fumadocs uses Base UI scrollbars for its sidebar instead of native tracks. */
+:is(#nd-sidebar, #nd-sidebar-mobile)
+  [data-orientation="vertical"]:has(> [data-orientation="vertical"]) {
+  width: 4px;
+  background: transparent;
+  opacity: 1;
+}
+
+:is(#nd-sidebar, #nd-sidebar-mobile)
+  [data-orientation="vertical"]
+  > [data-orientation="vertical"] {
+  border-radius: var(--citadel-radius);
+  background: var(--docs-scrollbar-thumb);
+}
+
+:is(#nd-sidebar, #nd-sidebar-mobile)
+  [data-orientation="vertical"]
+  > [data-orientation="vertical"]:hover {
+  background: var(--docs-scrollbar-thumb-hover);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(#nd-sidebar, #nd-sidebar-mobile):not(:hover):not(:has(:focus-visible))
+    [data-orientation="vertical"]:has(> [data-orientation="vertical"]) {
+    opacity: 0;
+  }
+}

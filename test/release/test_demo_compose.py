@@ -45,6 +45,7 @@ class PublicDeploymentComposeTests(unittest.TestCase):
         ports = []
         for target, cpus in ((preview, (1.0, 0.5)), (stable, (2.0, 1.0))):
             bindings = target["services"]["server"]["ports"]
+            self.assertEqual({p["target"] for p in bindings}, {8000, 8001})
             self.assertTrue(all(p["host_ip"] == "127.0.0.1" for p in bindings))
             ports.append({p["published"] for p in bindings})
             for service, maximum in zip(("server", "pg_db"), cpus):
@@ -110,8 +111,12 @@ class CanonicalConfigurationComposeTests(unittest.TestCase):
                 (root / "docker-compose.yml").write_text((ROOT / package / "docker-compose.yml").read_text())
                 (root / "direct.yml").write_text((ROOT / "deploy/compose.direct-tls.yml").read_text())
                 (root / ".env").write_text(self.configuration(root))
+                files = ["docker-compose.yml"]
+                if package == "deploy/install":
+                    (root / "edge.yml").write_text((ROOT / "deploy/install/compose.edge.yml").read_text())
+                    files.append("edge.yml")
                 for overlay in ([], ["direct.yml"]):
-                    server = self.render(root, ["docker-compose.yml", *overlay])["services"]["server"]
+                    server = self.render(root, [*files, *overlay])["services"]["server"]
                     ports = {int(p["published"]): p["target"] for p in server["ports"]}
                     self.assertEqual(ports, {18443: 8443, 18444: 8444})
                     env = server["environment"]
@@ -122,10 +127,55 @@ class CanonicalConfigurationComposeTests(unittest.TestCase):
                     self.assertEqual(env["PG_PASSWORD"], "literal$$not-expanded")
                     self.assertEqual(env["CITADEL_TRANSPORT_MODE"], "Direct" if overlay else "Disabled")
                     self.assertEqual(server["healthcheck"]["test"][-1], "healthcheck")
-                server = self.render(root, ["docker-compose.yml"], {"CITADEL_HTTP_LISTEN_PORT": "9443", "CITADEL_EDGE_GRPC_LISTEN_PORT": "9444"})["services"]["server"]
+                server = self.render(root, files, {"CITADEL_HTTP_LISTEN_PORT": "9443", "CITADEL_EDGE_GRPC_LISTEN_PORT": "9444"})["services"]["server"]
                 self.assertEqual({p["target"] for p in server["ports"]}, {9443, 9444})
                 self.assertEqual(server["environment"]["CITADEL_HTTP_LISTEN_PORT"], "9443")
                 self.assertEqual(server["environment"]["CITADEL_EDGE_GRPC_LISTEN_PORT"], "9444")
+
+    def test_installer_needs_only_password_and_publishes_only_web_port(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for file in ("docker-compose.yml", "compose.edge.yml"):
+                (root / file).write_text((ROOT / "deploy/install" / file).read_text())
+            template = (ROOT / "deploy/install/.env.example").read_text()
+            for extra, port in (("", 18000), ("CITADEL_HTTP_PORT=19000\n", 19000)):
+                with self.subTest(port=port):
+                    env = template.replace("PG_PASSWORD=", "PG_PASSWORD=fixture-password") + extra
+                    (root / ".env").write_text(env)
+                    (root / "fixture.env").write_text(env)
+                    config = self.render(root, ["docker-compose.yml"])
+                    server = config["services"]["server"]
+                    self.assertEqual([(p["host_ip"], p["published"], p["target"]) for p in server["ports"]],
+                                     [("127.0.0.1", str(port), 8000)])
+                    settings = server["environment"]
+                    self.assertEqual(settings["CITADEL_PUBLIC_URL"], f"http://localhost:{port}")
+                    self.assertEqual(settings["CITADEL_TRANSPORT_MODE"], "Disabled")
+                    self.assertEqual(settings["CITADEL_HTTP_ALLOWED_HOSTS"], "localhost;127.0.0.1")
+                    database = config["services"]["pg_db"]["environment"]
+                    for core, pg, expected in (("PG_USER", "POSTGRES_USER", "citadel"),
+                                              ("PG_DATABASE", "POSTGRES_DB", "citadel"),
+                                              ("PG_PASSWORD", "POSTGRES_PASSWORD", "fixture-password")):
+                        self.assertEqual(settings[core], expected)
+                        self.assertEqual(database[pg], expected)
+                    self.assertEqual(config["name"], "citadel")
+                    self.assertEqual(config["volumes"]["citadel_data"]["name"], "citadel_citadel_data")
+                    self.assertEqual(config["volumes"]["postgres_data"]["name"], "citadel_postgres_data")
+            overrides = {"CITADEL_PUBLIC_URL": "https://citadel.example.com",
+                         "CITADEL_EDGE_PUBLIC_GRPC_URL": "https://edge.example.com",
+                         "CITADEL_HTTP_ALLOWED_HOSTS": "citadel.example.com;edge.example.com",
+                         "CITADEL_TRANSPORT_MODE": "ReverseProxy",
+                         "PG_USER": "custom-user", "PG_DATABASE": "custom-db"}
+            config = self.render(root, ["docker-compose.yml", "compose.edge.yml"], overrides)
+            for key, value in overrides.items():
+                self.assertEqual(config["services"]["server"]["environment"][key], value)
+            self.assertEqual({p["target"] for p in config["services"]["server"]["ports"]}, {8000, 8001})
+            self.assertEqual(config["services"]["pg_db"]["environment"]["POSTGRES_USER"], "custom-user")
+            self.assertEqual(config["services"]["pg_db"]["environment"]["POSTGRES_DB"], "custom-db")
+            (root / ".env").write_text(template)
+            (root / "fixture.env").write_text(template)
+            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                self.render(root, ["docker-compose.yml"])
+            self.assertIn("Set PG_PASSWORD in .env", failure.exception.stderr)
 
     def test_development_mount_source_is_separate_from_container_socket(self):
         with tempfile.TemporaryDirectory() as directory:

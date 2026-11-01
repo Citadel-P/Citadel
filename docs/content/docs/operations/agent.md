@@ -3,7 +3,9 @@ title: "Regular Agent"
 description: "Connect a Docker host to Citadel through the regular Agent."
 ---
 
-The regular Citadel Agent connects a Docker host to Citadel Core through a direct, inbound connection.
+The regular Agent is the **Agent** connector in the Platform form. It is also
+called a Direct or inbound Agent: Core initiates the connection to the Agent
+on the Docker host. This connection type is separate from Core's TLS mode.
 
 Use the regular Agent when:
 
@@ -39,7 +41,7 @@ The private key remains on Citadel Core and must never be copied to an Agent. Ag
 > connection crosses an untrusted network.
 
 For production Core and Agent TLS configuration, including private certificate
-authorities, see [TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport).
+authorities, see [TLS and secure Agent transport](/operations/tls-and-secure-agent-transport).
 
 Regular Agents use HTTP by default to keep installation simple. Core allows
 these authenticated requests when `CITADEL_CORE_AGENT_ALLOW_INSECURE=true`, which
@@ -104,11 +106,11 @@ For builds, Citadel Core resolves the configured Git repository and branch, pack
 Keep build contexts small. Core's current archive step is limited to **12 MiB**
 and does not apply `.dockerignore`, before transfer through the 16 MiB Agent
 envelope. Use a narrow context and keep its Dockerfile inside that directory;
-see [Build Context Size](/docs/resources/builds#build-context-size).
+see [Build Context Size](/resources/builds#build-context-size).
 
 The Agent version should be updated together with Citadel Core when build protocol fields change.
 
-## Self-Managed Build Pool Agent
+## Self-managed Build Pool Agent
 
 A self-managed Build Pool uses the same Citadel Agent runtime, but it is dedicated to builds instead of being configured as a general Docker platform.
 
@@ -196,8 +198,9 @@ The Edge build Agent is scoped directly to the Build Pool. It is not an Edge Age
 
 The generated command is authoritative. It includes the correct container name, data volume, token, identity path, and `CITADEL_CORE_URL`.
 
-Use the generated gRPC address. Core listens on container port `8001`; the supplied
-Compose setup maps it to host port `18001` on loopback. Remote build Agents need
+Use the generated gRPC address. Core listens on container port `8001`; the optional
+[Edge overlay](/getting-started/configuration#edge-agent-access) publishes it
+on host loopback port `18001`. Remote build Agents need
 a reachable, secured address; they cannot use that local-only binding. The browser
 host port `18000` is separate.
 
@@ -569,7 +572,7 @@ Copy the latest installation command from the platform setup section and recreat
 * Rotate the signing key immediately if the Core private key may have been compromised.
 
 For the supported direct TLS setup and private-CA trust, see
-[TLS and secure Agent transport](/docs/operations/tls-and-secure-agent-transport).
+[TLS and secure Agent transport](/operations/tls-and-secure-agent-transport).
 
 Citadel automatically includes `CITADEL_AGENT_ID` in each Direct Agent install
 command. This UUID identifies the Platform or dedicated Build Pool independently

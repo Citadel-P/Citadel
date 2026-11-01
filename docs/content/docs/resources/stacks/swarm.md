@@ -4,9 +4,9 @@ description: "Deploy, import, and operate Compose applications on Docker Swarm."
 ---
 
 A Swarm Stack deploys a Compose application as native Docker Swarm Services.
-Choose a [Swarm Platform](/docs/resources/platforms/docker-swarm), then author
-its definition in the [Web Editor](/docs/resources/stacks/web-editor) or select
-files from [Git](/docs/resources/stacks/git).
+Choose a [Swarm Platform](/resources/platforms/docker-swarm), then author
+its definition in the [Web Editor](/resources/stacks/web-editor) or select
+files from [Git](/resources/stacks/git).
 
 ## Create and deploy a Swarm Stack
 
@@ -60,7 +60,7 @@ statistics.
 Rollback reapplies a selected healthy release's saved configuration through
 the same deployment checks. It does not restore application data. An unpinned
 Git source can resolve to a newer branch commit; see the
-[Git rollback limitations](/docs/resources/stacks/git#rollback) before using it.
+[Git rollback limitations](/resources/stacks/git#rollback) before using it.
 Citadel records owned Secret and Config IDs after a healthy deployment, but
 the current Rust rollback path does not restore those recorded IDs or manage
 a configurable retention window for them. Keep required Docker Secrets and
@@ -76,12 +76,12 @@ Native Docker Secrets and Configs can be referenced in the Compose definition.
 Citadel's **Mounted file** binding option is not connected to the current Rust
 Stack deployment path. Use supported Compose secret references or
 environment-variable bindings; see
-[secret delivery modes](/docs/guides/variables-and-secrets#delivery-mode).
+[secret delivery modes](/guides/variables-and-secrets#delivery-mode).
 
 All Git Stacks materialize the full committed tree on Core, including Local
 execution, within 512 entries/files and 12 MiB. Agents also check the final bundle
 after generated ownership files are added, so leave headroom. See
-[Git source requirements](/docs/resources/stacks/git#git-source-requirements)
+[Git source requirements](/resources/stacks/git#git-source-requirements)
 for monorepo counting, unsupported symlinks/submodules, and practical workarounds.
 
 ## Import an existing Stack or Compose project
@@ -132,10 +132,10 @@ images. Build-linked services use their build completion settings separately.
 Importing an external Docker Stack requires Stack Write plus Platform Read and
 Inspect. Deploy and rollback require Stack **Execute + Apply**. Viewing release
 history requires **Read + Releases**, and deletion requires **Execute**. Platform
-visibility is also required; see [permissions](/docs/reference/permissions).
+visibility is also required; see [permissions](/reference/permissions).
 
 ## Related resources
 
-- [Swarm Services](/docs/resources/swarm-services) explains Task logs and terminals.
-- [Cluster node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage) enables runtime operations beyond the connected manager.
-- [Backups](/docs/resources/backups#docker-swarm) describes Swarm Volume backup and restore limits.
+- [Swarm Services](/resources/swarm-services) explains Task logs and terminals.
+- [Cluster node coverage](/resources/platforms/docker-swarm#understand-cluster-node-coverage) enables runtime operations beyond the connected manager.
+- [Backups](/resources/backups#docker-swarm) describes Swarm Volume backup and restore limits.

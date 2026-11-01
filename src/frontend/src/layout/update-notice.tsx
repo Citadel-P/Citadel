@@ -14,7 +14,7 @@ import {
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 
-const UPGRADE_GUIDE = 'https://docs.citadelplane.com/docs/operations/upgrade-and-rollback/';
+const UPGRADE_GUIDE = 'https://docs.citadelplane.com/operations/upgrade-and-rollback/';
 
 export function useAvailableUpdate() {
   const { applicationInfo } = useAppContext();

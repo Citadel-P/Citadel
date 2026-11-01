@@ -49,15 +49,15 @@ username `demo` · password `citadel-demo-2026`.
 
 ## Install Citadel
 
-Follow the [installation guide](https://docs.citadelplane.com/docs/getting-started/install/)
+Follow the [installation guide](https://docs.citadelplane.com/getting-started/install/)
 to run Citadel with Docker Compose using published images.
 
 ## Documentation and contributing
 
-Start with the [quick start](https://docs.citadelplane.com/docs/getting-started/quick-start/)
-for first-run setup and connecting a host. Use the [public API reference](https://docs.citadelplane.com/docs/reference/api/)
+Start with the [quick start](https://docs.citadelplane.com/getting-started/quick-start/)
+for first-run setup and connecting a host. Use the [public API reference](https://docs.citadelplane.com/reference/api/)
 to integrate Citadel with scripts and developer tools. Choose
-[documentation and API schemas matching your installed version](https://docs.citadelplane.com/docs/reference/releases/#documentation-and-api).
+[documentation and API schemas matching your installed version](https://docs.citadelplane.com/reference/releases/#documentation-and-api).
 
 For development and contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

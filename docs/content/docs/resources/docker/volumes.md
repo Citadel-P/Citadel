@@ -27,7 +27,7 @@ Node before browsing, backing up, or restoring one.
 ## Browse and download files
 
 You need volume-content access and a reachable Docker host. For another Swarm
-Node, [Cluster node coverage](/docs/resources/platforms/docker-swarm#understand-cluster-node-coverage)
+Node, [Cluster node coverage](/resources/platforms/docker-swarm#understand-cluster-node-coverage)
 must provide a usable connection to that Node.
 
 1. Select the volume and choose **Browse**.
@@ -46,7 +46,7 @@ cannot be followed or downloaded as files.
 
 The browser reads current contents. Files may change while an application writes
 to the volume; a download is not an application-consistent backup. For recoverable
-snapshots and retention, configure a [backup policy](/docs/resources/backups).
+snapshots and retention, configure a [backup policy](/resources/backups).
 
 ## Protected storage
 
@@ -92,7 +92,7 @@ the table retains its last inventory while coverage for persisted worker volumes
 can still update. **Protected** requires an enabled
 schedule and an available successful backup; a policy with no schedule needs
 attention. **Unavailable** means coverage could not be determined. See
-[backup coverage](/docs/resources/backups) for configuration and status details.
+[backup coverage](/resources/backups) for configuration and status details.
 
 Hover or focus the shield to open the same backup card used on workload and
 container pages. It shows accessible policies, schedule warnings, and the last
@@ -120,4 +120,4 @@ attachments before treating it as unused.
 | A path cannot be downloaded | Select a regular file or subdirectory, rather than the volume root or a symbolic link |
 
 For remote workload backups, use an S3-compatible repository as described in
-[backup repositories](/docs/resources/backups#backup-repositories).
+[backup repositories](/resources/backups#backup-repositories).

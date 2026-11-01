@@ -1,61 +1,61 @@
 {
   "/docs/concepts/access-control": {
-    "to": "/docs/guides/access-control"
+    "to": "/guides/access-control"
   },
   "/docs/concepts/service-accounts": {
-    "to": "/docs/guides/service-accounts"
+    "to": "/guides/service-accounts"
   },
   "/docs/concepts/variables-and-secrets": {
-    "to": "/docs/guides/variables-and-secrets"
+    "to": "/guides/variables-and-secrets"
   },
   "/docs/concepts/resource-tags": {
-    "to": "/docs/guides/resource-tags"
+    "to": "/guides/resource-tags"
   },
   "/docs/concepts/docker-swarm": {
-    "to": "/docs/resources/platforms/docker-swarm",
+    "to": "/resources/platforms/docker-swarm",
     "anchors": {
-      "create-and-deploy-a-swarm-stack": "/docs/resources/stacks/swarm#create-and-deploy-a-swarm-stack",
-      "manage-a-swarm-service": "/docs/resources/swarm-services#manage-a-swarm-service",
-      "scale-a-replicated-service-to-zero": "/docs/resources/swarm-services#scale-a-replicated-service-to-zero",
-      "understand-service-ownership": "/docs/resources/swarm-services#understand-service-ownership",
-      "view-service-and-task-logs": "/docs/resources/swarm-services#view-service-and-task-logs",
-      "open-a-task-terminal": "/docs/resources/swarm-services#open-a-task-terminal"
+      "create-and-deploy-a-swarm-stack": "/resources/stacks/swarm#create-and-deploy-a-swarm-stack",
+      "manage-a-swarm-service": "/resources/swarm-services#manage-a-swarm-service",
+      "scale-a-replicated-service-to-zero": "/resources/swarm-services#scale-a-replicated-service-to-zero",
+      "understand-service-ownership": "/resources/swarm-services#understand-service-ownership",
+      "view-service-and-task-logs": "/resources/swarm-services#view-service-and-task-logs",
+      "open-a-task-terminal": "/resources/swarm-services#open-a-task-terminal"
     }
   },
   "/docs/guides/deployments": {
-    "to": "/docs/resources/deployments"
+    "to": "/resources/deployments"
   },
   "/docs/guides/manual-stacks": {
-    "to": "/docs/resources/stacks/web-editor"
+    "to": "/resources/stacks/web-editor"
   },
   "/docs/guides/git-stacks": {
-    "to": "/docs/resources/stacks/git"
+    "to": "/resources/stacks/git"
   },
   "/docs/guides/registries": {
-    "to": "/docs/resources/registries"
+    "to": "/resources/registries"
   },
   "/docs/guides/git-repositories": {
-    "to": "/docs/resources/git-repositories"
+    "to": "/resources/git-repositories"
   },
   "/docs/guides/builds": {
-    "to": "/docs/resources/builds",
+    "to": "/resources/builds",
     "anchors": {
-      "build-pools": "/docs/resources/build-pools#configure-a-pool",
-      "inbound-agent-endpoint": "/docs/resources/build-pools#inbound-agent-endpoint",
-      "edge-agent": "/docs/resources/build-pools#edge-agent",
-      "build-pool-connection-and-availability": "/docs/resources/build-pools#build-pool-connection-and-availability"
+      "build-pools": "/resources/build-pools#configure-a-pool",
+      "inbound-agent-endpoint": "/resources/build-pools#inbound-agent-endpoint",
+      "edge-agent": "/resources/build-pools#edge-agent",
+      "build-pool-connection-and-availability": "/resources/build-pools#build-pool-connection-and-availability"
     }
   },
   "/docs/guides/backups": {
-    "to": "/docs/resources/backups"
+    "to": "/resources/backups"
   },
   "/docs/guides/alert-rules": {
-    "to": "/docs/resources/alert-rules"
+    "to": "/resources/alert-rules"
   },
   "/docs/guides/scripts": {
-    "to": "/docs/resources/scripts"
+    "to": "/resources/scripts"
   },
   "/docs/concepts": {
-    "to": "/docs/resources"
+    "to": "/resources"
   }
 }

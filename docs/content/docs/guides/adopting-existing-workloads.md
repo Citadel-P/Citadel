@@ -388,8 +388,8 @@ Resolve every Swarm compatibility error before importing. Settings such as
 cannot be carried into `docker stack deploy`. Portability warnings for bind
 mounts, local Volumes, and fixed Host-mode ports require review on every Node.
 
-For normal Deployment behavior, see [Deployments](/docs/resources/deployments).
+For normal Deployment behavior, see [Deployments](/resources/deployments).
 
-For Web Editor Stacks, see [Web Editor Stacks](/docs/resources/stacks/web-editor).
+For Web Editor Stacks, see [Web Editor Stacks](/resources/stacks/web-editor).
 
-For Git-backed Stacks, see [Git Stacks](/docs/resources/stacks/git).
+For Git-backed Stacks, see [Git Stacks](/resources/stacks/git).

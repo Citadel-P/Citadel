@@ -5,11 +5,11 @@ description: "Use a host-installed Nginx server for Citadel HTTPS, WebSockets, a
 
 Use this setup when Nginx already runs as a system service on the same Linux
 host as Citadel. Core stays in Docker; Nginx connects to its published loopback
-ports. For a containerized proxy, use [Nginx in Docker](/docs/operations/reverse-proxy-nginx).
+ports. For a containerized proxy, use [Nginx in Docker](/operations/reverse-proxy-nginx).
 
 ## Before you start
 
-- Prepare the [standard Compose installation](/docs/getting-started/install).
+- Prepare the [standard Compose installation](/getting-started/install).
 - Install Nginx with HTTP/2 and gRPC support. The configuration below uses
   Nginx 1.25.1 or later.
 - Point `citadel.example.com` to this host and allow public traffic on ports
@@ -60,16 +60,19 @@ Clear existing `CITADEL_TLS_CERTIFICATE_PATH`,
 `CITADEL_TLS_PRIVATE_KEY_PATH`, and
 `CITADEL_HTTP_TRUSTED_PROXY_NETWORKS` values. Update explicit CORS origins
 and OIDC callback URLs if configured; see
-[related URL settings](/docs/operations/tls-and-secure-agent-transport#related-url-settings).
+[related URL settings](/operations/tls-and-secure-agent-transport#related-url-settings).
 Changing the JWT issuer or audience signs existing users out.
 
-Apply the settings and confirm the private listener works:
+Download the Edge overlay so host Nginx can reach the gRPC listener, then
+apply the settings and confirm the private HTTP listener works:
 
 ```bash
-docker compose up -d --wait
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/compose.edge.yml -o compose.edge.yml
+docker compose -f docker-compose.yml -f compose.edge.yml up -d --wait
 curl --fail --header 'Host: citadel.example.com' http://127.0.0.1:18000/health
 ```
 
+Include both Compose files in later update commands.
 If your installation uses different host ports, keep the `.env` values and
 Nginx upstreams below consistent. Run Docker commands as the account that owns
 the installation's Docker engine, including for rootless deployments.
@@ -140,6 +143,13 @@ uses long idle timeouts. Avoid an `error_page` maintenance fallback for these
 locations. This example assumes Nginx is the public-facing proxy; review
 forwarding trust if another proxy sits in front of it.
 
+If a CDN, load balancer or gateway sits in front of Nginx, verify that it supports
+bidirectional streaming gRPC and forwards it to Nginx over HTTP/2 with validated
+TLS. Enable any provider-specific gRPC setting. Keep the HTTP/2 setting and
+dedicated gRPC location above even when the dashboard already works. Follow the
+[Edge connectivity checks](/operations/edge-agent#dashboard-works-but-the-edge-platform-stays-disconnected)
+to distinguish CDN rejection, a missing proxy route and Agent authentication.
+
 Nginx supplies HSTS because it terminates TLS; Core does not emit HSTS in
 `ReverseProxy` mode. The HTTPS server's `add_header` applies to both locations,
 including error responses. If you add location-level `add_header` directives,
@@ -148,7 +158,7 @@ by default. If a CDN already sets HSTS, configure it in one place to avoid dupli
 
 Nginx forwards Core's browser security headers by default. Preserve them without
 adding duplicate `add_header` directives or hiding them with `proxy_hide_header`.
-See [Browser security headers](/docs/operations/tls-and-secure-agent-transport#browser-security-headers)
+See [Browser security headers](/operations/tls-and-secure-agent-transport#browser-security-headers)
 for the report-only CSP and public-response verification.
 
 ## 3. Validate and reload
@@ -192,7 +202,7 @@ with socket.socket() as listener:
 
 In another terminal on the same host, run `curl http://127.0.0.1:18002/`. The
 listener prints the peer and exits; Docker removes the temporary container.
-Set `CITADEL_HTTP_TRUSTED_PROXIES` to that address and recreate Core with `docker compose up -d`.
+Set `CITADEL_HTTP_TRUSTED_PROXIES` to that address and recreate Core with `docker compose -f docker-compose.yml -f compose.edge.yml up -d`.
 Verify it again if you recreate the Docker network or change rootless networking.
 
 ## Check Script API access
@@ -211,4 +221,4 @@ console.log("Accessible Platforms:", result.platforms.map(platform => platform.n
 
 Run it and confirm the Platform names (or an empty list) in the Action logs.
 A console-only Action does not test this connection. For HTTPS-only Core, follow
-[Direct TLS Script setup](/docs/operations/tls-and-secure-agent-transport#script-api-access).
+[Direct TLS Script setup](/operations/tls-and-secure-agent-transport#script-api-access).

@@ -80,8 +80,8 @@ Processed update observations retain their latest observation time even when
 they repeat an open target or are suppressed by cooldown. Older delayed observations
 cannot supersede that newer evidence. Rechecks do not restart the cooldown timer.
 
-Use [Platform monitoring](/docs/operations/platform-monitoring) to investigate
-capacity alerts and [Troubleshooting](/docs/operations/troubleshooting) for
+Use [Platform monitoring](/operations/platform-monitoring) to investigate
+capacity alerts and [Troubleshooting](/operations/troubleshooting) for
 connection or application failures. Alert details describe the condition; they
 are not a per-channel delivery receipt.
 
@@ -471,7 +471,7 @@ Choose a type based on the condition you need to investigate:
 | License | `LicenseEnteredGracePeriod`, `LicenseExpired` |
 
 `BuildAgentPoolUnavailable` uses an **Unavailable grace period (seconds)** threshold,
-rather than a percentage. See [Build Pool availability](/docs/resources/build-pools#build-pool-connection-and-availability)
+rather than a percentage. See [Build Pool availability](/resources/build-pools#build-pool-connection-and-availability)
 for the built-in rule's grace period and recovery behavior.
 
 `BackupRunFailed` handles eligible scheduled and webhook-triggered runs that
@@ -480,7 +480,7 @@ enabled on the backup policy. Manual runs and deliberate cancellation are
 excluded. Each failed run is a separate incident with a link to its logs;
 reprocessing the same result does not create another incident. Configure channels
 on the seeded **Backup Run Failed** rule as described above. See
-[backup alerts](/docs/resources/backups#alerts).
+[backup alerts](/resources/backups#alerts).
 
 ## Recommended Rules
 

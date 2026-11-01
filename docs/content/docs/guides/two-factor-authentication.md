@@ -91,7 +91,7 @@ UI cannot select a weaker policy.
 When policy requires setup, Citadel prompts you after you enter a valid username or email and password. Complete the QR-code setup and save recovery codes before entering the application.
 
 The same policy applies immediately after the first administrator is created.
-See [First-run setup](/docs/getting-started/first-run-setup) for initial installation instructions.
+See [First-run setup](/getting-started/first-run-setup) for initial installation instructions.
 
 If the setup session expires, return to the login page and sign in again to start a new setup session.
 
@@ -133,7 +133,7 @@ Two-factor authentication cannot be disabled when the active Citadel policy requ
 ## If You Lose Access
 
 If the lost device also had a signed-in browser, review and revoke that session
-under [Profile → Security](/docs/guides/profile-and-sessions#review-active-sessions).
+under [Profile → Security](/guides/profile-and-sessions#review-active-sessions).
 
 If you lose access to both your authenticator app and recovery codes, contact a Citadel administrator.
 

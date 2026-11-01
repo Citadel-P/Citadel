@@ -20,15 +20,15 @@ resource access instead of assigning the built-in Admin Role.
 1. As an administrator, open **Access → Users** and add a User.
 2. Enter a unique username, email, and initial password; leave **Enabled** on.
 3. Select the intended Roles and Teams, or use the single-resource grant below.
-   Review the [license requirements](/docs/overview/licensing) before expanding access.
+   Review the [license requirements](/overview/licensing) before expanding access.
 4. Save and give the person their credentials through a private channel. Have
-   them sign in, change the password through [Profile](/docs/guides/profile-and-sessions),
+   them sign in, change the password through [Profile](/guides/profile-and-sessions),
    and enroll in MFA if required.
 
 For shared access, create an enabled Team under **Access → Teams**, assign its
 Roles and Users, and save. Members inherit the Team's grants in addition to their
 own. Company sign-in can instead provision accounts through
-[OIDC](/docs/guides/oidc-providers#auto-provision-users).
+[OIDC](/guides/oidc-providers#auto-provision-users).
 
 ## Configure a Role
 
@@ -120,11 +120,11 @@ that resource type. A resource override alone does not enable creation.
 General permission levels and additional capabilities serve different purposes.
 For example, Stack logs require **Read + Logs**, while deployment and rollback
 require **Execute + Apply**. Execute also permits other lifecycle operations,
-including deletion; review the [permission matrix](/docs/reference/permissions)
+including deletion; review the [permission matrix](/reference/permissions)
 before expanding access. Browsing a Git Stack's repository source additionally
 requires Git Repository Read access.
 
-Use [Service Accounts](/docs/guides/service-accounts) for unattended integrations;
+Use [Service Accounts](/guides/service-accounts) for unattended integrations;
 they use the same permission model but cannot sign in through the browser.
 
 ## Review Access Changes

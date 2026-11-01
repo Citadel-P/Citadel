@@ -1,0 +1,7 @@
+# Optional: publish Core's Edge Agent listener for a host proxy or direct TLS.
+# docker compose -f docker-compose.yml -f compose.edge.yml up -d
+# Configure secure transport before exposing this port beyond loopback.
+services:
+  server:
+    ports:
+      - "${CITADEL_BIND_ADDRESS:-127.0.0.1}:${CITADEL_EDGE_PORT:-18001}:${CITADEL_EDGE_GRPC_LISTEN_PORT:-8001}"

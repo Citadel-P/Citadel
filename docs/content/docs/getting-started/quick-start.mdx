@@ -24,13 +24,15 @@ chmod 600 .env
 ```
 
 If repository access is restricted, use the signed-in download steps in the
-[installation guide](/docs/getting-started/install).
+[installation guide](/getting-started/install).
 
-Open `.env` in a text editor. Leave `CITADEL_IMAGE` blank to select
-`ghcr.io/citadel-p/citadel:latest`, or set an accessible published image address.
-Set `PG_PASSWORD` to a long, unique password containing
+Open `.env` in a text editor. Set `PG_PASSWORD` to a long, unique password containing
 letters and numbers, without surrounding quotes, and save the file. This is
 the database password; you will choose your sign-in password separately.
+
+Compose selects the published `latest` image automatically. If port `18000` is
+already in use, uncomment `CITADEL_HTTP_PORT` in `.env` and choose another port;
+use that port in the browser address below.
 
 Start Citadel:
 
@@ -42,16 +44,16 @@ docker compose ps
 
 The first image download can take several minutes. Wait until `server` and `pg_db` are
 healthy. If either fails, use the
-[troubleshooting guide](/docs/operations/troubleshooting).
+[troubleshooting guide](/operations/troubleshooting).
 
 This setup listens only on this machine. It gives Citadel administrative access
-to its Docker engine. Follow the [installation guide](/docs/getting-started/install)
+to its Docker engine. Follow the [installation guide](/getting-started/install)
 before making Citadel available to other people over a network.
 
 ## 2. Create your account
 
 Open [http://localhost:18000](http://localhost:18000) on the machine where
-Citadel is running. Enter your name, email, and a password of 15 to 128
+Citadel is running. Enter your username, email, and a password of 15 to 128
 characters, then select **Create administrator**.
 
 There is no default username or password. If you see the sign-in page instead,
@@ -66,7 +68,7 @@ account details before continuing.
 4. Wait for it to come online, then open it to see the containers on this host.
 
 A Platform is a Docker host that Citadel manages. You do not need an Agent for
-this local setup. See [connect a platform](/docs/getting-started/first-platform)
+this local setup. See [connect a platform](/getting-started/first-platform)
 to connect another machine.
 
 ## 4. Run an application
@@ -84,10 +86,10 @@ firewall controls who else can reach it. Citadel itself stays on port `18000`.
 
 ## What next?
 
-- [Deploy a Compose Stack](/docs/getting-started/first-stack) for an application with several services.
-- [Explore resources](/docs/resources) to learn about backups, builds, and Git repositories.
-- [Follow a guide](/docs/guides) to configure access, secrets, and integrations.
-- [Secure network access](/docs/getting-started/install) before sharing this installation.
+- [Deploy a Compose Stack](/getting-started/first-stack) for an application with several services.
+- [Explore resources](/resources) to learn about backups, builds, and Git repositories.
+- [Follow a guide](/guides) to configure access, secrets, and integrations.
+- [Secure network access](/getting-started/install) before sharing this installation.
 
 To stop Citadel while keeping its accounts and settings, run `docker compose
 stop` from your `citadel` installation directory. To start it again, run `docker compose up -d`.
