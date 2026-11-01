@@ -24,6 +24,20 @@ Container log streaming reports a deleted, dead, or removing container as
 replaced Stack member's log stream while retaining the Stack subscription.
 Other log errors keep their existing classification; no wire fields change.
 
+Image pulls use `PullImageResponse` on both transports, including progress and
+Docker error details. They finish on successful stream completion (Direct) or
+command completion (Edge), without the admission/completion receipts used by
+image builds. Cancellation releases the pending command; an ambiguous failure
+does not automatically replay the pull.
+
+Compose Stack apply completion reports the command outcome, including deployment
+hooks, on both Direct and Edge. As with Local execution, a successful apply does
+not wait for application healthchecks. The final `StackApplyResponse` carries
+`stack_status = Healthy` and `exit_code = 0` for a successful operation; container
+health is observed separately by Core. Starting or unhealthy containers must not
+replace that command outcome. Command failures and interrupted streams still fail
+the apply, and successful Compose applies retain their mounted secret files.
+
 ## Image metadata comparisons
 
 `DistributionInspect` accepts an optional target OS/architecture/variant. With that

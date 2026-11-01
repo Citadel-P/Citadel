@@ -1240,27 +1240,7 @@ impl AgentClient {
                 .map_err(|_| timeout_error("opening the Agent image-pull stream"))?
                 .map_err(normalize_status)?,
         };
-        let mut stream = response.into_inner();
-        loop {
-            let item = tokio::select! {
-                biased;
-                () = cancellation.cancelled() => return Err(cancelled_error()),
-                item = stream.next() => item,
-            };
-            let Some(item) = item else { break };
-            let item = item.map_err(normalize_status)?;
-            let message = item
-                .error_message
-                .or_else(|| item.error.and_then(|error| error.message));
-            if let Some(message) = message.filter(|message| !message.trim().is_empty()) {
-                return Err(RuntimeCapabilityError::new(
-                    RuntimeErrorKind::Remote,
-                    message,
-                    false,
-                ));
-            }
-        }
-        Ok(())
+        images::consume_image_pull_stream(response.into_inner(), cancellation).await
     }
 
     pub async fn open_image_pull(

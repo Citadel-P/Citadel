@@ -47,6 +47,7 @@ pub struct Runtime {
     heavy: Arc<tokio::sync::Semaphore>,
     heavy_capacity: usize,
     docker_cli: String,
+    stack_root: std::path::PathBuf,
     shutdown: CancellationToken,
     runtime_container: Option<String>,
 }
@@ -71,6 +72,7 @@ impl Runtime {
             samples: Arc::new(sampling::SharedSampler::new(docker.clone())),
             docker,
             docker_cli: "docker".into(),
+            stack_root: "/app/data/stacks".into(),
             shutdown,
             runtime_container,
         }
