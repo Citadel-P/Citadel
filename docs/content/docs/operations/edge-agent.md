@@ -267,6 +267,81 @@ The agent container must be able to reach the URL from inside Docker. Use the ex
 
 The Edge Agent gRPC endpoint is probably being served through an HTTP/1.1-only route or proxy. Point `CITADEL_CORE_URL` at the HTTP/2 gRPC endpoint and configure the proxy for gRPC pass-through or gRPC upstream forwarding.
 
+### Dashboard works but the Edge Platform stays disconnected
+
+A working dashboard or `/health` response only verifies the browser/API route.
+An Agent can remain running and repeatedly log `Edge connection ended; reconnecting`
+or `Core rejected the Edge connection` when the separate gRPC route is blocked
+or points to the browser listener.
+
+Check the full connection path:
+
+1. **Agent URL:** use the HTTPS `CITADEL_CORE_URL` from Core's enrollment
+   instructions. The Agent connects outbound; it does not need an inbound port
+   or its own public DNS record. Core's browser hostname can also serve Edge
+   traffic when the proxy routes the gRPC service separately.
+2. **CDN, load balancer or gateway, if present:** verify that every intermediary
+   supports bidirectional streaming gRPC and enable it for this hostname or
+   route when required. Check the service's supported ports, TLS certificate
+   validation, HTTP/2 negotiation and upstream protocol settings. Browser login
+   redirects, interactive challenges, buffering and short stream timeouts can
+   prevent an Agent connection even when ordinary web requests work. Use an
+   endpoint and access policy compatible with authenticated Agent traffic.
+3. **Reverse proxy:** enable HTTP/2 and route
+   `/citadel.edge.v1.EdgeAgentService/` to Core's Edge listener using gRPC upstream
+   forwarding. With host Nginx and the standard Edge overlay, this is
+   `grpc_pass grpc://127.0.0.1:18001`, forwarding to container port `8001`.
+   Use the actual Edge host port for your installation. The browser route's
+   `proxy_pass` to port `18000` cannot replace it. Follow the complete
+   [host Nginx configuration](/operations/reverse-proxy-nginx-host) or
+   [Caddy configuration](/operations/reverse-proxy-caddy).
+4. **Apply and verify:** back up the affected configuration, validate it with
+   your proxy's configuration checker, then apply or reload it. For host Nginx,
+   run `sudo nginx -t` before `sudo systemctl reload nginx`. Verify the dashboard
+   and gRPC route separately, and inspect the intermediary's logs to identify
+   which hop rejects the request.
+
+For example, Cloudflare requires **Network → gRPC** to be enabled for a proxied
+domain, with port `443`, TLS and HTTP/2 at the origin. Use **Full (strict)** TLS
+with a valid origin certificate. Its disabled gRPC setting produces `403`.
+Other providers expose different controls and error codes; consult your
+provider's documentation. See
+[Cloudflare's gRPC requirements](https://developers.cloudflare.com/network/grpc-connections/).
+
+These responses help locate the failure, but do not by themselves establish its
+cause:
+
+| Response from the Edge route | What to check |
+| --- | --- |
+| HTTP `401` or `403`, a login redirect, or a challenge page | Gateway access policy, gRPC enablement and request-blocking rules; distinguish these from Core's gRPC authentication response below |
+| `404`, `405`, or an HTML page | Missing gRPC location or traffic reaching the browser/API listener |
+| TLS or HTTP/2 negotiation failure | Certificate trust, hostname, ALPN and protocol support at the failing hop |
+| `502` or `504` | Proxy upstream address, published Edge port, listener availability and stream timeouts |
+
+With an HTTP/2-capable curl, send an empty request to the public Edge route,
+replacing the example hostname with the hostname in `CITADEL_CORE_URL`:
+
+```bash
+curl --http2 --max-time 15 --silent --show-error \
+  --request POST \
+  --header 'Content-Type: application/grpc' \
+  --header 'TE: trailers' \
+  --data-binary '' --dump-header - --output /dev/null \
+  https://citadel.example.com/citadel.edge.v1.EdgeAgentService/Connect
+```
+
+The expected response is HTTP/2 `200`, `content-type: application/grpc`, and
+`grpc-status: 16` (Unauthenticated). This is an intentional rejection: the empty
+request contains no enrollment token or Agent identity. It verifies that traffic
+reaches the Edge authentication handler, **not** that an Agent has enrolled.
+An HTTP `200` with HTML is not a successful gRPC check.
+
+Keep the existing Agent container and `/app/data` volume while repairing ingress.
+An Agent still retrying a connection should reconnect automatically after the
+route is fixed. Confirm that the Platform becomes **Online** and receives fresh
+observations. Do not delete its identity or generate a new token solely to fix a
+proxy failure; investigate enrollment separately if authentication still fails.
+
 ## Security notes
 
 - Use HTTPS for Citadel Core in production.

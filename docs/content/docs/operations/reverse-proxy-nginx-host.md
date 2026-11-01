@@ -143,6 +143,13 @@ uses long idle timeouts. Avoid an `error_page` maintenance fallback for these
 locations. This example assumes Nginx is the public-facing proxy; review
 forwarding trust if another proxy sits in front of it.
 
+If a CDN, load balancer or gateway sits in front of Nginx, verify that it supports
+bidirectional streaming gRPC and forwards it to Nginx over HTTP/2 with validated
+TLS. Enable any provider-specific gRPC setting. Keep the HTTP/2 setting and
+dedicated gRPC location above even when the dashboard already works. Follow the
+[Edge connectivity checks](/operations/edge-agent#dashboard-works-but-the-edge-platform-stays-disconnected)
+to distinguish CDN rejection, a missing proxy route and Agent authentication.
+
 Nginx supplies HSTS because it terminates TLS; Core does not emit HSTS in
 `ReverseProxy` mode. The HTTPS server's `add_header` applies to both locations,
 including error responses. If you add location-level `add_header` directives,

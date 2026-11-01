@@ -28,6 +28,10 @@ check enrollment and whether it can reach Core's **gRPC** address. Follow
 [Agent troubleshooting](/operations/agent#troubleshooting) or
 [Edge Agent troubleshooting](/operations/edge-agent#troubleshooting).
 
+If the dashboard opens but an Edge Agent keeps reconnecting, check the
+[gRPC routing through your proxy or CDN](/operations/edge-agent#dashboard-works-but-the-edge-platform-stays-disconnected).
+A healthy browser/API endpoint does not verify Edge connectivity.
+
 For Swarm, check manager health and node-agent coverage. Adding another Platform
 record for the same Docker engine will not repair connectivity.
 
