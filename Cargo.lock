@@ -502,6 +502,7 @@ dependencies = [
  "citadel-stacks",
  "citadel-swarm-services",
  "citadel-tags",
+ "citadel-updates",
  "ed25519-dalek",
  "futures-util",
  "getrandom 0.4.3",
@@ -514,10 +515,12 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "serde_yaml_ng",
  "sha1 0.11.0",
  "sha2 0.11.1",
  "sqlx",
  "subtle",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -1000,6 +1003,7 @@ dependencies = [
  "citadel-stacks",
  "citadel-swarm-services",
  "citadel-tags",
+ "citadel-updates",
  "clap",
  "futures-util",
  "getrandom 0.4.3",
@@ -1086,6 +1090,22 @@ dependencies = [
  "futures-util",
  "serde",
  "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "citadel-updates"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "citadel-primitives",
+ "futures-util",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
  "uuid",
 ]
 

@@ -32,6 +32,14 @@ def check_image(image, metadata, arch, config_digest):
     return dict(identity=actual, configDigest=info["Id"], architecture=arch)
 
 
+def check_upgrade_descriptor(image, metadata):
+    descriptor = json.loads(release.version.run(
+        "docker", "run", "--rm", "--network=none", image, "upgrade-descriptor-json"))
+    if descriptor != release.expected_upgrade_descriptor(metadata):
+        raise ValueError(f"{image}: embedded upgrade descriptor differs from the build contract")
+    return descriptor
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", required=True, type=Path)
@@ -50,6 +58,7 @@ def main():
             release.unpack(directory / f"{component}-{arch}.oci.tar", layout)
             _, config_digest = release.platform_manifest(layout, arch)
         tested[component] = check_image(image, metadata, arch, config_digest)
+    descriptor = check_upgrade_descriptor(images["core"], metadata)
     # Existing scripts exercise actual packaged binaries, Docker, runtime tools,
     # enrollment, reconnect, builds, volumes and Swarm Node Agent lifecycle.
     subprocess.run(["bash", "test/scripts/test-runtime-image.sh", images["core"]], check=True)
@@ -61,7 +70,8 @@ def main():
         raise ValueError("Candidate archive changed during acceptance")
     evidence = dict(schemaVersion=1, passed=True, metadata=metadata,
                     artifacts=after, architecture=arch, testedImages=tested,
-                    checks=["independent-binary-and-oci-versions", "core-runtime", "agent-image", "agent-compatibility", "candidate-acceptance"])
+                    upgradeDescriptor=descriptor,
+                    checks=["independent-binary-and-oci-versions", "core-runtime", "agent-image", "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor"])
     (directory / f"evidence-{arch}.json").write_text(json.dumps(evidence, indent=2) + "\n")
 
 

@@ -51,6 +51,183 @@ Pools use the same Agent executable; Swarm-node Agents use a restricted profile.
 Crate-specific tests stay beside their crates. Cargo's workspace and toolchain
 files remain at the repository root.
 
+## Instance update work in progress
+
+The Updates feature owns the release-check service, policy validation, release
+selection, compatibility descriptors, reviewed plans and operation/journal invariants.
+Its release-source interface is implemented by the bounded GitHub HTTP adapter;
+Server owns scheduling, composition and HTTP presentation. Adapters own release HTTP access, private
+filesystem journals and transactional PostgreSQL state. Identity remains the
+owner of the installation-wide check setting; its write transaction emits the
+Updates activity and a separate MFA activity when both settings change.
+
+The running application currently exposes persistent release checks and the
+administrator-only Config/Activities page. The page uses the shared resource registry,
+tabbed resource view and FormShell; it does not define a separate application route.
+Committed settings mutations publish `InstallationSettingsChanged` to administrator
+browsers, while persisted checks publish `ApplicationInfoChanged`. Shared realtime
+handling refreshes the affected HTTP reads on notification and reconnect. Activity
+history uses its existing scoped subscription; mutation responses keep the initiating
+browser's saved values current during a disconnect. Core self-update execution is
+not implemented.
+
+The Updates UI keeps Config and Activities in the standard resource page.
+Config offers automatic release checks at six-hour, twelve-hour or daily intervals
+(six hours by default), with Check now beside the frequency selector. Disabling
+automatic checks disables the frequency selector but preserves its value and still
+allows manual checks. Frequency is persisted with installation settings, with six
+hours as the migration default. The supervised worker uses the last persisted
+attempt to calculate the next check and reschedules on settings changes. Manual
+checks and restarts preserve this schedule. Server policy can prohibit both
+automatic and manual checks. History remains visible independently of this setting.
+
+The installation UI remains planned until execution is implemented. Installation
+readiness and recovery-checkpoint information will remain visible independently
+of automatic checks. Channel switching and scheduled installation are deferred.
+Update now
+opens a server-generated review of the exact target, interruption, checkpoint and
+Agent requirements. One approval starts a durable operation shown in the existing
+task sheet. Closing it, navigation or a browser refresh must neither cancel nor
+repeat the operation. Realtime reports progress while Core is available; during
+restart the loaded page retains the last confirmed phase and reconnects, without
+inventing progress or offering actions that require Core. The external executor
+retains durable evidence for reconciliation when Core returns.
+
+During a backend-confirmed update restart, keep the header connection indicator
+visible with a neutral spinner and “Updating · Reconnecting…”. Suppress repeated
+connection-error toasts only for that expected interruption. Ordinary disconnects
+retain the existing warning. A prolonged restart becomes “Taking longer than
+expected”, with operation details and host status/recovery instructions; loss of
+connectivity alone proves neither failure nor success. After verified completion,
+reload the document once to load the new frontend and preserve the Updates route,
+tab and operation ID. A fresh browser load may be unavailable while Core is down;
+the first version adds no independently hosted updater status endpoint.
+
+Release-check cancellation stops lock waits and network fetching. Once persistence
+begins, the supervised worker awaits cache publication and notification before
+exiting or applying a settings change. Policy monitoring and the worker are joined
+on shutdown; neither drops a committing check. The check endpoint returns the
+service result without rereading check state.
+
+The operation repository and journal contracts are foundations, not a completed
+external executor: live admission/draining, full installation preflight,
+installer integration, detached handoff and recovery orchestration still require
+integration and packaged source-to-target acceptance before enabling installation.
+Matching journal identity fields alone is not target readiness verification.
+
+Core acquires its database job lease and checks update ownership **before**
+migrations, setup, abandoned-operation recovery or service construction. The
+PostgreSQL adapter uses a bounded, read-only inspection; a fresh database without
+update tables is allowed, but missing update state after its migration is not.
+An owned operation blocks startup even when its JSON is unreadable, its phase is
+terminal, or release checks are disabled.
+
+Lease ownership is verified before each initialization phase and monitored while
+it runs, including migrations, setup, recovery and worker registration. Losing
+the original database session aborts startup; it does not reacquire the lease or
+fall back to maintenance listeners. Each subsequent phase checks ownership again
+so a completed migration cannot bypass a lost lease between periodic checks.
+Normal shutdown retains the lease through worker and dynamic-task cleanup.
+
+When `CITADEL_UPDATE_STATE_DIRECTORY` is explicitly configured, the Linux adapter
+also checks the existing private registration under a short, nonblocking host lock.
+The directory must be mounted at its registered absolute path and accessible to
+Core as the recorded executor UID. Missing, unsafe, corrupt, foreign-instance or
+locked state blocks startup. The check never creates or repairs evidence, holds
+the host lock while awaiting a helper, or treats a restored database without a
+claim as permission to ignore external evidence. Any file beyond the registration
+and lock currently requires recovery verification, including a completed journal.
+
+Blocked startup serves a restricted listener: `/health` reports process liveness,
+`/ready` returns 503, application routes are unavailable, and no Edge RPCs are exposed.
+Existing transport host/proxy checks, request limits and security headers still
+apply, and static frontend serving is disabled.
+The database job lease remains watched; loss of that lease stops the listeners.
+No normal workers, setup, recovery, webhook or scheduled dispatch is constructed.
+This mode does not reopen itself; restarting reevaluates the evidence. Automatic
+source/target resume still needs live runtime, migration, receipt and helper-cleanup
+verification. No target migrations or journal imports run in this mode. This is
+a startup safeguard, not the live admission/drain mechanism for an already running
+Core. Explicit operator migration/restore CLI commands remain separate maintenance
+tools. Installer mounting/configuration and execution integration are still pending;
+without the configured directory only database evidence can be inspected.
+
+The standalone `verify-update-release --version VERSION` command resolves a
+completed official publication and verifies its exact Core image using Cosign.
+The feature validates publication identity; the adapter owns bounded HTTP and
+signature-tool execution. Expected certificate identity and issuer come from
+Citadel's policy, not downloaded trust settings. The verifier uses a temporary
+private HOME, no inherited Docker credentials, and cancellation-aware process
+cleanup. Checksums and publisher receipts alone never establish authenticity.
+The command honours the server release-network restriction and does not construct
+Core, access the database, pull images or install anything. Its result proves an
+artifact signature, not catalog, architecture or installation compatibility.
+The verifier still needs integration into the reviewed-plan/executor path.
+
+Core also exposes `upgrade-descriptor-json` from its compiled version and embedded
+migration catalog. The catalog identity is SHA-256 of the exact embedded
+`migrations.json` bytes, after validation of every embedded SQL checksum; it is
+not a fingerprint of a live database. Candidate acceptance checks the descriptor
+on each architecture and retains it with the accepted archive evidence. The public
+manifest includes that retained copy as metadata, not as independent trust proof.
+The compiled descriptor currently has no qualified source transitions. A consumer
+must verify the image signature before reading its descriptor, then establish
+installation and live database compatibility before entering maintenance.
+
+The Linux `check-update-compose` diagnostic validates the explicitly supplied
+installer directory, project and ordered Compose paths. The adapter captures
+protected inputs, resolves a private snapshot through the bounded ProcessRunner,
+and rejects changes to the originals during validation. No installer templates
+are embedded in Core or Agent. A bounded YAML profile check rejects includes,
+builds, extra environment files and other unsupported dependencies before Compose
+can read them. Resolved configuration must preserve the supported service,
+network and persistent-storage layout; comments, filenames, labels, ports and
+explicit resource names need not match the shipped examples.
+The result contains a configuration fingerprint and desired image/storage names,
+never resolved environment values. This check does not contact the Docker daemon,
+bind the configuration to a live instance, persist registration, or establish
+upgrade eligibility.
+
+`register-update-installation` binds those inputs to a stable, healthy local
+Compose installation. Bounded Docker inspections verify the explicit invocation,
+service environment, ports, mounts, exclusive local volume ownership and bridge
+network identity. The command reads the existing initialized instance ID through
+Core's read-only `instance-identity-json` diagnostic; SQL remains in the PostgreSQL
+adapter, and neither diagnostic initializes Core, runs migrations or creates an
+identity. Repeated observations and an input fingerprint reject concurrent drift.
+Containerized registration also checks its own Docker identity and exact host
+binds for read-only installer inputs, private update state and the socket.
+
+Registration retains the installation lock and atomically creates a private
+`installation.json` without replacing existing evidence. An identical retry
+returns the same registration; different or corrupt registration and orphaned
+recovery state are refused. It records the executor UID/GID, `DockerCompose`
+installation kind and configuration and runtime fingerprints, not environment
+values. The registration model and
+bootstrap adapter are explicitly Compose-specific. Shared release verification,
+operation state and journals do not depend on Compose templates. Their current
+helper-image, container-ID and absolute checkpoint-path contracts still describe
+the container/host executor; they do not qualify another execution backend. Future
+Podman or Kubernetes installation support requires its own qualified adapter and recovery
+semantics; no unsupported kind is accepted or routed through Docker Compose.
+Registration is local operator authority, not an administrator-approved update or a user Activity. The installer
+does not yet invoke it automatically. Startup checks registration identity and
+private evidence; preflight must revalidate its live runtime and inputs before any
+future update. The saved observation alone never
+authorizes replacement or proves compatibility.
+
+Migration `0002_instance_updates` appends update state without changing the shipped
+baseline. Discovery markers and operation receipts are separate from Activity
+retention. Update state and the corresponding Activities commit together; a
+completion journal cannot reopen an older restored source identity.
+An attempt that fails or is postponed before replacement can release ownership
+after its outcome commits, helper cleanup completes and the running source's
+version, image, catalog and architecture are verified unchanged. Its original
+outcome stays terminal. Replacement uncertainty and `RecoveryRequired` retain
+ownership; successful replacement still requires the target completion receipt.
+These repository checks do not substitute for the pending runtime readiness and
+cleanup verification in the executor.
+
 ## Dependency rules
 
 - Features may depend on other features, but never on Server, Agent or infrastructure.
@@ -134,7 +311,7 @@ Worker dependency construction lives in `server/src/composition/workers.rs`.
 Executable background-task startup lives in `server/src/composition/background.rs`;
 worker implementations remain in `server/src/workers/`. HTTP extraction and
 validation belong to `server/src/api/request_validation/`. Citadel release
-notifications live in `server/src/release_updates/`, separate from workload updates.
+notifications are scheduled in `server/src/workers/updates/`, separate from workload image updates.
 Changes to the cached release result notify administrator browsers through
 `ApplicationInfoChanged`. Application info is fetched initially and refreshed on
 that event and realtime connection recovery, without periodic browser polling.
@@ -393,9 +570,22 @@ run status changes. Build logs load history initially, merge streamed entries,
 and recover missed history on reconnect. Tag assignments invalidate the affected
 resource lists/details and tag usage counts rather than the entire query cache.
 
+Register feature components in `src/frontend/src/features/index.tsx` through the
+shared list/form/detail factories. Resource page abstractions own routing, tabs,
+layout and declarative access/task-sheet options. Forms reuse FormShell/FormBuilder.
+Use a dedicated route only when the shared page model does not fit the workflow.
+
 Shared resource pages and UI components own layout, status badges, loading states
 and actions. Appearance uses CSS variables and shared density/radius tokens.
 Semantic health colors keep their meaning regardless of the selected accent.
+The shared top loading bar aggregates active React Query reads and mutations.
+It shows even fast requests for a minimum duration and waits for a quiet period before completing;
+individual responses and retry attempts do not restart the animation.
+
+Realtime snapshots or scoped invalidation events own synchronization after changes
+and on reconnect. Avoid parallel polling or mutation-triggered refresh-all flows.
+Authoritative mutation responses may update query caches while disconnected; cancel
+stale reads before applying them. Explicit error retries remain available.
 
 Frontend API modules and UI primitives must not import resource screens or the
 application router. Features may consume shared resource page templates and their

@@ -130,11 +130,37 @@ it.each([false, true])('shows installation controls only for an administrator (%
     />,
   );
   if (isAdministrator) {
-    expect(await screen.findByRole('switch', { name: 'Check for Citadel updates' })).toBeVisible();
+    expect(await screen.findByRole('combobox', { name: 'Two-factor authentication policy' })).toBeVisible();
+    expect(screen.queryByRole('switch', { name: 'Check for Citadel updates' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Instance settings Admins only' })).toBeVisible();
     expect(reads).toHaveBeenCalledOnce();
   } else {
     expect(screen.queryByText('Instance settings')).not.toBeInTheDocument();
     expect(reads).not.toHaveBeenCalled();
   }
+});
+
+it('shows password feedback only for the new password and clears it when the dialog closes', async () => {
+  server.use(
+    http.get('http://localhost/api/v1/profile/sessions', () =>
+      HttpResponse.json({ sessions: [], canRevokeOtherSessions: false }),
+    ),
+  );
+  const { user } = renderCitadel(
+    <ProfileForm
+      profile={{ ...profile, authentication: { ...profile.authentication, canChangePassword: true } }}
+      formatDate={String}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Change Password' }));
+  await user.type(screen.getByLabelText('Current password'), 'existing-password');
+  expect(screen.getByText('0 characters')).toBeVisible();
+  await user.type(screen.getByLabelText('New password', { exact: true }), 'passwordpasswordpassword');
+  expect(await screen.findByRole('meter')).toHaveAttribute('aria-valuetext', 'Weak');
+  expect(screen.getAllByRole('meter')).toHaveLength(1);
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  await user.click(screen.getByRole('button', { name: 'Change Password' }));
+  expect(screen.getByLabelText('New password', { exact: true })).toHaveValue('');
+  expect(screen.getByText('0 characters')).toBeVisible();
+  expect(screen.queryByRole('meter')).not.toBeInTheDocument();
 });

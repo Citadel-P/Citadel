@@ -33,6 +33,7 @@ pub struct PgDumpSystemBackupBuilder {
     staging_root: PathBuf,
     maximum_output: usize,
     recovery_assets: Option<RecoveryAssets>,
+    source_core_version: String,
 }
 
 /// File-backed keys are archived; explicitly configured keys stay external.
@@ -100,6 +101,7 @@ impl PgDumpSystemBackupBuilder {
         pg_dump: impl Into<OsString>,
         staging_root: PathBuf,
         maximum_output: usize,
+        source_core_version: String,
     ) -> Self {
         Self {
             local_budget: citadel_runtime::IoBudget::new(
@@ -112,6 +114,7 @@ impl PgDumpSystemBackupBuilder {
             staging_root,
             maximum_output,
             recovery_assets: None,
+            source_core_version,
         }
     }
 
@@ -213,7 +216,7 @@ impl PgDumpSystemBackupBuilder {
         let manifest = RecoveryManifest {
             format_version: 1,
             product: "citadel",
-            core_version: env!("CARGO_PKG_VERSION"),
+            core_version: &self.source_core_version,
             instance_id,
             created_at: chrono::Utc::now(),
             database: DatabaseManifest {

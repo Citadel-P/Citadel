@@ -86,6 +86,13 @@ include!("../generated/catalog.rs");
 pub struct MigrationRunner;
 
 impl MigrationRunner {
+    /// Identity of the exact embedded catalog, not an observation of a running
+    /// database. Verify every embedded SQL checksum before publishing it.
+    pub fn catalog_sha256() -> Result<String, MigrationError> {
+        validate_manifest()?;
+        Ok(sha256(super::MIGRATION_MANIFEST_JSON.as_bytes()))
+    }
+
     pub async fn migrate(database_url: &str) -> Result<MigrationOutcome, MigrationError> {
         let manifest = validate_manifest()?;
         let mut connection =
@@ -361,8 +368,12 @@ mod tests {
                 .iter()
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
-            ["0001"],
-            "the catalog must contain the consolidated initial migration"
+            ["0001", "0002"],
+            "instance updates must append to the published initial migration"
+        );
+        assert_eq!(
+            manifest["0001"].sha256,
+            "42d6600f4892a48a87b6014097c1c461f5dca298974a64fdcd30388262301128"
         );
         assert_eq!(manifest.len(), MIGRATIONS.len());
         assert_eq!(MIGRATIONS[0].id, "0001");

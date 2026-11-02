@@ -1,5 +1,23 @@
 use super::*;
 impl ActivityEvent {
+    pub fn new_updates_event(
+        instance_id: Uuid,
+        actor_id: ActorId,
+        info: ActivityEventInfo,
+        status: ActivityStatus,
+        created_at: DateTime<Utc>,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_resource_event(
+            instance_id,
+            "Updates".into(),
+            ActivityResourceType::Updates,
+            actor_id,
+            info,
+            status,
+            created_at,
+        )
+    }
+
     pub fn new_webhook_event(
         id: Uuid,
         name: String,

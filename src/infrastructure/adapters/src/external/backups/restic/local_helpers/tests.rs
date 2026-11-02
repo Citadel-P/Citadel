@@ -74,6 +74,7 @@ async fn local_restart_reconciles_exact_helpers_and_fences_late_starts() {
         "missing-citadel-test-pg-dump",
         staging.clone(),
         16384,
+        "0.1.1".into(),
     );
     let failed_bundle = Uuid::now_v7();
     let error = builder.build(failed_bundle, &cancel).await.unwrap_err();

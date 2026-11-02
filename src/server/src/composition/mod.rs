@@ -9,6 +9,7 @@ mod identity;
 mod licensing;
 mod platforms;
 mod scripts;
+mod updates;
 mod workloads;
 use citadel_activities::ActivityService;
 use citadel_adapters::connectors::agent::client::AgentClient;
@@ -65,7 +66,7 @@ pub struct ServerComponents {
     pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
     pub backup_coverage: Arc<citadel_server::api::resources::backups::coverage::BackupCoverageService>,
     pub edge_service: citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer<citadel_adapters::connectors::edge::EdgeIntake>,
-    pub updates: citadel_server::release_updates::UpdateChecker,
+    pub updates: citadel_updates::ReleaseCheckService,
     pub docker: DockerClient,
     pub pool: PgPool,
     pub cancellation: CancellationToken,
@@ -325,11 +326,7 @@ impl ServerComponents {
                 git_repositories,
                 backup_coverage,
                 edge_service,
-                updates: citadel_server::release_updates::UpdateChecker::default()
-                    .with_change_handler(citadel_server::realtime::change_callback(
-                        realtime_hub.clone(),
-                        "ApplicationInfo",
-                    )),
+                updates: updates::build(&pool, realtime_hub.clone()),
                 docker,
                 pool,
                 cancellation,

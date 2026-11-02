@@ -29,7 +29,7 @@ describe('InitialSetup', () => {
     });
 
     expect(screen.queryByText(/MFA is optional/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Advanced' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Advanced' })).not.toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: 'Check for Citadel updates' })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Username'), 'owner');
     await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
@@ -123,7 +123,7 @@ it('uses the server minimum rather than a hardcoded fifteen-character rule', asy
   await waitFor(() => expect(completeLogin).toHaveBeenCalledWith('token'));
 });
 
-it('submits the chosen installation settings and follows required MFA enrollment', async () => {
+it('preserves server settings and follows required MFA enrollment', async () => {
   const completeLogin = vi.fn();
   const markSetupComplete = vi.fn();
   const save = vi.fn();
@@ -135,23 +135,17 @@ it('submits the chosen installation settings and follows required MFA enrollment
   );
   const { user } = renderCitadel(<InitialSetup />, {
     auth: { completeLogin },
-    setup: { requiresSetup: true, markSetupComplete },
+    setup: {
+      requiresSetup: true,
+      markSetupComplete,
+      updateChecksEnabled: false,
+      mfaPolicy: MfaPolicy.RequiredForAdministrators,
+    },
   });
   await user.type(screen.getByLabelText('Username'), 'owner');
   await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
   await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple');
   await user.type(screen.getByLabelText('Confirm password'), 'correct-horse-battery-staple');
-  await user.click(screen.getByRole('button', { name: 'Advanced' }));
-  expect(screen.getByText(/MFA is optional/)).toBeVisible();
-  expect(screen.getByRole('switch', { name: 'Check for Citadel updates' })).toBeChecked();
-  await user.click(screen.getByRole('switch', { name: 'Check for Citadel updates' }));
-  await user.click(screen.getByRole('combobox', { name: 'Two-factor authentication' }));
-  await user.click(screen.getByRole('option', { name: 'Required for administrators' }));
-  expect(screen.queryByText(/MFA is optional/)).not.toBeInTheDocument();
-  expect(screen.getByText(/You’ll enroll after creating/)).toBeVisible();
-  await user.click(screen.getByRole('button', { name: 'Advanced' }));
-  expect(screen.queryByRole('combobox', { name: 'Two-factor authentication' })).not.toBeInTheDocument();
-  expect(screen.queryByText(/You’ll enroll after creating/)).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Create administrator' }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith(
@@ -163,24 +157,94 @@ it('submits the chosen installation settings and follows required MFA enrollment
 });
 
 it('honors installation restrictions supplied by the server', async () => {
+  const save = vi.fn();
+  server.use(
+    http.post(initializeUrl, async ({ request }) => {
+      save(await request.json());
+      return HttpResponse.json({ accessToken: null, nextStep: LoginNextStep.EnrollMfa });
+    }),
+  );
   const { user } = renderCitadel(<InitialSetup />, {
     setup: {
       requiresSetup: true,
-      updateChecksEnabled: false,
+      updateChecksEnabled: true,
       updateChecksAllowed: false,
       mfaPolicy: MfaPolicy.RequiredForAllUsers,
       minimumMfaPolicy: MfaPolicy.RequiredForAllUsers,
     },
   });
-  expect(screen.getByRole('button', { name: 'Advanced' })).toHaveAttribute('aria-expanded', 'false');
-  expect(screen.queryByText(/You’ll enroll after creating/)).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: 'Advanced' }));
-  expect(screen.getByRole('switch', { name: 'Check for Citadel updates' })).toBeDisabled();
-  expect(screen.getByRole('switch', { name: 'Check for Citadel updates' })).not.toBeChecked();
-  expect(screen.getByRole('combobox', { name: 'Two-factor authentication' })).toBeDisabled();
-  expect(screen.getByRole('combobox', { name: 'Two-factor authentication' })).toHaveTextContent(
-    'Required for everyone',
+  expect(screen.queryByRole('button', { name: 'Advanced' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  await user.type(screen.getByLabelText('Username'), 'owner');
+  await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
+  await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple');
+  await user.type(screen.getByLabelText('Confirm password'), 'correct-horse-battery-staple');
+  await user.click(screen.getByRole('button', { name: 'Create administrator' }));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ updateChecksEnabled: false, mfaPolicy: MfaPolicy.RequiredForAllUsers }),
+    ),
   );
-  expect(screen.getByText('The minimum policy is set by server configuration.')).toBeVisible();
-  expect(screen.queryByText(/MFA is optional/)).not.toBeInTheDocument();
 });
+
+it('keeps strength advisory when a password satisfies the configured length', async () => {
+  const completeLogin = vi.fn();
+  server.use(
+    http.post(initializeUrl, () => HttpResponse.json({ accessToken: 'token', nextStep: LoginNextStep.Completed })),
+  );
+  const { user } = renderCitadel(<InitialSetup />, {
+    auth: { completeLogin },
+    setup: { requiresSetup: true },
+  });
+  await user.type(screen.getByLabelText('Username'), 'owner');
+  await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
+  await user.type(screen.getByLabelText('Password'), 'passwordpasswordpassword');
+  await user.type(screen.getByLabelText('Confirm password'), 'passwordpasswordpassword');
+  expect(await screen.findByRole('meter')).toHaveAttribute('aria-valuetext', 'Weak');
+  expect(screen.getByText('24 characters · min 15')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Create administrator' }));
+  await waitFor(() => expect(completeLogin).toHaveBeenCalledWith('token'));
+});
+
+it.each(['Password', 'Confirm password'])(
+  'clears a submitted mismatch when correcting %s without another submit',
+  async (field) => {
+    const save = vi.fn();
+    const completeLogin = vi.fn();
+    server.use(
+      http.post(initializeUrl, async ({ request }) => {
+        save(await request.json());
+        return HttpResponse.json({ accessToken: 'token', nextStep: LoginNextStep.Completed });
+      }),
+    );
+    const { user } = renderCitadel(<InitialSetup />, {
+      auth: { completeLogin },
+      setup: { requiresSetup: true },
+    });
+    const matching = 'marigold fjord lantern cobalt';
+    await user.type(screen.getByLabelText('Username'), 'owner');
+    await user.type(screen.getByLabelText('Email address'), 'owner@example.test');
+    await user.type(screen.getByLabelText('Password'), field === 'Password' ? 'incorrect password' : matching);
+    await user.type(
+      screen.getByLabelText('Confirm password'),
+      field === 'Confirm password' ? 'incorrect password' : matching,
+    );
+    await user.click(screen.getByRole('button', { name: 'Create administrator' }));
+    expect(screen.getByText('Passwords do not match.')).toBeVisible();
+    expect(save).not.toHaveBeenCalled();
+
+    await user.clear(screen.getByLabelText(field));
+    await user.type(screen.getByLabelText(field), 'marigold');
+    expect(screen.getByText('Passwords do not match.')).toBeVisible();
+    await user.type(screen.getByLabelText(field), ' fjord lantern cobalt');
+    expect(screen.queryByText('Passwords do not match.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Confirm password')).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Create administrator' }));
+    await waitFor(() => expect(completeLogin).toHaveBeenCalledWith('token'));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ password: matching }));
+  },
+);

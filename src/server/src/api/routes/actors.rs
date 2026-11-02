@@ -1,8 +1,8 @@
 use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
+        resource_access::require_human_administrator,
         resources::actors::requests::PatchActorEnabledInput,
-        routes::authentication::require_human_administrator,
     },
     openapi::router::OpenApiRouterExt,
 };

@@ -29,6 +29,61 @@ schema_model! {
 #[serde(tag = "$type")]
 #[schema(as = ActivityEventInfo)]
 pub enum ActivityEventInfoSchema {
+    UpdateDiscovered {
+        #[serde(rename = "Version")]
+        version: String,
+        #[serde(rename = "ReleaseUrl")]
+        release_url: String,
+    },
+    UpdateChecksChanged {
+        #[serde(rename = "PreviousUpdateChecksEnabled")]
+        previous_update_checks_enabled: bool,
+        #[serde(rename = "UpdateChecksEnabled")]
+        update_checks_enabled: bool,
+        #[serde(rename = "PreviousUpdateCheckIntervalHours")]
+        previous_update_check_interval_hours: Option<i32>,
+        #[serde(rename = "UpdateCheckIntervalHours")]
+        update_check_interval_hours: Option<i32>,
+    },
+    InstanceUpdateStarted {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "SourceVersion")]
+        source_version: String,
+        #[serde(rename = "TargetVersion")]
+        target_version: String,
+    },
+    InstanceUpdateCompleted {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "SourceVersion")]
+        source_version: String,
+        #[serde(rename = "TargetVersion")]
+        target_version: String,
+    },
+    InstanceUpdateFailed {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Phase")]
+        phase: String,
+        #[serde(rename = "Message")]
+        message: String,
+    },
+    InstanceUpdatePostponed {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Message")]
+        message: String,
+    },
+    InstanceUpdateRecovered {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "RecoveryId")]
+        recovery_id: Uuid,
+        #[serde(rename = "Version")]
+        version: String,
+    },
+
     InstallationSettingsUpdated {
         #[serde(rename = "PreviousUpdateChecksEnabled")]
         previous_update_checks_enabled: bool,
@@ -1043,6 +1098,67 @@ pub enum ActivityEventInfoSchema {
 impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
     fn from(value: citadel_activities::ActivityEventInfo) -> Self {
         match value {
+            citadel_activities::ActivityEventInfo::UpdateDiscovered {
+                version,
+                release_url,
+            } => Self::UpdateDiscovered {
+                version,
+                release_url,
+            },
+            citadel_activities::ActivityEventInfo::UpdateChecksChanged {
+                previous_update_checks_enabled,
+                update_checks_enabled,
+                previous_update_check_interval_hours,
+                update_check_interval_hours,
+            } => Self::UpdateChecksChanged {
+                previous_update_checks_enabled,
+                update_checks_enabled,
+                previous_update_check_interval_hours,
+                update_check_interval_hours,
+            },
+            citadel_activities::ActivityEventInfo::InstanceUpdateStarted {
+                operation_id,
+                source_version,
+                target_version,
+            } => Self::InstanceUpdateStarted {
+                operation_id,
+                source_version,
+                target_version,
+            },
+            citadel_activities::ActivityEventInfo::InstanceUpdateCompleted {
+                operation_id,
+                source_version,
+                target_version,
+            } => Self::InstanceUpdateCompleted {
+                operation_id,
+                source_version,
+                target_version,
+            },
+            citadel_activities::ActivityEventInfo::InstanceUpdateFailed {
+                operation_id,
+                phase,
+                message,
+            } => Self::InstanceUpdateFailed {
+                operation_id,
+                phase,
+                message,
+            },
+            citadel_activities::ActivityEventInfo::InstanceUpdatePostponed {
+                operation_id,
+                message,
+            } => Self::InstanceUpdatePostponed {
+                operation_id,
+                message,
+            },
+            citadel_activities::ActivityEventInfo::InstanceUpdateRecovered {
+                operation_id,
+                recovery_id,
+                version,
+            } => Self::InstanceUpdateRecovered {
+                operation_id,
+                recovery_id,
+                version,
+            },
             citadel_activities::ActivityEventInfo::InstallationSettingsUpdated {
                 previous_update_checks_enabled,
                 update_checks_enabled,
@@ -1778,6 +1894,7 @@ enum_schema!(
         Team,
         Role,
         License,
+        Updates,
         Build,
         BuildAgentPool,
         Volume,
@@ -1861,6 +1978,13 @@ enum_schema!(
         StackImported,
         StackWebhookReceived,
         InstallationSettingsUpdated,
+        UpdateDiscovered,
+        UpdateChecksChanged,
+        InstanceUpdateStarted,
+        InstanceUpdateCompleted,
+        InstanceUpdateFailed,
+        InstanceUpdatePostponed,
+        InstanceUpdateRecovered,
         InitialAdministratorCreated,
         UserProfileUpdated,
         UserPreferencesUpdated,

@@ -53,5 +53,7 @@ pub struct PatchInstallationSettings {
     #[serde(default)]
     pub update_checks_enabled: citadel_primitives::PatchField<bool>,
     #[serde(default)]
+    pub update_check_interval_hours: citadel_primitives::PatchField<i32>,
+    #[serde(default)]
     pub mfa_policy: citadel_primitives::PatchField<crate::MfaPolicy>,
 }

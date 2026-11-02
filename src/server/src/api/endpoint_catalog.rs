@@ -8,6 +8,7 @@ pub(crate) fn visit_documents(mut visit: impl FnMut(OpenApi)) {
     visit(crate::api::routes::scripts::documented_routes().into_openapi());
     visit(crate::api::routes::stacks::documented_routes().into_openapi());
     visit(crate::api::routes::licensing::documented_routes().into_openapi());
+    visit(crate::api::routes::updates::documented_routes().into_openapi());
     visit(crate::api::routes::deployments::documented_routes().into_openapi());
     visit(crate::api::routes::activities::documented_routes().into_openapi());
     visit(crate::api::routes::service_accounts::documented_routes().into_openapi());

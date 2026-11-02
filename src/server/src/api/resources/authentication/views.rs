@@ -91,6 +91,7 @@ impl From<citadel_identity::SetupStatus> for SetupStatusView {
 #[serde(rename_all = "camelCase")]
 pub struct InstallationSettingsView {
     pub update_checks_enabled: bool,
+    pub update_check_interval_hours: i32,
     pub update_checks_allowed: bool,
     #[schema(value_type = crate::api::resources::vocabulary::MfaPolicySchema)]
     pub mfa_policy: citadel_identity::MfaPolicy,
@@ -105,6 +106,7 @@ impl InstallationSettingsView {
     ) -> Self {
         Self {
             update_checks_enabled: settings.update_checks_enabled,
+            update_check_interval_hours: settings.update_check_interval_hours,
             update_checks_allowed: policy.update_checks_allowed,
             mfa_policy: settings.mfa_policy,
             minimum_mfa_policy: policy.minimum_mfa_policy,

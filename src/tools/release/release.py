@@ -218,6 +218,7 @@ class Backend:
         if (not record or record["status"] != "complete" or record["metadata"] != metadata
                 or record.get("recoveryTag") != RECOVERY_PREFIX + tag
                 or record["indexes"] != completed["indexes"]
+                or accepted_upgrade_descriptor(record) != completed.get("upgradeDescriptor")
                 or any(record["steps"].get(key) != value for key, value in completed["steps"].items())):
             raise ValueError("Recovery journal does not match the completed public manifest; keep recovery files")
         release_id = draft["id"]
@@ -662,6 +663,16 @@ def recover(backend, tag, directory, durable_only=False):
     return record
 
 
+def expected_upgrade_descriptor(metadata):
+    # Hash the exact bytes embedded by citadel-database. SQL/catalog integrity is
+    # checked independently by the binary before it emits the descriptor.
+    catalog = ROOT / "src/infrastructure/database/generated/migrations.json"
+    return dict(schemaVersion=1, product="citadel", targetVersion=metadata["displayVersion"],
+                targetCatalogSha256=version.sha256(catalog),
+                installerFormat=POLICY["installerFormat"], updateProtocol=POLICY["updateProtocol"],
+                sources=[])
+
+
 def validate_evidence(directory, metadata):
     for arch in POLICY["architectures"]:
         evidence = json.loads((directory / f"evidence-{arch}.json").read_text())
@@ -669,9 +680,11 @@ def validate_evidence(directory, metadata):
                 or evidence["passed"] is not True or evidence["architecture"] != arch):
             raise ValueError("Candidate acceptance evidence does not match release")
         required = {"independent-binary-and-oci-versions", "core-runtime", "agent-image",
-                    "agent-compatibility", "candidate-acceptance"}
+                    "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor"}
         if not required.issubset(evidence["checks"]):
             raise ValueError("Missing required candidate checks")
+        if evidence.get("upgradeDescriptor") != expected_upgrade_descriptor(metadata):
+            raise ValueError("Candidate upgrade descriptor differs from the build contract")
         for component in ["core", "agent"]:
             if evidence["artifacts"][component] != version.sha256(directory / f"{component}-{arch}.oci.tar"):
                 raise ValueError("Candidate was changed after acceptance")
@@ -720,7 +733,21 @@ def published_record(backend, published, metadata=None):
             indexes[component] = digest
             steps["signed:" + ref] = digest
     return dict(tag=tag, metadata=metadata, status="complete", indexes=indexes, steps=steps,
-                artifacts={}, publicManifest=True)
+                artifacts={}, publicManifest=True, upgradeDescriptor=manifest.get("upgradeDescriptor"))
+
+
+def accepted_upgrade_descriptor(record):
+    # Preserve original accepted evidence during recovery, without recomputing
+    # any field from a later checkout or qualifying descriptor-less publications.
+    evidence = record.get("evidence", {})
+    if not any("upgradeDescriptor" in item for item in evidence.values()):
+        return None
+    descriptors = [evidence.get(arch, {}).get("upgradeDescriptor") for arch in POLICY["architectures"]]
+    descriptor = descriptors[0]
+    if (not isinstance(descriptor, dict) or any(item != descriptor for item in descriptors)
+            or descriptor.get("targetVersion") != record["metadata"]["displayVersion"]):
+        raise ValueError("Published upgrade descriptors differ across candidates")
+    return descriptor
 
 
 def public_files(record, directory):
@@ -742,6 +769,9 @@ def public_files(record, directory):
                     signatures=dict(tool="cosign", certificateIdentity=record["signingIdentity"],
                                     certificateOidcIssuer="https://token.actions.githubusercontent.com"),
                     releaseNotesSha256=record["artifacts"]["release-notes.md"])
+    descriptor = accepted_upgrade_descriptor(record)
+    if descriptor is not None:
+        manifest["upgradeDescriptor"] = descriptor
     path = directory / "release-manifest.json"
     path.write_text(json.dumps(manifest, indent=2) + "\n")
     checksums = directory / "SHA256SUMS"

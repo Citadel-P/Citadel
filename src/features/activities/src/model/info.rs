@@ -6,6 +6,61 @@ use super::*;
 // Activity construction solely to reduce the enum's stack size.
 #[allow(clippy::large_enum_variant)]
 pub enum ActivityEventInfo {
+    UpdateDiscovered {
+        #[serde(rename = "Version")]
+        version: String,
+        #[serde(rename = "ReleaseUrl")]
+        release_url: String,
+    },
+    UpdateChecksChanged {
+        #[serde(rename = "PreviousUpdateChecksEnabled")]
+        previous_update_checks_enabled: bool,
+        #[serde(rename = "UpdateChecksEnabled")]
+        update_checks_enabled: bool,
+        #[serde(rename = "PreviousUpdateCheckIntervalHours")]
+        previous_update_check_interval_hours: Option<i32>,
+        #[serde(rename = "UpdateCheckIntervalHours")]
+        update_check_interval_hours: Option<i32>,
+    },
+    InstanceUpdateStarted {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "SourceVersion")]
+        source_version: String,
+        #[serde(rename = "TargetVersion")]
+        target_version: String,
+    },
+    InstanceUpdateCompleted {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "SourceVersion")]
+        source_version: String,
+        #[serde(rename = "TargetVersion")]
+        target_version: String,
+    },
+    InstanceUpdateFailed {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Phase")]
+        phase: String,
+        #[serde(rename = "Message")]
+        message: String,
+    },
+    InstanceUpdatePostponed {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Message")]
+        message: String,
+    },
+    InstanceUpdateRecovered {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "RecoveryId")]
+        recovery_id: Uuid,
+        #[serde(rename = "Version")]
+        version: String,
+    },
+
     InstallationSettingsUpdated {
         #[serde(rename = "PreviousUpdateChecksEnabled")]
         previous_update_checks_enabled: bool,
@@ -1301,6 +1356,13 @@ impl ActivityEventInfo {
             Self::ServiceAccountTokenRevoked { .. } => {
                 ActivityEventType::ServiceAccountTokenRevoked
             }
+            Self::UpdateDiscovered { .. } => ActivityEventType::UpdateDiscovered,
+            Self::UpdateChecksChanged { .. } => ActivityEventType::UpdateChecksChanged,
+            Self::InstanceUpdateStarted { .. } => ActivityEventType::InstanceUpdateStarted,
+            Self::InstanceUpdateCompleted { .. } => ActivityEventType::InstanceUpdateCompleted,
+            Self::InstanceUpdateFailed { .. } => ActivityEventType::InstanceUpdateFailed,
+            Self::InstanceUpdatePostponed { .. } => ActivityEventType::InstanceUpdatePostponed,
+            Self::InstanceUpdateRecovered { .. } => ActivityEventType::InstanceUpdateRecovered,
             Self::LicenseInstalled { .. } => ActivityEventType::LicenseInstalled,
             Self::LicenseReplaced { .. } => ActivityEventType::LicenseReplaced,
             Self::LicenseRemoved { .. } => ActivityEventType::LicenseRemoved,

@@ -57,6 +57,100 @@ for each architecture and pinned builder, and do not share it between concurrent
 runs. The script retains this explicitly supplied directory while removing its
 temporary fixtures. Without this variable, compilation remains disposable.
 
+Instance update contract tests:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates
+SQLX_OFFLINE=true cargo test --locked -p citadel-database --lib
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::updates::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test update_release_cli
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib diagnostics_http::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test configuration
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::releases::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::artifacts::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::bootstrap::tests
+# Requires Docker Compose CLI, but no daemon access; uses private disposable inputs.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose::tests::actual_compose -- --ignored
+python3 -m unittest discover -s test/release -p 'test_update_fixtures.py'
+python3 -m unittest discover -s test/release -p 'test_candidates.py'
+python3 -m unittest discover -s test/release -p 'test_release.py'
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_update_journal
+# Fresh disposable database only; its name must start with citadel_update_test_.
+CITADEL_UPDATE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_state SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_updates -- --ignored --test-threads=1
+# Dedicated disposable PostgreSQL with CREATE DATABASE permission; no Docker socket.
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test bootstrap_process updates:: -- --ignored --test-threads=1
+# Docker bootstrap acceptance: use a Core image built from this checkout.
+docker build -t citadel-core:update-acceptance -f Dockerfile .
+python3 test/scripts/test-update-registration.py citadel-core:update-acceptance
+```
+
+These cover release/operation invariants, bounded release HTTP requests, cancellation
+before persistence, completion of notification after commit during settings changes
+and shutdown, protected journal files and transactional state/Activities. Stopped
+attempts cover committed outcomes, unchanged-source release, retry ownership and
+retention of unresolved recovery. Frontend installation-settings tests cover saved
+status during realtime disconnection and cancellation of stale reads. Artifact
+tests use local HTTP fixtures and an injected process runner to verify publication
+rejections, exact signature policy, credential isolation, output limits and failure
+handling. They do not replace a live signature-verification run or qualify a packaged updater, an installation profile,
+a published source-to-target transition or database recovery. Descriptor checks
+cover embedded catalog identity, offline CLI output, per-architecture acceptance
+and preservation of accepted metadata during publication recovery. Empty source
+lists intentionally provide no installation eligibility.
+
+Update-check frequency regressions cover six/twelve/twenty-four-hour scheduling,
+restart and manual-check timing, settings changes without restart, and cancellation
+through persistence. `mfa_http::installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa`
+also verifies frequency validation and concurrent settings patches. The
+`migrations::instance_updates_upgrade_preserves_existing_settings_and_migration_history`
+test requires its own fresh disposable `CITADEL_TEST_DATABASE_URL`; it builds the
+initial catalog before applying the consolidated instance-update migration. Updates UI tests cover
+disabled controls, manual checks, saved frequency and realtime synchronization.
+
+Installer Compose checks cover private snapshots, explicit input order, unsafe
+files, unsupported settings, changed inputs, cancellation cleanup and redacted
+failures. Dependency checks reject external files and remote includes before the
+Compose process starts. The opt-in Compose tests resolve both the shipped layout
+and compatible custom filenames, comments and resource names without starting
+services. Installer templates are test inputs, not compiled runtime dependencies.
+These configuration checks do not validate a live installation or qualify the detached update executor. Bootstrap tests use an
+injected bounded Docker runner and private temporary files to cover stable runtime
+binding, input and runtime drift, conflicting identity, exclusive volume ownership,
+cancellation, secret redaction and idempotent registration. Journal tests check
+exclusive atomic creation without replacing existing files or following links.
+The disposable PostgreSQL test also verifies that the identity diagnostic refuses
+missing identity or incomplete setup without creating state. These tests do not
+replace packaged bootstrap acceptance against an isolated Docker daemon.
+
+Startup checks cover a pristine database, retained and terminal-but-unreleased
+ownership, mismatched registration identity, corrupt operation JSON and missing
+migrated state. Filesystem tests cover private registration, lock contention,
+missing state, foreign paths/ownership, unsafe files and preserved orphan/completed
+journals. Process tests verify that maintenance precedes migrations/setup even
+without a database claim, survives restart, excludes normal API/Edge routes,
+retains the single-Core lease and stops listening on lease loss. Startup lease-loss
+regressions also hold migrations blocked or resume them immediately after another
+owner takes the lease, checking that the original Core exits without creating an
+administrator or opening listeners. These checks do not qualify live draining,
+target startup/migration verification or automatic
+recovery/resume; those execution paths remain unimplemented.
+
+`test-update-registration.py` runs the unmodified base installer and a compatible
+Edge-overlay installation with custom filenames, comments and resource names,
+completes setup through HTTP and invokes the Rust bootstrap
+from a separate Core-image container. It checks real Docker metadata, initialized
+database identity, private registration, identical retries, unsafe input permissions,
+input drift, additional volume/network consumers and preservation of conflicting
+registration evidence. It also checks that registration never restarts or replaces
+Core or PostgreSQL. It needs Python 3 and local Docker socket access on the test
+host; installed users do not need Python. All services and data run inside its
+own privileged Docker-in-Docker fixture, with no host socket passed to Core and no
+published host ports. A temporary private network allows the pinned PostgreSQL pull;
+it is removed before Core starts. The test removes only its own daemon and storage,
+including on failures. It does not qualify image replacement, recovery or source-to-target
+database transitions.
+
 Execution recovery regressions use a separate disposable PostgreSQL database:
 
 ```bash

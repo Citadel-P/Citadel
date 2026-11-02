@@ -1005,6 +1005,7 @@ export enum ActivityResourceType {
   Team = "Team",
   Role = "Role",
   License = "License",
+  Updates = "Updates",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
@@ -1083,6 +1084,13 @@ export enum ActivityEventType {
   StackImported = "StackImported",
   StackWebhookReceived = "StackWebhookReceived",
   InstallationSettingsUpdated = "InstallationSettingsUpdated",
+  UpdateDiscovered = "UpdateDiscovered",
+  UpdateChecksChanged = "UpdateChecksChanged",
+  InstanceUpdateStarted = "InstanceUpdateStarted",
+  InstanceUpdateCompleted = "InstanceUpdateCompleted",
+  InstanceUpdateFailed = "InstanceUpdateFailed",
+  InstanceUpdatePostponed = "InstanceUpdatePostponed",
+  InstanceUpdateRecovered = "InstanceUpdateRecovered",
   InitialAdministratorCreated = "InitialAdministratorCreated",
   UserProfileUpdated = "UserProfileUpdated",
   UserPreferencesUpdated = "UserPreferencesUpdated",
@@ -3869,6 +3877,8 @@ export interface InstallLicenseRequest {
 export interface InstallationSettingsView {
   mfaPolicy: MfaPolicy;
   minimumMfaPolicy: MfaPolicy;
+  /** @format int32 */
+  updateCheckIntervalHours: number;
   updateChecksAllowed: boolean;
   updateChecksEnabled: boolean;
 }
@@ -4517,6 +4527,11 @@ export interface PatchDeploymentMetadataInput {
 
 export interface PatchInstallationSettingsRequest {
   mfaPolicy?: MfaPolicy | null;
+  /**
+   * Automatic release-check interval. Supported values: 6, 12, 24 hours.
+   * @format int32
+   */
+  updateCheckIntervalHours?: number | null;
   updateChecksEnabled?: boolean | null;
 }
 
@@ -4837,6 +4852,55 @@ export interface PrunePlatformView {
 }
 
 export type PublicActivityEventInfo =
+  | {
+      $type: "UpdateDiscovered";
+      releaseUrl: string;
+      version: string;
+    }
+  | {
+      $type: "UpdateChecksChanged";
+      /** @format int32 */
+      previousUpdateCheckIntervalHours?: number | null;
+      previousUpdateChecksEnabled: boolean;
+      /** @format int32 */
+      updateCheckIntervalHours?: number | null;
+      updateChecksEnabled: boolean;
+    }
+  | {
+      $type: "InstanceUpdateStarted";
+      /** @format uuid */
+      operationId: string;
+      sourceVersion: string;
+      targetVersion: string;
+    }
+  | {
+      $type: "InstanceUpdateCompleted";
+      /** @format uuid */
+      operationId: string;
+      sourceVersion: string;
+      targetVersion: string;
+    }
+  | {
+      $type: "InstanceUpdateFailed";
+      message: string;
+      /** @format uuid */
+      operationId: string;
+      phase: string;
+    }
+  | {
+      $type: "InstanceUpdatePostponed";
+      message: string;
+      /** @format uuid */
+      operationId: string;
+    }
+  | {
+      $type: "InstanceUpdateRecovered";
+      /** @format uuid */
+      operationId: string;
+      /** @format uuid */
+      recoveryId: string;
+      version: string;
+    }
   | {
       $type: "InstallationSettingsUpdated";
       mfaPolicy: string;
@@ -7802,6 +7866,22 @@ export interface UpdateScriptMetadata {
 export interface UpdateServiceAccountRequest {
   description?: string | null;
   isEnabled?: boolean | null;
+}
+
+export interface UpdateStatusView {
+  available: AvailableUpdate | null;
+  channel: string;
+  checkError: string | null;
+  checksAllowed: boolean;
+  checksEnabled: boolean;
+  installationUnavailableReason: string;
+  installedVersion: string;
+  /** @format uuid */
+  instanceId: string;
+  /** @format date-time */
+  lastAttempt: string | null;
+  /** @format date-time */
+  lastSuccess: string | null;
 }
 
 export interface UpdateSwarmNodeInput {
@@ -20656,6 +20736,56 @@ export class Api<
       this.request<TeamView, ProblemDetails>({
         path: `/api/v1/teams/${id}/roles/${roleId}`,
         method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetInstanceUpdates
+     * @summary Get instance update status
+     * @request GET:/api/v1/updates
+     * @secure
+     * @response `200` `UpdateStatusView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceUpdates: (params: RequestParams = {}) =>
+      this.request<UpdateStatusView, ProblemDetails>({
+        path: `/api/v1/updates`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name CheckInstanceUpdates
+     * @summary Check official releases once without installing
+     * @request POST:/api/v1/updates/check
+     * @secure
+     * @response `200` `UpdateStatusView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    checkInstanceUpdates: (params: RequestParams = {}) =>
+      this.request<UpdateStatusView, ProblemDetails>({
+        path: `/api/v1/updates/check`,
+        method: "POST",
         secure: true,
         format: "json",
         ...params,

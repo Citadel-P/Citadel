@@ -28,6 +28,42 @@ struct Cli {
 enum Command {
     /// Print embedded display and informational versions without starting Core.
     VersionJson,
+    /// Print this build's upgrade descriptor without starting Core or accessing a database.
+    UpgradeDescriptorJson,
+    /// Read the initialized instance identity without starting Core or migrating its database.
+    InstanceIdentityJson,
+    /// Verify a published Core image signature without installing or starting Core.
+    VerifyUpdateRelease {
+        /// Exact published version, without the v prefix (for example 0.1.2).
+        #[arg(long)]
+        version: String,
+    },
+    /// Validate installer Compose inputs without contacting Docker or changing services.
+    #[cfg(target_os = "linux")]
+    CheckUpdateCompose {
+        /// Canonical host installation directory, mounted at the same path if containerized.
+        #[arg(long)]
+        directory: std::path::PathBuf,
+        /// The explicit project name used to install Citadel.
+        #[arg(long)]
+        project: String,
+        /// Original absolute Compose paths, in invocation order. Repeat for the Edge overlay.
+        #[arg(long = "compose-file", required = true)]
+        compose_files: Vec<std::path::PathBuf>,
+    },
+    /// Bind Docker Compose inputs to the running local installation and save private registration.
+    #[cfg(target_os = "linux")]
+    RegisterUpdateInstallation {
+        #[arg(long)]
+        directory: std::path::PathBuf,
+        #[arg(long)]
+        project: String,
+        #[arg(long = "compose-file", required = true)]
+        compose_files: Vec<std::path::PathBuf>,
+        /// Existing private host directory, owned by the intended updater user.
+        #[arg(long)]
+        state_directory: std::path::PathBuf,
+    },
     /// Run the Rust foundation server and supervised workers.
     Serve,
     /// Apply the embedded Citadel schema migrations and exit.
@@ -75,6 +111,107 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             info["protocolVersion"] =
                 serde_json::json!(citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION);
             println!("{}", serde_json::to_string(&info)?);
+            Ok(())
+        }
+        Command::UpgradeDescriptorJson => {
+            let descriptor = citadel_updates::UpgradeDescriptor {
+                schema_version: 1,
+                product: "citadel".into(),
+                target_version: env!("CITADEL_BUILD_VERSION").into(),
+                target_catalog_sha256: MigrationRunner::catalog_sha256()?,
+                installer_format: citadel_updates::INSTALLER_FORMAT,
+                update_protocol: citadel_updates::UPDATE_PROTOCOL,
+                // No source transition is qualified until executor/recovery
+                // acceptance proves it against the actual source artifact.
+                sources: vec![],
+            };
+            println!("{}", serde_json::to_string(&descriptor)?);
+            Ok(())
+        }
+        Command::InstanceIdentityJson => {
+            let database = DatabaseConfig::from_env()
+                .map_err(|_| "Valid PostgreSQL configuration is required for the instance identity diagnostic.")?;
+            let instance = tokio::time::timeout(Duration::from_secs(10), async {
+                use citadel_adapters::persistence::postgres::{connection, updates};
+                let pool =
+                    connection::connect_pool(&database.database_url, 1, Duration::from_secs(5))
+                        .await
+                        .map_err(|_| "Cannot connect to the existing Citadel database.")?;
+                let result = updates::read_instance_identity(&pool)
+                    .await
+                    .map_err(|_| "Cannot read an initialized Citadel instance identity.");
+                pool.close().await;
+                result
+            })
+            .await
+            .map_err(|_| "Instance identity read timed out.")??;
+            println!("{}", serde_json::json!({"instanceId": instance}));
+            Ok(())
+        }
+        Command::VerifyUpdateRelease { version } => {
+            use citadel_updates::ReleaseArtifactSource;
+            if !citadel_server::config::release_checks_allowed_from_env()? {
+                return Err("Release checks are disabled by server configuration.".into());
+            }
+            let source = citadel_adapters::external::updates::GithubReleaseArtifacts::new(
+                std::sync::Arc::new(citadel_processes::SystemProcess),
+            )?;
+            let cancellation = CancellationToken::new();
+            let verification = source.verify(&version, &cancellation);
+            tokio::pin!(verification);
+            let result = tokio::select! {
+                result = &mut verification => result,
+                () = crate::app::shutdown_signal(cancellation.clone()) => verification.await,
+            }?;
+            println!("{}", serde_json::to_string(&result)?);
+            Ok(())
+        }
+        #[cfg(target_os = "linux")]
+        Command::CheckUpdateCompose {
+            directory,
+            project,
+            compose_files,
+        } => {
+            let inputs = citadel_adapters::external::updates::InstallerComposeInputs {
+                directory,
+                project,
+                compose_files,
+            };
+            let cancellation = CancellationToken::new();
+            let check = inputs.check(&citadel_processes::SystemProcess, &cancellation);
+            tokio::pin!(check);
+            let result = tokio::select! {
+                result = &mut check => result,
+                () = crate::app::shutdown_signal(cancellation.clone()) => check.await,
+            }?;
+            println!("{}", serde_json::to_string(&result)?);
+            Ok(())
+        }
+        #[cfg(target_os = "linux")]
+        Command::RegisterUpdateInstallation {
+            directory,
+            project,
+            compose_files,
+            state_directory,
+        } => {
+            let inputs = citadel_adapters::external::updates::InstallerComposeInputs {
+                directory,
+                project,
+                compose_files,
+            };
+            let cancellation = CancellationToken::new();
+            let registration = citadel_adapters::external::updates::register_compose_installation(
+                &inputs,
+                state_directory,
+                &citadel_processes::SystemProcess,
+                &cancellation,
+            );
+            tokio::pin!(registration);
+            let result = tokio::select! {
+                result = &mut registration => result,
+                () = crate::app::shutdown_signal(cancellation.clone()) => registration.await,
+            }?;
+            println!("{}", serde_json::to_string(&result)?);
             Ok(())
         }
         Command::Serve => crate::app::serve(Config::from_env()?).await,

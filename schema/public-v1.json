@@ -106,6 +106,13 @@
           "StackImported",
           "StackWebhookReceived",
           "InstallationSettingsUpdated",
+          "UpdateDiscovered",
+          "UpdateChecksChanged",
+          "InstanceUpdateStarted",
+          "InstanceUpdateCompleted",
+          "InstanceUpdateFailed",
+          "InstanceUpdatePostponed",
+          "InstanceUpdateRecovered",
           "InitialAdministratorCreated",
           "UserProfileUpdated",
           "UserPreferencesUpdated",
@@ -200,6 +207,7 @@
           "Team",
           "Role",
           "License",
+          "Updates",
           "Build",
           "BuildAgentPool",
           "Volume",
@@ -12358,6 +12366,196 @@
       },
       "PublicActivityEventInfo": {
         "oneOf": [
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateDiscovered"
+                ],
+                "type": "string"
+              },
+              "releaseUrl": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "releaseUrl",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateChecksChanged"
+                ],
+                "type": "string"
+              },
+              "previousUpdateCheckIntervalHours": {
+                "format": "int32",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "previousUpdateChecksEnabled": {
+                "type": "boolean"
+              },
+              "updateCheckIntervalHours": {
+                "format": "int32",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "updateChecksEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "previousUpdateChecksEnabled",
+              "updateChecksEnabled",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateStarted"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": "string"
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "sourceVersion",
+              "targetVersion",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateCompleted"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": "string"
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "sourceVersion",
+              "targetVersion",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateFailed"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "phase",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdatePostponed"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateRecovered"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "recoveryId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "recoveryId",
+              "version",
+              "$type"
+            ],
+            "type": "object"
+          },
           {
             "properties": {
               "$type": {

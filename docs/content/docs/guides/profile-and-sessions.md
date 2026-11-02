@@ -28,14 +28,19 @@ log timestamps and scheduled execution times remain precise.
 
 ## Instance settings
 
-Administrators also see **Instance settings**. These choices apply to everyone
-in the installation and save automatically:
+Administrators also see **Instance settings** in Profile. The **Two-factor
+authentication policy** applies to everyone in the installation and saves
+automatically. It is Optional by default. Administrators can require MFA for
+administrators or all local-password users, subject to the minimum set by server
+configuration. Users can enable MFA in **Profile → Security**.
 
-- **Check for Citadel updates** contacts GitHub for new releases, with no Citadel
-  telemetry or automatic installation. Server configuration can force checks off.
-- **Two-factor authentication policy** is Optional by default. Users can enable MFA
-  later in **Profile → Security**. Administrators can require MFA for administrators
-  or all local-password users, subject to the minimum set by server configuration.
+To change **Automatic checks** or its frequency, open **Settings → Updates → Config** and
+select **Save** after editing. Release checks contact GitHub without Citadel
+telemetry or automatic installation. Server configuration can force checks off.
+Select **Check now** beside the frequency to check immediately. A notification
+confirms whether a release was found or the check failed; checking does not install an update.
+Hover over or select the info icon at the right of the tabs to see the installed
+version, release channel, and last successful check.
 
 MFA policy changes apply to subsequent local-password sign-ins and do not revoke
 existing browser sessions. Instance settings remain separate from personal

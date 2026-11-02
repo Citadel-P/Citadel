@@ -28,3 +28,5 @@ pub mod users;
 pub mod webhooks;
 
 pub mod resource_copies;
+
+pub mod updates;

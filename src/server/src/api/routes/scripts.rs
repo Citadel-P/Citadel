@@ -896,7 +896,7 @@ async fn resolve_cleanup(
     input: Result<Json<ResolveScriptCleanupInput>, JsonRejection>,
 ) -> HttpResult {
     let principal = api_result(
-        super::authentication::require_human_administrator(principal),
+        crate::api::resource_access::require_human_administrator(principal),
         &headers,
     )?;
     let Json(input) = api_result(

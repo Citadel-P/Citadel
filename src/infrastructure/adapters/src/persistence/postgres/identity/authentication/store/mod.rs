@@ -147,7 +147,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
                 r#"
 UPDATE instancesetupstates
 SET initialadministratoractorid = $1, initializedat = $2, updatedat = $2,
-    updatechecksenabled = $3, mfapolicy = $4
+    updatechecksenabled = $3, mfapolicy = $4, updatecheckintervalhours = $5
 WHERE id = 1 AND initializedat IS NULL
 "#,
             )
@@ -155,6 +155,7 @@ WHERE id = 1 AND initializedat IS NULL
             .bind(administrator.created_at())
             .bind(settings.update_checks_enabled)
             .bind(settings.mfa_policy.as_database_str())
+            .bind(settings.update_check_interval_hours)
             .execute(&mut *transaction)
             .await
             .map_err(storage)?

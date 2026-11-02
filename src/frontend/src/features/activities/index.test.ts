@@ -46,3 +46,23 @@ describe('activity resource options', () => {
     );
   });
 });
+
+it('keeps Updates administrator-only and includes all singleton update event types', () => {
+  expect(getActivityResourceOptions(false)).not.toContainEqual(
+    expect.objectContaining({ value: ActivityResourceType.Updates }),
+  );
+  expect(getActivityResourceOptions(true)).toContainEqual(
+    expect.objectContaining({ value: ActivityResourceType.Updates }),
+  );
+  expect(getActivityEventOptions(ActivityResourceType.Updates)).toEqual(
+    expect.arrayContaining([
+      ActivityEventType.UpdateDiscovered,
+      ActivityEventType.UpdateChecksChanged,
+      ActivityEventType.InstanceUpdateStarted,
+      ActivityEventType.InstanceUpdateCompleted,
+      ActivityEventType.InstanceUpdateFailed,
+      ActivityEventType.InstanceUpdatePostponed,
+      ActivityEventType.InstanceUpdateRecovered,
+    ]),
+  );
+});

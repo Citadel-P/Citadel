@@ -13,18 +13,29 @@ import { formatActivityEvent } from '@/lib/utils';
 
 const EMPTY_ROWS: ActivityView[] = [];
 
-export const ActivitiesTable = ({
-  pagedResult,
-  isLoading,
-  displayTarget = false,
-  displayPagging = false,
-}: {
+type ActivitiesTableProps = {
   pagedResult: PagedActivityView;
   isLoading: boolean;
   displayTarget?: boolean;
   displayPagging?: boolean;
-}) => {
+};
+
+export const ActivitiesTable = (props: ActivitiesTableProps) => {
   const [query, setQuery] = useActivityQuery();
+  return <ScopedActivitiesTable {...props} query={query} setQuery={setQuery} />;
+};
+
+export const ScopedActivitiesTable = ({
+  pagedResult,
+  isLoading,
+  displayTarget = false,
+  displayPagging = false,
+  query,
+  setQuery,
+}: ActivitiesTableProps & {
+  query: ReturnType<typeof useActivityQuery>[0];
+  setQuery: ReturnType<typeof useActivityQuery>[1];
+}) => {
   const formatDateTime = useProfileDateTimeFormatter();
 
   const cols = useMemo(() => columns(displayTarget, formatDateTime), [displayTarget, formatDateTime]);
@@ -122,6 +133,24 @@ function getActivitySummary(info: PublicActivityEventInfo | null | undefined): s
   if (!info?.$type) return null;
 
   switch (info.$type) {
+    case 'UpdateDiscovered':
+      return `Citadel ${info.version} is available`;
+    case 'UpdateChecksChanged':
+      return [
+        `Automatic update checks ${info.updateChecksEnabled ? 'enabled' : 'disabled'}`,
+        info.updateCheckIntervalHours ? `every ${info.updateCheckIntervalHours} hours` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    case 'InstanceUpdateStarted':
+      return `Updating from ${info.sourceVersion} to ${info.targetVersion}`;
+    case 'InstanceUpdateCompleted':
+      return `Updated from ${info.sourceVersion} to ${info.targetVersion}`;
+    case 'InstanceUpdateFailed':
+    case 'InstanceUpdatePostponed':
+      return info.message;
+    case 'InstanceUpdateRecovered':
+      return `Recovered Citadel ${info.version}`;
     case 'BackupRunQueued':
     case 'BackupRunStarted':
       return info.trigger;

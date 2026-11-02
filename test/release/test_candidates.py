@@ -12,6 +12,20 @@ spec.loader.exec_module(candidates)
 
 
 class CandidateIdentityTests(unittest.TestCase):
+    def test_upgrade_descriptor_is_read_from_core_without_network_or_database(self):
+        metadata = dict(displayVersion='1.2.3')
+        descriptor = candidates.release.expected_upgrade_descriptor(metadata)
+        with patch.object(candidates.release.version, 'run', return_value=json.dumps(descriptor)) as run:
+            self.assertEqual(candidates.check_upgrade_descriptor('core-candidate', metadata), descriptor)
+            run.assert_called_once_with('docker', 'run', '--rm', '--network=none', 'core-candidate', 'upgrade-descriptor-json')
+        for field, value in [('schemaVersion', 2), ('product', 'other'), ('targetVersion', '1.2.4'),
+                             ('targetCatalogSha256', 'a'*64), ('installerFormat', 2), ('updateProtocol', 2),
+                             ('sources', [{'version':'1.2.2'}])]:
+            with self.subTest(field=field), patch.object(candidates.release.version, 'run',
+                    return_value=json.dumps(dict(descriptor, **{field:value}))):
+                with self.assertRaisesRegex(ValueError, 'upgrade descriptor'):
+                    candidates.check_upgrade_descriptor('core-candidate', metadata)
+
     def test_acceptance_checks_current_pair(self):
         with patch.object(candidates.subprocess, 'run') as run:
             candidates.run_acceptance('core-image', 'agent-image')

@@ -363,10 +363,20 @@ class ArtifactTests(unittest.TestCase):
                 (self.root/f'{component}-{arch}.oci.tar').write_bytes(b'candidate')
             evidence=dict(metadata=value['metadata'], passed=True,
                           architecture=arch, checks=['independent-binary-and-oci-versions','core-runtime',
-                          'agent-image','agent-compatibility','candidate-acceptance'],
+                          'agent-image','agent-compatibility','candidate-acceptance','embedded-upgrade-descriptor'],
+                          upgradeDescriptor=release.expected_upgrade_descriptor(value['metadata']),
                           artifacts={c:release.digest(b'candidate').split(':')[1] for c in ['core','agent']})
             (self.root/f'evidence-{arch}.json').write_text(json.dumps(evidence))
         release.validate_evidence(self.root,value['metadata'])
+        original = copy.deepcopy(evidence)
+        file=self.root/'evidence-arm64.json'
+        for descriptor in [None, dict(original['upgradeDescriptor'], targetCatalogSha256='a'*64),
+                           dict(original['upgradeDescriptor'], sources=[{'version':'1.2.2'}])]:
+            evidence['upgradeDescriptor'] = descriptor
+            file.write_text(json.dumps(evidence))
+            with self.assertRaisesRegex(ValueError, 'upgrade descriptor'):
+                release.validate_evidence(self.root, value['metadata'])
+        evidence = original
         file=self.root/'evidence-arm64.json'; evidence['passed']=False; file.write_text(json.dumps(evidence))
         with self.assertRaisesRegex(ValueError,'acceptance'): release.validate_evidence(self.root,value['metadata'])
         evidence['passed']=True; evidence['checks'].remove('core-runtime'); file.write_text(json.dumps(evidence))

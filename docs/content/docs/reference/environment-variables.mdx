@@ -57,7 +57,8 @@ restart alone does not load a changed Compose environment.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit release checks controlled by setup or administrator Profile settings; false forces them off. Checks start after setup and repeat every six hours; no automatic installation |
+| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit release checks controlled by setup or Settings → Updates; false prohibits automatic and manual checks. The saved frequency is 6, 12 or 24 hours (default: 6); no automatic installation |
+| `CITADEL_UPDATE_STATE_DIRECTORY` | Unset | Advanced updater integration: absolute path to an existing private registration directory, mounted at its registered path and owned by Core's user. Invalid or unresolved state keeps Core in maintenance before migrations. The installer does not configure this yet; setting it does not enable automatic installation |
 
 No Citadel telemetry or instance data is sent. GitHub receives normal connection
 information, including the outbound IP address. See

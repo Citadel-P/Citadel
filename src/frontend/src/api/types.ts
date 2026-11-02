@@ -23,6 +23,7 @@ export type ResourceType =
   | 'AlertChannel'
   | 'Alert'
   | 'License'
+  | 'Updates'
   | 'Stack'
   | 'GitRepository'
   | 'GitAccount'
@@ -58,6 +59,7 @@ export const PluralResourceMap = {
   AlertRule: 'AlertRules',
   Alert: 'Alerts',
   License: 'License',
+  Updates: 'Updates',
   Stack: 'Stacks',
   AlertChannel: 'AlertChannels',
   GitRepository: 'GitRepositories',

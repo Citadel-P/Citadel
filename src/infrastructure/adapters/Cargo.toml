@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-updates = { path = "../../features/updates" }
 citadel-scripts-runtime = { path = "../scripts" }
 citadel-docker = { path = "../docker" }
 citadel-resource-copies = { path = "../../features/resource-copies" }
@@ -48,11 +49,13 @@ reqwest.workspace = true
 rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml_ng.workspace = true
 sha2.workspace = true
 sha1.workspace = true
 sqlx.workspace = true
 subtle.workspace = true
 thiserror.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tonic = { workspace = true, features = ["tls-ring", "tls-native-roots"] }

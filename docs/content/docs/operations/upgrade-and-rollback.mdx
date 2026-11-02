@@ -21,8 +21,13 @@ Never rewrite applied migration history or checksums to force an upgrade.
 ## Release notifications
 
 [Update checks](/getting-started/configuration#allow-update-checks) are enabled
-by default. Administrators can change the installation-wide choice in **Profile →
-Instance settings**. `CITADEL_UPDATE_CHECKS_ENABLED=false` forces checks off.
+by default, every six hours. In **Settings → Updates → Config**, administrators
+can choose **Every 6 hours**, **Every 12 hours**, or **Daily**, then select **Save**.
+The saved frequency applies without restarting Core. The next check is based on
+the last completed attempt, including manual checks and failed release requests;
+restarting Core preserves that schedule. Disabling automatic checks preserves the
+frequency and disables its selector. `CITADEL_UPDATE_CHECKS_ENABLED=false` prohibits
+both automatic and manual checks.
 Administrators see newer releases in their installed channel on
 Home and beside the sidebar version. Checks use completed public GitHub releases,
 which Citadel publishes after verifying its Core and Agent images; pushing an
@@ -30,8 +35,10 @@ image tag alone does not trigger a notification. Stable installations track stab
 releases, while development installations (`-dev.N`) track development releases.
 A stable publication does not produce an update notice for the development channel.
 
-Updates remain manual. With checks disabled, follow the
-[release notes](https://github.com/Citadel-P/Citadel/releases) yourself.
+Updates remain manual in this build. **Check now** checks once without installing;
+it remains available when automatic checks are off, unless server configuration
+prohibits release checks. The **Activities** tab records discovered releases and
+update-check setting changes.
 
 ## Before an upgrade
 
@@ -88,6 +95,14 @@ change, follow that release's migration instructions as well.
 Citadel applies database migrations during startup. If startup fails, read the
 logs before trying another image. A healthy container confirms that Core
 responds; complete the checks below before ending maintenance.
+
+If Core logs that it is in **update maintenance**, `/health` can respond while
+`/ready` returns 503 and the application remains unavailable. Core has detected
+unresolved update ownership or cannot verify a configured update-state directory.
+Preserve the database and update-state files while investigating; deleting a
+journal or changing its completion flags is not a recovery procedure. This
+startup safeguard does not install an update or resume an interrupted update
+automatically.
 
 ## Verify the upgrade
 

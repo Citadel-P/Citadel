@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSelectedResources } from '@/lib/atoms';
 import { useLocalStorage } from '@/lib/hooks';
+import { cn } from '@/lib/utils';
 import { Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -20,11 +21,12 @@ type TabbedResourceViewProps<T = any> = {
   Components: TabbedResourceComponents<T>;
   type: ResourceType;
   tab?: ResourceType;
+  showTaskSheet?: boolean;
 };
 
-export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResourceViewProps<T>) => {
+export const TabbedResourceView = <T,>({ Components, type, tab, showTaskSheet = true }: TabbedResourceViewProps<T>) => {
   const navigate = useNavigate();
-  const { platformId = '' } = useParams();
+  const { platformId = '', tab: routeSegment } = useParams();
   const [search, setSearch] = useState('');
   const [_, setSelected] = useSelectedResources(type);
 
@@ -37,7 +39,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
 
   const [storedTab, setStoredTab] = useLocalStorage(`${type}-active-tab`, tabs[0].label);
 
-  const routeTab =
+  const resourceTab =
     tab && PluralResourceMap[tab]
       ? tabs.find((t) => {
           const plural = PluralResourceMap[tab].toLowerCase();
@@ -45,7 +47,8 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
         })
       : undefined;
 
-  const activeTab = routeTab ?? tabs.find((t) => t.label === storedTab) ?? tabs[0];
+  const routeTab = tabs.find((item) => item.slug && item.slug.toLowerCase() === routeSegment?.toLowerCase());
+  const activeTab = routeTab ?? resourceTab ?? tabs.find((t) => t.label === storedTab) ?? tabs[0];
 
   useEffect(() => {
     return () => setSelected([]);
@@ -82,6 +85,8 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
           icon={Components.Icon}
           title={header.title}
           subtitle={header.subtitle}
+          variant={header.variant}
+          Details={header.Details}
           showSearch={showTopSearch}
           showAdd={header.showAdd}
           showTagFilter={header.showTagFilter}
@@ -95,12 +100,22 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
 
         {Components.SubHeader && <Components.SubHeader />}
 
-        <Tabs value={activeTab.label} onValueChange={handleTabChange}>
-          <div className="flex flex-col sm:flex-row justify-between gap-2">
+        <Tabs
+          value={activeTab.label}
+          onValueChange={handleTabChange}
+          className={cn(Components.tabsVariant === 'bordered' && 'gap-5')}>
+          <div
+            className={cn(
+              'flex flex-col sm:flex-row justify-between gap-2',
+              Components.tabsVariant === 'bordered' && 'rounded-lg border bg-card',
+              Components.TabActions && 'flex-row items-center',
+            )}>
             {/* Tabs */}
-            <TabsList className="overflow-x-auto">
+            <TabsList
+              className={cn('min-w-0 overflow-x-auto', Components.tabsVariant === 'bordered' && 'h-10 border-b-0')}>
               {tabs.map((t) => (
                 <TabsTrigger
+                  className={cn(Components.tabsVariant === 'bordered' && 'h-full data-[state=active]:bg-primary/10')}
                   key={t.label}
                   value={t.label}
                   disabled={t.disabled?.(null as any) ?? false}
@@ -111,7 +126,11 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
             </TabsList>
 
             {/* Actions */}
-            <div className="flex gap-1 flex-col sm:flex-row">
+            <div
+              className={cn(
+                'ml-auto flex shrink-0 gap-1 items-center flex-col sm:flex-row empty:hidden',
+                Components.tabsVariant === 'bordered' && (showAdd || tabHeader.Extra) && 'pr-2',
+              )}>
               {showTabSearch && (
                 <SearchField
                   placeholder={tabHeader.searchPlaceholder}
@@ -133,6 +152,11 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
               )}
 
               {tabHeader.Extra && <tabHeader.Extra />}
+              {Components.TabActions && (
+                <div className="px-2">
+                  <Components.TabActions />
+                </div>
+              )}
             </div>
           </div>
 
@@ -145,7 +169,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab }: TabbedResource
         </Tabs>
       </AppContent>
 
-      <TaskSheet type={type} />
+      {showTaskSheet && <TaskSheet type={type} />}
     </div>
   );
 };

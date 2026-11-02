@@ -58,10 +58,11 @@ pub async fn spawn_all(
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
     supervisor.spawn(
         "update-checker",
-        state
-            .updates
-            .clone()
-            .run(state.identity.clone(), cancellation.child_token()),
+        citadel_server::workers::updates::run(
+            state.updates.clone(),
+            state.identity.clone(),
+            cancellation.child_token(),
+        ),
     );
     supervisor.spawn(
         "service-account-last-used",

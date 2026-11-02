@@ -1,6 +1,7 @@
 import { ResourceType } from '@/api/types';
 import {
   Activity,
+  RefreshCw,
   Cable,
   ChevronsLeftRightEllipsis,
   CalendarClock,
@@ -45,6 +46,7 @@ export const DockerIcon = createLucideIcon('DockerIcon', [
 ]);
 
 export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ className?: string }>> = {
+  ['Updates']: RefreshCw,
   ['Deployment']: Rocket,
   ['SwarmService']: Boxes,
   ['Registry']: Cable,

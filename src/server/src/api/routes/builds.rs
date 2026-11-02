@@ -1618,7 +1618,7 @@ async fn get_run_recovery(
     headers: HeaderMap,
 ) -> HttpResult {
     api_result(
-        super::authentication::require_human_administrator(principal),
+        crate::api::resource_access::require_human_administrator(principal),
         &headers,
     )?;
     let reservation = api_result(
@@ -1657,7 +1657,7 @@ async fn resolve_run_cleanup(
     input: Result<Json<ResolveBuildCleanupInput>, JsonRejection>,
 ) -> HttpResult {
     let principal = api_result(
-        super::authentication::require_human_administrator(principal),
+        crate::api::resource_access::require_human_administrator(principal),
         &headers,
     )?;
     let Json(input) = api_result(input.map_err(invalid_json), &headers)?;

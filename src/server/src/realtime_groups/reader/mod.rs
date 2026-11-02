@@ -1452,7 +1452,13 @@ impl ApplicationGroupReader {
         use citadel_activities::ActivityResourceType as A;
         if matches!(
             kind,
-            A::User | A::Team | A::Role | A::ServiceAccount | A::OidcProvider | A::License
+            A::User
+                | A::Team
+                | A::Role
+                | A::ServiceAccount
+                | A::OidcProvider
+                | A::License
+                | A::Updates
         ) {
             if !p.is_administrator() {
                 return Err(RealtimeReadError::Authorization);

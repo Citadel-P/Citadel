@@ -21,12 +21,17 @@ mod setup;
 #[path = "bootstrap_process/lifecycle.rs"]
 mod lifecycle;
 
+#[cfg(target_os = "linux")]
+#[path = "bootstrap_process/updates.rs"]
+mod updates;
+
 struct Fixture {
     admin_url: String,
     database_name: String,
     database_url: String,
     directory: PathBuf,
     client: Client,
+    update_state: Option<PathBuf>,
 }
 
 struct Server {
@@ -59,6 +64,7 @@ impl Fixture {
             database_name,
             database_url: url.into(),
             directory,
+            update_state: None,
             client: Client::builder()
                 .timeout(Duration::from_secs(3))
                 .build()
@@ -123,6 +129,9 @@ impl Fixture {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        if let Some(path) = &self.update_state {
+            command.env("CITADEL_UPDATE_STATE_DIRECTORY", path);
+        }
         if bootstrap {
             command.env("CITADEL_BOOTSTRAP_ADMIN_NAME", "bootstrap-admin");
             if !partial {

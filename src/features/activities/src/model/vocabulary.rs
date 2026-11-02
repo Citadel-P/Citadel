@@ -51,6 +51,7 @@ database_string_enum! {
         Team,
         Role,
         License,
+        Updates,
         Build,
         BuildAgentPool,
         Volume,
@@ -63,6 +64,14 @@ database_string_enum! {
 database_string_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum ActivityEventType {
+        UpdateDiscovered,
+        UpdateChecksChanged,
+        InstanceUpdateStarted,
+        InstanceUpdateCompleted,
+        InstanceUpdateFailed,
+        InstanceUpdatePostponed,
+        InstanceUpdateRecovered,
+
         DeploymentCreated,
         DeploymentDuplicated,
         DeploymentUpdated,
@@ -307,6 +316,13 @@ impl ActivityEventType {
             Self::RoleCreated | Self::RoleUpdated | Self::RoleRenamed | Self::RoleDeleted => {
                 ActivityResourceType::Role
             }
+            Self::UpdateDiscovered
+            | Self::UpdateChecksChanged
+            | Self::InstanceUpdateStarted
+            | Self::InstanceUpdateCompleted
+            | Self::InstanceUpdateFailed
+            | Self::InstanceUpdatePostponed
+            | Self::InstanceUpdateRecovered => ActivityResourceType::Updates,
             Self::LicenseInstalled
             | Self::LicenseReplaced
             | Self::LicenseRemoved

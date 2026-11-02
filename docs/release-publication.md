@@ -38,6 +38,33 @@ aliases, documentation and public attachment checks succeed. Registry copies can
 be transactional across providers; the existing journal resumes partial publication.
 The GitHub release page is the final user-facing completion signal.
 
+The Core `verify-update-release` diagnostic independently checks the published
+manifest and runs Cosign against the exact Core digest with the expected
+`Citadel-P/Citadel/.github/workflows/ci.yml@refs/tags/vVERSION` certificate identity
+and GitHub Actions OIDC issuer. Its trust checks follow
+[Cosign's identity-based verification](https://docs.sigstore.dev/cosign/verifying/verify/).
+The manifest's signature checkpoints are publication receipts, not a substitute
+for this verification. The shared stable/development fixtures under
+`test/release/fixtures/` are checked against the publisher's actual output and
+consumed by Rust tests. No source-to-target upgrade eligibility is implied by
+a valid image signature.
+
+New candidate evidence also records Core's `upgrade-descriptor-json` output.
+Acceptance runs it without network access on each architecture and compares its
+version, migration-catalog digest, installer/update protocols and source list with
+the tagged build contract. Promotion rejects missing or mismatched evidence.
+The catalog digest covers the exact embedded `migrations.json` bytes; Core first
+validates the SQL checksums referenced by that catalog. It does not describe the
+current state of any installed database.
+
+`release-manifest.json` includes the accepted `upgradeDescriptor` when present in
+the retained evidence. Retries preserve those bytes and never derive a replacement
+descriptor from a later checkout. Existing retained publications without descriptor
+evidence keep their original attachment format. A public descriptor is only metadata:
+an updater must read the descriptor from the verified image before trusting it.
+The current source list is empty; enabling a transition requires executor/recovery
+implementation and data-preserving acceptance against the actual source artifact.
+
 ## Retention and retries
 
 **Thirty-day Actions retention is not a durable recovery policy.** Actions artifacts

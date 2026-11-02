@@ -39,6 +39,23 @@ pub fn router(state: DiagnosticsHttpState) -> Router {
         )))))
 }
 
+/// Restricted startup listener: no database or Docker probes can make an
+/// unresolved update ready, and no application routes are constructed.
+pub fn maintenance_router() -> Router {
+    Router::new()
+        .route("/health", axum::routing::get(health))
+        .route(
+            "/ready",
+            axum::routing::get(|| async {
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    axum::Json(Readiness::default().snapshot()),
+                )
+            }),
+        )
+        .fallback(|| async { StatusCode::SERVICE_UNAVAILABLE })
+}
+
 #[utoipa::path(
     get,
     path = "/health",
@@ -139,6 +156,46 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn maintenance_never_exposes_application_routes_or_dependency_readiness() {
+        let app = maintenance_router();
+        for (method, path, status) in [
+            ("GET", "/health", StatusCode::OK),
+            ("GET", "/ready", StatusCode::SERVICE_UNAVAILABLE),
+            (
+                "POST",
+                "/api/v1/setup/initialize",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            ("GET", "/api/v1/updates", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/metrics", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/realtime", StatusCode::SERVICE_UNAVAILABLE),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), status, "{method} {path}");
+            if path == "/ready" {
+                let bytes = axum::body::to_bytes(response.into_body(), 1024)
+                    .await
+                    .unwrap();
+                let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(body["status"], "not-ready");
+                assert_eq!(body["database"], false);
+                assert_eq!(body["docker"], false);
+                assert_eq!(body["setup"], false);
+            }
+        }
+    }
 
     struct BlockingDatabase {
         calls: AtomicUsize,

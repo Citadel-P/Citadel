@@ -158,6 +158,12 @@ const MenuItems: IMenuItem[] = [
             access: 'administrator',
           },
           {
+            icon: renderIcon(CitadelIcons.Updates),
+            label: 'Updates',
+            route: '/updates',
+            access: 'administrator',
+          },
+          {
             icon: <KeyRound className="w-3.5 h-3.5" />,
             label: 'License',
             route: '/license',

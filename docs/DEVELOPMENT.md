@@ -138,8 +138,107 @@ Inspect non-secret effective configuration without connecting to PostgreSQL:
 bash src/tools/dev/dev.sh exec cargo run --locked -p citadel-server -- print-effective-config
 ```
 
-This command reports deployment configuration. Database-managed update-check and
-MFA-policy choices are shown in administrator **Profile → Instance settings**.
+This command reports deployment configuration. Administrators manage the persisted
+update-check choice in **Settings → Updates → Config** and the MFA policy in
+**Profile → Instance settings**.
+
+For updater development, `citadel-server verify-update-release --version VERSION`
+checks a completed official release manifest and its exact Core image signature.
+The packaged Core includes Cosign; native runs require `cosign` on PATH. This
+explicit diagnostic does not need a database or start Core. It honours
+`CITADEL_UPDATE_CHECKS_ENABLED=false`, sends no instance credentials, and prints
+only the verified version and digest reference. It does not establish upgrade
+eligibility or perform installation. Automatic checks keep their existing setup
+and policy gates.
+
+`citadel-server upgrade-descriptor-json` prints the local build's version,
+embedded migration-catalog SHA-256, installer/update protocol versions and
+qualified source transitions. It needs neither configuration, network access nor
+a database connection. The source list is currently empty: no automatic upgrade
+path is qualified. Release acceptance compares this output from both Core image
+architectures with the tagged checkout; it does not enable update execution.
+
+On Linux, `citadel-server check-update-compose` checks the configuration portion
+of updater registration using the Compose CLI packaged in Core:
+
+```bash
+citadel-server check-update-compose \
+  --directory /opt/citadel --project citadel \
+  --compose-file /opt/citadel/docker-compose.yml
+```
+
+Supply the actual original project name and canonical host paths. If the original
+invocation used the Edge overlay, append
+`--compose-file /opt/citadel/compose.edge.yml`. A container running this diagnostic
+needs the installation directory mounted read-only at that same path and a user
+that can read its private files. It needs no Docker socket or database access.
+Do not relax file permissions to make the check pass.
+
+The Docker Compose adapter accepts one to four distinct `.yaml`/`.yml` files
+directly inside the installation directory, in their original invocation order.
+It validates configuration rather than comparing files with embedded templates.
+Comments, filenames, labels, published Core ports and explicit volume/network names
+can differ from the examples. The current profile still requires `server` and
+`pg_db`, the `citadel_data`/`postgres_data` volume roles, the default bridge network,
+and the supported persistent mount paths. An installation kind identifies this
+profile as Docker Compose; Podman and Kubernetes are not implemented.
+
+Settings use a private `.env` containing unique `NAME=value` assignments without
+variable interpolation. Service `env_file` references must point to that same
+`.env` with `format: raw`. Includes, extends, builds, external configuration/secret
+files, YAML merge/tag extensions and unrecognized fields are rejected before
+Compose runs. External databases, remote Core Agents, additional services and
+storage-root overrides are not supported. It resolves captured bytes in a private
+temporary directory, rejects input changes during the check, and prints only
+the project, configuration fingerprint and desired image/volume/network names.
+Errors omit Compose output because it may contain secrets. It does not save a
+registration or prove that running containers match these settings.
+
+The next step for a current-build development installation is the Linux bootstrap
+command below. The state directory must already exist, be mode `0700`, and belong
+to the user intended to execute updates. Use a dedicated host path outside Docker's
+data directory and the Citadel volumes. The command requires local Docker socket
+access, a healthy single-Core Compose project and completed instance setup:
+
+```bash
+citadel-server register-update-installation \
+  --directory /opt/citadel --project citadel \
+  --compose-file /opt/citadel/docker-compose.yml \
+  --state-directory /opt/citadel-update-state
+```
+
+Supply the original ordered Edge overlay here too, when used. This Rust command
+is also included in the Core image; no host Python installation is required.
+For containerized execution, use Docker's default hostname and mount exactly the
+installer directory read-only, the private state directory read-write and
+`/var/run/docker.sock`, each at its original host path. Run as the intended updater
+user with socket access and permission to read the protected installer files.
+Use `--entrypoint /app/citadel-server` to invoke the diagnostic directly: the normal
+Core entrypoint switches root to the Core service UID. Set `--user UID:GID` to the
+owner of the private installer inputs and state; add the socket's group for a
+non-root executor when needed. Do not change those files' permissions to bypass
+an ownership mismatch.
+The command verifies these mounts against its own container on that daemon.
+The registration container needs no network attachment: the database identity diagnostic executes in the
+existing Core container, using Core's existing database configuration.
+
+The bootstrap compares running services and storage with the supplied inputs,
+reads the initialized database identity without migrations or writes, and creates
+`installation.json` with mode `0600`. The file records the installation kind, identities and fingerprints;
+it contains no environment values. Unknown kinds or malformed registration are
+refused without replacing existing evidence. Identical retries preserve its ID. Drift,
+conflicting registration, corrupt files and orphaned recovery evidence cause a
+refusal without overwriting state. It does not stop services, approve an update,
+establish source-to-target compatibility or enable automatic installation.
+The initial profile requires the Compose network and Citadel data volumes to be
+used only by these two services; additional consumers are rejected as ambiguous.
+Automatic installer integration, registration reconciliation, startup maintenance
+and detached execution are still pending.
+
+Validate bootstrap changes with the isolated Docker acceptance command in
+[`test/README.md`](../test/README.md). It exercises the shipped layout and a compatible customized Edge-overlay installation
+and containerized registration with completed HTTP setup. This is a registration
+gate; it does not qualify a source-to-target upgrade or recovery path.
 
 For deployment settings, use the [configuration guide](content/docs/getting-started/configuration.md).
 
@@ -190,6 +289,11 @@ Verify committed artifacts with:
 cargo run --locked -p xtask -- openapi --check
 npm run api:verify --prefix src/frontend
 ```
+
+Run generation and both verification commands sequentially. Finish them before
+frontend tests, lint, or TypeScript checks: `api:verify` temporarily regenerates
+outputs and restores the original files, so concurrent checks can observe missing
+or intermediate generated files.
 
 Do not hand-edit generated schemas or TypeScript models. Documentation-site
 commands are in [docs/README.md](README.md).
@@ -292,8 +396,8 @@ currently configured.
 
 ## Database schema changes
 
-The pre-release migration catalog contains only `0001_initial.sql`, generated
-from `src/infrastructure/database/src/schema/schema.sql`. It includes workload
+The migration catalog starts with `0001_initial.sql` and appends numbered upgrade
+migrations. The initial migration includes workload
 statistics, alert observation ordering, secret-use grants, and build, backup,
 restore and script execution ownership/capacity changes.
 
@@ -316,19 +420,19 @@ otherwise retain captured grants exactly, including revocations. Rehearse the
 import before cutover. Normal deployments must continue to preserve applied
 migration checksums.
 
-While this baseline remains unpublished, update the schema authority and regenerate
-the single initial migration and its catalog:
+For the current catalog, preserve applied migrations and add each schema change
+as the next numbered SQL migration under `src/infrastructure/database/generated/`.
+Append the same SQL to `src/infrastructure/database/src/schema/schema.sql`; the
+verifier checks it against the ordered migration SQL. Then regenerate the catalog:
 
 ```bash
-cargo run --locked -p xtask -- database refresh-baseline
+cargo run --locked -p xtask -- database refresh-catalog
 cargo run --locked -p xtask -- database verify
 ```
 
-After release, preserve applied migrations and add each change as the next numbered
-SQL migration under `src/infrastructure/database/generated/`. Update the schema
-authority as well, then run `database refresh-catalog` and `database verify`.
 Test fresh installation and upgrades against separate disposable databases.
-`refresh-baseline` is not an upgrade path. Never rewrite applied migration journals
+`refresh-baseline` only supports a single unpublished initial migration; it is not
+an upgrade path for this catalog. Never rewrite applied migration journals
 or checksums to suppress an `AppliedChecksum` error.
 
 ## Agent development

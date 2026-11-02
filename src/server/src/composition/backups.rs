@@ -70,6 +70,7 @@ pub(super) fn build(
                             config.execution.tools.pg_dump.clone(),
                             options.settings.working_directory.join("citadel-system"),
                             options.maximum_log_bytes,
+                            env!("CITADEL_BUILD_VERSION").to_owned(),
                         )
                         .with_local_budget(runtime.local_heavy_work.clone())
                         .with_recovery_assets(RecoveryAssets {

@@ -24,6 +24,27 @@ pub struct Routers {
     pub edge: Router,
 }
 
+/// Preserve host/proxy validation, TLS policy, request limits and headers while
+/// exposing no application services or static frontend during blocked startup.
+pub fn maintenance_router(config: &Config) -> Result<Routers, Box<dyn std::error::Error>> {
+    let readiness = Arc::new(citadel_server::Readiness::default());
+    let mut transport_config = config.transport.clone();
+    transport_config.static_root = None;
+    Ok(Routers {
+        http: transport::secure_router(
+            citadel_server::diagnostics_http::maintenance_router(),
+            &transport_config,
+            readiness.clone(),
+        )?,
+        edge: transport::secure_router_with_grpc(
+            Router::new(),
+            &transport_config,
+            readiness,
+            None,
+        )?,
+    })
+}
+
 pub fn router(
     state: ServerComponents,
     config: &Config,
@@ -100,6 +121,13 @@ pub fn router(
         allowed_return_origins: config.transport.cors_origins.clone(),
         secure_cookies: config.transport.mode != citadel_server::config::TransportMode::Disabled,
     }))
+    .merge(citadel_server::api::routes::updates::router(
+        citadel_server::api::routes::updates::UpdateHttpState {
+            identity: identity.clone(),
+            licenses: licenses.clone(),
+            checker: updates.clone(),
+        },
+    ))
     .merge(application_info_http::router(updates))
     .merge(citadel_server::api::routes::search::router(search))
     .merge(citadel_server::api::routes::actors::router(actors))

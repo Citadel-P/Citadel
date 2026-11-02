@@ -319,6 +319,15 @@ fn server_database_handles_stay_in_composition_and_startup() {
 }
 
 #[test]
+fn release_scheduler_consumes_feature_ports() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/workers/updates");
+    assert!(root.is_dir(), "release scheduler must be checked");
+    for path in sources(&root) {
+        assert_no_dependencies(&path, &["citadel_adapters", "reqwest", "sqlx"]);
+    }
+}
+
+#[test]
 fn all_http_and_realtime_handlers_consume_ports_not_concrete_adapters() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     for area in ["api", "realtime", "realtime_groups"] {

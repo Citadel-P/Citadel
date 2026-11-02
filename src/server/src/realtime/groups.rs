@@ -82,8 +82,12 @@ pub(super) async fn run_group_connection(
                 };
                 // Background statistics and unrelated resources should not cause
                 // a database authentication read for every open browser socket.
-                let application_info_changed = event.resource_type == "ApplicationInfo" && subscription.principal.is_administrator();
-                if event.resource_type!="License" && !application_info_changed && !state.groups.values().any(|g|g.group.affected_by(&event)) {
+                let administrator_event = match event.resource_type {
+                    "ApplicationInfo" => Some("ApplicationInfoChanged"),
+                    "InstallationSettings" => Some("InstallationSettingsChanged"),
+                    _ => None,
+                }.filter(|_| subscription.principal.is_administrator());
+                if event.resource_type!="License" && administrator_event.is_none() && !state.groups.values().any(|g|g.group.affected_by(&event)) {
                     continue;
                 }
                 // Readers without a generation contract retain their conservative
@@ -92,8 +96,8 @@ pub(super) async fn run_group_connection(
                 if event.resource_type=="License" {
                     send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new("LicenseStateChanged",vec![])).await?;
                 }
-                if application_info_changed && subscription.principal.is_administrator() {
-                    send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new("ApplicationInfoChanged",vec![])).await?;
+                if let Some(target) = administrator_event.filter(|_| subscription.principal.is_administrator()) {
+                    send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new(target,vec![])).await?;
                 }
                 for joined in state.groups.values_mut().filter(|g|g.group.affected_by(&event)) {
                     // Inventory I/O must not pause this connection's active streams.

@@ -15,6 +15,7 @@ import { ServiceAccountDropdownActions, ServiceAccountGroupActions } from './ser
 
 export const AccessComponents: TabbedResourceComponents = {
   Icon: CitadelIcons.Access,
+  tabsVariant: 'bordered',
   header: {
     subtitle: 'Manage users, teams, roles, and non-human access.',
     showSearch: false,

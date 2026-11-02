@@ -354,6 +354,23 @@ type ActivityInfoRendererMap = {
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
+  UpdateChecksChanged: (info) => (
+    <MonacoDiff
+      original={{ updateChecksEnabled: info.previousUpdateChecksEnabled }}
+      modified={{ updateChecksEnabled: info.updateChecksEnabled }}
+      format="yaml"
+      title="Update-check settings"
+    />
+  ),
+  UpdateDiscovered: (info) => (
+    <p className="text-sm">
+      Citadel {info.version} is available.{' '}
+      <a className="underline" href={info.releaseUrl} target="_blank" rel="noreferrer">
+        Release notes
+      </a>
+    </p>
+  ),
+
   BackupPolicyCreated: (info, activity) => (
     <SpecViewer spec={info.policy} resourceId={activity.resourceId} title="Initial configuration" />
   ),

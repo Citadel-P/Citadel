@@ -13,6 +13,48 @@ fn database_url() -> String {
 }
 
 #[tokio::test]
+#[ignore = "requires a fresh disposable CITADEL_TEST_DATABASE_URL"]
+async fn instance_updates_upgrade_preserves_existing_settings_and_migration_history() {
+    let url = database_url();
+    let mut connection = PgConnection::connect(&url).await.unwrap();
+    // Build the actual preceding catalog, never alter a current migration journal.
+    sqlx::raw_sql(include_str!("../generated/0001_initial.sql"))
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE TABLE citadel_schema_migrations (id text PRIMARY KEY, name text NOT NULL, checksum text NOT NULL, started_at timestamptz NOT NULL, completed_at timestamptz, failure text);
+        INSERT INTO citadel_schema_migrations VALUES
+        ('0001','initial','42d6600f4892a48a87b6014097c1c461f5dca298974a64fdcd30388262301128',now(),now(),NULL);
+        UPDATE instancesetupstates SET updatechecksenabled=false, mfapolicy='RequiredForAdministrators';")
+        .execute(&mut connection).await.unwrap();
+    let before: Vec<(String, String)> =
+        sqlx::query_as("SELECT id, checksum FROM citadel_schema_migrations ORDER BY id")
+            .fetch_all(&mut connection)
+            .await
+            .unwrap();
+    let result = MigrationRunner::migrate(&url).await.unwrap();
+    assert_eq!(result.applied, 1);
+    assert_eq!(result.already_applied, 1);
+    let settings: (bool, String, i32) = sqlx::query_as("SELECT updatechecksenabled, mfapolicy, updatecheckintervalhours FROM instancesetupstates WHERE id=1")
+        .fetch_one(&mut connection).await.unwrap();
+    assert_eq!(settings, (false, "RequiredForAdministrators".into(), 6));
+    let retained: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, checksum FROM citadel_schema_migrations WHERE id = '0001' ORDER BY id",
+    )
+    .fetch_all(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(retained, before);
+    assert!(
+        sqlx::query("UPDATE instancesetupstates SET updatecheckintervalhours=7")
+            .execute(&mut connection)
+            .await
+            .is_err()
+    );
+    assert_eq!(MigrationRunner::migrate(&url).await.unwrap().applied, 0);
+}
+
+#[tokio::test]
 #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
 async fn clean_install_restart_and_checksum_enforcement() {
     let database_url = database_url();

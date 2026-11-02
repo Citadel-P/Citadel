@@ -30,6 +30,7 @@ fn features_use_resource_roles_without_domain_application_layers() {
         "discovery",
         "activities",
         "licensing",
+        "updates",
     ] {
         let source = crates.join("features").join(feature).join("src");
         assert!(source.is_dir(), "{feature}");

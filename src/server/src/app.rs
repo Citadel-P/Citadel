@@ -51,14 +51,28 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             "Citadel transport security is disabled; API and Agent traffic is not encrypted"
         );
     }
-    startup::migrate(&config).await?;
-    let job_lease = startup::acquire_job_lease(&config).await?;
-    let (state, background_services) = ServerComponents::build(&config).await?;
-    startup::run(&state).await?;
+    let mut job_lease = startup::acquire_job_lease(&config).await?;
+    if let Err(error) =
+        startup::while_owned(&mut job_lease, startup::check_updates(&config)).await?
+    {
+        tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
+        return serve_maintenance(&config, job_lease).await;
+    }
+    startup::while_owned(&mut job_lease, startup::migrate(&config)).await??;
+    let (state, background_services) =
+        startup::while_owned(&mut job_lease, ServerComponents::build(&config)).await??;
     let cancellation = state.cancellation.clone();
+    // Also cancel owned work if initialization fails before normal shutdown is
+    // installed (for example, lease loss while registering background workers).
+    let _cancel_on_exit = cancellation.clone().drop_guard();
+    startup::run(&state, &mut job_lease).await?;
     let pool = state.pool.clone();
     let dynamic_tasks = state.dynamic_tasks.clone();
-    let mut supervisor = background::spawn_all(&state, background_services, &config).await?;
+    let mut supervisor = startup::while_owned(
+        &mut job_lease,
+        background::spawn_all(&state, background_services, &config),
+    )
+    .await??;
     // The watcher owns the connection by value. Return it on cancellation so
     // the advisory lease remains held through worker/dynamic-task cleanup.
     let (lease_return, lease_retained) = tokio::sync::oneshot::channel();
@@ -127,6 +141,40 @@ enum ServerExit {
     Task(Result<(), citadel_runtime::SupervisedTaskError>),
 }
 
+async fn serve_maintenance(
+    config: &Config,
+    mut job_lease: startup::CoreJobLease,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cancellation = CancellationToken::new();
+    job_lease.verify().await?;
+    let api::Routers { http, edge } = api::maintenance_router(config)?;
+    let server = run_server(
+        config.listen_address,
+        config.transport.clone(),
+        http,
+        edge,
+        cancellation.clone(),
+        config.shutdown_timeout,
+    );
+    // Both futures are owned here. Maintenance starts no normal background jobs,
+    // but losing the single-Core lease still terminates the listeners.
+    let lease = startup::watch_job_lease(job_lease, cancellation.clone());
+    tokio::pin!(server, lease);
+    tokio::select! {
+        result = &mut server => {
+            cancellation.cancel();
+            let _retained_lease = tokio::time::timeout(config.shutdown_timeout, &mut lease).await??;
+            result?;
+        }
+        result = &mut lease => {
+            cancellation.cancel();
+            let _ = tokio::time::timeout(config.shutdown_timeout, &mut server).await;
+            result?;
+        }
+    }
+    Ok(())
+}
+
 async fn run_server(
     address: std::net::SocketAddr,
     transport_config: citadel_server::config::TransportConfig,
@@ -161,7 +209,7 @@ async fn run_server(
     }
 }
 
-async fn shutdown_signal(cancellation: CancellationToken) {
+pub(crate) async fn shutdown_signal(cancellation: CancellationToken) {
     #[cfg(unix)]
     let terminate = async {
         match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {

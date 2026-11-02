@@ -4,15 +4,34 @@ import { MfaPolicy } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { createQueryClient } from '@/query-client-wrapper';
-import { InstallationSettingsControls } from './installation-settings';
+import { InstallationSettingsControls as MfaSettingsControls } from './installation-settings';
+import { UpdateCheckSettings } from '../updates/config';
+import { useRead } from '@/lib/hooks';
+
+vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => (value: string) => value }));
+
+// Separate settings surfaces share serialized mutations and one authoritative cache.
+function InstallationSettingsControls() {
+  return (
+    <>
+      <MfaSettingsControls />
+      <UpdateCheckSettings />
+    </>
+  );
+}
 
 const url = 'http://localhost/api/v1/installation/settings';
 const defaults = {
   updateChecksEnabled: true,
   updateChecksAllowed: true,
+  updateCheckIntervalHours: 6,
   mfaPolicy: MfaPolicy.Optional,
   minimumMfaPolicy: MfaPolicy.Optional,
 };
+
+beforeEach(() => {
+  server.use(http.get('http://localhost/api/v1/updates', () => HttpResponse.json({ lastAttempt: null })));
+});
 
 it('keeps MFA available during an update-check save and queues overlapping saves', async () => {
   let finishFirstSave!: () => void;
@@ -32,10 +51,12 @@ it('keeps MFA available during an update-check save and queues overlapping saves
     }),
   );
   const { user } = renderCitadel(<InstallationSettingsControls />);
-  const updateSwitch = await screen.findByRole('switch', { name: 'Check for Citadel updates' });
+  const updateSwitch = await screen.findByRole('switch', { name: 'Automatic checks' });
   const policy = screen.getByRole('combobox', { name: 'Two-factor authentication policy' });
   try {
     await user.click(updateSwitch);
+    expect(save).not.toHaveBeenCalled();
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
     expect(updateSwitch).toBeDisabled();
     expect(policy).toBeEnabled();
@@ -67,11 +88,16 @@ it('saves installation choices separately and clears the cached update notice wh
   );
   const { user, queryClient } = renderCitadel(<InstallationSettingsControls />);
   queryClient.setQueryData(['getApplicationInfo', {}], { data: { availableUpdate: { version: '1.2.0' } } });
-  const updateSwitch = await screen.findByRole('switch', { name: 'Check for Citadel updates' });
+  const updateSwitch = await screen.findByRole('switch', { name: 'Automatic checks' });
   expect(updateSwitch).toBeChecked();
   expect(screen.getByText(/MFA is optional/)).toBeVisible();
   await user.click(updateSwitch);
-  await waitFor(() => expect(updateSwitch).not.toBeChecked());
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  await waitFor(() =>
+    expect(queryClient.getQueryData(['getApplicationInfo', {}])).toEqual({ data: { availableUpdate: undefined } }),
+  );
+  expect(updateSwitch).not.toBeChecked();
   expect(save).toHaveBeenCalledWith({ updateChecksEnabled: false });
   expect(queryClient.getQueryData(['getApplicationInfo', {}])).toEqual({ data: { availableUpdate: undefined } });
   await user.click(screen.getByRole('combobox', { name: 'Two-factor authentication policy' }));
@@ -94,7 +120,7 @@ it('shows server restrictions and excludes weaker MFA policies', async () => {
     ),
   );
   const { user } = renderCitadel(<InstallationSettingsControls />);
-  const updateSwitch = await screen.findByRole('switch', { name: 'Check for Citadel updates' });
+  const updateSwitch = await screen.findByRole('switch', { name: 'Automatic checks' });
   expect(updateSwitch).toBeDisabled();
   expect(updateSwitch).not.toBeChecked();
   expect(screen.getByText('Disabled by server configuration.')).toBeVisible();
@@ -103,17 +129,128 @@ it('shows server restrictions and excludes weaker MFA policies', async () => {
   expect(screen.getByRole('option', { name: 'Required for everyone' })).toBeVisible();
 });
 
-it('keeps the saved choice when an update fails', async () => {
+it.each([false, true])('keeps update status current when saving %s without realtime', async (enabled) => {
+  const settings = { ...defaults, updateChecksEnabled: !enabled };
+  const status = {
+    checksEnabled: !enabled,
+    checksAllowed: true,
+    available: { version: '0.1.2' },
+    lastSuccess: '2026-11-01T12:00:00Z',
+  };
+  server.use(
+    http.get(url, () => HttpResponse.json(settings)),
+    http.get('http://localhost/api/v1/updates', () => HttpResponse.json(status)),
+    http.patch(url, () => HttpResponse.json({ ...settings, updateChecksEnabled: enabled })),
+  );
+  const { user, queryClient } = renderCitadel(<UpdateCheckSettings />);
+  await waitFor(() =>
+    expect(queryClient.getQueryData<{ data: typeof status }>(['getInstanceUpdates', {}])?.data).toEqual(status),
+  );
+  await user.click(await screen.findByRole('switch', { name: 'Automatic checks' }));
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  await waitFor(() =>
+    expect(queryClient.getQueryData<{ data: typeof status }>(['getInstanceUpdates', {}])?.data).toEqual({
+      ...status,
+      checksEnabled: enabled,
+    }),
+  );
+});
+
+it('cancels an older update-status read before applying the saved check setting', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    http.get(url, () => HttpResponse.json(defaults)),
+    http.patch(url, () => HttpResponse.json({ ...defaults, updateChecksEnabled: false })),
+  );
+  const { user, queryClient } = renderCitadel(<UpdateCheckSettings />);
+  const stale = { data: { checksEnabled: true, checksAllowed: true } };
+  queryClient.setQueryData(['getInstanceUpdates', {}], stale);
+  const pending = queryClient
+    .fetchQuery({
+      queryKey: ['getInstanceUpdates', {}],
+      queryFn: async () => {
+        await gate;
+        return stale;
+      },
+    })
+    .catch(() => undefined);
+  try {
+    await user.click(await screen.findByRole('switch', { name: 'Automatic checks' }));
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+    await waitFor(() =>
+      expect(queryClient.getQueryData(['getInstanceUpdates', {}])).toMatchObject({
+        data: { checksEnabled: false },
+      }),
+    );
+    await act(async () => {
+      release();
+      await pending;
+    });
+    expect(queryClient.getQueryData(['getInstanceUpdates', {}])).toMatchObject({
+      data: { checksEnabled: false },
+    });
+  } finally {
+    release();
+    await pending;
+  }
+});
+
+it('restarts a pending initial status read when there is no cached status to patch', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const read = vi.fn();
+  server.use(
+    http.get(url, () => HttpResponse.json(defaults)),
+    http.patch(url, () => HttpResponse.json({ ...defaults, updateChecksEnabled: false })),
+    http.get('http://localhost/api/v1/updates', async () => {
+      read();
+      if (read.mock.calls.length === 1) {
+        await gate;
+        return HttpResponse.json({ checksEnabled: true });
+      }
+      return HttpResponse.json({ checksEnabled: false });
+    }),
+  );
+  function Status() {
+    const status = useRead('getInstanceUpdates');
+    return <p>{status.data ? `Checks enabled: ${status.data.data.checksEnabled}` : 'Loading status'}</p>;
+  }
+  const { user } = renderCitadel(
+    <>
+      <UpdateCheckSettings />
+      <Status />
+    </>,
+  );
+  try {
+    await waitFor(() => expect(read).toHaveBeenCalledOnce());
+    await user.click(await screen.findByRole('switch', { name: 'Automatic checks' }));
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+    expect(await screen.findByText('Checks enabled: false')).toBeVisible();
+    expect(read).toHaveBeenCalledTimes(2);
+  } finally {
+    release();
+  }
+});
+
+it('keeps the draft and saved choice separate when an update fails', async () => {
   server.use(
     http.get(url, () => HttpResponse.json(defaults)),
     http.patch(url, () => new HttpResponse(null, { status: 500 })),
   );
   const { user } = renderCitadel(<InstallationSettingsControls />);
-  const updateSwitch = await screen.findByRole('switch', { name: 'Check for Citadel updates' });
+  const updateSwitch = await screen.findByRole('switch', { name: 'Automatic checks' });
   await user.click(updateSwitch);
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
   expect(await screen.findByRole('alert')).toHaveTextContent('Update-check setting could not be saved.');
-  expect(updateSwitch).toBeChecked();
+  expect(updateSwitch).not.toBeChecked();
   expect(updateSwitch).toBeEnabled();
+  await user.click(screen.getAllByRole('button', { name: 'Reset' })[0]);
+  expect(updateSwitch).toBeChecked();
 });
 
 it('does not let an older settings read overwrite a successful save', async () => {
@@ -139,9 +276,14 @@ it('does not let an older settings read overwrite a successful save', async () =
   const { user } = renderCitadel(<InstallationSettingsControls />, { queryClient });
   try {
     await waitFor(() => expect(read).toHaveBeenCalledOnce());
-    const toggle = screen.getByRole('switch', { name: 'Check for Citadel updates' });
+    const toggle = screen.getByRole('switch', { name: 'Automatic checks' });
     await user.click(toggle);
-    await waitFor(() => expect(toggle).not.toBeChecked());
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+    await waitFor(() =>
+      expect(queryClient.getQueryData(['getInstallationSettings', {}])).toMatchObject({
+        data: { updateChecksEnabled: false },
+      }),
+    );
     await act(async () => {
       release();
     });
@@ -167,8 +309,9 @@ it('identifies the failed setting when another setting saves successfully', asyn
     }),
   );
   const { user } = renderCitadel(<InstallationSettingsControls />);
-  const toggle = await screen.findByRole('switch', { name: 'Check for Citadel updates' });
+  const toggle = await screen.findByRole('switch', { name: 'Automatic checks' });
   await user.click(toggle);
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
   expect(await screen.findByRole('alert')).toHaveTextContent('Update-check setting could not be saved.');
   await user.click(screen.getByRole('combobox', { name: 'Two-factor authentication policy' }));
   await user.click(screen.getByRole('option', { name: 'Required for administrators' }));
@@ -176,7 +319,8 @@ it('identifies the failed setting when another setting saves successfully', asyn
   expect(screen.getByRole('alert')).toHaveTextContent('Update-check setting could not be saved.');
   expect(screen.queryByText('MFA policy could not be saved. Try again.')).not.toBeInTheDocument();
   rejectUpdateChecks = false;
-  await user.click(toggle);
-  await waitFor(() => expect(toggle).not.toBeChecked());
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(toggle).not.toBeChecked();
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });

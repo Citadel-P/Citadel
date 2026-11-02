@@ -19,6 +19,40 @@ fn run(root: &std::path::Path, overrides: &[(&str, &str)], command: &[&str]) -> 
 }
 
 #[test]
+fn update_state_requires_an_explicit_absolute_directory_independent_of_release_checks() {
+    let root = std::env::temp_dir().join(format!("citadel-config-{}", uuid::Uuid::now_v7()));
+    for path in ["", "relative", "/", "/private/../state"] {
+        let output = run(
+            &root,
+            &[("CITADEL_UPDATE_STATE_DIRECTORY", path)],
+            &["print-effective-config"],
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("CITADEL_UPDATE_STATE_DIRECTORY"));
+    }
+    // Existence/permissions are checked by startup, not repaired by the parser.
+    let path = root.join("missing-update-state");
+    let output = run(
+        &root,
+        &[
+            ("CITADEL_UPDATE_STATE_DIRECTORY", path.to_str().unwrap()),
+            ("CITADEL_UPDATE_CHECKS_ENABLED", "false"),
+        ],
+        &["print-effective-config"],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let config: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(config["updateStateDirectory"], path.to_str().unwrap());
+    assert_eq!(config["updatesEnabled"], false);
+    assert!(!path.exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn configured_limits_reach_startup_and_generated_keys_survive_restarts() {
     let root = std::env::temp_dir().join(format!("citadel-config-{}", uuid::Uuid::now_v7()));
     let overrides = [
