@@ -24,6 +24,7 @@ mod tests;
 // during delivery of one invalidation, after each reader checks authorization.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
+    pub admission: citadel_runtime::admission::AdmissionGate,
     pub image_store: Arc<dyn citadel_platforms::image_mutations::ImageMutationStore>,
     pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,

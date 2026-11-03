@@ -28,6 +28,7 @@ async-stream.workspace = true
 tokio-stream.workspace = true
 base64.workspace = true
 bytes.workspace = true
+http-body = "=1.1.0"
 chrono.workspace = true
 citadel-adapters = { path = "../infrastructure/adapters" }
 citadel-scripts = { path = "../features/scripts" }

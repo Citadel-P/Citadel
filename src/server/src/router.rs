@@ -50,6 +50,7 @@ pub fn router(
     config: &Config,
 ) -> Result<Routers, Box<dyn std::error::Error>> {
     let ServerComponents {
+        admission,
         docker,
         updates,
         database_health,
@@ -303,6 +304,10 @@ pub fn router(
     let app = app.layer(middleware::from_fn_with_state(
         identity,
         identity_http::authentication_middleware,
+    ));
+    let app = app.layer(middleware::from_fn_with_state(
+        admission,
+        citadel_server::api::admission::admit,
     ));
     // Release uses panic=abort. Only unwind-capable builds can render a panic;
     // production recovery relies on returned errors and supervised shutdown.

@@ -2,6 +2,14 @@ use citadel_backups::BackupError;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+/// Checkpoint preparation observes an existing identity without initializing it.
+pub(crate) async fn existing_instance_id(pool: &PgPool) -> Result<Option<Uuid>, BackupError> {
+    sqlx::query_scalar("SELECT instanceid FROM citadelinstanceidentity WHERE id=1")
+        .fetch_optional(pool)
+        .await
+        .map_err(storage)
+}
+
 pub(crate) async fn instance_id(pool: &PgPool) -> Result<Uuid, BackupError> {
     let mut transaction = pool.begin().await.map_err(storage)?;
     let generated = Uuid::now_v7();

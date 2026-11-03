@@ -1,3 +1,10 @@
+mod inspection;
+pub use inspection::ReleaseInspectionService;
+mod drain;
+pub use drain::UpdateDrainService;
+mod handoff;
+pub use handoff::UpdateHandoffService;
+
 use crate::{
     CheckState, Release, ReleaseChannel, ReleaseCheckRepository, ReleaseNotice, ReleaseSource,
     UpdateError, available_update, development_update,

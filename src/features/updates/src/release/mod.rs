@@ -69,29 +69,42 @@ pub fn release_version(value: &str) -> Result<Version, UpdateError> {
 }
 
 impl UpgradeDescriptor {
-    pub fn validate_transition(
-        &self,
-        source: &CoreIdentity,
-        target: &CoreIdentity,
-        agents: &[String],
-    ) -> Result<(), UpdateError> {
-        let from = release_version(&source.version)?;
-        let to = release_version(&target.version)?;
+    /// Validate the target identity independently of any proposed source.
+    /// An empty source list is valid metadata but authorizes no transition.
+    pub fn validate_target(&self, target: &CoreIdentity) -> Result<(), UpdateError> {
+        release_version(&target.version)?;
         if self.schema_version != 1
             || self.product != "citadel"
             || self.update_protocol != UPDATE_PROTOCOL
             || self.installer_format != INSTALLER_FORMAT
             || self.target_version != target.version
             || self.target_catalog_sha256 != target.catalog_sha256
-            || !is_sha256(&source.catalog_sha256)
             || !is_sha256(&target.catalog_sha256)
-            || !official_image_digest(&source.image)
             || !official_image_digest(&target.image)
-            || source.architecture != target.architecture
             || !matches!(target.architecture.as_str(), "amd64" | "arm64")
+            || self.sources.len() > 64
+        {
+            return Err(UpdateError::Unavailable(
+                "The verified image has an unsupported or inconsistent upgrade descriptor.".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn validate_transition(
+        &self,
+        source: &CoreIdentity,
+        target: &CoreIdentity,
+        agents: &[String],
+    ) -> Result<(), UpdateError> {
+        self.validate_target(target)?;
+        let from = release_version(&source.version)?;
+        let to = release_version(&target.version)?;
+        if !is_sha256(&source.catalog_sha256)
+            || !official_image_digest(&source.image)
+            || source.architecture != target.architecture
             || from >= to
             || from.pre.is_empty() != to.pre.is_empty()
-            || self.sources.len() > 64
         {
             return Err(UpdateError::Unavailable(
                 "This release does not support the selected installation transition.".into(),

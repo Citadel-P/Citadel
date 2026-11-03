@@ -3,6 +3,9 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 pub async fn run(cancel: CancellationToken, service: Arc<CopyService>) -> Result<(), CopyError> {
+    // Start/cleanup requests are admitted at HTTP. These lanes only continue
+    // committed parents, which remain durable drain blockers until terminal.
+    // Closing admission must not strand their remaining volumes or finalization.
     // Both futures belong to this supervised worker and share its shutdown
     // token. Long storage work cannot block parent reconciliation. One execution
     // lane bounds current-data helpers to one globally (and per platform/node).

@@ -118,6 +118,10 @@ impl ApplicationGroupReader {
         shell: TerminalShell,
         cancel: &CancellationToken,
     ) -> Result<GroupTerminal, RealtimeReadError> {
+        let admission = self
+            .admission
+            .try_enter("Container terminals")
+            .ok_or_else(|| failure("Citadel is preparing an update. Try again later."))?;
         let permit = TERMINAL_SLOTS
             .try_acquire()
             .map_err(|_| failure("Terminal capacity exceeded."))?;
@@ -136,6 +140,7 @@ impl ApplicationGroupReader {
         let group = g.clone();
         let cancel = cancel.clone();
         let output = Box::pin(async_stream::try_stream! {
+            let _admission = admission;
             let _permit=permit;
             loop {
                 let (change, item) = tokio::select! {

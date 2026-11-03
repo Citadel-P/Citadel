@@ -31,12 +31,29 @@ enum Command {
     /// Print this build's upgrade descriptor without starting Core or accessing a database.
     UpgradeDescriptorJson,
     /// Read the initialized instance identity without starting Core or migrating its database.
-    InstanceIdentityJson,
+    InstanceIdentityJson {
+        /// Also require a complete matching migration journal and no owned update.
+        #[arg(long)]
+        verify_migrations: bool,
+    },
+    /// Inspect existing recovery keys without exposing them or creating replacements.
+    #[cfg(target_os = "linux")]
+    CheckUpdateRecoveryKeys,
     /// Verify a published Core image signature without installing or starting Core.
     VerifyUpdateRelease {
         /// Exact published version, without the v prefix (for example 0.1.2).
         #[arg(long)]
         version: String,
+    },
+    /// Verify and inspect a release in a disposable local Docker container; never installs it.
+    #[cfg(target_os = "linux")]
+    InspectUpdateRelease {
+        /// Exact published version, without the v prefix.
+        #[arg(long)]
+        version: String,
+        /// Target Linux architecture (amd64 or arm64).
+        #[arg(long, value_parser = ["amd64", "arm64"])]
+        architecture: String,
     },
     /// Validate installer Compose inputs without contacting Docker or changing services.
     #[cfg(target_os = "linux")]
@@ -64,6 +81,17 @@ enum Command {
         #[arg(long)]
         state_directory: std::path::PathBuf,
     },
+    /// Revalidate a registered local installation without changing it or approving an update.
+    #[cfg(target_os = "linux")]
+    CheckUpdateInstallation {
+        /// Existing registered private host directory; nothing is created or repaired.
+        #[arg(long)]
+        state_directory: std::path::PathBuf,
+    },
+    /// Internal bounded exchange executed inside the owned updater helper.
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    UpdateHelperHandoff,
     /// Run the Rust foundation server and supervised workers.
     Serve,
     /// Apply the embedded Citadel schema migrations and exit.
@@ -128,7 +156,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string(&descriptor)?);
             Ok(())
         }
-        Command::InstanceIdentityJson => {
+        Command::InstanceIdentityJson { verify_migrations } => {
             let database = DatabaseConfig::from_env()
                 .map_err(|_| "Valid PostgreSQL configuration is required for the instance identity diagnostic.")?;
             let instance = tokio::time::timeout(Duration::from_secs(10), async {
@@ -137,15 +165,64 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     connection::connect_pool(&database.database_url, 1, Duration::from_secs(5))
                         .await
                         .map_err(|_| "Cannot connect to the existing Citadel database.")?;
-                let result = updates::read_instance_identity(&pool)
-                    .await
-                    .map_err(|_| "Cannot read an initialized Citadel instance identity.");
+                let result = if verify_migrations {
+                    updates::read_update_database_state(&pool, &CancellationToken::new())
+                        .await
+                        .and_then(|state| {
+                            serde_json::to_value(state).map_err(|_| {
+                                citadel_updates::UpdateError::Unavailable(
+                                    "Cannot encode database validation.".into(),
+                                )
+                            })
+                        })
+                } else {
+                    updates::read_instance_identity(&pool)
+                        .await
+                        .map(|instance| serde_json::json!({"instanceId": instance}))
+                        .map_err(|_| {
+                            citadel_updates::UpdateError::Unavailable(
+                                "Cannot read an initialized Citadel instance identity.".into(),
+                            )
+                        })
+                };
                 pool.close().await;
-                result
+                result.map_err(|error| error.to_string())
             })
             .await
             .map_err(|_| "Instance identity read timed out.")??;
-            println!("{}", serde_json::json!({"instanceId": instance}));
+            println!("{}", instance);
+            Ok(())
+        }
+        #[cfg(target_os = "linux")]
+        Command::CheckUpdateRecoveryKeys => {
+            use zeroize::Zeroizing;
+            // Read only the required settings: normal Config initialization may
+            // generate keys and must never run in this diagnostic.
+            let configured = |name| -> Result<Option<Zeroizing<String>>, &'static str> {
+                match std::env::var(name) {
+                    Ok(value) => Ok(Some(Zeroizing::new(value))),
+                    Err(std::env::VarError::NotPresent) => Ok(None),
+                    Err(_) => Err("Recovery-key configuration is not valid UTF-8."),
+                }
+            };
+            if std::env::var_os("CITADEL_CORE_AGENT_PRIVATE_KEY_PATH").is_some()
+                || std::env::var_os("CITADEL_CORE_AGENT_ADDRESS").is_some()
+            {
+                return Err(
+                    "Remote Core Agent keys are outside the updater installation profile.".into(),
+                );
+            }
+            let root = std::env::var_os("CITADEL_DATA_ROOT")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| "/app/data".into());
+            let jwt = configured("CITADEL_JWT_KEY")?;
+            let encryption = configured("CITADEL_SECRETS_ENCRYPTION_KEY")?;
+            let keys = citadel_adapters::external::updates::check_recovery_keys(
+                &root,
+                jwt.as_ref().map(|value| value.as_str()),
+                encryption.as_ref().map(|value| value.as_str()),
+            )?;
+            println!("{}", serde_json::to_string(&keys)?);
             Ok(())
         }
         Command::VerifyUpdateRelease { version } => {
@@ -162,6 +239,34 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result = tokio::select! {
                 result = &mut verification => result,
                 () = crate::app::shutdown_signal(cancellation.clone()) => verification.await,
+            }?;
+            println!("{}", serde_json::to_string(&result)?);
+            Ok(())
+        }
+        #[cfg(target_os = "linux")]
+        Command::InspectUpdateRelease {
+            version,
+            architecture,
+        } => {
+            use citadel_adapters::external::updates::{
+                DockerReleaseInspection, GithubReleaseArtifacts,
+            };
+            use citadel_updates::ReleaseInspectionService;
+            use std::sync::Arc;
+            if !citadel_server::config::release_checks_allowed_from_env()? {
+                return Err("Release checks are disabled by server configuration.".into());
+            }
+            let process = Arc::new(citadel_processes::SystemProcess);
+            let service = ReleaseInspectionService::new(
+                Arc::new(GithubReleaseArtifacts::new(process.clone())?),
+                Arc::new(DockerReleaseInspection::new(process)),
+            );
+            let cancellation = CancellationToken::new();
+            let inspection = service.inspect(&version, &architecture, &cancellation);
+            tokio::pin!(inspection);
+            let result = tokio::select! {
+                result = &mut inspection => result,
+                () = crate::app::shutdown_signal(cancellation.clone()) => inspection.await,
             }?;
             println!("{}", serde_json::to_string(&result)?);
             Ok(())
@@ -212,6 +317,45 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 () = crate::app::shutdown_signal(cancellation.clone()) => registration.await,
             }?;
             println!("{}", serde_json::to_string(&result)?);
+            Ok(())
+        }
+        #[cfg(target_os = "linux")]
+        Command::CheckUpdateInstallation { state_directory } => {
+            let cancellation = CancellationToken::new();
+            let check = citadel_adapters::external::updates::check_registered_compose_installation(
+                &state_directory,
+                &citadel_processes::SystemProcess,
+                &cancellation,
+            );
+            tokio::pin!(check);
+            let result = tokio::select! {
+                result = &mut check => result,
+                () = crate::app::shutdown_signal(cancellation.clone()) => check.await,
+            }?;
+            println!("{}", serde_json::to_string(&result)?);
+            Ok(())
+        }
+        #[cfg(target_os = "linux")]
+        Command::UpdateHelperHandoff => {
+            use citadel_adapters::external::updates::{
+                MAX_HANDOFF_REQUEST, execute_helper_handoff,
+            };
+            use std::io::Read;
+            // A one-shot internal stdin command; the invoking Docker client owns
+            // its deadline. No application tasks or database have been started.
+            let mut input = Vec::new();
+            std::io::stdin()
+                .take(MAX_HANDOFF_REQUEST as u64 + 1)
+                .read_to_end(&mut input)?;
+            let cancellation = CancellationToken::new();
+            let exchange =
+                execute_helper_handoff(&input, &citadel_processes::SystemProcess, &cancellation);
+            tokio::pin!(exchange);
+            let output = tokio::select! {
+                result = &mut exchange => result,
+                () = crate::app::shutdown_signal(cancellation.clone()) => exchange.await,
+            }?;
+            println!("{}", std::str::from_utf8(&output)?);
             Ok(())
         }
         Command::Serve => crate::app::serve(Config::from_env()?).await,

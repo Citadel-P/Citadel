@@ -6,6 +6,7 @@ use citadel_alerts::{AlertDeliveryService, AlertError};
 use tokio_util::sync::CancellationToken;
 
 pub async fn deliveries(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<AlertDeliveryService>,
     mut wake: tokio::sync::watch::Receiver<()>,
@@ -14,7 +15,13 @@ pub async fn deliveries(
         if cancellation.is_cancelled() {
             return Ok(());
         }
-        let failed = match service.process_one(&cancellation).await {
+        let result = {
+            let Some(_admission) = admission.enter("Alert deliveries", &cancellation).await else {
+                return Ok(());
+            };
+            service.process_one(&cancellation).await
+        };
+        let failed = match result {
             Ok(true) => continue,
             Ok(false) => false,
             Err(error) => {

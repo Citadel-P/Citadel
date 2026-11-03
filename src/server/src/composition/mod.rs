@@ -62,6 +62,7 @@ pub(super) struct RuntimeContext {
 }
 
 pub struct ServerComponents {
+    pub admission: citadel_runtime::admission::AdmissionGate,
     pub database_health: Arc<dyn citadel_runtime::database_health::DatabaseHealth>,
     pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
     pub backup_coverage: Arc<citadel_server::api::resources::backups::coverage::BackupCoverageService>,
@@ -135,6 +136,7 @@ impl ServerComponents {
             &config.execution.paths.host_root,
         )?;
         let cancellation = CancellationToken::new();
+        let admission = citadel_runtime::admission::AdmissionGate::default();
         let readiness = Arc::new(Readiness::default());
         let dynamic_tasks = citadel_runtime::DynamicTasks::new(cancellation.clone());
         let docker = docker.with_terminal_tasks(dynamic_tasks.clone());
@@ -279,6 +281,7 @@ impl ServerComponents {
             )
             .with_groups(Arc::new(
                 citadel_server::realtime_groups::ApplicationGroupReader {
+                    admission: admission.clone(),
                     image_store: platform_state.image_store.clone(),
                     image_updates: platform_state.image_updates.clone(),
                     registries: platform_state.registries.clone(),
@@ -322,6 +325,7 @@ impl ServerComponents {
         };
         Ok((
             Self {
+                admission,
                 database_health,
                 git_repositories,
                 backup_coverage,

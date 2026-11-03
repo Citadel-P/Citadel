@@ -23,6 +23,15 @@ pub trait ReleaseCheckRepository: Send + Sync {
     ) -> BoxFuture<'a, Result<bool, UpdateError>>;
 }
 
+/// Read-only observation under the exact persisted maintenance claim. Implementations
+/// reject released, foreign, corrupt or advanced ownership before reporting counts.
+pub trait UpdateDrainRepository: Send + Sync {
+    fn blockers<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+    ) -> BoxFuture<'a, Result<Vec<crate::UpdateDrainBlocker>, UpdateError>>;
+}
+
 pub trait UpdateRepository: ReleaseCheckRepository {
     fn save_review<'a>(
         &'a self,

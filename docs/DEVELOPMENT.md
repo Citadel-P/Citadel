@@ -158,6 +158,31 @@ a database connection. The source list is currently empty: no automatic upgrade
 path is qualified. Release acceptance compares this output from both Core image
 architectures with the tagged checkout; it does not enable update execution.
 
+On Linux, inspect the descriptor from a verified published target with:
+
+```bash
+citadel-server inspect-update-release --version 1.2.3 --architecture amd64
+```
+
+Use an actual completed release version and `amd64` or `arm64`. This operator
+diagnostic requires Cosign, a Docker CLI supporting `image inspect --platform`
+and a daemon supporting API 1.49 or newer, plus access to `/var/run/docker.sock`;
+`CITADEL_UPDATE_CHECKS_ENABLED=false` also prohibits it. It verifies the signature
+before pulling the immutable image and runs a disposable descriptor-only container
+without installation mounts or network access. It returns JSON containing the
+target identity and embedded descriptor. It does not start Core services, migrate
+a database, register an installation, save a review or install the release.
+The target architecture must be executable by the daemon; emulation is not configured.
+Both pull and image inspection explicitly select that architecture, including when
+multiple platforms of the same release are cached.
+
+Cancellation waits for bounded probe cleanup. Failures return no successful JSON;
+a cleanup failure names the probe requiring inspection. A process/host crash or a
+late Docker create after a timeout can leave an unstarted probe labelled
+`com.citadel.update-inspection`; inspect that exact probe, rather than removing
+installation containers. Pulled images remain cached. Successful inspection proves
+target metadata, not a qualified source-to-target transition or recovery readiness.
+
 On Linux, `citadel-server check-update-compose` checks the configuration portion
 of updater registration using the Compose CLI packaged in Core:
 
@@ -230,10 +255,110 @@ refused without replacing existing evidence. Identical retries preserve its ID. 
 conflicting registration, corrupt files and orphaned recovery evidence cause a
 refusal without overwriting state. It does not stop services, approve an update,
 establish source-to-target compatibility or enable automatic installation.
+
+To revalidate an existing registration without changing it, use:
+
+```bash
+citadel-server check-update-installation --state-directory /opt/citadel-update-state
+```
+
+Use the same executor UID/GID and mounts as registration. The command derives the
+Compose invocation from protected registration, takes the existing nonblocking
+installation lock, and compares fresh configuration, daemon, container, storage,
+network and instance observations with the saved values. It returns JSON with
+`registration`, `database`, `recoveryKeys` and `checkpointStorage`; no registration or
+lock file is created or repaired. Edited
+inputs, changed resources, lock contention or recovery evidence cause refusal.
+The lock is released on success, failure or cancellation. Release-network policy
+does not disable this local check. It invokes
+`instance-identity-json --verify-migrations` inside the source Core to read initialized
+identity, update ownership, the migration journal and database size. Missing,
+incomplete, failed, unknown or checksum-mismatched migrations fail closed without
+changing migration history. A retained update owner also blocks the check.
+
+It also invokes `check-update-recovery-keys` inside Core as its packaged service
+user (65532:0). This read-only diagnostic uses existing key files or explicitly
+configured JWT/encryption keys; it does not initialize Core or create replacements.
+It checks availability, encoding and length, with bounded private file reads and
+no symlink traversal. Its JSON reports only `DataVolume` or `Environment`
+for JWT, secret encryption and Agent signing. External keys must be represented
+in the protected installer inputs and match the running container environment.
+Neither values nor key fingerprints are returned. Preserve the original keys;
+passing this check is not proof of successful decryption or an independent backup.
+
+Checkpoint storage requires available space of twice the current database size
+plus 64 MiB in the registered state directory. A private 4 KiB file is written,
+synchronized and removed to test executor access. A crash can leave a
+`.checkpoint-probe-*` file; preserve the state directory and inspect that exact
+probe before retrying. This budget does not reserve space or guarantee that a
+future dump fits.
+
+This supplies database and storage evidence for preflight; it does not qualify a
+target transition, create or restore-test a checkpoint, save an update review or
+permit replacement. Its result is a
+point-in-time observation; the executor must revalidate under ownership before
+any future replacement.
+
 The initial profile requires the Compose network and Citadel data volumes to be
 used only by these two services; additional consumers are rejected as ambiguous.
-Automatic installer integration, registration reconciliation, startup maintenance
-and detached execution are still pending.
+Automatic installer integration, registration reconciliation, verified startup
+recovery/resume and detached execution are still pending.
+
+Live update admission has a shared process-local gate wired into HTTP and worker
+dispatch. `UpdateDrainService` validates a committed claim with the PostgreSQL
+reader, closes the gate through the Server runtime port, and observes local tasks
+and durable operations/reservations within a deadline. It does not mutate journal
+history, release ownership or create checkpoints. Run it under a separate supervised
+owner, not inside the `DynamicTasks` tracker it observes. The production update
+driver does not invoke this step yet, and installation remains disabled. Remaining
+writers still require quiescence before checkpoint creation. See the admission and
+owned-drain regression commands in [`test/README.md`](../test/README.md).
+
+`prepare_update_checkpoint` is an internal helper building block, not a CLI or HTTP
+action. It requires the held installation lock and matching backup-phase journal,
+preserves installer inputs, reuses the system recovery builder and durably publishes
+a preparation receipt after integrity checks. It never initializes database
+identity, advances the journal or resumes Core. Failed/interrupted attempt
+directories are evidence, not disposable cache. The caller must finish draining
+and stop source writers first; helper acknowledgement and that shutdown are not
+connected to the packaged driver yet. Run the checkpoint regressions with dedicated disposable source
+and restore databases as described in [`test/README.md`](../test/README.md).
+
+`verify_update_checkpoint` is the subsequent internal PostgreSQL restore rehearsal.
+It requires the same held lock and backup-phase journal, restores into a networkless
+temporary container, verifies identity/claim/migration history, and removes the
+verifier before publishing `restore-verified.json`. The caller supplies a bounded
+time/storage budget; storage exhaustion fails verification. The source PostgreSQL
+container and its volumes are never changed. Failed attempts retain their evidence
+and cannot be blindly retried. This step does not verify encrypted data with recovery
+keys, authorize replacement or resume Core. It is not wired to a public command yet.
+
+Handoff now has feature-owned shutdown authorization and Docker/filesystem
+adapters. Persist launch intent after the database claim, bind the confirmed
+helper container before starting it, and let the helper hold the installation
+lock. `DockerHelperHandoff` receives the launcher's confirmed container ID and
+uses the existing Docker socket to execute the hidden `update-helper-handoff`
+command in that verified container. Its bounded stdin/stdout exchange leaves host
+path access and durable grant publication with the helper's registered user.
+Core requires no extra mount or writable host-root access. The command does not
+launch a helper or stop Core; only the owned helper session can consume the grant.
+`UpdateHandoffService` rechecks acknowledgement and drain before granting
+shutdown; `OwnedUpdateHelper` records stop intent and observes clean Core exit
+before producing the backup-phase journal. Keep that session alive when passing
+its state/lock to checkpoint preparation. Cancellation or timeout never authorizes
+a relaunch, repeated stop, evidence deletion or source resume.
+
+`launch_update_helper` now implements the internal create/verify/bind/start
+sequence in the registered executor namespace. It uses the local pinned source
+image without pulling, records start intent before execution, and releases the
+installation lock before the child can acquire it. It returns the exact container
+ID for `DockerHelperHandoff`; a successful launch is not acknowledgement or
+shutdown authorization. Failed or interrupted launches retain state and containers
+for explicit recovery, never automatic retry/removal. Core cannot invoke this
+filesystem adapter directly through its read-only host mapping. The packaged
+launcher bridge, long-running helper CLI and normal update worker wiring remain pending; these functions
+must not be exposed as standalone user commands that stop Core without the rest
+of the recovery/update driver.
 
 Validate bootstrap changes with the isolated Docker acceptance command in
 [`test/README.md`](../test/README.md). It exercises the shipped layout and a compatible customized Edge-overlay installation

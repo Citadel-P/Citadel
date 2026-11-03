@@ -13,7 +13,10 @@ pub use model::{
     CompletionReceipt, CoreIdentity, InstallationKind, UPDATE_PROTOCOL, UpdateJournal,
     UpdateOperation, UpdatePhase, UpdatePlan,
 };
-pub use read_models::{CheckState, ReleaseCheckStatus};
+pub use read_models::{
+    CheckState, InspectedRelease, ReleaseCheckStatus, UpdateDatabaseState, UpdateDrainBlocker,
+    UpdateDrainOutcome,
+};
 pub use release::{
     CORE_IMAGE, INSTALLER_FORMAT, OFFICIAL_REPOSITORY, PublicationIdentity,
     PublicationSignaturePolicy, PublishedImage, PublishedReleaseManifest, RELEASE_OIDC_ISSUER,
@@ -21,8 +24,14 @@ pub use release::{
     VerifiedReleaseArtifact, available_update, development_update, is_development, is_sha256,
     official_image_digest, release_signing_identity, release_version,
 };
-pub use repository::{ReleaseCheckRepository, UpdateActor, UpdateRepository};
-pub use runtime::{ReleaseArtifactSource, ReleaseSource};
+pub use repository::{
+    ReleaseCheckRepository, UpdateActor, UpdateDrainRepository, UpdateRepository,
+};
+pub use runtime::{
+    ReleaseArtifactSource, ReleaseInspectionRuntime, ReleaseSource, UpdateDrainRuntime,
+    UpdateHandoffRuntime,
+};
 pub use service::{
-    NoopUpdateChangeNotifier, ReleaseCheckPolicy, ReleaseCheckService, UpdateChangeNotifier,
+    NoopUpdateChangeNotifier, ReleaseCheckPolicy, ReleaseCheckService, ReleaseInspectionService,
+    UpdateChangeNotifier, UpdateDrainService, UpdateHandoffService,
 };

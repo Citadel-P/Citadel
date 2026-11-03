@@ -1,16 +1,14 @@
+use super::super::docker::SOCKET;
+use super::super::{JournalDirectory, RegisteredComposeInstallation};
 use super::*;
-use citadel_execution::ProcessOutput;
-use futures_util::future::BoxFuture;
-use std::sync::{
-    Mutex,
-    atomic::{AtomicUsize, Ordering},
-};
+use super::{executor::validate_executor, registration::REGISTRATION};
+use citadel_updates::UpdateError;
+use serde_json::json;
+use std::sync::atomic::Ordering;
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
+use tokio_util::sync::CancellationToken;
 
-const CORE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const DATABASE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const NETWORK: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
-const IMAGE: &str = "ghcr.io/citadel-p/citadel:v0.1.1";
-const INSTANCE: &str = "01900000-0000-7000-8000-000000000001";
+use super::fixtures::*;
 
 #[tokio::test]
 async fn startup_observes_registration_without_repairing_or_holding_the_helper_lock() {
@@ -128,217 +126,6 @@ fn containerized_registration_requires_its_own_identity_and_exact_persistent_mou
                 .push(json!({"Type":"bind","Source":"/","Destination":"/host","RW":true})),
         }
         assert!(validate_executor(&changed, &CORE[..12], &fixture.inputs, &fixture.state).is_err());
-    }
-}
-
-struct Fixture {
-    _root: tempfile::TempDir,
-    inputs: InstallerComposeInputs,
-    state: PathBuf,
-    runner: Runner,
-}
-impl Fixture {
-    fn new() -> Self {
-        let root = tempfile::Builder::new()
-            .prefix("citadel-register-test-")
-            .permissions(fs::Permissions::from_mode(0o700))
-            .tempdir()
-            .unwrap();
-        let directory = root.path().join("installer");
-        let state = root.path().join("state");
-        for path in [&directory, &state] {
-            fs::create_dir(path).unwrap();
-            fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
-        }
-        let base = directory.join("docker-compose.yml");
-        fs::copy(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../deploy/install/docker-compose.yml"),
-            &base,
-        )
-        .unwrap();
-        fs::write(
-            directory.join(".env"),
-            "PG_PASSWORD=private-test-password\nCITADEL_IMAGE=ghcr.io/citadel-p/citadel:v0.1.1\n",
-        )
-        .unwrap();
-        fs::set_permissions(directory.join(".env"), fs::Permissions::from_mode(0o600)).unwrap();
-        let inputs = InstallerComposeInputs {
-            directory,
-            project: "citadel-test".into(),
-            compose_files: vec![base],
-        };
-        let mut config = json!({
-            "name": "citadel-test", "services": {
-                "server": {"image": IMAGE, "environment": {"PG_HOST":"pg_db", "PG_PORT":"5432", "PG_USER":"citadel", "PG_PASSWORD":"private-test-password", "PG_DATABASE":"citadel"}, "ports":[{"target":8000,"published":"18000","host_ip":"127.0.0.1","protocol":"tcp"}]},
-                "pg_db": {"image":"postgres@sha256:fixture", "environment":{"POSTGRES_USER":"citadel","POSTGRES_PASSWORD":"private-test-password","POSTGRES_DB":"citadel"}}
-            },
-            "volumes":{"citadel_data":{"name":"citadel-test_citadel_data"},"postgres_data":{"name":"citadel-test_postgres_data"}},
-            "networks":{"default":{"name":"citadel-test_default"}}
-        });
-        super::super::compose::tests::profile_fixture(&mut config);
-        let container = |role: &str, id: &str| {
-            let service = &config["services"][role];
-            let mounts = if role == "server" {
-                json!([
-                    {"Type":"volume","Name":"citadel-test_citadel_data","Destination":"/app/data","RW":true},
-                    {"Type":"bind","Source":SOCKET,"Destination":SOCKET,"RW":true},
-                    {"Type":"bind","Source":"/","Destination":"/host","RW":false}
-                ])
-            } else {
-                json!([{"Type":"volume","Name":"citadel-test_postgres_data","Destination":"/var/lib/postgresql","RW":true}])
-            };
-            json!({"Id":id,"Image":format!("sha256:{}", "d".repeat(64)),
-                "State":{"Running":true,"Paused":false,"Restarting":false,"Health":{"Status":"healthy"}},
-                "Config":{"Image":service["image"],"Env": service["environment"].as_object().unwrap().iter().map(|(k,v)|format!("{k}={}",v.as_str().unwrap())).collect::<Vec<_>>(),
-                    "Labels":{"com.docker.compose.project":"citadel-test","com.docker.compose.service":role,"com.docker.compose.oneoff":"False","com.docker.compose.container-number":"1", "com.docker.compose.project.working_dir":inputs.directory,"com.docker.compose.project.config_files":inputs.compose_files[0]}},
-                "HostConfig":{"Privileged":false,"NetworkMode":"citadel-test_default","RestartPolicy":{"Name":"unless-stopped"},"PortBindings":if role=="server" {json!({"8000/tcp":[{"HostIp":"127.0.0.1","HostPort":"18000"}]})} else {json!({})}},
-                "Mounts":mounts,"NetworkSettings":{"Networks":{"citadel-test_default":{"NetworkID":NETWORK,"Aliases":[role]}}}
-            })
-        };
-        let core = container("server", CORE);
-        let database = container("pg_db", DATABASE);
-        let runner = Runner {
-            config,
-            core,
-            database,
-            inputs_directory: inputs.directory.clone(),
-            state: state.clone(),
-            mode: "normal",
-            calls: AtomicUsize::new(0),
-            observations: AtomicUsize::new(0),
-            homes: Mutex::new(vec![]),
-        };
-        Self {
-            _root: root,
-            inputs,
-            state,
-            runner,
-        }
-    }
-    async fn register(&self) -> Result<RegisteredComposeInstallation, UpdateError> {
-        register_compose_installation(
-            &self.inputs,
-            self.state.clone(),
-            &self.runner,
-            &CancellationToken::new(),
-        )
-        .await
-    }
-}
-
-struct Runner {
-    config: Value,
-    core: Value,
-    database: Value,
-    inputs_directory: PathBuf,
-    state: PathBuf,
-    mode: &'static str,
-    calls: AtomicUsize,
-    observations: AtomicUsize,
-    homes: Mutex<Vec<PathBuf>>,
-}
-impl ProcessRunner for Runner {
-    fn run<'a>(
-        &'a self,
-        request: ProcessRequest,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<ProcessOutput, ProcessError>> {
-        Box::pin(async move {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            assert_eq!(request.program, "docker");
-            assert_eq!(
-                &request.arguments[..2],
-                ["--host", "unix:///var/run/docker.sock"]
-            );
-            assert!(request.output.is_none());
-            assert!(request.stdin.is_none());
-            assert!(request.limits.timeout <= Duration::from_secs(30));
-            assert_eq!(request.limits.maximum_stdout_bytes, 1024 * 1024);
-            let home = PathBuf::from(&request.environment[0].1);
-            assert!(home.exists());
-            self.homes.lock().unwrap().push(home);
-            let args = request.arguments[2..]
-                .iter()
-                .map(|v| v.to_str().unwrap())
-                .collect::<Vec<_>>();
-            let mut output = ProcessOutput {
-                exit_code: Some(0),
-                stdout: vec![],
-                stderr: vec![],
-                stdout_truncated: false,
-                stderr_truncated: false,
-            };
-            if self.mode == "tool-failure" {
-                output.exit_code = Some(1);
-                output.stderr = b"private-test-password".to_vec();
-                return Ok(output);
-            }
-            let value = match args.as_slice() {
-                ["compose", ..] => self.config.clone(),
-                ["info", ..] => {
-                    let n = self.observations.fetch_add(1, Ordering::SeqCst);
-                    json!({"ID":if self.mode=="changed-daemon" && n%2==1 {"other"} else {"daemon"}, "OSType":"linux","DockerRootDir":"/var/lib/docker", "SecurityOptions": if self.mode=="rootless" {json!(["name=rootless"])} else {json!(["name=seccomp"])}})
-                }
-                ["container", "ls", ..] => {
-                    let filter = args[5];
-                    let ids = if filter.starts_with("label=") {
-                        if self.mode == "replicas" {
-                            vec![CORE, DATABASE, NETWORK]
-                        } else {
-                            vec![CORE, DATABASE]
-                        }
-                    } else if filter.ends_with("citadel_data") {
-                        if self.mode == "shared-volume" {
-                            vec![CORE, NETWORK]
-                        } else {
-                            vec![CORE]
-                        }
-                    } else {
-                        vec![DATABASE]
-                    };
-                    output.stdout = ids
-                        .iter()
-                        .map(|id| format!("{}\n", serde_json::to_string(id).unwrap()))
-                        .collect::<String>()
-                        .into_bytes();
-                    return Ok(output);
-                }
-                ["container", "inspect", id] if *id == CORE => json!([self.core]),
-                ["container", "inspect", id] if *id == DATABASE => json!([self.database]),
-                ["container", "inspect", hostname] => {
-                    json!([{"Id":format!("{hostname}{}","0".repeat(64-hostname.len())),"Config":{"Hostname":hostname},"Mounts":[
-                    {"Type":"bind","Source":self.inputs_directory,"Destination":self.inputs_directory,"RW":false},
-                    {"Type":"bind","Source":self.state,"Destination":self.state,"RW":true},
-                    {"Type":"bind","Source":SOCKET,"Destination":SOCKET,"RW":true}]}])
-                }
-                ["volume", "inspect", name] => {
-                    json!([{"Name":name,"Driver":"local","Scope":"local","Options":null,"Mountpoint":format!("/var/lib/docker/volumes/{name}/_data"), "CreatedAt":"2026-11-01T00:00:00Z", "Labels":{"com.citadel.system":"true","com.citadel.system-role":if name.ends_with("citadel_data") {"core"} else {"database"}}}])
-                }
-                ["network", "inspect", name] => {
-                    let mut members = json!({CORE: {}, DATABASE: {}});
-                    if self.mode == "shared-network" {
-                        members[NETWORK] = json!({});
-                    }
-                    json!([{"Id":NETWORK,"Name":name,"Driver":"bridge","Scope":"local","Containers":members,"Labels":{"com.docker.compose.project":"citadel-test"}}])
-                }
-                ["exec", id, "/app/citadel-server", "instance-identity-json"] => {
-                    assert_eq!(*id, CORE);
-                    if self.mode == "cancel" {
-                        cancellation.cancel();
-                        return Err(ProcessError::Cancelled);
-                    }
-                    if self.mode == "changed-inputs" {
-                        fs::write(self.inputs_directory.join(".env"), "PG_PASSWORD=changed\n")
-                            .unwrap();
-                    }
-                    json!({"instanceId":if self.mode=="missing-identity" {"invalid"} else {INSTANCE}})
-                }
-                _ => panic!("unexpected Docker operation: {args:?}"),
-            };
-            output.stdout = serde_json::to_vec(&value).unwrap();
-            Ok(output)
-        })
     }
 }
 
@@ -481,4 +268,235 @@ async fn unknown_installation_kinds_are_preserved_and_never_sent_to_docker() {
     assert!(fixture.register().await.is_err());
     assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), calls);
     assert_eq!(fs::read(fixture.state.join(REGISTRATION)).unwrap(), before);
+}
+
+#[tokio::test]
+async fn live_check_preserves_registration_and_releases_the_lock() {
+    let fixture = Fixture::new();
+    let registered = fixture.register().await.unwrap();
+    let path = fixture.state.join(REGISTRATION);
+    let bytes = fs::read(&path).unwrap();
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    assert_eq!(fixture.check().await.unwrap().registration, registered);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
+    assert_eq!(fs::read_dir(&fixture.state).unwrap().count(), 2);
+    let state = JournalDirectory::open(fixture.state.clone()).unwrap();
+    let lock = state.existing_lock().unwrap();
+    let calls = fixture.runner.calls.load(Ordering::SeqCst);
+    assert!(fixture.check().await.is_err());
+    assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), calls);
+    drop(lock);
+    assert!(fixture.check().await.is_ok());
+}
+
+#[tokio::test]
+async fn live_check_never_repairs_missing_state() {
+    let fixture = Fixture::new();
+    assert!(fixture.check().await.is_err());
+    assert_eq!(fs::read_dir(&fixture.state).unwrap().count(), 0);
+    fixture.register().await.unwrap();
+    fs::remove_file(fixture.state.join("installation.lock")).unwrap();
+    let calls = fixture.runner.calls.load(Ordering::SeqCst);
+    assert!(fixture.check().await.is_err());
+    assert!(!fixture.state.join("installation.lock").exists());
+    assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), calls);
+}
+
+#[tokio::test]
+async fn live_check_rejects_unsafe_state_and_changed_inputs_before_external_work() {
+    for mutation in 0..9 {
+        let fixture = Fixture::new();
+        let mut registration = fixture.register().await.unwrap();
+        let state = JournalDirectory::open(fixture.state.clone()).unwrap();
+        match mutation {
+            0 => fs::write(fixture.state.join("recovery.json"), b"preserve recovery").unwrap(),
+            1 => fs::write(
+                fixture.inputs.directory.join(".env"),
+                "PG_PASSWORD=changed\n",
+            )
+            .unwrap(),
+            2 => registration.executor_uid = registration.executor_uid.wrapping_add(1),
+            3 => registration.executor_gid = registration.executor_gid.wrapping_add(1),
+            4 => registration.state_directory = "/different-state".into(),
+            5 => registration.docker_socket = "/different.sock".into(),
+            6 => {
+                let mut value = serde_json::to_value(&registration).unwrap();
+                value["kind"] = json!("Kubernetes");
+                state.write(REGISTRATION, &value).unwrap();
+            }
+            7 => fs::write(fixture.state.join(REGISTRATION), b"corrupt").unwrap(),
+            _ => fs::set_permissions(
+                fixture.state.join(REGISTRATION),
+                fs::Permissions::from_mode(0o644),
+            )
+            .unwrap(),
+        }
+        if (2..=5).contains(&mutation) {
+            state.write(REGISTRATION, &registration).unwrap();
+        }
+        let before = fs::read(fixture.state.join(REGISTRATION)).unwrap();
+        let calls = fixture.runner.calls.load(Ordering::SeqCst);
+        assert!(fixture.check().await.is_err(), "{mutation}");
+        assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), calls);
+        assert_eq!(fs::read(fixture.state.join(REGISTRATION)).unwrap(), before);
+        if mutation == 0 {
+            assert_eq!(
+                fs::read(fixture.state.join("recovery.json")).unwrap(),
+                b"preserve recovery"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn live_check_accepts_external_keys_only_from_matching_installer_environment() {
+    let mut fixture = Fixture::new();
+    for setting in ["CITADEL_JWT_KEY", "CITADEL_SECRETS_ENCRYPTION_KEY"] {
+        fixture.runner.config["services"]["server"]["environment"][setting] =
+            json!("external-key-fixture");
+        fixture.runner.core["Config"]["Env"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(format!("{setting}=external-key-fixture")));
+    }
+    fixture.register().await.unwrap();
+    let checked = fixture.check().await.unwrap();
+    assert_eq!(
+        checked.recovery_keys.jwt,
+        super::super::RecoveryKeySource::Environment
+    );
+    assert_eq!(
+        checked.recovery_keys.secrets_encryption,
+        super::super::RecoveryKeySource::Environment
+    );
+    assert!(
+        !serde_json::to_string(&checked)
+            .unwrap()
+            .contains("external-key-fixture")
+    );
+    fixture.runner.core["Config"]["Env"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    assert!(fixture.check().await.is_err());
+}
+
+#[tokio::test]
+async fn live_check_rejects_drift_and_ambiguity_without_rewriting_registration() {
+    for mode in [
+        "replicas",
+        "rootless",
+        "shared-volume",
+        "shared-network",
+        "changed-daemon",
+        "changed-inputs",
+        "different-instance",
+        "cancel",
+        "tool-failure",
+        "changed-image",
+        "evidence-during-check",
+        "invalid-catalog",
+        "recovery-key-failure",
+        "unregistered-key",
+        "invalid-key-report",
+        "external-agent-key",
+        "key-cancel",
+    ] {
+        let mut fixture = Fixture::new();
+        fixture.register().await.unwrap();
+        let before = fs::read(fixture.state.join(REGISTRATION)).unwrap();
+        fixture.runner.mode = mode;
+        if mode == "changed-image" {
+            fixture.runner.core["Image"] = json!(format!("sha256:{}", "e".repeat(64)));
+        }
+        let error = fixture.check().await.unwrap_err();
+        if mode == "cancel" || mode == "key-cancel" {
+            assert!(matches!(error, UpdateError::Cancelled));
+        }
+        assert!(!error.to_string().contains("private-test-password"));
+        assert!(!error.to_string().contains("private key detail"));
+        assert_eq!(fs::read(fixture.state.join(REGISTRATION)).unwrap(), before);
+        JournalDirectory::open(fixture.state.clone())
+            .unwrap()
+            .existing_lock()
+            .unwrap();
+        assert!(
+            fixture
+                .runner
+                .homes
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|p| !p.exists())
+        );
+        if mode == "evidence-during-check" {
+            assert_eq!(
+                fs::read(fixture.state.join("recovery.json")).unwrap(),
+                b"preserve recovery"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn live_check_rejects_registration_replacement_and_initial_cancellation() {
+    let mut fixture = Fixture::new();
+    fixture.register().await.unwrap();
+    fixture.runner.mode = "registration-during-check";
+    assert!(fixture.check().await.is_err());
+    let state = JournalDirectory::open(fixture.state.clone()).unwrap();
+    let changed: RegisteredComposeInstallation = state.read(REGISTRATION).unwrap();
+    assert_ne!(changed.instance_id.to_string(), INSTANCE);
+    let calls = fixture.runner.calls.load(Ordering::SeqCst);
+    let cancellation = CancellationToken::new();
+    cancellation.cancel();
+    assert!(matches!(
+        check_registered_compose_installation(&fixture.state, &fixture.runner, &cancellation).await,
+        Err(UpdateError::Cancelled)
+    ));
+    assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), calls);
+}
+
+#[test]
+fn checkpoint_budget_is_bounded_and_invalid_sizes_are_refused() {
+    assert_eq!(
+        super::checkpoint::minimum_bytes(1024).unwrap(),
+        64 * 1024 * 1024 + 2048
+    );
+    assert!(super::checkpoint::minimum_bytes(0).is_err());
+    assert!(super::checkpoint::minimum_bytes(u64::MAX).is_err());
+}
+
+#[test]
+fn checkpoint_storage_probe_cleans_up_and_preserves_existing_evidence() {
+    let fixture = Fixture::new();
+    let state = JournalDirectory::open(fixture.state.clone()).unwrap();
+    state
+        .write("preserved.json", &json!({"evidence":true}))
+        .unwrap();
+    let before = fs::read(fixture.state.join("preserved.json")).unwrap();
+    let checked = super::checkpoint::check_storage(&state, 1024).unwrap();
+    assert_eq!(checked.directory, fixture.state);
+    assert!(checked.available_bytes >= checked.minimum_bytes);
+    assert_eq!(fs::read_dir(&fixture.state).unwrap().count(), 1);
+    assert_eq!(
+        fs::read(fixture.state.join("preserved.json")).unwrap(),
+        before
+    );
+    assert!(super::checkpoint::check_storage(&state, u64::MAX / 4).is_err());
+    assert_eq!(fs::read_dir(&fixture.state).unwrap().count(), 1);
+}
+
+#[test]
+fn checkpoint_storage_rejects_a_replaced_directory_before_writing() {
+    let fixture = Fixture::new();
+    let state = JournalDirectory::open(fixture.state.clone()).unwrap();
+    let original = fixture.state.with_file_name("original-state");
+    fs::rename(&fixture.state, &original).unwrap();
+    fs::create_dir(&fixture.state).unwrap();
+    fs::set_permissions(&fixture.state, fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(super::checkpoint::check_storage(&state, 1024).is_err());
+    assert_eq!(fs::read_dir(&original).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&fixture.state).unwrap().count(), 0);
 }

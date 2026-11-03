@@ -17,6 +17,9 @@ use citadel_updates::*;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
+#[path = "instance_updates/drain.rs"]
+mod drain;
+
 #[tokio::test]
 #[ignore = "requires a fresh disposable CITADEL_UPDATE_TEST_DATABASE_URL (database name citadel_update_test_*)"]
 async fn update_state_activities_and_receipts_commit_atomically() {
@@ -163,6 +166,7 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     }
     assert!(repo.claim(actor, &plan, Uuid::now_v7(), now).await.is_err());
     assert_eq!(count(&pool, "InstanceUpdateStarted").await, 1);
+    drain::verify_owned_drain_observations(&pool, &repo, &operation).await;
     let mut journal = UpdateJournal {
         protocol: UPDATE_PROTOCOL,
         history: vec![operation.clone()],
@@ -191,6 +195,10 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     assert!(repo.import(&journal).await.is_err());
     journal.verified_target = Some(plan.target.clone());
     let receipt = repo.import(&journal).await.unwrap().unwrap();
+    assert!(
+        repo.blockers(&journal.operation).await.is_err(),
+        "a completed update must not enter drain again"
+    );
     assert!(
         check_startup_updates(&pool, Some(instance)).await.is_err(),
         "terminal but unreleased ownership still blocks startup"

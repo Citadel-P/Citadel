@@ -525,7 +525,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
     let restore = store
-        .claim_restore(Utc::now() - Duration::minutes(5))
+        .claim_restore(
+            Utc::now() - Duration::minutes(5),
+            citadel_backups::RestoreClaimScope::All,
+        )
         .await
         .unwrap()
         .unwrap();

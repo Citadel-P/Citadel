@@ -9,6 +9,13 @@ pub struct BackupRepositoryOperation<'a> {
     pub message: Option<&'a str>,
 }
 
+/// Restrict maintenance claims to children of already committed copy operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestoreClaimScope {
+    All,
+    ResourceCopies,
+}
+
 pub trait BackupPersistence: Send + Sync {
     /// Renew only the current owner. Expiry never authorizes takeover of work
     /// whose cleanup has not been confirmed.
@@ -156,6 +163,7 @@ pub trait BackupPersistence: Send + Sync {
     fn claim_restore(
         &self,
         stale_before: DateTime<Utc>,
+        scope: RestoreClaimScope,
     ) -> BoxFuture<'_, Result<Option<RestoreClaim>, BackupError>>;
     /// Returns true only for a committed Running -> terminal transition.
     /// On false, recovery/removal may have superseded this result.

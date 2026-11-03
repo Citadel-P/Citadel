@@ -23,6 +23,16 @@ dependency wiring and test placement. Add files for actual responsibilities;
 do not copy an entire scaffold or create empty modules. Follow the documented
 `name/mod.rs` convention when a Rust module has child files.
 
+Keep new or refactored `lib.rs` and `mod.rs` files thin: module declarations,
+deliberate re-exports, crate/module documentation and applicable attributes.
+Put implementation in named sibling files
+organized by responsibility. Plan that split before adding orchestration, tool I/O
+or lifecycle/cleanup logic; do not accumulate them in the entry point and defer
+the split until review. Existing large crate roots or module entry points are not
+templates for new work.
+Choose names from the actual responsibilities, not a mandatory file list; keep
+related helpers together and avoid one file per function or empty scaffolding.
+
 ## Rust, infrastructure and server
 
 Trace only the relevant path: HTTP input/view → feature use case and ports →
@@ -67,6 +77,11 @@ Compare the finished path with the chosen reference: entry points, naming,
 ownership, authorization, persistence-before-notification and frontend cache
 updates. Explain necessary deviations in the final response; do not seek approval
 for routine implementation choices already authorized by the task.
+
+Inspect each new or expanded `lib.rs` and `mod.rs` before finishing. Move implementation into
+the appropriate responsibility module while preserving public import paths,
+minimal visibility, cancellation ownership and cleanup ordering. Keep unrelated
+existing modules outside the task scope.
 
 Run the applicable checks from `docs/DEVELOPMENT.md` and `test/README.md`, including
 architecture tests when boundaries change. Prefer behavioral tests for access,

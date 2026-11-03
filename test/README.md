@@ -68,8 +68,10 @@ SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib diagnostics_http::
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --test configuration
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::releases::tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::artifacts::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::inspection::tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose::tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::bootstrap::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::recovery_keys::tests
 # Requires Docker Compose CLI, but no daemon access; uses private disposable inputs.
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose::tests::actual_compose -- --ignored
 python3 -m unittest discover -s test/release -p 'test_update_fixtures.py'
@@ -78,6 +80,8 @@ python3 -m unittest discover -s test/release -p 'test_release.py'
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_update_journal
 # Fresh disposable database only; its name must start with citadel_update_test_.
 CITADEL_UPDATE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_state SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_updates -- --ignored --test-threads=1
+# Separate fresh disposable database for read-only preflight validation.
+CITADEL_UPDATE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_preflight SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test update_preflight -- --ignored
 # Dedicated disposable PostgreSQL with CREATE DATABASE permission; no Docker socket.
 CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test bootstrap_process updates:: -- --ignored --test-threads=1
 # Docker bootstrap acceptance: use a Core image built from this checkout.
@@ -99,6 +103,16 @@ cover embedded catalog identity, offline CLI output, per-architecture acceptance
 and preservation of accepted metadata during publication recovery. Empty source
 lists intentionally provide no installation eligibility.
 
+Target-inspection service tests enforce signature-before-execution, exact release
+identity, supported target metadata and awaited cancellation cleanup. Injected Docker
+runner tests cover immutable image selection, architecture/digest mismatches,
+explicit platform selection with both architectures cached and distinct manifest/local IDs,
+image-declared volumes, container isolation, ambiguous creation, cancellation,
+nonzero/running results, malformed/truncated output, foreign ownership and failed
+cleanup. CLI tests reject invalid input or disabled network policy before external
+work. These tests do not pull images or touch Docker/databases, and do not substitute
+for signed-image inspection on a disposable daemon or packaged updater acceptance.
+
 Update-check frequency regressions cover six/twelve/twenty-four-hour scheduling,
 restart and manual-check timing, settings changes without restart, and cancellation
 through persistence. `mfa_http::installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa`
@@ -117,8 +131,28 @@ services. Installer templates are test inputs, not compiled runtime dependencies
 These configuration checks do not validate a live installation or qualify the detached update executor. Bootstrap tests use an
 injected bounded Docker runner and private temporary files to cover stable runtime
 binding, input and runtime drift, conflicting identity, exclusive volume ownership,
-cancellation, secret redaction and idempotent registration. Journal tests check
-exclusive atomic creation without replacing existing files or following links.
+cancellation, secret redaction and idempotent registration. Live registration checks
+reuse those observations and test missing/unsafe state, executor mismatch, changed
+inputs and instance identity, runtime drift, concurrent evidence/registration changes,
+lock contention and cancellation without rewriting registration. CLI tests assert
+missing state is not created and local checks are independent of release-network policy.
+Catalog tests reject missing, incomplete, failed, duplicate, altered and unknown
+migration entries. The disposable PostgreSQL preflight test verifies initialized
+identity, exact catalog matching, retained ownership (even corrupt operation JSON),
+bounded lock waits, cancellation and preservation of migration history. Storage
+tests cover capacity arithmetic and a private write/sync/remove probe without
+modifying registration or existing recovery evidence. Recovery-key tests check
+file/environment precedence, encoding and size limits, private permissions,
+symlink/FIFO refusal, missing-key preservation and secret-free output. Bootstrap
+tests require the key diagnostic to run as Core's packaged service user, bind
+external key sources to installer settings, and reject failures/cancellation
+without rewriting registration. CLI tests exercise file and external keys without
+database configuration or normal Core initialization. These checks do not create
+or restore-test a checkpoint, prove keys match in-memory state, or test decryption
+of all stored ciphertext.
+The opt-in Docker bootstrap script checks live revalidation for both the base and
+Edge profiles, including drift and preservation of registration/recovery evidence.
+Journal tests check exclusive atomic creation without replacing existing files or following links.
 The disposable PostgreSQL test also verifies that the identity diagnostic refuses
 missing identity or incomplete setup without creating state. These tests do not
 replace packaged bootstrap acceptance against an isolated Docker daemon.
@@ -135,6 +169,117 @@ owner takes the lease, checking that the original Core exits without creating an
 administrator or opening listeners. These checks do not qualify live draining,
 target startup/migration verification or automatic
 recovery/resume; those execution paths remain unimplemented.
+
+The live admission barrier has targeted runtime, HTTP and worker regressions:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-runtime admission::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib api::admission::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::git::tests
+# Each command below needs a fresh disposable CITADEL_EXECUTION_DATABASE_URL.
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::builds::tests::queued_builds_execute_concurrently_and_shutdown_drains_both -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::backups::tests::dispatcher_bounds_claims_and_drains_controllers_on_shutdown -- --ignored --test-threads=1
+# Separate disposable CITADEL_PLATFORM_DATABASE_URL with CREATE DATABASE permission.
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test platforms_http realtime_groups::terminal_websocket_requires_join_and_terminal_permission_and_owns_its_session -- --ignored --test-threads=1
+```
+
+These cover admission/close races, ownership fencing, timeout/cancellation without
+automatic resume, paused queues, admitted execution completion, streaming response
+lifetimes and maintenance HTTP responses. The terminal regression rejects new Edge
+sessions during maintenance while keeping admitted input/output and authorization
+revocation working. The database-backed cases preserve queued
+work and distinguish maintenance from normal shutdown cancellation. They do not
+qualify a complete drain of durable reservations, writer quiescence, checkpoint
+creation or detached handoff. The production update coordinator does not yet
+activate this barrier.
+
+Owned drain regressions also exercise the feature coordinator and Server task
+adapter:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::drain::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib tasks::updates::tests
+# Fresh disposable CITADEL_UPDATE_TEST_DATABASE_URL, named citadel_update_test_*.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_updates -- --ignored --test-threads=1
+```
+
+The PostgreSQL test checks exact claim ownership, corrupt/released/stale records,
+bounded lock waits, queued versus running work, expired source leases and executor
+reservations retained after terminal run status. The coordinator tests reject stale
+ownership before closing admission, retain maintenance on timeout/cancellation or
+read failure, and detect a local-to-remote handoff during a database snapshot.
+The Server adapter test keeps detached cleanup visible after the request ends
+without closing the task tracker needed for further cleanup. These checks do not
+qualify final writer quiescence, journal handoff, checkpoint creation or source resume.
+
+Checkpoint preparation and shared recovery bundle regressions:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::checkpoint::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::backups::system_recovery
+# Two fresh, distinct disposable databases, both named citadel_update_test_*:
+# CITADEL_UPDATE_TEST_DATABASE_URL and CITADEL_CHECKPOINT_TARGET_DATABASE_URL.
+# Set CITADEL_PG_DUMP and CITADEL_PG_RESTORE to compatible PostgreSQL executables.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::checkpoint::tests::checkpoint_builds_real_bundle_and_preserves_failed_or_interrupted_attempts -- --ignored
+```
+
+These verify exact journal/registration/lock checks, ordered private installer
+snapshots, refusal to reuse interrupted attempts, ENOSPC write handling, symlink
+refusal, cancellation with awaited subprocess cleanup, failed/corrupt dumps,
+configuration drift and mismatched database identity. The disposable PostgreSQL
+case creates a real archive and restores its instance identity and marker into
+the clean target. The existing `citadel_system_recovery` integration test separately
+covers the full schema and encrypted-state round trip. No test authorizes a live
+replacement: helper acknowledgement, Core shutdown/writer quiescence, crash-time
+power-loss durability and packaged source-to-target recovery remain unqualified.
+
+Checkpoint restore rehearsal has injected-runner tests and an opt-in real PostgreSQL
+test. The real test creates its own source and verifier containers with tmpfs data,
+no external network, no published ports and no installation volumes. It requires
+a cached `postgres:18.6` image and removes its fixtures, including on failure.
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::checkpoint::restore::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::checkpoint::restore::acceptance -- --ignored
+```
+
+Coverage includes restored instance/claim/catalog checks, tampered input/dump evidence,
+create ambiguity, cancellation, restore failure, foreign-container protection,
+cleanup failure, exclusive receipts and no journal advancement. It does not replace
+packaged helper or source-to-target upgrade acceptance.
+
+Handoff and shutdown guards:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::handoff::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::handoff::tests
+```
+
+These use private temporary state, real OS installation locks and an injected
+Docker runner. They cover launch/binding exclusivity, lock release before helper
+startup, verified create/bind/start ordering, missing start intent, wrong user/mounts,
+automatic removal, create/start cancellation and ambiguous timeout retention.
+Launch retries cannot create a second helper or replay start. They also cover
+stale/dead/restarted helpers, retained evidence after helper loss, busy
+drains, cancellation, grant-before-stop ordering, changed inputs, clean-exit
+journal history and refusal to replay ambiguous stops. A failed/nonzero exit,
+restarted Core, unavailable database or shutdown timeout never reaches `BackingUp`.
+They do not launch the packaged helper or stop a live Core/Docker installation;
+that process/daemon acceptance remains required before enabling installation.
+The namespace regression gives Core nonexistent host paths and a different
+executor UID, and routes only the bounded Docker exec request into the helper's
+private state. CLI tests reject invalid/oversized input without starting Core.
+
+Resource-copy continuation during maintenance has database-backed regressions:
+
+```bash
+# Fresh disposable CITADEL_EXECUTION_DATABASE_URL.
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test execution_resources_http resource_copies:: -- --ignored --test-threads=1
+```
+
+These finish an admitted two-volume copy after admission closes, reject new HTTP
+starts, and verify restricted restore claims skip an older unrelated queued run.
+They use fake storage executors; no workload containers or volumes are touched.
 
 `test-update-registration.py` runs the unmodified base installer and a compatible
 Edge-overlay installation with custom filenames, comments and resource names,

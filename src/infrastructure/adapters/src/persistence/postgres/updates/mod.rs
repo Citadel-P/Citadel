@@ -20,20 +20,22 @@ use uuid::Uuid;
 
 mod activity;
 mod authorization;
+mod checkpoint;
 mod checks;
+pub(crate) use checkpoint::{CHECKPOINT_PROBE_SQL, validate_checkpoint_database};
 mod claims;
+mod drain;
+mod preflight;
 mod queries;
 mod recovery;
 mod repository;
 mod reviews;
 mod startup;
+pub use preflight::read_update_database_state;
 
 use activity::{activity, operation_activity};
 use authorization::{authorize, instance};
 pub use queries::read_instance_identity;
 pub use repository::PostgresUpdateRepository;
+use repository::storage;
 pub use startup::check_startup_updates;
-
-fn storage(error: impl std::fmt::Display) -> UpdateError {
-    UpdateError::Storage(error.to_string())
-}

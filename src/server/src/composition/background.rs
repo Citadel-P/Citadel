@@ -94,6 +94,7 @@ pub async fn spawn_all(
         &mut supervisor,
         cancellation,
         workers::WorkerDependencies {
+            admission: state.admission.clone(),
             image_updates: platform_state.image_updates.clone(),
             targets: runtime_targets.clone(),
             volume_content,
@@ -153,6 +154,7 @@ pub async fn spawn_all(
     supervisor.spawn(
         "image-scanner",
         workers::image_scanning::run(
+            state.admission.clone(),
             cancellation.child_token(),
             image_scanner.clone(),
             deployments.clone(),

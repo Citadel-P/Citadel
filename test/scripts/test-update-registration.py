@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in bootstrap acceptance against a disposable, network-isolated Docker daemon.
+"""Opt-in registration/revalidation acceptance on a disposable isolated Docker daemon.
 
 Requires a Core image built from this checkout, Docker and Python 3 on the test
 host. Python is test tooling only; registration itself runs from the Core image.
@@ -161,15 +161,28 @@ class Fixture:
         for name in files:
             command += ["--compose-file", f"{directory}/{name}"]
 
-        def register(success, expected_error=None):
-            result = self.docker(*command, check=False, timeout=180)
-            require(password.encode() not in result.stdout + result.stderr, "Registration leaked a secret")
+        check_command = command[:command.index("register-update-installation")] + [
+            "check-update-installation", "--state-directory", state,
+        ]
+
+        def invoke(args, success, expected_error=None):
+            result = self.docker(*args, check=False, timeout=180)
+            require(password.encode() not in result.stdout + result.stderr, "Installation diagnostic leaked a secret")
             require((result.returncode == 0) == success,
-                    "Unexpected registration outcome: " + result.stderr.decode(errors="replace"))
+                    "Unexpected installation diagnostic outcome: " + result.stderr.decode(errors="replace"))
             if expected_error:
-                require(expected_error.encode() in result.stderr, "Registration failed for an unexpected reason")
+                require(expected_error.encode() in result.stderr, "Installation diagnostic failed for an unexpected reason")
             return json.loads(result.stdout) if success else None
 
+        def register(success, expected_error=None):
+            return invoke(command, success, expected_error)
+
+        def check(success, expected_error=None):
+            return invoke(check_command, success, expected_error)
+
+        check(False)
+        require(self.execute("test", "-e", f"{state}/installation.lock", check=False).returncode != 0,
+                "Live check created a missing lock file")
         register(False, "initialized, reachable Citadel database")
         require(self.execute("test", "-e", f"{state}/installation.json", check=False).returncode != 0,
                 "Registration must not persist before instance setup")
@@ -186,21 +199,32 @@ class Fixture:
                     == ("acceptance_edge_core", "acceptance_edge_database", "acceptance_edge_network"),
                     "Registration ignored custom resource names")
         original = self.read(f"{state}/installation.json")
+        checked = check(True)
+        require(checked["database"]["instanceId"] == first["instanceId"], "Database preflight bound the wrong instance")
+        require(len(checked["database"]["catalogSha256"]) == 64, "Database preflight omitted catalog evidence")
+        require(checked["recoveryKeys"] == {"jwt": "DataVolume", "secretsEncryption": "DataVolume", "agentSigning": "DataVolume"},
+                "Recovery keys were not verified in the Core data volume")
+        require(checked["checkpointStorage"]["availableBytes"] >= checked["checkpointStorage"]["minimumBytes"],
+                "Checkpoint storage did not meet its admission budget")
         identity = json.loads(self.docker("exec", core, "/app/citadel-server", "instance-identity-json").stdout)
         require(first["instanceId"] == identity["instanceId"], "Registration bound the wrong instance")
         require(first["coreContainerId"] == core and first["databaseContainerId"] == database,
                 "Registration bound the wrong containers")
         require(register(True) == first and self.read(f"{state}/installation.json") == original,
                 "Idempotent retry changed registration")
+        require(check(True)["registration"] == first and self.read(f"{state}/installation.json") == original,
+                "Live check changed registration")
         mode = self.execute("stat", "-c", "%a:%u:%g", f"{state}/installation.json").stdout.strip()
         require(mode == b"600:0:0", "Registration permissions or ownership are unsafe")
         require(password.encode() not in original, "Registration stored a secret")
 
         self.write(f"{directory}/.env", env + "CITADEL_HTTP_ALLOWED_HOSTS=changed.example.test\n")
+        check(False, "Registered installer inputs have changed")
         register(False, "Running service environment differs")
         require(self.read(f"{state}/installation.json") == original, "Input drift overwrote registration")
         self.write(f"{directory}/.env", env)
         self.execute("chmod", "644", f"{directory}/.env")
+        check(False, "installer .env must be private")
         register(False, "installer .env must be private")
         self.execute("chmod", "600", f"{directory}/.env")
 
@@ -208,25 +232,34 @@ class Fixture:
         extra = self.docker("create", "--network", "none", "--entrypoint", "/bin/true",
                             "--mount", f"type=volume,src={first['coreVolume']},dst=/shared", self.tag).stdout.decode().strip()
         register(False, "persistent volume is shared")
+        check(False, "persistent volume is shared")
         self.docker("rm", extra)
         extra = self.docker("run", "--detach", "--network", first["network"],
                             "--entrypoint", "/bin/sleep", self.tag, "300").stdout.decode().strip()
         register(False, "database network identity is ambiguous")
+        check(False, "database network identity is ambiguous")
         self.docker("rm", "--force", extra)
         require(self.read(f"{state}/installation.json") == original, "Rejected drift changed evidence")
 
         conflicting = dict(first, instanceId=str(uuid.uuid4()))
         evidence = json.dumps(conflicting).encode()
         self.write(f"{state}/installation.json", evidence)
+        check(False, "live installation no longer matches")
         register(False, "different installation is already registered")
         require(self.read(f"{state}/installation.json") == evidence, "Conflicting evidence was overwritten")
         self.write(f"{state}/installation.json", original)
+        self.write(f"{state}/recovery.json", b"preserve recovery evidence")
+        check(False, "execution evidence requires recovery")
+        require(self.read(f"{state}/recovery.json") == b"preserve recovery evidence",
+                "Live check changed recovery evidence")
+        self.execute("rm", f"{state}/recovery.json")
+        require(check(True)["registration"] == first, "Live check failed after fixture drift was removed")
         require(register(True) == first, "Registration did not recover after fixture drift was removed")
         after = json.loads(self.docker("inspect", core, database).stdout)
         require([(v["Id"], v["State"]["StartedAt"], v["RestartCount"]) for v in before]
                 == [(v["Id"], v["State"]["StartedAt"], v["RestartCount"]) for v in after],
                 "Registration restarted or replaced a service")
-        print(f"{project}: identity, private persistence, retry, drift and evidence preservation passed", flush=True)
+        print(f"{project}: registration, live revalidation, drift and evidence preservation passed", flush=True)
 
 
 def main():

@@ -17,6 +17,7 @@ const DRIFT_EVENT_COALESCE_WINDOW: Duration = Duration::from_millis(50);
 const DRIFT_EVENT_MAX_PENDING: usize = 256;
 
 pub(crate) async fn stack_updates(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
     mut completed: tokio::sync::watch::Receiver<()>,
@@ -31,6 +32,9 @@ pub(crate) async fn stack_updates(
             result = completed.changed() => if result.is_err() { return Ok(()); },
             _ = ticker.tick() => {},
         }
+        let Some(_admission) = admission.enter("Stack updates", &cancellation).await else {
+            return Ok(());
+        };
         // Coalesce completed syncs before scanning; changes during the scan
         // remain pending. The timer only reconciles stored observations.
         completed.borrow_and_update();
@@ -50,6 +54,7 @@ pub(crate) async fn stack_updates(
 }
 
 pub(crate) async fn stack_webhooks(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
     mut signals: tokio::sync::watch::Receiver<()>,
@@ -59,6 +64,10 @@ pub(crate) async fn stack_webhooks(
             return Ok(());
         }
         let processed = {
+            let Some(_admission) = admission.enter("Stack webhooks", &cancellation).await else {
+                return Ok(());
+            };
+
             let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackWebhooks.start();
             stacks.process_webhooks().await
         };
@@ -100,6 +109,7 @@ pub(crate) async fn stack_operation_reconciliation(
 }
 
 pub(crate) async fn stack_drift_monitor(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
 ) -> Result<(), std::convert::Infallible> {
@@ -111,6 +121,9 @@ pub(crate) async fn stack_drift_monitor(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
+        let Some(_admission) = admission.enter("Stack drift repair", &cancellation).await else {
+            return Ok(());
+        };
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackDrift.start();
         let mut cursor = None;
         loop {
@@ -148,6 +161,7 @@ pub(crate) async fn stack_drift_monitor(
 /// The drift monitor consumes stop/pause events. Notifications are
 /// transactional and originate from the shared Local/Direct/Edge event store.
 pub(crate) async fn event_drift(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
     mut listener: Box<dyn NotificationSource>,
@@ -158,6 +172,10 @@ pub(crate) async fn event_drift(
                 let Some(pending) = receive_drift_batch(listener.as_mut(), &cancellation).await?
                 else {
                     return Ok::<(), NotificationError>(());
+                };
+                let Some(_admission) = admission.enter("Stack event repair", &cancellation).await
+                else {
+                    return Ok(());
                 };
                 for id in pending {
                     if let Err(error) = stacks.monitor_container_event(id).await {

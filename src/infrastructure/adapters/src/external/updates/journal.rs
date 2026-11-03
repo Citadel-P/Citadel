@@ -33,6 +33,48 @@ pub struct JournalDirectory {
 }
 
 impl JournalDirectory {
+    pub(super) fn require_lock_held(&self) -> Result<(), UpdateError> {
+        self.verify_location()?;
+        let file = open_secure(&self.path.join("installation.lock"), false)?;
+        let metadata = file.metadata().map_err(|_| unavailable_input())?;
+        if metadata.nlink() != 1
+            || metadata.mode() & 0o077 != 0
+            || metadata.uid() != rustix::process::geteuid().as_raw()
+        {
+            return Err(unavailable_input());
+        }
+        match file.try_lock() {
+            Err(std::fs::TryLockError::WouldBlock) => Ok(()),
+            Err(_) => Err(unavailable_input()),
+            Ok(()) => {
+                file.unlock().map_err(|_| unavailable_input())?;
+                Err(UpdateError::Conflict(
+                    "The acknowledged helper no longer holds the installation lock.".into(),
+                ))
+            }
+        }
+    }
+
+    pub(super) fn verify_lock(&self, lock: &InstallationLock) -> Result<(), UpdateError> {
+        self.verify_location()?;
+        let current = open_secure(&self.path.join("installation.lock"), false)?;
+        let current = current.metadata().map_err(|_| unavailable_input())?;
+        let held = lock._file.metadata().map_err(|_| unavailable_input())?;
+        if (current.dev(), current.ino()) != (held.dev(), held.ino())
+            || current.nlink() != 1
+            || current.mode() & 0o077 != 0
+            || current.uid() != rustix::process::geteuid().as_raw()
+        {
+            return Err(UpdateError::Conflict(
+                "Installation lock identity changed.".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub(super) fn directory(&self) -> &File {
+        &self.directory
+    }
     pub(super) fn sync(&self) -> Result<(), UpdateError> {
         self.directory.sync_all().map_err(|_| {
             UpdateError::Unavailable("Cannot durably synchronize update state.".into())

@@ -4,12 +4,20 @@ use citadel_scripts::{ScriptError, ScriptService};
 use tokio_util::sync::CancellationToken;
 
 pub async fn script_runs(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<ScriptService>,
     wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), ScriptError> {
-    let workers = (0..service.options().max_parallel_runs + service.options().max_remote_runs)
-        .map(|_| run_worker(cancellation.clone(), service.clone(), wake.clone()));
+    let workers =
+        (0..service.options().max_parallel_runs + service.options().max_remote_runs).map(|_| {
+            run_worker(
+                admission.clone(),
+                cancellation.clone(),
+                service.clone(),
+                wake.clone(),
+            )
+        });
     // Each loop awaits its process cleanup; shutdown never drops active runs.
     for result in futures_util::future::join_all(workers).await {
         result?;
@@ -18,6 +26,7 @@ pub async fn script_runs(
 }
 
 async fn run_worker(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<ScriptService>,
     mut wake: tokio::sync::watch::Receiver<()>,
@@ -26,6 +35,10 @@ async fn run_worker(
     let mut delay = minimum;
     while !cancellation.is_cancelled() {
         let result = {
+            let Some(_admission) = admission.enter("Scripts", &cancellation).await else {
+                return Ok(());
+            };
+
             let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::ScriptClaim.start();
             service.process_one(&cancellation).await
         };
@@ -52,12 +65,18 @@ async fn run_worker(
 }
 
 pub async fn script_scheduler(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<ScriptService>,
 ) -> Result<(), ScriptError> {
     while !cancellation.is_cancelled() {
-        if let Err(error) = service.queue_due_scheduled(chrono::Utc::now()).await {
-            tracing::warn!(%error, "scripts scheduler tick failed");
+        {
+            let Some(_admission) = admission.enter("Script schedules", &cancellation).await else {
+                return Ok(());
+            };
+            if let Err(error) = service.queue_due_scheduled(chrono::Utc::now()).await {
+                tracing::warn!(%error, "scripts scheduler tick failed");
+            }
         }
         tokio::select! {
             () = cancellation.cancelled() => break,

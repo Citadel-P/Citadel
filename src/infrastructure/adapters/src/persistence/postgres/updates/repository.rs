@@ -1,5 +1,9 @@
 use super::*;
 
+pub(super) fn storage(error: impl std::fmt::Display) -> UpdateError {
+    UpdateError::Storage(error.to_string())
+}
+
 #[derive(Clone)]
 pub struct PostgresUpdateRepository {
     pub(super) pool: PgPool,

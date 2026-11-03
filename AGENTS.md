@@ -22,6 +22,9 @@ Name the implemented reference and follow its naming, module organization and
 integration patterns across the affected layers. New contributors should be able
 to navigate equivalent features the same way; add only files the feature needs.
 Explain meaningful deviations rather than introducing a parallel convention.
+Keep new or refactored Rust `lib.rs` and `mod.rs` files thin, with declarations and exports;
+place implementation in sibling files organized by responsibility as described in
+`docs/ARCHITECTURE.md`.
 
 For nontrivial changes, provide a concise implementation plan in the conversation; do **not** generate a hierarchy of specification documents unless explicitly requested.
 

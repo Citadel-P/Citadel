@@ -25,6 +25,8 @@ pub enum MigrationError {
     },
     #[error("database contains unknown migration journal entry '{0}'")]
     UnknownMigration(String),
+    #[error("migration journal entry '{0}' is missing, duplicated, incomplete or failed")]
+    InvalidJournal(String),
     #[error(
         "applied migration '{id}' checksum mismatch: database has {database}, binary has {embedded}"
     )]
@@ -290,6 +292,13 @@ async fn record_failure(
         id: migration.id.to_owned(),
         message,
     })
+}
+
+pub(crate) fn expected_checksums() -> Result<BTreeMap<String, String>, MigrationError> {
+    Ok(validate_manifest()?
+        .into_iter()
+        .map(|(id, entry)| (id, entry.sha256))
+        .collect())
 }
 
 fn validate_manifest() -> Result<BTreeMap<String, ManifestMigration>, MigrationError> {

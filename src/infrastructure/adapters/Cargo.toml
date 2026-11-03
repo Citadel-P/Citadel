@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+citadel-database = { path = "../database" }
 citadel-updates = { path = "../../features/updates" }
 citadel-scripts-runtime = { path = "../scripts" }
 citadel-docker = { path = "../docker" }
@@ -71,7 +72,6 @@ rustix.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 axum.workspace = true
-citadel-database = { path = "../database" }
 tonic = { workspace = true, features = ["router"] }
 
 [lints]

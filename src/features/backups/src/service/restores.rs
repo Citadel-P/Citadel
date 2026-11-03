@@ -12,12 +12,30 @@ impl BackupService {
         &self,
         shutdown: &CancellationToken,
     ) -> Result<Option<ClaimedBackupWork>, BackupError> {
+        self.claim_restore_in_scope(RestoreClaimScope::All, shutdown)
+            .await
+    }
+
+    /// Continue committed copy parents while ordinary restore admission is closed.
+    pub async fn claim_copy_restore(
+        &self,
+        shutdown: &CancellationToken,
+    ) -> Result<Option<ClaimedBackupWork>, BackupError> {
+        self.claim_restore_in_scope(RestoreClaimScope::ResourceCopies, shutdown)
+            .await
+    }
+
+    async fn claim_restore_in_scope(
+        &self,
+        scope: RestoreClaimScope,
+        shutdown: &CancellationToken,
+    ) -> Result<Option<ClaimedBackupWork>, BackupError> {
         let Some(tracking) = self.tracking_slot(shutdown).await else {
             return Ok(None);
         };
         Ok(self
             .store
-            .claim_restore(Utc::now() - self.stale_after)
+            .claim_restore(Utc::now() - self.stale_after, scope)
             .await?
             .map(|claim| ClaimedBackupWork {
                 claim: BackupWorkClaim::Restore(Box::new(claim)),

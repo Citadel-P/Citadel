@@ -114,10 +114,11 @@ pub(super) fn read_input(path: &Path, private: bool) -> Result<Vec<u8>, UpdateEr
     read_bounded(file, MAX_INPUT)
 }
 
-pub(super) fn fingerprint_inputs(project: &str, inputs: &[(PathBuf, Vec<u8>)]) -> String {
+pub(super) fn fingerprint_inputs<B: AsRef<[u8]>>(project: &str, inputs: &[(PathBuf, B)]) -> String {
     let mut hash = Sha256::new();
     hash.update(project.as_bytes());
     for (path, bytes) in inputs {
+        let bytes = bytes.as_ref();
         hash.update((path.as_os_str().len() as u64).to_be_bytes());
         hash.update(path.as_os_str().as_encoded_bytes());
         hash.update((bytes.len() as u64).to_be_bytes());
