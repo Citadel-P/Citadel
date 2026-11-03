@@ -22,7 +22,7 @@ pub struct CheckpointRestoreBudget {
     pub maximum_bytes: u64,
 }
 
-/// Successful isolated PostgreSQL restore and cleanup, not key decryption,
+/// Successful isolated PostgreSQL restore, authenticated decryption and cleanup, not
 /// writer quiescence, replacement authorization or source resume permission.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -35,6 +35,8 @@ pub struct RestoredUpdateCheckpoint {
     pub catalog_sha256: String,
     pub database_image: String,
     pub sandbox_id: String,
+    /// Zero means there were no stored encrypted values to verify.
+    pub decrypted_values: u64,
 }
 
 /// Helper-owned work under the installation lock. Await this future through
@@ -56,6 +58,7 @@ pub async fn verify_update_checkpoint(
         ));
     }
     let before = evidence::check(state, owner, operation, cancellation).await?;
+    let protector = super::keys::load(&before, process, cancellation).await?;
     let home = tempfile::Builder::new()
         .prefix("citadel-restore-")
         .permissions(std::fs::Permissions::from_mode(0o700))
@@ -109,7 +112,8 @@ pub async fn verify_update_checkpoint(
             &restored,
             &before.journal,
         )?;
-        Ok::<_, UpdateError>(id)
+        let decrypted = super::keys::verify(&sandbox, &docker, &id, &protector).await?;
+        Ok::<_, UpdateError>((id, decrypted))
     }
     .await;
     // Cancellation of a Docker CLI does not stop its exec/container. Cleanup
@@ -127,7 +131,7 @@ pub async fn verify_update_checkpoint(
             sandbox.name()
         )));
     }
-    let sandbox_id = result?;
+    let (sandbox_id, decrypted_values) = result?;
     before.stage.verify_location()?;
     let after = evidence::check(state, owner, operation, cancellation).await?;
     if before.receipt != after.receipt
@@ -139,7 +143,7 @@ pub async fn verify_update_checkpoint(
         return Err(failed());
     }
     let receipt = RestoredUpdateCheckpoint {
-        format: 1,
+        format: 2,
         operation_id: operation.id,
         fence: operation.fence,
         instance_id: operation.instance_id,
@@ -147,6 +151,7 @@ pub async fn verify_update_checkpoint(
         catalog_sha256: operation.plan.source.catalog_sha256.clone(),
         database_image: sandbox.image,
         sandbox_id,
+        decrypted_values,
     };
     after.stage.create("restore-verified.json", &receipt)?;
     Ok(receipt)

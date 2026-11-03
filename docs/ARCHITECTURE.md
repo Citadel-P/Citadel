@@ -196,67 +196,126 @@ record prevents silent replay; timeout/cancellation still awaits independently
 bounded cleanup of the exact owned container. Ambiguous creates, foreign containers,
 failed cleanup, altered artifacts or failed restoration cannot publish the restore
 receipt. A successful receipt proves this PostgreSQL archive was restored and its
-verifier removed. It does not prove key decryption, writer quiescence, target
-readiness or permission to replace/resume Core, and it does not advance the journal.
+verifier removed. It also checks recovery-key availability and authenticates every
+stored AES-GCM envelope with the production secret protector, using bounded
+keyset pages from the restored database. This includes internal secrets, provider
+tokens, Git credentials, OIDC client secrets and both MFA secret stores. Required
+missing/malformed envelopes fail verification; nullable OIDC client secrets remain
+optional. Keys and plaintext never enter the PostgreSQL sandbox or process
+arguments. File-backed keys come from the checked bundle; externally configured
+keys are resolved from the unchanged registered Compose inputs. Decryption evidence
+in receipts contains only a count, with zero explicitly meaning there were no
+encrypted values to test. JWT and Agent keys are checked for availability/encoding,
+not authentication against a running Core or Agent.
+
+Neither the restore receipt nor decryption proves writer quiescence, target
+readiness or permission to replace/resume Core, and neither advances the journal.
 
 This adapter is not invoked by the live update path yet. The external helper must
 acknowledge ownership before stopping Core, then confirm all source writers have
 stopped before taking the final checkpoint while PostgreSQL remains available.
-The handoff and guarded shutdown primitives below implement that boundary, but
-packaged execution, recovery-key decryption verification, replacement and verified
-resume remain pending. A process-local idle drain or a preparation receipt must
-not substitute for those checks.
+The detached helper implements that boundary. Its execution is internal: public
+installation, host reconciliation and explicit recovery are still unfinished.
 
-`UpdateHandoffService` requires a live helper acknowledgement, repeats the owned
-drain, then asks its runtime port to recheck the helper and publish a shutdown
-grant. A busy drain, stale claim, cancellation or lost helper prevents the grant.
-It runs under a supervised owner outside the task tracker being drained; it does
-not release maintenance or cancel admitted operations.
+**Execution ownership**
 
-The Docker adapter persists a unique launch intent under a short installation lock
-and binds the confirmed container ID before start. The internal launcher runs in
-the registered executor namespace, not Core's read-only host mapping. It rechecks
-the source installation and pinned local image, creates without pulling, and
-inspects the stopped helper before binding it. The helper uses the registered
-UID/GID, no network, no restart or automatic removal, and disables the image's
-Core HTTP health check. Both created and running containers must match this profile.
-The launcher records exclusive start intent and releases its lock before starting
-the exact container ID. A create/start timeout or cancellation retains evidence;
-another launch cannot overwrite it or blindly retry. Launch confirmation does not
-grant shutdown or prove helper acknowledgement. The helper acquires the lock,
-requires matching binding/start intent, checks the exact registration,
-runtime fingerprint, source image and its own container identity/configuration,
-then publishes the initial journal history and an incarnation-specific
-acknowledgement. Core verifies the exact helper container and sends a bounded
-JSON request through Docker exec to the internal `update-helper-handoff` command. That command runs as
-the registered executor inside the helper; it checks private evidence, the held
-lock and exact process incarnation before publishing the exclusive grant. Core
-checks the returned binding and observes the helper again. Core never opens
-helper host paths, assumes the executor UID, or writes through `/host:ro`.
-The command uses the existing state bind for temporary files and adds no Core mounts.
-An interrupted exec can have published the grant; it never permits blind replay
-or source resume. The helper retains its lock across shutdown and checkpoint preparation. Interrupted
-launches, old acknowledgements and ambiguous outcomes remain recovery evidence;
-these primitives never blindly relaunch, replay a stop or reopen maintenance.
+`run_update_helper` is the single owner of the installation lock and host journal.
+Its sequence is target preparation → shutdown grant → clean source stop → checkpoint
+and restore rehearsal → Core-only replacement → target completion. The individual
+phase methods are private implementation details, not separate executable APIs.
+The launcher records exclusive launch intent, then binds the verified helper
+immediately before starting the exact pinned source image. It releases the host lock before starting the helper. Ambiguous Docker
+responses retain evidence and never permit an automatic relaunch or mutation retry.
 
-Before stopping Core, the helper revalidates the installation and grant and
-durably records stop intent. It sends SIGTERM to the exact registered Core using
-Docker's `stop --timeout -1`, which disables daemon-side SIGKILL escalation.
-The client and observation budget are bounded independently. A timeout can leave
-the daemon request in flight and therefore does not permit retry or source resume.
-Only an observed clean exit with unchanged container/image/start identity and a
-healthy PostgreSQL container advances the complete journal to `BackingUp`.
+Core and the replacement target use one private `update-helper-handoff` command.
+The request carries the reserved operation, exact helper binding/start identity,
+and one action: check acknowledgement, grant shutdown, inspect target evidence,
+or submit target completion. The command validates ownership before dispatch and
+cannot execute a phase. It only reads evidence or publishes the exclusive grant or
+completion mailbox. The driver alone writes journal transitions. Core uses bounded
+Docker exec; it does not open private host paths or need an additional host mount.
+Protocol types remain private to the adapter; the public ports expose use cases.
 
-These are internal services and adapters. The `run-update-helper` execution
-contract is checked by the adapter and used by the internal launcher, but the
-packaged helper CLI and Core-to-launcher integration are not connected yet; no
-public update action starts it. The supported helper profile has no
-network attachment, a read-only root filesystem and exactly the registered
-installer directory, state directory and Docker socket mounted at their host
-paths. The installer/state binds are writable for the eventual qualified update
-executor; registration diagnostics continue to require read-only installer inputs.
-No writable host-root bind is introduced. Runtime preflight, checkpoint creation,
-target verification and recovery still need an end-to-end packaged driver.
+Each operation has five records: launch intent and start binding from the launcher,
+one helper-owned execution journal, Core's shutdown grant, and the target's completion
+mailbox. The execution journal contains the phase history, helper incarnation,
+preparation, stop identity, replacement intent/submission and target identity.
+Acknowledgement/history, replacement intent/phase and target identity/phase are each
+published atomically, with no separate phase markers to reconcile. The grant and
+completion stay separate because other processes write them; they cannot overwrite
+the driver's journal. Checkpoint files remain independently verified recovery artifacts.
+Standalone checkpoint journals retain their format. Existing fragmented execution
+state is preserved and blocks relaunch; it is never converted into permission to replay.
+
+The helper has a read-only root filesystem, the registered installer/state/socket
+binds at their original paths, and Core data mounted read-only at `/app/data`. It
+shares the exact PostgreSQL container's network namespace. Its profile prohibits
+privileged execution, restart policies, automatic removal and HTTP health checks.
+A root helper may read official Core UID 65532 keys only below `/app`; symlinks,
+permissive key modes and other owners remain rejected. Ordinary registration/key
+checks keep their original ownership restrictions.
+
+**Preparation and replacement**
+
+Before shutdown authorization, preparation verifies recovery-key/database access,
+the exact signed target and supported source transition, and the reviewed Agent
+versions. It compares the actual ordered Compose inputs with the proposed image
+change. Only the Core image and its `CITADEL_IMAGE` selector may differ. The durable
+receipt belongs to the exact helper incarnation and must be fresh when granting
+shutdown. Core's read-only readiness check waits for this preparation before draining;
+a raw helper acknowledgement by itself does not authorize shutdown. Source preparation
+and target binding use the same bounded pending exchange, which checks helper
+incarnation between reads. Grants and completion writes are never retried by it.
+
+After Core drains, the helper records stop intent before sending SIGTERM to the
+registered Core with Docker's `stop --timeout -1`. The client has a bounded deadline;
+there is no daemon-side SIGKILL escalation. Only a clean exit with unchanged
+container/image/start identity and a healthy PostgreSQL advances to `BackingUp`.
+Checkpoint creation reuses system recovery and the isolated restore rehearsal above.
+Source/helper identity and Agent versions are rechecked; pools close before return.
+
+Replacement validates the checkpoint, removed restore sandbox, pinned image and
+approved configuration. It records replacement intent and `ReplacingCore` before
+atomically publishing the private `.env` image selector. The original inputs remain
+in the checkpoint. The original Compose invocation runs only
+`up --detach --no-deps --no-build --pull never server`; PostgreSQL, volumes and Compose
+files remain intact. A successful response records submission, not readiness.
+There is no source-schema SQL after replacement submission.
+
+`ReplacementEvidence` centralizes the post-publication validation used by observation,
+target startup and completion: operation/history, grant/stop ownership, approved
+configuration, checkpoint identity and retained runtime. Observation requires
+confirmed submission. It binds the exact replacement container/start identity after
+two consistent reads and publishes that identity with `Verifying` in one atomic
+journal write. A mismatched phase/identity is rejected, not repaired. It cannot
+accept a restarted or different target. Docker health never establishes completion. Target inspection
+may report pending only for the owned `ReplacingCore` phase, while Compose starts
+Core before the driver publishes the binding. Retrying that read is bounded and
+never repeats replacement.
+
+**Target acceptance and completion**
+
+Linux target startup runs under the same monitored Core job lease, before ordinary
+migrations or services. It requires the exact planned build/catalog/architecture and
+its own verified container identity. It checks the source migration catalog as an
+unchanged prefix of the target catalog, migrates using target-owned code, then
+checks the complete catalog and decrypts stored credentials. It revalidates the
+live execution around migration and completion. File-backed JWT/encryption/Agent
+keys, including loaded values, must match the verified checkpoint even when there
+are no encrypted database rows. External keys stay bound by the unchanged Compose
+environment. Private key identities are redacted and never enter public views.
+
+The target atomically commits outcome, receipt and Activities before submitting
+completion through the helper command. The driver independently asks the target's
+`update-target-receipt` command to confirm that database commit; the source never
+reads target-schema SQL. It then rechecks target identity, acknowledges completion
+in the host journal and exits. That journal is the acknowledgement record; there
+is no second completion marker to publish. Target startup verifies that exact clean
+helper exit.
+Neither receipt nor exit releases maintenance: host reconciliation and final
+admission remain unimplemented. Pre-stop failures retain maintenance as `Failed`;
+ambiguous post-stop failures record `RecoveryRequired`, preserve evidence and never
+restart the source or roll back the database automatically.
 
 Core acquires its database job lease and checks update ownership **before**
 migrations, setup, abandoned-operation recovery or service construction. The

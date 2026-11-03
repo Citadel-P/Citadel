@@ -55,6 +55,30 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     if let Err(error) =
         startup::while_owned(&mut job_lease, startup::check_updates(&config)).await?
     {
+        #[cfg(target_os = "linux")]
+        {
+            let cancellation = CancellationToken::new();
+            let acceptance = startup::while_owned(
+                &mut job_lease,
+                crate::composition::updates::accept_target(&config, &cancellation),
+            );
+            tokio::pin!(acceptance);
+            let result = tokio::select! {
+                result = &mut acceptance => result?,
+                () = shutdown_signal(cancellation.clone()) => {
+                    acceptance.await??;
+                    return Ok(());
+                }
+            };
+            match result {
+                Ok(()) => tracing::info!(
+                    "Update target verified and helper exited cleanly; maintenance is retained pending host reconciliation."
+                ),
+                Err(error) => {
+                    tracing::warn!(%error, "Update target acceptance did not authorize admission")
+                }
+            }
+        }
         tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
         return serve_maintenance(&config, job_lease).await;
     }

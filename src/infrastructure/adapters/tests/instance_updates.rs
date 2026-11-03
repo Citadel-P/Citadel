@@ -17,6 +17,8 @@ use citadel_updates::*;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
 
+#[path = "instance_updates/acceptance.rs"]
+mod acceptance;
 #[path = "instance_updates/drain.rs"]
 mod drain;
 
@@ -115,7 +117,7 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     let source = CoreIdentity {
         version: "0.1.1".into(),
         image: format!("ghcr.io/citadel-p/citadel@sha256:{}", "a".repeat(64)),
-        catalog_sha256: "b".repeat(64),
+        catalog_sha256: MigrationRunner::catalog_sha256().unwrap(),
         architecture: "amd64".into(),
     };
     let plan = UpdatePlan {
@@ -191,10 +193,45 @@ async fn update_state_activities_and_receipts_commit_atomically() {
             .advance(journal.operation.revision, phase, Utc::now())
             .unwrap();
         journal.history.push(journal.operation.clone());
+        if phase == UpdatePhase::Verifying {
+            acceptance::verify_target_acceptance(&pool, &journal, actor.subject_id).await;
+        }
     }
     assert!(repo.import(&journal).await.is_err());
     journal.verified_target = Some(plan.target.clone());
+    let uncommitted = CompletionReceipt {
+        instance_id: journal.operation.instance_id,
+        operation_id: journal.operation.id,
+        fence: journal.operation.fence,
+        revision: journal.operation.revision,
+        target: plan.target.clone(),
+    };
+    assert!(
+        citadel_adapters::persistence::postgres::updates::check_committed_update_receipt(
+            &pool,
+            &journal,
+            &uncommitted
+        )
+        .await
+        .is_err()
+    );
     let receipt = repo.import(&journal).await.unwrap().unwrap();
+    citadel_adapters::persistence::postgres::updates::check_committed_update_receipt(
+        &pool, &journal, &receipt,
+    )
+    .await
+    .unwrap();
+    let mut foreign_receipt = receipt.clone();
+    foreign_receipt.fence = Uuid::now_v7();
+    assert!(
+        citadel_adapters::persistence::postgres::updates::check_committed_update_receipt(
+            &pool,
+            &journal,
+            &foreign_receipt
+        )
+        .await
+        .is_err()
+    );
     assert!(
         repo.blockers(&journal.operation).await.is_err(),
         "a completed update must not enter drain again"
@@ -203,7 +240,7 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         check_startup_updates(&pool, Some(instance)).await.is_err(),
         "terminal but unreleased ownership still blocks startup"
     );
-    assert_eq!(repo.import(&journal).await.unwrap(), Some(receipt));
+    assert_eq!(repo.import(&journal).await.unwrap(), Some(receipt.clone()));
     assert_eq!(count(&pool, "InstanceUpdateCompleted").await, 1);
     assert!(repo.release(&journal, &plan.target).await.is_err());
     journal.completion_acknowledged = true;
@@ -212,6 +249,18 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     repo.release(&journal, &plan.target).await.unwrap();
     repo.release(&journal, &plan.target).await.unwrap();
     assert!(repo.active().await.unwrap().is_none());
+    let mut completed_only = journal.clone();
+    completed_only.completion_acknowledged = false;
+    completed_only.maintenance_released = false;
+    assert!(
+        citadel_adapters::persistence::postgres::updates::check_committed_update_receipt(
+            &pool,
+            &completed_only,
+            &receipt
+        )
+        .await
+        .is_err()
+    );
 
     let identity = PostgresIdentityStore::new(pool.clone());
     check_startup_updates(&pool, Some(instance)).await.unwrap();

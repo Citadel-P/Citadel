@@ -1,7 +1,7 @@
 use super::files::{open_secure, read_bounded, unavailable_input};
 use citadel_updates::{UpdateError, UpdateJournal};
 use rustix::fs::{AtFlags, Mode, OFlags, RenameFlags, openat, renameat, renameat_with, unlinkat};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::os::unix::fs::MetadataExt;
 use std::{
     fs::File,
@@ -9,6 +9,16 @@ use std::{
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
+
+// Standalone journals are also used by checkpoint inspection. Preserve their
+// storage format. A helper journal can be read through this projection, but only
+// its owner may write the complete execution record.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredJournal {
+    Execution(Box<super::handoff::ExecutionJournal>),
+    Standalone(Box<UpdateJournal>),
+}
 
 const MAX_JOURNAL: u64 = 256 * 1024;
 
@@ -267,11 +277,20 @@ impl JournalDirectory {
     }
 
     pub fn journal(&self, id: Uuid) -> Result<UpdateJournal, UpdateError> {
-        self.read(&format!("{id}.json"))
+        match self.read::<StoredJournal>(&format!("{id}.json"))? {
+            StoredJournal::Execution(saved) => Ok(saved.journal),
+            StoredJournal::Standalone(journal) => Ok(*journal),
+        }
     }
 
     pub fn save(&self, journal: &UpdateJournal) -> Result<(), UpdateError> {
-        self.write(&format!("{}.json", journal.operation.id), journal)
+        let name = format!("{}.json", journal.operation.id);
+        match self.read_optional::<StoredJournal>(&name)? {
+            Some(StoredJournal::Execution(_)) => Err(UpdateError::Conflict(
+                "Only the owning helper may write an execution journal.".into(),
+            )),
+            _ => self.write(&name, journal),
+        }
     }
 
     fn entry(&self, name: &str) -> Result<PathBuf, UpdateError> {

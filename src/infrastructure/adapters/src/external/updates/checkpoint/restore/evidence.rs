@@ -133,3 +133,50 @@ pub(super) async fn check(
 pub(super) fn failed() -> UpdateError {
     UpdateError::Unavailable("Checkpoint restore verification failed. Preserve update state; no replacement or source resume was authorized.".into())
 }
+
+/// Re-read the saved restore proof and bundle before authorizing replacement.
+/// This performs no restore or cleanup and cannot repair an incomplete rehearsal.
+pub(in crate::external::updates) async fn verified_checkpoint(
+    state: &JournalDirectory,
+    owner: &InstallationLock,
+    operation: &UpdateOperation,
+    docker: &super::super::super::docker::LocalDocker<'_>,
+) -> Result<PreparedUpdateCheckpoint, UpdateError> {
+    let evidence = check(state, owner, operation, docker.cancellation).await?;
+    let receipt: super::RestoredUpdateCheckpoint = evidence.stage.read("restore-verified.json")?;
+    let sandbox: super::sandbox::Sandbox = evidence.stage.read("restore-intent.json")?;
+    let id: String = evidence.stage.read("restore-container.json")?;
+    if receipt.format != 2
+        || receipt.operation_id != operation.id
+        || receipt.fence != operation.fence
+        || receipt.instance_id != operation.instance_id
+        || receipt.catalog_sha256 != operation.plan.source.catalog_sha256
+        || receipt.bundle_checksums_sha256 != evidence.receipt.bundle_checksums_sha256
+        || receipt.database_image != sandbox.image
+        || receipt.sandbox_id != id
+        || !citadel_updates::is_sha256(&id)
+        || sandbox.dump != evidence.receipt.bundle.join("database/citadel.dump")
+    {
+        return Err(failed());
+    }
+    let raw = docker
+        .json(&[
+            "container",
+            "inspect",
+            &evidence.registration.database_container_id,
+        ])
+        .await?;
+    let database = super::super::super::docker::single(&raw)?;
+    if database["Id"] != evidence.registration.database_container_id
+        || database["Image"] != receipt.database_image
+    {
+        return Err(failed());
+    }
+    for filter in [format!("id={id}"), format!("name=^/{}$", sandbox.name())] {
+        if !docker.containers(&filter).await?.is_empty() {
+            return Err(failed());
+        }
+    }
+    state.verify_lock(owner)?;
+    Ok(evidence.receipt)
+}

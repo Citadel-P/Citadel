@@ -380,8 +380,7 @@ fn server_resources_live_under_api_and_composition_has_no_hidden_configuration()
         }
     }
     assert!(!source.join("state.rs").exists());
-    for entry in std::fs::read_dir(source.join("composition")).unwrap() {
-        let path = entry.unwrap().path();
+    for path in feature_sources(&source.join("composition")) {
         let code = std::fs::read_to_string(&path).unwrap();
         assert!(!code.contains("std::env"), "{}", path.display());
         assert!(!code.contains("env::var"), "{}", path.display());

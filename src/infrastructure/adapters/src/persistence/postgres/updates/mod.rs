@@ -18,11 +18,21 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod acceptance;
 mod activity;
+pub use acceptance::{check_committed_update_receipt, check_target_update_database};
+mod agents;
+pub(crate) use agents::read_update_agent_versions;
 mod authorization;
 mod checkpoint;
+mod checkpoint_secrets;
+pub(crate) use checkpoint_secrets::{
+    CHECKPOINT_SECRET_PAGE_SIZE, checkpoint_secret_page, checkpoint_secrets_query,
+};
 mod checks;
-pub(crate) use checkpoint::{CHECKPOINT_PROBE_SQL, validate_checkpoint_database};
+pub(crate) use checkpoint::{
+    CHECKPOINT_PROBE_SQL, check_checkpoint_source, validate_checkpoint_database,
+};
 mod claims;
 mod drain;
 mod preflight;

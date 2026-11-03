@@ -9,7 +9,7 @@ mod identity;
 mod licensing;
 mod platforms;
 mod scripts;
-mod updates;
+pub(crate) mod updates;
 mod workloads;
 use citadel_activities::ActivityService;
 use citadel_adapters::connectors::agent::client::AgentClient;

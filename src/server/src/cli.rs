@@ -92,6 +92,21 @@ enum Command {
     #[cfg(target_os = "linux")]
     #[command(hide = true)]
     UpdateHelperHandoff,
+    /// Internal detached executor, launched only after persisted approval.
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    RunUpdateHelper {
+        #[arg(long)]
+        state_directory: std::path::PathBuf,
+        #[arg(long)]
+        operation_id: Uuid,
+        #[arg(long)]
+        fence: Uuid,
+    },
+    /// Internal target-schema read of the committed completion receipt.
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    UpdateTargetReceipt,
     /// Run the Rust foundation server and supervised workers.
     Serve,
     /// Apply the embedded Citadel schema migrations and exit.
@@ -336,28 +351,15 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         #[cfg(target_os = "linux")]
-        Command::UpdateHelperHandoff => {
-            use citadel_adapters::external::updates::{
-                MAX_HANDOFF_REQUEST, execute_helper_handoff,
-            };
-            use std::io::Read;
-            // A one-shot internal stdin command; the invoking Docker client owns
-            // its deadline. No application tasks or database have been started.
-            let mut input = Vec::new();
-            std::io::stdin()
-                .take(MAX_HANDOFF_REQUEST as u64 + 1)
-                .read_to_end(&mut input)?;
-            let cancellation = CancellationToken::new();
-            let exchange =
-                execute_helper_handoff(&input, &citadel_processes::SystemProcess, &cancellation);
-            tokio::pin!(exchange);
-            let output = tokio::select! {
-                result = &mut exchange => result,
-                () = crate::app::shutdown_signal(cancellation.clone()) => exchange.await,
-            }?;
-            println!("{}", std::str::from_utf8(&output)?);
-            Ok(())
-        }
+        Command::UpdateHelperHandoff => crate::cli_updates::exchange().await,
+        #[cfg(target_os = "linux")]
+        Command::RunUpdateHelper {
+            state_directory,
+            operation_id,
+            fence,
+        } => crate::cli_updates::helper(state_directory, operation_id, fence).await,
+        #[cfg(target_os = "linux")]
+        Command::UpdateTargetReceipt => crate::cli_updates::target_receipt().await,
         Command::Serve => crate::app::serve(Config::from_env()?).await,
         Command::Migrate => migrate(DatabaseConfig::from_env()?).await,
         Command::RestoreSystem {

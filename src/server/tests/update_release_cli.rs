@@ -2,6 +2,28 @@ use std::process::Command;
 
 #[cfg(target_os = "linux")]
 #[test]
+fn detached_helper_honors_disabled_release_policy_before_opening_state() {
+    let path = std::env::temp_dir().join(format!("citadel-helper-cli-{}", uuid::Uuid::now_v7()));
+    let output = Command::new(env!("CARGO_BIN_EXE_citadel-server"))
+        .env_clear()
+        .env("CITADEL_UPDATE_CHECKS_ENABLED", "false")
+        .args(["run-update-helper", "--state-directory"])
+        .arg(&path)
+        .args([
+            "--operation-id",
+            &uuid::Uuid::now_v7().to_string(),
+            "--fence",
+            &uuid::Uuid::now_v7().to_string(),
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Release checks are disabled"));
+    assert!(!path.exists());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
 fn recovery_key_diagnostic_is_read_only_and_needs_no_database() {
     use base64::Engine;
     use std::{fs, os::unix::fs::PermissionsExt};
@@ -298,5 +320,6 @@ fn helper_handoff_command_rejects_invalid_input_without_starting_core() {
         assert!(!output.status.success());
         assert!(output.stdout.is_empty());
         assert!(!String::from_utf8_lossy(&output.stderr).contains("DATABASE_URL"));
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("unrecognized subcommand"));
     }
 }

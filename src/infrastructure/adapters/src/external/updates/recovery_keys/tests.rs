@@ -145,3 +145,56 @@ fn validates_explicit_encoding_and_lengths_without_falling_back() {
     assert!(check_recovery_keys(root.path(), Some("short"), None).is_err());
     assert!(check_recovery_keys(root.path(), Some(&"x".repeat(16 * 1024 + 1)), None).is_err());
 }
+
+#[test]
+#[ignore = "Requires root in a disposable container with a fresh tmpfs at /app/data"]
+fn root_helper_reads_packaged_core_keys_without_trusting_other_owners() {
+    assert_eq!(
+        std::env::var("CITADEL_TEST_PACKAGED_KEYS").as_deref(),
+        Ok("1")
+    );
+    assert_eq!(rustix::process::geteuid().as_raw(), 0);
+    assert!(std::path::Path::new("/.dockerenv").exists());
+    assert!(
+        fs::read_to_string("/proc/mounts")
+            .unwrap()
+            .lines()
+            .any(|line| {
+                let fields: Vec<_> = line.split_whitespace().collect();
+                fields.get(1) == Some(&"/app/data") && fields.get(2) == Some(&"tmpfs")
+            })
+    );
+    let root = Path::new("/app/data");
+    assert_eq!(fs::read_dir(root).unwrap().count(), 0);
+    fs::create_dir(root.join("agent")).unwrap();
+    write(
+        &root.join("jwtsecret"),
+        "fixture-jwt-key-material-1234567890",
+    );
+    write(
+        &root.join("secret-encryption-key"),
+        STANDARD.encode([7; 32]),
+    );
+    write(&root.join("agent/signing-key"), [9; 32]);
+    for path in [
+        root.to_path_buf(),
+        root.join("agent"),
+        root.join("jwtsecret"),
+        root.join("secret-encryption-key"),
+        root.join("agent/signing-key"),
+    ] {
+        std::os::unix::fs::chown(path, Some(65532), Some(0)).unwrap();
+    }
+    // The ordinary key API retains its existing ownership requirements.
+    assert!(check_recovery_keys(root, None, None).is_err());
+    super::validation::check_packaged_recovery_keys(None, None).unwrap();
+    let key = root.join("agent/signing-key");
+    std::os::unix::fs::chown(&key, Some(65531), None).unwrap();
+    assert!(super::validation::check_packaged_recovery_keys(None, None).is_err());
+    std::os::unix::fs::chown(&key, Some(65532), None).unwrap();
+    fs::set_permissions(&key, fs::Permissions::from_mode(0o640)).unwrap();
+    assert!(super::validation::check_packaged_recovery_keys(None, None).is_err());
+    fs::remove_file(&key).unwrap();
+    symlink("/tmp/not-a-key", &key).unwrap();
+    assert!(super::validation::check_packaged_recovery_keys(None, None).is_err());
+}

@@ -2,6 +2,8 @@ use super::super::super::{JournalDirectory, RegisteredComposeInstallation};
 use super::super::{CheckpointInstallerInput, PreparedUpdateCheckpoint, tests::Fixture};
 use super::sandbox::Sandbox;
 use super::*;
+use crate::security::identity::crypto::AesGcmSecretProtector;
+use base64::{Engine, engine::general_purpose::STANDARD};
 use citadel_execution::{ProcessError, ProcessOutput, ProcessRequest, ProcessRunner};
 use citadel_updates::UpdateError;
 use futures_util::future::BoxFuture;
@@ -83,13 +85,17 @@ pub(super) fn fixture() -> Fixture {
                 bundle_checksums_sha256: String::new(),
                 configuration_sha256: reg.configuration_sha256,
                 installer_inputs: inputs,
-                required_external_configuration: vec![
-                    "CITADEL_JWT_KEY".into(),
-                    "CITADEL_SECRETS_ENCRYPTION_KEY".into(),
-                ],
+                required_external_configuration: vec![],
             },
         )
         .unwrap();
+    let receipt: PreparedUpdateCheckpoint = stage.read("checkpoint.json").unwrap();
+    write(&receipt.bundle.join("recovery/jwtsecret"), &[b'j'; 32]);
+    write(
+        &receipt.bundle.join("recovery/secret-encryption-key"),
+        STANDARD.encode([7; 32]).as_bytes(),
+    );
+    write(&receipt.bundle.join("recovery/agent/signing-key"), &[8; 32]);
     set_dump(&f, b"PGDMP-fixture");
     f
 }
@@ -98,15 +104,26 @@ pub(super) fn set_dump(f: &Fixture, dump: &[u8]) {
     let stage = JournalDirectory::open(f.stage()).unwrap();
     let mut receipt: PreparedUpdateCheckpoint = stage.read("checkpoint.json").unwrap();
     write(&receipt.bundle.join("database/citadel.dump"), dump);
+    let mut inventory = serde_json::Map::new();
+    let mut recovery_files = vec![];
+    for name in [
+        "recovery/jwtsecret",
+        "recovery/secret-encryption-key",
+        "recovery/agent/signing-key",
+    ] {
+        if let Ok(bytes) = fs::read(receipt.bundle.join(name)) {
+            inventory.insert(name.into(), json!(hash(&bytes)));
+            recovery_files.push(name);
+        }
+    }
     let manifest = serde_json::to_vec(&json!({"formatVersion":1,"product":"citadel",
         "coreVersion":receipt.source.version,"instanceId":receipt.instance_id,"createdAt":chrono::Utc::now(),
         "database":{"engine":"PostgreSQL","path":"database/citadel.dump","sha256":hash(dump)},
-        "requiredExternalConfiguration":receipt.required_external_configuration})).unwrap();
+        "requiredExternalConfiguration":receipt.required_external_configuration, "recoveryFiles":recovery_files})).unwrap();
     write(&receipt.bundle.join("manifest.json"), &manifest);
-    let checksums = serde_json::to_vec(
-        &json!({"manifest.json":hash(&manifest),"database/citadel.dump":hash(dump)}),
-    )
-    .unwrap();
+    inventory.insert("manifest.json".into(), json!(hash(&manifest)));
+    inventory.insert("database/citadel.dump".into(), json!(hash(dump)));
+    let checksums = serde_json::to_vec(&inventory).unwrap();
     write(&receipt.bundle.join("checksums.json"), &checksums);
     receipt.bundle_checksums_sha256 = hash(&checksums);
     stage.write("checkpoint.json", &receipt).unwrap();
@@ -127,16 +144,32 @@ struct Runner {
     creates: AtomicUsize,
     starts: AtomicUsize,
     removals: AtomicUsize,
+    secret_pages: AtomicUsize,
 }
 impl Runner {
     fn new(mode: &'static str) -> Self {
+        let f = fixture();
+        if mode.starts_with("external") {
+            let stage = JournalDirectory::open(f.stage()).unwrap();
+            let mut receipt: PreparedUpdateCheckpoint = stage.read("checkpoint.json").unwrap();
+            receipt.required_external_configuration = vec![
+                "CITADEL_JWT_KEY".into(),
+                "CITADEL_SECRETS_ENCRYPTION_KEY".into(),
+            ];
+            for name in ["jwtsecret", "secret-encryption-key"] {
+                fs::remove_file(receipt.bundle.join("recovery").join(name)).unwrap();
+            }
+            stage.write("checkpoint.json", &receipt).unwrap();
+            set_dump(&f, b"PGDMP-fixture");
+        }
         Self {
-            f: fixture(),
+            f,
             mode,
             sandbox: Mutex::new(None),
             creates: AtomicUsize::new(0),
             starts: AtomicUsize::new(0),
             removals: AtomicUsize::new(0),
+            secret_pages: AtomicUsize::new(0),
         }
     }
     async fn verify(
@@ -189,7 +222,41 @@ impl ProcessRunner for Runner {
                 .iter()
                 .map(|v| v.to_str().unwrap())
                 .collect();
+            // No recovered key may be passed through process argv/environment/stdin.
+            let key = STANDARD.encode([7; 32]);
+            assert!(
+                !request
+                    .arguments
+                    .iter()
+                    .any(|s| s.to_string_lossy().contains(&key))
+            );
+            assert!(
+                !request
+                    .environment
+                    .iter()
+                    .any(|(_, s)| s.to_string_lossy().contains(&key))
+            );
+            assert!(
+                request
+                    .stdin
+                    .as_ref()
+                    .is_none_or(|s| !String::from_utf8_lossy(s).contains(&key))
+            );
             let value = match args.as_slice() {
+                ["compose", ..] => {
+                    let fixture = super::super::super::bootstrap::fixtures::Fixture::new();
+                    let mut config = fixture.runner.config;
+                    config["name"] = json!("test-checkpoint");
+                    config["services"]["server"]["environment"]["CITADEL_JWT_KEY"] =
+                        json!("j".repeat(32));
+                    if self.mode != "external-missing" {
+                        config["services"]["server"]["environment"]["CITADEL_SECRETS_ENCRYPTION_KEY"] = json!(
+                            STANDARD
+                                .encode([if self.mode == "external-wrong" { 9 } else { 7 }; 32])
+                        );
+                    }
+                    config
+                }
                 ["container", "inspect", ID] => {
                     let mut value = self.observed();
                     if self.mode == "foreign" {
@@ -234,6 +301,51 @@ impl ProcessRunner for Runner {
                         return Ok(o);
                     }
                     return Ok(output(vec![]));
+                }
+                ["exec", ID, "psql", rest @ ..]
+                    if rest.last().is_some_and(|s| s.contains("WITH envelopes")) =>
+                {
+                    let page = self.secret_pages.fetch_add(1, Ordering::SeqCst);
+                    let protector = AesGcmSecretProtector::new(
+                        &[if self.mode == "wrong-key" { 9 } else { 7 }; 32],
+                    )
+                    .unwrap();
+                    let envelope = protector.protect(b"private-checkpoint-fixture").unwrap();
+                    match self.mode {
+                        "null-envelope" => {
+                            json!([{"kind":1,"id":Uuid::from_u128(1),"envelope":null}])
+                        }
+                        "malformed-envelope" => {
+                            json!([{"kind":1,"id":Uuid::from_u128(1),"envelope":"bad"}])
+                        }
+                        "empty-secrets" => json!([]),
+                        "maximum-secrets" => {
+                            if page == 0 {
+                                let value = protector.protect(&vec![b's'; 256 * 1024]).unwrap();
+                                let page = json!([{"kind":1,"id":Uuid::from_u128(1),"envelope":value},{"kind":1,"id":Uuid::from_u128(2),"envelope":value}]);
+                                assert!(
+                                    serde_json::to_vec(&page).unwrap().len()
+                                        < request.limits.maximum_stdout_bytes
+                                );
+                                page
+                            } else {
+                                json!([])
+                            }
+                        }
+                        "pagination" | "repeated-page" => {
+                            let start = if self.mode == "repeated-page" {
+                                0
+                            } else {
+                                page * 2
+                            };
+                            if start >= 32 {
+                                json!([])
+                            } else {
+                                json!((start..start+2).map(|n| json!({"kind":1,"id":Uuid::from_u128(n as u128+1),"envelope":envelope})).collect::<Vec<_>>())
+                            }
+                        }
+                        _ => json!([{"kind":1,"id":Uuid::from_u128(1),"envelope":envelope}]),
+                    }
                 }
                 ["exec", ID, "psql", ..] => {
                     let mut p = probe(&self.f);
@@ -282,6 +394,7 @@ async fn publishes_restore_proof_only_after_cleanup_and_preserves_journal() {
     let receipt = runner.verify(&token).await.unwrap();
     assert_eq!(runner.removals.load(Ordering::SeqCst), 1);
     assert_eq!(receipt.instance_id, runner.f.operation.instance_id);
+    assert_eq!(receipt.decrypted_values, 1);
     assert_eq!(
         runner.f.state.journal(runner.f.operation.id).unwrap(),
         before
@@ -303,6 +416,10 @@ async fn failed_interrupted_or_untrusted_restore_never_publishes_success() {
         "changed-input",
         "foreign",
         "cleanup-failure",
+        "wrong-key",
+        "null-envelope",
+        "malformed-envelope",
+        "repeated-page",
     ] {
         let runner = Runner::new(mode);
         let error = runner
@@ -356,4 +473,65 @@ fn set_dump_corrupt(f: &Fixture) {
         b"PGDMP-corrupt",
     )
     .unwrap();
+}
+
+#[tokio::test]
+async fn verifies_every_page_and_records_empty_encrypted_state_explicitly() {
+    for (mode, expected, pages) in [
+        ("pagination", 32, 17),
+        ("empty-secrets", 0, 1),
+        ("maximum-secrets", 2, 2),
+    ] {
+        let runner = Runner::new(mode);
+        let receipt = runner.verify(&CancellationToken::new()).await.unwrap();
+        assert_eq!(receipt.decrypted_values, expected);
+        assert_eq!(runner.secret_pages.load(Ordering::SeqCst), pages);
+        let serialized = serde_json::to_string(&receipt).unwrap();
+        assert!(!serialized.contains("private-checkpoint-fixture"));
+    }
+}
+
+#[tokio::test]
+async fn malformed_or_unavailable_recovery_keys_fail_before_creating_a_container() {
+    for mode in ["jwt", "signing", "encryption", "missing", "unsafe"] {
+        let runner = Runner::new("normal");
+        let stage = JournalDirectory::open(runner.f.stage()).unwrap();
+        let receipt: PreparedUpdateCheckpoint = stage.read("checkpoint.json").unwrap();
+        let path = receipt.bundle.join(match mode {
+            "jwt" => "recovery/jwtsecret",
+            "signing" => "recovery/agent/signing-key",
+            _ => "recovery/secret-encryption-key",
+        });
+        if mode == "missing" {
+            fs::remove_file(&path).unwrap();
+        } else {
+            write(&path, b"invalid");
+        }
+        set_dump(&runner.f, b"PGDMP-fixture");
+        if mode == "unsafe" {
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        }
+        assert!(runner.verify(&CancellationToken::new()).await.is_err());
+        assert_eq!(runner.creates.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn external_keys_are_resolved_from_approved_compose_inputs_and_not_sent_to_postgres() {
+    let normal = Runner::new("external");
+    let receipt = normal.verify(&CancellationToken::new()).await.unwrap();
+    assert_eq!(receipt.decrypted_values, 1);
+    let wrong = Runner::new("external-wrong");
+    assert!(
+        wrong
+            .verify(&CancellationToken::new())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("cannot decrypt")
+    );
+    assert_eq!(wrong.removals.load(Ordering::SeqCst), 1);
+    let missing = Runner::new("external-missing");
+    assert!(missing.verify(&CancellationToken::new()).await.is_err());
+    assert_eq!(missing.creates.load(Ordering::SeqCst), 0);
 }

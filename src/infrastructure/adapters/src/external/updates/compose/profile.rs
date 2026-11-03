@@ -1,7 +1,8 @@
 //! Supported Docker Compose installation layout, independent of installer text.
 //! This is an adapter policy, not the shared update protocol or a Compose schema.
-use super::{Value, unsupported};
+use super::resolution::unsupported;
 use citadel_updates::UpdateError;
+use serde_json::Value;
 
 const SERVICE_FIELDS: &[&str] = &[
     "image",

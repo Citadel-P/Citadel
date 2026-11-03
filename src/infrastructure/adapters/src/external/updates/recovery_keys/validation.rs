@@ -1,4 +1,4 @@
-use super::super::files::open_secure;
+use super::super::files::open_secure_with_owner;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use citadel_updates::UpdateError;
 use serde::{Deserialize, Serialize};
@@ -28,12 +28,33 @@ pub fn check_recovery_keys(
     jwt: Option<&str>,
     encryption: Option<&str>,
 ) -> Result<CheckedRecoveryKeys, UpdateError> {
-    let (jwt_source, jwt) = load(data_root, "jwtsecret", jwt)?;
+    check_keys(data_root, jwt, encryption, None)
+}
+
+/// The official image runs Core as 65532:0, while a registered host executor may
+/// be root. This narrow read trusts that owner only below /app, on the verified
+/// read-only image and data mount. It does not relax installer/journal ownership.
+pub(in crate::external::updates) fn check_packaged_recovery_keys(
+    jwt: Option<&str>,
+    encryption: Option<&str>,
+) -> Result<CheckedRecoveryKeys, UpdateError> {
+    let owner = (rustix::process::geteuid().as_raw() == 0).then_some((65532, Path::new("/app")));
+    check_keys(Path::new("/app/data"), jwt, encryption, owner)
+}
+
+fn check_keys(
+    data_root: &Path,
+    jwt: Option<&str>,
+    encryption: Option<&str>,
+    owner: Option<(u32, &Path)>,
+) -> Result<CheckedRecoveryKeys, UpdateError> {
+    let (jwt_source, jwt) = load(data_root, "jwtsecret", jwt, owner)?;
     // Match startup: JWT is UTF-8 key material, not decoded Base64.
     if std::str::from_utf8(&jwt).is_err() || jwt.len() < 32 {
         return Err(unavailable());
     }
-    let (encryption_source, encryption) = load(data_root, "secret-encryption-key", encryption)?;
+    let (encryption_source, encryption) =
+        load(data_root, "secret-encryption-key", encryption, owner)?;
     let encoded = std::str::from_utf8(&encryption).map_err(|_| unavailable())?;
     let decoded = Zeroizing::new(STANDARD.decode(encoded.trim()).map_err(|_| unavailable())?);
     if decoded.len() != 32 {
@@ -41,7 +62,7 @@ pub fn check_recovery_keys(
     }
     // Core's local connector persists a raw 32-byte Ed25519 seed. Remote Core
     // Agent configurations are outside the qualified Compose installation profile.
-    let signing = read_key(&data_root.join("agent/signing-key"))?;
+    let signing = read_owned_key(&data_root.join("agent/signing-key"), owner)?;
     if signing.len() != 32 {
         return Err(unavailable());
     }
@@ -56,6 +77,7 @@ fn load(
     root: &Path,
     file: &str,
     configured: Option<&str>,
+    owner: Option<(u32, &Path)>,
 ) -> Result<(RecoveryKeySource, Zeroizing<Vec<u8>>), UpdateError> {
     match configured.filter(|value| !value.trim().is_empty()) {
         Some(value) if value.len() <= MAX_KEY_BYTES => Ok((
@@ -63,12 +85,24 @@ fn load(
             Zeroizing::new(value.as_bytes().to_vec()),
         )),
         Some(_) => Err(unavailable()),
-        None => Ok((RecoveryKeySource::DataVolume, read_key(&root.join(file))?)),
+        None => Ok((
+            RecoveryKeySource::DataVolume,
+            read_owned_key(&root.join(file), owner)?,
+        )),
     }
 }
 
-fn read_key(path: &Path) -> Result<Zeroizing<Vec<u8>>, UpdateError> {
-    let mut file = open_secure(path, false).map_err(|_| unavailable())?;
+pub(in crate::external::updates) fn read_key(
+    path: &Path,
+) -> Result<Zeroizing<Vec<u8>>, UpdateError> {
+    read_owned_key(path, None)
+}
+
+fn read_owned_key(
+    path: &Path,
+    owner: Option<(u32, &Path)>,
+) -> Result<Zeroizing<Vec<u8>>, UpdateError> {
+    let mut file = open_secure_with_owner(path, false, owner).map_err(|_| unavailable())?;
     let before = file.metadata().map_err(|_| unavailable())?;
     if before.mode() & 0o077 != 0 || before.len() > MAX_KEY_BYTES as u64 {
         return Err(unavailable());
@@ -78,7 +112,7 @@ fn read_key(path: &Path) -> Result<Zeroizing<Vec<u8>>, UpdateError> {
         .take(MAX_KEY_BYTES as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| unavailable())?;
-    let after = open_secure(path, false)
+    let after = open_secure_with_owner(path, false, owner)
         .and_then(|file| file.metadata().map_err(|_| unavailable()))
         .map_err(|_| unavailable())?;
     if bytes.len() > MAX_KEY_BYTES

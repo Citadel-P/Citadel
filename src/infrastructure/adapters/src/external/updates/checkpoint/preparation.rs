@@ -9,7 +9,7 @@ use crate::external::backups::system_recovery::{
 use citadel_backups::{BackupError, CitadelSystemBackupBuilder};
 use citadel_updates::{CoreIdentity, UpdateError, UpdateOperation, UpdatePhase};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -83,7 +83,7 @@ pub async fn prepare_update_checkpoint(
         || registration.executor_gid != rustix::process::getegid().as_raw()
         || registration.configuration_sha256 != operation.plan.configuration_sha256
         || registration.environment_file != registration.directory.join(".env")
-        || PathBuf::from(&operation.plan.checkpoint_directory) != state.path()
+        || Path::new(&operation.plan.checkpoint_directory) != state.path()
     {
         return Err(UpdateError::Conflict(
             "Checkpoint registration does not match its approved operation.".into(),

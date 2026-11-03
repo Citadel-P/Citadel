@@ -53,6 +53,8 @@ impl ProcessRunner for FixtureProcess {
 async fn real_postgres_restore_verifies_identity_claim_catalog_and_removes_sandbox() {
     let f = fixture();
     let broken = fixture();
+    let wrong_key = fixture();
+    let wrong_stage = JournalDirectory::open(wrong_key.stage()).unwrap();
     let broken_stage = JournalDirectory::open(broken.stage()).unwrap();
     let process = FixtureProcess;
     let token = CancellationToken::new();
@@ -106,6 +108,20 @@ async fn real_postgres_restore_verifies_identity_claim_catalog_and_removes_sandb
             "CREATE TABLE citadelinstanceidentity(id int PRIMARY KEY,instanceid uuid); INSERT INTO citadelinstanceidentity VALUES(1,'{}'); CREATE TABLE instancesetupstates(id int PRIMARY KEY,initializedat timestamptz); INSERT INTO instancesetupstates VALUES(1,now()); CREATE TABLE citadel_schema_migrations(id text PRIMARY KEY,checksum text,completed_at timestamptz,failure text); CREATE TABLE instanceupdates(id uuid,instanceid uuid,actorid uuid,idempotencykey uuid,revision bigint,ownsinstallation bool,operation jsonb); CREATE TABLE checkpoint_marker(value text); INSERT INTO checkpoint_marker VALUES('restored-data');",
             f.operation.instance_id
         );
+        sql.push_str("CREATE TABLE internalsecretvalues(secretid uuid PRIMARY KEY,encryptedvalue text NOT NULL); CREATE TABLE secretproviders(id uuid PRIMARY KEY,configuration text NOT NULL); CREATE TABLE gitaccounts(id uuid PRIMARY KEY,configuration json NOT NULL); CREATE TABLE oidcproviders(id uuid PRIMARY KEY,clientsecretciphertext text); CREATE TABLE mfasetupsessions(id uuid PRIMARY KEY,protectedtotpsecret text NOT NULL); CREATE TABLE usermfasettings(userid uuid PRIMARY KEY,protectedtotpsecret text NOT NULL);");
+        let protector =
+            crate::security::identity::crypto::AesGcmSecretProtector::new(&[7; 32]).unwrap();
+        for index in 1..=33_u128 {
+            let envelope = protector.protect(b"disposable-recovery-secret").unwrap();
+            sql.push_str(&format!(
+                "INSERT INTO internalsecretvalues VALUES('{}','{envelope}');",
+                Uuid::from_u128(index)
+            ));
+        }
+        let envelope = protector
+            .protect(b"disposable-recovery-credential")
+            .unwrap();
+        sql.push_str(&format!("INSERT INTO secretproviders VALUES('{}','{{\"ProtectedToken\":\"{envelope}\"}}'); INSERT INTO gitaccounts VALUES('{}','{{\"$protected\":\"{envelope}\"}}'); INSERT INTO oidcproviders VALUES('{}','{envelope}'); INSERT INTO oidcproviders VALUES('{}',NULL); INSERT INTO mfasetupsessions VALUES('{}','{envelope}'); INSERT INTO usermfasettings VALUES('{}','{envelope}');", Uuid::now_v7(),Uuid::now_v7(),Uuid::now_v7(),Uuid::now_v7(),Uuid::now_v7(),Uuid::now_v7()));
         for m in p["migrations"].as_array().unwrap() {
             sql.push_str(&format!(
                 "INSERT INTO citadel_schema_migrations VALUES('{}','{}',now(),NULL);",
@@ -177,6 +193,7 @@ async fn real_postgres_restore_verifies_identity_claim_catalog_and_removes_sandb
         )
         .await?;
         assert_eq!(verified.instance_id, f.operation.instance_id);
+        assert_eq!(verified.decrypted_values, 38);
         assert_eq!(f.state.journal(f.operation.id)?, journal);
         let sandbox: Sandbox = stage.read("restore-intent.json")?;
         assert!(
@@ -220,6 +237,93 @@ async fn real_postgres_restore_verifies_identity_claim_catalog_and_removes_sandb
                 .await?
                 .is_empty()
         );
+        // A well-formed but incorrect archived key must also fail after a real
+        // restore. Give this independent attempt its own matching DB claim.
+        let original = wrong_key
+            .state
+            .journal(wrong_key.operation.id)?
+            .history
+            .remove(0);
+        let sql = format!(
+            "UPDATE citadelinstanceidentity SET instanceid='{}'; DELETE FROM instanceupdates; INSERT INTO instanceupdates VALUES('{}','{}','{}','{}',0,true,'{}');",
+            wrong_key.operation.instance_id,
+            original.id,
+            original.instance_id,
+            original.actor_id.value(),
+            original.idempotency_key,
+            serde_json::to_string(&original)
+                .unwrap()
+                .replace('\'', "''")
+        );
+        docker
+            .run_with_input(
+                &[
+                    "exec",
+                    "--interactive",
+                    &id,
+                    "psql",
+                    "-h",
+                    "/var/run/postgresql",
+                    "-U",
+                    "postgres",
+                    "-d",
+                    DATABASE,
+                    "-v",
+                    "ON_ERROR_STOP=1",
+                ],
+                sql.into_bytes(),
+                Duration::from_secs(30),
+            )
+            .await?;
+        let dump = docker
+            .run(&[
+                "exec",
+                &id,
+                "pg_dump",
+                "-h",
+                "/var/run/postgresql",
+                "-U",
+                "postgres",
+                "-d",
+                DATABASE,
+                "--format=custom",
+                "--no-owner",
+                "--no-privileges",
+            ])
+            .await?;
+        let wrong_receipt: super::super::PreparedUpdateCheckpoint =
+            wrong_stage.read("checkpoint.json")?;
+        use base64::Engine;
+        std::fs::write(
+            wrong_receipt.bundle.join("recovery/secret-encryption-key"),
+            base64::engine::general_purpose::STANDARD.encode([9; 32]),
+        )
+        .unwrap();
+        set_dump(&wrong_key, &dump);
+        let mut reg: RegisteredComposeInstallation = wrong_key.state.read("installation.json")?;
+        reg.database_container_id = id.clone();
+        wrong_key.state.write("installation.json", &reg)?;
+        wrong_stage.write("installation.json", &reg)?;
+        let error = verify_update_checkpoint(
+            &wrong_key.state,
+            &wrong_key.owner,
+            &wrong_key.operation,
+            &process,
+            &CheckpointRestoreBudget {
+                timeout: Duration::from_secs(90),
+                maximum_bytes: 128 * 1024 * 1024,
+            },
+            &token,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("cannot decrypt"), "{error}");
+        assert!(!error.to_string().contains("disposable-recovery"));
+        assert!(
+            wrong_stage
+                .read_optional::<RestoredUpdateCheckpoint>("restore-verified.json")?
+                .is_none()
+        );
         // The test's source was neither stopped nor modified by rehearsal.
         let state = docker.json(&["container", "inspect", &id]).await?;
         assert_eq!(single(&state)?["State"]["Running"], Value::Bool(true));
@@ -251,7 +355,7 @@ async fn real_postgres_restore_verifies_identity_claim_catalog_and_removes_sandb
     };
     let cleaned = source.cleanup(&cleanup).await;
     // Also clean our own rehearsal on a test assertion/verification failure.
-    for directory in [&stage, &broken_stage] {
+    for directory in [&stage, &broken_stage, &wrong_stage] {
         if let Ok(Some(attempt)) = directory.read_optional::<Sandbox>("restore-intent.json") {
             attempt.cleanup(&cleanup).await.unwrap();
         }

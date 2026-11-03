@@ -3,25 +3,49 @@ use super::super::{
     InstallerComposeInputs, RegisteredComposeInstallation,
     docker::{LocalDocker, failed},
 };
-use super::observation::observe;
+use super::observation::{CoreState, Observation, observe_with_helper};
 use citadel_updates::UpdateError;
 
 pub(in crate::external::updates) async fn verify_handoff_source(
     docker: &LocalDocker<'_>,
     registration: &RegisteredComposeInstallation,
+    helper: Option<&str>,
 ) -> Result<(), UpdateError> {
+    verify_source(docker, registration, helper, CoreState::Healthy)
+        .await
+        .map(|_| ())
+}
+
+pub(in crate::external::updates) async fn verify_stopped_source(
+    docker: &LocalDocker<'_>,
+    registration: &RegisteredComposeInstallation,
+    helper: &str,
+) -> Result<String, UpdateError> {
+    verify_source(docker, registration, Some(helper), CoreState::Stopped)
+        .await
+        .map(|observed| observed.retained_fingerprint)
+}
+
+async fn verify_source(
+    docker: &LocalDocker<'_>,
+    registration: &RegisteredComposeInstallation,
+    helper: Option<&str>,
+    state: CoreState,
+) -> Result<Observation, UpdateError> {
     let inputs = InstallerComposeInputs {
         directory: registration.directory.clone(),
         project: registration.project.clone(),
         compose_files: registration.compose_files.clone(),
     };
     let (checked, config) = inputs.resolve(docker.process, docker.cancellation).await?;
-    let observed = observe(
+    let observed = observe_with_helper(
         docker,
         &inputs,
         &config,
         &checked,
         &registration.state_directory,
+        helper,
+        state,
     )
     .await?;
     if checked.configuration_sha256 != registration.configuration_sha256
@@ -35,5 +59,5 @@ pub(in crate::external::updates) async fn verify_handoff_source(
     {
         return Err(failed());
     }
-    Ok(())
+    Ok(observed)
 }

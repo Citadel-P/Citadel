@@ -55,8 +55,31 @@ async fn checked_container(
         project: intent.registration.project.clone(),
         compose_files: intent.registration.compose_files.clone(),
     };
+    let mounts = actual["Mounts"].as_array().ok_or_else(conflict)?;
+    if mounts.len() != 4
+        || mounts
+            .iter()
+            .filter(|m| {
+                m["Type"] == "volume"
+                    && m["Name"] == intent.registration.core_volume
+                    && m["Destination"] == "/app/data"
+                    && m["RW"] == false
+            })
+            .count()
+            != 1
+    {
+        return Err(conflict());
+    }
+    let mut executor = actual.clone();
+    executor["Mounts"] = Value::Array(
+        mounts
+            .iter()
+            .filter(|m| m["Type"] != "volume")
+            .cloned()
+            .collect(),
+    );
     validate_executor_mounts(
-        actual,
+        &executor,
         &id[..12],
         &inputs,
         &intent.registration.state_directory,
@@ -78,7 +101,8 @@ async fn checked_container(
         || actual["State"]["Status"] != if running { "running" } else { "created" }
         || actual["RestartCount"] != 0
         || actual["HostConfig"]["RestartPolicy"]["Name"] != "no"
-        || actual["HostConfig"]["NetworkMode"] != "none"
+        || actual["HostConfig"]["NetworkMode"]
+            != format!("container:{}", intent.registration.database_container_id)
         || actual["HostConfig"]["Privileged"] != false
         || actual["HostConfig"]["ReadonlyRootfs"] != true
         || actual["HostConfig"]["AutoRemove"] != false
@@ -107,34 +131,33 @@ pub(super) async fn source_image(
     docker: &LocalDocker<'_>,
     intent: &HelperLaunchIntent,
 ) -> Result<String, UpdateError> {
+    release_image(docker, &intent.operation.plan.source).await
+}
+
+pub(super) async fn release_image(
+    docker: &LocalDocker<'_>,
+    identity: &citadel_updates::CoreIdentity,
+) -> Result<String, UpdateError> {
     // Match release inspection: a containerd image store may report a platform
     // manifest ID separately from the locally addressable container image ID.
-    let platform = format!("linux/{}", intent.operation.plan.source.architecture);
+    let platform = format!("linux/{}", identity.architecture);
     let raw = docker
-        .json(&[
-            "image",
-            "inspect",
-            "--platform",
-            &platform,
-            &intent.operation.plan.source.image,
-        ])
+        .json(&["image", "inspect", "--platform", &platform, &identity.image])
         .await?;
     let image = single(&raw)?;
     if image["Os"] != "linux"
-        || image["Architecture"] != intent.operation.plan.source.architecture
+        || image["Architecture"] != identity.architecture
         || !(image["Config"]["Volumes"].is_null()
             || image["Config"]["Volumes"]
                 .as_object()
                 .is_some_and(|v| v.is_empty()))
         || !image["RepoDigests"]
             .as_array()
-            .is_some_and(|v| v.iter().any(|s| s == &intent.operation.plan.source.image))
+            .is_some_and(|v| v.iter().any(|s| s == &identity.image))
     {
         return Err(conflict());
     }
-    let local = docker
-        .json(&["image", "inspect", &intent.operation.plan.source.image])
-        .await?;
+    let local = docker.json(&["image", "inspect", &identity.image]).await?;
     let id = single(&local)?["Id"]
         .as_str()
         .filter(|s| s.strip_prefix("sha256:").is_some_and(is_sha256))

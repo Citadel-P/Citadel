@@ -1,7 +1,12 @@
 use super::*;
+use crate::{
+    CoreIdentity, InspectedRelease, ReleaseArtifactSource, ReleaseInspectionRuntime, UpdateError,
+};
 use crate::{INSTALLER_FORMAT, UPDATE_PROTOCOL, UpgradeDescriptor, VerifiedReleaseArtifact};
 use futures_util::future::BoxFuture;
+use std::sync::Arc;
 use std::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 struct Ports {
     calls: Mutex<Vec<&'static str>>,

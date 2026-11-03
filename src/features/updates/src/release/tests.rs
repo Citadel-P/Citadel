@@ -1,4 +1,5 @@
 use super::*;
+use crate::CoreIdentity;
 
 fn identities() -> (CoreIdentity, CoreIdentity, UpgradeDescriptor) {
     let source = CoreIdentity {

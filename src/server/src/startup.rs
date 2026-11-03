@@ -4,8 +4,8 @@ use citadel_database::MigrationRunner;
 use citadel_server::config::Config;
 
 /// This check runs before migrations, setup, recovery and worker construction.
-/// No update evidence is imported or released here. Execution remains disabled
-/// until target readiness and helper-cleanup verification are implemented.
+/// This check never releases ownership. A retained claim can only enter the
+/// separate target-acceptance path; ordinary migration/startup remains blocked.
 pub async fn check_updates(config: &Config) -> Result<(), citadel_updates::UpdateError> {
     use citadel_updates::UpdateError;
     let registered_instance = match config.update_state_directory.as_ref() {

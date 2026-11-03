@@ -12,6 +12,17 @@ pub(super) struct Observation {
     pub(super) core: String,
     pub(super) database: String,
     pub(super) fingerprint: String,
+    pub(super) retained_fingerprint: String,
+    pub(super) core_image: String,
+    pub(super) core_started_at: String,
+}
+
+/// Target process liveness is distinct from application readiness during maintenance.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum CoreState {
+    Healthy,
+    Stopped,
+    TargetRunning,
 }
 
 pub(super) async fn observe(
@@ -21,6 +32,28 @@ pub(super) async fn observe(
     checked: &super::super::CheckedInstallerCompose,
     state: &Path,
 ) -> Result<Observation, UpdateError> {
+    observe_with_helper(
+        docker,
+        inputs,
+        config,
+        checked,
+        state,
+        None,
+        CoreState::Healthy,
+    )
+    .await
+}
+
+pub(super) async fn observe_with_helper(
+    docker: &LocalDocker<'_>,
+    inputs: &InstallerComposeInputs,
+    config: &Value,
+    checked: &super::super::CheckedInstallerCompose,
+    state: &Path,
+    helper: Option<&str>,
+    core_state: CoreState,
+) -> Result<Observation, UpdateError> {
+    let stopped = core_state == CoreState::Stopped;
     let info = docker.json(&["info", "--format", "{{json .}}"]).await?;
     if info["OSType"] != "linux"
         || info["ID"].as_str().is_none_or(str::is_empty)
@@ -77,6 +110,11 @@ pub(super) async fn observe(
             actual,
             role,
             &checked.network,
+            if role == "server" {
+                core_state
+            } else {
+                CoreState::Healthy
+            },
         )?;
     }
     validate_mounts(
@@ -102,7 +140,14 @@ pub(super) async fn observe(
         (&checked.database_volume, "database", database),
     ] {
         let id = container["Id"].as_str().ok_or_else(failed)?;
-        if docker.containers(&format!("volume={name}")).await? != [id] {
+        let mut expected = vec![id.to_owned()];
+        if role == "core"
+            && let Some(helper) = helper
+        {
+            expected.push(helper.to_owned());
+        }
+        expected.sort();
+        if docker.containers(&format!("volume={name}")).await? != expected {
             return Err(refuse(
                 "A Citadel persistent volume is shared with another container; registration is ambiguous.",
             ));
@@ -149,9 +194,10 @@ pub(super) async fn observe(
             .as_object()
             .ok_or_else(failed)?;
         if networks.len() != 1
-            || networks
-                .get(&checked.network)
-                .is_none_or(|v| v["NetworkID"] != network_id)
+            || networks.get(&checked.network).is_none_or(|v| {
+                v["NetworkID"] != network_id
+                    && !(stopped && container["Id"] == core["Id"] && v["NetworkID"] == "")
+            })
         {
             return Err(refuse(
                 "Running Citadel network attachments differ from the supplied installation.",
@@ -167,8 +213,13 @@ pub(super) async fn observe(
             .map(|v| v.as_str().map(str::to_owned).ok_or_else(failed))
             .collect()
     };
-    if members.len() != 2
-        || ids.iter().any(|id| !members.contains_key(id))
+    let expected_members = if stopped {
+        vec![database["Id"].as_str().ok_or_else(failed)?]
+    } else {
+        ids.iter().map(String::as_str).collect()
+    };
+    if members.len() != expected_members.len()
+        || expected_members.iter().any(|id| !members.contains_key(*id))
         || !aliases(database)?.iter().any(|alias| alias == "pg_db")
         || aliases(core)?.iter().any(|alias| alias == "pg_db")
     {
@@ -183,11 +234,21 @@ pub(super) async fn observe(
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect();
+    let retained = json!({"daemon": info["ID"], "database": stable_container(database),
+        "databaseStartedAt": started_at(database)?, "databaseRestarts": database["RestartCount"].as_u64().ok_or_else(failed)?,
+        "volumes": volumes, "networkId": network_id});
+    let retained_fingerprint = Sha256::digest(serde_json::to_vec(&retained).map_err(|_| failed())?)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
     Ok(Observation {
         daemon: info["ID"].as_str().ok_or_else(failed)?.into(),
         core: core["Id"].as_str().ok_or_else(failed)?.into(),
         database: database["Id"].as_str().ok_or_else(failed)?.into(),
         fingerprint,
+        retained_fingerprint,
+        core_image: core["Image"].as_str().ok_or_else(failed)?.into(),
+        core_started_at: started_at(core)?.into(),
     })
 }
 
@@ -201,6 +262,7 @@ fn validate_service(
     actual: &Value,
     role: &str,
     network: &str,
+    state: CoreState,
 ) -> Result<(), UpdateError> {
     let labels = &actual["Config"]["Labels"];
     let files = inputs
@@ -209,10 +271,30 @@ fn validate_service(
         .map(|p| p.to_str().ok_or_else(failed))
         .collect::<Result<Vec<_>, _>>()?
         .join(",");
-    if actual["State"]["Running"] != true
+    let healthy = if state == CoreState::Stopped {
+        actual["State"]["Running"] == false
+            && actual["State"]["Status"] == "exited"
+            && actual["State"]["ExitCode"] == 0
+            && actual["State"]["OOMKilled"] == false
+            && actual["State"]["Error"] == ""
+    } else if state == CoreState::TargetRunning {
+        // A maintenance listener deliberately fails readiness. Do not require a
+        // healthy probe to identify the target, or infer completion from one.
+        actual["State"]["Running"] == true
+            && actual["State"]["Status"] == "running"
+            && actual["State"]["OOMKilled"] == false
+            && actual["State"]["Error"] == ""
+            && actual["RestartCount"] == 0
+            && matches!(
+                actual["State"]["Health"]["Status"].as_str(),
+                Some("starting" | "healthy" | "unhealthy")
+            )
+    } else {
+        actual["State"]["Running"] == true && actual["State"]["Health"]["Status"] == "healthy"
+    };
+    if !healthy
         || actual["State"]["Paused"] != false
         || actual["State"]["Restarting"] != false
-        || actual["State"]["Health"]["Status"] != "healthy"
         || actual["Config"]["Image"] != expected["image"]
         || labels["com.docker.compose.project"] != inputs.project
         || labels["com.docker.compose.service"] != role
@@ -318,4 +400,14 @@ fn validate_mounts(
         ));
     }
     Ok(())
+}
+
+fn started_at(container: &Value) -> Result<&str, UpdateError> {
+    let value = container["State"]["StartedAt"]
+        .as_str()
+        .ok_or_else(failed)?;
+    if chrono::DateTime::parse_from_rfc3339(value).is_err() || value.starts_with("0001-") {
+        return Err(failed());
+    }
+    Ok(value)
 }

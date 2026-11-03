@@ -48,6 +48,16 @@ pub(super) fn unavailable_input() -> UpdateError {
 /// Walk anchored directory descriptors: replacing an ancestor with a symlink
 /// cannot redirect a privileged read between path validation and open.
 pub(super) fn open_secure(path: &Path, directory: bool) -> Result<std::fs::File, UpdateError> {
+    open_secure_with_owner(path, directory, None)
+}
+
+/// Only the helper's verified read-only packaged data mount uses an additional
+/// owner. Registration, installer files and journals retain the executor-only rule.
+pub(super) fn open_secure_with_owner(
+    path: &Path,
+    directory: bool,
+    additional_owner: Option<(u32, &Path)>,
+) -> Result<std::fs::File, UpdateError> {
     use rustix::fs::{Mode, OFlags, openat};
     use std::os::unix::fs::MetadataExt;
     validate_absolute(path)?;
@@ -59,7 +69,9 @@ pub(super) fn open_secure(path: &Path, directory: bool) -> Result<std::fs::File,
             _ => None,
         })
         .collect::<Vec<_>>();
+    let mut traversed = PathBuf::from("/");
     for (index, name) in parts.iter().enumerate() {
+        traversed.push(name);
         let is_directory = index + 1 < parts.len() || directory;
         let mut flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK;
         if is_directory {
@@ -69,8 +81,11 @@ pub(super) fn open_secure(path: &Path, directory: bool) -> Result<std::fs::File,
             openat(&parent, *name, flags, Mode::empty()).map_err(|_| unavailable_input())?,
         );
         let metadata = file.metadata().map_err(|_| unavailable_input())?;
-        let trusted_owner =
-            metadata.uid() == 0 || metadata.uid() == rustix::process::geteuid().as_raw();
+        let trusted_owner = metadata.uid() == 0
+            || metadata.uid() == rustix::process::geteuid().as_raw()
+            || additional_owner.is_some_and(|(owner, root)| {
+                metadata.uid() == owner && traversed.starts_with(root)
+            });
         let safe_sticky_ancestor = is_directory
             && index + 1 < parts.len()
             && metadata.uid() == 0

@@ -11,6 +11,62 @@ pub struct AppliedMigration {
 }
 
 impl MigrationRunner {
+    /// Validate the exact signed-source catalog and its complete live journal
+    /// against an append-only prefix of this target. Never repairs checksums.
+    pub fn validate_upgrade_source(
+        entries: &[AppliedMigration],
+        source_manifest: &str,
+        expected_sha256: &str,
+    ) -> Result<(), MigrationError> {
+        use serde::Deserialize;
+        use sha2::{Digest, Sha256};
+        #[derive(Deserialize)]
+        struct Source {
+            migrations: Vec<Migration>,
+        }
+        #[derive(Deserialize)]
+        struct Migration {
+            id: String,
+            sha256: String,
+        }
+        let invalid = || {
+            MigrationError::InvalidManifest(
+                "Source catalog is not the approved append-only transition".into(),
+            )
+        };
+        if source_manifest.len() > 128 * 1024
+            || Sha256::digest(source_manifest.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+                != expected_sha256
+        {
+            return Err(invalid());
+        }
+        let source: Source = serde_json::from_str(source_manifest).map_err(|_| invalid())?;
+        let target = crate::runner::expected_checksums()?;
+        if source.migrations.is_empty()
+            || source.migrations.len() != entries.len()
+            || source.migrations.len() > target.len()
+        {
+            return Err(invalid());
+        }
+        for ((source, actual), (id, checksum)) in
+            source.migrations.iter().zip(entries).zip(target.iter())
+        {
+            if source.id != *id
+                || source.sha256 != *checksum
+                || actual.id != source.id
+                || actual.checksum != source.sha256
+                || !actual.completed
+                || actual.failed
+            {
+                return Err(invalid());
+            }
+        }
+        Ok(())
+    }
+
     /// Return the embedded catalog identity only when the live journal matches
     /// every migration exactly. This does not verify arbitrary schema edits.
     pub fn validate_applied_catalog(

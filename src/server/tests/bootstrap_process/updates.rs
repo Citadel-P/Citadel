@@ -291,3 +291,65 @@ async fn database_update_ownership_blocks_startup_and_lease_loss_stops_maintenan
     pool.close().await;
     fixture.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission; starts isolated Core processes"]
+async fn a_valid_foreign_target_claim_cannot_enter_startup_migrations() {
+    use citadel_updates::{CoreIdentity, UpdateOperation, UpdatePlan};
+    let fixture = Fixture::new().await;
+    let pool = PgPool::connect(&fixture.database_url).await.unwrap();
+    let now = chrono::Utc::now();
+    let source = CoreIdentity {
+        version: "0.0.1".into(),
+        image: format!("ghcr.io/citadel-p/citadel@sha256:{}", "a".repeat(64)),
+        catalog_sha256: citadel_database::MigrationRunner::catalog_sha256().unwrap(),
+        architecture: "amd64".into(),
+    };
+    let operation = UpdateOperation::approve(
+        UpdatePlan {
+            id: Uuid::now_v7(),
+            instance_id: Uuid::now_v7(),
+            source: source.clone(),
+            target: CoreIdentity {
+                version: "0.0.2".into(),
+                ..source.clone()
+            },
+            helper_image: source.image,
+            configuration_sha256: "b".repeat(64),
+            registration_id: Uuid::now_v7(),
+            reviewed_at: now,
+            expires_at: now + chrono::Duration::minutes(10),
+            checkpoint_directory: "/private/test-checkpoint".into(),
+            agent_requirements: vec![],
+        },
+        citadel_primitives::ActorId::new(Uuid::now_v7()),
+        Uuid::now_v7(),
+        now,
+    )
+    .unwrap();
+    // Valid operation JSON must not become authorization for a different build
+    // to initialize or migrate this database, even with a matching catalog.
+    sqlx::raw_sql(
+        "CREATE TABLE instanceupdates(ownsinstallation boolean NOT NULL, operation jsonb)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO instanceupdates VALUES(true, $1)")
+        .bind(sqlx::types::Json(&operation))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut server = fixture.start(false, false);
+    maintenance(&fixture, &mut server).await;
+    no_migrations(&pool).await;
+    let retained: sqlx::types::Json<UpdateOperation> =
+        sqlx::query_scalar("SELECT operation FROM instanceupdates WHERE ownsinstallation")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(retained.0, operation);
+    server.stop().await;
+    pool.close().await;
+    fixture.close().await;
+}

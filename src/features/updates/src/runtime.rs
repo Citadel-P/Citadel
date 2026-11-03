@@ -1,9 +1,10 @@
 use crate::{Release, ReleaseChannel, UpdateError};
 use futures_util::future::BoxFuture;
 
-/// An acknowledged external executor and a one-way durable shutdown grant.
+/// A prepared external executor and a one-way durable shutdown grant.
 /// The implementation rechecks live ownership before publishing the grant.
 pub trait UpdateHandoffRuntime: Send + Sync {
+    /// Wait for the owned helper to finish preparation before draining Core.
     fn acknowledged<'a>(
         &'a self,
         operation: &'a crate::UpdateOperation,

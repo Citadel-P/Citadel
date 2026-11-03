@@ -1,5 +1,7 @@
 mod app;
 mod cli;
+#[cfg(target_os = "linux")]
+mod cli_updates;
 mod composition;
 mod router;
 mod startup;

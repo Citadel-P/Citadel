@@ -1,4 +1,5 @@
 use super::*;
+use crate::CORE_IMAGE;
 use serde_json::{Value, json};
 
 const STABLE: &str = include_str!(concat!(

@@ -2,6 +2,7 @@
 mod preparation;
 mod restore;
 mod storage;
+pub(in crate::external::updates) use restore::verified_checkpoint;
 pub use restore::{CheckpointRestoreBudget, RestoredUpdateCheckpoint, verify_update_checkpoint};
 
 pub use preparation::{

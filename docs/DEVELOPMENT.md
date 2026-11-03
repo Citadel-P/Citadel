@@ -301,8 +301,9 @@ any future replacement.
 
 The initial profile requires the Compose network and Citadel data volumes to be
 used only by these two services; additional consumers are rejected as ambiguous.
-Automatic installer integration, registration reconciliation, verified startup
-recovery/resume and detached execution are still pending.
+Automatic installer integration, registration reconciliation and verified
+recovery/resume are still pending. The detached driver and target startup
+acceptance exist, but public installation is not yet enabled.
 
 Live update admission has a shared process-local gate wired into HTTP and worker
 dispatch. `UpdateDrainService` validates a committed claim with the PostgreSQL
@@ -320,8 +321,8 @@ preserves installer inputs, reuses the system recovery builder and durably publi
 a preparation receipt after integrity checks. It never initializes database
 identity, advances the journal or resumes Core. Failed/interrupted attempt
 directories are evidence, not disposable cache. The caller must finish draining
-and stop source writers first; helper acknowledgement and that shutdown are not
-connected to the packaged driver yet. Run the checkpoint regressions with dedicated disposable source
+and stop source writers first; the detached helper driver enforces those steps
+before calling this primitive. Run the checkpoint regressions with dedicated disposable source
 and restore databases as described in [`test/README.md`](../test/README.md).
 
 `verify_update_checkpoint` is the subsequent internal PostgreSQL restore rehearsal.
@@ -330,35 +331,54 @@ temporary container, verifies identity/claim/migration history, and removes the
 verifier before publishing `restore-verified.json`. The caller supplies a bounded
 time/storage budget; storage exhaustion fails verification. The source PostgreSQL
 container and its volumes are never changed. Failed attempts retain their evidence
-and cannot be blindly retried. This step does not verify encrypted data with recovery
-keys, authorize replacement or resume Core. It is not wired to a public command yet.
+and cannot be blindly retried. Before publishing the receipt it also verifies
+recovery-key availability and decrypts all stored encrypted values in bounded
+pages. The receipt records the count; zero means there was no ciphertext to check.
+File-backed keys come from the bundle; external keys are resolved using the
+unchanged registered Compose inputs. Keys/plaintext stay in the executor, never
+in PostgreSQL, subprocess arguments, logs or receipts. JWT/Agent authentication
+against running services is not exercised. This step does not authorize replacement
+or resume Core. It is not wired to a public command yet.
 
-Handoff now has feature-owned shutdown authorization and Docker/filesystem
-adapters. Persist launch intent after the database claim, bind the confirmed
-helper container before starting it, and let the helper hold the installation
-lock. `DockerHelperHandoff` receives the launcher's confirmed container ID and
-uses the existing Docker socket to execute the hidden `update-helper-handoff`
-command in that verified container. Its bounded stdin/stdout exchange leaves host
-path access and durable grant publication with the helper's registered user.
-Core requires no extra mount or writable host-root access. The command does not
-launch a helper or stop Core; only the owned helper session can consume the grant.
-`UpdateHandoffService` rechecks acknowledgement and drain before granting
-shutdown; `OwnedUpdateHelper` records stop intent and observes clean Core exit
-before producing the backup-phase journal. Keep that session alive when passing
-its state/lock to checkpoint preparation. Cancellation or timeout never authorizes
-a relaunch, repeated stop, evidence deletion or source resume.
+The detached updater has three entry points: `launch_update_helper` in the
+registered executor namespace, `run_update_helper` in the pinned source helper,
+and `TargetUpdateSession` in replacement Core startup. Individual execution phases
+are private to the adapter. Core cannot directly call the host filesystem launcher
+through its read-only host mapping; that bridge and the public installation action
+are not connected yet.
 
-`launch_update_helper` now implements the internal create/verify/bind/start
-sequence in the registered executor namespace. It uses the local pinned source
-image without pulling, records start intent before execution, and releases the
-installation lock before the child can acquire it. It returns the exact container
-ID for `DockerHelperHandoff`; a successful launch is not acknowledgement or
-shutdown authorization. Failed or interrupted launches retain state and containers
-for explicit recovery, never automatic retry/removal. Core cannot invoke this
-filesystem adapter directly through its read-only host mapping. The packaged
-launcher bridge, long-running helper CLI and normal update worker wiring remain pending; these functions
-must not be exposed as standalone user commands that stop Core without the rest
-of the recovery/update driver.
+The helper driver owns its lock and journal for preparation, authorized shutdown,
+checkpoint/rehearsal, Core-only replacement and completion. `UpdateHandoffService`
+waits for prepared-helper readiness, then drains before granting shutdown. Preparation
+must have published its fresh target/Agent/configuration evidence before a grant can succeed.
+Core and target both use the same bounded `update-helper-handoff` Docker-exec
+command, with typed actions and exact operation/helper identity. Only the driver
+writes the complete execution journal; command handlers publish grants or completion
+mailboxes. Read-only pending responses share one bounded, cancellation-aware wait.
+No request executes replacement, retries a stop or releases maintenance.
+
+Post-publication validation is shared by replacement observation, target startup
+and completion. A replacing operation may return pending while Compose starts the
+target before the helper binds it. Bound targets require unchanged configuration,
+checkpoint, PostgreSQL/storage/network and container/start identity. Readiness can
+still fail in maintenance; Docker health is not update success.
+
+Target startup validates the source catalog and recovery keys, runs supported
+migrations, verifies the target catalog and credential decryption, and commits
+completion under the monitored single-Core lease. The helper asks the target's
+read-only `update-target-receipt` command to verify that committed receipt before
+acknowledging completion and exiting. No source-schema queries run after replacement.
+Host reconciliation, final admission, public installation and host recovery remain
+unfinished; installation stays disabled. Helper acknowledgement, preparation, stop,
+replacement and target binding now live with the phase history in one atomic journal.
+The launcher still owns launch intent/start binding, and other processes publish only
+the shutdown grant/completion mailbox. Standalone checkpoint journals, database
+claims and migration history retain their formats. Existing fragmented operation
+state is retained and blocks automatic relaunch; it is not silently migrated or replayed.
+
+For the execution invariants and module responsibilities, see
+[instance updates](ARCHITECTURE.md#instance-update-work-in-progress). Do not expose
+internal commands as operator shortcuts around the full update/recovery flow.
 
 Validate bootstrap changes with the isolated Docker acceptance command in
 [`test/README.md`](../test/README.md). It exercises the shipped layout and a compatible customized Edge-overlay installation

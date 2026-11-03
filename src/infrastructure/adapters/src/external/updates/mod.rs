@@ -19,7 +19,7 @@ mod files;
 #[cfg(target_os = "linux")]
 mod recovery_keys;
 #[cfg(target_os = "linux")]
-pub use compose::{CheckedInstallerCompose, InstallerComposeInputs};
+pub use compose::{CheckedCoreReplacement, CheckedInstallerCompose, InstallerComposeInputs};
 #[cfg(target_os = "linux")]
 pub use recovery_keys::{CheckedRecoveryKeys, RecoveryKeySource, check_recovery_keys};
 #[cfg(target_os = "linux")]
@@ -54,6 +54,6 @@ mod handoff;
 #[cfg(target_os = "linux")]
 pub use handoff::{
     DockerHelperHandoff, HelperLaunchIntent, LaunchedUpdateHelper, MAX_HANDOFF_REQUEST,
-    OwnedUpdateHelper, bind_helper_launch, execute_helper_handoff, launch_update_helper,
-    prepare_helper_launch,
+    TargetRecoveryKeys, TargetUpdateCompletion, TargetUpdateEvidence, TargetUpdateSession,
+    UpdateHelperBudget, execute_helper_handoff, launch_update_helper, run_update_helper,
 };

@@ -29,7 +29,7 @@ async fn fetch_release<T: serde::de::DeserializeOwned>(
         }
         body.extend_from_slice(&chunk);
     }
-    Ok(serde_json::from_slice(&body).map_err(unavailable)?)
+    serde_json::from_slice(&body).map_err(unavailable)
 }
 
 const RELEASE_URL: &str = "https://api.github.com/repos/Citadel-P/Citadel/releases/latest";

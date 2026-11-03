@@ -1,8 +1,9 @@
 use super::super::{
     InstallationLock, JournalDirectory, bootstrap::verify_handoff_source, docker::LocalDocker,
 };
+use super::ExecutionJournal;
 use super::{
-    evidence::{HelperAcknowledgement, HelperBinding, HelperLaunchIntent, binding, conflict},
+    evidence::{HelperAcknowledgement, HelperLaunchIntent, binding, conflict},
     runtime::private_home,
     verification,
 };
@@ -10,15 +11,14 @@ use citadel_execution::ProcessRunner;
 use citadel_updates::{UPDATE_PROTOCOL, UpdateError, UpdateJournal, UpdatePhase};
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
 /// Owned by the detached helper until its checkpoint/replacement/recovery path
 /// completes. Dropping releases only the OS lock, never durable maintenance.
-pub struct OwnedUpdateHelper {
-    state: JournalDirectory,
-    owner: InstallationLock,
-    intent: HelperLaunchIntent,
-    acknowledgement: HelperAcknowledgement,
+pub(super) struct OwnedUpdateHelper {
+    pub(super) state: JournalDirectory,
+    pub(super) owner: InstallationLock,
+    pub(super) intent: HelperLaunchIntent,
+    pub(super) acknowledgement: HelperAcknowledgement,
 }
 impl OwnedUpdateHelper {
     /// Executor identity comes from the helper's own runtime context. This is
@@ -33,9 +33,7 @@ impl OwnedUpdateHelper {
         let owner = state.existing_lock()?;
         intent.verify_saved(&state)?;
         let binding = binding(&state, &intent)?;
-        if executor_id != binding.helper_container_id
-            || state.read::<HelperBinding>(&intent.file("start-intent"))? != binding
-        {
+        if executor_id != binding.helper_container_id {
             return Err(conflict());
         }
         let home = private_home()?;
@@ -46,7 +44,12 @@ impl OwnedUpdateHelper {
             deadline: Instant::now() + Duration::from_secs(120),
         };
         let image = verification::helper(&docker, &intent, &binding).await?;
-        verify_handoff_source(&docker, &intent.registration).await?;
+        verify_handoff_source(
+            &docker,
+            &intent.registration,
+            Some(&binding.helper_container_id),
+        )
+        .await?;
         let core = verification::container(&docker, &intent.registration.core_container_id).await?;
         if core["Image"] != image.image {
             return Err(conflict());
@@ -68,13 +71,22 @@ impl OwnedUpdateHelper {
             maintenance_released: false,
         };
         journal.validate_for(&intent.operation)?;
-        state.create(&format!("{}.json", intent.operation.id), &journal)?;
         let acknowledgement = HelperAcknowledgement {
             binding,
-            incarnation: Uuid::now_v7(),
             started_at: image.started_at,
         };
-        state.create(&intent.file("ack"), &acknowledgement)?;
+        state.create(
+            &format!("{}.json", intent.operation.id),
+            &ExecutionJournal {
+                journal,
+                acknowledgement: acknowledgement.clone(),
+                prepared: None,
+                stop: None,
+                replacement: None,
+                submitted: false,
+                target: None,
+            },
+        )?;
         Ok(Self {
             state,
             owner,
@@ -106,7 +118,12 @@ impl OwnedUpdateHelper {
         };
         let image =
             verification::helper(&docker, &self.intent, &self.acknowledgement.binding).await?;
-        verify_handoff_source(&docker, &self.intent.registration).await?;
+        verify_handoff_source(
+            &docker,
+            &self.intent.registration,
+            Some(&self.acknowledgement.binding.helper_container_id),
+        )
+        .await?;
         if image.started_at != self.acknowledgement.started_at {
             return Err(conflict());
         }
@@ -136,8 +153,12 @@ impl OwnedUpdateHelper {
         if cancellation.is_cancelled() {
             return Err(UpdateError::Cancelled);
         }
-        self.state
-            .create(&self.intent.file("stop-intent"), &self.acknowledgement)?;
+        let mut execution = ExecutionJournal::read(&self.state, self.intent.operation.id)?;
+        if execution.stop.is_some() || execution.journal != journal {
+            return Err(conflict());
+        }
+        execution.stop = Some(super::checkpoint::SourceProcess::from_container(&core)?);
+        execution.save(&self.state, &self.owner)?;
         // Docker's -1 timeout disables daemon-side SIGKILL escalation. The client
         // is bounded; interruption can leave a daemon request in flight, so an
         // error is not a retry/resume signal. Stop intent prohibits blind replay.
@@ -203,32 +224,31 @@ impl OwnedUpdateHelper {
         if cancellation.is_cancelled() {
             return Err(UpdateError::Cancelled);
         }
-        self.state.save(&journal)?;
+        self.save_journal(journal.clone())?;
         Ok(journal)
     }
 
-    fn check_grant(&self) -> Result<(), UpdateError> {
+    pub(super) fn check_grant(&self) -> Result<(), UpdateError> {
         self.state.verify_lock(&self.owner)?;
         self.intent.verify_saved(&self.state)?;
+        super::preparation::check_prepared_target(
+            &self.state,
+            &self.intent,
+            &self.acknowledgement,
+            false,
+        )?;
         if binding(&self.state, &self.intent)? != self.acknowledgement.binding {
             return Err(conflict());
         }
-        for kind in ["ack", "shutdown-grant"] {
-            if self
+        if ExecutionJournal::read(&self.state, self.intent.operation.id)?.acknowledgement
+            != self.acknowledgement
+            || self
                 .state
-                .read::<HelperAcknowledgement>(&self.intent.file(kind))?
+                .read::<HelperAcknowledgement>(&self.intent.file("shutdown-grant"))?
                 != self.acknowledgement
-            {
-                return Err(conflict());
-            }
+        {
+            return Err(conflict());
         }
         Ok(())
-    }
-
-    pub fn state(&self) -> &JournalDirectory {
-        &self.state
-    }
-    pub fn owner(&self) -> &InstallationLock {
-        &self.owner
     }
 }

@@ -1,11 +1,16 @@
 use super::*;
-use crate::Release;
+use crate::{
+    CheckState, Release, ReleaseChannel, ReleaseCheckRepository, ReleaseNotice, ReleaseSource,
+    UpdateError,
+};
 use futures_util::future::BoxFuture;
+use std::sync::Arc;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use tokio::sync::Notify;
+use tokio_util::sync::CancellationToken;
 
 const POLICY: ReleaseCheckPolicy = ReleaseCheckPolicy {
     initialized: true,

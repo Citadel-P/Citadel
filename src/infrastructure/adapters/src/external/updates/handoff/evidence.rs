@@ -20,6 +20,16 @@ impl HelperLaunchIntent {
         format!("{kind}-{}.json", self.operation.id)
     }
     pub(super) fn verify(&self, state: &JournalDirectory) -> Result<(), UpdateError> {
+        self.verify_identity(state)?;
+        if self.registration.fingerprint(std::path::Path::new("/"))?
+            != self.registration.configuration_sha256
+        {
+            return Err(conflict());
+        }
+        Ok(())
+    }
+
+    fn verify_identity(&self, state: &JournalDirectory) -> Result<(), UpdateError> {
         state.verify_location()?;
         self.operation.plan.validate(self.operation.created_at)?;
         self.registration.validate()?;
@@ -48,7 +58,6 @@ impl HelperLaunchIntent {
             || !is_sha256(&reg.core_container_id)
             || !is_sha256(&reg.database_container_id)
             || reg.docker_socket != std::path::Path::new("/var/run/docker.sock")
-            || reg.fingerprint(std::path::Path::new("/"))? != reg.configuration_sha256
             || state.read::<RegisteredComposeInstallation>("installation.json")? != *reg
         {
             return Err(conflict());
@@ -57,6 +66,16 @@ impl HelperLaunchIntent {
     }
     pub(super) fn verify_saved(&self, state: &JournalDirectory) -> Result<(), UpdateError> {
         self.verify(state)?;
+        self.verify_saved_identity(state)
+    }
+
+    /// Post-publication callers must separately verify the approved target input
+    /// fingerprint. Source-side authorization always retains verify_saved().
+    pub(super) fn verify_saved_identity(
+        &self,
+        state: &JournalDirectory,
+    ) -> Result<(), UpdateError> {
+        self.verify_identity(state)?;
         if state.read::<Self>(&self.file("launch"))? != *self {
             return Err(conflict());
         }
@@ -75,13 +94,12 @@ pub(super) struct HelperBinding {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct HelperAcknowledgement {
     pub binding: HelperBinding,
-    pub incarnation: Uuid,
     pub started_at: String,
 }
 
 /// Call only after the transactional approval. The short registration lock is
 /// released before this returns; Core never waits for a helper while holding it.
-pub fn prepare_helper_launch(
+pub(super) fn prepare_helper_launch(
     state: &JournalDirectory,
     operation: &UpdateOperation,
 ) -> Result<HelperLaunchIntent, UpdateError> {
@@ -97,34 +115,6 @@ pub fn prepare_helper_launch(
     state.verify_lock(&lock)?;
     state.create(&intent.file("launch"), &intent)?;
     Ok(intent)
-}
-
-/// Bind a confirmed Docker create before starting it. An ambiguous create must
-/// be reconciled by exact name/nonce, never blindly retried or replaced here.
-pub fn bind_helper_launch(
-    state: &JournalDirectory,
-    intent: &HelperLaunchIntent,
-    helper_container_id: &str,
-) -> Result<(), UpdateError> {
-    let lock = state.existing_lock()?;
-    intent.verify_saved(state)?;
-    if !is_sha256(helper_container_id)
-        || [
-            intent.registration.core_container_id.as_str(),
-            intent.registration.database_container_id.as_str(),
-        ]
-        .contains(&helper_container_id)
-    {
-        return Err(conflict());
-    }
-    state.verify_lock(&lock)?;
-    state.create(
-        &intent.file("binding"),
-        &HelperBinding {
-            nonce: intent.nonce,
-            helper_container_id: helper_container_id.into(),
-        },
-    )
 }
 
 pub(super) fn binding(

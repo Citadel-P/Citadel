@@ -266,3 +266,55 @@ fn source_resume_never_releases_active_or_ambiguous_replacement() {
             .is_err()
     );
 }
+
+#[test]
+fn review_requires_known_distinct_agent_versions_in_canonical_order() {
+    let mut plan = plan();
+    plan.agent_requirements = vec!["0.1.0".into(), "0.1.1".into()];
+    plan.validate(plan.reviewed_at).unwrap();
+    for versions in [
+        vec!["unknown"],
+        vec!["0.1.1", "0.1.1"],
+        vec!["0.1.1", "0.1.0"],
+    ] {
+        plan.agent_requirements = versions.into_iter().map(str::to_owned).collect();
+        assert!(plan.validate(plan.reviewed_at).is_err());
+    }
+}
+
+#[test]
+fn target_completion_is_separate_from_commit_and_maintenance_release() {
+    let mut journal = journal();
+    for phase in [
+        UpdatePhase::Draining,
+        UpdatePhase::BackingUp,
+        UpdatePhase::ReplacingCore,
+        UpdatePhase::Verifying,
+    ] {
+        assert!(
+            journal
+                .completed(&journal.operation.plan.target, journal.operation.updated_at)
+                .is_err()
+        );
+        if phase == UpdatePhase::ReplacingCore {
+            journal.operation.checkpoint = Some("checkpoint".into());
+        }
+        advance(&mut journal, phase);
+    }
+    assert!(
+        journal
+            .completed(&journal.operation.plan.source, journal.operation.updated_at)
+            .is_err()
+    );
+    let done = journal
+        .completed(&journal.operation.plan.target, journal.operation.updated_at)
+        .unwrap();
+    assert_eq!(done.operation.phase, UpdatePhase::Succeeded);
+    assert_eq!(done.operation.revision, journal.operation.revision + 1);
+    assert_eq!(done.history[..journal.history.len()], journal.history);
+    assert!(!done.completion_acknowledged && !done.maintenance_released);
+    assert!(
+        done.completed(&done.operation.plan.target, done.operation.updated_at)
+            .is_err()
+    );
+}

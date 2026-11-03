@@ -6,6 +6,20 @@ use uuid::Uuid;
 
 pub(crate) const CHECKPOINT_PROBE_SQL: &str = include_str!("checkpoint.sql");
 
+pub(crate) async fn check_checkpoint_source(
+    pool: &sqlx::PgPool,
+    journal: &UpdateJournal,
+) -> Result<(), UpdateError> {
+    let value: serde_json::Value = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        sqlx::query_scalar(CHECKPOINT_PROBE_SQL).fetch_one(pool),
+    )
+    .await
+    .map_err(|_| failed())?
+    .map_err(|_| failed())?;
+    validate_checkpoint_database(&serde_json::to_vec(&value).map_err(|_| failed())?, journal)
+}
+
 #[derive(Deserialize)]
 struct Probe {
     instance: Uuid,
@@ -34,6 +48,18 @@ pub(crate) fn validate_checkpoint_database(
     bytes: &[u8],
     journal: &UpdateJournal,
 ) -> Result<(), UpdateError> {
+    let entries = checked_migrations(bytes, journal)?;
+    let catalog = MigrationRunner::validate_applied_catalog(&entries).map_err(|_| failed())?;
+    if catalog != journal.operation.plan.source.catalog_sha256 {
+        return Err(failed());
+    }
+    Ok(())
+}
+
+pub(super) fn checked_migrations(
+    bytes: &[u8],
+    journal: &UpdateJournal,
+) -> Result<Vec<AppliedMigration>, UpdateError> {
     let probe: Probe = serde_json::from_slice(bytes).map_err(|_| failed())?;
     if probe.instance != journal.operation.instance_id
         || !probe.initialized
@@ -52,7 +78,7 @@ pub(crate) fn validate_checkpoint_database(
     {
         return Err(failed());
     }
-    let entries = probe
+    Ok(probe
         .migrations
         .into_iter()
         .map(|m| AppliedMigration {
@@ -61,12 +87,7 @@ pub(crate) fn validate_checkpoint_database(
             completed: m.completed,
             failed: m.failed,
         })
-        .collect::<Vec<_>>();
-    let catalog = MigrationRunner::validate_applied_catalog(&entries).map_err(|_| failed())?;
-    if catalog != journal.operation.plan.source.catalog_sha256 {
-        return Err(failed());
-    }
-    Ok(())
+        .collect())
 }
 
 fn failed() -> UpdateError {

@@ -103,6 +103,45 @@ cover embedded catalog identity, offline CLI output, per-architecture acceptance
 and preservation of accepted metadata during publication recovery. Empty source
 lists intentionally provide no installation eligibility.
 
+Core replacement boundary tests use private disposable installer/checkpoint files
+and an injected Docker runner:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib replacement
+```
+
+They check durable intent/journal ordering before mutation, exact Core-only Compose
+arguments, private atomic `.env` publication, preservation of checkpoint inputs,
+rejection of changed/missing restore proof and leftover sandboxes, cached image
+identity, runtime drift, cancellation, timeout, failed/truncated responses and no
+replay. Successful command submission must leave maintenance active and must not
+claim verified startup or completion. These do not exercise a real Core replacement
+or qualify an end-to-end update; packaged driver/startup/recovery acceptance remains
+required before enabling installation.
+
+Replacement observation tests reuse the handoff/replacement fixtures and enforce a
+read-only Docker command allowlist:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::handoff::target_tests
+```
+
+They cover target binding while readiness is unhealthy, repeated observations,
+interruption between binding and journal publication, target/helper restarts,
+changed PostgreSQL configuration/start identity, recreated storage/network, leftover
+source containers, installer edits during observation, malformed evidence and
+cancelled/timed-out commands. The journal may advance only to `Verifying`; no
+completion flags or maintenance release are inferred. These tests do not exercise
+target migrations or a packaged end-to-end upgrade. Target exchange tests also
+exercise the Compose/startup binding race: repeated pending reads preserve the
+journal, a published binding becomes ready, and conflicting fences/grants,
+terminal journals or a missing installation lock fail closed. Key-identity tests
+reject replaced JWT/encryption/signing keys, stale loaded keys, changes to key
+sources, and edited checkpoint key files/checksum metadata without generating
+new keys or rewriting the journal. Bootstrap-process
+tests continue to enforce maintenance before ordinary migrations, including
+corrupt operation JSON and retained external evidence.
+
 Target-inspection service tests enforce signature-before-execution, exact release
 identity, supported target metadata and awaited cancellation cleanup. Injected Docker
 runner tests cover immutable image selection, architecture/digest mismatches,
@@ -166,9 +205,11 @@ without a database claim, survives restart, excludes normal API/Edge routes,
 retains the single-Core lease and stops listening on lease loss. Startup lease-loss
 regressions also hold migrations blocked or resume them immediately after another
 owner takes the lease, checking that the original Core exits without creating an
-administrator or opening listeners. These checks do not qualify live draining,
-target startup/migration verification or automatic
-recovery/resume; those execution paths remain unimplemented.
+administrator or opening listeners. A valid claim targeting another build also
+remains in maintenance without migrations or changes to the saved operation.
+These process checks do not qualify a packaged target migration or automatic
+recovery/resume. Target startup acceptance is connected; host reconciliation
+and admission still require implementation and end-to-end qualification.
 
 The live admission barrier has targeted runtime, HTTP and worker regressions:
 
@@ -245,21 +286,29 @@ SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::update
 
 Coverage includes restored instance/claim/catalog checks, tampered input/dump evidence,
 create ambiguity, cancellation, restore failure, foreign-container protection,
-cleanup failure, exclusive receipts and no journal advancement. It does not replace
-packaged helper or source-to-target upgrade acceptance.
+cleanup failure, exclusive receipts and no journal advancement. Recovery-key tests
+cover malformed/missing/unsafe keys, external Compose resolution, an incorrect but
+well-formed encryption key, malformed envelopes, repeated pages and empty encrypted
+state. The real PostgreSQL test restores and decrypts all six supported encrypted
+stores over multiple pages, rejects a correctly checksummed archive with the wrong
+key, and removes every owned verifier. It does not replace packaged helper or
+source-to-target upgrade acceptance.
 
 Handoff and shutdown guards:
 
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::handoff::tests
-SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::handoff::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::handoff::
 ```
 
 These use private temporary state, real OS installation locks and an injected
 Docker runner. They cover launch/binding exclusivity, lock release before helper
-startup, verified create/bind/start ordering, missing start intent, wrong user/mounts,
+startup, verified create/bind/start ordering, missing start binding, wrong user/mounts,
 automatic removal, create/start cancellation and ambiguous timeout retention.
-Launch retries cannot create a second helper or replay start. They also cover
+Launch retries cannot create a second helper or replay start. The helper profile
+requires the exact PostgreSQL network namespace and a read-only Core data mount;
+host networking and writable data mounts fail verification. Stopped-source checks
+reject restart, unclean exit, lost PostgreSQL and changed helper profiles. They also cover
 stale/dead/restarted helpers, retained evidence after helper loss, busy
 drains, cancellation, grant-before-stop ordering, changed inputs, clean-exit
 journal history and refusal to replay ambiguous stops. A failed/nonzero exit,
@@ -268,7 +317,44 @@ They do not launch the packaged helper or stop a live Core/Docker installation;
 that process/daemon acceptance remains required before enabling installation.
 The namespace regression gives Core nonexistent host paths and a different
 executor UID, and routes only the bounded Docker exec request into the helper's
-private state. CLI tests reject invalid/oversized input without starting Core.
+private state. Source authorization and target acceptance exercise the same
+`update-helper-handoff` command, including action/phase, operation and process
+identity checks. CLI tests reject invalid/oversized input without starting Core.
+The replacement evidence checks are shared by observation, pending target reads
+and completion; changing the saved checkpoint or configuration must fail all of
+them without advancing the journal or granting/replaying execution.
+
+Target-completion tests reject uncommitted or foreign receipts, changed target incarnations,
+altered history and premature maintenance release. The mailbox never writes journal
+history concurrently with the driver. Execution-state regressions require phase and
+target identity to be published atomically, reject mismatched snapshots, prevent a
+phase-only write from discarding execution evidence, and retain preparation on failure.
+Readiness tests cover waiting for preparation and cancellation without granting shutdown. Failure after replacement preserves the
+checkpoint and records recovery without issuing another Docker mutation.
+The `instance_updates` disposable-database test also exercises source-catalog
+verification and target credential decryption over multiple pages, including a
+wrong key and a malformed final page. This is current-schema verification, not
+qualification of a published source-to-target transition.
+
+Target preparation regressions reject shutdown without a fresh, matching preparation
+receipt. Compose comparison tests exercise the real base installer and Edge overlay,
+keep the input files byte-for-byte unchanged, and reject changes to credentials,
+ports, volumes, PostgreSQL, ignored image selectors and concurrent input edits.
+These are configuration and handoff checks, **not** a source-to-target update test.
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose -- --include-ignored
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib persistence::postgres::updates::agents::tests
+# Disposable database only, named citadel_update_test_*:
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib persistence::postgres::updates::agents::database_tests -- --ignored
+```
+
+The ignored `root_helper_reads_packaged_core_keys_without_trusting_other_owners`
+test requires root inside a disposable container, a fresh tmpfs mounted at
+`/app/data`, and `CITADEL_TEST_PACKAGED_KEYS=1`. Run the compiled adapters test
+binary read-only with no Docker socket, host data mounts or network. It verifies
+the root helper can read UID 65532 keys while refusing other owners, permissive
+key modes and symlinks. Never point it at an installation's data volume.
 
 Resource-copy continuation during maintenance has database-backed regressions:
 

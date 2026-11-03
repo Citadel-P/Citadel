@@ -1,8 +1,16 @@
+use super::super::{files::validate_absolute, registration::fingerprint_inputs};
+use super::resolution::validate_environment;
 use super::*;
 use citadel_execution::ProcessOutput;
+use citadel_execution::{ProcessError, ProcessRequest, ProcessRunner};
+use citadel_updates::UpdateError;
 use futures_util::future::BoxFuture;
+use serde_json::Value;
 use serde_json::json;
+use std::time::Duration;
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 use std::{os::unix::fs::symlink, sync::Mutex};
+use tokio_util::sync::CancellationToken;
 
 fn template(name: &str) -> Vec<u8> {
     fs::read(
@@ -15,13 +23,13 @@ fn template(name: &str) -> Vec<u8> {
 
 const ENV: &str = "PG_PASSWORD=private-fixture-password\nCITADEL_HTTP_PORT=19000\n";
 
-struct Fixture {
+pub(super) struct Fixture {
     _directory: tempfile::TempDir,
-    inputs: InstallerComposeInputs,
+    pub(super) inputs: InstallerComposeInputs,
 }
 
 impl Fixture {
-    fn new(edge: bool) -> Self {
+    pub(super) fn new(edge: bool) -> Self {
         let directory = tempfile::Builder::new()
             .prefix("citadel-compose-fixture-")
             .permissions(fs::Permissions::from_mode(0o700))
@@ -52,7 +60,7 @@ impl Fixture {
     }
 }
 
-fn resolved() -> Value {
+pub(super) fn resolved() -> Value {
     let mut config = json!({
         "name": "citadel-fixture",
         "services": {

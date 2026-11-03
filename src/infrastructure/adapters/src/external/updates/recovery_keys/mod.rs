@@ -2,6 +2,7 @@
 mod validation;
 
 pub use validation::{CheckedRecoveryKeys, RecoveryKeySource, check_recovery_keys};
+pub(super) use validation::{check_packaged_recovery_keys, read_key};
 
 #[cfg(test)]
 mod tests;

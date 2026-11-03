@@ -16,6 +16,7 @@ pub struct UpdatePlan {
     pub reviewed_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub checkpoint_directory: String,
+    /// Sorted distinct published Agent versions covered by this review.
     pub agent_requirements: Vec<String>,
 }
 
@@ -47,6 +48,14 @@ impl UpdatePlan {
                 .any(|segment| matches!(segment, "." | ".."))
             || self.checkpoint_directory.len() > 4096
             || self.agent_requirements.len() > 4096
+            || self
+                .agent_requirements
+                .iter()
+                .any(|version| release_version(version).is_err())
+            || self
+                .agent_requirements
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
         {
             return Err(UpdateError::Conflict(
                 "The update review is invalid or has expired. Review again.".into(),

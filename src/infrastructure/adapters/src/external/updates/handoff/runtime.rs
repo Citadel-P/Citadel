@@ -1,8 +1,8 @@
 //! Core-side Docker transport; registered host files are only accessed by the helper.
 use super::super::docker::LocalDocker;
 use super::{
-    command::{HandoffAction, HandoffRequest, MAX_HANDOFF_REQUEST},
-    evidence::{HelperAcknowledgement, HelperBinding, HelperLaunchIntent, conflict},
+    command::{HelperAction, HelperRequest, HelperResponse},
+    evidence::{HelperBinding, HelperLaunchIntent, conflict},
     verification,
 };
 use citadel_execution::ProcessRunner;
@@ -35,7 +35,7 @@ impl DockerHelperHandoff {
     async fn exchange(
         &self,
         operation: &UpdateOperation,
-        action: HandoffAction,
+        action: HelperAction,
         cancellation: &CancellationToken,
     ) -> Result<(), UpdateError> {
         if cancellation.is_cancelled() {
@@ -58,49 +58,36 @@ impl DockerHelperHandoff {
             process: self.process.as_ref(),
             cancellation,
             home: home.path(),
-            deadline: Instant::now() + Duration::from_secs(60),
+            deadline: Instant::now()
+                + Duration::from_secs(if matches!(action, HelperAction::Check) {
+                    900
+                } else {
+                    60
+                }),
         };
         let observed = verification::helper(&docker, &self.intent, &binding).await?;
-        let request = HandoffRequest {
-            intent: self.intent.clone(),
+        let request = HelperRequest {
+            operation: operation.clone(),
             binding: binding.clone(),
             started_at: observed.started_at.clone(),
             action,
         };
-        let input = serde_json::to_vec(&request).map_err(|_| conflict())?;
-        if input.len() > MAX_HANDOFF_REQUEST {
-            return Err(conflict());
-        }
         let user = format!(
             "{}:{}",
             self.intent.registration.executor_uid, self.intent.registration.executor_gid
         );
-        let temporary = format!(
-            "TMPDIR={}",
-            self.intent.registration.state_directory.display()
-        );
-        let output = docker
-            .run_with_input(
-                &[
-                    "exec",
-                    "--interactive",
-                    "--env",
-                    &temporary,
-                    "--user",
-                    &user,
-                    &self.helper_container_id,
-                    "/app/citadel-server",
-                    "update-helper-handoff",
-                ],
-                input,
+        let HelperResponse::Acknowledged(ack) = request
+            .exchange(
+                &docker,
+                &self.helper_container_id,
+                &user,
                 Duration::from_secs(45),
             )
-            .await?;
-        let ack: HelperAcknowledgement = serde_json::from_slice(&output).map_err(|_| conflict())?;
-        if ack.binding != binding
-            || ack.incarnation.is_nil()
-            || ack.started_at != observed.started_at
-        {
+            .await?
+        else {
+            return Err(conflict());
+        };
+        if ack.binding != binding || ack.started_at != observed.started_at {
             return Err(conflict());
         }
         let after = verification::helper(&docker, &self.intent, &binding).await?;
@@ -116,14 +103,14 @@ impl UpdateHandoffRuntime for DockerHelperHandoff {
         operation: &'a UpdateOperation,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), UpdateError>> {
-        Box::pin(self.exchange(operation, HandoffAction::Check, cancellation))
+        Box::pin(self.exchange(operation, HelperAction::Check, cancellation))
     }
     fn authorize_shutdown<'a>(
         &'a self,
         operation: &'a UpdateOperation,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), UpdateError>> {
-        Box::pin(self.exchange(operation, HandoffAction::Grant, cancellation))
+        Box::pin(self.exchange(operation, HelperAction::Grant, cancellation))
     }
 }
 

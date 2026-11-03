@@ -24,7 +24,7 @@ pub struct LaunchedUpdateHelper {
 /// registered host/executor namespace after the database approval commits.
 /// Core cannot call this directly: its host-root bind is read-only.
 /// Await cancellation cleanup of Docker clients. Never retry, remove or restart
-/// a container after failure: launch/binding/start evidence is retained for recovery.
+/// a container after failure: launch intent and binding is retained for recovery.
 pub async fn launch_update_helper(
     state: &JournalDirectory,
     operation: &UpdateOperation,
@@ -42,7 +42,7 @@ pub async fn launch_update_helper(
         home: home.path(),
         deadline: Instant::now() + Duration::from_secs(120),
     };
-    verify_handoff_source(&docker, &intent.registration).await?;
+    verify_handoff_source(&docker, &intent.registration, None).await?;
     let image = verification::source_image(&docker, &intent).await?;
     let core = verification::container(&docker, &intent.registration.core_container_id).await?;
     if core["Image"] != image {
@@ -71,14 +71,13 @@ pub async fn launch_update_helper(
     state.verify_lock(&owner)?;
     intent.verify_saved(state)?;
     cancelled(cancellation)?;
-    state.create(&intent.file("binding"), &binding)?;
     // Recheck the source immediately before allowing the helper to execute.
-    verify_handoff_source(&docker, &intent.registration).await?;
+    verify_handoff_source(&docker, &intent.registration, Some(id)).await?;
     verification::created_helper(&docker, &intent, &binding).await?;
     state.verify_lock(&owner)?;
     intent.verify_saved(state)?;
     cancelled(cancellation)?;
-    state.create(&intent.file("start-intent"), &binding)?;
+    state.create(&intent.file("binding"), &binding)?;
     // The child acquires this lock on entry. Never hold it across docker start
     // or while waiting for acknowledgement; the helper would fail to acquire it.
     drop(owner);
@@ -102,7 +101,7 @@ fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateEr
         "--platform".into(),
         format!("linux/{}", intent.operation.plan.source.architecture),
         "--restart=no".into(),
-        "--network=none".into(),
+        format!("--network=container:{}", reg.database_container_id),
         "--read-only".into(),
         "--no-healthcheck".into(),
         "--user".into(),
@@ -119,6 +118,13 @@ fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateEr
     for path in [&reg.directory, &reg.state_directory, &reg.docker_socket] {
         args.extend(["--mount".into(), bind_mount(path)?]);
     }
+    args.extend([
+        "--mount".into(),
+        format!(
+            "type=volume,source={},destination=/app/data,readonly",
+            reg.core_volume
+        ),
+    ]);
     args.extend([
         intent.operation.plan.helper_image.clone(),
         "run-update-helper".into(),

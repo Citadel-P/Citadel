@@ -20,6 +20,35 @@ pub struct UpdateJournal {
 }
 
 impl UpdateJournal {
+    /// Construct completion only in the target process after catalog and readiness
+    /// verification. Import this value transactionally before acknowledging it to
+    /// the helper; constructing it does not release installation ownership.
+    pub fn completed(
+        &self,
+        running: &CoreIdentity,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Self, UpdateError> {
+        self.validate_for(&self.operation)?;
+        if self.operation.phase != UpdatePhase::Verifying
+            || running != &self.operation.plan.target
+            || self.verified_target.is_some()
+            || self.completion_acknowledged
+            || self.maintenance_released
+        {
+            return Err(UpdateError::Conflict(
+                "Target verification is not ready for completion.".into(),
+            ));
+        }
+        let mut completed = self.clone();
+        completed
+            .operation
+            .advance(self.operation.revision, UpdatePhase::Succeeded, now)?;
+        completed.history.push(completed.operation.clone());
+        completed.verified_target = Some(running.clone());
+        completed.validate_for(&self.operation)?;
+        Ok(completed)
+    }
+
     pub fn validate_for(&self, operation: &UpdateOperation) -> Result<(), UpdateError> {
         let actual = &self.operation;
         if self.protocol != UPDATE_PROTOCOL
