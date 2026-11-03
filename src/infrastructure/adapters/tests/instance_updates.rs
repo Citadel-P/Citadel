@@ -21,6 +21,8 @@ use uuid::Uuid;
 mod acceptance;
 #[path = "instance_updates/drain.rs"]
 mod drain;
+#[path = "instance_updates/ownership.rs"]
+mod ownership;
 
 #[tokio::test]
 #[ignore = "requires a fresh disposable CITADEL_UPDATE_TEST_DATABASE_URL (database name citadel_update_test_*)"]
@@ -161,10 +163,17 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     let key = Uuid::now_v7();
     let claims =
         futures_util::future::join_all((0..8).map(|_| repo.claim(actor, &plan, key, now))).await;
-    let operation = claims[0].as_ref().unwrap().clone();
+    let operation = claims[0].as_ref().unwrap().0.clone();
+    assert_eq!(
+        claims
+            .iter()
+            .filter(|claim| claim.as_ref().unwrap().1)
+            .count(),
+        1
+    );
     assert!(check_startup_updates(&pool, None).await.is_err());
     for claim in claims {
-        assert_eq!(claim.unwrap(), operation);
+        assert_eq!(claim.unwrap().0, operation);
     }
     assert!(repo.claim(actor, &plan, Uuid::now_v7(), now).await.is_err());
     assert_eq!(count(&pool, "InstanceUpdateStarted").await, 1);
@@ -215,7 +224,20 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         .await
         .is_err()
     );
+    ownership::verify_reconciliation_ownership(&pool, &repo, &journal).await;
+    // Outcome, revision, receipt and Activities must still be one transaction.
+    sqlx::raw_sql("CREATE FUNCTION reject_update_completion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.eventtype='InstanceUpdateCompleted' THEN RAISE EXCEPTION 'fixture completion failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_update_completion BEFORE INSERT ON activityevents FOR EACH ROW EXECUTE FUNCTION reject_update_completion();")
+        .execute(&pool).await.unwrap();
+    assert!(repo.import(&journal).await.is_err());
+    assert_eq!(
+        repo.active().await.unwrap(),
+        journal.history.first().cloned()
+    );
+    assert_eq!(count(&pool, "InstanceUpdateCompleted").await, 0);
+    sqlx::raw_sql("DROP TRIGGER reject_update_completion ON activityevents; DROP FUNCTION reject_update_completion();")
+        .execute(&pool).await.unwrap();
     let receipt = repo.import(&journal).await.unwrap().unwrap();
+    ownership::verify_reconciliation_ownership(&pool, &repo, &journal).await;
     citadel_adapters::persistence::postgres::updates::check_committed_update_receipt(
         &pool, &journal, &receipt,
     )
@@ -247,11 +269,27 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     journal.maintenance_released = true;
     assert!(repo.release(&journal, &plan.source).await.is_err());
     repo.release(&journal, &plan.target).await.unwrap();
+    assert_eq!(
+        repo.previous(actor, key).await.unwrap(),
+        Some(journal.operation.clone())
+    );
+    let (replayed, created) = repo.claim(actor, &plan, key, Utc::now()).await.unwrap();
+    assert_eq!(replayed, journal.operation);
+    assert!(!created);
+
     repo.release(&journal, &plan.target).await.unwrap();
     assert!(repo.active().await.unwrap().is_none());
     let mut completed_only = journal.clone();
     completed_only.completion_acknowledged = false;
     completed_only.maintenance_released = false;
+    // Replaying a released terminal result must not write, even with identical values.
+    sqlx::raw_sql("CREATE FUNCTION reject_released_update_changes() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NOT OLD.ownsinstallation THEN RAISE EXCEPTION 'released claim is read-only'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_released_update_changes BEFORE UPDATE ON instanceupdates FOR EACH ROW EXECUTE FUNCTION reject_released_update_changes();")
+        .execute(&pool).await.unwrap();
+    assert_eq!(
+        repo.import(&completed_only).await.unwrap(),
+        Some(receipt.clone())
+    );
+    repo.release(&journal, &plan.target).await.unwrap();
     assert!(
         citadel_adapters::persistence::postgres::updates::check_committed_update_receipt(
             &pool,
@@ -378,9 +416,11 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         let operation = repo
             .claim(actor, &plan, Uuid::now_v7(), Utc::now())
             .await
-            .unwrap();
+            .unwrap()
+            .0;
         if let Some(previous) = &previous_stopped {
             // Replaying an old release must not release the new attempt's owner.
+            assert!(repo.import(previous).await.unwrap().is_none());
             repo.release(previous, &plan.source).await.unwrap();
             assert_eq!(repo.active().await.unwrap(), Some(operation.clone()));
         }
@@ -424,7 +464,8 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     let operation = repo
         .claim(actor, &plan, Uuid::now_v7(), Utc::now())
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let mut recovery = UpdateJournal {
         protocol: UPDATE_PROTOCOL,
         history: vec![operation.clone()],

@@ -3,7 +3,7 @@ use super::super::docker::{LocalDocker, single};
 use super::{
     command::{HelperAction, HelperRequest, HelperResponse},
     completion::TargetUpdateCompletion,
-    evidence::{HelperBinding, conflict},
+    evidence::{HelperAcknowledgement, HelperBinding, conflict},
     runtime::private_home,
     target::TargetUpdateEvidence,
     verification,
@@ -15,8 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct TargetUpdateSession {
     pub evidence: TargetUpdateEvidence,
-    helper_id: String,
-    helper_started_at: String,
+    helper: HelperAcknowledgement,
 }
 
 impl TargetUpdateSession {
@@ -71,8 +70,7 @@ impl TargetUpdateSession {
         {
             return Err(conflict());
         }
-        let HelperResponse::Ready(evidence) = (HelperRequest {
-            operation: operation.clone(),
+        let acknowledgement = HelperAcknowledgement {
             binding: HelperBinding {
                 nonce: helper["Config"]["Labels"][verification::NONCE]
                     .as_str()
@@ -85,9 +83,14 @@ impl TargetUpdateSession {
                 .as_str()
                 .ok_or_else(conflict)?
                 .into(),
+        };
+        let HelperResponse::Ready(evidence) = (HelperRequest {
+            operation: operation.clone(),
+            binding: acknowledgement.binding.clone(),
+            started_at: acknowledgement.started_at.clone(),
             action: HelperAction::InspectTarget,
         })
-        .exchange(&docker, id, user, Duration::from_secs(150))
+        .exchange(&docker, user, Duration::from_secs(150))
         .await?
         else {
             return Err(conflict());
@@ -104,14 +107,7 @@ impl TargetUpdateSession {
             return Err(conflict());
         }
         intent.registration.validate()?;
-        let bound = HelperBinding {
-            nonce: intent.nonce,
-            helper_container_id: id.clone(),
-        };
-        let observed = verification::helper(&docker, intent, &bound).await?;
-        if helper["State"]["StartedAt"] != observed.started_at {
-            return Err(conflict());
-        }
+        verification::acknowledged_helper(&docker, intent, &acknowledgement).await?;
         if !evidence.container_id.starts_with(hostname) {
             return Err(conflict());
         }
@@ -126,8 +122,7 @@ impl TargetUpdateSession {
         }
         Ok(Self {
             evidence,
-            helper_id: id.clone(),
-            helper_started_at: observed.started_at,
+            helper: acknowledgement,
         })
     }
 
@@ -138,10 +133,7 @@ impl TargetUpdateSession {
         cancellation: &CancellationToken,
     ) -> Result<(), UpdateError> {
         let current = Self::connect(&self.evidence.intent.operation, process, cancellation).await?;
-        if current.evidence != self.evidence
-            || current.helper_id != self.helper_id
-            || current.helper_started_at != self.helper_started_at
-        {
+        if current.evidence != self.evidence || current.helper != self.helper {
             return Err(conflict());
         }
         Ok(())
@@ -162,28 +154,19 @@ impl TargetUpdateSession {
             deadline: Instant::now() + Duration::from_secs(180),
         };
         let intent = &self.evidence.intent;
-        let bound = HelperBinding {
-            nonce: intent.nonce,
-            helper_container_id: self.helper_id.clone(),
-        };
-        if verification::helper(&docker, intent, &bound)
-            .await?
-            .started_at
-            != self.helper_started_at
-        {
-            return Err(conflict());
-        }
+        let bound = &self.helper.binding;
+        verification::acknowledged_helper(&docker, intent, &self.helper).await?;
         let user = format!(
             "{}:{}",
             intent.registration.executor_uid, intent.registration.executor_gid
         );
         if (HelperRequest {
             operation: intent.operation.clone(),
-            binding: bound,
-            started_at: self.helper_started_at.clone(),
+            binding: bound.clone(),
+            started_at: self.helper.started_at.clone(),
             action: HelperAction::CompleteTarget(Box::new(completion.clone())),
         })
-        .exchange(&docker, &self.helper_id, &user, Duration::from_secs(150))
+        .exchange(&docker, &user, Duration::from_secs(150))
         .await?
             != HelperResponse::Ready(Box::new(self.evidence.clone()))
         {
@@ -207,23 +190,7 @@ impl TargetUpdateSession {
             deadline: Instant::now() + Duration::from_secs(180),
         };
         loop {
-            let helper = verification::container(&docker, &self.helper_id).await?;
-            if helper["State"]["StartedAt"] != self.helper_started_at
-                || helper["RestartCount"] != 0
-                || helper["State"]["OOMKilled"] != false
-                || helper["State"]["Error"] != ""
-                || helper["State"]["Paused"] != false
-                || helper["State"]["Restarting"] != false
-                || helper["HostConfig"]["RestartPolicy"]["Name"] != "no"
-                || helper["HostConfig"]["AutoRemove"] != false
-                || helper["Config"]["Image"] != self.evidence.intent.operation.plan.helper_image
-            {
-                return Err(conflict());
-            }
-            if helper["State"]["Running"] == false {
-                if helper["State"]["Status"] != "exited" || helper["State"]["ExitCode"] != 0 {
-                    return Err(conflict());
-                }
+            if verification::helper_exited(&docker, &self.evidence.intent, &self.helper).await? {
                 return Ok(());
             }
             tokio::select! {

@@ -9,7 +9,7 @@ use citadel_updates::UpdateError;
 use std::path::Path;
 use tokio_util::sync::CancellationToken;
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckedUpdateInstallation {
     pub registration: RegisteredComposeInstallation,

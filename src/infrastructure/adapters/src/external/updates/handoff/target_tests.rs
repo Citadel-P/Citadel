@@ -13,7 +13,7 @@ use std::{
     fs,
     sync::{
         Mutex,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -25,6 +25,7 @@ struct TargetRunner {
     mode: Mutex<&'static str>,
     scans: AtomicUsize,
     calls: AtomicUsize,
+    removed: AtomicBool,
 }
 impl TargetRunner {
     async fn new() -> (Self, OwnedUpdateHelper) {
@@ -39,6 +40,7 @@ impl TargetRunner {
                 mode: Mutex::new("normal"),
                 scans: AtomicUsize::new(0),
                 calls: AtomicUsize::new(0),
+                removed: AtomicBool::new(false),
             },
             helper,
         )
@@ -127,7 +129,21 @@ impl ProcessRunner for TargetRunner {
                 if mode == "foreign-completion" {
                     receipt.fence = uuid::Uuid::now_v7();
                 }
+                if mode == "preparation-changed-during-receipt" {
+                    let state = self.previous.base.state();
+                    edit_execution(&state, self.previous.base.intent.operation.id, |saved| {
+                        let checked: chrono::DateTime<chrono::Utc> =
+                            serde_json::from_value(saved["prepared"]["checkedAt"].clone()).unwrap();
+                        saved["prepared"]["checkedAt"] =
+                            json!(checked - chrono::Duration::milliseconds(1));
+                    });
+                }
                 return Ok(output(serde_json::to_vec(&receipt).unwrap()));
+            }
+            if args == ["container", "rm", HELPER] {
+                assert_eq!(mode, "exit-clean");
+                assert!(!self.removed.swap(true, Ordering::SeqCst));
+                return Ok(output(HELPER.as_bytes().to_vec()));
             }
             assert!(matches!(
                 args.as_slice(),
@@ -146,8 +162,12 @@ impl ProcessRunner for TargetRunner {
             let value = match args.as_slice() {
                 ["container", "ls", ..] => {
                     let filter = args[5];
-                    let ids = if filter.starts_with("label=com.citadel.update-operation=") {
-                        if mode == "duplicate-helper" {
+                    let ids = if filter.starts_with("label=com.citadel.update-operation=")
+                        || filter == format!("id={HELPER}")
+                    {
+                        if self.removed.load(Ordering::SeqCst) {
+                            vec![]
+                        } else if mode == "duplicate-helper" {
                             vec![HELPER, CORE]
                         } else {
                             vec![HELPER]
@@ -159,7 +179,11 @@ impl ProcessRunner for TargetRunner {
                         }
                         ids
                     } else if filter.ends_with("citadel_data") {
-                        vec![TARGET, HELPER]
+                        if self.removed.load(Ordering::SeqCst) {
+                            vec![TARGET]
+                        } else {
+                            vec![TARGET, HELPER]
+                        }
                     } else if filter == format!("id={CORE}") {
                         if mode == "old-source" {
                             vec![CORE]
@@ -178,7 +202,23 @@ impl ProcessRunner for TargetRunner {
                             .into_bytes(),
                     ));
                 }
-                ["container", "inspect", TARGET] => json!([self.core(mode)]),
+                ["container", "inspect", TARGET] => {
+                    if matches!(mode, "saved-target-race" | "saved-preparation-race") {
+                        let state = self.previous.base.state();
+                        edit_execution(&state, self.previous.base.intent.operation.id, |saved| {
+                            if mode == "saved-target-race" {
+                                saved["target"]["startedAt"] = json!("2026-11-03T00:03:00Z");
+                            } else {
+                                let checked: chrono::DateTime<chrono::Utc> =
+                                    serde_json::from_value(saved["prepared"]["checkedAt"].clone())
+                                        .unwrap();
+                                saved["prepared"]["checkedAt"] =
+                                    json!(checked - chrono::Duration::milliseconds(1));
+                            }
+                        });
+                    }
+                    json!([self.core(mode)])
+                }
                 ["container", "inspect", DATABASE] => {
                     let mut database = self.previous.base.fixture.runner.database.clone();
                     match mode {
@@ -242,6 +282,49 @@ impl ProcessRunner for TargetRunner {
                     let out = self.previous.run(request, token).await?;
                     let mut value: Value = serde_json::from_slice(&out.stdout).unwrap();
                     value[0]["CreatedAt"] = json!("2026-11-03T00:04:00Z");
+                    value
+                }
+                ["container", "inspect", HELPER] if mode.starts_with("exit-") => {
+                    let out = self.previous.run(request, token).await?;
+                    let mut value: Value = serde_json::from_slice(&out.stdout).unwrap();
+                    let helper = &mut value[0];
+                    helper["State"]["Running"] = json!(false);
+                    helper["State"]["Status"] = json!("exited");
+                    helper["State"]["ExitCode"] = json!(0);
+                    helper["State"]["OOMKilled"] = json!(false);
+                    helper["State"]["Error"] = json!("");
+                    match mode {
+                        "exit-clean" => (),
+                        "exit-running" => {
+                            helper["State"]["Running"] = json!(true);
+                            helper["State"]["Status"] = json!("running");
+                        }
+                        "exit-image" => {
+                            helper["Image"] = json!(format!("sha256:{}", "f".repeat(64)))
+                        }
+                        "exit-nonce" => {
+                            helper["Config"]["Labels"][super::verification::NONCE] =
+                                json!(uuid::Uuid::now_v7())
+                        }
+                        "exit-operation" => {
+                            helper["Config"]["Labels"][super::verification::OPERATION] =
+                                json!(uuid::Uuid::now_v7())
+                        }
+                        "exit-mount" => helper["Mounts"][0]["RW"] = json!(false),
+                        "exit-user" => helper["Config"]["User"] = json!("wrong"),
+                        "exit-command" => helper["Args"] = json!(["serve"]),
+                        "exit-network" => helper["HostConfig"]["NetworkMode"] = json!("host"),
+                        "exit-privileged" => helper["HostConfig"]["Privileged"] = json!(true),
+                        "exit-restarted" => {
+                            helper["State"]["StartedAt"] = json!("2026-11-03T00:04:00Z")
+                        }
+                        "exit-nonzero" => helper["State"]["ExitCode"] = json!(1),
+                        "exit-oom" => helper["State"]["OOMKilled"] = json!(true),
+                        "exit-error" => helper["State"]["Error"] = json!("failed"),
+                        "exit-created" => helper["State"]["Status"] = json!("created"),
+                        "exit-removing" => helper["State"]["Status"] = json!("removing"),
+                        _ => panic!("unexpected exit mode {mode}"),
+                    }
                     value
                 }
                 ["container", "inspect", HELPER] if mode == "helper-restarted" => {
@@ -604,6 +687,41 @@ async fn helper_cannot_acknowledge_a_receipt_that_target_persistence_does_not_co
 }
 
 #[tokio::test]
+async fn completion_rejects_execution_changes_during_receipt_verification() {
+    let (runner, helper) = TargetRunner::new().await;
+    let token = CancellationToken::new();
+    let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+    let done = completion(&journal);
+    helper
+        .state
+        .create(&helper.intent.file("target-completion"), &done)
+        .unwrap();
+    let mut expected = execution(&helper.state, helper.intent.operation.id);
+    let checked: chrono::DateTime<chrono::Utc> =
+        serde_json::from_value(expected["prepared"]["checkedAt"].clone()).unwrap();
+    expected["prepared"]["checkedAt"] = json!(checked - chrono::Duration::milliseconds(1));
+    *runner.mode.lock().unwrap() = "preparation-changed-during-receipt";
+
+    assert!(
+        helper
+            .accept_target_completion(&runner, &token)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        execution(&helper.state, helper.intent.operation.id),
+        expected
+    );
+    assert_eq!(
+        helper
+            .state
+            .read::<super::TargetUpdateCompletion>(&helper.intent.file("target-completion"))
+            .unwrap(),
+        done,
+    );
+}
+
+#[tokio::test]
 async fn interrupted_replacement_records_recovery_without_replaying_daemon_mutations() {
     let (runner, helper) = TargetRunner::new().await;
     let before = runner.calls.load(Ordering::SeqCst);
@@ -895,4 +1013,264 @@ async fn target_identity_cannot_be_published_separately_from_verifying() {
             .is_err()
     );
     assert_eq!(runner.calls.load(Ordering::SeqCst), calls);
+}
+
+#[tokio::test]
+async fn changed_saved_target_during_inspection_is_rejected() {
+    let (runner, helper) = TargetRunner::new().await;
+    let token = CancellationToken::new();
+    let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+    *runner.mode.lock().unwrap() = "saved-target-race";
+    assert!(
+        super::ExecutionJournal::read_replacement(&helper.state, &helper.intent)
+            .unwrap()
+            .target_evidence(&helper.state, &helper.intent, &runner, &token)
+            .await
+            .is_err()
+    );
+    assert_eq!(helper.state.journal(journal.operation.id).unwrap(), journal);
+    assert_eq!(
+        execution(&helper.state, journal.operation.id)["target"]["startedAt"],
+        "2026-11-03T00:03:00Z"
+    );
+    assert!(
+        helper
+            .state
+            .read_optional::<Value>(&helper.intent.file("target-completion"))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn changed_preparation_during_observation_is_not_overwritten() {
+    let (runner, helper) = TargetRunner::new().await;
+    let token = CancellationToken::new();
+    let before = execution(&helper.state, helper.intent.operation.id);
+    *runner.mode.lock().unwrap() = "saved-preparation-race";
+    assert!(helper.observe_replacement(&runner, &token).await.is_err());
+    let saved = execution(&helper.state, helper.intent.operation.id);
+    assert_eq!(saved["journal"], before["journal"]);
+    assert_eq!(saved["target"], Value::Null);
+    assert_ne!(saved["prepared"], before["prepared"]);
+}
+
+#[tokio::test]
+async fn helper_exit_requires_the_same_verified_container_profile() {
+    let (runner, helper) = TargetRunner::new().await;
+    let token = CancellationToken::new();
+    let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+    let session = super::TargetUpdateSession::connect_from(
+        &helper.intent.operation,
+        &runner,
+        &token,
+        &TARGET[..12],
+    )
+    .await
+    .unwrap();
+    for mode in [
+        "exit-image",
+        "exit-nonce",
+        "exit-operation",
+        "exit-mount",
+        "exit-user",
+        "exit-command",
+        "exit-network",
+        "exit-privileged",
+        "exit-restarted",
+        "exit-nonzero",
+        "exit-oom",
+        "exit-error",
+        "exit-created",
+        "exit-removing",
+    ] {
+        *runner.mode.lock().unwrap() = mode;
+        assert!(
+            session.wait_for_exit(&runner, &token).await.is_err(),
+            "{mode}"
+        );
+        assert_eq!(helper.state.journal(journal.operation.id).unwrap(), journal);
+    }
+    *runner.mode.lock().unwrap() = "exit-clean";
+    session.wait_for_exit(&runner, &token).await.unwrap();
+    // An exit observation cannot acknowledge completion or release maintenance.
+    assert_eq!(helper.state.journal(journal.operation.id).unwrap(), journal);
+}
+
+#[tokio::test]
+async fn helper_exit_wait_is_cancellable_and_preserves_maintenance() {
+    let (runner, helper) = TargetRunner::new().await;
+    let token = CancellationToken::new();
+    let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+    let session = super::TargetUpdateSession::connect_from(
+        &helper.intent.operation,
+        &runner,
+        &token,
+        &TARGET[..12],
+    )
+    .await
+    .unwrap();
+    *runner.mode.lock().unwrap() = "exit-running";
+    let cancel = async {
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        token.cancel();
+    };
+    let (result, ()) = tokio::join!(session.wait_for_exit(&runner, &token), cancel);
+    assert!(matches!(
+        result,
+        Err(citadel_updates::UpdateError::Cancelled)
+    ));
+    assert_eq!(helper.state.journal(journal.operation.id).unwrap(), journal);
+    let fresh = CancellationToken::new();
+    let finish = async {
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        *runner.mode.lock().unwrap() = "exit-clean";
+    };
+    let (result, ()) = tokio::join!(session.wait_for_exit(&runner, &fresh), finish);
+    result.unwrap();
+    assert_eq!(helper.state.journal(journal.operation.id).unwrap(), journal);
+}
+
+#[tokio::test]
+async fn finalization_reconciles_registration_and_archives_without_moving_checkpoint() {
+    let (runner, helper) = TargetRunner::new().await;
+    let token = CancellationToken::new();
+    let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+    let done = completion(&journal);
+    helper
+        .state
+        .create(&helper.intent.file("target-completion"), &done)
+        .unwrap();
+    helper
+        .accept_target_completion(&runner, &token)
+        .await
+        .unwrap();
+    let intent = helper.intent.clone();
+    let checkpoint = done.journal.operation.checkpoint.clone().unwrap();
+    drop(helper);
+    *runner.mode.lock().unwrap() = "exit-clean";
+    let released = super::finalize_update(
+        &super::FinalizeUpdateRequest {
+            intent: intent.clone(),
+            completion: done.clone(),
+        },
+        &runner,
+        &token,
+    )
+    .await
+    .unwrap();
+    assert!(released.maintenance_released && released.completion_acknowledged);
+    done.receipt
+        .permits_resume(&released, &intent.operation.plan.target)
+        .unwrap();
+    let state = runner.previous.base.state();
+    state.require_registration_only().unwrap();
+    let registration: super::super::RegisteredComposeInstallation =
+        state.read("installation.json").unwrap();
+    assert_eq!(registration.core_container_id, TARGET);
+    assert_eq!(registration.id, intent.registration.id);
+    assert_eq!(
+        registration.configuration_sha256,
+        registration.fingerprint(std::path::Path::new("/")).unwrap()
+    );
+    assert!(std::path::Path::new(&checkpoint).exists());
+    let archive = super::super::JournalDirectory::open(
+        state
+            .path()
+            .join(format!("checkpoint-{}", intent.operation.id)),
+    )
+    .unwrap();
+    let saved: super::finalization::CompletedUpdate = archive.read("completed.json").unwrap();
+    saved.validate(&archive).unwrap();
+    assert!(runner.removed.load(Ordering::SeqCst));
+    // Reconstruct each interrupted archive boundary. The clean-exit receipt is
+    // retained, the helper is absent, and container replacement must not repeat.
+    let names = [
+        intent.file("launch"),
+        intent.file("binding"),
+        intent.file("shutdown-grant"),
+        intent.file("target-completion"),
+        format!("{}.json", intent.operation.id),
+    ];
+    for completed_moves in 0..=names.len() {
+        for name in names.iter().skip(completed_moves) {
+            fs::rename(archive.path().join(name), state.path().join(name)).unwrap();
+        }
+        fs::remove_file(archive.path().join("completed.json")).unwrap();
+        state
+            .write("installation.json", &intent.registration)
+            .unwrap();
+        if completed_moves < names.len() {
+            edit_execution(&state, intent.operation.id, |value| {
+                value["journal"]["maintenanceReleased"] = json!(false)
+            });
+        }
+        let recovered = super::completed_update_target(&released.operation, &runner, &token)
+            .await
+            .unwrap();
+        assert_eq!(
+            recovered.journal, released,
+            "archive boundary {completed_moves}"
+        );
+        state.require_registration_only().unwrap();
+    }
+    for mode in ["normal", "manual-restart"] {
+        *runner.mode.lock().unwrap() = mode;
+        let recovered = super::completed_update_target(&released.operation, &runner, &token)
+            .await
+            .unwrap();
+        assert_eq!(recovered.journal, released);
+        assert_eq!(recovered.container_id, TARGET);
+    }
+    *runner.mode.lock().unwrap() = "wrong-image";
+    assert!(
+        super::completed_update_target(&released.operation, &runner, &token)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn finalization_rejects_changed_helper_before_cleanup() {
+    for mode in ["exit-nonce", "exit-nonzero", "exit-image", "exit-restarted"] {
+        let (runner, helper) = TargetRunner::new().await;
+        let token = CancellationToken::new();
+        let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+        let done = completion(&journal);
+        helper
+            .state
+            .create(&helper.intent.file("target-completion"), &done)
+            .unwrap();
+        helper
+            .accept_target_completion(&runner, &token)
+            .await
+            .unwrap();
+        let intent = helper.intent.clone();
+        drop(helper);
+        *runner.mode.lock().unwrap() = mode;
+        assert!(
+            super::finalize_update(
+                &super::FinalizeUpdateRequest {
+                    intent: intent.clone(),
+                    completion: done
+                },
+                &runner,
+                &token
+            )
+            .await
+            .is_err(),
+            "{mode}"
+        );
+        assert!(!runner.removed.load(Ordering::SeqCst));
+        let state = runner.previous.base.state();
+        assert!(
+            !state
+                .journal(intent.operation.id)
+                .unwrap()
+                .maintenance_released
+        );
+        let registration: super::super::RegisteredComposeInstallation =
+            state.read("installation.json").unwrap();
+        assert_eq!(registration, intent.registration);
+    }
 }

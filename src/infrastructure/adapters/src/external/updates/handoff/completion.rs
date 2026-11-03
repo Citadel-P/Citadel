@@ -1,8 +1,6 @@
 //! Target-owned completion; the source helper never reads target-schema SQL.
 use super::super::docker::LocalDocker;
-use super::{
-    OwnedUpdateHelper, evidence::conflict, runtime::private_home, target::target_evidence,
-};
+use super::{ExecutionJournal, OwnedUpdateHelper, evidence::conflict, runtime::private_home};
 use citadel_execution::ProcessRunner;
 use citadel_updates::{CompletionReceipt, UpdateError, UpdateJournal};
 use serde::{Deserialize, Serialize};
@@ -27,12 +25,7 @@ pub(super) fn validate_completion(
     if completion.journal != expected {
         return Err(conflict());
     }
-    let mut released = expected;
-    released.completion_acknowledged = true;
-    released.maintenance_released = true;
-    completion
-        .receipt
-        .permits_resume(&released, &journal.operation.plan.target)
+    completion.receipt.validate_for(&expected)
 }
 
 impl OwnedUpdateHelper {
@@ -50,7 +43,12 @@ impl OwnedUpdateHelper {
         else {
             return Ok(false);
         };
-        let evidence = target_evidence(&self.state, &self.intent, process, cancellation)
+        let mut execution = ExecutionJournal::read_replacement(&self.state, &self.intent)?;
+        if execution.acknowledgement != self.acknowledgement {
+            return Err(conflict());
+        }
+        let evidence = execution
+            .target_evidence(&self.state, &self.intent, process, cancellation)
             .await?
             .ok_or_else(conflict)?;
         validate_completion(&evidence.journal, &completion)?;
@@ -79,18 +77,19 @@ impl OwnedUpdateHelper {
         let committed: CompletionReceipt =
             serde_json::from_slice(&output).map_err(|_| conflict())?;
         if committed != completion.receipt
-            || target_evidence(&self.state, &self.intent, process, cancellation)
+            || execution
+                .target_evidence(&self.state, &self.intent, process, cancellation)
                 .await?
                 .as_ref()
                 != Some(&evidence)
         {
             return Err(conflict());
         }
-        let mut journal = completion.journal;
-        journal.completion_acknowledged = true;
+        execution.journal = completion.journal;
+        execution.journal.completion_acknowledged = true;
         // Runtime cleanup has not happened yet. The target must not interpret
         // helper exit or this acknowledgement as database admission permission.
-        self.save_journal(journal.clone())?;
+        execution.save(&self.state, &self.owner)?;
         Ok(true)
     }
 }

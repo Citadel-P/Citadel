@@ -43,13 +43,18 @@ pub trait UpdateRepository: ReleaseCheckRepository {
         actor: UpdateActor,
         id: Uuid,
     ) -> BoxFuture<'_, Result<UpdatePlan, UpdateError>>;
+    fn previous(
+        &self,
+        actor: UpdateActor,
+        key: Uuid,
+    ) -> BoxFuture<'_, Result<Option<UpdateOperation>, UpdateError>>;
     fn claim<'a>(
         &'a self,
         actor: UpdateActor,
         plan: &'a UpdatePlan,
         key: Uuid,
         now: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<UpdateOperation, UpdateError>>;
+    ) -> BoxFuture<'a, Result<(UpdateOperation, bool), UpdateError>>;
     fn active(&self) -> BoxFuture<'_, Result<Option<UpdateOperation>, UpdateError>>;
     fn operation(&self, id: Uuid) -> BoxFuture<'_, Result<UpdateOperation, UpdateError>>;
     /// Called only after the adapter validates the private journal and running

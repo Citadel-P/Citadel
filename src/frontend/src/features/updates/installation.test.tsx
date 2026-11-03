@@ -1,0 +1,195 @@
+import { screen, waitFor } from '@testing-library/react';
+import { getDefaultStore } from 'jotai';
+import { http, HttpResponse } from 'msw';
+import { server } from '@/test/server';
+import { renderCitadel } from '@/test/render-citadel';
+import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
+import { RealtimeContext } from '@/lib/context/realtime-context';
+import type { UpdateStatusView } from '@/api/generated/api.types';
+import { InstallUpdate, UpdateProgress } from './installation';
+
+const status: UpdateStatusView = {
+  instanceId: '019a0000-0000-7000-8000-000000000001',
+  installedVersion: '0.1.1',
+  channel: 'stable',
+  checksAllowed: true,
+  checksEnabled: true,
+  lastAttempt: null,
+  lastSuccess: null,
+  checkError: null,
+  available: { version: '0.1.2', releaseUrl: 'https://github.com/Citadel-P/Citadel/releases/tag/v0.1.2' },
+  installationUnavailableReason: null,
+  operation: null,
+};
+const operation = {
+  id: '019a0000-0000-7000-8000-000000000002',
+  version: '0.1.2',
+  phase: 'Preparing',
+  updatedAt: '2026-11-03T12:00:00Z',
+};
+beforeEach(() => {
+  getDefaultStore().set(pendingInstanceUpdateAtom, null);
+});
+
+it('requires review and explicit approval, retaining the same key after an ambiguous failure', async () => {
+  const requests: unknown[] = [];
+  server.use(
+    http.post('http://localhost/api/v1/updates/review', async ({ request }) => {
+      expect(await request.json()).toEqual({ version: '0.1.2' });
+      return HttpResponse.json({
+        id: operation.id,
+        installedVersion: '0.1.1',
+        targetVersion: '0.1.2',
+        expiresAt: '2026-11-03T13:00:00Z',
+      });
+    }),
+    http.post('http://localhost/api/v1/updates/approve', async ({ request }) => {
+      requests.push(await request.json());
+      return requests.length === 1 ? new HttpResponse(null, { status: 503 }) : HttpResponse.json(operation);
+    }),
+  );
+  const { user } = renderCitadel(<InstallUpdate status={status} />);
+  await user.click(screen.getByRole('button', { name: 'Review update' }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('0.1.1 → 0.1.2');
+  expect(requests).toHaveLength(0);
+  await user.click(screen.getByRole('button', { name: 'Update and restart' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Approval could not be confirmed');
+  await user.click(screen.getByRole('button', { name: 'Update and restart' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).toEqual(requests[1]);
+  expect(getDefaultStore().get(pendingInstanceUpdateAtom)?.id).toBe(operation.id);
+});
+
+it('does not offer installation when registration is unavailable', () => {
+  renderCitadel(<InstallUpdate status={{ ...status, installationUnavailableReason: 'Not registered' }} />);
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+
+it('recovers a retained operation from the API without inventing progress while disconnected', async () => {
+  getDefaultStore().set(pendingInstanceUpdateAtom, { instanceId: status.instanceId, id: operation.id });
+  const read = vi.fn();
+  server.use(
+    http.get(`http://localhost/api/v1/updates/operations/${operation.id}`, () => {
+      read();
+      return HttpResponse.json({ ...operation, phase: 'Succeeded' });
+    }),
+  );
+  renderCitadel(
+    <RealtimeContext.Provider value={{ liveConnectionState: 'connected', retryConnection: async () => {} }}>
+      <UpdateProgress status={status} />
+    </RealtimeContext.Provider>,
+  );
+  expect(await screen.findByText('Update completed')).toBeVisible();
+  expect(read).toHaveBeenCalledOnce();
+});
+
+it('shows an offline wait instead of advancing the saved phase', () => {
+  renderCitadel(
+    <RealtimeContext.Provider value={{ liveConnectionState: 'disconnected', retryConnection: async () => {} }}>
+      <UpdateProgress status={{ ...status, operation: { ...operation, phase: 'Draining' } }} />
+    </RealtimeContext.Provider>,
+  );
+  expect(screen.getByText('Waiting for active work to finish')).toBeVisible();
+  expect(screen.getByText(/Waiting for Citadel to reconnect/)).toBeVisible();
+  expect(getDefaultStore().get(pendingInstanceUpdateAtom)?.restartUntil).toBeGreaterThan(Date.now());
+});
+
+const reload = vi.fn();
+beforeEach(() => {
+  reload.mockReset();
+  vi.stubGlobal('location', {
+    href: 'http://localhost/updates/activities?filter=updates#operation',
+    reload,
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+function progress(current: UpdateStatusView, connected = true) {
+  return (
+    <RealtimeContext.Provider
+      value={{ liveConnectionState: connected ? 'connected' : 'disconnected', retryConnection: async () => {} }}>
+      <UpdateProgress status={current} />
+    </RealtimeContext.Provider>
+  );
+}
+
+function retainedOutcome(phase = 'Succeeded') {
+  getDefaultStore().set(pendingInstanceUpdateAtom, {
+    instanceId: status.instanceId,
+    id: operation.id,
+    restartUntil: Date.now() + 60_000,
+  });
+  server.use(
+    http.get(`http://localhost/api/v1/updates/operations/${operation.id}`, () =>
+      HttpResponse.json({ ...operation, phase }),
+    ),
+  );
+}
+
+it('waits for maintenance release then reloads the same URL once, preserving the operation across remounts', async () => {
+  retainedOutcome();
+  const target = { ...status, installedVersion: operation.version };
+  const view = renderCitadel(progress({ ...target, operation: { ...operation, phase: 'Succeeded' } }));
+  expect(screen.getByText('Finishing update')).toBeVisible();
+  expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
+  expect(getDefaultStore().get(pendingInstanceUpdateAtom)?.restartUntil).toBeGreaterThan(Date.now());
+  expect(reload).not.toHaveBeenCalled();
+
+  view.rerender(progress(target));
+  await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  expect(location.href).toBe('http://localhost/updates/activities?filter=updates#operation');
+  expect(JSON.parse(sessionStorage.getItem('citadel-instance-update')!)).toEqual({
+    instanceId: status.instanceId,
+    id: operation.id,
+    frontendReloaded: true,
+  });
+  view.unmount();
+  renderCitadel(progress(target), { queryClient: view.queryClient });
+  expect(await screen.findByText('Update completed')).toBeVisible();
+  expect(reload).toHaveBeenCalledOnce();
+});
+
+it('waits for reconnection before reloading a completed target', async () => {
+  retainedOutcome();
+  const target = { ...status, installedVersion: operation.version };
+  const view = renderCitadel(progress(target, false));
+  expect(await screen.findByText('Update completed')).toBeVisible();
+  expect(reload).not.toHaveBeenCalled();
+  view.rerender(progress(target));
+  await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+});
+
+it('does not reload on a historical success for a different running version', async () => {
+  retainedOutcome();
+  renderCitadel(progress(status));
+  expect(await screen.findByText('Update completed')).toBeVisible();
+  expect(reload).not.toHaveBeenCalled();
+});
+
+it.each(['Failed', 'Postponed', 'RecoveryRequired'])('does not reload a %s operation', async (phase) => {
+  retainedOutcome(phase);
+  renderCitadel(progress({ ...status, installedVersion: operation.version }));
+  expect(await screen.findByText(`Target version: Citadel ${operation.version}.`)).toBeVisible();
+  expect(reload).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Reload portal' })).not.toBeInTheDocument();
+});
+
+it('ignores a retained operation belonging to another instance', () => {
+  retainedOutcome();
+  renderCitadel(progress({ ...status, instanceId: 'another-instance', installedVersion: operation.version }));
+  expect(reload).not.toHaveBeenCalled();
+  expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
+});
+
+it('leaves a manual reload action if a durable reload marker cannot be saved', async () => {
+  retainedOutcome();
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Storage unavailable', 'SecurityError');
+  });
+  const { user } = renderCitadel(progress({ ...status, installedVersion: operation.version }));
+  await screen.findByText('Update completed');
+  expect(reload).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Reload portal' }));
+  expect(reload).toHaveBeenCalledOnce();
+});

@@ -35,10 +35,34 @@ image tag alone does not trigger a notification. Stable installations track stab
 releases, while development installations (`-dev.N`) track development releases.
 A stable publication does not produce an update notice for the development channel.
 
-Updates remain manual in this build. **Check now** checks once without installing;
+**Check now** checks once without installing;
 it remains available when automatic checks are off, unless server configuration
 prohibits release checks. The **Activities** tab records discovered releases and
 update-check setting changes.
+
+## Install a qualified update
+
+A registered, supported Docker Compose installation can offer **Review update**
+for an available release. Review verifies the installation and release before
+anything is approved. The target release must explicitly support your installed
+version, database catalog, architecture and connected Agent versions.
+
+Select **Update and restart** to approve the reviewed version. Citadel waits for
+active work, creates a recovery checkpoint and replaces Core. Running managed
+workloads normally continue. During the restart, the portal displays its last known
+phase and waits to reconnect; it cannot stream progress while Core is offline.
+After reconnection it reads the recorded outcome. While cleanup still holds
+maintenance, the status shows **Finishing update**. Once maintenance is released
+and the running version matches the completed update, the Updates page reloads
+once to load the new frontend, keeping the current URL and operation ID.
+**Reload portal** is available if automatic reload cannot complete. Closing the
+browser does not cancel an approved update.
+
+If verification or cleanup fails, Citadel retains maintenance and recovery state.
+Preserve the checkpoint and logs for operator recovery. It does not automatically
+roll back a migrated database. Until a release transition has been qualified, use
+the manual procedure below; an available release notice alone does not establish
+installation eligibility.
 
 ## Before an upgrade
 
@@ -101,8 +125,8 @@ If Core logs that it is in **update maintenance**, `/health` can respond while
 unresolved update ownership or cannot verify a configured update-state directory.
 Preserve the database and update-state files while investigating; deleting a
 journal or changing its completion flags is not a recovery procedure. This
-startup safeguard does not install an update or resume an interrupted update
-automatically.
+startup safeguard does not replay an interrupted container replacement. A target
+with a committed successful update can finish verified cleanup after a restart.
 
 ## Verify the upgrade
 
@@ -138,3 +162,26 @@ actual state with the recovered configuration before deploying again.
 
 Use exact patch versions or digests when you need a repeatable installation.
 Core releases publish `latest` alongside patch, minor, and major aliases.
+
+### Recover an in-app update checkpoint
+
+If the updater created a completed checkpoint before failure, stop Core and its
+update helper and preserve their database, volumes and private update-state directory.
+Use the checkpoint's recorded source image and the original encryption key. Configure
+that image to connect to a **new, empty PostgreSQL database**, and mount the checkpoint
+at its original absolute path:
+
+```bash
+citadel-server restore-update-checkpoint \
+  --checkpoint-directory /opt/citadel-update-state/checkpoint-OPERATION_UUID \
+  --confirm-instance-replacement
+```
+
+The command verifies the checkpoint and restored database before releasing the
+restored maintenance claim. It records the update as failed. It does not replace
+the original database, restart containers or clear the original journal. Restore
+the original keys and required Core data using the control-plane recovery procedure,
+then start the recorded source image with the recovered database and a new update-state
+directory. If verification fails, preserve the result for investigation; the command
+will not overwrite a nonempty database. An incomplete checkpoint is not recoverable
+through this command; use a verified earlier control-plane backup.

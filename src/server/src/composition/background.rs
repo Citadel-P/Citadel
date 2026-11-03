@@ -8,6 +8,10 @@ use std::{sync::Arc, time::Duration};
 
 /// Background-only services and worker inputs that must be started once.
 pub struct BackgroundServices {
+    pub update_installation: Option<(
+        citadel_updates::UpdateInstallService,
+        tokio::sync::mpsc::Receiver<citadel_updates::UpdateInstallCommand>,
+    )>,
     pub docker: citadel_docker::client::DockerClient,
     pub agent: Option<citadel_adapters::connectors::agent::client::AgentClient>,
     pub volume_content:
@@ -45,6 +49,7 @@ pub async fn spawn_all(
         ..
     } = state;
     let BackgroundServices {
+        update_installation,
         docker,
         agent,
         volume_content,
@@ -56,6 +61,12 @@ pub async fn spawn_all(
         license_realtime_hub,
     } = services;
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
+    if let Some((service, receiver)) = update_installation {
+        supervisor.spawn(
+            "update-installer",
+            workers::updates::run_installation(service, receiver, cancellation.child_token()),
+        );
+    }
     supervisor.spawn(
         "update-checker",
         citadel_server::workers::updates::run(

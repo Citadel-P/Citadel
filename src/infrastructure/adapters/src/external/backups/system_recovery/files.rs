@@ -76,7 +76,8 @@ pub(super) async fn validate_dump(path: &Path) -> Result<(), BackupError> {
 
 pub(super) async fn sha256_file(path: &Path) -> Result<String, BackupError> {
     let mut file = tokio::fs::File::open(path).await.map_err(storage)?;
-    let mut buffer = [0_u8; 64 * 1024];
+    // Keep the buffer off the stack of nested backup/verification futures.
+    let mut buffer = vec![0_u8; 64 * 1024];
     let mut hash = Sha256::new();
     loop {
         let read = file.read(&mut buffer).await.map_err(storage)?;

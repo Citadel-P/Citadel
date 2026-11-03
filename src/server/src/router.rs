@@ -53,6 +53,7 @@ pub fn router(
         admission,
         docker,
         updates,
+        update_installation,
         database_health,
         git_repositories,
         backup_coverage,
@@ -127,6 +128,7 @@ pub fn router(
             identity: identity.clone(),
             licenses: licenses.clone(),
             checker: updates.clone(),
+            installer: update_installation,
         },
     ))
     .merge(application_info_http::router(updates))

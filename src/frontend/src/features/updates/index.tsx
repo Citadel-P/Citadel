@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { ExternalLink, Info, RefreshCw } from 'lucide-react';
 import { ActivityResourceType } from '@/api/generated/api.types';
 import { UpdateCheckSettings } from './config';
+import { InstallUpdate, UpdateProgress } from './installation';
 import { Timestamp } from '@/components/custom/timestamp';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
@@ -114,6 +115,7 @@ function UpdateStatus() {
     );
   return (
     <div className="space-y-2" aria-live="polite">
+      <UpdateProgress status={data} />
       {data.available ? (
         <AlertMessage
           type="info"
@@ -121,11 +123,14 @@ function UpdateStatus() {
           date={data.lastSuccess ?? undefined}
           className="my-0 flex-wrap"
           action={
-            <Button variant="outline" size="sm" className="text-foreground" asChild>
-              <a href={data.available.releaseUrl} target="_blank" rel="noreferrer">
-                Release notes <ExternalLink className="size-3.5" aria-hidden="true" />
-              </a>
-            </Button>
+            <div className="flex items-center gap-2">
+              <InstallUpdate status={data} />
+              <Button variant="outline" size="sm" className="text-foreground" asChild>
+                <a href={data.available.releaseUrl} target="_blank" rel="noreferrer">
+                  Release notes <ExternalLink className="size-3.5" aria-hidden="true" />
+                </a>
+              </Button>
+            </div>
           }>
           Review the release notes before upgrading.
         </AlertMessage>

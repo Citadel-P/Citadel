@@ -276,6 +276,9 @@ impl ProcessRunner for Runner {
                         helper["State"]["Status"] = json!("created");
                     }
                     match mode {
+                        "prepare-during-check" => {
+                            super::preparation::record_fixture(&self.state(), &self.intent);
+                        }
                         "wrong-user" => helper["Config"]["User"] = json!("unexpected"),
                         "auto-remove" => helper["HostConfig"]["AutoRemove"] = json!(true),
                         "wrong-mount" => helper["Mounts"][0]["RW"] = json!(false),
@@ -398,13 +401,9 @@ async fn helper_requires_a_durable_grant_and_retains_lock_through_clean_stop() {
         .authorize_shutdown(&runner.intent.operation, &token)
         .await
         .unwrap();
-    let budget = super::super::CheckpointRestoreBudget {
-        timeout: Duration::from_secs(30),
-        maximum_bytes: 128 * 1024 * 1024,
-    };
     assert!(
         helper
-            .prepare_checkpoint(runner.as_ref(), &budget, &token)
+            .prepare_checkpoint(runner.as_ref(), &token)
             .await
             .is_err()
     );
@@ -436,7 +435,7 @@ async fn helper_requires_a_durable_grant_and_retains_lock_through_clean_stop() {
         *runner.mode.lock().unwrap() = mode;
         assert!(
             helper
-                .prepare_checkpoint(runner.as_ref(), &budget, &token)
+                .prepare_checkpoint(runner.as_ref(), &token)
                 .await
                 .is_err(),
             "{mode}"
@@ -1182,6 +1181,17 @@ async fn phase_projection_cannot_discard_execution_and_failure_retains_preparati
         ExecutionJournal::read(&helper.state, helper.intent.operation.id).unwrap(),
         before
     );
+    // A failure belongs to the helper that accepted this execution, even when
+    // the replacement acknowledgement is otherwise structurally valid.
+    let mut changed = before.clone();
+    changed.acknowledgement.started_at = "2026-11-03T00:03:00Z".into();
+    changed.save(&helper.state, &helper.owner).unwrap();
+    assert!(super::driver::record_failure(&helper).is_err());
+    assert_eq!(
+        ExecutionJournal::read(&helper.state, helper.intent.operation.id).unwrap(),
+        changed
+    );
+    before.save(&helper.state, &helper.owner).unwrap();
     super::driver::record_failure(&helper).unwrap();
     let after = ExecutionJournal::read(&helper.state, helper.intent.operation.id).unwrap();
     assert_eq!(after.journal.operation.phase, UpdatePhase::Failed);
@@ -1202,4 +1212,46 @@ async fn phase_projection_cannot_discard_execution_and_failure_retains_preparati
     ];
     expected.sort();
     assert_eq!(entries, expected);
+}
+
+#[tokio::test]
+async fn readiness_accepts_preparation_finished_during_helper_verification() {
+    use super::command::{HelperAction, HelperRequest, HelperResponse};
+    let runner = Runner::new().await;
+    let token = CancellationToken::new();
+    let helper = OwnedUpdateHelper::acknowledge(
+        runner.state(),
+        runner.intent.clone(),
+        HELPER,
+        runner.as_ref(),
+        &token,
+    )
+    .await
+    .unwrap();
+    *runner.mode.lock().unwrap() = "prepare-during-check";
+    let request = HelperRequest {
+        operation: runner.intent.operation.clone(),
+        binding: helper.acknowledgement.binding.clone(),
+        started_at: helper.acknowledgement.started_at.clone(),
+        action: HelperAction::Check,
+    };
+    let response = execute_helper_handoff(
+        &serde_json::to_vec(&request).unwrap(),
+        runner.as_ref(),
+        &token,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<HelperResponse>(&response).unwrap(),
+        HelperResponse::Acknowledged(helper.acknowledgement.clone())
+    );
+    assert!(
+        runner
+            .state()
+            .read_optional::<Value>(&runner.intent.file("shutdown-grant"))
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(runner.stops.load(Ordering::SeqCst), 0);
 }

@@ -17,15 +17,18 @@ pub async fn admit(State(gate): State<AdmissionGate>, request: Request, next: Ne
     // authorization bypass: normal authentication and permissions still run.
     let path = request.uri().path().trim_end_matches('/');
     let observation = request.method() == Method::GET
-        && matches!(
-            path,
-            "/health"
-                | "/ready"
-                | "/api/v1/updates"
-                | "/api/v1/activities"
-                | "/api/v1/application/info"
-                | "/api/v1/realtime"
-        );
+        && (path
+            .strip_prefix("/api/v1/updates/operations/")
+            .is_some_and(|id| uuid::Uuid::parse_str(id).is_ok())
+            || matches!(
+                path,
+                "/health"
+                    | "/ready"
+                    | "/api/v1/updates"
+                    | "/api/v1/activities"
+                    | "/api/v1/application/info"
+                    | "/api/v1/realtime"
+            ));
     if observation && !(path == "/ready" && gate.is_closed()) {
         return next.run(request).await;
     }

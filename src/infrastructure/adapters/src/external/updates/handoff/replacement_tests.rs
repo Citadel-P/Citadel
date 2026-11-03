@@ -1,6 +1,6 @@
 use super::super::{
     CheckpointInstallerInput, InstallerComposeInputs, JournalDirectory, PreparedUpdateCheckpoint,
-    RestoredUpdateCheckpoint, bootstrap::fixtures::DATABASE,
+    bootstrap::fixtures::DATABASE,
 };
 use super::tests::{edit_execution, execution};
 use super::{
@@ -37,8 +37,8 @@ fn write(path: &Path, bytes: &[u8]) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
 }
 
-// Model a completed rehearsal with real on-disk bundle checksums. Actual
-// PostgreSQL restoration/decryption is exercised by the restore acceptance suite.
+// Real on-disk bundle checksums; restoring the archive is covered separately
+// by the shared system-recovery and checkpoint integration tests.
 fn checkpoint(helper: &OwnedUpdateHelper) -> JournalDirectory {
     let journal = helper.state.journal(helper.intent.operation.id).unwrap();
     let op = &journal.operation;
@@ -98,26 +98,6 @@ fn checkpoint(helper: &OwnedUpdateHelper) -> JournalDirectory {
                     "CITADEL_JWT_KEY".into(),
                     "CITADEL_SECRETS_ENCRYPTION_KEY".into(),
                 ],
-            },
-        )
-        .unwrap();
-    let image = format!("sha256:{}", "d".repeat(64));
-    let id = "f".repeat(64);
-    stage.create("restore-intent.json", &json!({"nonce":Uuid::now_v7(),"image":image,"dump":bundle.join("database/citadel.dump"),"maximumBytes":268435456})).unwrap();
-    stage.create("restore-container.json", &id).unwrap();
-    stage
-        .create(
-            "restore-verified.json",
-            &RestoredUpdateCheckpoint {
-                format: 2,
-                operation_id: op.id,
-                fence: op.fence,
-                instance_id: op.instance_id,
-                bundle_checksums_sha256: hash(&checksums),
-                catalog_sha256: op.plan.source.catalog_sha256.clone(),
-                database_image: image,
-                sandbox_id: id,
-                decrypted_values: 0,
             },
         )
         .unwrap();
@@ -225,20 +205,6 @@ impl ProcessRunner for ReplacementRunner {
                 return Ok(output(b"", true));
             } else if args.get(2) == Some(&"image") && args.last() == Some(&target.as_str()) {
                 json!([{"Id":format!("sha256:{}", "c".repeat(64)),"Os":"linux","Architecture":if self.mode == "wrong-image" {"arm64"} else {"amd64"},"RepoDigests":[target],"Config":{"Volumes":null}}])
-            } else if args.get(2) == Some(&"container")
-                && args.get(3) == Some(&"ls")
-                && args
-                    .iter()
-                    .any(|s| s.starts_with("id=") || s.starts_with("name=^/citadel-checkpoint-"))
-            {
-                return Ok(output(
-                    if self.mode == "sandbox-present" {
-                        b"\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n"
-                    } else {
-                        b""
-                    },
-                    true,
-                ));
             } else if matches!(self.mode, "database-restarted" | "input-race")
                 && args.ends_with(&["container", "inspect", DATABASE])
                 && fs::read_to_string(&reg.environment_file)
@@ -351,7 +317,9 @@ async fn core_only_submission_is_durable_and_never_reports_update_success_or_rep
         assert_ne!(fs::read(&reg.environment_file).unwrap(), original);
         assert_eq!(fs::read(stage.path().join("input-1")).unwrap(), original);
         assert_eq!(fs::read(&reg.compose_files[0]).unwrap(), compose);
-        assert!(stage.path().join("restore-verified.json").exists());
+        assert!(stage.path().join("checkpoint.json").exists());
+        assert!(!stage.path().join("restore-intent.json").exists());
+        assert!(!stage.path().join("restore-verified.json").exists());
         let evidence = fs::read(
             helper
                 .state
@@ -388,7 +356,12 @@ async fn missing_or_changed_recovery_evidence_and_wrong_target_cannot_mutate_ins
         "missing-receipt",
         "foreign-receipt",
         "changed-dump",
-        "sandbox-present",
+        "changed-snapshot",
+        "changed-keys",
+        "symlink-input",
+        "foreign-bundle",
+        "missing-input",
+        "wrong-format",
         "wrong-image",
         "cancel-before",
         "changed-inputs",
@@ -397,18 +370,44 @@ async fn missing_or_changed_recovery_evidence_and_wrong_target_cannot_mutate_ins
         let (runner, helper, stage) = ready(mode).await;
         let token = CancellationToken::new();
         match mode {
-            "missing-receipt" => {
-                fs::remove_file(stage.path().join("restore-verified.json")).unwrap()
-            }
+            "missing-receipt" => fs::remove_file(stage.path().join("checkpoint.json")).unwrap(),
             "foreign-receipt" => {
-                let mut receipt: RestoredUpdateCheckpoint =
-                    stage.read("restore-verified.json").unwrap();
+                let mut receipt: PreparedUpdateCheckpoint = stage.read("checkpoint.json").unwrap();
                 receipt.fence = Uuid::now_v7();
-                stage.write("restore-verified.json", &receipt).unwrap();
+                stage.write("checkpoint.json", &receipt).unwrap();
             }
             "changed-dump" => {
                 let checkpoint: PreparedUpdateCheckpoint = stage.read("checkpoint.json").unwrap();
                 write(&checkpoint.bundle.join("database/citadel.dump"), b"changed");
+            }
+            "changed-snapshot" => write(&stage.path().join("input-0"), b"changed"),
+            "changed-keys" => {
+                let checkpoint: PreparedUpdateCheckpoint = stage.read("checkpoint.json").unwrap();
+                write(
+                    &checkpoint.bundle.join("recovery/agent/signing-key"),
+                    &[9; 32],
+                );
+            }
+            "symlink-input" => {
+                fs::remove_file(stage.path().join("input-0")).unwrap();
+                std::os::unix::fs::symlink(
+                    &helper.intent.registration.compose_files[0],
+                    stage.path().join("input-0"),
+                )
+                .unwrap();
+            }
+            "foreign-bundle" | "missing-input" | "wrong-format" => {
+                let mut checkpoint: PreparedUpdateCheckpoint =
+                    stage.read("checkpoint.json").unwrap();
+                match mode {
+                    "foreign-bundle" => checkpoint.bundle = stage.path().to_path_buf(),
+                    "missing-input" => {
+                        checkpoint.installer_inputs.pop();
+                    }
+                    "wrong-format" => checkpoint.format = 99,
+                    _ => unreachable!(),
+                }
+                stage.write("checkpoint.json", &checkpoint).unwrap();
             }
             "cancel-before" => token.cancel(),
             "changed-inputs" => fs::write(

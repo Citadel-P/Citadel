@@ -29,3 +29,75 @@ pub(crate) async fn verify_completion(
     result.map_err(|_| "Target receipt verification timed out.")??;
     Ok(())
 }
+
+pub(super) async fn resume_completed(
+    config: &citadel_server::config::Config,
+    pool: &sqlx::PgPool,
+    operation: &citadel_updates::UpdateOperation,
+    cancellation: &tokio_util::sync::CancellationToken,
+) -> Result<(), citadel_updates::UpdateError> {
+    use citadel_adapters::{
+        external::updates::{HostUpdateClient, HostUpdateRequest, HostUpdateResponse},
+        persistence::postgres::updates::{
+            PostgresUpdateRepository, check_committed_update_receipt, check_target_update_database,
+        },
+    };
+    use citadel_updates::{UpdateError, UpdateRepository};
+    let failed = || {
+        UpdateError::Unavailable(
+            "Completed update recovery could not be verified. Maintenance remains active.".into(),
+        )
+    };
+    let directory = config.update_state_directory.as_ref().ok_or_else(failed)?;
+    if directory != std::path::Path::new(&operation.plan.checkpoint_directory) {
+        return Err(failed());
+    }
+    let client = HostUpdateClient::new(
+        std::sync::Arc::new(citadel_processes::SystemProcess),
+        directory.clone(),
+    );
+    let (response, image, architecture) = client
+        .exchange(
+            HostUpdateRequest::Completed(Box::new(operation.clone())),
+            cancellation,
+        )
+        .await?;
+    let HostUpdateResponse::Completed(completed) = response else {
+        return Err(failed());
+    };
+    let hostname = std::fs::read_to_string("/proc/sys/kernel/hostname").map_err(|_| failed())?;
+    if completed.journal.operation != *operation
+        || image != operation.plan.target.image
+        || architecture != operation.plan.target.architecture
+        || !citadel_updates::is_sha256(&completed.container_id)
+        || hostname.trim() != &completed.container_id[..12]
+    {
+        return Err(failed());
+    }
+    completed.recovery_keys.verify_loaded(
+        &config.execution.paths.data_root,
+        config.identity.jwt_key.expose(),
+        config.identity.secret_encryption_key.expose(),
+        config.identity.jwt_key_is_external,
+        config.identity.encryption_key_is_external,
+    )?;
+    check_committed_update_receipt(
+        pool,
+        &completed.completion.journal,
+        &completed.completion.receipt,
+    )
+    .await?;
+    check_target_update_database(
+        pool,
+        &completed.journal,
+        None,
+        config.identity.secret_encryption_key.expose(),
+    )
+    .await?;
+    if cancellation.is_cancelled() {
+        return Err(UpdateError::Cancelled);
+    }
+    PostgresUpdateRepository::new(pool.clone())
+        .release(&completed.journal, &operation.plan.target)
+        .await
+}

@@ -13,10 +13,32 @@ pub async fn check_updates(config: &Config) -> Result<(), citadel_updates::Updat
         Some(path) => {
             #[cfg(target_os = "linux")]
             {
-                Some(
-                    citadel_adapters::external::updates::check_startup_registration(path)?
-                        .instance_id,
-                )
+                use citadel_adapters::external::updates::{
+                    HostUpdateClient, HostUpdateRequest, HostUpdateResponse,
+                    check_startup_registration,
+                };
+                if std::path::Path::new("/.dockerenv").exists() {
+                    let client = HostUpdateClient::new(
+                        std::sync::Arc::new(citadel_processes::SystemProcess),
+                        path.clone(),
+                    );
+                    let (response, _, _) = client
+                        .exchange(
+                            HostUpdateRequest::Startup {
+                                state_directory: path.clone(),
+                            },
+                            &tokio_util::sync::CancellationToken::new(),
+                        )
+                        .await?;
+                    let HostUpdateResponse::Registered(registration) = response else {
+                        return Err(UpdateError::Unavailable(
+                            "Cannot verify update registration.".into(),
+                        ));
+                    };
+                    Some(registration.instance_id)
+                } else {
+                    Some(check_startup_registration(path)?.instance_id)
+                }
             }
             #[cfg(not(target_os = "linux"))]
             {

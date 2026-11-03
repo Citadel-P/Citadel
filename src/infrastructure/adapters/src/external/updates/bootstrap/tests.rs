@@ -500,3 +500,66 @@ fn checkpoint_storage_rejects_a_replaced_directory_before_writing() {
     assert_eq!(fs::read_dir(&original).unwrap().count(), 0);
     assert_eq!(fs::read_dir(&fixture.state).unwrap().count(), 0);
 }
+
+#[tokio::test]
+async fn explicit_refresh_updates_idle_input_fingerprint_but_preserves_identity_and_evidence() {
+    let mut fixture = Fixture::new();
+    let original = fixture.register().await.unwrap();
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(&original.environment_file)
+        .unwrap()
+        .write_all(b"\n# intentional operator change\n")
+        .unwrap();
+    assert!(fixture.register().await.is_err());
+    assert!(fixture.check().await.is_err());
+    let updated = refresh_compose_installation(
+        &fixture.inputs,
+        fixture.state.clone(),
+        &fixture.runner,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.id, original.id);
+    assert_eq!(updated.instance_id, original.instance_id);
+    assert_ne!(updated.configuration_sha256, original.configuration_sha256);
+    fixture.check().await.unwrap();
+    fixture.runner.mode = "different-instance";
+    assert!(
+        refresh_compose_installation(
+            &fixture.inputs,
+            fixture.state.clone(),
+            &fixture.runner,
+            &CancellationToken::new()
+        )
+        .await
+        .is_err()
+    );
+    fixture.runner.mode = "normal";
+    let state = JournalDirectory::open(fixture.state.clone()).unwrap();
+    state
+        .create("unresolved.json", &json!({"preserve":true}))
+        .unwrap();
+    assert!(
+        refresh_compose_installation(
+            &fixture.inputs,
+            fixture.state.clone(),
+            &fixture.runner,
+            &CancellationToken::new()
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        state
+            .read::<RegisteredComposeInstallation>(REGISTRATION)
+            .unwrap(),
+        updated
+    );
+    assert_eq!(
+        state.read::<serde_json::Value>("unresolved.json").unwrap(),
+        json!({"preserve":true})
+    );
+}

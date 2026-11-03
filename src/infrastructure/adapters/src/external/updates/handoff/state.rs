@@ -2,7 +2,7 @@
 use super::super::{InstallationLock, JournalDirectory, bootstrap::ObservedReplacement};
 use super::{
     checkpoint::SourceProcess,
-    evidence::{HelperAcknowledgement, conflict},
+    evidence::{HelperAcknowledgement, HelperLaunchIntent, binding, conflict},
     preparation::PreparedTarget,
     replacement::CoreReplacementIntent,
 };
@@ -38,6 +38,22 @@ impl ExecutionJournal {
         Ok(saved)
     }
 
+    /// Read one complete execution snapshot bound to the reserved operation.
+    /// Callers check the source or target configuration for their current phase.
+    pub(super) fn read_for(
+        state: &JournalDirectory,
+        intent: &HelperLaunchIntent,
+    ) -> Result<Self, UpdateError> {
+        state.require_lock_held()?;
+        intent.verify_saved_identity(state)?;
+        let execution = Self::read(state, intent.operation.id)?;
+        execution.journal.validate_for(&intent.operation)?;
+        if execution.acknowledgement.binding != binding(state, intent)? {
+            return Err(conflict());
+        }
+        Ok(execution)
+    }
+
     fn validate(&self) -> Result<(), UpdateError> {
         let initial = self.journal.history.first().ok_or_else(conflict)?;
         self.journal.validate_for(initial)?;
@@ -69,14 +85,5 @@ impl ExecutionJournal {
         state.verify_lock(owner)?;
         self.validate()?;
         state.write(&format!("{}.json", self.journal.operation.id), self)
-    }
-}
-
-impl super::OwnedUpdateHelper {
-    pub(super) fn save_journal(&self, journal: UpdateJournal) -> Result<(), UpdateError> {
-        let mut execution = ExecutionJournal::read(&self.state, self.intent.operation.id)?;
-        journal.validate_for(&execution.journal.operation)?;
-        execution.journal = journal;
-        execution.save(&self.state, &self.owner)
     }
 }

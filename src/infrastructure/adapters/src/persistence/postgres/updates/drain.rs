@@ -20,33 +20,22 @@ impl UpdateDrainRepository for PostgresUpdateRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
-            let row = sqlx::query("SELECT operation,revision,instanceid,actorid,idempotencykey,ownsinstallation FROM instanceupdates WHERE id=$1")
-                .bind(expected.id).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or(UpdateError::NotFound)?;
-            let current = row
-                .try_get::<sqlx::types::Json<UpdateOperation>, _>("operation")
+            let row = sqlx::query("SELECT * FROM instanceupdates WHERE id=$1")
+                .bind(expected.id)
+                .fetch_optional(&mut *tx)
+                .await
                 .map_err(storage)?
-                .0;
-            current.plan.validate(current.created_at)?;
+                .ok_or(UpdateError::NotFound)?;
+            let current = super::queries::read_operation(&row)?;
             if current != *expected
                 || !row
                     .try_get::<bool, _>("ownsinstallation")
                     .map_err(storage)?
-                || row.try_get::<i64, _>("revision").map_err(storage)?
-                    != i64::try_from(expected.revision).map_err(storage)?
-                || row.try_get::<Uuid, _>("instanceid").map_err(storage)? != expected.instance_id
-                || row.try_get::<Uuid, _>("actorid").map_err(storage)? != expected.actor_id.value()
-                || row.try_get::<Uuid, _>("idempotencykey").map_err(storage)?
-                    != expected.idempotency_key
                 || instance(&mut tx).await? != expected.instance_id
                 || !matches!(
                     current.phase,
                     UpdatePhase::Preparing | UpdatePhase::Draining
                 )
-                || current.fence.is_nil()
-                || current.instance_id != current.plan.instance_id
-                || current.actor_id.value().is_nil()
-                || current.idempotency_key.is_nil()
-                || current.updated_at < current.created_at
                 || current.checkpoint.is_some()
                 || current.revision
                     != if current.phase == UpdatePhase::Preparing {

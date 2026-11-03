@@ -2,6 +2,21 @@ use std::process::Command;
 
 #[cfg(target_os = "linux")]
 #[test]
+fn checkpoint_recovery_requires_explicit_confirmation_before_reading_state() {
+    let path = std::env::temp_dir().join(format!("citadel-restore-cli-{}", uuid::Uuid::now_v7()));
+    let output = Command::new(env!("CARGO_BIN_EXE_citadel-server"))
+        .env_clear()
+        .args(["restore-update-checkpoint", "--checkpoint-directory"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("NEW empty database"));
+    assert!(!path.exists());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
 fn detached_helper_honors_disabled_release_policy_before_opening_state() {
     let path = std::env::temp_dir().join(format!("citadel-helper-cli-{}", uuid::Uuid::now_v7()));
     let output = Command::new(env!("CARGO_BIN_EXE_citadel-server"))

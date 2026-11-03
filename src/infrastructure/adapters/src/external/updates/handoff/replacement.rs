@@ -1,13 +1,12 @@
-//! One-shot Core replacement after an independently verified recovery checkpoint.
+//! One-shot Core replacement after an integrity-checked recovery checkpoint.
 use super::super::{
     CheckedCoreReplacement, InstallerComposeInputs, JournalDirectory, PreparedUpdateCheckpoint,
-    checkpoint::verified_checkpoint, docker::LocalDocker,
+    checkpoint::verify_checkpoint_integrity, docker::LocalDocker,
 };
 use super::ExecutionJournal;
 use super::{
     OwnedUpdateHelper,
-    evidence::{HelperAcknowledgement, HelperLaunchIntent, binding, conflict},
-    preparation::check_prepared_target,
+    evidence::{HelperAcknowledgement, HelperLaunchIntent, conflict},
     runtime::private_home,
     verification,
 };
@@ -36,9 +35,8 @@ impl OwnedUpdateHelper {
         process: &dyn ProcessRunner,
         cancellation: &CancellationToken,
     ) -> Result<UpdateJournal, UpdateError> {
-        self.check_grant()?;
-        let mut journal = self.state.journal(self.intent.operation.id)?;
-        journal.validate_for(&self.intent.operation)?;
+        let mut execution = self.check_grant()?;
+        let mut journal = execution.journal.clone();
         if journal.operation.phase != UpdatePhase::BackingUp || journal.operation.revision != 2 {
             return Err(conflict());
         }
@@ -50,9 +48,9 @@ impl OwnedUpdateHelper {
             deadline: Instant::now() + Duration::from_secs(600),
         };
         let checkpoint =
-            verified_checkpoint(&self.state, &self.owner, &journal.operation, &docker).await?;
-        let checked =
-            check_prepared_target(&self.state, &self.intent, &self.acknowledgement, false)?;
+            verify_checkpoint_integrity(&self.state, &self.owner, &journal.operation, cancellation)
+                .await?;
+        let checked = execution.prepared_target(&self.intent, false)?.clone();
         let reg = &self.intent.registration;
         let inputs = InstallerComposeInputs {
             directory: reg.directory.clone(),
@@ -77,8 +75,7 @@ impl OwnedUpdateHelper {
         if core["Image"] == target_image_id {
             return Err(conflict());
         }
-        self.check_grant()?;
-        if self.state.journal(self.intent.operation.id)? != journal || cancellation.is_cancelled() {
+        if self.check_grant()? != execution || cancellation.is_cancelled() {
             return Err(conflict());
         }
         let intent = CoreReplacementIntent {
@@ -87,8 +84,7 @@ impl OwnedUpdateHelper {
             checkpoint,
             target_image_id,
         };
-        let mut execution = ExecutionJournal::read(&self.state, self.intent.operation.id)?;
-        if execution.replacement.is_some() || execution.journal != journal {
+        if execution.replacement.is_some() {
             return Err(conflict());
         }
         journal.operation.checkpoint = Some(
@@ -114,15 +110,11 @@ impl OwnedUpdateHelper {
         self.state.verify_lock(&self.owner)?;
         if reg.fingerprint(std::path::Path::new("/"))?
             != intent.configuration.target_configuration_sha256
-            || self.state.journal(self.intent.operation.id)? != journal
+            || ExecutionJournal::read_for(&self.state, &self.intent)? != execution
         {
             return Err(conflict());
         }
-        let helper =
-            verification::helper(&docker, &self.intent, &self.acknowledgement.binding).await?;
-        if helper.started_at != self.acknowledgement.started_at {
-            return Err(conflict());
-        }
+        verification::acknowledged_helper(&docker, &self.intent, &self.acknowledgement).await?;
         let current = verification::container(&docker, &reg.core_container_id).await?;
         same_runtime(&core, &current)?;
         if current["State"]["Running"] != false
@@ -162,7 +154,7 @@ impl OwnedUpdateHelper {
         self.state.verify_lock(&self.owner)?;
         if reg.fingerprint(std::path::Path::new("/"))?
             != intent.configuration.target_configuration_sha256
-            || self.state.journal(self.intent.operation.id)? != journal
+            || ExecutionJournal::read_for(&self.state, &self.intent)? != execution
         {
             return Err(conflict());
         }
@@ -174,7 +166,7 @@ impl OwnedUpdateHelper {
                 _ => UpdateError::Unavailable("Core replacement was not confirmed. Preserve update state for recovery; do not retry or restart the source.".into()),
             })?;
         self.state.verify_lock(&self.owner)?;
-        if self.state.journal(self.intent.operation.id)? != journal {
+        if ExecutionJournal::read_for(&self.state, &self.intent)? != execution {
             return Err(conflict());
         }
         // Only submission evidence. No old-schema database access after this point.
@@ -202,42 +194,34 @@ fn same_runtime(before: &Value, after: &Value) -> Result<(), UpdateError> {
     Ok(())
 }
 
-/// One post-publication proof shared by observation, target startup and completion.
-/// Reading it never retries a mutation or assumes submission has completed.
-#[derive(PartialEq, Eq)]
-pub(super) struct ReplacementEvidence {
-    pub acknowledgement: HelperAcknowledgement,
-    pub replacement: CoreReplacementIntent,
-    pub journal: UpdateJournal,
-}
-impl ReplacementEvidence {
-    pub fn read(
+impl ExecutionJournal {
+    /// Validate replacement evidence from one snapshot. Reading it never retries
+    /// a mutation or assumes submission has completed.
+    pub(super) fn read_replacement(
         state: &JournalDirectory,
         intent: &HelperLaunchIntent,
     ) -> Result<Self, UpdateError> {
-        state.require_lock_held()?;
-        intent.verify_saved_identity(state)?;
-        let execution = ExecutionJournal::read(state, intent.operation.id)?;
-        let acknowledgement = execution.acknowledgement;
-        if binding(state, intent)? != acknowledgement.binding {
-            return Err(conflict());
-        }
-        if state.read::<HelperAcknowledgement>(&intent.file("shutdown-grant"))? != acknowledgement
+        let execution = Self::read_for(state, intent)?;
+        let acknowledgement = &execution.acknowledgement;
+        if state.read::<HelperAcknowledgement>(&intent.file("shutdown-grant"))? != *acknowledgement
             || execution.stop.is_none()
         {
             return Err(conflict());
         }
-        let replacement = execution.replacement.ok_or_else(conflict)?;
-        let checked = check_prepared_target(state, intent, &acknowledgement, false)?;
-        let journal = execution.journal;
-        journal.validate_for(&intent.operation)?;
+        let replacement = execution.replacement.as_ref().ok_or_else(conflict)?;
+        let checked = execution.prepared_target(intent, false)?;
+        let journal = &execution.journal;
+        let completed = journal.operation.phase == UpdatePhase::Succeeded
+            && journal.operation.revision == 5
+            && journal.verified_target.as_ref() == Some(&intent.operation.plan.target)
+            && journal.completion_acknowledged;
         let checkpoint = &replacement.checkpoint;
         let stage = JournalDirectory::open(
             state
                 .path()
                 .join(format!("checkpoint-{}", journal.operation.id)),
         )?;
-        if replacement.configuration != checked
+        if replacement.configuration != *checked
             || !citadel_updates::is_sha256(&replacement.retained_runtime_sha256)
             || !replacement
                 .target_image_id
@@ -245,13 +229,14 @@ impl ReplacementEvidence {
                 .is_some_and(citadel_updates::is_sha256)
             || intent.registration.fingerprint(std::path::Path::new("/"))?
                 != checked.target_configuration_sha256
-            || !matches!(
-                (journal.operation.phase, journal.operation.revision),
-                (UpdatePhase::ReplacingCore, 3) | (UpdatePhase::Verifying, 4)
-            )
+            || !(completed
+                || matches!(
+                    (journal.operation.phase, journal.operation.revision),
+                    (UpdatePhase::ReplacingCore, 3) | (UpdatePhase::Verifying, 4)
+                ))
             || journal.helper_container_id != acknowledgement.binding.helper_container_id
-            || journal.verified_target.is_some()
-            || journal.completion_acknowledged
+            || (!completed
+                && (journal.verified_target.is_some() || journal.completion_acknowledged))
             || journal.maintenance_released
             || checkpoint.operation_id != journal.operation.id
             || checkpoint.fence != journal.operation.fence
@@ -264,20 +249,11 @@ impl ReplacementEvidence {
         {
             return Err(conflict());
         }
-        Ok(Self {
-            acknowledgement,
-            replacement,
-            journal,
-        })
+        Ok(execution)
     }
 
-    pub fn require_submission(
-        &self,
-        state: &JournalDirectory,
-        intent: &HelperLaunchIntent,
-    ) -> Result<(), UpdateError> {
-        let execution = ExecutionJournal::read(state, intent.operation.id)?;
-        if !execution.submitted || execution.replacement.as_ref() != Some(&self.replacement) {
+    pub(super) fn require_submission(&self) -> Result<(), UpdateError> {
+        if !self.submitted {
             return Err(conflict());
         }
         Ok(())

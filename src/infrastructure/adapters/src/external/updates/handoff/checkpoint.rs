@@ -1,10 +1,8 @@
 //! Helper-owned snapshot using the ordinary recovery builder, without Core workers.
 use super::super::{
-    CheckpointRestoreBudget, InstallerComposeInputs, RestoredUpdateCheckpoint,
-    bootstrap::verify_stopped_source, docker::LocalDocker, prepare_update_checkpoint,
-    recovery_keys::check_packaged_recovery_keys, verify_update_checkpoint,
+    InstallerComposeInputs, PreparedUpdateCheckpoint, bootstrap::verify_stopped_source,
+    docker::LocalDocker, prepare_update_checkpoint, recovery_keys::check_packaged_recovery_keys,
 };
-use super::ExecutionJournal;
 use super::{OwnedUpdateHelper, evidence::conflict, runtime::private_home, verification};
 use crate::external::backups::system_recovery::{PgDumpSystemBackupBuilder, RecoveryAssets};
 use citadel_execution::ProcessRunner;
@@ -74,12 +72,10 @@ impl OwnedUpdateHelper {
     pub async fn prepare_checkpoint(
         &self,
         process: &dyn ProcessRunner,
-        budget: &CheckpointRestoreBudget,
         cancellation: &CancellationToken,
-    ) -> Result<RestoredUpdateCheckpoint, UpdateError> {
-        self.check_grant()?;
-        let journal = self.state.journal(self.intent.operation.id)?;
-        journal.validate_for(&self.intent.operation)?;
+    ) -> Result<PreparedUpdateCheckpoint, UpdateError> {
+        let execution = self.check_grant()?;
+        let journal = &execution.journal;
         if journal.operation.phase != UpdatePhase::BackingUp || journal.operation.revision != 2 {
             return Err(conflict());
         }
@@ -96,27 +92,17 @@ impl OwnedUpdateHelper {
         )
         .with_recovery_assets(source.assets);
         let result = async {
-            crate::persistence::postgres::updates::check_checkpoint_source(&pool, &journal).await?;
+            crate::persistence::postgres::updates::check_checkpoint_source(&pool, journal).await?;
             if crate::persistence::postgres::updates::read_update_agent_versions(&pool).await?
                 != journal.operation.plan.agent_requirements
             {
                 return Err(conflict());
             }
-            prepare_update_checkpoint(
+            let receipt = prepare_update_checkpoint(
                 &self.state,
                 &self.owner,
                 &journal.operation,
                 &builder,
-                cancellation,
-            )
-            .await?;
-            self.check_stopped_runtime(process, cancellation).await?;
-            let receipt = verify_update_checkpoint(
-                &self.state,
-                &self.owner,
-                &journal.operation,
-                process,
-                budget,
                 cancellation,
             )
             .await?;
@@ -134,7 +120,7 @@ impl OwnedUpdateHelper {
         process: &dyn ProcessRunner,
         cancellation: &CancellationToken,
     ) -> Result<String, UpdateError> {
-        self.check_grant()?;
+        let execution = self.check_grant()?;
         let home = private_home()?;
         let docker = LocalDocker {
             process,
@@ -143,10 +129,7 @@ impl OwnedUpdateHelper {
             deadline: Instant::now() + Duration::from_secs(120),
         };
         let helper =
-            verification::helper(&docker, &self.intent, &self.acknowledgement.binding).await?;
-        if helper.started_at != self.acknowledgement.started_at {
-            return Err(conflict());
-        }
+            verification::acknowledged_helper(&docker, &self.intent, &self.acknowledgement).await?;
         let retained = verify_stopped_source(
             &docker,
             &self.intent.registration,
@@ -155,10 +138,11 @@ impl OwnedUpdateHelper {
         .await?;
         let core =
             verification::container(&docker, &self.intent.registration.core_container_id).await?;
-        let stopped = ExecutionJournal::read(&self.state, self.intent.operation.id)?
-            .stop
-            .ok_or_else(conflict)?;
-        if SourceProcess::from_container(&core)? != stopped || core["Image"] != helper.image {
+        let stopped = execution.stop.as_ref().ok_or_else(conflict)?;
+        if SourceProcess::from_container(&core)? != *stopped
+            || core["Image"] != helper.image
+            || self.check_grant()? != execution
+        {
             return Err(conflict());
         }
         Ok(retained)

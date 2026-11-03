@@ -5,7 +5,7 @@ use rustix::fs::{AtFlags, Mode, OFlags, openat, unlinkat};
 use std::{fs::File, io::Write, path::PathBuf};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckpointStorage {
     pub directory: PathBuf,

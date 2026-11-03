@@ -1,5 +1,5 @@
 //! Owned detached execution. No phase is resumed by replaying a daemon mutation.
-use super::super::{CheckpointRestoreBudget, JournalDirectory};
+use super::super::JournalDirectory;
 use super::ExecutionJournal;
 use super::{
     OwnedUpdateHelper,
@@ -15,7 +15,6 @@ use uuid::Uuid;
 pub struct UpdateHelperBudget {
     pub handoff: Duration,
     pub shutdown: Duration,
-    pub checkpoint: CheckpointRestoreBudget,
     pub target: Duration,
 }
 
@@ -24,17 +23,13 @@ impl Default for UpdateHelperBudget {
         Self {
             handoff: Duration::from_secs(900),
             shutdown: Duration::from_secs(600),
-            checkpoint: CheckpointRestoreBudget {
-                timeout: Duration::from_secs(3600),
-                maximum_bytes: 4 * 1024 * 1024 * 1024,
-            },
             target: Duration::from_secs(900),
         }
     }
 }
 
 /// Invoked only by the launcher in the exact source-image helper. Owns all
-/// futures through cancellation, including checkpoint sandbox cleanup. A restart
+/// futures through cancellation, including checkpoint subprocess cleanup. A restart
 /// cannot acquire a fresh acknowledgement over an existing journal.
 pub async fn run_update_helper(
     state_directory: PathBuf,
@@ -108,9 +103,7 @@ async fn execute(
     helper
         .stop_source(process, budget.shutdown, cancellation)
         .await?;
-    helper
-        .prepare_checkpoint(process, &budget.checkpoint, cancellation)
-        .await?;
+    helper.prepare_checkpoint(process, cancellation).await?;
     helper.replace_core(process, cancellation).await?;
     helper.observe_replacement(process, cancellation).await?;
     let deadline = Instant::now() + budget.target;
@@ -140,14 +133,15 @@ async fn pause(deadline: Instant, cancellation: &CancellationToken) -> Result<()
 
 pub(super) fn record_failure(helper: &OwnedUpdateHelper) -> Result<(), UpdateError> {
     helper.state.verify_lock(&helper.owner)?;
-    helper.intent.verify_saved_identity(&helper.state)?;
-    let mut journal = helper.state.journal(helper.intent.operation.id)?;
-    journal.validate_for(&helper.intent.operation)?;
+    let mut execution = ExecutionJournal::read_for(&helper.state, &helper.intent)?;
+    if execution.acknowledgement != helper.acknowledgement {
+        return Err(conflict());
+    }
+    let journal = &mut execution.journal;
     if journal.operation.phase.terminal() {
         return Ok(());
     }
-    let stop = ExecutionJournal::read(&helper.state, helper.intent.operation.id)?.stop;
-    let phase = if stop.is_none() && journal.operation.phase == UpdatePhase::Draining {
+    let phase = if execution.stop.is_none() && journal.operation.phase == UpdatePhase::Draining {
         UpdatePhase::Failed
     } else {
         UpdatePhase::RecoveryRequired
@@ -162,5 +156,5 @@ pub(super) fn record_failure(helper: &OwnedUpdateHelper) -> Result<(), UpdateErr
     }.into());
     journal.history.push(journal.operation.clone());
     journal.validate_for(&helper.intent.operation)?;
-    helper.save_journal(journal)
+    execution.save(&helper.state, &helper.owner)
 }

@@ -13,6 +13,7 @@ import release
 
 def run_acceptance(core, agent):
     subprocess.run(["bash", "test/scripts/test-agent-acceptance.sh", core, agent], check=True)
+    subprocess.run([sys.executable, "test/scripts/test-update-registration.py", core], check=True)
 
 
 def check_image(image, metadata, arch, config_digest):
@@ -71,7 +72,7 @@ def main():
     evidence = dict(schemaVersion=1, passed=True, metadata=metadata,
                     artifacts=after, architecture=arch, testedImages=tested,
                     upgradeDescriptor=descriptor,
-                    checks=["independent-binary-and-oci-versions", "core-runtime", "agent-image", "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor"])
+                    checks=["independent-binary-and-oci-versions", "core-runtime", "agent-image", "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor", "update-registration"])
     (directory / f"evidence-{arch}.json").write_text(json.dumps(evidence, indent=2) + "\n")
 
 

@@ -77,12 +77,7 @@ impl DockerHelperHandoff {
             self.intent.registration.executor_uid, self.intent.registration.executor_gid
         );
         let HelperResponse::Acknowledged(ack) = request
-            .exchange(
-                &docker,
-                &self.helper_container_id,
-                &user,
-                Duration::from_secs(45),
-            )
+            .exchange(&docker, &user, Duration::from_secs(45))
             .await?
         else {
             return Err(conflict());
@@ -90,14 +85,55 @@ impl DockerHelperHandoff {
         if ack.binding != binding || ack.started_at != observed.started_at {
             return Err(conflict());
         }
-        let after = verification::helper(&docker, &self.intent, &binding).await?;
-        if after.started_at != observed.started_at {
-            return Err(conflict());
-        }
+        verification::acknowledged_helper(&docker, &self.intent, &ack).await?;
         Ok(())
     }
 }
 impl UpdateHandoffRuntime for DockerHelperHandoff {
+    fn journal<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_updates::UpdateJournal, UpdateError>> {
+        Box::pin(async move {
+            if operation != &self.intent.operation {
+                return Err(conflict());
+            }
+            let home = private_home()?;
+            let docker = LocalDocker {
+                process: self.process.as_ref(),
+                cancellation,
+                home: home.path(),
+                deadline: Instant::now() + Duration::from_secs(60),
+            };
+            let binding = HelperBinding {
+                nonce: self.intent.nonce,
+                helper_container_id: self.helper_container_id.clone(),
+            };
+            let observed = verification::helper(&docker, &self.intent, &binding).await?;
+            let request = HelperRequest {
+                operation: operation.clone(),
+                binding,
+                started_at: observed.started_at,
+                action: HelperAction::InspectJournal,
+            };
+            let user = format!(
+                "{}:{}",
+                self.intent.registration.executor_uid, self.intent.registration.executor_gid
+            );
+            let HelperResponse::Journal(journal) = request
+                .exchange(&docker, &user, Duration::from_secs(30))
+                .await?
+            else {
+                return Err(conflict());
+            };
+            journal.validate_for(operation)?;
+            if journal.helper_container_id != self.helper_container_id {
+                return Err(conflict());
+            }
+            Ok(*journal)
+        })
+    }
     fn acknowledged<'a>(
         &'a self,
         operation: &'a UpdateOperation,

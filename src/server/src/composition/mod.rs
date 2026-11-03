@@ -68,6 +68,7 @@ pub struct ServerComponents {
     pub backup_coverage: Arc<citadel_server::api::resources::backups::coverage::BackupCoverageService>,
     pub edge_service: citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer<citadel_adapters::connectors::edge::EdgeIntake>,
     pub updates: citadel_updates::ReleaseCheckService,
+    pub update_installation: Option<citadel_updates::UpdateInstallService>,
     pub docker: DockerClient,
     pub pool: PgPool,
     pub cancellation: CancellationToken,
@@ -312,6 +313,20 @@ impl ServerComponents {
             )
         });
 
+        #[cfg(target_os = "linux")]
+        let installation = updates::build_installation(
+            config,
+            &pool,
+            realtime_hub.clone(),
+            admission.clone(),
+            dynamic_tasks.clone(),
+        )?;
+        #[cfg(not(target_os = "linux"))]
+        let installation: Option<(
+            citadel_updates::UpdateInstallService,
+            tokio::sync::mpsc::Receiver<citadel_updates::UpdateInstallCommand>,
+        )> = None;
+        let update_installation = installation.as_ref().map(|(service, _)| service.clone());
         let background_services = background::BackgroundServices {
             docker: docker.clone(),
             agent,
@@ -320,6 +335,7 @@ impl ServerComponents {
             image_scanner,
             alert_deliveries,
             last_used_worker,
+            update_installation: installation,
             license_transition_monitor,
             license_realtime_hub,
         };
@@ -331,6 +347,7 @@ impl ServerComponents {
                 backup_coverage,
                 edge_service,
                 updates: updates::build(&pool, realtime_hub.clone()),
+                update_installation,
                 docker,
                 pool,
                 cancellation,

@@ -146,6 +146,20 @@ fn completion_handshake_never_unlocks_an_uncommitted_or_restored_source() {
         revision: journal.operation.revision,
         target: journal.operation.plan.target.clone(),
     };
+    receipt.validate_for(&journal).unwrap();
+    assert!(!journal.completion_acknowledged && !journal.maintenance_released);
+    for field in ["instance", "operation", "fence", "revision", "target"] {
+        let mut foreign = receipt.clone();
+        match field {
+            "instance" => foreign.instance_id = Uuid::now_v7(),
+            "operation" => foreign.operation_id = Uuid::now_v7(),
+            "fence" => foreign.fence = Uuid::now_v7(),
+            "revision" => foreign.revision += 1,
+            "target" => foreign.target = journal.operation.plan.source.clone(),
+            _ => unreachable!(),
+        }
+        assert!(foreign.validate_for(&journal).is_err(), "{field}");
+    }
     assert!(receipt.permits_resume(&journal, &receipt.target).is_err());
     journal.completion_acknowledged = true;
     assert!(receipt.permits_resume(&journal, &receipt.target).is_err());

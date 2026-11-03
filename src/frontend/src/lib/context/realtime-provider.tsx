@@ -29,6 +29,7 @@ type CancellationRef = { current: boolean };
 const liveBackedQueryKeys = new Set([
   'getApplicationInfo',
   'getInstanceUpdates',
+  'getInstanceUpdateOperation',
   'getInstallationSettings',
   'getProfileMfaStatus',
   'getBackupRepository',
@@ -149,11 +150,13 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       conn.on('ApplicationInfoChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdateOperation'] });
       });
 
       conn.on('InstallationSettingsChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['getInstallationSettings'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdateOperation'] });
         void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
         void queryClient.invalidateQueries({ queryKey: ['getProfileMfaStatus'] });
       });
@@ -268,9 +271,13 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
           } else {
             // Cover changes between the initial HTTP read and the live subscription.
             await Promise.all(
-              ['getApplicationInfo', 'getInstanceUpdates', 'getInstallationSettings', 'getProfileMfaStatus'].map(
-                (key) => queryClient.invalidateQueries({ queryKey: [key] }),
-              ),
+              [
+                'getApplicationInfo',
+                'getInstanceUpdates',
+                'getInstanceUpdateOperation',
+                'getInstallationSettings',
+                'getProfileMfaStatus',
+              ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
             );
           }
 

@@ -10,8 +10,8 @@ mod service;
 
 pub use error::UpdateError;
 pub use model::{
-    CompletionReceipt, CoreIdentity, InstallationKind, UPDATE_PROTOCOL, UpdateJournal,
-    UpdateOperation, UpdatePhase, UpdatePlan,
+    CompletionReceipt, CoreIdentity, InstallationKind, InstallationSnapshot, UPDATE_PROTOCOL,
+    UpdateJournal, UpdateOperation, UpdatePhase, UpdatePlan,
 };
 pub use read_models::{
     CheckState, InspectedRelease, ReleaseCheckStatus, UpdateDatabaseState, UpdateDrainBlocker,
@@ -29,9 +29,9 @@ pub use repository::{
 };
 pub use runtime::{
     ReleaseArtifactSource, ReleaseInspectionRuntime, ReleaseSource, UpdateDrainRuntime,
-    UpdateHandoffRuntime,
+    UpdateHandoffRuntime, UpdateInstallationRuntime,
 };
 pub use service::{
     NoopUpdateChangeNotifier, ReleaseCheckPolicy, ReleaseCheckService, ReleaseInspectionService,
-    UpdateChangeNotifier, UpdateDrainService, UpdateHandoffService,
+    UpdateChangeNotifier, UpdateDrainService, UpdateInstallCommand, UpdateInstallService,
 };

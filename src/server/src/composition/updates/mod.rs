@@ -10,3 +10,8 @@ pub(super) use checks::build;
 pub(crate) use completion::verify_completion;
 #[cfg(target_os = "linux")]
 pub(crate) use startup::accept_target;
+
+#[cfg(target_os = "linux")]
+mod installation;
+#[cfg(target_os = "linux")]
+pub(super) use installation::build_installation;

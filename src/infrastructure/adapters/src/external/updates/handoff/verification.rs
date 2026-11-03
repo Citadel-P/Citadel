@@ -3,7 +3,7 @@ use super::super::{
     bootstrap::validate_executor_mounts,
     docker::{LocalDocker, single},
 };
-use super::evidence::{HelperBinding, HelperLaunchIntent, conflict};
+use super::evidence::{HelperAcknowledgement, HelperBinding, HelperLaunchIntent, conflict};
 use citadel_updates::{UpdateError, is_sha256};
 use serde_json::{Value, json};
 
@@ -20,7 +20,10 @@ pub(super) async fn helper(
     intent: &HelperLaunchIntent,
     binding: &HelperBinding,
 ) -> Result<RunningHelper, UpdateError> {
-    let actual = checked_container(docker, intent, binding, true).await?;
+    let actual = helper_container(docker, intent, binding).await?;
+    if actual["State"]["Running"] != true || actual["State"]["Status"] != "running" {
+        return Err(conflict());
+    }
     let started_at = actual["State"]["StartedAt"].as_str().ok_or_else(conflict)?;
     chrono::DateTime::parse_from_rfc3339(started_at).map_err(|_| conflict())?;
     Ok(RunningHelper {
@@ -29,22 +32,62 @@ pub(super) async fn helper(
     })
 }
 
+/// Later phases must retain the process incarnation accepted at handoff.
+pub(super) async fn acknowledged_helper(
+    docker: &LocalDocker<'_>,
+    intent: &HelperLaunchIntent,
+    acknowledgement: &HelperAcknowledgement,
+) -> Result<RunningHelper, UpdateError> {
+    let running = helper(docker, intent, &acknowledgement.binding).await?;
+    if running.started_at != acknowledgement.started_at {
+        return Err(conflict());
+    }
+    Ok(running)
+}
+
 /// A created container must pass the same profile checks before it can execute.
 pub(super) async fn created_helper(
     docker: &LocalDocker<'_>,
     intent: &HelperLaunchIntent,
     binding: &HelperBinding,
 ) -> Result<(), UpdateError> {
-    checked_container(docker, intent, binding, false).await?;
+    let actual = helper_container(docker, intent, binding).await?;
+    if actual["State"]["Running"] != false || actual["State"]["Status"] != "created" {
+        return Err(conflict());
+    }
     Ok(())
 }
 
-async fn checked_container(
+/// Observe the acknowledged process without granting permission to resume Core.
+/// Creation, execution and exit all retain the same exact container profile.
+pub(super) async fn helper_exited(
+    docker: &LocalDocker<'_>,
+    intent: &HelperLaunchIntent,
+    acknowledgement: &HelperAcknowledgement,
+) -> Result<bool, UpdateError> {
+    let actual = helper_container(docker, intent, &acknowledgement.binding).await?;
+    let state = &actual["State"];
+    if state["StartedAt"] != acknowledgement.started_at
+        || state["OOMKilled"] != false
+        || state["Error"] != ""
+    {
+        return Err(conflict());
+    }
+    match (state["Running"].as_bool(), state["Status"].as_str()) {
+        (Some(true), Some("running")) => Ok(false),
+        (Some(false), Some("exited")) if state["ExitCode"] == 0 => Ok(true),
+        _ => Err(conflict()),
+    }
+}
+
+async fn helper_container(
     docker: &LocalDocker<'_>,
     intent: &HelperLaunchIntent,
     binding: &HelperBinding,
-    running: bool,
 ) -> Result<Value, UpdateError> {
+    if !is_sha256(&binding.helper_container_id) || binding.nonce != intent.nonce {
+        return Err(conflict());
+    }
     let raw = docker
         .json(&["container", "inspect", &binding.helper_container_id])
         .await?;
@@ -95,10 +138,8 @@ async fn checked_container(
                 "{}:{}",
                 intent.registration.executor_uid, intent.registration.executor_gid
             )
-        || actual["State"]["Running"] != running
         || actual["State"]["Paused"] != false
         || actual["State"]["Restarting"] != false
-        || actual["State"]["Status"] != if running { "running" } else { "created" }
         || actual["RestartCount"] != 0
         || actual["HostConfig"]["RestartPolicy"]["Name"] != "no"
         || actual["HostConfig"]["NetworkMode"]

@@ -3,9 +3,9 @@ use super::super::{JournalDirectory, docker::LocalDocker};
 use super::ExecutionJournal;
 use super::{
     completion::{TargetUpdateCompletion, validate_completion},
-    evidence::{HelperAcknowledgement, HelperBinding, HelperLaunchIntent, binding, conflict},
+    evidence::{HelperAcknowledgement, HelperBinding, HelperLaunchIntent, conflict},
     runtime::private_home,
-    target::{TargetUpdateEvidence, target_evidence},
+    target::TargetUpdateEvidence,
     verification,
 };
 use citadel_execution::ProcessRunner;
@@ -25,6 +25,7 @@ pub const MAX_HANDOFF_REQUEST: usize = 256 * 1024;
 )]
 pub(super) enum HelperAction {
     Check,
+    InspectJournal,
     Grant,
     InspectTarget,
     CompleteTarget(Box<TargetUpdateCompletion>),
@@ -50,16 +51,17 @@ pub(super) enum HelperResponse {
     Acknowledged(HelperAcknowledgement),
     Pending,
     Ready(Box<TargetUpdateEvidence>),
+    Journal(Box<citadel_updates::UpdateJournal>),
 }
 
 impl HelperRequest {
     pub async fn exchange(
         &self,
         docker: &LocalDocker<'_>,
-        id: &str,
         user: &str,
         timeout: Duration,
     ) -> Result<HelperResponse, UpdateError> {
+        let id = &self.binding.helper_container_id;
         let input = serde_json::to_vec(self).map_err(|_| conflict())?;
         if input.len() > MAX_HANDOFF_REQUEST {
             return Err(conflict());
@@ -129,15 +131,11 @@ pub async fn execute_helper_handoff(
     let state = JournalDirectory::open(request.operation.plan.checkpoint_directory.clone().into())?;
     let intent: HelperLaunchIntent =
         state.read(&format!("launch-{}.json", request.operation.id))?;
-    intent.verify_saved_identity(&state)?;
-    state.require_lock_held()?;
-    let execution = ExecutionJournal::read(&state, intent.operation.id)?;
-    let journal = execution.journal;
+    let execution = ExecutionJournal::read_for(&state, &intent)?;
+    let journal = &execution.journal;
     journal.validate_for(&request.operation)?;
-    journal.validate_for(&intent.operation)?;
-    let ack = execution.acknowledgement;
-    if ack.binding != binding(&state, &intent)?
-        || ack.binding != request.binding
+    let ack = &execution.acknowledgement;
+    if ack.binding != request.binding
         || ack.started_at != request.started_at
         || journal.helper_container_id != ack.binding.helper_container_id
     {
@@ -150,14 +148,9 @@ pub async fn execute_helper_handoff(
         home: home.path(),
         deadline: Instant::now() + Duration::from_secs(30),
     };
-    if verification::helper(&docker, &intent, &ack.binding)
-        .await?
-        .started_at
-        != ack.started_at
-    {
-        return Err(conflict());
-    }
+    verification::acknowledged_helper(&docker, &intent, ack).await?;
     let response = match request.action {
+        HelperAction::InspectJournal => HelperResponse::Journal(Box::new(execution.journal)),
         HelperAction::Check | HelperAction::Grant => {
             intent.verify_saved(&state)?;
             if request.operation != intent.operation
@@ -170,31 +163,32 @@ pub async fn execute_helper_handoff(
             {
                 return Err(conflict());
             }
-            state.require_lock_held()?;
-            if ExecutionJournal::read(&state, intent.operation.id)?.acknowledgement != ack
-                || state.journal(intent.operation.id)? != journal
+            // The driver may finish preparation while Core checks readiness.
+            // Read that result together; Grant still requires its reviewed snapshot.
+            let current = ExecutionJournal::read_for(&state, &intent)?;
+            if current.acknowledgement != *ack
+                || current.journal != *journal
+                || (matches!(request.action, HelperAction::Grant) && current != execution)
             {
                 return Err(conflict());
             }
             if cancellation.is_cancelled() {
                 return Err(UpdateError::Cancelled);
             }
-            if matches!(request.action, HelperAction::Check)
-                && ExecutionJournal::read(&state, intent.operation.id)?
-                    .prepared
-                    .is_none()
-            {
+            if matches!(request.action, HelperAction::Check) && current.prepared.is_none() {
                 HelperResponse::Pending
             } else {
-                super::preparation::check_prepared_target(&state, &intent, &ack, true)?;
+                current.prepared_target(&intent, true)?;
                 if matches!(request.action, HelperAction::Grant) {
-                    state.create(&intent.file("shutdown-grant"), &ack)?;
+                    state.create(&intent.file("shutdown-grant"), ack)?;
                 }
-                HelperResponse::Acknowledged(ack)
+                HelperResponse::Acknowledged(ack.clone())
             }
         }
         action => {
-            let evidence = target_evidence(&state, &intent, process, cancellation).await?;
+            let evidence = ExecutionJournal::read_replacement(&state, &intent)?
+                .target_evidence(&state, &intent, process, cancellation)
+                .await?;
             match (action, evidence) {
                 (HelperAction::InspectTarget, None) => HelperResponse::Pending,
                 (HelperAction::InspectTarget, Some(evidence)) => {

@@ -62,8 +62,12 @@ the retained evidence. Retries preserve those bytes and never derive a replaceme
 descriptor from a later checkout. Existing retained publications without descriptor
 evidence keep their original attachment format. A public descriptor is only metadata:
 an updater must read the descriptor from the verified image before trusting it.
-The current source list is empty; enabling a transition requires executor/recovery
-implementation and data-preserving acceptance against the actual source artifact.
+Each candidate also runs the disposable installer registration test, including
+host utility execution and explicit registration refresh after Core recreation.
+Promotion requires that check on both architectures. This verifies packaged setup,
+not image replacement or recovery. The current source list remains empty; enabling
+a transition requires data-preserving upgrade and recovery acceptance against the
+actual source and target artifacts.
 
 ## Retention and retries
 

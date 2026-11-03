@@ -21,7 +21,7 @@ pub(in crate::external::updates) async fn observe_replacement(
     docker: &LocalDocker<'_>,
     registration: &RegisteredComposeInstallation,
     configuration: &CheckedCoreReplacement,
-    helper: &str,
+    helper: Option<&str>,
 ) -> Result<ObservedReplacement, UpdateError> {
     let inputs = InstallerComposeInputs {
         directory: registration.directory.clone(),
@@ -44,13 +44,13 @@ pub(in crate::external::updates) async fn observe_replacement(
         &config,
         &checked,
         &registration.state_directory,
-        Some(helper),
+        helper,
         CoreState::TargetRunning,
     )
     .await?;
     if observed.daemon != registration.daemon_id
         || observed.core == registration.core_container_id
-        || observed.core == helper
+        || helper.is_some_and(|id| observed.core == id)
         || observed.database != registration.database_container_id
         || !citadel_updates::is_sha256(&observed.core)
         || !observed

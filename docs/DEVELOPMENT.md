@@ -256,6 +256,16 @@ conflicting registration, corrupt files and orphaned recovery evidence cause a
 refusal without overwriting state. It does not stop services, approve an update,
 establish source-to-target compatibility or enable automatic installation.
 
+For UI installation, use the root executor (`0:0`). First register the healthy
+installation, then add `CITADEL_UPDATE_STATE_DIRECTORY=/opt/citadel-update-state`
+to its existing `.env` and recreate Core with the original Compose invocation.
+After Core is healthy, repeat `register-update-installation` with `--refresh` and
+the same paths. This explicitly accepts the changed Core container/configuration
+while preserving the instance, daemon, database, volumes, network and registration
+ID. Refresh requires an idle, healthy installation with a verified catalog; active
+or orphaned recovery evidence blocks it. It is never an escape from maintenance.
+Do not enable the state-directory setting before the initial registration exists.
+
 To revalidate an existing registration without changing it, use:
 
 ```bash
@@ -301,18 +311,19 @@ any future replacement.
 
 The initial profile requires the Compose network and Citadel data volumes to be
 used only by these two services; additional consumers are rejected as ambiguous.
-Automatic installer integration, registration reconciliation and verified
-recovery/resume are still pending. The detached driver and target startup
-acceptance exist, but public installation is not yet enabled.
+Registration remains an explicit operator step. Registered Linux Compose
+installations now have review/approval endpoints and a supervised execution path.
+Only a signed target descriptor that explicitly qualifies the source version,
+catalog, architecture and Agent versions permits a review. Packaged transition
+qualification remains required before publishing an eligible transition.
 
 Live update admission has a shared process-local gate wired into HTTP and worker
 dispatch. `UpdateDrainService` validates a committed claim with the PostgreSQL
 reader, closes the gate through the Server runtime port, and observes local tasks
 and durable operations/reservations within a deadline. It does not mutate journal
 history, release ownership or create checkpoints. Run it under a separate supervised
-owner, not inside the `DynamicTasks` tracker it observes. The production update
-driver does not invoke this step yet, and installation remains disabled. Remaining
-writers still require quiescence before checkpoint creation. See the admission and
+owner, not inside the `DynamicTasks` tracker it observes. The installation worker invokes this step after the driver's acknowledged
+journal has been imported. All writers must be quiescent before checkpoint creation. See the admission and
 owned-drain regression commands in [`test/README.md`](../test/README.md).
 
 `prepare_update_checkpoint` is an internal helper building block, not a CLI or HTTP
@@ -325,30 +336,26 @@ and stop source writers first; the detached helper driver enforces those steps
 before calling this primitive. Run the checkpoint regressions with dedicated disposable source
 and restore databases as described in [`test/README.md`](../test/README.md).
 
-`verify_update_checkpoint` is the subsequent internal PostgreSQL restore rehearsal.
-It requires the same held lock and backup-phase journal, restores into a networkless
-temporary container, verifies identity/claim/migration history, and removes the
-verifier before publishing `restore-verified.json`. The caller supplies a bounded
-time/storage budget; storage exhaustion fails verification. The source PostgreSQL
-container and its volumes are never changed. Failed attempts retain their evidence
-and cannot be blindly retried. Before publishing the receipt it also verifies
-recovery-key availability and decrypts all stored encrypted values in bounded
-pages. The receipt records the count; zero means there was no ciphertext to check.
-File-backed keys come from the bundle; external keys are resolved using the
-unchanged registered Compose inputs. Keys/plaintext stay in the executor, never
-in PostgreSQL, subprocess arguments, logs or receipts. JWT/Agent authentication
-against running services is not exercised. This step does not authorize replacement
-or resume Core. It is not wired to a public command yet.
+`verify_checkpoint_integrity` rechecks the operation, registration, saved installer
+inputs and recovery-bundle checksums immediately before replacement. It performs no
+Docker mutations and does not restore the archive. Runtime updates need no restore
+sandbox, restore receipt or sandbox resource budget. Validate actual restoration
+with the shared recovery tests and the disposable checkpoint round trip in
+[`test/README.md`](../test/README.md); never describe integrity checks as restore tests.
+Target startup still validates keys, migrations and stored credential decryption.
 
 The detached updater has three entry points: `launch_update_helper` in the
 registered executor namespace, `run_update_helper` in the pinned source helper,
 and `TargetUpdateSession` in replacement Core startup. Individual execution phases
-are private to the adapter. Core cannot directly call the host filesystem launcher
-through its read-only host mapping; that bridge and the public installation action
-are not connected yet.
+are private to the adapter. Core invokes the launcher through a short-lived `update-host` utility from its
+actual installed image. Only installer inputs, private state and the local socket
+are bound into the utility; temporary files use a separate tmpfs. Its exact ID,
+image, labels, command, mounts and privilege profile are checked before execution
+and cleanup. No Python installation or embedded Compose template is required.
 
 The helper driver owns its lock and journal for preparation, authorized shutdown,
-checkpoint/rehearsal, Core-only replacement and completion. `UpdateHandoffService`
+checkpoint creation and integrity verification, Core-only replacement and completion.
+`UpdateInstallService`
 waits for prepared-helper readiness, then drains before granting shutdown. Preparation
 must have published its fresh target/Agent/configuration evidence before a grant can succeed.
 Core and target both use the same bounded `update-helper-handoff` Docker-exec
@@ -368,13 +375,40 @@ migrations, verifies the target catalog and credential decryption, and commits
 completion under the monitored single-Core lease. The helper asks the target's
 read-only `update-target-receipt` command to verify that committed receipt before
 acknowledging completion and exiting. No source-schema queries run after replacement.
-Host reconciliation, final admission, public installation and host recovery remain
-unfinished; installation stays disabled. Helper acknowledgement, preparation, stop,
+Host reconciliation and final admission are connected to target acceptance.
+A durable finalization record permits interrupted cleanup and archive moves to finish
+after validating the committed target again; replacement is never replayed. A complete
+archive can finish an interrupted database release. Failures before committed
+completion retain maintenance for explicit operator recovery. Only qualified release transitions can be approved.
+Helper acknowledgement, preparation, stop,
 replacement and target binding now live with the phase history in one atomic journal.
 The launcher still owns launch intent/start binding, and other processes publish only
 the shutdown grant/completion mailbox. Standalone checkpoint journals, database
 claims and migration history retain their formats. Existing fragmented operation
 state is retained and blocks automatic relaunch; it is not silently migrated or replayed.
+
+For a failed update with a completed checkpoint, `restore-update-checkpoint`
+restores the source into a **new empty database**. Stop the original Core and helper,
+preserve their volumes and journals, and use the exact source image recorded in
+`checkpoint.json`. Supply the original encryption key and configure the new database.
+Mount the private checkpoint at its original absolute path, then run:
+
+```bash
+citadel-server restore-update-checkpoint \
+  --checkpoint-directory /opt/citadel-update-state/checkpoint-OPERATION_UUID \
+  --confirm-instance-replacement
+```
+
+The command refuses a nonempty destination or a live Core database lease. It checks
+artifact integrity and source build/catalog before restoring, then validates instance,
+claim identity, applied catalog and stored credential decryption. The restored
+attempt is recorded as failed and its claim is released atomically with its Activity.
+The original database and host journal are untouched. If post-restore verification
+fails, the restored claim remains closed; preserve that database and retry recovery
+into another empty database after correcting the cause. Restore the original JWT,
+Agent signing and encryption material and the required Core data before starting the
+source image against the recovered database with a **new** update-state directory.
+Register that recovered installation separately; do not erase the original evidence.
 
 For the execution invariants and module responsibilities, see
 [instance updates](ARCHITECTURE.md#instance-update-work-in-progress). Do not expose
@@ -384,6 +418,13 @@ Validate bootstrap changes with the isolated Docker acceptance command in
 [`test/README.md`](../test/README.md). It exercises the shipped layout and a compatible customized Edge-overlay installation
 and containerized registration with completed HTTP setup. This is a registration
 gate; it does not qualify a source-to-target upgrade or recovery path.
+
+The opt-in published-transition smoke test in [`test/README.md`](../test/README.md)
+uses the real update APIs and signature checks on a disposable Docker daemon, then
+restores the resulting checkpoint into a fresh database. It requires a source that
+already contains the updater and an eligible published target; it cannot qualify
+the first transition while the compiled source list is empty. Do not add a source
+entry merely to make this test reach approval.
 
 For deployment settings, use the [configuration guide](content/docs/getting-started/configuration.md).
 

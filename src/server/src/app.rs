@@ -55,8 +55,10 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     if let Err(error) =
         startup::while_owned(&mut job_lease, startup::check_updates(&config)).await?
     {
+        #[cfg(not(target_os = "linux"))]
+        let recovered = false;
         #[cfg(target_os = "linux")]
-        {
+        let recovered = {
             let cancellation = CancellationToken::new();
             let acceptance = startup::while_owned(
                 &mut job_lease,
@@ -71,16 +73,23 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             match result {
-                Ok(()) => tracing::info!(
-                    "Update target verified and helper exited cleanly; maintenance is retained pending host reconciliation."
-                ),
+                Ok(()) => {
+                    tracing::info!(
+                        "Update target verified, host reconciled and maintenance released."
+                    );
+                    true
+                }
                 Err(error) => {
-                    tracing::warn!(%error, "Update target acceptance did not authorize admission")
+                    tracing::warn!(%error, "Update target acceptance did not authorize admission");
+                    false
                 }
             }
+        };
+        if !recovered {
+            tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
+            return serve_maintenance(&config, job_lease).await;
         }
-        tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
-        return serve_maintenance(&config, job_lease).await;
+        startup::while_owned(&mut job_lease, startup::check_updates(&config)).await??;
     }
     startup::while_owned(&mut job_lease, startup::migrate(&config)).await??;
     let (state, background_services) =

@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 /// Launch confirmation only. Core must still observe acknowledgement and drain
 /// before authorizing shutdown through DockerHelperHandoff.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LaunchedUpdateHelper {
     pub intent: HelperLaunchIntent,
     pub container_id: String,

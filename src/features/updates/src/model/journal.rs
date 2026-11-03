@@ -187,21 +187,33 @@ pub struct CompletionReceipt {
 }
 
 impl CompletionReceipt {
-    pub fn permits_resume(
-        &self,
-        journal: &UpdateJournal,
-        running: &CoreIdentity,
-    ) -> Result<(), UpdateError> {
+    /// Validate a committed completion's identity without pretending maintenance
+    /// has already been released. Persistence separately proves the commit exists.
+    pub fn validate_for(&self, journal: &UpdateJournal) -> Result<(), UpdateError> {
         journal.validate_for(&journal.operation)?;
         let operation = &journal.operation;
-        if !journal.maintenance_released
-            || !journal.completion_acknowledged
-            || operation.phase != UpdatePhase::Succeeded
+        if operation.phase != UpdatePhase::Succeeded
             || self.instance_id != operation.instance_id
             || self.operation_id != operation.id
             || self.fence != operation.fence
             || self.revision != operation.revision
             || self.target != operation.plan.target
+        {
+            return Err(UpdateError::Conflict(
+                "Completion does not match the verified update.".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn permits_resume(
+        &self,
+        journal: &UpdateJournal,
+        running: &CoreIdentity,
+    ) -> Result<(), UpdateError> {
+        self.validate_for(journal)?;
+        if !journal.maintenance_released
+            || !journal.completion_acknowledged
             || &self.target != running
         {
             return Err(UpdateError::Conflict(

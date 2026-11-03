@@ -176,6 +176,24 @@ impl JournalDirectory {
             rustix::fs::Dir::read_from(&self.directory).map_err(|_| unavailable_input())?;
         for entry in entries {
             let entry = entry.map_err(|_| unavailable_input())?;
+            if let Ok(name) = entry.file_name().to_str()
+                && name
+                    .strip_prefix("checkpoint-")
+                    .is_some_and(|id| Uuid::parse_str(id).is_ok())
+            {
+                let archive = Self::open(self.path.join(name))?;
+                let completed: super::handoff::CompletedUpdate = archive.read("completed.json")?;
+                completed.validate(&archive)?;
+                let registration: super::RegisteredComposeInstallation =
+                    self.read("installation.json")?;
+                if completed.registration.instance_id != registration.instance_id
+                    || completed.registration.id != registration.id
+                    || completed.registration.state_directory != registration.state_directory
+                {
+                    return Err(unavailable_input());
+                }
+                continue;
+            }
             if ![
                 b".".as_slice(),
                 b"..",
@@ -190,6 +208,29 @@ impl JournalDirectory {
             }
         }
         Ok(())
+    }
+
+    /// Preserve active evidence alongside its checkpoint, without changing any
+    /// bundle paths or replacing existing archive entries.
+    pub(super) fn archive(
+        &self,
+        owner: &InstallationLock,
+        archive: &Self,
+        name: &str,
+    ) -> Result<(), UpdateError> {
+        self.verify_lock(owner)?;
+        archive.verify_location()?;
+        self.read::<serde_json::Value>(name)?;
+        renameat_with(
+            &self.directory,
+            name,
+            &archive.directory,
+            name,
+            RenameFlags::NOREPLACE,
+        )
+        .map_err(|_| unavailable_input())?;
+        archive.sync()?;
+        self.sync()
     }
 
     pub fn read<T: DeserializeOwned>(&self, name: &str) -> Result<T, UpdateError> {

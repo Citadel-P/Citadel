@@ -80,6 +80,9 @@ enum Command {
         /// Existing private host directory, owned by the intended updater user.
         #[arg(long)]
         state_directory: std::path::PathBuf,
+        /// Refresh a healthy, idle registration after an intentional Core/configuration change.
+        #[arg(long)]
+        refresh: bool,
     },
     /// Revalidate a registered local installation without changing it or approving an update.
     #[cfg(target_os = "linux")]
@@ -107,6 +110,10 @@ enum Command {
     #[cfg(target_os = "linux")]
     #[command(hide = true)]
     UpdateTargetReceipt,
+    /// Internal bounded host-namespace operation.
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    UpdateHost,
     /// Run the Rust foundation server and supervised workers.
     Serve,
     /// Apply the embedded Citadel schema migrations and exit.
@@ -115,6 +122,14 @@ enum Command {
     RestoreSystem {
         #[arg(long)]
         bundle: std::path::PathBuf,
+        #[arg(long)]
+        confirm_instance_replacement: bool,
+    },
+    /// Restore an update checkpoint into a NEW empty database using its source build.
+    #[cfg(target_os = "linux")]
+    RestoreUpdateCheckpoint {
+        #[arg(long)]
+        checkpoint_directory: std::path::PathBuf,
         #[arg(long)]
         confirm_instance_replacement: bool,
     },
@@ -313,6 +328,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             project,
             compose_files,
             state_directory,
+            refresh,
         } => {
             let inputs = citadel_adapters::external::updates::InstallerComposeInputs {
                 directory,
@@ -320,12 +336,25 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 compose_files,
             };
             let cancellation = CancellationToken::new();
-            let registration = citadel_adapters::external::updates::register_compose_installation(
-                &inputs,
-                state_directory,
-                &citadel_processes::SystemProcess,
-                &cancellation,
-            );
+            let registration = async {
+                if refresh {
+                    citadel_adapters::external::updates::refresh_compose_installation(
+                        &inputs,
+                        state_directory,
+                        &citadel_processes::SystemProcess,
+                        &cancellation,
+                    )
+                    .await
+                } else {
+                    citadel_adapters::external::updates::register_compose_installation(
+                        &inputs,
+                        state_directory,
+                        &citadel_processes::SystemProcess,
+                        &cancellation,
+                    )
+                    .await
+                }
+            };
             tokio::pin!(registration);
             let result = tokio::select! {
                 result = &mut registration => result,
@@ -360,6 +389,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         } => crate::cli_updates::helper(state_directory, operation_id, fence).await,
         #[cfg(target_os = "linux")]
         Command::UpdateTargetReceipt => crate::cli_updates::target_receipt().await,
+        #[cfg(target_os = "linux")]
+        Command::UpdateHost => crate::cli_updates::host().await,
         Command::Serve => crate::app::serve(Config::from_env()?).await,
         Command::Migrate => migrate(DatabaseConfig::from_env()?).await,
         Command::RestoreSystem {
@@ -373,6 +404,16 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             restore_system(DatabaseConfig::from_env()?, bundle).await
+        }
+        #[cfg(target_os = "linux")]
+        Command::RestoreUpdateCheckpoint {
+            checkpoint_directory,
+            confirm_instance_replacement,
+        } => {
+            if !confirm_instance_replacement {
+                return Err("Stop the original Core and update helper, preserve their state, and configure a NEW empty database; then pass --confirm-instance-replacement.".into());
+            }
+            crate::cli_updates::restore_checkpoint(checkpoint_directory).await
         }
         Command::Diagnostics => {
             println!(

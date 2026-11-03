@@ -50,6 +50,12 @@ pub(in crate::external::updates) fn validate_executor_mounts(
         ));
     }
     let mounts = executor["Mounts"].as_array().ok_or_else(failed)?;
+    let mounts: Vec<_> = mounts
+        .iter()
+        .filter(|mount| {
+            !(mount["Type"] == "tmpfs" && mount["Destination"] == "/tmp" && mount["RW"] == true)
+        })
+        .collect();
     if mounts.len() != 3 {
         return Err(refuse(
             "Updater executor must mount only installer inputs, update state and the Docker socket.",

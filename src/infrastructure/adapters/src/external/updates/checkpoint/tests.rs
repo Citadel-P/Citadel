@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 pub(super) struct Fixture {
-    root: tempfile::TempDir,
+    pub(super) root: tempfile::TempDir,
     pub(super) state: JournalDirectory,
     pub(super) owner: InstallationLock,
     pub(super) operation: UpdateOperation,
@@ -121,7 +121,7 @@ impl Fixture {
             operation,
         }
     }
-    fn builder(
+    pub(super) fn builder(
         &self,
         pool: sqlx::PgPool,
         url: &str,
@@ -267,6 +267,12 @@ async fn checkpoint_builds_real_bundle_and_preserves_failed_or_interrupted_attem
     let result = prepare_update_checkpoint(&f.state, &f.owner, &f.operation, &builder, &token)
         .await
         .unwrap();
+    assert_eq!(
+        verify_checkpoint_integrity(&f.state, &f.owner, &f.operation, &token)
+            .await
+            .unwrap(),
+        result,
+    );
     assert_eq!(f.state.journal(f.operation.id).unwrap(), before);
     assert_eq!(result.instance_id, instance);
     assert_eq!(result.installer_inputs.len(), 3);

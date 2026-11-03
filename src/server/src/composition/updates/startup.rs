@@ -50,7 +50,13 @@ async fn accept(
     // A restarted source, development executable or unrelated image must not
     // migrate under someone else's retained claim. Container identity is checked
     // independently by TargetUpdateSession before database verification.
-    if !matches_target_build(target)? || operation.phase.terminal() || cancellation.is_cancelled() {
+    if !matches_target_build(target)? || cancellation.is_cancelled() {
+        return Err(unavailable());
+    }
+    if operation.phase == UpdatePhase::Succeeded {
+        return super::completion::resume_completed(config, pool, &operation, cancellation).await;
+    }
+    if operation.phase.terminal() {
         return Err(unavailable());
     }
     let process = citadel_processes::SystemProcess;
@@ -114,17 +120,42 @@ async fn accept(
         .await
         .map_err(|_| unavailable())?
         .ok_or_else(unavailable)?;
+    let completion = TargetUpdateCompletion {
+        journal: completed,
+        receipt,
+    };
     session
-        .acknowledge(
-            &TargetUpdateCompletion {
-                journal: completed,
-                receipt,
-            },
-            &process,
+        .acknowledge(&completion, &process, cancellation)
+        .await?;
+    session.wait_for_exit(&process, cancellation).await?;
+    use citadel_adapters::external::updates::{
+        FinalizeUpdateRequest, HostUpdateClient, HostUpdateRequest, HostUpdateResponse,
+    };
+    let client = HostUpdateClient::new(
+        std::sync::Arc::new(process),
+        session.evidence.intent.registration.state_directory.clone(),
+    );
+    let (response, _, _) = client
+        .exchange(
+            HostUpdateRequest::Finalize(Box::new(FinalizeUpdateRequest {
+                intent: session.evidence.intent.clone(),
+                completion: completion.clone(),
+            })),
             cancellation,
         )
         .await?;
-    session.wait_for_exit(&process, cancellation).await
+    let HostUpdateResponse::Finalized(released) = response else {
+        return Err(unavailable());
+    };
+    let mut expected = completion.journal.clone();
+    expected.completion_acknowledged = true;
+    expected.maintenance_released = true;
+    if *released != expected || cancellation.is_cancelled() {
+        return Err(unavailable());
+    }
+    completion.receipt.permits_resume(&released, target)?;
+    verify_keys()?;
+    repository.release(&released, target).await
 }
 
 fn matches_target_build(target: &citadel_updates::CoreIdentity) -> Result<bool, UpdateError> {

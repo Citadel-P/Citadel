@@ -36,7 +36,7 @@ impl TargetRecoveryKeys {
         {
             return Err(conflict());
         }
-        // Read private, bounded checksum metadata. The restore receipt already
+        // Read private, bounded checksum metadata. The checkpoint receipt already
         // bound its exact bytes before replacement; never trust a fresh manifest.
         let bytes = read_key(&receipt.bundle.join("checksums.json"))?;
         if digest(&bytes) != receipt.bundle_checksums_sha256 {

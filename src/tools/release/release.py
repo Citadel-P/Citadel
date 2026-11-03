@@ -680,7 +680,7 @@ def validate_evidence(directory, metadata):
                 or evidence["passed"] is not True or evidence["architecture"] != arch):
             raise ValueError("Candidate acceptance evidence does not match release")
         required = {"independent-binary-and-oci-versions", "core-runtime", "agent-image",
-                    "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor"}
+                    "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor", "update-registration"}
         if not required.issubset(evidence["checks"]):
             raise ValueError("Missing required candidate checks")
         if evidence.get("upgradeDescriptor") != expected_upgrade_descriptor(metadata):

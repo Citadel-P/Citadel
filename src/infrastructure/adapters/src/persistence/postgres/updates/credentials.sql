@@ -13,8 +13,6 @@ WITH envelopes AS (
     UNION ALL
     SELECT 6, userid, protectedtotpsecret FROM public.usermfasettings
 )
-SELECT COALESCE(json_agg(page), '[]'::json) FROM (
-    SELECT kind, id, envelope FROM envelopes
-    WHERE (kind, id) > (__KIND__, '__ID__'::uuid)
-    ORDER BY kind, id LIMIT __PAGE_SIZE__
-) page;
+SELECT kind, id, envelope FROM envelopes
+WHERE (kind, id) > ($1, $2)
+ORDER BY kind, id LIMIT $3;

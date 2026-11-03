@@ -16,6 +16,8 @@ function UpdatesPage() {
   );
 }
 
+vi.mock('@/lib/context/realtime-context', () => ({ useRealtimeContext: () => ({ liveConnectionState: 'connected' }) }));
+
 vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPlatform: undefined }) }));
 
 vi.mock('@/components/custom/task-sheet', () => ({ default: () => <div data-testid="activity-drawer" /> }));

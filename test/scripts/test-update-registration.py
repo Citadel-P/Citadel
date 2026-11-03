@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in registration/revalidation acceptance on a disposable isolated Docker daemon.
+"""Packaged registration/revalidation acceptance on a disposable isolated Docker daemon.
 
 Requires a Core image built from this checkout, Docker and Python 3 on the test
 host. Python is test tooling only; registration itself runs from the Core image.
@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 import secrets
+import re
 import signal
 import subprocess
 import tempfile
@@ -51,15 +52,20 @@ class Fixture:
         return run([*DOCKER, *args], **kwargs)
 
     def execute(self, *args, **kwargs):
-        return self.host("exec", self.daemon, *args, **kwargs)
+        interactive = ["--interactive"] if kwargs.get("stdin") is not None else []
+        return self.host("exec", *interactive, self.daemon, *args, **kwargs)
 
     def docker(self, *args, **kwargs):
         return self.execute("docker", "--host", "unix:///var/run/docker.sock", *args, **kwargs)
 
-    def start(self):
+    def start(self, *, published=False):
         print("Preparing disposable Docker daemon and loading test images", flush=True)
         # The caller supplies the exact Core image; never fetch an implicit latest.
-        self.host("image", "inspect", self.core)
+        if published:
+            require(re.fullmatch(r"ghcr\.io/citadel-p/citadel@sha256:[0-9a-f]{64}", self.core),
+                    "Published acceptance requires an exact official Core digest")
+        else:
+            self.host("image", "inspect", self.core)
         if self.host("image", "inspect", DIND, check=False).returncode:
             self.host("pull", DIND, timeout=300)
         self.network = self.host("network", "create", f"citadel-update-acceptance-{uuid.uuid4().hex}").stdout.decode().strip()
@@ -77,6 +83,12 @@ class Fixture:
         # Docker save/load can discard RepoDigests. Pull the exact installer pin
         # inside the disposable daemon, then disconnect it before starting Core.
         self.docker("pull", POSTGRES, timeout=300)
+        if published:
+            # Retain registry/GitHub access and RepoDigests for the real verifier.
+            # No host ports or host Docker socket are exposed to this daemon.
+            self.docker("pull", self.core, timeout=300)
+            self.tag = self.core
+            return
         self.host("network", "disconnect", self.network, self.daemon)
         self.host("network", "rm", self.network)
         self.network = None
@@ -165,8 +177,8 @@ class Fixture:
             "check-update-installation", "--state-directory", state,
         ]
 
-        def invoke(args, success, expected_error=None):
-            result = self.docker(*args, check=False, timeout=180)
+        def invoke(args, success, expected_error=None, stdin=None):
+            result = self.docker(*args, check=False, timeout=180, stdin=stdin)
             require(password.encode() not in result.stdout + result.stderr, "Installation diagnostic leaked a secret")
             require((result.returncode == 0) == success,
                     "Unexpected installation diagnostic outcome: " + result.stderr.decode(errors="replace"))
@@ -180,9 +192,26 @@ class Fixture:
         def check(success, expected_error=None):
             return invoke(check_command, success, expected_error)
 
+        def refresh(success, expected_error=None):
+            return invoke([*command, "--refresh"], success, expected_error)
+
+        def host_check(action, success=True):
+            # Same executable, mounts and restricted runtime as HostUpdateClient.
+            # This exercises the packaged utility, not release signature admission.
+            utility = command[:command.index(self.tag)] + [
+                "--interactive", "--read-only", "--restart=no", "--no-healthcheck",
+                "--env", "TMPDIR=/tmp", "--tmpfs=/tmp:rw,noexec,nosuid,size=64m",
+                self.tag, "update-host",
+            ]
+            with tempfile.TemporaryFile() as request:
+                request.write(json.dumps({"action": action, "request": {"state_directory": state}}).encode())
+                request.seek(0)
+                return invoke(utility, success, stdin=request)
+
         check(False)
         require(self.execute("test", "-e", f"{state}/installation.lock", check=False).returncode != 0,
                 "Live check created a missing lock file")
+        refresh(False)
         register(False, "initialized, reachable Citadel database")
         require(self.execute("test", "-e", f"{state}/installation.json", check=False).returncode != 0,
                 "Registration must not persist before instance setup")
@@ -199,6 +228,10 @@ class Fixture:
                     == ("acceptance_edge_core", "acceptance_edge_database", "acceptance_edge_network"),
                     "Registration ignored custom resource names")
         original = self.read(f"{state}/installation.json")
+        require(host_check("startup") == {"status": "registered", "result": first},
+                "Host utility did not return the registered instance")
+        require(host_check("check")["result"]["registration"] == first,
+                "Read-only host utility could not revalidate the packaged installation")
         checked = check(True)
         require(checked["database"]["instanceId"] == first["instanceId"], "Database preflight bound the wrong instance")
         require(len(checked["database"]["catalogSha256"]) == 64, "Database preflight omitted catalog evidence")
@@ -218,6 +251,7 @@ class Fixture:
         require(mode == b"600:0:0", "Registration permissions or ownership are unsafe")
         require(password.encode() not in original, "Registration stored a secret")
 
+        print(f"{project}: live preflight and host utility passed; checking drift rejection", flush=True)
         self.write(f"{directory}/.env", env + "CITADEL_HTTP_ALLOWED_HOSTS=changed.example.test\n")
         check(False, "Registered installer inputs have changed")
         register(False, "Running service environment differs")
@@ -250,6 +284,8 @@ class Fixture:
         self.write(f"{state}/installation.json", original)
         self.write(f"{state}/recovery.json", b"preserve recovery evidence")
         check(False, "execution evidence requires recovery")
+        refresh(False)
+        host_check("startup", False)
         require(self.read(f"{state}/recovery.json") == b"preserve recovery evidence",
                 "Live check changed recovery evidence")
         self.execute("rm", f"{state}/recovery.json")
@@ -259,7 +295,40 @@ class Fixture:
         require([(v["Id"], v["State"]["StartedAt"], v["RestartCount"]) for v in before]
                 == [(v["Id"], v["State"]["StartedAt"], v["RestartCount"]) for v in after],
                 "Registration restarted or replaced a service")
-        print(f"{project}: registration, live revalidation, drift and evidence preservation passed", flush=True)
+        print(f"{project}: drift rejected; recreating Core to verify explicit refresh", flush=True)
+        # An intentional Core-only configuration change requires explicit refresh.
+        # Local candidate archives have no registry RepoDigest, so do not enable
+        # release installation or pretend this qualifies a signed transition.
+        keys = self.docker("exec", core, "sha256sum", "/app/data/jwtsecret",
+                           "/app/data/secret-encryption-key", "/app/data/agent/signing-key").stdout
+        require(keys.strip(), "Fixture did not retain file-backed recovery keys")
+        self.write(f"{directory}/.env", env + "CITADEL_HTTP_ALLOWED_HOSTS=localhost;127.0.0.1;acceptance.test\n")
+        self.docker(*compose, "up", "--detach", "--no-deps", "--pull", "never",
+                    "--wait", "--wait-timeout", "180", "server", timeout=210)
+        replacement = self.docker(*compose, "ps", "--quiet", "server").stdout.decode().strip()
+        require(replacement != core, "Fixture did not recreate Core for the configuration change")
+        register(False, "different installation is already registered")
+        check(False)
+        require(self.read(f"{state}/installation.json") == original, "Implicit refresh changed registration")
+        refreshed = refresh(True)
+        expected = dict(first, coreContainerId=replacement,
+                        configurationSha256=refreshed["configurationSha256"],
+                        runtimeSha256=refreshed["runtimeSha256"])
+        require(refreshed == expected, "Refresh changed installation or storage identity")
+        require(refreshed["configurationSha256"] != first["configurationSha256"],
+                "Refresh did not bind the changed configuration")
+        require(refresh(True) == refreshed and check(True)["registration"] == refreshed,
+                "Refreshed installation did not pass an idempotent retry and live check")
+        require(host_check("check")["result"]["registration"] == refreshed,
+                "Host utility did not observe refreshed registration")
+        after_database = json.loads(self.docker("inspect", database).stdout)[0]
+        require((after_database["Id"], after_database["State"]["StartedAt"], after_database["RestartCount"])
+                == (before[1]["Id"], before[1]["State"]["StartedAt"], before[1]["RestartCount"]),
+                "Registration refresh restarted or replaced PostgreSQL")
+        require(self.docker("exec", replacement, "sha256sum", "/app/data/jwtsecret",
+                            "/app/data/secret-encryption-key", "/app/data/agent/signing-key").stdout == keys,
+                "Core recreation changed recovery keys")
+        print(f"{project}: registration, host utility, refresh and evidence preservation passed", flush=True)
 
 
 def main():

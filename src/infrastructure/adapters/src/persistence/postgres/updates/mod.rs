@@ -25,19 +25,16 @@ mod agents;
 pub(crate) use agents::read_update_agent_versions;
 mod authorization;
 mod checkpoint;
-mod checkpoint_secrets;
-pub(crate) use checkpoint_secrets::{
-    CHECKPOINT_SECRET_PAGE_SIZE, checkpoint_secret_page, checkpoint_secrets_query,
-};
 mod checks;
-pub(crate) use checkpoint::{
-    CHECKPOINT_PROBE_SQL, check_checkpoint_source, validate_checkpoint_database,
-};
+mod credentials;
+pub(crate) use checkpoint::check_checkpoint_source;
 mod claims;
 mod drain;
 mod preflight;
 mod queries;
 mod recovery;
+mod restore;
+pub(crate) use restore::{finish_checkpoint_restore, require_empty_restore_database};
 mod repository;
 mod reviews;
 mod startup;

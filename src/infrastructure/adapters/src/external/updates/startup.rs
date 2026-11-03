@@ -4,8 +4,8 @@ use std::path::Path;
 
 /// Observe registration under a short, nonblocking installation lock. Startup
 /// must never erase evidence or infer successful execution from a journal flag.
-/// Until runtime recovery verification is implemented, any execution evidence
-/// keeps Core in maintenance, including apparently completed journals.
+/// Active or orphaned evidence keeps Core in maintenance. Completed archives
+/// must carry the validated host reconciliation record.
 pub fn check_startup_registration(
     path: &Path,
 ) -> Result<RegisteredComposeInstallation, UpdateError> {

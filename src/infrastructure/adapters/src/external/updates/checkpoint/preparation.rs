@@ -7,7 +7,7 @@ use crate::external::backups::system_recovery::{
     PgDumpSystemBackupBuilder, inspect_recovery_bundle,
 };
 use citadel_backups::{BackupError, CitadelSystemBackupBuilder};
-use citadel_updates::{CoreIdentity, UpdateError, UpdateOperation, UpdatePhase};
+use citadel_updates::{CoreIdentity, UpdateError, UpdateJournal, UpdateOperation, UpdatePhase};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
@@ -52,43 +52,7 @@ pub async fn prepare_update_checkpoint(
     cancellation: &CancellationToken,
 ) -> Result<PreparedUpdateCheckpoint, UpdateError> {
     cancelled(cancellation)?;
-    state.verify_lock(owner)?;
-    operation.plan.validate(operation.created_at)?;
-    let journal = state.journal(operation.id)?;
-    journal.validate_for(operation)?;
-    if journal.operation != *operation
-        || operation.id.is_nil()
-        || operation.fence.is_nil()
-        || operation.actor_id.value().is_nil()
-        || operation.idempotency_key.is_nil()
-        || operation.instance_id != operation.plan.instance_id
-        || operation.phase != UpdatePhase::BackingUp
-        || operation.revision != 2
-        || operation.checkpoint.is_some()
-        || !citadel_updates::is_sha256(&journal.helper_container_id)
-        || journal.verified_target.is_some()
-        || journal.completion_acknowledged
-        || journal.maintenance_released
-    {
-        return Err(UpdateError::Conflict(
-            "Checkpoint preparation requires the owned backup phase.".into(),
-        ));
-    }
-    let registration: RegisteredComposeInstallation = state.read("installation.json")?;
-    registration.validate()?;
-    if registration.id != operation.plan.registration_id
-        || registration.instance_id != operation.instance_id
-        || registration.state_directory != state.path()
-        || registration.executor_uid != rustix::process::geteuid().as_raw()
-        || registration.executor_gid != rustix::process::getegid().as_raw()
-        || registration.configuration_sha256 != operation.plan.configuration_sha256
-        || registration.environment_file != registration.directory.join(".env")
-        || Path::new(&operation.plan.checkpoint_directory) != state.path()
-    {
-        return Err(UpdateError::Conflict(
-            "Checkpoint registration does not match its approved operation.".into(),
-        ));
-    }
+    let (journal, registration) = check_preparation(state, owner, operation)?;
     let inputs = InstallerComposeInputs {
         directory: registration.directory.clone(),
         project: registration.project.clone(),
@@ -157,12 +121,9 @@ pub async fn prepare_update_checkpoint(
         installer_inputs,
         required_external_configuration: checked.required_external_configuration,
     };
-    state.verify_lock(owner)?;
     stage.verify_location()?;
-    if state.journal(operation.id)? != journal
-        || state.read::<RegisteredComposeInstallation>("installation.json")? != registration
-        || registration.fingerprint(std::path::Path::new("/"))? != registration.configuration_sha256
-    {
+    let (current_journal, current_registration) = check_preparation(state, owner, operation)?;
+    if current_journal != journal || current_registration != registration {
         return Err(changed());
     }
     cancelled(cancellation)?;
@@ -174,4 +135,51 @@ fn changed() -> UpdateError {
     UpdateError::Conflict(
         "Installer inputs or update ownership changed during checkpoint preparation.".into(),
     )
+}
+
+/// One validation boundary shared by preparation and pre-replacement integrity checks.
+pub(super) fn check_preparation(
+    state: &JournalDirectory,
+    owner: &InstallationLock,
+    operation: &UpdateOperation,
+) -> Result<(UpdateJournal, RegisteredComposeInstallation), UpdateError> {
+    state.verify_lock(owner)?;
+    operation.plan.validate(operation.created_at)?;
+    let journal = state.journal(operation.id)?;
+    journal.validate_for(operation)?;
+    if journal.operation != *operation
+        || operation.id.is_nil()
+        || operation.fence.is_nil()
+        || operation.actor_id.value().is_nil()
+        || operation.idempotency_key.is_nil()
+        || operation.instance_id != operation.plan.instance_id
+        || operation.phase != UpdatePhase::BackingUp
+        || operation.revision != 2
+        || operation.checkpoint.is_some()
+        || !citadel_updates::is_sha256(&journal.helper_container_id)
+        || journal.verified_target.is_some()
+        || journal.completion_acknowledged
+        || journal.maintenance_released
+    {
+        return Err(UpdateError::Conflict(
+            "Checkpoint preparation requires the owned backup phase.".into(),
+        ));
+    }
+    let registration: RegisteredComposeInstallation = state.read("installation.json")?;
+    registration.validate()?;
+    if registration.id != operation.plan.registration_id
+        || registration.instance_id != operation.instance_id
+        || registration.state_directory != state.path()
+        || registration.executor_uid != rustix::process::geteuid().as_raw()
+        || registration.executor_gid != rustix::process::getegid().as_raw()
+        || registration.configuration_sha256 != operation.plan.configuration_sha256
+        || registration.environment_file != registration.directory.join(".env")
+        || registration.fingerprint(Path::new("/"))? != registration.configuration_sha256
+        || Path::new(&operation.plan.checkpoint_directory) != state.path()
+    {
+        return Err(UpdateError::Conflict(
+            "Checkpoint registration does not match its approved operation.".into(),
+        ));
+    }
+    Ok((journal, registration))
 }

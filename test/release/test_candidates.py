@@ -3,7 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('candidates',ROOT/'src/tools/release/candidates.py')
@@ -29,7 +29,16 @@ class CandidateIdentityTests(unittest.TestCase):
     def test_acceptance_checks_current_pair(self):
         with patch.object(candidates.subprocess, 'run') as run:
             candidates.run_acceptance('core-image', 'agent-image')
-            run.assert_called_once_with(['bash', 'test/scripts/test-agent-acceptance.sh', 'core-image', 'agent-image'], check=True)
+            self.assertEqual(run.call_args_list, [
+                call(['bash', 'test/scripts/test-agent-acceptance.sh', 'core-image', 'agent-image'], check=True),
+                call([candidates.sys.executable, 'test/scripts/test-update-registration.py', 'core-image'], check=True),
+            ])
+
+    def test_failed_update_registration_blocks_candidate_acceptance(self):
+        failure = candidates.subprocess.CalledProcessError(1, 'update-registration')
+        with patch.object(candidates.subprocess, 'run', side_effect=[None, failure]):
+            with self.assertRaises(candidates.subprocess.CalledProcessError):
+                candidates.run_acceptance('core-image', 'agent-image')
 
     def test_display_informational_revision_and_loaded_artifact_checked_independently(self):
         metadata=dict(productVersion='1.2.3',displayVersion='1.2.3-dev.5.g0123456789ab',

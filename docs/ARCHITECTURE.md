@@ -68,8 +68,10 @@ Committed settings mutations publish `InstallationSettingsChanged` to administra
 browsers, while persisted checks publish `ApplicationInfoChanged`. Shared realtime
 handling refreshes the affected HTTP reads on notification and reconnect. Activity
 history uses its existing scoped subscription; mutation responses keep the initiating
-browser's saved values current during a disconnect. Core self-update execution is
-not implemented.
+browser's saved values current during a disconnect. Registered Linux Compose
+installations also expose review, approval and retained operation progress. The
+executor is wired through target completion, but no release transition is qualified
+yet; packaged source-to-target acceptance remains required.
 
 The Updates UI keeps Config and Activities in the standard resource page.
 Config offers automatic release checks at six-hour, twelve-hour or daily intervals
@@ -81,13 +83,11 @@ attempt to calculate the next check and reschedules on settings changes. Manual
 checks and restarts preserve this schedule. Server policy can prohibit both
 automatic and manual checks. History remains visible independently of this setting.
 
-The installation UI remains planned until execution is implemented. Installation
-readiness and recovery-checkpoint information will remain visible independently
-of automatic checks. Channel switching and scheduled installation are deferred.
-Update now
-opens a server-generated review of the exact target, interruption, checkpoint and
-Agent requirements. One approval starts a durable operation shown in the existing
-task sheet. Closing it, navigation or a browser refresh must neither cancel nor
+The installation UI offers Review update when a release is available and the
+installation runtime is configured. The server verifies registration, signatures,
+transition eligibility and Agent requirements before returning a review. Approval
+starts a durable operation shown in the Updates status alert. Channel switching
+and scheduled installation are deferred. Closing it, navigation or a browser refresh must neither cancel nor
 repeat the operation. Realtime reports progress while Core is available; during
 restart the loaded page retains the last confirmed phase and reconnects, without
 inventing progress or offering actions that require Core. The external executor
@@ -99,8 +99,11 @@ connection-error toasts only for that expected interruption. Ordinary disconnect
 retain the existing warning. A prolonged restart becomes “Taking longer than
 expected”, with operation details and host status/recovery instructions; loss of
 connectivity alone proves neither failure nor success. After verified completion,
-reload the document once to load the new frontend and preserve the Updates route,
-tab and operation ID. A fresh browser load may be unavailable while Core is down;
+the Updates page reloads the document once to load the new frontend, preserving
+the URL and operation ID. It requires no active maintenance owner, the retained
+successful outcome, a connected realtime session and the matching running version.
+A session marker is persisted before reload; storage failure leaves a manual action
+instead. A committed success still owning maintenance is shown as Finishing update. A fresh browser load may be unavailable while Core is down;
 the first version adds no independently hosted updater status endpoint.
 
 Release-check cancellation stops lock waits and network fetching. Once persistence
@@ -109,10 +112,10 @@ exiting or applying a settings change. Policy monitoring and the worker are join
 on shutdown; neither drops a committing check. The check endpoint returns the
 service result without rereading check state.
 
-The operation repository and journal contracts are foundations, not a completed
-external executor: durable coordination of live admission/draining, full installation preflight,
-installer integration, detached handoff and recovery orchestration still require
-integration and packaged source-to-target acceptance before enabling installation.
+The operation repository, detached executor and target startup share persisted
+ownership through draining, checkpoint creation, replacement and acceptance.
+Packaged source-to-target upgrade and recovery tests are still required before
+a release descriptor can authorize installation.
 Matching journal identity fields alone is not target readiness verification.
 
 Core now shares a process-local `AdmissionGate` between HTTP handling and work
@@ -158,8 +161,8 @@ This drain step does not advance journal phases or authorize a checkpoint. The
 operation driver must preserve the complete journal transition history, quiesce
 remaining observation writers and revalidate evidence before checkpointing. Safe
 postponement/resume still requires unchanged-source and cleanup verification. The
-drain service is not yet invoked by the production update path; release checks do
-not close admission. The startup safeguards below remain the authority across
+installation coordinator invokes the drain service after helper readiness; release
+checks alone do not close admission. The startup safeguards below remain the authority across
 process restarts.
 
 The checkpoint adapter prepares local recovery artifacts under an already held
@@ -180,48 +183,34 @@ binds the bundle checksum inventory and installer input hashes; it is artifact
 evidence, not runtime quiescence or restore verification. No operation phase or
 maintenance ownership changes as part of this filesystem preparation.
 
-`verify_update_checkpoint` now rehearses the PostgreSQL restore in a disposable
-container using the registered database container's exact local image. It checks
-the held lock, complete backup-phase journal, saved installer inputs and bundle
-hashes before execution and again before publishing success. Only the dump file
-is mounted read-only; the verifier has no installation volumes, Docker socket,
-external network or published ports. PostgreSQL data lives in bounded tmpfs,
-with bounded memory, CPU, process count and execution time. Initialization must
-finish before restoration starts.
+Before replacement, `verify_checkpoint_integrity` rechecks the owned backup-phase
+journal, registration, saved installer inputs, bundle checksums and source identity.
+Preparation and verification share the same operation/registration validation.
+The helper does not create a second PostgreSQL container or restore the checkpoint
+as part of an update. The checkpoint is **integrity checked**, not **restore tested**.
+Real restore and encrypted-data round trips belong in disposable release qualification
+and the shared system-recovery tests. Integrity checks alone cannot prove that
+PostgreSQL will restore an archive successfully.
 
-The read-only database probe verifies initialized instance identity, the retained
-update claim against the journal history, and the exact embedded source migration
-catalog. It does not run migrations or initialize identity. A durable attempt
-record prevents silent replay; timeout/cancellation still awaits independently
-bounded cleanup of the exact owned container. Ambiguous creates, foreign containers,
-failed cleanup, altered artifacts or failed restoration cannot publish the restore
-receipt. A successful receipt proves this PostgreSQL archive was restored and its
-verifier removed. It also checks recovery-key availability and authenticates every
-stored AES-GCM envelope with the production secret protector, using bounded
-keyset pages from the restored database. This includes internal secrets, provider
-tokens, Git credentials, OIDC client secrets and both MFA secret stores. Required
-missing/malformed envelopes fail verification; nullable OIDC client secrets remain
-optional. Keys and plaintext never enter the PostgreSQL sandbox or process
-arguments. File-backed keys come from the checked bundle; externally configured
-keys are resolved from the unchanged registered Compose inputs. Decryption evidence
-in receipts contains only a count, with zero explicitly meaning there were no
-encrypted values to test. JWT and Agent keys are checked for availability/encoding,
-not authentication against a running Core or Agent.
+The helper checks recovery-key availability before shutdown and validates the source
+identity, retained claim and migration catalog before dumping. Target startup still
+verifies the original keys, migration history and decryption of stored credentials
+before recording completion. Credential reads use bounded parameterized SQL in the
+target executable, without a Docker/JSON database-query transport. Missing or malformed
+required envelopes fail verification; nullable OIDC client secrets remain optional.
 
-Neither the restore receipt nor decryption proves writer quiescence, target
-readiness or permission to replace/resume Core, and neither advances the journal.
-
-This adapter is not invoked by the live update path yet. The external helper must
-acknowledge ownership before stopping Core, then confirm all source writers have
-stopped before taking the final checkpoint while PostgreSQL remains available.
-The detached helper implements that boundary. Its execution is internal: public
-installation, host reconciliation and explicit recovery are still unfinished.
+The external helper must acknowledge ownership before stopping Core, then confirm
+source writers have stopped before taking the checkpoint while PostgreSQL remains
+available. Neither artifact integrity nor a successful dump releases maintenance.
+The detached helper implements that boundary behind the review/approval API.
+Host reconciliation and explicit checkpoint recovery are connected to the same
+retained ownership; their packaged source-to-target acceptance is still pending.
 
 **Execution ownership**
 
 `run_update_helper` is the single owner of the installation lock and host journal.
 Its sequence is target preparation → shutdown grant → clean source stop → checkpoint
-and restore rehearsal → Core-only replacement → target completion. The individual
+integrity verification → Core-only replacement → target completion. The individual
 phase methods are private implementation details, not separate executable APIs.
 The launcher records exclusive launch intent, then binds the verified helper
 immediately before starting the exact pinned source image. It releases the host lock before starting the helper. Ambiguous Docker
@@ -233,7 +222,10 @@ and one action: check acknowledgement, grant shutdown, inspect target evidence,
 or submit target completion. The command validates ownership before dispatch and
 cannot execute a phase. It only reads evidence or publishes the exclusive grant or
 completion mailbox. The driver alone writes journal transitions. Core uses bounded
-Docker exec; it does not open private host paths or need an additional host mount.
+Docker exec, addressed directly from the request's helper binding; it does not
+open private host paths or need an additional host mount. Running phases share
+one verification routine for the full helper profile and acknowledged start time,
+so preparation, shutdown, replacement and completion retain the same process identity.
 Protocol types remain private to the adapter; the public ports expose use cases.
 
 Each operation has five records: launch intent and start binding from the launcher,
@@ -243,7 +235,10 @@ preparation, stop identity, replacement intent/submission and target identity.
 Acknowledgement/history, replacement intent/phase and target identity/phase are each
 published atomically, with no separate phase markers to reconcile. The grant and
 completion stay separate because other processes write them; they cannot overwrite
-the driver's journal. Checkpoint files remain independently verified recovery artifacts.
+the driver's journal. Phase checks consume one complete execution snapshot, including
+preparation and process identities, and compare it again after runtime I/O before
+advancing or accepting target evidence. A readiness check may observe newly finished
+preparation; it does not grant shutdown. Checkpoint files remain independently verified recovery artifacts.
 Standalone checkpoint journals retain their format. Existing fragmented execution
 state is preserved and blocks relaunch; it is never converted into permission to replay.
 
@@ -271,10 +266,10 @@ After Core drains, the helper records stop intent before sending SIGTERM to the
 registered Core with Docker's `stop --timeout -1`. The client has a bounded deadline;
 there is no daemon-side SIGKILL escalation. Only a clean exit with unchanged
 container/image/start identity and a healthy PostgreSQL advances to `BackingUp`.
-Checkpoint creation reuses system recovery and the isolated restore rehearsal above.
+Checkpoint creation reuses the system recovery builder; integrity is checked before replacement.
 Source/helper identity and Agent versions are rechecked; pools close before return.
 
-Replacement validates the checkpoint, removed restore sandbox, pinned image and
+Replacement validates the checkpoint integrity, pinned image and
 approved configuration. It records replacement intent and `ReplacingCore` before
 atomically publishing the private `.env` image selector. The original inputs remain
 in the checkpoint. The original Compose invocation runs only
@@ -282,7 +277,7 @@ in the checkpoint. The original Compose invocation runs only
 files remain intact. A successful response records submission, not readiness.
 There is no source-schema SQL after replacement submission.
 
-`ReplacementEvidence` centralizes the post-publication validation used by observation,
+`ExecutionJournal::read_replacement` centralizes the post-publication validation used by observation,
 target startup and completion: operation/history, grant/stop ownership, approved
 configuration, checkpoint identity and retained runtime. Observation requires
 confirmed submission. It binds the exact replacement container/start identity after
@@ -292,6 +287,24 @@ accept a restarted or different target. Docker health never establishes completi
 may report pending only for the owned `ReplacingCore` phase, while Compose starts
 Core before the driver publishes the binding. Retrying that read is bounded and
 never repeats replacement.
+
+**Review and approval**
+
+The Updates API exposes administrator-only review, approval and operation reads.
+Review checks live registration, signed release identity, the embedded qualified
+transition and current Agent versions, then saves a short-lived plan. Approval
+rechecks the source and claims atomically with its Activity. A bounded supervised
+worker owns review cleanup and approved execution independently of the HTTP
+receiver. The same request key returns the stored operation, including after
+release; it cannot launch another helper. One coordinator launches, waits for
+acknowledgement, imports the driver's Draining journal, drains work and grants
+shutdown. No separate handoff coordinator or browser-owned task is used.
+
+The frontend uses the existing Updates page, generated API models and realtime
+invalidations. It retains an operation ID in session storage for reconnection,
+never synthetic progress. An approved restart gets a bounded explanatory header
+status; browser offline and expired expectations retain the normal connection
+warning. Public views omit host paths, keys, fences and private journals.
 
 **Target acceptance and completion**
 
@@ -306,14 +319,33 @@ are no encrypted database rows. External keys stay bound by the unchanged Compos
 environment. Private key identities are redacted and never enter public views.
 
 The target atomically commits outcome, receipt and Activities before submitting
-completion through the helper command. The driver independently asks the target's
+completion through the helper command. Persistence maps operation rows through one
+claim validator: indexed identity, actor, request key and revision must match the
+serialized operation. Import and release hold the row lock throughout validation
+and mutation. A released attempt cannot advance; exact replay of a released
+successful or safely stopped outcome is read-only and cannot affect a newer owner. The driver independently asks the target's
 `update-target-receipt` command to confirm that database commit; the source never
 reads target-schema SQL. It then rechecks target identity, acknowledges completion
-in the host journal and exits. That journal is the acknowledgement record; there
-is no second completion marker to publish. Target startup verifies that exact clean
-helper exit.
-Neither receipt nor exit releases maintenance: host reconciliation and final
-admission remain unimplemented. Pre-stop failures retain maintenance as `Failed`;
+in the host journal and exits. Completion retains one execution snapshot across
+both live checks and receipt verification; changed preparation or replacement
+evidence prevents acknowledgement. Completion and failure update that complete
+snapshot directly, without merging a phase into freshly read execution state.
+That journal is the acknowledgement record; there is no second completion marker
+to publish. Target startup verifies that exact clean
+helper exit using the same container profile checks as creation and running-state
+verification. The session retains its original helper acknowledgement; exit code zero
+is insufficient if the image, process incarnation, labels, command or mounts changed.
+The target invokes the installed image's bounded `update-host` reconciler after
+clean helper exit. Under the installation lock it rechecks the committed receipt,
+target and helper, removes only the exited helper (without force), updates the
+registration to the target and archives active records alongside the unchanged
+checkpoint. A completed archive is validated before startup treats the state as
+idle. Only then does target-owned persistence release the claim and normal startup
+continue. A fully reconciled archive can finish an interrupted database release on target
+restart after rechecking image, container, configuration, storage, keys, catalog and
+committed receipt. A private finalization record is persisted after clean helper exit
+and target receipt verification, before cleanup. It permits exact interrupted archive
+moves to finish after revalidation, without replaying container replacement. Pre-stop failures retain maintenance as `Failed`;
 ambiguous post-stop failures record `RecoveryRequired`, preserve evidence and never
 restart the source or roll back the database automatically.
 
@@ -333,12 +365,15 @@ Normal shutdown retains the lease through worker and dynamic-task cleanup.
 
 When `CITADEL_UPDATE_STATE_DIRECTORY` is explicitly configured, the Linux adapter
 also checks the existing private registration under a short, nonblocking host lock.
-The directory must be mounted at its registered absolute path and accessible to
-Core as the recorded executor UID. Missing, unsafe, corrupt, foreign-instance or
+Containerized Core uses a short-lived utility from its actual installed image,
+with exact host-path binds for installer inputs (read-only), state and the local
+Docker socket. The utility runs as the registered root executor, with no network
+and a private temporary filesystem. Core does not need writable host-root access. Missing, unsafe, corrupt, foreign-instance or
 locked state blocks startup. The check never creates or repairs evidence, holds
 the host lock while awaiting a helper, or treats a restored database without a
-claim as permission to ignore external evidence. Any file beyond the registration
-and lock currently requires recovery verification, including a completed journal.
+claim as permission to ignore external evidence. Active or orphaned evidence requires recovery verification. Completed checkpoint
+archives are permitted only with validated completion and registration identities;
+a standalone successful journal does not authorize startup.
 
 Blocked startup serves a restricted listener: `/health` reports process liveness,
 `/ready` returns 503, application routes are unavailable, and no Edge RPCs are exposed.
@@ -351,8 +386,7 @@ source/target resume still needs live runtime, migration, receipt and helper-cle
 verification. No target migrations or journal imports run in this mode. This is
 a startup safeguard, not the live admission/drain mechanism for an already running
 Core. Explicit operator migration/restore CLI commands remain separate maintenance
-tools. Installer mounting/configuration and execution integration are still pending;
-without the configured directory only database evidence can be inspected.
+tools. Registration is explicitly configured; without that directory only database evidence can be inspected.
 
 The standalone `verify-update-release --version VERSION` command resolves a
 completed official publication and verifies its exact Core image using Cosign.
@@ -364,8 +398,7 @@ cleanup. Checksums and publisher receipts alone never establish authenticity.
 The command honours the server release-network restriction and does not construct
 Core, access the database, pull images or install anything. Its result proves an
 artifact signature, not catalog, architecture or installation compatibility.
-The verifier feeds a separate target-inspection service; reviewed-plan/executor
-integration remains pending.
+The verifier feeds the target-inspection service used by review and detached execution.
 
 Core also exposes `upgrade-descriptor-json` from its compiled version and embedded
 migration catalog. The catalog identity is SHA-256 of the exact embedded
@@ -478,9 +511,8 @@ The result contains registration, validated database identity/catalog/size,
 availability does not prove that the values match Core's in-memory keys or decrypt
 all stored ciphertext, and it is not an independent copy. This is a point-in-time
 preflight input, not target compatibility, a created/restorable checkpoint or
-replacement approval. Local checkpoint artifact preparation is implemented separately;
-reviewed-plan, live checkpoint and executor integration remain pending. The executor
-must repeat validation under ownership before replacement.
+replacement approval. The executor repeats validation under ownership before preparing
+the checkpoint and replacing Core.
 
 Migration `0002_instance_updates` appends update state without changing the shipped
 baseline. Discovery markers and operation receipts are separate from Activity
@@ -491,8 +523,13 @@ after its outcome commits, helper cleanup completes and the running source's
 version, image, catalog and architecture are verified unchanged. Its original
 outcome stays terminal. Replacement uncertainty and `RecoveryRequired` retain
 ownership; successful replacement still requires the target completion receipt.
-These repository checks do not substitute for the pending runtime readiness and
-cleanup verification in the executor.
+These repository checks do not substitute for live runtime readiness and cleanup
+verification. An explicit `restore-update-checkpoint` command supports recovery into
+an empty database using the exact source build. It holds and monitors the Core lease,
+validates the immutable checkpoint, restores through the shared system recovery
+implementation, then checks catalog, claim identity and credential decryption before
+atomically recording failure and releasing the restored claim. Original host evidence
+and the original database remain intact; recovery never fabricates target success.
 
 ## Dependency rules
 

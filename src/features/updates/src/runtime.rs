@@ -4,7 +4,12 @@ use futures_util::future::BoxFuture;
 /// A prepared external executor and a one-way durable shutdown grant.
 /// The implementation rechecks live ownership before publishing the grant.
 pub trait UpdateHandoffRuntime: Send + Sync {
-    /// Wait for the owned helper to finish preparation before draining Core.
+    fn journal<'a>(
+        &'a self,
+        operation: &'a crate::UpdateOperation,
+        cancellation: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<crate::UpdateJournal, UpdateError>>;
+
     fn acknowledged<'a>(
         &'a self,
         operation: &'a crate::UpdateOperation,
@@ -15,6 +20,18 @@ pub trait UpdateHandoffRuntime: Send + Sync {
         operation: &'a crate::UpdateOperation,
         cancellation: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<'a, Result<(), UpdateError>>;
+}
+
+pub trait UpdateInstallationRuntime: Send + Sync {
+    fn source<'a>(
+        &'a self,
+        cancellation: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<crate::InstallationSnapshot, UpdateError>>;
+    fn launch<'a>(
+        &'a self,
+        operation: &'a crate::UpdateOperation,
+        cancellation: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<std::sync::Arc<dyn UpdateHandoffRuntime>, UpdateError>>;
 }
 
 /// Process-owned admission and detached work, independent of the requesting browser.

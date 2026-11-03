@@ -108,7 +108,7 @@ impl OwnedUpdateHelper {
                 "Shutdown observation budget must be between zero and ten minutes.".into(),
             ));
         }
-        self.check_grant()?;
+        let mut execution = self.check_grant()?;
         let home = private_home()?;
         let docker = LocalDocker {
             process,
@@ -117,16 +117,13 @@ impl OwnedUpdateHelper {
             deadline: Instant::now() + budget,
         };
         let image =
-            verification::helper(&docker, &self.intent, &self.acknowledgement.binding).await?;
+            verification::acknowledged_helper(&docker, &self.intent, &self.acknowledgement).await?;
         verify_handoff_source(
             &docker,
             &self.intent.registration,
             Some(&self.acknowledgement.binding.helper_container_id),
         )
         .await?;
-        if image.started_at != self.acknowledgement.started_at {
-            return Err(conflict());
-        }
         let core_id = &self.intent.registration.core_container_id;
         let core = verification::container(&docker, core_id).await?;
         if core["Image"] != image.image
@@ -137,8 +134,7 @@ impl OwnedUpdateHelper {
         {
             return Err(conflict());
         }
-        let mut journal = self.state.journal(self.intent.operation.id)?;
-        journal.validate_for(&self.intent.operation)?;
+        let mut journal = execution.journal.clone();
         if journal.operation.phase != UpdatePhase::Draining
             || journal.operation.revision != 1
             || journal.operation.checkpoint.is_some()
@@ -149,12 +145,13 @@ impl OwnedUpdateHelper {
         {
             return Err(conflict());
         }
-        self.check_grant()?;
+        if self.check_grant()? != execution {
+            return Err(conflict());
+        }
         if cancellation.is_cancelled() {
             return Err(UpdateError::Cancelled);
         }
-        let mut execution = ExecutionJournal::read(&self.state, self.intent.operation.id)?;
-        if execution.stop.is_some() || execution.journal != journal {
+        if execution.stop.is_some() {
             return Err(conflict());
         }
         execution.stop = Some(super::checkpoint::SourceProcess::from_container(&core)?);
@@ -177,12 +174,10 @@ impl OwnedUpdateHelper {
             )
             .await?;
         loop {
-            self.check_grant()?;
-            let helper =
-                verification::helper(&docker, &self.intent, &self.acknowledgement.binding).await?;
-            if helper.started_at != self.acknowledgement.started_at {
+            if self.check_grant()? != execution {
                 return Err(conflict());
             }
+            verification::acknowledged_helper(&docker, &self.intent, &self.acknowledgement).await?;
             let database =
                 verification::container(&docker, &self.intent.registration.database_container_id)
                     .await?;
@@ -212,8 +207,7 @@ impl OwnedUpdateHelper {
                 () = tokio::time::sleep(Duration::from_millis(250)) => {}
             }
         }
-        self.check_grant()?;
-        if self.state.journal(self.intent.operation.id)? != journal {
+        if self.check_grant()? != execution {
             return Err(conflict());
         }
         journal
@@ -224,24 +218,17 @@ impl OwnedUpdateHelper {
         if cancellation.is_cancelled() {
             return Err(UpdateError::Cancelled);
         }
-        self.save_journal(journal.clone())?;
+        execution.journal = journal.clone();
+        execution.save(&self.state, &self.owner)?;
         Ok(journal)
     }
 
-    pub(super) fn check_grant(&self) -> Result<(), UpdateError> {
+    pub(super) fn check_grant(&self) -> Result<ExecutionJournal, UpdateError> {
         self.state.verify_lock(&self.owner)?;
         self.intent.verify_saved(&self.state)?;
-        super::preparation::check_prepared_target(
-            &self.state,
-            &self.intent,
-            &self.acknowledgement,
-            false,
-        )?;
-        if binding(&self.state, &self.intent)? != self.acknowledgement.binding {
-            return Err(conflict());
-        }
-        if ExecutionJournal::read(&self.state, self.intent.operation.id)?.acknowledgement
-            != self.acknowledgement
+        let execution = ExecutionJournal::read_for(&self.state, &self.intent)?;
+        execution.prepared_target(&self.intent, false)?;
+        if execution.acknowledgement != self.acknowledgement
             || self
                 .state
                 .read::<HelperAcknowledgement>(&self.intent.file("shutdown-grant"))?
@@ -249,6 +236,6 @@ impl OwnedUpdateHelper {
         {
             return Err(conflict());
         }
-        Ok(())
+        Ok(execution)
     }
 }

@@ -36,13 +36,21 @@ impl UpdateRepository for PostgresUpdateRepository {
         Box::pin(self.review_impl(actor, id))
     }
 
+    fn previous(
+        &self,
+        actor: UpdateActor,
+        key: Uuid,
+    ) -> BoxFuture<'_, Result<Option<UpdateOperation>, UpdateError>> {
+        Box::pin(self.previous_impl(actor, key))
+    }
+
     fn claim<'a>(
         &'a self,
         actor: UpdateActor,
         plan: &'a UpdatePlan,
         key: Uuid,
         now: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<UpdateOperation, UpdateError>> {
+    ) -> BoxFuture<'a, Result<(UpdateOperation, bool), UpdateError>> {
         Box::pin(self.claim_impl(actor, plan, key, now))
     }
 

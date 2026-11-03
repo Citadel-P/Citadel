@@ -35,6 +35,10 @@ async fn closed_admission_blocks_handlers_but_preserves_status_and_liveness() {
             "/api/v1/updates",
             get(|| async { StatusCode::UNAUTHORIZED }),
         )
+        .route(
+            "/api/v1/updates/operations/{id}",
+            get(|| async { StatusCode::UNAUTHORIZED }),
+        )
         .route("/health", get(|| async { "alive" }))
         .route("/ready", get(|| async { "ready" }))
         .layer(middleware::from_fn_with_state(gate.clone(), admit));
@@ -63,6 +67,14 @@ async fn closed_admission_blocks_handlers_but_preserves_status_and_liveness() {
     for (path, status) in [
         ("/health", StatusCode::OK),
         ("/api/v1/updates", StatusCode::UNAUTHORIZED),
+        (
+            "/api/v1/updates/operations/019a0000-0000-7000-8000-000000000001",
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "/api/v1/updates/operations/not-an-id",
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
     ] {
         assert_eq!(
             app.clone()

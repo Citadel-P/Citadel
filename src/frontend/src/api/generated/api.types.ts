@@ -1489,6 +1489,13 @@ export interface ApplyStackInput {
   recreate?: boolean | null;
 }
 
+export interface ApproveUpdateInput {
+  /** @format uuid */
+  requestId: string;
+  /** @format uuid */
+  reviewId: string;
+}
+
 export interface ArchiveServiceAccountsRequest {
   ids: string[];
 }
@@ -6179,6 +6186,10 @@ export interface Restores {
   runs: BackupRestoreRunView[];
 }
 
+export interface ReviewUpdateInput {
+  version: string;
+}
+
 export interface RevokeOtherProfileSessionsView {
   /** @format int64 */
   count: number;
@@ -7842,6 +7853,24 @@ export interface UpdateCurrentProfileRequest {
   displayName: string;
 }
 
+export interface UpdateOperationView {
+  /** @format uuid */
+  id: string;
+  phase: string;
+  /** @format date-time */
+  updatedAt: string;
+  version: string;
+}
+
+export interface UpdateReviewView {
+  /** @format date-time */
+  expiresAt: string;
+  /** @format uuid */
+  id: string;
+  installedVersion: string;
+  targetVersion: string;
+}
+
 export interface UpdateScriptInput {
   alertOnFailure?: boolean;
   code?: string;
@@ -7874,7 +7903,7 @@ export interface UpdateStatusView {
   checkError: string | null;
   checksAllowed: boolean;
   checksEnabled: boolean;
-  installationUnavailableReason: string;
+  installationUnavailableReason: string | null;
   installedVersion: string;
   /** @format uuid */
   instanceId: string;
@@ -7882,6 +7911,7 @@ export interface UpdateStatusView {
   lastAttempt: string | null;
   /** @format date-time */
   lastSuccess: string | null;
+  operation: UpdateOperationView | null;
 }
 
 export interface UpdateSwarmNodeInput {
@@ -20770,6 +20800,36 @@ export class Api<
      * No description
      *
      * @tags Updates
+     * @name ApproveInstanceUpdate
+     * @summary Approve a reviewed instance update
+     * @request POST:/api/v1/updates/approve
+     * @secure
+     * @response `200` `UpdateOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    approveInstanceUpdate: (
+      data: ApproveUpdateInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UpdateOperationView, ProblemDetails>({
+        path: `/api/v1/updates/approve`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
      * @name CheckInstanceUpdates
      * @summary Check official releases once without installing
      * @request POST:/api/v1/updates/check
@@ -20787,6 +20847,61 @@ export class Api<
         path: `/api/v1/updates/check`,
         method: "POST",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetInstanceUpdateOperation
+     * @summary Read an instance update operation
+     * @request GET:/api/v1/updates/operations/{id}
+     * @secure
+     * @response `200` `UpdateOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceUpdateOperation: (id: string, params: RequestParams = {}) =>
+      this.request<UpdateOperationView, ProblemDetails>({
+        path: `/api/v1/updates/operations/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name ReviewInstanceUpdate
+     * @summary Review a verified release without installing
+     * @request POST:/api/v1/updates/review
+     * @secure
+     * @response `200` `UpdateReviewView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    reviewInstanceUpdate: (
+      data: ReviewUpdateInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UpdateReviewView, ProblemDetails>({
+        path: `/api/v1/updates/review`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

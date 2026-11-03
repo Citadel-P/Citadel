@@ -5,8 +5,8 @@ mod checkpoint;
 mod docker;
 #[cfg(target_os = "linux")]
 pub use checkpoint::{
-    CheckpointInstallerInput, CheckpointRestoreBudget, PreparedUpdateCheckpoint,
-    RestoredUpdateCheckpoint, prepare_update_checkpoint, verify_update_checkpoint,
+    CheckpointInstallerInput, PreparedUpdateCheckpoint, prepare_update_checkpoint,
+    restore_update_checkpoint,
 };
 #[cfg(target_os = "linux")]
 mod registration;
@@ -27,7 +27,7 @@ mod bootstrap;
 #[cfg(target_os = "linux")]
 pub use bootstrap::{
     CheckedUpdateInstallation, CheckpointStorage, check_registered_compose_installation,
-    register_compose_installation,
+    refresh_compose_installation, register_compose_installation,
 };
 #[cfg(target_os = "linux")]
 mod journal;
@@ -52,8 +52,16 @@ pub use inspection::DockerReleaseInspection;
 #[cfg(target_os = "linux")]
 mod handoff;
 #[cfg(target_os = "linux")]
+mod host;
+#[cfg(target_os = "linux")]
 pub use handoff::{
-    DockerHelperHandoff, HelperLaunchIntent, LaunchedUpdateHelper, MAX_HANDOFF_REQUEST,
-    TargetRecoveryKeys, TargetUpdateCompletion, TargetUpdateEvidence, TargetUpdateSession,
-    UpdateHelperBudget, execute_helper_handoff, launch_update_helper, run_update_helper,
+    CompletedUpdateTarget, DockerHelperHandoff, FinalizeUpdateRequest, HelperLaunchIntent,
+    LaunchedUpdateHelper, MAX_HANDOFF_REQUEST, TargetRecoveryKeys, TargetUpdateCompletion,
+    TargetUpdateEvidence, TargetUpdateSession, UpdateHelperBudget, completed_update_target,
+    execute_helper_handoff, finalize_update, launch_update_helper, run_update_helper,
+};
+#[cfg(target_os = "linux")]
+pub use host::{
+    DockerUpdateInstallation, HostUpdateClient, HostUpdateRequest, HostUpdateResponse,
+    execute_host_update,
 };
