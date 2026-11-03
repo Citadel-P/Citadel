@@ -1,4 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
+import { getDefaultStore } from 'jotai';
+import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { toast } from 'sonner';
 import { useHTTPErrorHandler } from '@/lib/hooks';
 import { delay, http, HttpResponse } from 'msw';
@@ -45,6 +47,7 @@ const settings = {
 };
 
 beforeEach(() => {
+  getDefaultStore().set(pendingInstanceUpdateAtom, null);
   localStorage.clear();
   vi.spyOn(toast, 'success').mockImplementation(() => 'notice');
   vi.spyOn(toast, 'error').mockImplementation(() => 'notice');
@@ -69,6 +72,26 @@ it('denies direct navigation without fetching administrator status', async () =>
     'Administrator access is required.',
   );
   expect(read).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['Preparing', 'Preparing update'],
+  ['Draining', 'Waiting for active work to finish'],
+  ['Succeeded', 'Finishing update'],
+])('hides release notices while an operation owns maintenance (%s)', async (phase, title) => {
+  server.use(
+    http.get('http://localhost/api/v1/updates', () =>
+      HttpResponse.json({
+        ...status,
+        operation: { id: 'update-operation', version: '0.1.2', phase, updatedAt: status.lastSuccess },
+      }),
+    ),
+  );
+  renderCitadel(<UpdatesPage />, { route: '/updates' });
+  expect(await screen.findByText(title)).toBeVisible();
+  expect(screen.queryByText(/Citadel 0.1.2 is available/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Release notes' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Update now' })).not.toBeInTheDocument();
 });
 
 it('has exactly Config and Activities tabs and checks without installing or refetching status', async () => {

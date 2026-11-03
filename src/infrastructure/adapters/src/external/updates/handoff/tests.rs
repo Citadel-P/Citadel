@@ -133,7 +133,7 @@ impl Runner {
         let intent: HelperLaunchIntent = self.state().read(&self.intent.file("launch")).unwrap();
         let reg = &intent.registration;
         json!({"Id": HELPER, "Name": format!("/{}", intent.helper_name()), "Image": format!("sha256:{}", "d".repeat(64)),
-            "Config": {"Hostname": &HELPER[..12], "User": format!("{}:{}", reg.executor_uid, reg.executor_gid), "Healthcheck": {"Test": ["NONE"]}, "Image": intent.operation.plan.helper_image, "Labels": {verification::NONCE: intent.nonce.to_string(), verification::OPERATION: intent.operation.id.to_string()}},
+            "Config": {"Hostname": &DATABASE[..12], "User": format!("{}:{}", reg.executor_uid, reg.executor_gid), "Healthcheck": {"Test": ["NONE"]}, "Image": intent.operation.plan.helper_image, "Labels": {verification::NONCE: intent.nonce.to_string(), verification::OPERATION: intent.operation.id.to_string()}},
             "State": {"Running": true, "Paused": false, "Restarting": false, "Status": "running", "StartedAt": "2026-11-03T00:00:00Z"}, "RestartCount": 0,
             "HostConfig": {"RestartPolicy": {"Name": "no"}, "NetworkMode": format!("container:{}", reg.database_container_id), "Privileged": false, "ReadonlyRootfs": true, "AutoRemove": false},
             "Path": "/app/citadel-server", "Args": ["run-update-helper", "--state-directory", reg.state_directory, "--operation-id", intent.operation.id.to_string(), "--fence", intent.operation.fence.to_string()],
@@ -154,6 +154,24 @@ impl ProcessRunner for Runner {
                 .map(|s| s.to_str().unwrap())
                 .collect();
             let value = match args.as_slice() {
+                ["exec", HELPER, "readlink", "/proc/self/ns/mnt"] => {
+                    let namespace = if mode == "foreign-process" {
+                        "mnt:[foreign]".into()
+                    } else {
+                        std::fs::read_link("/proc/self/ns/mnt")
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned()
+                    };
+                    return Ok(ProcessOutput {
+                        exit_code: Some(0),
+                        stdout: namespace.into_bytes(),
+                        stderr: vec![],
+                        stdout_truncated: false,
+                        stderr_truncated: false,
+                    });
+                }
+
                 ["container", "create", rest @ ..] => {
                     assert!(self.state().existing_lock().is_err());
                     let saved: HelperLaunchIntent =
@@ -274,6 +292,7 @@ impl ProcessRunner for Runner {
                     if self.launch_fixture && self.starts.load(Ordering::SeqCst) == 0 {
                         helper["State"]["Running"] = json!(false);
                         helper["State"]["Status"] = json!("created");
+                        helper["Config"]["Hostname"] = json!(&HELPER[..12]);
                     }
                     match mode {
                         "prepare-during-check" => {
@@ -286,6 +305,11 @@ impl ProcessRunner for Runner {
                         "wrong-network" => helper["HostConfig"]["NetworkMode"] = json!("host"),
                         "wrong-helper" => {
                             helper["Config"]["Labels"][verification::NONCE] = json!("foreign")
+                        }
+                        "exited-helper" => {
+                            helper["State"]["Running"] = json!(false);
+                            helper["State"]["Status"] = json!("exited");
+                            helper["State"]["ExitCode"] = json!(1);
                         }
                         "dead-helper" => helper["State"]["Running"] = json!(false),
                         "restarted-helper" => helper["RestartCount"] = json!(1),
@@ -379,12 +403,15 @@ async fn helper_requires_a_durable_grant_and_retains_lock_through_clean_stop() {
     let runner = Runner::new().await;
     let runtime = DockerHelperHandoff::new(runner.intent.clone(), HELPER.into(), runner.clone());
     let token = CancellationToken::new();
-    assert!(
-        runtime
-            .acknowledged(&runner.intent.operation, &token)
-            .await
-            .is_err()
+    let waiting = CancellationToken::new();
+    let (readiness, ()) = tokio::join!(
+        runtime.acknowledged(&runner.intent.operation, &waiting),
+        async {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            waiting.cancel();
+        }
     );
+    assert!(matches!(readiness, Err(UpdateError::Cancelled)));
     let helper = runner.acknowledge().await.unwrap();
     assert!(
         helper
@@ -1254,4 +1281,147 @@ async fn readiness_accepts_preparation_finished_during_helper_verification() {
             .is_none()
     );
     assert_eq!(runner.stops.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn failed_journal_requires_terminal_owned_execution_and_exact_exited_helper() {
+    let runner = Runner::new().await;
+    let helper = runner.acknowledge().await.unwrap();
+    let cancellation = CancellationToken::new();
+    let read =
+        || super::state::failed_journal(&runner.intent.operation, runner.as_ref(), &cancellation);
+    assert!(read().await.is_err(), "live driver owns the lock");
+    super::driver::record_failure(&helper).unwrap();
+    drop(helper);
+    for mode in [
+        "normal",
+        "wrong-helper",
+        "manual-restart",
+        "restarted-helper",
+    ] {
+        *runner.mode.lock().unwrap() = mode;
+        assert!(read().await.is_err(), "{mode}");
+    }
+    *runner.mode.lock().unwrap() = "exited-helper";
+    let journal = read().await.unwrap();
+    assert_eq!(journal.operation.phase, UpdatePhase::Failed);
+    assert!(!journal.maintenance_released);
+    assert!(!journal.completion_acknowledged);
+    assert_eq!(runner.stops.load(Ordering::SeqCst), 0);
+    let mut foreign = runner.intent.operation.clone();
+    foreign.fence = Uuid::now_v7();
+    assert!(
+        super::state::failed_journal(&foreign, runner.as_ref(), &cancellation)
+            .await
+            .is_err()
+    );
+    cancellation.cancel();
+    assert!(read().await.is_err());
+}
+
+#[tokio::test]
+async fn network_donor_hostname_is_not_helper_process_identity() {
+    let runner = Runner::new().await;
+    let token = CancellationToken::new();
+    let home = runtime::private_home().unwrap();
+    let docker = super::super::docker::LocalDocker {
+        process: runner.as_ref(),
+        cancellation: &token,
+        home: home.path(),
+        deadline: std::time::Instant::now() + Duration::from_secs(30),
+    };
+    let binding = evidence::binding(&runner.state(), &runner.intent).unwrap();
+    assert_eq!(runner.helper()["Config"]["Hostname"], &DATABASE[..12]);
+    verification::helper_process(&docker, &runner.intent, &binding)
+        .await
+        .unwrap();
+    *runner.mode.lock().unwrap() = "foreign-process";
+    assert!(
+        verification::helper_process(&docker, &runner.intent, &binding)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn readiness_waits_for_initial_journal_but_never_grants_without_it() {
+    use super::command::{HelperAction, HelperRequest, HelperResponse};
+    let runner = Runner::new().await;
+    let token = CancellationToken::new();
+    let mut request = HelperRequest {
+        operation: runner.intent.operation.clone(),
+        binding: evidence::binding(&runner.state(), &runner.intent).unwrap(),
+        started_at: "2026-11-03T00:00:00Z".into(),
+        action: HelperAction::Check,
+    };
+    let response = execute_helper_handoff(
+        &serde_json::to_vec(&request).unwrap(),
+        runner.as_ref(),
+        &token,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<HelperResponse>(&response).unwrap(),
+        HelperResponse::Pending
+    );
+    assert!(
+        runner
+            .state()
+            .read_optional::<Value>(&format!("{}.json", request.operation.id))
+            .unwrap()
+            .is_none()
+    );
+    request.action = HelperAction::Grant;
+    assert!(
+        execute_helper_handoff(
+            &serde_json::to_vec(&request).unwrap(),
+            runner.as_ref(),
+            &token
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        !runner
+            .fixture
+            .state
+            .join(runner.intent.file("shutdown-grant"))
+            .exists()
+    );
+    request.action = HelperAction::Check;
+    for mode in [
+        "wrong-helper",
+        "dead-helper",
+        "restarted-helper",
+        "manual-restart",
+    ] {
+        *runner.mode.lock().unwrap() = mode;
+        assert!(
+            execute_helper_handoff(
+                &serde_json::to_vec(&request).unwrap(),
+                runner.as_ref(),
+                &token
+            )
+            .await
+            .is_err()
+        );
+    }
+    *runner.mode.lock().unwrap() = "normal";
+    let runtime = DockerHelperHandoff::new(runner.intent.clone(), HELPER.into(), runner.clone());
+    let (ready, helper) = tokio::join!(
+        runtime.acknowledged(&runner.intent.operation, &token),
+        async {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            runner.acknowledge().await.unwrap()
+        }
+    );
+    ready.unwrap();
+    assert!(
+        !helper
+            .state
+            .path()
+            .join(runner.intent.file("shutdown-grant"))
+            .exists()
+    );
 }

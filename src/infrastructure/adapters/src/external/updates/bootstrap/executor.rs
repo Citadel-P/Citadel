@@ -30,16 +30,6 @@ pub(in crate::external::updates) fn validate_executor(
     inputs: &InstallerComposeInputs,
     state: &Path,
 ) -> Result<(), UpdateError> {
-    validate_executor_mounts(executor, hostname, inputs, state, false)
-}
-
-pub(in crate::external::updates) fn validate_executor_mounts(
-    executor: &Value,
-    hostname: &str,
-    inputs: &InstallerComposeInputs,
-    state: &Path,
-    writable_inputs: bool,
-) -> Result<(), UpdateError> {
     if executor["Id"]
         .as_str()
         .is_none_or(|id| !is_sha256(id) || !id.starts_with(hostname))
@@ -49,6 +39,15 @@ pub(in crate::external::updates) fn validate_executor_mounts(
             "Cannot establish updater executor identity on the local daemon.",
         ));
     }
+    validate_executor_mounts(executor, inputs, state, false)
+}
+
+pub(in crate::external::updates) fn validate_executor_mounts(
+    executor: &Value,
+    inputs: &InstallerComposeInputs,
+    state: &Path,
+    writable_inputs: bool,
+) -> Result<(), UpdateError> {
     let mounts = executor["Mounts"].as_array().ok_or_else(failed)?;
     let mounts: Vec<_> = mounts
         .iter()

@@ -396,6 +396,58 @@ it is removed before Core starts. The test removes only its own daemon and stora
 including on failures. It does not qualify image replacement, recovery or source-to-target
 database transitions.
 
+Run the updater lifecycle locally before publishing a release:
+
+```bash
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image YOUR_LOCAL_CORE_IMAGE
+```
+
+Use a Core runtime image built from this checkout. The runner compiles two
+test-only Core executables with distinct versions and packages them using that
+runtime. Only the release discovery/trust dependency is replaced by a private
+fixture; the real HTTP setup/login, review/approval, Docker inspection, detached
+helper, checkpoint, replacement, target verification and PostgreSQL persistence run
+unchanged. The fixture registry is reachable only inside a disconnected disposable
+Docker daemon. No fixture credentials or journals are stored in the checkout.
+
+The command runs a normal update and a target crash after host cleanup but before
+database ownership release. Both must complete without replacing PostgreSQL or
+changing installation identity, volumes or recovery keys. Each restores its actual
+checkpoint into a fresh database and checks encrypted data and released recovery
+ownership. `--scenario upgrade` or `--scenario cleanup-restart` runs one case.
+Ordinary `cargo test` does not start this fixture server; its test executable exits
+unless packaged with its private fixture file. Product binaries have no fixture
+setting, and candidate publication rejects the test executable's identity marker.
+
+This is a lifecycle regression test, not a signature test or proof that an arbitrary
+older release can migrate to a future candidate. Keep production artifact verification
+and source/target compatibility checks enabled. Real release transition qualification
+must use the intended source catalog and target build.
+
+For manual testing in a browser, use the same runner:
+
+```bash
+python3 test/scripts/test-instance-upgrade-local.py \
+  --runtime-image YOUR_LOCAL_CORE_IMAGE --browser
+```
+
+This also builds the current frontend (`npm ci --prefix src/frontend` is required
+first if dependencies are missing) and includes it in both test images. After setup,
+the terminal prints `http://localhost:18080/updates` and a generated administrator
+password for `upgrade@example.test`. Sign in, click **Check now**, then **Update
+now → Update and restart** to move from `0.1.1-dev.9001` to `0.1.1-dev.9002`.
+Observe the restart indicator, reconnection, completed operation and frontend reload.
+You control approval; the runner does not install the update for you or restore a
+checkpoint in this mode. It stays running after the update so you can inspect the UI.
+
+Use `--port 18081` if the default port is occupied. Only the UI port is published,
+bound to `127.0.0.1`; the inner Docker daemon and PostgreSQL are not exposed.
+Browser mode retains the fixture's bridge network for port forwarding, so it has
+outbound network access. Its test registry remains inside that daemon. Existing
+Citadel instances, host volumes and development servers are not modified. Press
+**Ctrl+C** in the runner terminal to remove its installation, data, network and test
+images. Run it again for a fresh source version and new credentials.
+
 `test-instance-upgrade.py` is a separate opt-in smoke test for an **already eligible
 published transition**, not a pre-publication qualification bypass. It requires an
 exact official source digest with the updater, and the target must be the release
@@ -926,7 +978,8 @@ completion and refusal to remove changed/nonzero-exit helpers. Frontend tests co
 review-before-approval, a stable retry key, retained operation lookup, offline
 progress and bounded planned-restart feedback. Completion tests distinguish a
 committed success from released maintenance, wait for the matching running version
-and reconnect, and verify one-time frontend reload with the URL/operation retained.
+and reconnect, and verify one-time frontend reload with the URL retained and the
+completed session hint/banner cleared after reload. Active operations hide release notices.
 Failed outcomes, foreign instances and unavailable session storage do not cause an
 automatic reload; a manual action remains available after completion.
 

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useAtom, useStore } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { ArrowRight, CircleAlert, CloudDownload, RefreshCw, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMutate, useRead } from '@/lib/hooks';
 import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
 import type { UpdateReviewView, UpdateStatusView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertMessage } from '@/components/custom/alert-message';
 import {
   Dialog,
@@ -49,37 +50,64 @@ export function InstallUpdate({ status }: { status: UpdateStatusView }) {
         size="sm"
         disabled={prepare.isPending}
         onClick={() => prepare.mutate({ data: { version: status.available!.version } })}>
-        <RefreshCw className={prepare.isPending ? 'size-4 animate-spin' : 'size-4'} />
-        {prepare.isPending ? 'Preparing review…' : 'Review update'}
+        {prepare.isPending ? <RefreshCw className="size-4 animate-spin" /> : <CloudDownload className="size-4" />}
+        {prepare.isPending ? 'Preparing review…' : 'Update now'}
       </Button>
       <Dialog
         open={!!review}
         onOpenChange={(open) => {
           if (!open && !approve.isPending) setReview(undefined);
         }}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-h-[calc(100dvh_-_2rem)] w-[calc(100vw_-_2rem)] gap-5 overflow-y-auto">
+          <DialogHeader className="text-left">
             <DialogTitle>Update Citadel</DialogTitle>
-            <DialogDescription>
-              Citadel {review?.installedVersion} → {review?.targetVersion}
-            </DialogDescription>
+            <DialogDescription>Install the new version on this Citadel instance.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <p>
-              Citadel will finish active work, create a recovery checkpoint, then restart. The portal will be
-              temporarily unavailable.
-            </p>
-            <p className="text-muted-foreground">
-              Your managed workloads remain running. If verification fails, Citadel stays in maintenance for operator
-              recovery.
-            </p>
-            {approve.isError && (
-              <p role="alert">
-                Approval could not be confirmed. Retrying uses the same request and will not start a second update.
-              </p>
-            )}
+          <div className="grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)] items-center gap-3 rounded-md border bg-muted/30 p-4 text-center text-sm">
+            <dl className="min-w-0 space-y-1">
+              <dt className="text-xs text-muted-foreground">Installed</dt>
+              <dd className="wrap-anywhere font-medium">{review?.installedVersion}</dd>
+            </dl>
+            <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
+            <dl className="min-w-0 space-y-1">
+              <dt className="text-xs text-muted-foreground">New version</dt>
+              <dd className="wrap-anywhere font-medium">{review?.targetVersion}</dd>
+            </dl>
           </div>
-          <DialogFooter>
+          <div className="space-y-4 text-sm">
+            <div className="flex items-start gap-3">
+              <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div className="space-y-1">
+                <p className="font-medium">Recovery checkpoint</p>
+                <p className="leading-relaxed text-muted-foreground">
+                  Citadel waits for active work to finish, then creates a checkpoint before updating.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <RefreshCw aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div className="space-y-1">
+                <p className="font-medium">Portal restart</p>
+                <p className="leading-relaxed text-muted-foreground">
+                  The portal will be temporarily unavailable and reconnect automatically. Your managed workloads keep
+                  running.
+                </p>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            If verification fails, Citadel remains in maintenance and requires manual recovery.
+          </p>
+          {approve.isError && (
+            <Alert variant="destructive">
+              <CircleAlert aria-hidden="true" />
+              <AlertTitle>Approval could not be confirmed</AlertTitle>
+              <AlertDescription>
+                Try again. Retrying uses the same request and will not start a second update.
+              </AlertDescription>
+            </Alert>
+          )}
+          <DialogFooter className="border-t pt-4">
             <Button variant="outline" disabled={approve.isPending} onClick={() => setReview(undefined)}>
               Cancel
             </Button>
@@ -112,13 +140,13 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
   const [pending, remember] = useAtom(pendingInstanceUpdateAtom);
   const store = useStore();
   const { liveConnectionState } = useRealtimeContext();
-  const id = pending?.instanceId === status.instanceId ? pending.id : undefined;
+  const id = pending && pending.instanceId === status.instanceId ? pending.id : undefined;
   const result = useRead(
     'getInstanceUpdateOperation',
     { id: id ?? '' },
     { enabled: !!id && !status.operation, retry: false },
   );
-  const operation = status.operation ?? result.data?.data;
+  const operation = status.operation ?? (id ? result.data?.data : undefined);
   // A committed outcome still owns maintenance until host cleanup is verified.
   const finishing = status.operation?.phase === 'Succeeded';
   const completed = !status.operation && operation?.phase === 'Succeeded';
@@ -126,11 +154,16 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
     try {
       if (status.operation && (!terminal.has(status.operation.phase) || finishing)) {
         remember((previous) => ({
-          ...(previous?.instanceId === status.instanceId && previous.id === status.operation!.id ? previous : {}),
+          ...(previous && previous.instanceId === status.instanceId && previous.id === status.operation!.id
+            ? previous
+            : {}),
           instanceId: status.instanceId,
           id: status.operation!.id,
           restartUntil:
-            previous?.instanceId === status.instanceId && previous.id === status.operation!.id && previous.restartUntil
+            previous &&
+            previous.instanceId === status.instanceId &&
+            previous.id === status.operation!.id &&
+            previous.restartUntil
               ? previous.restartUntil
               : ['Draining', 'BackingUp', 'ReplacingCore', 'Verifying', 'Succeeded'].includes(status.operation!.phase)
                 ? Date.now() + 15 * 60_000
@@ -138,7 +171,7 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
         }));
       } else if (operation && terminal.has(operation.phase)) {
         remember((previous) =>
-          previous?.instanceId === status.instanceId && previous.id === operation.id && previous.restartUntil
+          previous && previous.instanceId === status.instanceId && previous.id === operation.id && previous.restartUntil
             ? { ...previous, restartUntil: undefined }
             : previous,
         );
@@ -152,8 +185,12 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
     if (!completed || liveConnectionState !== 'connected' || status.installedVersion !== operation?.version) return;
     // Read the current atom so repeated effects cannot request a second reload.
     const saved = store.get(pendingInstanceUpdateAtom);
-    if (saved?.instanceId !== status.instanceId || saved.id !== operation.id || saved.frontendReloaded) return;
+    if (!saved || saved.instanceId !== status.instanceId || saved.id !== operation.id) return;
     try {
+      if (saved.frontendReloaded) {
+        store.set(pendingInstanceUpdateAtom, null);
+        return;
+      }
       // Persist before navigation. If session storage is unavailable, leave the
       // manual reload action visible rather than risking a reload loop.
       store.set(pendingInstanceUpdateAtom, { ...saved, restartUntil: undefined, frontendReloaded: true });
@@ -174,7 +211,21 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
       date={operation.updatedAt}
       action={
         completed && liveConnectionState === 'connected' ? (
-          <Button size="sm" variant="outline" onClick={() => location.reload()}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              try {
+                remember((previous) =>
+                  previous && previous.instanceId === status.instanceId && previous.id === operation.id
+                    ? { ...previous, restartUntil: undefined, frontendReloaded: true }
+                    : previous,
+                );
+              } catch {
+                // An explicit reload remains available when storage is unavailable.
+              }
+              location.reload();
+            }}>
             <RefreshCw className="size-4" />
             Reload portal
           </Button>

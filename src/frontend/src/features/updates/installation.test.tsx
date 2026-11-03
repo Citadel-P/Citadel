@@ -49,8 +49,10 @@ it('requires review and explicit approval, retaining the same key after an ambig
     }),
   );
   const { user } = renderCitadel(<InstallUpdate status={status} />);
-  await user.click(screen.getByRole('button', { name: 'Review update' }));
-  expect(await screen.findByRole('dialog')).toHaveTextContent('0.1.1 → 0.1.2');
+  await user.click(screen.getByRole('button', { name: 'Update now' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog).toHaveTextContent('Installed0.1.1');
+  expect(dialog).toHaveTextContent('New version0.1.2');
   expect(requests).toHaveLength(0);
   await user.click(screen.getByRole('button', { name: 'Update and restart' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Approval could not be confirmed');
@@ -127,7 +129,14 @@ function retainedOutcome(phase = 'Succeeded') {
   );
 }
 
-it('waits for maintenance release then reloads the same URL once, preserving the operation across remounts', async () => {
+it('leaves progress empty when there is no active or remembered update', () => {
+  renderCitadel(progress(status));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Reload portal' })).not.toBeInTheDocument();
+  expect(reload).not.toHaveBeenCalled();
+});
+
+it('waits for maintenance release, reloads once, then clears the completed banner on remount', async () => {
   retainedOutcome();
   const target = { ...status, installedVersion: operation.version };
   const view = renderCitadel(progress({ ...target, operation: { ...operation, phase: 'Succeeded' } }));
@@ -146,7 +155,9 @@ it('waits for maintenance release then reloads the same URL once, preserving the
   });
   view.unmount();
   renderCitadel(progress(target), { queryClient: view.queryClient });
-  expect(await screen.findByText('Update completed')).toBeVisible();
+  await waitFor(() => expect(getDefaultStore().get(pendingInstanceUpdateAtom)).toBeNull());
+  expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
+  expect(JSON.parse(sessionStorage.getItem('citadel-instance-update')!)).toBeNull();
   expect(reload).toHaveBeenCalledOnce();
 });
 
@@ -158,6 +169,19 @@ it('waits for reconnection before reloading a completed target', async () => {
   expect(reload).not.toHaveBeenCalled();
   view.rerender(progress(target));
   await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+});
+
+it('clears a completed update retained by an already reloaded tab without another reload', async () => {
+  retainedOutcome();
+  getDefaultStore().set(pendingInstanceUpdateAtom, {
+    instanceId: status.instanceId,
+    id: operation.id,
+    frontendReloaded: true,
+  });
+  renderCitadel(progress({ ...status, installedVersion: operation.version }));
+  await waitFor(() => expect(getDefaultStore().get(pendingInstanceUpdateAtom)).toBeNull());
+  expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
+  expect(reload).not.toHaveBeenCalled();
 });
 
 it('does not reload on a historical success for a different running version', async () => {
@@ -191,5 +215,25 @@ it('leaves a manual reload action if a durable reload marker cannot be saved', a
   await screen.findByText('Update completed');
   expect(reload).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Reload portal' }));
+  expect(reload).toHaveBeenCalledOnce();
+});
+
+it('remembers an explicit reload when storage recovers and clears the banner on remount', async () => {
+  retainedOutcome();
+  const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Storage unavailable', 'SecurityError');
+  });
+  const target = { ...status, installedVersion: operation.version };
+  const view = renderCitadel(progress(target));
+  await screen.findByText('Update completed');
+  expect(reload).not.toHaveBeenCalled();
+  storage.mockRestore();
+  await view.user.click(screen.getByRole('button', { name: 'Reload portal' }));
+  expect(JSON.parse(sessionStorage.getItem('citadel-instance-update')!).frontendReloaded).toBe(true);
+  expect(reload).toHaveBeenCalledOnce();
+  view.unmount();
+  renderCitadel(progress(target), { queryClient: view.queryClient });
+  await waitFor(() => expect(getDefaultStore().get(pendingInstanceUpdateAtom)).toBeNull());
+  expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
   expect(reload).toHaveBeenCalledOnce();
 });

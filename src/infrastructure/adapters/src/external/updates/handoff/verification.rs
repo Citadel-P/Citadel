@@ -15,6 +15,30 @@ pub(super) struct RunningHelper {
     pub started_at: String,
 }
 
+/// Network sharing copies PostgreSQL's hostname, so it cannot identify this
+/// process. Docker exec enters the exact helper's private mount namespace;
+/// compare that namespace with ours before acquiring execution ownership.
+pub(super) async fn helper_process(
+    docker: &LocalDocker<'_>,
+    intent: &HelperLaunchIntent,
+    binding: &HelperBinding,
+) -> Result<(), UpdateError> {
+    helper(docker, intent, binding).await?;
+    let own = std::fs::read_link("/proc/self/ns/mnt").map_err(|_| conflict())?;
+    let observed = docker
+        .run(&[
+            "exec",
+            &binding.helper_container_id,
+            "readlink",
+            "/proc/self/ns/mnt",
+        ])
+        .await?;
+    if std::str::from_utf8(&observed).map(str::trim).ok() != own.to_str() {
+        return Err(conflict());
+    }
+    Ok(())
+}
+
 pub(super) async fn helper(
     docker: &LocalDocker<'_>,
     intent: &HelperLaunchIntent,
@@ -80,7 +104,7 @@ pub(super) async fn helper_exited(
     }
 }
 
-async fn helper_container(
+pub(super) async fn helper_container(
     docker: &LocalDocker<'_>,
     intent: &HelperLaunchIntent,
     binding: &HelperBinding,
@@ -123,11 +147,24 @@ async fn helper_container(
     );
     validate_executor_mounts(
         &executor,
-        &id[..12],
         &inputs,
         &intent.registration.state_directory,
         true,
     )?;
+    // Docker copies the network donor's hostname on start. A created helper
+    // still has its own default hostname; neither hostname is process identity.
+    let hostname = if actual["State"]["Status"] == "created" {
+        id[..12].to_owned()
+    } else {
+        container(docker, &intent.registration.database_container_id).await?["Config"]["Hostname"]
+            .as_str()
+            .filter(|v| !v.is_empty())
+            .ok_or_else(conflict)?
+            .to_owned()
+    };
+    if actual["Config"]["Hostname"] != hostname {
+        return Err(conflict());
+    }
     if actual["Id"] != *id
         || actual["Name"] != format!("/{}", intent.helper_name())
         || actual["Config"]["Image"] != intent.operation.plan.helper_image

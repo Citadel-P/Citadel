@@ -166,6 +166,10 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::VersionJson => {
             let mut info =
                 serde_json::to_value(citadel_server::application_info_http::application_info())?;
+            #[cfg(test)]
+            {
+                info["qualificationBuild"] = serde_json::json!(true);
+            }
             info["protocolVersion"] =
                 serde_json::json!(citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION);
             println!("{}", serde_json::to_string(&info)?);
@@ -179,9 +183,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 target_catalog_sha256: MigrationRunner::catalog_sha256()?,
                 installer_format: citadel_updates::INSTALLER_FORMAT,
                 update_protocol: citadel_updates::UPDATE_PROTOCOL,
-                // No source transition is qualified until executor/recovery
-                // acceptance proves it against the actual source artifact.
-                sources: vec![],
+                // Release-owned source metadata is embedded in the signed image.
+                sources: crate::composition::updates::releases::sources()?,
             };
             println!("{}", serde_json::to_string(&descriptor)?);
             Ok(())
@@ -256,13 +259,12 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Command::VerifyUpdateRelease { version } => {
-            use citadel_updates::ReleaseArtifactSource;
             if !citadel_server::config::release_checks_allowed_from_env()? {
                 return Err("Release checks are disabled by server configuration.".into());
             }
-            let source = citadel_adapters::external::updates::GithubReleaseArtifacts::new(
-                std::sync::Arc::new(citadel_processes::SystemProcess),
-            )?;
+            let source = crate::composition::updates::releases::artifacts(std::sync::Arc::new(
+                citadel_processes::SystemProcess,
+            ))?;
             let cancellation = CancellationToken::new();
             let verification = source.verify(&version, &cancellation);
             tokio::pin!(verification);
@@ -278,9 +280,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             version,
             architecture,
         } => {
-            use citadel_adapters::external::updates::{
-                DockerReleaseInspection, GithubReleaseArtifacts,
-            };
+            use citadel_adapters::external::updates::DockerReleaseInspection;
             use citadel_updates::ReleaseInspectionService;
             use std::sync::Arc;
             if !citadel_server::config::release_checks_allowed_from_env()? {
@@ -288,7 +288,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let process = Arc::new(citadel_processes::SystemProcess);
             let service = ReleaseInspectionService::new(
-                Arc::new(GithubReleaseArtifacts::new(process.clone())?),
+                crate::composition::updates::releases::artifacts(process.clone())?,
                 Arc::new(DockerReleaseInspection::new(process)),
             );
             let cancellation = CancellationToken::new();

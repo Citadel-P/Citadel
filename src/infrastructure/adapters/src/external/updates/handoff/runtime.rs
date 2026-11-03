@@ -96,44 +96,74 @@ impl UpdateHandoffRuntime for DockerHelperHandoff {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<citadel_updates::UpdateJournal, UpdateError>> {
         Box::pin(async move {
-            if operation != &self.intent.operation {
-                return Err(conflict());
+            let read = async {
+                if operation != &self.intent.operation {
+                    return Err(conflict());
+                }
+                let home = private_home()?;
+                let docker = LocalDocker {
+                    process: self.process.as_ref(),
+                    cancellation,
+                    home: home.path(),
+                    deadline: Instant::now() + Duration::from_secs(60),
+                };
+                let binding = HelperBinding {
+                    nonce: self.intent.nonce,
+                    helper_container_id: self.helper_container_id.clone(),
+                };
+                let observed = verification::helper(&docker, &self.intent, &binding).await?;
+                let request = HelperRequest {
+                    operation: operation.clone(),
+                    binding,
+                    started_at: observed.started_at,
+                    action: HelperAction::InspectJournal,
+                };
+                let user = format!(
+                    "{}:{}",
+                    self.intent.registration.executor_uid, self.intent.registration.executor_gid
+                );
+                let HelperResponse::Journal(journal) = request
+                    .exchange(&docker, &user, Duration::from_secs(30))
+                    .await?
+                else {
+                    return Err(conflict());
+                };
+                journal.validate_for(operation)?;
+                if journal.helper_container_id != self.helper_container_id {
+                    return Err(conflict());
+                }
+                Ok(*journal)
             }
-            let home = private_home()?;
-            let docker = LocalDocker {
-                process: self.process.as_ref(),
-                cancellation,
-                home: home.path(),
-                deadline: Instant::now() + Duration::from_secs(60),
-            };
-            let binding = HelperBinding {
-                nonce: self.intent.nonce,
-                helper_container_id: self.helper_container_id.clone(),
-            };
-            let observed = verification::helper(&docker, &self.intent, &binding).await?;
-            let request = HelperRequest {
-                operation: operation.clone(),
-                binding,
-                started_at: observed.started_at,
-                action: HelperAction::InspectJournal,
-            };
-            let user = format!(
-                "{}:{}",
-                self.intent.registration.executor_uid, self.intent.registration.executor_gid
+            .await;
+            if read.is_ok() || cancellation.is_cancelled() {
+                return read;
+            }
+            // An exited helper cannot answer docker exec. Read only its durable
+            // terminal journal under the host lock; never infer success from exit.
+            use super::super::host::{HostUpdateClient, HostUpdateRequest, HostUpdateResponse};
+            let client = HostUpdateClient::new(
+                self.process.clone(),
+                self.intent.registration.state_directory.clone(),
             );
-            let HelperResponse::Journal(journal) = request
-                .exchange(&docker, &user, Duration::from_secs(30))
-                .await?
-            else {
+            let (response, image, _) = client
+                .exchange(
+                    HostUpdateRequest::FailedJournal(Box::new(operation.clone())),
+                    cancellation,
+                )
+                .await?;
+            let HostUpdateResponse::FailedJournal(journal) = response else {
                 return Err(conflict());
             };
             journal.validate_for(operation)?;
-            if journal.helper_container_id != self.helper_container_id {
+            if image != operation.plan.source.image
+                || journal.helper_container_id != self.helper_container_id
+            {
                 return Err(conflict());
             }
             Ok(*journal)
         })
     }
+
     fn acknowledged<'a>(
         &'a self,
         operation: &'a UpdateOperation,

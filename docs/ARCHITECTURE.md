@@ -100,10 +100,12 @@ retain the existing warning. A prolonged restart becomes “Taking longer than
 expected”, with operation details and host status/recovery instructions; loss of
 connectivity alone proves neither failure nor success. After verified completion,
 the Updates page reloads the document once to load the new frontend, preserving
-the URL and operation ID. It requires no active maintenance owner, the retained
+the URL. It requires no active maintenance owner, the retained
 successful outcome, a connected realtime session and the matching running version.
 A session marker is persisted before reload; storage failure leaves a manual action
-instead. A committed success still owning maintenance is shown as Finishing update. A fresh browser load may be unavailable while Core is down;
+instead. After reload, confirmed completion clears the session hint and banner;
+the durable operation remains in Activities. Release-check notices are hidden while
+an operation owns maintenance. A committed success still owning maintenance is shown as Finishing update. A fresh browser load may be unavailable while Core is down;
 the first version adds no independently hosted updater status endpoint.
 
 Release-check cancellation stops lock waits and network fetching. Once persistence
@@ -117,6 +119,12 @@ ownership through draining, checkpoint creation, replacement and acceptance.
 Packaged source-to-target upgrade and recovery tests are still required before
 a release descriptor can authorize installation.
 Matching journal identity fields alone is not target readiness verification.
+
+When the helper records a terminal failure before Core stops, the coordinator
+imports that durable outcome before notifying the UI. An exited helper's journal
+is read by the existing host utility under the installation lock after validating
+the exact helper identity and exit. This read never releases maintenance or retries
+replacement; an ambiguous or missing record remains an unresolved claim.
 
 Core now shares a process-local `AdmissionGate` between HTTP handling and work
 dispatch. A closed gate rejects ordinary HTTP requests with a no-store 503 and
@@ -246,6 +254,13 @@ The helper has a read-only root filesystem, the registered installer/state/socke
 binds at their original paths, and Core data mounted read-only at `/app/data`. It
 shares the exact PostgreSQL container's network namespace. Its profile prohibits
 privileged execution, restart policies, automatic removal and HTTP health checks.
+Docker copies the network donor's hostname when this helper starts. The driver
+therefore proves its process identity by comparing its private mount namespace
+with a Docker exec in the exact validated helper, rather than treating the shared
+hostname as a container ID. Registration utilities retain their default-hostname
+identity check because they use a private network namespace.
+Readiness waits for the initial journal while validating the same running helper;
+shutdown grants still require its persisted preparation and acknowledgement.
 A root helper may read official Core UID 65532 keys only below `/app`; symlinks,
 permissive key modes and other owners remain rejected. Ordinary registration/key
 checks keep their original ownership restrictions.

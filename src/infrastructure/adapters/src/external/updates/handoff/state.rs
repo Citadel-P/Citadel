@@ -10,6 +10,52 @@ use citadel_updates::{UpdateError, UpdateJournal, UpdatePhase};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Import a failed helper's final observation while the original Core is alive.
+/// Taking the lock proves the driver cannot still write or authorize replacement.
+/// This never releases maintenance, removes evidence or resumes a process.
+pub(in crate::external::updates) async fn failed_journal(
+    operation: &citadel_updates::UpdateOperation,
+    process: &dyn citadel_execution::ProcessRunner,
+    cancellation: &tokio_util::sync::CancellationToken,
+) -> Result<UpdateJournal, UpdateError> {
+    let state = JournalDirectory::open(operation.plan.checkpoint_directory.clone().into())?;
+    let owner = state.existing_lock()?;
+    let intent: HelperLaunchIntent = state.read(&format!("launch-{}.json", operation.id))?;
+    if intent.operation != *operation {
+        return Err(conflict());
+    }
+    intent.verify_saved(&state)?;
+    let execution = ExecutionJournal::read_for(&state, &intent)?;
+    if !matches!(
+        execution.journal.operation.phase,
+        UpdatePhase::Failed | UpdatePhase::RecoveryRequired
+    ) || execution.journal.maintenance_released
+    {
+        return Err(conflict());
+    }
+    let home = super::runtime::private_home()?;
+    let docker = super::super::docker::LocalDocker {
+        process,
+        cancellation,
+        home: home.path(),
+        deadline: std::time::Instant::now() + std::time::Duration::from_secs(30),
+    };
+    let helper =
+        super::verification::helper_container(&docker, &intent, &execution.acknowledgement.binding)
+            .await?;
+    if helper["State"]["Running"] != false
+        || helper["State"]["Status"] != "exited"
+        || helper["State"]["StartedAt"] != execution.acknowledgement.started_at
+    {
+        return Err(conflict());
+    }
+    state.verify_lock(&owner)?;
+    if cancellation.is_cancelled() {
+        return Err(UpdateError::Cancelled);
+    }
+    Ok(execution.journal)
+}
+
 /// Only the launcher creates launch/binding records. After acknowledgement the
 /// detached driver is the sole writer of this journal. Other processes publish
 /// immutable shutdown/completion messages, so they cannot overwrite its state.

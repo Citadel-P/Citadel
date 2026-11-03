@@ -28,7 +28,7 @@ pub use keys::TargetRecoveryKeys;
 pub use launcher::{LaunchedUpdateHelper, launch_update_helper};
 pub use runtime::DockerHelperHandoff;
 use session::OwnedUpdateHelper;
-pub(super) use state::ExecutionJournal;
+pub(super) use state::{ExecutionJournal, failed_journal};
 pub use target::TargetUpdateEvidence;
 pub use target_runtime::TargetUpdateSession;
 

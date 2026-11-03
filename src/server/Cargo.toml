@@ -79,3 +79,9 @@ serde_json.workspace = true
 
 [lints]
 workspace = true
+
+# A separate executable for disposable lifecycle tests; never a product binary.
+[[test]]
+name = "instance_upgrade_fixture"
+path = "tests/instance_upgrade_fixture.rs"
+harness = false

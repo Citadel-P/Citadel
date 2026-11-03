@@ -64,10 +64,19 @@ evidence keep their original attachment format. A public descriptor is only meta
 an updater must read the descriptor from the verified image before trusting it.
 Each candidate also runs the disposable installer registration test, including
 host utility execution and explicit registration refresh after Core recreation.
-Promotion requires that check on both architectures. This verifies packaged setup,
-not image replacement or recovery. The current source list remains empty; enabling
-a transition requires data-preserving upgrade and recovery acceptance against the
-actual source and target artifacts.
+Promotion requires that check on both architectures. Candidate acceptance also
+runs the disposable update lifecycle test: normal replacement, a crash during
+final ownership release, and checkpoint recovery into a fresh database. The
+test-only executable shares Core's lifecycle but substitutes its release catalog;
+it is marked unpublishable and never replaces the accepted candidate archive.
+This validates lifecycle behavior without needing to publish a test release.
+
+`src/server/upgrade-sources.json` owns the source list embedded in the target
+image and compared by release tooling. It currently remains empty: the local
+lifecycle regression does not qualify arbitrary earlier published versions.
+Declare an intended source version, catalog, architecture and Agent compatibility
+before building its target candidate, and qualify that actual transition before
+publication. Do not rebuild accepted artifacts to add eligibility afterward.
 
 ## Retention and retries
 

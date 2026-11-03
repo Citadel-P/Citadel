@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCKER = ["docker", "--host", "unix:///var/run/docker.sock"]
 # Same fixture versions as Agent acceptance; no daemon TCP port is published.
 DIND = "docker@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0"
+REGISTRY = "registry@sha256:d4032d4cc323c1731c707931ecada07a53076eac38e3b61ae57533f170f2c6c3"
 POSTGRES = "postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5"
 
 
@@ -58,7 +59,10 @@ class Fixture:
     def docker(self, *args, **kwargs):
         return self.execute("docker", "--host", "unix:///var/run/docker.sock", *args, **kwargs)
 
-    def start(self, *, published=False):
+    def start(self, *, published=False, registry=False, browser_port=None):
+        require(not (published and registry), "Fixture registry cannot be used for published releases")
+        require(browser_port is None or (registry and 1 <= browser_port <= 65535),
+                "Browser access requires the private registry and a valid local port")
         print("Preparing disposable Docker daemon and loading test images", flush=True)
         # The caller supplies the exact Core image; never fetch an implicit latest.
         if published:
@@ -72,7 +76,10 @@ class Fixture:
         self.daemon = self.host(
             "create", "--privileged", "--network", self.network,
             "--name", f"citadel-update-acceptance-{uuid.uuid4().hex}",
+            *(["--publish", f"127.0.0.1:{browser_port}:18000"] if browser_port else []),
+            *(["--add-host", "ghcr.io:127.0.0.1"] if registry else []),
             "-e", "DOCKER_TLS_CERTDIR=", DIND,
+            *(["--insecure-registry=ghcr.io"] if registry else []),
             "--host=unix:///var/run/docker.sock", "--tls=false",
         ).stdout.decode().strip()
         self.host("start", self.daemon)
@@ -83,15 +90,18 @@ class Fixture:
         # Docker save/load can discard RepoDigests. Pull the exact installer pin
         # inside the disposable daemon, then disconnect it before starting Core.
         self.docker("pull", POSTGRES, timeout=300)
+        if registry:
+            self.docker("pull", REGISTRY, timeout=300)
         if published:
             # Retain registry/GitHub access and RepoDigests for the real verifier.
             # No host ports or host Docker socket are exposed to this daemon.
             self.docker("pull", self.core, timeout=300)
             self.tag = self.core
             return
-        self.host("network", "disconnect", self.network, self.daemon)
-        self.host("network", "rm", self.network)
-        self.network = None
+        if not browser_port:
+            self.host("network", "disconnect", self.network, self.daemon)
+            self.host("network", "rm", self.network)
+            self.network = None
         archive = self.directory / "images.tar"
         self.host("image", "save", "--output", str(archive), self.core, timeout=300)
         # Stream into the daemon CLI: DinD's /tmp is private to its mount namespace.

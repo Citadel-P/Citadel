@@ -71,14 +71,14 @@ pub async fn helper(
     fence: Uuid,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use citadel_adapters::external::updates::{
-        DockerReleaseInspection, GithubReleaseArtifacts, UpdateHelperBudget, run_update_helper,
+        DockerReleaseInspection, UpdateHelperBudget, run_update_helper,
     };
     if !citadel_server::config::release_checks_allowed_from_env()? {
         return Err("Release checks are disabled by server configuration.".into());
     }
     let process = Arc::new(citadel_processes::SystemProcess);
     let inspector = citadel_updates::ReleaseInspectionService::new(
-        Arc::new(GithubReleaseArtifacts::new(process.clone())?),
+        crate::composition::updates::releases::artifacts(process.clone())?,
         Arc::new(DockerReleaseInspection::new(process.clone())),
     );
     let token = CancellationToken::new();

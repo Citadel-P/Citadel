@@ -81,7 +81,7 @@ class UpgradeFixture(registration.Fixture):
         return self.docker("exec", core, "sha256sum", "/app/data/jwtsecret",
                            "/app/data/secret-encryption-key", "/app/data/agent/signing-key").stdout
 
-    def run_transition(self, target_version):
+    def inspect_transition(self, target_version):
         architecture = self.json_command("image", "inspect", self.core)[0]["Architecture"]
         source = self.json_command("run", "--rm", "--network=none", self.core, "upgrade-descriptor-json")
         verified = self.json_command("run", "--rm", self.core, "verify-update-release",
@@ -92,21 +92,33 @@ class UpgradeFixture(registration.Fixture):
             self.core, "inspect-update-release", "--version", target_version,
             "--architecture", architecture)
         require_eligible(source, target, architecture)
-        print("Signed source and target inspected; creating isolated installation", flush=True)
+        return source
+
+    def setup_installation(self, browser_port=None):
         self.execute("mkdir", "-p", self.installation, self.state)
         self.execute("chmod", "700", self.installation, self.state)
         self.write(self.installation + "/docker-compose.yml",
                    (registration.ROOT / "deploy/install/docker-compose.yml").read_text())
         password, admin_password = secrets.token_hex(24), secrets.token_hex(24)
         env = f"CITADEL_IMAGE={self.core}\nPG_PASSWORD={password}\n"
+        if browser_port:
+            # Bind within the isolated daemon; its outer port remains localhost-only.
+            env += f"CITADEL_BIND_ADDRESS=0.0.0.0\nCITADEL_PUBLIC_URL=http://localhost:{browser_port}\n"
         self.write(self.installation + "/.env", env)
         self.compose("up", "-d", "--pull=never", "--wait", "--wait-timeout=180", timeout=210)
         self.http("setup/initialize", {"name": "upgrade", "email": "upgrade@example.test",
                                        "password": admin_password})
+        print("Setup complete; registering the installation", flush=True)
         self.register()
         self.write(self.installation + "/.env", env + f"CITADEL_UPDATE_STATE_DIRECTORY={self.state}\n")
         self.compose("up", "-d", "--no-deps", "--pull=never", "--wait", "--wait-timeout=180", "server", timeout=210)
         registered = self.register(refresh=True)
+        return registered, password, admin_password
+
+    def run_transition(self, target_version):
+        source = self.inspect_transition(target_version)
+        print("Source and target inspected; creating isolated installation", flush=True)
+        registered, password, admin_password = self.setup_installation()
         core, database = registered["coreContainerId"], registered["databaseContainerId"]
         before = self.json_command("inspect", database)[0]
         keys = self.keys(core)
@@ -114,6 +126,7 @@ class UpgradeFixture(registration.Fixture):
         self.http("resourceBindings/secrets", {"name": "upgrade-fixture", "value": secrets.token_hex(32)}, token)
         ciphertext = self.sql(database, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid")
         require(ciphertext, "Encrypted fixture credential was not persisted")
+        print("Registration and encrypted fixture ready; reviewing the update", flush=True)
         status = self.http("updates/check", {}, token)
         require((status.get("available") or {}).get("version") == target_version,
                 "Target is not the currently offered release; no update was approved")
@@ -124,9 +137,19 @@ class UpgradeFixture(registration.Fixture):
         operation = self.http("updates/approve", {"reviewId": review["id"], "requestId": str(uuid.uuid4())}, token)
         operation_id = str(uuid.UUID(operation["id"]))
         print("Update approved once; waiting for verified completion", flush=True)
+        self.after_approval(operation_id, registered)
         deadline = time.monotonic() + 1200
         refresh_at = time.monotonic() + 60
         while time.monotonic() < deadline:
+            if self.execute("test", "-f", self.state + "/shutdown-grant-" + operation_id + ".json", check=False).returncode:
+                source_logs = self.docker("logs", "--tail=100", core, check=False)
+                require(b"Citadel update stopped; retained maintenance" not in source_logs.stdout + source_logs.stderr,
+                        "Source coordinator stopped before granting shutdown; preserve failure evidence")
+            failed = self.docker("ps", "-a", "--filter", "label=com.citadel.update-operation=" + operation_id,
+                                 "--filter", "status=exited", "--format", "{{.ID}}").stdout.decode().split()
+            for helper in failed:
+                require(self.json_command("inspect", helper)[0]["State"]["ExitCode"] == 0,
+                        "Detached helper exited unsuccessfully; preserve its failure evidence")
             # Renew through normal login, without flooding authentication while
             # Core is offline or maintenance blocks new sessions.
             if time.monotonic() >= refresh_at:
@@ -144,6 +167,9 @@ class UpgradeFixture(registration.Fixture):
         else:
             raise AssertionError("Update did not complete within the fixture deadline")
         self.login(admin_password)
+        require(self.sql(database, "SELECT count(*) FROM instanceupdates") == b"1", "Approval created more than one operation")
+        require(self.sql(database, "SELECT count(*) FROM activityevents WHERE eventtype='InstanceUpdateCompleted'") == b"1",
+                "Completion was not recorded exactly once")
         after = self.json_command("inspect", database)[0]
         require(database_state(before) == database_state(after), "Update restarted or replaced PostgreSQL")
         refreshed = json.loads(self.read(self.state + "/installation.json"))
@@ -154,7 +180,10 @@ class UpgradeFixture(registration.Fixture):
         checked = self.utility("check-update-installation")
         require(checked["database"]["instanceId"] == registered["instanceId"], "Instance identity changed")
         self.restore_checkpoint(operation_id, registered, password, ciphertext)
-        print("Published transition and fresh-database checkpoint recovery passed", flush=True)
+        print("Transition and fresh-database checkpoint recovery passed", flush=True)
+
+    def after_approval(self, operation_id, registered):
+        pass
 
     def capture_failure(self):
         if not getattr(self, "approval_attempted", False):

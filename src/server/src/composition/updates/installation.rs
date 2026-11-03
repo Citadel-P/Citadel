@@ -1,7 +1,5 @@
 use citadel_adapters::{
-    external::updates::{
-        DockerReleaseInspection, DockerUpdateInstallation, GithubReleaseArtifacts,
-    },
+    external::updates::{DockerReleaseInspection, DockerUpdateInstallation},
     persistence::postgres::updates::PostgresUpdateRepository,
 };
 use citadel_server::{
@@ -39,7 +37,7 @@ pub(crate) fn build_installation(
             pool.clone(),
         )),
         Arc::new(ReleaseInspectionService::new(
-            Arc::new(GithubReleaseArtifacts::new(process.clone())?),
+            super::releases::artifacts(process.clone())?,
             Arc::new(DockerReleaseInspection::new(process)),
         )),
         UpdateDrainService::new(

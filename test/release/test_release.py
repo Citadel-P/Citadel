@@ -363,7 +363,7 @@ class ArtifactTests(unittest.TestCase):
                 (self.root/f'{component}-{arch}.oci.tar').write_bytes(b'candidate')
             evidence=dict(metadata=value['metadata'], passed=True,
                           architecture=arch, checks=['independent-binary-and-oci-versions','core-runtime',
-                          'agent-image','agent-compatibility','candidate-acceptance','embedded-upgrade-descriptor','update-registration'],
+                          'agent-image','agent-compatibility','candidate-acceptance','embedded-upgrade-descriptor','update-registration','update-lifecycle'],
                           upgradeDescriptor=release.expected_upgrade_descriptor(value['metadata']),
                           artifacts={c:release.digest(b'candidate').split(':')[1] for c in ['core','agent']})
             (self.root/f'evidence-{arch}.json').write_text(json.dumps(evidence))
@@ -376,11 +376,12 @@ class ArtifactTests(unittest.TestCase):
             file.write_text(json.dumps(evidence))
             with self.assertRaisesRegex(ValueError, 'upgrade descriptor'):
                 release.validate_evidence(self.root, value['metadata'])
-        evidence = copy.deepcopy(original)
-        evidence['checks'].remove('update-registration')
-        file.write_text(json.dumps(evidence))
-        with self.assertRaisesRegex(ValueError, 'checks'):
-            release.validate_evidence(self.root, value['metadata'])
+        for check in ['update-registration', 'update-lifecycle']:
+            evidence = copy.deepcopy(original)
+            evidence['checks'].remove(check)
+            file.write_text(json.dumps(evidence))
+            with self.assertRaisesRegex(ValueError, 'checks'):
+                release.validate_evidence(self.root, value['metadata'])
         evidence = original
         file=self.root/'evidence-arm64.json'; evidence['passed']=False; file.write_text(json.dumps(evidence))
         with self.assertRaisesRegex(ValueError,'acceptance'): release.validate_evidence(self.root,value['metadata'])

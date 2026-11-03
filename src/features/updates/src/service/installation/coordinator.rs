@@ -198,24 +198,51 @@ impl UpdateInstallService {
             return Ok(());
         }
         let runtime = self.runtime.launch(&operation, cancellation).await?;
-        runtime.acknowledged(&operation, cancellation).await?;
-        let journal = runtime.journal(&operation, cancellation).await?;
-        self.repository.import(&journal).await?;
-        self.notifier.changed();
-        if self
-            .drain
-            .drain(&journal.operation, Duration::from_secs(300), cancellation)
-            .await?
-            != crate::UpdateDrainOutcome::Idle
-        {
-            return Err(UpdateError::Conflict(
-                "Unfinished work prevents shutdown. Maintenance remains active.".into(),
-            ));
+        let execution = async {
+            runtime.acknowledged(&operation, cancellation).await?;
+            let journal = runtime.journal(&operation, cancellation).await?;
+            self.repository.import(&journal).await?;
+            self.notifier.changed();
+            if self
+                .drain
+                .drain(&journal.operation, Duration::from_secs(300), cancellation)
+                .await?
+                != crate::UpdateDrainOutcome::Idle
+            {
+                return Err(UpdateError::Conflict(
+                    "Unfinished work prevents shutdown. Maintenance remains active.".into(),
+                ));
+            }
+            if cancellation.is_cancelled() {
+                return Err(UpdateError::Cancelled);
+            }
+            runtime.authorize_shutdown(&operation, cancellation).await
         }
-        if cancellation.is_cancelled() {
-            return Err(UpdateError::Cancelled);
+        .await;
+        if execution.is_err() {
+            // Preserve independently committed helper failure for UI/Activities.
+            // A failed observation cannot release ownership or fabricate an outcome.
+            let observation = CancellationToken::new();
+            let read = runtime.journal(&operation, &observation);
+            tokio::pin!(read);
+            let observed = tokio::select! {
+                result = &mut read => result,
+                () = tokio::time::sleep(Duration::from_secs(60)) => {
+                    observation.cancel();
+                    read.await
+                }
+            };
+            if let Ok(journal) = observed
+                && matches!(
+                    journal.operation.phase,
+                    crate::UpdatePhase::Failed | crate::UpdatePhase::RecoveryRequired
+                )
+            {
+                self.repository.import(&journal).await?;
+                self.notifier.changed();
+            }
         }
-        runtime.authorize_shutdown(&operation, cancellation).await
+        execution
     }
 }
 

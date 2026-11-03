@@ -13,6 +13,7 @@ struct State {
     denied: bool,
     drift: bool,
     fail_ack: bool,
+    helper_failed: bool,
     fail_grant: bool,
     busy: bool,
 }
@@ -226,9 +227,14 @@ impl UpdateHandoffRuntime for Fixture {
         Box::pin(async move {
             let mut current = operation.clone();
             current.advance(0, UpdatePhase::Draining, Utc::now())?;
+            let mut history = vec![operation.clone(), current.clone()];
+            if self.state.lock().unwrap().helper_failed {
+                current.advance(1, UpdatePhase::Failed, Utc::now())?;
+                history.push(current.clone());
+            }
             Ok(UpdateJournal {
                 protocol: UPDATE_PROTOCOL,
-                history: vec![operation.clone(), current.clone()],
+                history,
                 operation: current,
                 helper_container_id: "a".repeat(64),
                 verified_target: None,
@@ -506,4 +512,32 @@ async fn review_verifies_the_transition_and_saves_only_a_short_lived_plan() {
     let state = fixture.state.lock().unwrap();
     assert!(state.operation.is_none());
     assert_eq!(state.events, ["source", "verify", "inspect", "review"]);
+}
+
+#[tokio::test]
+async fn exited_helper_failure_is_persisted_before_notification_without_releasing_ownership() {
+    let fixture = Fixture::new();
+    {
+        let mut state = fixture.state.lock().unwrap();
+        state.fail_ack = true;
+        state.helper_failed = true;
+    }
+    let (service, mut queue) = fixture.service();
+    let approval = service.approve(actor(), fixture.plan.id, Uuid::now_v7());
+    tokio::pin!(approval);
+    let command = tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut approval => panic!() };
+    assert!(
+        service
+            .execute(command, &CancellationToken::new())
+            .await
+            .is_err()
+    );
+    assert!(approval.await.is_ok());
+    let state = fixture.state.lock().unwrap();
+    assert_eq!(state.operation.as_ref().unwrap().phase, UpdatePhase::Failed);
+    assert!(!state.events.contains(&"grant"));
+    assert_eq!(
+        &state.events[state.events.len() - 2..],
+        &["import", "notify"]
+    );
 }

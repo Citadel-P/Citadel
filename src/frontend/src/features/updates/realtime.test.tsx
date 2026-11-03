@@ -27,6 +27,7 @@ it('updates the saved frequency through the existing installation realtime notif
     ),
     http.get('http://localhost/api/v1/updates', () =>
       HttpResponse.json({
+        instanceId: '019a0000-0000-7000-8000-000000000001',
         installedVersion: '0.1.1',
         channel: 'stable',
         checksAllowed: true,

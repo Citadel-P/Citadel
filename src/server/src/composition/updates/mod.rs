@@ -15,3 +15,10 @@ pub(crate) use startup::accept_target;
 mod installation;
 #[cfg(target_os = "linux")]
 pub(super) use installation::build_installation;
+
+#[cfg(test)]
+pub(crate) mod fixtures;
+#[cfg(not(test))]
+pub(crate) mod releases;
+#[cfg(test)]
+pub(crate) use fixtures as releases;

@@ -14,10 +14,13 @@ import release
 def run_acceptance(core, agent):
     subprocess.run(["bash", "test/scripts/test-agent-acceptance.sh", core, agent], check=True)
     subprocess.run([sys.executable, "test/scripts/test-update-registration.py", core], check=True)
+    subprocess.run([sys.executable, "test/scripts/test-instance-upgrade-local.py", "--runtime-image", core], check=True)
 
 
 def check_image(image, metadata, arch, config_digest):
     actual = json.loads(release.version.run("docker", "run", "--rm", "--network=none", image, "version-json"))
+    if actual.get("qualificationBuild"):
+        raise ValueError("Test-only qualification executables cannot be published")
     for field, embedded in [("displayVersion", "version"), ("informationalVersion", "informationalVersion")]:
         if actual.get(embedded) != metadata[field]:
             raise ValueError(f"{image}: wrong embedded {embedded}")
@@ -72,7 +75,7 @@ def main():
     evidence = dict(schemaVersion=1, passed=True, metadata=metadata,
                     artifacts=after, architecture=arch, testedImages=tested,
                     upgradeDescriptor=descriptor,
-                    checks=["independent-binary-and-oci-versions", "core-runtime", "agent-image", "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor", "update-registration"])
+                    checks=["independent-binary-and-oci-versions", "core-runtime", "agent-image", "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor", "update-registration", "update-lifecycle"])
     (directory / f"evidence-{arch}.json").write_text(json.dumps(evidence, indent=2) + "\n")
 
 

@@ -131,6 +131,37 @@ pub async fn execute_helper_handoff(
     let state = JournalDirectory::open(request.operation.plan.checkpoint_directory.clone().into())?;
     let intent: HelperLaunchIntent =
         state.read(&format!("launch-{}.json", request.operation.id))?;
+    let home = private_home()?;
+    let docker = LocalDocker {
+        process,
+        cancellation,
+        home: home.path(),
+        deadline: Instant::now() + Duration::from_secs(30),
+    };
+    // Docker start confirms the process, not publication of its journal. Only
+    // the read-only readiness action may wait for that initial acknowledgement.
+    if matches!(request.action, HelperAction::Check)
+        && state
+            .read_optional::<ExecutionJournal>(&format!("{}.json", intent.operation.id))?
+            .is_none()
+    {
+        intent.verify_saved(&state)?;
+        if request.operation != intent.operation
+            || super::evidence::binding(&state, &intent)? != request.binding
+        {
+            return Err(conflict());
+        }
+        verification::acknowledged_helper(
+            &docker,
+            &intent,
+            &HelperAcknowledgement {
+                binding: request.binding.clone(),
+                started_at: request.started_at.clone(),
+            },
+        )
+        .await?;
+        return serde_json::to_vec(&HelperResponse::Pending).map_err(|_| conflict());
+    }
     let execution = ExecutionJournal::read_for(&state, &intent)?;
     let journal = &execution.journal;
     journal.validate_for(&request.operation)?;
@@ -141,13 +172,6 @@ pub async fn execute_helper_handoff(
     {
         return Err(conflict());
     }
-    let home = private_home()?;
-    let docker = LocalDocker {
-        process,
-        cancellation,
-        home: home.path(),
-        deadline: Instant::now() + Duration::from_secs(30),
-    };
     verification::acknowledged_helper(&docker, &intent, ack).await?;
     let response = match request.action {
         HelperAction::InspectJournal => HelperResponse::Journal(Box::new(execution.journal)),

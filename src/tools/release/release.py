@@ -670,7 +670,7 @@ def expected_upgrade_descriptor(metadata):
     return dict(schemaVersion=1, product="citadel", targetVersion=metadata["displayVersion"],
                 targetCatalogSha256=version.sha256(catalog),
                 installerFormat=POLICY["installerFormat"], updateProtocol=POLICY["updateProtocol"],
-                sources=[])
+                sources=json.loads((ROOT / "src/server/upgrade-sources.json").read_text()))
 
 
 def validate_evidence(directory, metadata):
@@ -680,7 +680,7 @@ def validate_evidence(directory, metadata):
                 or evidence["passed"] is not True or evidence["architecture"] != arch):
             raise ValueError("Candidate acceptance evidence does not match release")
         required = {"independent-binary-and-oci-versions", "core-runtime", "agent-image",
-                    "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor", "update-registration"}
+                    "agent-compatibility", "candidate-acceptance", "embedded-upgrade-descriptor", "update-registration", "update-lifecycle"}
         if not required.issubset(evidence["checks"]):
             raise ValueError("Missing required candidate checks")
         if evidence.get("upgradeDescriptor") != expected_upgrade_descriptor(metadata):

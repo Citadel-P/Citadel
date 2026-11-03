@@ -42,8 +42,8 @@ update-check setting changes.
 
 ## Install a qualified update
 
-A registered, supported Docker Compose installation can offer **Review update**
-for an available release. Review verifies the installation and release before
+A registered, supported Docker Compose installation can offer **Update now**
+for an available release. This opens a review that verifies the installation and release before
 anything is approved. The target release must explicitly support your installed
 version, database catalog, architecture and connected Agent versions.
 
@@ -54,7 +54,8 @@ phase and waits to reconnect; it cannot stream progress while Core is offline.
 After reconnection it reads the recorded outcome. While cleanup still holds
 maintenance, the status shows **Finishing update**. Once maintenance is released
 and the running version matches the completed update, the Updates page reloads
-once to load the new frontend, keeping the current URL and operation ID.
+once to load the new frontend, keeping the current URL. The completed banner clears
+after reload; the update remains in **Activities**.
 **Reload portal** is available if automatic reload cannot complete. Closing the
 browser does not cancel an approved update.
 

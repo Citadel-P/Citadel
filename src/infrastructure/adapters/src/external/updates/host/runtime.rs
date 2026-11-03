@@ -51,7 +51,9 @@ impl HostUpdateClient {
         let requested_state = match &request {
             HostUpdateRequest::Startup { state_directory }
             | HostUpdateRequest::Check { state_directory } => state_directory.as_path(),
-            HostUpdateRequest::Launch(operation) | HostUpdateRequest::Completed(operation) => {
+            HostUpdateRequest::Launch(operation)
+            | HostUpdateRequest::Completed(operation)
+            | HostUpdateRequest::FailedJournal(operation) => {
                 std::path::Path::new(&operation.plan.checkpoint_directory)
             }
             HostUpdateRequest::Finalize(request) => {

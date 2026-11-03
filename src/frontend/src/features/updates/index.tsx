@@ -116,41 +116,45 @@ function UpdateStatus() {
   return (
     <div className="space-y-2" aria-live="polite">
       <UpdateProgress status={data} />
-      {data.available ? (
-        <AlertMessage
-          type="info"
-          title={`Citadel ${data.available.version} is available.`}
-          date={data.lastSuccess ?? undefined}
-          className="my-0 flex-wrap"
-          action={
-            <div className="flex items-center gap-2">
-              <InstallUpdate status={data} />
-              <Button variant="outline" size="sm" className="text-foreground" asChild>
-                <a href={data.available.releaseUrl} target="_blank" rel="noreferrer">
-                  Release notes <ExternalLink className="size-3.5" aria-hidden="true" />
-                </a>
-              </Button>
+      {!data.operation && (
+        <>
+          {data.available ? (
+            <AlertMessage
+              type="info"
+              title={`Citadel ${data.available.version} is available.`}
+              date={data.lastSuccess ?? undefined}
+              className="my-0 flex-wrap"
+              action={
+                <div className="flex items-center gap-2">
+                  <InstallUpdate status={data} />
+                  <Button variant="outline" size="sm" className="text-foreground" asChild>
+                    <a href={data.available.releaseUrl} target="_blank" rel="noreferrer">
+                      Release notes <ExternalLink className="size-3.5" aria-hidden="true" />
+                    </a>
+                  </Button>
+                </div>
+              }>
+              Review the release notes before upgrading.
+            </AlertMessage>
+          ) : (
+            !data.checkError && (
+              <AlertMessage type="info" className="my-0 flex-wrap" date={data.lastSuccess ?? undefined}>
+                {data.lastSuccess ? 'No newer release found at the last check.' : 'No successful release check yet.'}
+              </AlertMessage>
+            )
+          )}
+          {data.checkError && (
+            <div role="alert">
+              <AlertMessage
+                type="warning"
+                title="Update check failed"
+                className="my-0 flex-wrap"
+                date={data.lastAttempt ?? undefined}>
+                {data.checkError} Last successful release information is retained.
+              </AlertMessage>
             </div>
-          }>
-          Review the release notes before upgrading.
-        </AlertMessage>
-      ) : (
-        !data.checkError && (
-          <AlertMessage type="info" className="my-0 flex-wrap" date={data.lastSuccess ?? undefined}>
-            {data.lastSuccess ? 'No newer release found at the last check.' : 'No successful release check yet.'}
-          </AlertMessage>
-        )
-      )}
-      {data.checkError && (
-        <div role="alert">
-          <AlertMessage
-            type="warning"
-            title="Update check failed"
-            className="my-0 flex-wrap"
-            date={data.lastAttempt ?? undefined}>
-            {data.checkError} Last successful release information is retained.
-          </AlertMessage>
-        </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -419,6 +419,12 @@ Validate bootstrap changes with the isolated Docker acceptance command in
 and containerized registration with completed HTTP setup. This is a registration
 gate; it does not qualify a source-to-target upgrade or recovery path.
 
+The local lifecycle runner in [`test/README.md`](../test/README.md) exercises normal
+replacement, interrupted final release and checkpoint restore without publishing
+anything. It uses a test-only release dependency; shipped binaries always use the
+official verifier and cannot enable the fixture through configuration. Candidate
+acceptance runs this regression on both supported architectures.
+
 The opt-in published-transition smoke test in [`test/README.md`](../test/README.md)
 uses the real update APIs and signature checks on a disposable Docker daemon, then
 restores the resulting checkpoint into a fresh database. It requires a source that

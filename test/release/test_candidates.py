@@ -32,11 +32,18 @@ class CandidateIdentityTests(unittest.TestCase):
             self.assertEqual(run.call_args_list, [
                 call(['bash', 'test/scripts/test-agent-acceptance.sh', 'core-image', 'agent-image'], check=True),
                 call([candidates.sys.executable, 'test/scripts/test-update-registration.py', 'core-image'], check=True),
+                call([candidates.sys.executable, 'test/scripts/test-instance-upgrade-local.py', '--runtime-image', 'core-image'], check=True),
             ])
 
     def test_failed_update_registration_blocks_candidate_acceptance(self):
         failure = candidates.subprocess.CalledProcessError(1, 'update-registration')
         with patch.object(candidates.subprocess, 'run', side_effect=[None, failure]):
+            with self.assertRaises(candidates.subprocess.CalledProcessError):
+                candidates.run_acceptance('core-image', 'agent-image')
+
+    def test_failed_lifecycle_blocks_acceptance(self):
+        failure = candidates.subprocess.CalledProcessError(1, 'update-lifecycle')
+        with patch.object(candidates.subprocess, 'run', side_effect=[None, None, failure]):
             with self.assertRaises(candidates.subprocess.CalledProcessError):
                 candidates.run_acceptance('core-image', 'agent-image')
 
@@ -51,7 +58,7 @@ class CandidateIdentityTests(unittest.TestCase):
             'com.citadel.informational-version':metadata['informationalVersion']}})
         with patch.object(candidates.release.version,'run',side_effect=[json.dumps(binary),json.dumps([image])]):
             candidates.check_image('candidate',metadata,'amd64',image['Id'])
-        for failure in ['display','informational','revision','archive','architecture','protocol']:
+        for failure in ['display','informational','revision','archive','architecture','protocol','qualification']:
             with self.subTest(failure=failure):
                 actual=copy.deepcopy(binary); inspected=copy.deepcopy(image)
                 if failure=='display': actual['version']='1.2.3'
@@ -60,5 +67,6 @@ class CandidateIdentityTests(unittest.TestCase):
                 if failure=='archive': inspected['Id']='sha256:'+'c'*64
                 if failure=='architecture': inspected['Architecture']='arm64'
                 if failure=='protocol': actual['protocolVersion']=1
+                if failure=='qualification': actual['qualificationBuild']=True
                 with patch.object(candidates.release.version,'run',side_effect=[json.dumps(actual),json.dumps([inspected])]):
                     with self.assertRaises(ValueError): candidates.check_image('candidate',metadata,'amd64',image['Id'])

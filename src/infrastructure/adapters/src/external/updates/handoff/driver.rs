@@ -55,11 +55,14 @@ pub async fn run_update_helper(
         return Err(conflict());
     }
     let bound = binding(&state, &intent)?;
-    let hostname = std::fs::read_to_string("/proc/sys/kernel/hostname").map_err(|_| conflict())?;
-    let hostname = hostname.trim();
-    if hostname != bound.helper_container_id && hostname != &bound.helper_container_id[..12] {
-        return Err(conflict());
-    }
+    let home = super::runtime::private_home()?;
+    let docker = super::super::docker::LocalDocker {
+        process,
+        cancellation,
+        home: home.path(),
+        deadline: std::time::Instant::now() + Duration::from_secs(60),
+    };
+    super::verification::helper_process(&docker, &intent, &bound).await?;
     let helper = OwnedUpdateHelper::acknowledge(
         state,
         intent,

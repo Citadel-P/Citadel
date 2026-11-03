@@ -1,5 +1,6 @@
 import copy
 import importlib.util
+import io
 from pathlib import Path
 import subprocess
 import tempfile
@@ -106,6 +107,69 @@ class PublishedUpgradeTests(unittest.TestCase):
                 fixture.http('updates/approve', {'requestId': 'one-request'}, 'private-token')
             execute.assert_called_once()
             self.assertNotIn('private', str(failure.exception))
+
+
+class LocalUpgradeTests(unittest.TestCase):
+    def test_browser_publishes_only_loopback_ui_and_retains_its_own_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = upgrade.registration.Fixture('local-core', Path(directory))
+            calls = []
+            def host(*args, **kwargs):
+                calls.append(args)
+                if args[:2] == ('image', 'save'):
+                    Path(args[3]).write_bytes(b'archive')
+                return subprocess.CompletedProcess([], 0, b'fixture-id\n', b'')
+            with patch.object(fixture, 'host', side_effect=host):
+                fixture.start(registry=True, browser_port=18080)
+                create = next(c for c in calls if c[0] == 'create')
+                self.assertEqual(create[create.index('--publish') + 1], '127.0.0.1:18080:18000')
+                self.assertEqual(create.count('--publish'), 1)
+                self.assertFalse(any(c[:2] == ('network', 'disconnect') for c in calls))
+                self.assertIsNotNone(fixture.network)
+                fixture.close()
+                self.assertIn(('rm', '-fv', 'fixture-id'), calls)
+                self.assertIn(('network', 'rm', 'fixture-id'), calls)
+
+    def test_browser_setup_leaves_check_review_and_approval_to_the_user(self):
+        spec = importlib.util.spec_from_file_location(
+            'browser_upgrade', ROOT / 'test/scripts/test-instance-upgrade-local.py')
+        local = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(local)
+        fixture = local.LocalUpgrade('unused', Path('/unused'))
+        with patch.object(fixture, 'inspect_transition') as inspect, \
+             patch.object(fixture, 'setup_installation', return_value=({}, 'pg-secret', 'admin-secret')), \
+             patch.object(fixture, 'http') as http, \
+             patch.object(local.time, 'sleep', side_effect=KeyboardInterrupt), \
+             patch('sys.stdout', new_callable=io.StringIO) as output:
+            with self.assertRaises(KeyboardInterrupt):
+                fixture.serve_browser(18080)
+            inspect.assert_called_once_with(local.TARGET)
+            http.assert_not_called()
+            self.assertIn('http://localhost:18080/updates', output.getvalue())
+            self.assertIn('admin-secret', output.getvalue())
+            self.assertNotIn('pg-secret', output.getvalue())
+
+    def test_private_registry_and_published_mode_cannot_be_combined(self):
+        fixture = upgrade.registration.Fixture('unused', Path('/unused'))
+        with patch.object(fixture, 'host') as host:
+            with self.assertRaisesRegex(AssertionError, 'cannot be used'):
+                fixture.start(published=True, registry=True)
+            host.assert_not_called()
+
+    def test_private_push_selects_the_official_digest_among_local_aliases(self):
+        spec = importlib.util.spec_from_file_location(
+            'local_upgrade', ROOT / 'test/scripts/test-instance-upgrade-local.py')
+        local = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(local)
+        fixture = local.LocalUpgrade('unused', Path('/unused'))
+        digest = 'ghcr.io/citadel-p/citadel@sha256:' + 'a' * 64
+        with patch.object(fixture, 'docker'), patch.object(fixture, 'json_command', return_value=[
+                {'RepoDigests': ['citadel-upgrade-fixture@sha256:' + 'b' * 64, digest]}]):
+            self.assertEqual(fixture.publish_private('image', 'target'), digest)
+        with patch.object(fixture, 'docker'), patch.object(fixture, 'json_command', return_value=[
+                {'RepoDigests': ['unrelated@sha256:' + 'b' * 64]}]):
+            with self.assertRaisesRegex(AssertionError, 'Unexpected private digest'):
+                fixture.publish_private('image', 'target')
 
 
 if __name__ == '__main__':
