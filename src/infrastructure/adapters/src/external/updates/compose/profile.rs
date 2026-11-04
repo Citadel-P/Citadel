@@ -123,7 +123,9 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
         }
     }
     if core["depends_on"]["pg_db"]["condition"] != "service_healthy"
-        || database["environment"].get("PGDATA").is_some()
+        || database["environment"]
+            .get("PGDATA")
+            .is_some_and(|path| path != "/var/lib/postgresql/18/docker")
         || database
             .get("ports")
             .is_some_and(|v| v.as_array().is_none_or(|v| !v.is_empty()))

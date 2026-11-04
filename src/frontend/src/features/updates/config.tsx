@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { Clock } from 'lucide-react';
 import { AgentUpdates, agentOptions } from './agents';
 import { ReviewUpdates } from './review';
-import { AvailableUpdateHeading, CoreUpdateAvailability } from './available';
+import { AvailableUpdateHeading, CoreUpdateAvailability, DatabaseUpdateAvailability } from './available';
 import { useRead, useMutate } from '@/lib/hooks';
 import { UpdateScheduleView, LicenseCapability } from '@/api/generated/api.types';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
@@ -30,6 +30,7 @@ type UpdateConfig = UpdateScheduleView & {
   updateChecksEnabled: boolean;
   updateCheckIntervalHours: number;
   coreStatus: null;
+  databaseStatus: null;
   agentSelection: null;
   reviewUpdates: null;
   scheduleInfo: null;
@@ -57,7 +58,6 @@ export function UpdateCheckSettings() {
   const save = useUpdateInstallationSettings();
   const [update, setUpdate] = useState<Partial<UpdateConfig>>({});
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
-  const [editingSchedule, setEditingSchedule] = useState(false);
   const busy =
     !!status.data?.data.operation ||
     (!!agents?.operation && !agents.operation.finished) ||
@@ -67,6 +67,7 @@ export function UpdateCheckSettings() {
   const includeCore = update.includeCore ?? schedule.includeCore;
   const automaticChecks = update.updateChecksEnabled ?? settings?.updateChecksEnabled;
   const allowed = !!settings?.updateChecksAllowed;
+  const scheduleDisabled = saving || !allowed || !team || !agents || !scheduleEnabled;
   const coreBlocker =
     status.data?.data.installationUnavailableReason ?? (!status.data ? 'Core status is unavailable.' : undefined);
   const nextCheck =
@@ -103,6 +104,11 @@ export function UpdateCheckSettings() {
                 key: 'coreStatus',
                 label: 'Citadel Core',
                 render: () => <CoreUpdateAvailability data={status.data?.data} isError={status.isError} busy={busy} />,
+              }),
+              defineField({
+                key: 'databaseStatus',
+                label: 'Database',
+                render: () => <DatabaseUpdateAvailability data={status.data?.data} />,
               }),
               defineField({
                 key: 'agentSelection',
@@ -193,110 +199,105 @@ export function UpdateCheckSettings() {
             requiredLicense: 'Team',
             description: 'Install supported updates for the components you select.',
             items: [
-              ...((team || schedule.enabled) && agents
-                ? [
-                    defineField<UpdateConfig>({
-                      key: 'enabled',
-                      label: 'Enabled',
-                      render: (value, set) => (
-                        <FieldSwitch
-                          id="update-schedule-enabled"
-                          aria-label="Scheduled updates enabled"
-                          checked={value}
-                          disabled={saving || ((!team || !allowed) && !schedule.enabled)}
-                          onChange={(enabled) => set({ enabled })}
-                        />
-                      ),
-                    }),
-                  ]
-                : []),
-              ...(team && agents && (scheduleEnabled || editingSchedule)
-                ? [
-                    defineField<UpdateConfig>({
-                      key: 'includeCore',
-                      label: 'Update Citadel Core',
-                      description: includeCore
-                        ? 'Citadel Core updates first and temporarily disconnects the interface. Selected Agents follow after Core is verified.'
-                        : 'Include Core in scheduled installation.',
-                      render: (value, set) => (
-                        <div className="space-y-2">
-                          <Checkbox
-                            aria-label="Update Citadel Core"
-                            checked={value ?? false}
-                            disabled={saving || !allowed || (!!coreBlocker && !value)}
-                            onCheckedChange={(checked) => set({ includeCore: checked === true })}
-                          />
-                          {coreBlocker && <p className="text-sm text-muted-foreground">{coreBlocker}</p>}
-                        </div>
-                      ),
-                    }),
-                    defineField<UpdateConfig>({
-                      key: 'targets',
-                      label: 'Scheduled Agents',
-                      validate: (value) =>
-                        scheduleEnabled && !includeCore && !value.length
-                          ? 'Select Core or at least one Agent.'
-                          : value.length > 100
-                            ? 'Select at most 100 Agents.'
-                            : null,
-                      render: (value, set) => (
-                        <div className="max-w-100">
-                          <span id="scheduled-agent-selection" className="sr-only">
-                            Scheduled Agents
-                          </span>
-                          <MultiSelect
-                            aria-labelledby="scheduled-agent-selection"
-                            options={[
-                              ...agentOptions(agents.targets, true),
-                              ...schedule.targets
-                                .filter((id) => !agents.targets.some((t) => t.id === id))
-                                .map((id) => ({
-                                  value: id,
-                                  label: `${id} · no longer registered`,
-                                  disabled: true,
-                                  disabledReason: 'Remove this target before saving the schedule.',
-                                })),
-                            ]}
-                            defaultValue={value}
-                            onValueChange={(targets) => set({ targets })}
-                            disabled={saving || !allowed}
-                            placeholder="Select scheduled Agents"
-                          />
-                        </div>
-                      ),
-                    }),
-                    defineField<UpdateConfig>({
-                      key: 'cron',
-                      label: 'Cron',
-                      required: scheduleEnabled,
-                      validate: (value) =>
-                        scheduleEnabled && !String(value ?? '').trim()
-                          ? 'Cron is required when schedule is enabled'
-                          : null,
-                      render: (value, set) => (
-                        <FieldInput
-                          value={value}
-                          placeholder="0 3 * * *"
-                          disabled={saving || !allowed}
-                          onChange={(cron) => set({ cron })}
-                        />
-                      ),
-                    }),
-                    defineField<UpdateConfig>({
-                      key: 'timeZone',
-                      label: 'Time Zone',
-                      required: scheduleEnabled,
-                      render: (value, set) => (
-                        <TimezoneSelectField
-                          value={value}
-                          disabled={saving || !allowed}
-                          onChange={(timeZone) => set({ timeZone })}
-                          className="w-full min-w-0 max-w-100"
-                        />
-                      ),
-                    }),
-                  ]
-                : []),
+              defineField<UpdateConfig>({
+                key: 'enabled',
+                label: 'Enabled',
+                render: (value, set) => (
+                  <FieldSwitch
+                    id="update-schedule-enabled"
+                    aria-label="Scheduled updates enabled"
+                    checked={value}
+                    disabled={saving || !agents || ((!team || !allowed) && !schedule.enabled)}
+                    onChange={(enabled) => set({ enabled })}
+                  />
+                ),
+              }),
+
+              defineField<UpdateConfig>({
+                key: 'includeCore',
+                label: 'Update Citadel Core',
+                disabled: scheduleDisabled,
+                description: includeCore
+                  ? 'Citadel Core updates first and temporarily disconnects the interface. Selected Agents follow after Core is verified.'
+                  : 'Include Core in scheduled installation.',
+                render: (value, set) => (
+                  <div className="space-y-2">
+                    <Checkbox
+                      aria-label="Update Citadel Core"
+                      checked={value ?? false}
+                      disabled={scheduleDisabled || (!!coreBlocker && !value)}
+                      onCheckedChange={(checked) => set({ includeCore: checked === true })}
+                    />
+                    {coreBlocker && <p className="text-sm text-muted-foreground">{coreBlocker}</p>}
+                  </div>
+                ),
+              }),
+              defineField<UpdateConfig>({
+                key: 'targets',
+                label: 'Scheduled Agents',
+                disabled: scheduleDisabled,
+                validate: (value) =>
+                  scheduleEnabled && !includeCore && !value.length
+                    ? 'Select Core or at least one Agent.'
+                    : value.length > 100
+                      ? 'Select at most 100 Agents.'
+                      : null,
+                render: (value, set) => (
+                  <div className="max-w-100">
+                    <span id="scheduled-agent-selection" className="sr-only">
+                      Scheduled Agents
+                    </span>
+                    <MultiSelect
+                      aria-labelledby="scheduled-agent-selection"
+                      options={[
+                        ...agentOptions(agents?.targets ?? [], true),
+                        ...schedule.targets
+                          .filter((id) => !agents?.targets.some((t) => t.id === id))
+                          .map((id) => ({
+                            value: id,
+                            label: `${id} · no longer registered`,
+                            disabled: true,
+                            disabledReason: 'Remove this target before saving the schedule.',
+                          })),
+                      ]}
+                      defaultValue={value}
+                      onValueChange={(targets) => set({ targets })}
+                      disabled={scheduleDisabled}
+                      placeholder="Select scheduled Agents"
+                    />
+                  </div>
+                ),
+              }),
+              defineField<UpdateConfig>({
+                key: 'cron',
+                label: 'Cron',
+                disabled: scheduleDisabled,
+                required: scheduleEnabled,
+                validate: (value) =>
+                  scheduleEnabled && !String(value ?? '').trim() ? 'Cron is required when schedule is enabled' : null,
+                render: (value, set) => (
+                  <FieldInput
+                    value={value}
+                    placeholder="0 3 * * *"
+                    disabled={scheduleDisabled}
+                    onChange={(cron) => set({ cron })}
+                  />
+                ),
+              }),
+              defineField<UpdateConfig>({
+                key: 'timeZone',
+                label: 'Time Zone',
+                disabled: scheduleDisabled,
+                required: scheduleEnabled,
+                render: (value, set) => (
+                  <TimezoneSelectField
+                    value={value}
+                    disabled={scheduleDisabled}
+                    onChange={(timeZone) => set({ timeZone })}
+                    className="w-full min-w-0 max-w-100"
+                  />
+                ),
+              }),
               defineField({
                 key: 'scheduleInfo',
                 label: 'Next run',
@@ -315,17 +316,6 @@ export function UpdateCheckSettings() {
                     )}
                     {!team && (
                       <p>Team enables scheduled installation. Manual updates and release checks remain available.</p>
-                    )}
-                    {team && agents && !scheduleEnabled && !editingSchedule && (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span>
-                          {schedule.includeCore ? 'Core and ' : ''}
-                          {schedule.targets.length} scheduled Agents · {schedule.cron} · {schedule.timeZone}
-                        </span>
-                        <Button type="button" size="sm" variant="outline" onClick={() => setEditingSchedule(true)}>
-                          Edit schedule
-                        </Button>
-                      </div>
                     )}
                     {agents?.scheduleRun && agents.scheduleRun.phase !== 'Finished' && (
                       <p>Scheduled update in progress. Changes apply to future occurrences.</p>
@@ -355,7 +345,7 @@ export function UpdateCheckSettings() {
       includeCore,
       team,
       saving,
-      editingSchedule,
+      scheduleDisabled,
       allowed,
       coreBlocker,
       automaticChecks,
@@ -387,6 +377,7 @@ export function UpdateCheckSettings() {
         original={{
           ...schedule,
           coreStatus: null,
+          databaseStatus: null,
           agentSelection: null,
           reviewUpdates: null,
           scheduleInfo: null,
@@ -421,7 +412,6 @@ export function UpdateCheckSettings() {
                 timeZone: value.timeZone,
               },
             });
-            setEditingSchedule(false);
           }
         }}
       />

@@ -50,7 +50,20 @@ async fn accept(
     // A restarted source, development executable or unrelated image must not
     // migrate under someone else's retained claim. Container identity is checked
     // independently by TargetUpdateSession before database verification.
-    if matches_target_build(&operation.plan.source)? && !cancellation.is_cancelled() {
+    let database_target = if let Some(database) = &operation.plan.database {
+        let version =
+            citadel_updates::ReleaseCheckRepository::database_version(&repository).await?;
+        if version != database.source_version && version != database.target_version {
+            return Err(unavailable());
+        }
+        version == database.target_version
+    } else {
+        false
+    };
+    if !database_target
+        && matches_target_build(&operation.plan.source)?
+        && !cancellation.is_cancelled()
+    {
         use citadel_updates::UpdateInstallationRuntime;
         let directory = config
             .update_state_directory

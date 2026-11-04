@@ -58,6 +58,7 @@ impl Runner {
         };
         let operation = UpdateOperation::approve(
             UpdatePlan {
+                database: None,
                 id: Uuid::now_v7(),
                 instance_id: registration.instance_id,
                 source: source.clone(),
@@ -133,9 +134,9 @@ impl Runner {
         let intent: HelperLaunchIntent = self.state().read(&self.intent.file("launch")).unwrap();
         let reg = &intent.registration;
         json!({"Id": HELPER, "Name": format!("/{}", intent.helper_name()), "Image": format!("sha256:{}", "d".repeat(64)),
-            "Config": {"Hostname": &DATABASE[..12], "User": format!("{}:{}", reg.executor_uid, reg.executor_gid), "Healthcheck": {"Test": ["NONE"]}, "Image": intent.operation.plan.helper_image, "Labels": {verification::NONCE: intent.nonce.to_string(), verification::OPERATION: intent.operation.id.to_string()}},
+            "Config": {"Hostname": &DATABASE[..12], "Env": ["TMPDIR=/tmp"], "User": format!("{}:{}", reg.executor_uid, reg.executor_gid), "Healthcheck": {"Test": ["NONE"]}, "Image": intent.operation.plan.helper_image, "Labels": {verification::NONCE: intent.nonce.to_string(), verification::OPERATION: intent.operation.id.to_string()}},
             "State": {"Running": true, "Paused": false, "Restarting": false, "Status": "running", "StartedAt": "2026-11-03T00:00:00Z"}, "RestartCount": 0,
-            "HostConfig": {"RestartPolicy": {"Name": "no"}, "NetworkMode": format!("container:{}", reg.database_container_id), "Privileged": false, "ReadonlyRootfs": true, "AutoRemove": false},
+            "HostConfig": {"RestartPolicy": {"Name": "no"}, "NetworkMode": format!("container:{}", reg.database_container_id), "Privileged": false, "ReadonlyRootfs": true, "AutoRemove": false, "Tmpfs": {"/tmp":"rw,noexec,nosuid,size=64m"}},
             "Path": "/app/citadel-server", "Args": ["run-update-helper", "--state-directory", reg.state_directory, "--operation-id", intent.operation.id.to_string(), "--fence", intent.operation.fence.to_string()],
             "Mounts": [{"Type":"bind", "Source":reg.directory, "Destination":reg.directory, "RW":true}, {"Type":"bind", "Source":reg.state_directory, "Destination":reg.state_directory, "RW":true}, {"Type":"bind", "Source":SOCKET, "Destination":SOCKET, "RW":true}, {"Type":"volume","Name":reg.core_volume,"Destination":"/app/data","RW":false}]
         })
@@ -181,6 +182,8 @@ impl ProcessRunner for Runner {
                         "--pull=never",
                         "--restart=no",
                         "--read-only",
+                        "--tmpfs=/tmp:rw,noexec,nosuid,size=64m",
+                        "TMPDIR=/tmp",
                         "run-update-helper",
                     ] {
                         assert!(rest.contains(&required));
@@ -237,7 +240,7 @@ impl ProcessRunner for Runner {
                     "exec",
                     "--interactive",
                     "--env",
-                    _,
+                    "TMPDIR=/tmp",
                     "--user",
                     _,
                     HELPER,
@@ -298,6 +301,14 @@ impl ProcessRunner for Runner {
                         "prepare-during-check" => {
                             super::preparation::record_fixture(&self.state(), &self.intent);
                         }
+                        "temporary-state" => {
+                            helper["Config"]["Env"] = json!([format!(
+                                "TMPDIR={}",
+                                self.intent.registration.state_directory.display()
+                            )])
+                        }
+                        "unbounded-temp" => helper["HostConfig"]["Tmpfs"]["/tmp"] = json!("rw"),
+                        "missing-temp" => helper["HostConfig"]["Tmpfs"] = Value::Null,
                         "wrong-user" => helper["Config"]["User"] = json!("unexpected"),
                         "auto-remove" => helper["HostConfig"]["AutoRemove"] = json!(true),
                         "wrong-mount" => helper["Mounts"][0]["RW"] = json!(false),
@@ -954,6 +965,9 @@ async fn invalid_created_helpers_never_start() {
         "wrong-user",
         "auto-remove",
         "wrong-mount",
+        "temporary-state",
+        "unbounded-temp",
+        "missing-temp",
         "writable-data",
         "wrong-network",
         "restarted-helper",

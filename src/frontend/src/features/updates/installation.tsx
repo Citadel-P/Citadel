@@ -44,6 +44,12 @@ export function CoreReviewDetails({ review }: { review: UpdateReviewView }) {
           </div>
         </div>
       </div>
+      {review.component === 'Database' && (
+        <p className="text-sm text-muted-foreground">
+          This updates PostgreSQL within its current major version and keeps the existing data directory. Core and Agent
+          versions do not change.
+        </p>
+      )}
       <p className="text-xs leading-relaxed text-muted-foreground">
         If verification fails, Citadel remains in maintenance and requires manual recovery.
       </p>
@@ -110,17 +116,21 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
   }, [status.operation, status.instanceId, operation, finishing, remember]);
 
   useEffect(() => {
-    if (!completed || liveConnectionState !== 'connected' || status.installedVersion !== operation?.version) return;
+    const runningVersion = operation?.component === 'Database' ? status.databaseVersion : status.installedVersion;
+    if (!completed || liveConnectionState !== 'connected' || runningVersion !== operation?.version) return;
     // Read the current atom so repeated effects cannot request a second reload.
     const saved = store.get(pendingInstanceUpdateAtom);
     if (!saved || saved.instanceId !== status.instanceId || saved.id !== operation.id) return;
     try {
       if (saved.frontendReloaded) {
         store.set(pendingInstanceUpdateAtom, null);
-        toast.success('Citadel updated successfully', {
-          id: `instance-update-${status.instanceId}-${operation.id}`,
-          description: `Version ${operation.version} is now running.`,
-        });
+        toast.success(
+          operation.component === 'Database' ? 'PostgreSQL updated successfully' : 'Citadel updated successfully',
+          {
+            id: `instance-update-${status.instanceId}-${operation.id}`,
+            description: `Version ${operation.version} is now running.`,
+          },
+        );
         return;
       }
       // Persist before navigation. If session storage is unavailable, leave the
@@ -130,14 +140,22 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
     } catch {
       // Completion remains visible, with an explicit reload action below.
     }
-  }, [completed, liveConnectionState, status.instanceId, status.installedVersion, operation, store]);
+  }, [
+    completed,
+    liveConnectionState,
+    status.instanceId,
+    status.installedVersion,
+    status.databaseVersion,
+    operation,
+    store,
+  ]);
 
   useEffect(() => {
     if (!operation || !['Failed', 'RecoveryRequired'].includes(operation.phase)) return;
     const saved = store.get(pendingInstanceUpdateAtom);
     const sameOperation = saved?.instanceId === status.instanceId && saved?.id === operation.id;
     if (sameOperation && saved.failureNotified) return;
-    toast.error('Citadel update failed', {
+    toast.error(operation.component === 'Database' ? 'PostgreSQL update failed' : 'Citadel update failed', {
       id: `instance-update-${status.instanceId}-${operation.id}`,
       description: status.operation
         ? `The update to ${operation.version} needs manual recovery. Check Activities for details.`
@@ -163,7 +181,13 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
     <AlertMessage
       type={failed ? 'warning' : 'info'}
       className="my-0"
-      title={finishing ? 'Finishing update' : (labels[operation.phase] ?? 'Update in progress')}
+      title={
+        finishing
+          ? 'Finishing update'
+          : operation.component === 'Database' && operation.phase === 'ReplacingCore'
+            ? 'Upgrading PostgreSQL'
+            : (labels[operation.phase] ?? 'Update in progress')
+      }
       date={operation.updatedAt}
       action={
         completed && liveConnectionState === 'connected' ? (
@@ -192,7 +216,7 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
         : finishing
           ? 'The new version is verified. Citadel is completing cleanup before reopening the portal.'
           : terminal.has(operation.phase)
-            ? `Target version: Citadel ${operation.version}.`
+            ? `Target version: ${operation.component === 'Database' ? 'PostgreSQL' : 'Citadel'} ${operation.version}.`
             : 'You can leave this page. The server owns this operation; closing your browser will not cancel it.'}
     </AlertMessage>
   );

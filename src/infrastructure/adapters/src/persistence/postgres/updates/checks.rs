@@ -1,6 +1,20 @@
 use super::*;
 
 impl ReleaseCheckRepository for PostgresUpdateRepository {
+    fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>> {
+        Box::pin(async {
+            let read =
+                sqlx::query_scalar::<_, String>("SHOW server_version_num").fetch_one(&self.pool);
+            let version = tokio::time::timeout(std::time::Duration::from_secs(5), read)
+                .await
+                .map_err(|_| UpdateError::Unavailable("Database version is unavailable.".into()))?
+                .map_err(storage)?;
+            version
+                .parse()
+                .map_err(|_| UpdateError::Unavailable("Database version is unavailable.".into()))
+        })
+    }
+
     fn observe_core_availability<'a>(
         &'a self,
         installed: &'a str,

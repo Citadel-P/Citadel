@@ -276,3 +276,76 @@ async fn actual_compose_accepts_published_image_with_base_and_edge_inputs() {
         assert_eq!(&before[..before.len() - 1], &after[..after.len() - 1]);
     }
 }
+
+struct DatabaseResolver {
+    change_password: bool,
+}
+impl ProcessRunner for DatabaseResolver {
+    fn run<'a>(
+        &'a self,
+        request: ProcessRequest,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<ProcessOutput, ProcessError>> {
+        Box::pin(async move {
+            let env =
+                std::fs::read_to_string(request.current_directory.as_ref().unwrap().join(".env"))
+                    .unwrap();
+            let mut value = resolved();
+            let target = env.contains("PG_DATA=/var/lib/postgresql/18/docker");
+            value["services"]["pg_db"]["environment"]["PGDATA"] =
+                json!("/var/lib/postgresql/18/docker");
+            if target {
+                let image = env
+                    .lines()
+                    .find_map(|line| line.strip_prefix("PG_IMAGE="))
+                    .unwrap();
+                value["services"]["pg_db"]["image"] = json!(image);
+                value["services"]["server"]["environment"]["PG_IMAGE"] = json!(image);
+                value["services"]["server"]["environment"]["PG_DATA"] =
+                    json!("/var/lib/postgresql/18/docker");
+                if self.change_password {
+                    value["services"]["server"]["environment"]["PG_PASSWORD"] = json!("changed");
+                    value["services"]["pg_db"]["environment"]["POSTGRES_PASSWORD"] =
+                        json!("changed");
+                }
+            }
+            Ok(ProcessOutput {
+                exit_code: Some(0),
+                stdout: serde_json::to_vec(&value).unwrap(),
+                stderr: vec![],
+                stdout_truncated: false,
+                stderr_truncated: false,
+            })
+        })
+    }
+}
+
+#[tokio::test]
+async fn database_replacement_changes_only_engine_selectors_and_preserves_core() {
+    for change_password in [false, true] {
+        let fixture = Fixture::new(true);
+        let path = fixture.inputs.directory.join(".env");
+        let before = std::fs::read(&path).unwrap();
+        let plan = super::database::database_update(180001).unwrap().unwrap();
+        let candidate = fixture
+            .inputs
+            .prepare_database_replacement(
+                &plan,
+                &DatabaseResolver { change_password },
+                &CancellationToken::new(),
+            )
+            .await;
+        assert_eq!(candidate.is_ok(), !change_password);
+        assert_eq!(std::fs::read(path).unwrap(), before);
+        if let Ok(candidate) = candidate {
+            assert_eq!(
+                candidate.checked.target_image,
+                resolved()["services"]["server"]["image"].as_str().unwrap()
+            );
+            assert_ne!(
+                candidate.checked.source_configuration_sha256,
+                candidate.checked.target_configuration_sha256
+            );
+        }
+    }
+}

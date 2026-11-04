@@ -77,6 +77,7 @@ fn operation() -> UpdateOperation {
     };
     UpdateOperation::approve(
         UpdatePlan {
+            database: None,
             id: Uuid::now_v7(),
             instance_id: Uuid::now_v7(),
             target: CoreIdentity {

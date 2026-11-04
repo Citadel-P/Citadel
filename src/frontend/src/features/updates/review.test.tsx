@@ -9,6 +9,9 @@ import { ReviewUpdates } from './review';
 const status: UpdateStatusView = {
   instanceId: 'instance',
   installedVersion: '0.1.1',
+  databaseVersion: '18.6',
+  databaseAvailable: null,
+  databaseManaged: false,
   channel: 'stable',
   checksAllowed: true,
   checksEnabled: true,
@@ -67,6 +70,7 @@ it('uses one entry point, reviews only the chosen component, and keeps Agent pro
   expect(await within(dialog).findByRole('alert')).toHaveTextContent('Approval could not be confirmed');
   await user.click(within(dialog).getByRole('button', { name: 'Update now' }));
   expect(await within(dialog).findByText('Updating')).toBeVisible();
+  expect(within(dialog).getByText('Updating').querySelector('.animate-spin')).toBeInTheDocument();
   expect(requests).toHaveLength(2);
   expect(requests[0]).toEqual(requests[1]);
   expect(prepareCore).not.toHaveBeenCalled();
@@ -83,4 +87,62 @@ it('uses one entry point, reviews only the chosen component, and keeps Agent pro
   expect(await within(dialog).findByText('Update results')).toBeVisible();
   expect(within(dialog).getByText('Succeeded')).toHaveAttribute('data-slot', 'badge');
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Agent updates finished'));
+});
+
+it.each(['Succeeded', 'Failed'])('notifies %s once after the progress dialog is closed', async (phase) => {
+  const success = vi.spyOn(toast, 'success').mockImplementation(() => 'notice');
+  const error = vi.spyOn(toast, 'error').mockImplementation(() => 'notice');
+  const operation = { id: 'operation', finished: false, targets: [{ target: agents.targets[0], phase: 'Updating' }] };
+  server.use(
+    http.get('http://localhost/api/v1/updates/agents/operations/operation', () => HttpResponse.json(operation)),
+  );
+  const { user, queryClient } = renderCitadel(
+    <ReviewUpdates status={status} agents={{ ...agents, operation } as AgentUpdatesView} />,
+  );
+  await user.click(screen.getByRole('button', { name: 'View progress' }));
+  await screen.findByText('Updating');
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const finished = { data: { ...operation, finished: true, targets: [{ ...operation.targets[0], phase }] } };
+  act(() => {
+    queryClient.setQueryData(['getAgentUpdateOperation', { id: 'operation' }], finished);
+  });
+  await waitFor(() => expect(phase === 'Failed' ? error : success).toHaveBeenCalledTimes(1));
+  act(() => {
+    queryClient.setQueryData(['getAgentUpdateOperation', { id: 'operation' }], { ...finished });
+  });
+  expect(phase === 'Failed' ? error : success).toHaveBeenCalledTimes(1);
+});
+
+it('reviews a database-only upgrade through the existing confirmation dialog', async () => {
+  const review = vi.fn();
+  server.use(
+    http.post('http://localhost/api/v1/updates/review', async ({ request }) => {
+      review(await request.json());
+      return HttpResponse.json({
+        id: 'database-review',
+        component: 'Database',
+        installedVersion: '17.11',
+        targetVersion: '18.6',
+        expiresAt: '2099-01-01T00:00:00Z',
+      });
+    }),
+  );
+  const { user } = renderCitadel(
+    <ReviewUpdates
+      status={{
+        ...status,
+        available: null,
+        databaseVersion: '17.11',
+        databaseManaged: true,
+        databaseAvailable: '18.6',
+      }}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Review and update' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText('17.11')).toBeVisible();
+  expect(within(dialog).getByRole('heading', { name: 'Update PostgreSQL' })).toBeVisible();
+  expect(review).toHaveBeenCalledExactlyOnceWith({ version: '18.6', database: true });
+  expect(within(dialog).getByRole('button', { name: 'Update and restart' })).toBeEnabled();
 });

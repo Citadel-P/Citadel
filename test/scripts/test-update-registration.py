@@ -32,7 +32,10 @@ def run(args, *, timeout=120, check=True, stdin=None):
         raise RuntimeError("Fixture command timed out; arguments and output withheld") from None
     if check and result.returncode:
         # Compose, inspect and HTTP output can include fixture credentials/tokens.
-        raise RuntimeError(f"Fixture command failed (exit {result.returncode}); output withheld")
+        evidence = Path(tempfile.mkdtemp(prefix="citadel-fixture-command-failure-")) / "output.log"
+        evidence.write_bytes(result.stdout + b"\n" + result.stderr)
+        evidence.chmod(0o600)
+        raise RuntimeError(f"Fixture command failed (exit {result.returncode}); private output: {evidence}")
     return result
 
 

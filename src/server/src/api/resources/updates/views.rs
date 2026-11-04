@@ -7,6 +7,12 @@ use uuid::Uuid;
 pub struct UpdateStatusView {
     pub instance_id: Uuid,
     pub installed_version: String,
+    /// PostgreSQL server version; absence never means the engine is up to date.
+    #[schema(required = true)]
+    pub database_version: Option<String>,
+    #[schema(required = true)]
+    pub database_available: Option<String>,
+    pub database_managed: bool,
     pub channel: String,
     pub checks_allowed: bool,
     pub checks_enabled: bool,
@@ -51,6 +57,9 @@ impl UpdateStatusView {
         Self {
             instance_id,
             installed_version: status.installed_version,
+            database_version: None,
+            database_available: None,
+            database_managed: false,
             channel: status.channel.as_str().into(),
             checks_allowed,
             checks_enabled,
@@ -69,6 +78,8 @@ impl UpdateStatusView {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateOperationView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub component: Option<String>,
     pub id: Uuid,
     pub version: String,
     pub phase: String,
@@ -77,8 +88,14 @@ pub struct UpdateOperationView {
 impl From<citadel_updates::UpdateOperation> for UpdateOperationView {
     fn from(operation: citadel_updates::UpdateOperation) -> Self {
         Self {
+            component: operation.plan.database.as_ref().map(|_| "Database".into()),
             id: operation.id,
-            version: operation.plan.target.version,
+            version: operation
+                .plan
+                .database
+                .as_ref()
+                .map(|db| db.target_display())
+                .unwrap_or(operation.plan.target.version),
             phase: format!("{:?}", operation.phase),
             updated_at: operation.updated_at,
         }
@@ -87,6 +104,8 @@ impl From<citadel_updates::UpdateOperation> for UpdateOperationView {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateReviewView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub component: Option<String>,
     pub id: Uuid,
     pub installed_version: String,
     pub target_version: String,
@@ -95,9 +114,24 @@ pub struct UpdateReviewView {
 impl From<citadel_updates::UpdatePlan> for UpdateReviewView {
     fn from(plan: citadel_updates::UpdatePlan) -> Self {
         Self {
+            component: plan.database.as_ref().map(|_| "Database".into()),
             id: plan.id,
-            installed_version: plan.source.version,
-            target_version: plan.target.version,
+            installed_version: plan
+                .database
+                .as_ref()
+                .map(|db| {
+                    format!(
+                        "{}.{}",
+                        db.source_version / 10000,
+                        db.source_version % 10000
+                    )
+                })
+                .unwrap_or(plan.source.version),
+            target_version: plan
+                .database
+                .as_ref()
+                .map(|db| db.target_display())
+                .unwrap_or(plan.target.version),
             expires_at: plan.expires_at,
         }
     }

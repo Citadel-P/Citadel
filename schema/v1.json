@@ -20931,6 +20931,9 @@
       "ReviewUpdateInput": {
         "additionalProperties": false,
         "properties": {
+          "database": {
+            "type": "boolean"
+          },
           "version": {
             "type": "string"
           }
@@ -27731,6 +27734,12 @@
       },
       "UpdateOperationView": {
         "properties": {
+          "component": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -27763,6 +27772,12 @@
       },
       "UpdateReviewView": {
         "properties": {
+          "component": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "expiresAt": {
             "format": "date-time",
             "type": "string"
@@ -27977,6 +27992,22 @@
           "checksEnabled": {
             "type": "boolean"
           },
+          "databaseAvailable": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "databaseManaged": {
+            "type": "boolean"
+          },
+          "databaseVersion": {
+            "description": "PostgreSQL server version; absence never means the engine is up to date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "installationUnavailableReason": {
             "type": [
               "string",
@@ -28018,6 +28049,9 @@
         "required": [
           "instanceId",
           "installedVersion",
+          "databaseVersion",
+          "databaseAvailable",
+          "databaseManaged",
           "channel",
           "checksAllowed",
           "checksEnabled",

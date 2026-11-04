@@ -214,11 +214,17 @@ pub(super) async fn observe_with_helper(
             .map(|v| v.as_str().map(str::to_owned).ok_or_else(failed))
             .collect()
     };
-    let expected_members = if stopped {
+    let mut expected_members = if stopped {
         vec![database["Id"].as_str().ok_or_else(failed)?]
     } else {
         ids.iter().map(String::as_str).collect()
     };
+    if let Some(helper) = helper.filter(|id| members.contains_key(*id)) {
+        let raw = docker.json(&["container", "inspect", helper]).await?;
+        if single(&raw)?["HostConfig"]["NetworkMode"] == checked.network {
+            expected_members.push(helper);
+        }
+    }
     if members.len() != expected_members.len()
         || expected_members.iter().any(|id| !members.contains_key(*id))
         || !aliases(database)?.iter().any(|alias| alias == "pg_db")

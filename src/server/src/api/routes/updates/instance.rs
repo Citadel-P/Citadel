@@ -111,8 +111,15 @@ async fn respond(
             state.identity.installation_policy().update_checks_allowed,
             settings.update_checks_enabled,
         );
+        view.database_version = state.checker.database_version().await;
         if let Some(installer) = &state.installer {
             view.operation = installer.active().await?.map(Into::into);
+            if view.operation.is_none()
+                && let Ok(database) = installer.database_update(&CancellationToken::new()).await
+            {
+                view.database_managed = true;
+                view.database_available = database.map(|db| db.target_display());
+            }
             if state.identity.installation_policy().update_checks_allowed {
                 view.installation_unavailable_reason = None;
             }
@@ -169,6 +176,13 @@ async fn review(
     let result = async {
         let principal = require_human_administrator(principal)?;
         let installer = installation(&state)?;
+        if input.database {
+            return installer
+                .review_database(actor(principal))
+                .await
+                .map(UpdateReviewView::from)
+                .map_err(ApiError::from);
+        }
         let notice = state.checker.status().await?.available.ok_or_else(|| {
             ApiError::Conflict("Check for updates before reviewing a release.".into())
         })?;

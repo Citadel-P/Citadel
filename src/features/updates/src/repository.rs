@@ -18,6 +18,9 @@ pub struct UpdateActor {
 }
 
 pub trait ReleaseCheckRepository: Send + Sync {
+    /// Version of the connected PostgreSQL server, never the client binary or image tag.
+    fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>>;
+
     /// Availability must come from verified transition qualification, not release discovery.
     fn observe_core_availability<'a>(
         &'a self,

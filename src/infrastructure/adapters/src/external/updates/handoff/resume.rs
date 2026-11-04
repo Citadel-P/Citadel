@@ -113,7 +113,7 @@ pub async fn completed_update_target(
     }
     let observed = observe_accepted_target(
         &docker,
-        &intent.registration,
+        &execution.target_registration(&intent)?,
         &replacement.configuration,
         None,
     )
@@ -174,7 +174,7 @@ async fn quiesce_accepted_helper(
     }
     let observed = observe_accepted_target(
         &docker,
-        &intent.registration,
+        &execution.target_registration(&intent)?,
         &replacement.configuration,
         Some(helper),
     )

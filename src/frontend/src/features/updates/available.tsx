@@ -5,7 +5,7 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { useCheckInstanceUpdates } from './queries';
-import { CoreStatusBadge } from './status-badge';
+import { DatabaseStatusBadge, CoreStatusBadge } from './status-badge';
 
 export function AvailableUpdateHeading({ status }: { status?: UpdateStatusView }) {
   const { mutate, isPending, isError } = useCheckInstanceUpdates();
@@ -99,6 +99,35 @@ export function CoreUpdateAvailability({
           </a>
         </AlertMessage>
       )}
+    </div>
+  );
+}
+
+export function DatabaseUpdateAvailability({ data }: { data?: UpdateStatusView }) {
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <span>PostgreSQL {data?.databaseVersion ?? '—'}</span>
+        {data?.databaseAvailable && (
+          <>
+            <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
+            <span>{data.databaseAvailable}</span>
+          </>
+        )}
+        <DatabaseStatusBadge status={data} />
+      </div>
+      <p className="text-muted-foreground">
+        {data?.databaseManaged
+          ? 'PostgreSQL 18 minor updates require review and restart Core. The existing data directory is preserved.'
+          : 'Manage this database through its provider or Compose maintenance.'}{' '}
+        <a
+          className="underline"
+          href="https://docs.citadelplane.com/operations/upgrade-and-rollback/#postgresql-engine-maintenance"
+          target="_blank"
+          rel="noreferrer">
+          Database upgrade guide
+        </a>
+      </p>
     </div>
   );
 }

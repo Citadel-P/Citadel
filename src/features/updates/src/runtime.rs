@@ -26,6 +26,15 @@ pub trait UpdateHandoffRuntime: Send + Sync {
 }
 
 pub trait UpdateInstallationRuntime: Send + Sync {
+    /// Advisory engine availability for status reads. Must not acquire update
+    /// ownership or run installation preflight; review/approval call source().
+    fn database_update<'a>(
+        &'a self,
+        _cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<crate::DatabaseUpdatePlan>, UpdateError>> {
+        Box::pin(async { Ok(None) })
+    }
+
     /// Fence the old executor, verify the unchanged source and archive its evidence.
     fn recover_source<'a>(
         &'a self,

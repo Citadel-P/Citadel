@@ -1,12 +1,13 @@
 import { useId, useState } from 'react';
-import { Info, RefreshCw } from 'lucide-react';
+import { ChevronDown, Info, RefreshCw } from 'lucide-react';
 import { ActivityResourceType } from '@/api/generated/api.types';
 import { UpdateCheckSettings } from './config';
 import { UpdateProgress } from './installation';
-import { AgentStatusBadge, AgentStatusSummary, CoreStatusBadge } from './status-badge';
+import { AgentStatusBadge, AgentSummaryBadge, CoreStatusBadge, DatabaseStatusBadge } from './status-badge';
 import { Timestamp } from '@/components/custom/timestamp';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import Loader from '@/components/ui/loader';
 import { useRead } from '@/lib/hooks';
 import type { TabbedResourceComponents } from '@/pages/types';
@@ -105,28 +106,45 @@ function UpdateInfo() {
           </p>
         )}
         <div className="border-t p-4 text-xs">
-          <h3 className="mb-2 font-medium">Agents</h3>
-          <AgentStatusSummary state={agents.data?.data} failed={agents.isError} />
-          {agents.data?.data.checkError && <p className="mt-2 text-muted-foreground">{agents.data.data.checkError}</p>}
-          {!!agents.data?.data.targets.length && (
-            <ul className="mt-3 max-h-56 space-y-3 overflow-y-auto">
-              {agents.data.data.targets.map((target) => (
-                <li key={target.id} className="space-y-1">
-                  <div className="flex justify-between gap-3">
-                    <span className="min-w-0 break-words font-medium">{target.name}</span>
-                    <AgentStatusBadge status={target.status} />
-                  </div>
-                  <p className="break-all font-mono text-muted-foreground">
-                    {target.installedVersion ?? 'Version unknown'}
-                    {target.status === 'Available' && target.availableVersion && ` → ${target.availableVersion}`}
-                  </p>
-                  {target.nodes > 1 && <p className="text-muted-foreground">{target.nodes} nodes</p>}
-                  {target.reason && <p className="text-muted-foreground">{target.reason}</p>}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-medium">Database</h3>
+            <DatabaseStatusBadge status={status} />
+          </div>
+          <p className="mt-2 font-mono text-muted-foreground">PostgreSQL {status?.databaseVersion ?? '—'}</p>
         </div>
+        <Collapsible className="border-t p-4 text-xs">
+          <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left">
+            <span className="mr-auto font-medium">Agents</span>
+            <AgentSummaryBadge state={agents.data?.data} failed={agents.isError} />
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {agents.data?.data.checkError && (
+              <p className="mt-2 text-muted-foreground">{agents.data.data.checkError}</p>
+            )}
+            {!!agents.data?.data.targets.length && (
+              <ul className="mt-3 max-h-56 space-y-3 overflow-y-auto">
+                {agents.data.data.targets.map((target) => (
+                  <li key={target.id} className="space-y-1">
+                    <div className="flex justify-between gap-3">
+                      <span className="min-w-0 break-words font-medium">{target.name}</span>
+                      <AgentStatusBadge status={target.status} />
+                    </div>
+                    <p className="break-all font-mono text-muted-foreground">
+                      {target.installedVersion ?? 'Version unknown'}
+                      {target.status === 'Available' && target.availableVersion && ` → ${target.availableVersion}`}
+                    </p>
+                    {target.nodes > 1 && <p className="text-muted-foreground">{target.nodes} nodes</p>}
+                    {target.reason && <p className="text-muted-foreground">{target.reason}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </HoverCardContent>
     </HoverCard>
   );

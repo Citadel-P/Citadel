@@ -46,6 +46,7 @@ async fn scheduled_check_rechecks_due_time_after_a_concurrent_manual_check() {
 
 #[derive(Default)]
 struct Store {
+    database_version: AtomicUsize,
     state: Mutex<CheckState>,
     availability: Mutex<Vec<Option<String>>>,
     reads: AtomicUsize,
@@ -56,6 +57,15 @@ struct Store {
     resume: Notify,
 }
 impl ReleaseCheckRepository for Store {
+    fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>> {
+        Box::pin(async {
+            if self.fail.load(Ordering::SeqCst) {
+                return Err(UpdateError::Unavailable("private database endpoint".into()));
+            }
+            Ok(self.database_version.load(Ordering::SeqCst) as u32)
+        })
+    }
+
     fn observe_core_availability<'a>(
         &'a self,
         _: &'a str,
@@ -342,4 +352,25 @@ async fn core_availability_requires_successful_check_and_transition_qualificatio
             .iter()
             .all(Option::is_none)
     );
+}
+
+#[tokio::test]
+async fn database_version_reports_the_connected_engine_without_claiming_availability() {
+    let (service, store, source, _) = fixture();
+    for (number, expected) in [
+        (170011, Some("17.11")),
+        (180006, Some("18.6")),
+        (180000, Some("18.0")),
+        (0, None),
+        (90624, None),
+        (1000000, None),
+    ] {
+        store.database_version.store(number, Ordering::SeqCst);
+        assert_eq!(service.database_version().await.as_deref(), expected);
+    }
+    store.fail.store(true, Ordering::SeqCst);
+    assert!(service.database_version().await.is_none());
+    assert_eq!(store.writes.load(Ordering::SeqCst), 0);
+    assert_eq!(source.calls.load(Ordering::SeqCst), 0);
+    assert!(store.availability.lock().unwrap().is_empty());
 }

@@ -10,6 +10,15 @@ vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPla
 vi.mock('@/components/custom/task-sheet', () => ({ default: () => null }));
 vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => (value: string) => value }));
 
+beforeEach(() => {
+  server.use(
+    http.get('http://localhost/api/v1/license/entitlements', () => HttpResponse.json({ capabilities: [] })),
+    http.get('http://localhost/api/v1/updates/agents', () =>
+      HttpResponse.json({ targets: [], schedule: { targets: [], enabled: false, cron: '0 3 * * *', timeZone: 'UTC' } }),
+    ),
+  );
+});
+
 it('updates the saved frequency through the existing installation realtime notification', async () => {
   let hours = 6;
   const lastAttempt = new Date().toISOString();
@@ -47,17 +56,58 @@ it('updates the saved frequency through the existing installation realtime notif
     },
   );
   await screen.findByRole('heading', { name: 'Updates' }, { timeout: 5000 });
-  expect(await screen.findByRole('combobox', { name: 'Check frequency' })).toHaveTextContent('Every 6 hours');
+  expect(await screen.findByRole('combobox', { name: 'Frequency' })).toHaveTextContent('Every 6 hours');
   hours = 12;
   act(() => fake.emit('InstallationSettingsChanged'));
   await waitFor(() =>
-    expect(screen.getByRole('combobox', { name: 'Check frequency' })).toHaveTextContent('Every 12 hours'),
+    expect(screen.getByRole('combobox', { name: 'Frequency' })).toHaveTextContent('Every 12 hours'),
   );
   const expectedCheck = new Date(Date.parse(lastAttempt) + 12 * 3_600_000).toISOString();
-  const schedule = screen.getByText('Next automatic check:');
-  expect(schedule).toHaveTextContent(expectedCheck);
-  expect(schedule.querySelector('time')).toHaveAttribute('datetime', expectedCheck);
-  expect(schedule.querySelector('time')).toHaveAttribute('title', expectedCheck);
+  expect(screen.getByText('Next automatic check')).toBeVisible();
+  const schedule = screen.getByTitle(expectedCheck);
+  expect(schedule).toHaveAttribute('datetime', expectedCheck);
+  expect(schedule).toHaveAttribute('title', expectedCheck);
+});
+
+it('refreshes the database version through the existing update notification', async () => {
+  let databaseVersion = '17.11';
+  const fake = new FakeRealtimeConnection();
+  server.use(
+    http.get('http://localhost/api/v1/profile', () => HttpResponse.json({ authorization: { isAdministrator: true } })),
+    http.get('http://localhost/api/v1/installation/settings', () =>
+      HttpResponse.json({
+        updateChecksEnabled: true,
+        updateChecksAllowed: true,
+        updateCheckIntervalHours: 6,
+        mfaPolicy: 'Optional',
+        minimumMfaPolicy: 'Optional',
+      }),
+    ),
+    http.get('http://localhost/api/v1/updates', () =>
+      HttpResponse.json({
+        instanceId: '019a0000-0000-7000-8000-000000000001',
+        installedVersion: '0.1.1',
+        databaseVersion,
+        channel: 'stable',
+        checksAllowed: true,
+        checksEnabled: true,
+      }),
+    ),
+  );
+  renderCitadel(
+    <Routes>
+      <Route path=":type/:tab" element={<ResourcePage />} />
+    </Routes>,
+    {
+      route: '/updates/config',
+      groups: { connectionFactory: () => fake, startConnection: (connection) => connection.start() },
+    },
+  );
+  expect(await screen.findByText('PostgreSQL 17.11')).toBeVisible();
+  databaseVersion = '18.6';
+  act(() => fake.emit('ApplicationInfoChanged'));
+  expect(await screen.findByText('PostgreSQL 18.6')).toBeVisible();
+  expect(screen.queryByText('PostgreSQL 17.11')).not.toBeInTheDocument();
 });
 
 it('receives scoped activity events without refreshing the history list', async () => {

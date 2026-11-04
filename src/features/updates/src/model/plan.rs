@@ -6,6 +6,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdatePlan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub database: Option<super::DatabaseUpdatePlan>,
     pub id: Uuid,
     pub instance_id: Uuid,
     pub source: CoreIdentity,
@@ -38,7 +40,10 @@ impl UpdatePlan {
             || !is_sha256(&self.target.catalog_sha256)
             || self.source.architecture != self.target.architecture
             || !matches!(self.source.architecture.as_str(), "amd64" | "arm64")
-            || source >= target
+            || match &self.database {
+                Some(database) => self.source != self.target || database.validate().is_err(),
+                None => source >= target,
+            }
             || source.pre.is_empty() != target.pre.is_empty()
             || !self.checkpoint_directory.starts_with('/')
             || self.checkpoint_directory.contains('\0')

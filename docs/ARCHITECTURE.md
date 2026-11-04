@@ -130,7 +130,7 @@ reuse existing supersession. System-owned Info rules work in Community, with ext
 channels assigned through the usual Alert Rules configuration.
 
 Agent updates share the Updates page, release verification, Activities and realtime
-notifier. The shared **Review and update** dialog selects either Core or Agents;
+notifier. The shared **Review and update** dialog selects Core, PostgreSQL or Agents;
 manual operations stay separate, and Agent progress remains in that dialog using
 existing realtime invalidation. It does not coordinate a browser-owned combined rollout.
 They have explicit installation targets and one durable sequential selection;
@@ -336,7 +336,7 @@ state is preserved and blocks relaunch; it is never converted into permission to
 
 The helper has a read-only root filesystem, the registered installer/state/socket
 binds at their original paths, and Core data mounted read-only at `/app/data`. It
-shares the exact PostgreSQL container's network namespace. Its profile prohibits
+shares the exact PostgreSQL container's network namespace for Core updates (the installation bridge for an explicit database update). Its profile prohibits
 privileged execution, restart policies, automatic removal and HTTP health checks.
 Docker copies the network donor's hostname when this helper starts. The driver
 therefore proves its process identity by comparing its private mount namespace
@@ -630,6 +630,45 @@ validates the immutable checkpoint, restores through the shared system recovery
 implementation, then checks catalog, claim identity and credential decryption before
 atomically recording failure and releasing the restored claim. Original host evidence
 and the original database remain intact; recovery never fabricates target success.
+
+### PostgreSQL engine updates
+
+The administrator-only Updates status reports the live `databaseVersion` through
+its existing repository. A registered Compose installation can also offer the
+PostgreSQL image qualified by this Core build (currently Alpine 18.6). External
+or unregistered databases remain manually managed. Unknown versions never imply
+that an engine is current.
+
+Status uses the startup-validated registration and a bounded engine-version read;
+it does not launch preflight helpers or acquire the installation lock. Availability
+is advisory until review and approval recheck the live installation.
+
+An explicit database review uses the existing instance update service, review,
+claim, journal, checkpoint, Activity, and target-acceptance lifecycle. Its optional
+`UpdatePlan.database` pins the engine versions and official image digest while
+requiring identical source/target Core identities. Scheduled Core updates cannot
+implicitly upgrade the database. Approval rechecks the registered source.
+
+The detached executor uses the installation bridge for database operations so it
+survives replacing PostgreSQL. Core-only operations retain the exact PostgreSQL
+network namespace and unchanged-database invariant. Database replacement permits
+only `PG_IMAGE` and `PG_DATA` selector changes. It retains daemon, volume and
+network identity, records mutation intent before stopping the engine, verifies the
+replacement container/version, and binds its incarnation before target acceptance.
+Target startup distinguishes a database operation by its actual engine version;
+it still verifies the exact Core container, catalog, keys and committed receipt.
+No timeout replays replacement or silently restarts the source. Temporary Docker and inspection files
+use the detached helper's bounded `/tmp` mount, never the durable update-state
+directory, so failed preflight cannot leave scratch files blocking source recovery.
+
+Citadel's minimum PostgreSQL version is 18. The current executor performs only
+qualified minor updates within 18, retaining the existing data directory. It rejects
+older engines, replication and external tablespaces; major-version transitions are
+not enabled without separate qualification. Core needs only the PostgreSQL client
+utilities already used for checkpoints, with no bundled database server toolchains.
+Engine updates are restricted to Alpine clusters owned by UID 70 in the versioned
+`/var/lib/postgresql/18/docker` layout. External databases and custom layouts are
+never replaced. Failures retain evidence and maintenance ownership for explicit recovery.
 
 ### Update interruption reconciliation
 

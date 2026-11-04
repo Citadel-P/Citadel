@@ -42,6 +42,13 @@ Core's `.env` does not configure remote Agents.
 | `CITADEL_PASSWORDS_MINIMUM_LENGTH` | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
 | `CITADEL_HTTP_OPENAPI_ENABLED` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
+For explicit [PostgreSQL maintenance](/operations/upgrade-and-rollback#postgresql-engine-maintenance),
+`PG_IMAGE` selects an official PostgreSQL image digest and `PG_DATA` selects its data
+directory (default `/var/lib/postgresql/18/docker`). These are Compose controls,
+not application settings. Changing the major image version alone does not upgrade
+the data. The optional maintenance overlay uses `PG_UPGRADE_IMAGE` for the locally
+built helper and `PG_SOURCE_DATA` for its source directory.
+
 `CITADEL_IMAGE`, `COMPOSE_PROJECT_NAME`, and host port settings control Compose.
 The application settings must reach the Core container; the supplied Compose
 file reads `.env` for this purpose. Recreate Core after editing it:

@@ -82,7 +82,7 @@ impl ExecutionJournal {
         let replacement = self.replacement.as_ref().ok_or_else(conflict)?;
         let observed = observe_replacement(
             docker,
-            &intent.registration,
+            &self.target_registration(intent)?,
             &replacement.configuration,
             Some(&self.acknowledgement.binding.helper_container_id),
         )
@@ -91,9 +91,13 @@ impl ExecutionJournal {
         if verification::release_image(docker, &intent.operation.plan.target).await?
             != replacement.target_image_id
             || observed.image_id != replacement.target_image_id
-            || observed.retained_runtime_sha256 != replacement.retained_runtime_sha256
+            || (intent.operation.plan.database.is_none()
+                && observed.retained_runtime_sha256 != replacement.retained_runtime_sha256)
         {
             return Err(conflict());
+        }
+        if let Some(database) = &replacement.database {
+            database.verify(docker, intent).await?;
         }
         Ok(observed)
     }

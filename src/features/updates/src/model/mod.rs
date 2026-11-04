@@ -17,3 +17,6 @@ mod agents;
 pub use agents::*;
 mod schedule;
 pub use schedule::*;
+
+mod database;
+pub use database::DatabaseUpdatePlan;

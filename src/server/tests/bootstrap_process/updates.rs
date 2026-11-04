@@ -307,6 +307,7 @@ async fn a_valid_foreign_target_claim_cannot_enter_startup_migrations() {
     };
     let operation = UpdateOperation::approve(
         UpdatePlan {
+            database: None,
             id: Uuid::now_v7(),
             instance_id: Uuid::now_v7(),
             source: source.clone(),

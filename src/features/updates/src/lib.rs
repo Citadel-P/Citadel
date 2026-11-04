@@ -10,8 +10,8 @@ mod service;
 
 pub use error::UpdateError;
 pub use model::{
-    CompletionReceipt, CoreIdentity, InstallationKind, InstallationSnapshot, UPDATE_PROTOCOL,
-    UpdateJournal, UpdateOperation, UpdatePhase, UpdatePlan,
+    CompletionReceipt, CoreIdentity, DatabaseUpdatePlan, InstallationKind, InstallationSnapshot,
+    UPDATE_PROTOCOL, UpdateJournal, UpdateOperation, UpdatePhase, UpdatePlan,
 };
 pub use read_models::{
     CheckState, InspectedRelease, ReleaseCheckStatus, UpdateDatabaseState, UpdateDrainBlocker,

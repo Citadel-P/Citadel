@@ -20,6 +20,8 @@ use tokio_util::sync::CancellationToken;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct CoreReplacementIntent {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) database: Option<super::database::DatabaseReplacement>,
     pub(super) configuration: CheckedCoreReplacement,
     pub(super) checkpoint: PreparedUpdateCheckpoint,
     pub(super) target_image_id: String,
@@ -27,7 +29,7 @@ pub(super) struct CoreReplacementIntent {
 }
 
 impl OwnedUpdateHelper {
-    /// Submit exactly one Core-only Compose replacement. This does not verify
+    /// Submit one reviewed Compose replacement, including PostgreSQL when selected. This does not verify
     /// target startup, import completion, release maintenance or resume source.
     /// Await cancellation cleanup; any error retains intent and prohibits replay.
     pub async fn replace_core(
@@ -45,7 +47,12 @@ impl OwnedUpdateHelper {
             process,
             cancellation,
             home: home.path(),
-            deadline: Instant::now() + Duration::from_secs(600),
+            deadline: Instant::now()
+                + Duration::from_secs(if self.intent.operation.plan.database.is_some() {
+                    1200
+                } else {
+                    600
+                }),
         };
         let checkpoint =
             verify_checkpoint_integrity(&self.state, &self.owner, &journal.operation, cancellation)
@@ -57,13 +64,19 @@ impl OwnedUpdateHelper {
             project: reg.project.clone(),
             compose_files: reg.compose_files.clone(),
         };
-        let candidate = inputs
-            .prepare_replacement(
-                &self.intent.operation.plan.target.image,
-                process,
-                cancellation,
-            )
-            .await?;
+        let candidate = if let Some(database) = &self.intent.operation.plan.database {
+            inputs
+                .prepare_database_replacement(database, process, cancellation)
+                .await?
+        } else {
+            inputs
+                .prepare_replacement(
+                    &self.intent.operation.plan.target.image,
+                    process,
+                    cancellation,
+                )
+                .await?
+        };
         if candidate.checked != checked {
             return Err(conflict());
         }
@@ -72,13 +85,19 @@ impl OwnedUpdateHelper {
         let retained_runtime_sha256 = self.check_stopped_runtime(process, cancellation).await?;
         let core = verification::container(&docker, &reg.core_container_id).await?;
         let database = verification::container(&docker, &reg.database_container_id).await?;
-        if core["Image"] == target_image_id {
+        if core["Image"] == target_image_id && self.intent.operation.plan.database.is_none() {
             return Err(conflict());
         }
         if self.check_grant()? != execution || cancellation.is_cancelled() {
             return Err(conflict());
         }
+        let database_intent = if self.intent.operation.plan.database.is_some() {
+            Some(super::database::DatabaseReplacement::prepare(&docker, &self.intent).await?)
+        } else {
+            None
+        };
         let intent = CoreReplacementIntent {
+            database: database_intent,
             retained_runtime_sha256,
             configuration: checked,
             checkpoint,
@@ -130,6 +149,9 @@ impl OwnedUpdateHelper {
         let current = verification::container(&docker, &reg.database_container_id).await?;
         same_runtime(&database, &current)?;
         verification::database_running(&current)?;
+        if self.intent.operation.plan.database.is_some() {
+            self.replace_database(&docker, &mut execution).await?;
+        }
         let mut args = vec![
             "compose",
             "--project-name",
@@ -151,6 +173,9 @@ impl OwnedUpdateHelper {
             "never",
             "server",
         ]);
+        if self.intent.operation.plan.database.is_some() {
+            args.insert(args.len() - 1, "--force-recreate");
+        }
         self.state.verify_lock(&self.owner)?;
         if reg.fingerprint(std::path::Path::new("/"))?
             != intent.configuration.target_configuration_sha256

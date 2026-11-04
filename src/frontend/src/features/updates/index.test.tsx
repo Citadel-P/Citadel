@@ -35,6 +35,9 @@ vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () 
 const status = {
   instanceId: '019a0000-0000-7000-8000-000000000001',
   installedVersion: '0.1.1',
+  databaseVersion: '18.6',
+  databaseAvailable: null,
+  databaseManaged: false,
   channel: 'stable',
   checksAllowed: true,
   checksEnabled: true,
@@ -128,7 +131,11 @@ it('has exactly Config and Activities tabs and checks without installing or refe
     'href',
     'https://docs.citadelplane.com/operations/upgrade-and-rollback/',
   );
-  expect(screen.getByText(status.installationUnavailableReason, { exact: false })).toBeVisible();
+  expect(
+    within(document.getElementById('available-updates')!).getByText(status.installationUnavailableReason, {
+      exact: false,
+    }),
+  ).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Check now' }));
   await waitFor(() => expect(check).toHaveBeenCalledOnce());
   expect(await screen.findByText('0.1.3')).toBeVisible();
@@ -376,7 +383,14 @@ it('keeps current Agents visible and updates only the selected outdated Agent wh
   await user.click(screen.getByRole('button', { name: 'Update information' }));
   const info = await screen.findByRole('region', { name: 'Update information' });
   expect(info).toHaveTextContent('Citadel CoreUp to date');
-  expect(info).toHaveTextContent('3 registered1 update available2 up to date');
+  expect(info).toHaveTextContent('DatabaseManual updates');
+  expect(within(info).getByText('PostgreSQL 18.6')).toBeVisible();
+  expect(info).toHaveTextContent('1 Agent needs attention');
+  expect(within(info).queryByText('Agent C')).not.toBeInTheDocument();
+  const expand = within(info).getByRole('button', { name: /Agents.*1 Agent needs attention/ });
+  expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await user.click(expand);
+  expect(expand).toHaveAttribute('aria-expanded', 'true');
   expect(within(info).getByText('Agent C').closest('li')).toHaveTextContent('0.1.0 → 0.1.1');
   await user.keyboard('{Escape}');
   expect(screen.getByRole('button', { name: 'Review and update' })).toBeEnabled();
@@ -396,7 +410,7 @@ it('keeps current Agents visible and updates only the selected outdated Agent wh
   expect(screen.queryByTestId('activity-drawer')).not.toBeInTheDocument();
 });
 
-it('uses one form with the three sections and a compact Community schedule explanation', async () => {
+it('uses one form with the three sections and visible disabled Community schedule controls', async () => {
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
   await screen.findByRole('button', { name: 'Check now' });
   const menus = screen.getAllByRole('navigation', { name: 'Form sections' });
@@ -413,8 +427,8 @@ it('uses one form with the three sections and a compact Community schedule expla
   expect(document.querySelector(schedule.getAttribute('href')!)).toHaveTextContent(
     'Team enables scheduled installation.',
   );
-  expect(screen.queryByRole('checkbox', { name: 'Update Citadel Core' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('textbox', { name: 'Cron' })).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Update Citadel Core' })).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: 'Cron' })).toBeDisabled();
 });
 
 it('keeps failed Agent schedule edits without resaving successful Core settings', async () => {
@@ -564,7 +578,7 @@ it.each([
     );
     const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
     const enabled = await screen.findByRole('switch', { name: 'Scheduled updates enabled' });
-    expect(screen.queryByRole('textbox', { name: 'Cron' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Cron' })).toBeDisabled();
     await user.click(enabled);
     if (includeCore) await user.click(screen.getByRole('checkbox', { name: 'Update Citadel Core' }));
     if (includeAgent) {
@@ -589,7 +603,7 @@ it.each([
   },
 );
 
-it('lets an expired Team disable the retained scope without exposing a long disabled form', async () => {
+it('lets an expired Team disable the retained scope while keeping the saved fields visible and disabled', async () => {
   const save = vi.fn();
   const schedule = { includeCore: true, enabled: true, targets: ['A'], cron: '0 3 * * 0', timeZone: 'Europe/Paris' };
   server.use(
@@ -603,8 +617,35 @@ it('lets an expired Team disable the retained scope without exposing a long disa
   );
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
   await user.click(await screen.findByRole('switch', { name: 'Scheduled updates enabled' }));
-  expect(screen.queryByRole('textbox', { name: 'Cron' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Cron' })).toBeDisabled();
   expect(document.getElementById('scheduled-updates')).toHaveTextContent('Paused');
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
   await waitFor(() => expect(save).toHaveBeenCalledWith({ ...schedule, enabled: false }));
+});
+
+it('shows the live database version without claiming an engine update is available', async () => {
+  server.use(
+    http.get('http://localhost/api/v1/updates', () =>
+      HttpResponse.json({ ...status, available: null, databaseVersion: '17.11' }),
+    ),
+  );
+  renderCitadel(<UpdatesPage />, { route: '/updates' });
+  expect(await screen.findByText('PostgreSQL 17.11')).toBeVisible();
+  expect(screen.getByText('Manual updates')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Review and update' })).toBeDisabled();
+});
+
+it('keeps Core status usable when the database version cannot be read', async () => {
+  server.use(
+    http.get('http://localhost/api/v1/updates', () =>
+      HttpResponse.json({ ...status, available: null, databaseVersion: null }),
+    ),
+  );
+  const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
+  expect(await screen.findByText('Version unavailable')).toBeVisible();
+  expect(screen.getByText('Up to date')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Update information' }));
+  const card = await screen.findByRole('region', { name: 'Update information' });
+  expect(within(card).getByText('Version unavailable')).toBeVisible();
+  expect(within(card).queryByText('Manual updates')).not.toBeInTheDocument();
 });

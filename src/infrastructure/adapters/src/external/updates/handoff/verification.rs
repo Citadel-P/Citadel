@@ -153,7 +153,9 @@ pub(super) async fn helper_container(
     )?;
     // Docker copies the network donor's hostname on start. A created helper
     // still has its own default hostname; neither hostname is process identity.
-    let hostname = if actual["State"]["Status"] == "created" {
+    let hostname = if actual["State"]["Status"] == "created"
+        || intent.operation.plan.database.is_some()
+    {
         id[..12].to_owned()
     } else {
         container(docker, &intent.registration.database_container_id).await?["Config"]["Hostname"]
@@ -162,6 +164,22 @@ pub(super) async fn helper_container(
             .ok_or_else(conflict)?
             .to_owned()
     };
+    if intent.operation.plan.database.is_some() {
+        let networks = actual["NetworkSettings"]["Networks"]
+            .as_object()
+            .ok_or_else(conflict)?;
+        if networks.len() != 1 || !networks.contains_key(&intent.registration.network) {
+            return Err(conflict());
+        }
+        let endpoint = &networks[&intent.registration.network];
+        if ["Aliases", "DNSNames"].iter().any(|field| {
+            endpoint[*field]
+                .as_array()
+                .is_some_and(|names| names.iter().any(|name| name == "pg_db"))
+        }) {
+            return Err(conflict());
+        }
+    }
     if actual["Config"]["Hostname"] != hostname {
         return Err(conflict());
     }
@@ -180,9 +198,20 @@ pub(super) async fn helper_container(
         || actual["RestartCount"] != 0
         || actual["HostConfig"]["RestartPolicy"]["Name"] != "no"
         || actual["HostConfig"]["NetworkMode"]
-            != format!("container:{}", intent.registration.database_container_id)
+            != if intent.operation.plan.database.is_some() {
+                intent.registration.network.clone()
+            } else {
+                format!("container:{}", intent.registration.database_container_id)
+            }
         || actual["HostConfig"]["Privileged"] != false
         || actual["HostConfig"]["ReadonlyRootfs"] != true
+        || actual["HostConfig"]["Tmpfs"] != json!({"/tmp":"rw,noexec,nosuid,size=64m"})
+        || !actual["Config"]["Env"].as_array().is_some_and(|env| {
+            env.iter()
+                .filter_map(Value::as_str)
+                .filter(|value| value.starts_with("TMPDIR="))
+                .eq(["TMPDIR=/tmp"])
+        })
         || actual["HostConfig"]["AutoRemove"] != false
         || actual["Config"]["Healthcheck"]["Test"] != json!(["NONE"])
         || actual["Path"] != "/app/citadel-server"

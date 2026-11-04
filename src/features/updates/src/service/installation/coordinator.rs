@@ -20,6 +20,7 @@ pub enum UpdateInstallCommand {
         reservation: OwnedSemaphorePermit,
         actor: UpdateActor,
         version: String,
+        database: bool,
         response: oneshot::Sender<Result<UpdatePlan, UpdateError>>,
     },
     Approve {
@@ -81,6 +82,26 @@ impl UpdateInstallService {
         actor: UpdateActor,
         version: &str,
     ) -> Result<UpdatePlan, UpdateError> {
+        self.review_component(actor, version, false).await
+    }
+
+    pub async fn review_database(&self, actor: UpdateActor) -> Result<UpdatePlan, UpdateError> {
+        self.review_component(actor, "", true).await
+    }
+
+    pub async fn database_update(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<crate::DatabaseUpdatePlan>, UpdateError> {
+        self.runtime.database_update(cancellation).await
+    }
+
+    async fn review_component(
+        &self,
+        actor: UpdateActor,
+        version: &str,
+        database: bool,
+    ) -> Result<UpdatePlan, UpdateError> {
         let reservation = self.reserve()?;
         let (response, receiver) = oneshot::channel();
         self.queue
@@ -88,6 +109,7 @@ impl UpdateInstallService {
                 reservation,
                 actor,
                 version: version.into(),
+                database,
                 response,
             })
             .map_err(|_| UpdateError::Conflict("Another update request is running.".into()))?;
@@ -100,9 +122,38 @@ impl UpdateInstallService {
         &self,
         actor: UpdateActor,
         version: &str,
+        database: bool,
         cancellation: &CancellationToken,
     ) -> Result<UpdatePlan, UpdateError> {
-        let plan = self.prepare_scheduled(version, cancellation).await?;
+        let plan = if database {
+            let source = self.runtime.source(cancellation).await?;
+            let database = self
+                .runtime
+                .database_update(cancellation)
+                .await?
+                .ok_or_else(|| {
+                    UpdateError::Conflict("No supported PostgreSQL update is available.".into())
+                })?;
+            let now = chrono::Utc::now();
+            let plan = UpdatePlan {
+                database: Some(database),
+                id: Uuid::now_v7(),
+                instance_id: source.instance_id,
+                helper_image: source.source.image.clone(),
+                target: source.source.clone(),
+                source: source.source,
+                configuration_sha256: source.configuration_sha256,
+                registration_id: source.registration_id,
+                reviewed_at: now,
+                expires_at: now + chrono::Duration::minutes(15),
+                checkpoint_directory: source.checkpoint_directory,
+                agent_requirements: source.agent_versions,
+            };
+            plan.validate(now)?;
+            plan
+        } else {
+            self.prepare_scheduled(version, cancellation).await?
+        };
         self.repository.save_review(actor, &plan).await?;
         Ok(plan)
     }
@@ -125,6 +176,7 @@ impl UpdateInstallService {
         )?;
         let now = chrono::Utc::now();
         let plan = UpdatePlan {
+            database: None,
             id: Uuid::now_v7(),
             instance_id: source.instance_id,
             helper_image: source.source.image.clone(),
@@ -273,9 +325,12 @@ impl UpdateInstallService {
                 reservation: _reservation,
                 actor,
                 version,
+                database,
                 response,
             } => {
-                let result = self.prepare_review(actor, &version, cancellation).await;
+                let result = self
+                    .prepare_review(actor, &version, database, cancellation)
+                    .await;
                 let _ = response.send(result);
                 return Ok(());
             }
@@ -296,6 +351,13 @@ impl UpdateInstallService {
             let plan = self.repository.review(actor, plan_id).await?;
             let source = self.runtime.source(cancellation).await?;
             check_source(&source, &plan)?;
+            if let Some(database) = &plan.database
+                && self.runtime.database_update(cancellation).await?.as_ref() != Some(database)
+            {
+                return Err(UpdateError::Conflict(
+                    "PostgreSQL changed since review. Review again.".into(),
+                ));
+            }
             if cancellation.is_cancelled() {
                 return Err(UpdateError::Cancelled);
             }

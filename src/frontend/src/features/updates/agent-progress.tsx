@@ -1,19 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { LoaderCircle } from 'lucide-react';
 import { useRead } from '@/lib/hooks';
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StateBadge } from '@/components/custom/state-badge';
 import { AlertMessage } from '@/components/custom/alert-message';
 
-export function AgentUpdateProgress({ payload }: { payload: { id: string } }) {
-  const query = useRead('getAgentUpdateOperation', { id: payload.id });
+export function useAgentUpdateProgress(id?: string, approved = false) {
+  const query = useRead('getAgentUpdateOperation', { id: id ?? '' }, { enabled: !!id });
   const operation = query.data?.data;
   const followed = useRef(false);
   const notified = useRef(false);
   useEffect(() => {
-    followed.current = false;
+    followed.current = approved;
     notified.current = false;
-  }, [payload.id]);
+  }, [id, approved]);
   useEffect(() => {
     if (!operation) return;
     if (!operation.finished) {
@@ -27,11 +28,21 @@ export function AgentUpdateProgress({ payload }: { payload: { id: string } }) {
     else if (operation.targets.some((t) => t.phase === 'NotStarted' || t.phase === 'Skipped'))
       toast.warning('Agent updates finished with skipped targets', { description: 'Review the target results.' });
     else toast.success('Agent updates finished');
-  }, [operation]);
+  }, [operation, id, approved]);
+  return query;
+}
+
+export function AgentUpdateProgress({ query }: { query: ReturnType<typeof useAgentUpdateProgress> }) {
+  const operation = query.data?.data;
   return (
     <div className="space-y-4">
       <DialogHeader>
-        <DialogTitle>Agent updates</DialogTitle>
+        <DialogTitle className="flex items-center gap-2">
+          {operation && !operation.finished && (
+            <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
+          )}
+          Agent updates
+        </DialogTitle>
         <DialogDescription>
           {operation?.finished ? 'Update results' : 'Progress is saved by Citadel. You can close this dialog.'}
         </DialogDescription>
@@ -46,6 +57,11 @@ export function AgentUpdateProgress({ payload }: { payload: { id: string } }) {
               <StateBadge
                 value={['Updating', 'Draining'].includes(result.phase) ? 'Running' : result.phase}
                 kind="run"
+                indicator={
+                  !operation.finished && result.phase === 'Updating' ? (
+                    <LoaderCircle aria-hidden="true" className="size-3 animate-spin motion-reduce:animate-none" />
+                  ) : undefined
+                }
                 label={result.phase === 'NotStarted' ? 'Not started' : result.phase}
               />
             </div>

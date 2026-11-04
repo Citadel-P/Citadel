@@ -12,6 +12,7 @@ fn plan() -> UpdatePlan {
         architecture: "amd64".into(),
     };
     UpdatePlan {
+        database: None,
         id: Uuid::now_v7(),
         instance_id: Uuid::now_v7(),
         target: CoreIdentity {
@@ -365,4 +366,31 @@ fn shared_schedule_preserves_old_scope_and_accepts_only_explicit_nonempty_scopes
         .validate()
         .is_err()
     );
+}
+
+#[test]
+fn database_review_keeps_core_identity_and_rejects_downgrades_or_combined_changes() {
+    let mut reviewed = plan();
+    reviewed.target = reviewed.source.clone();
+    assert!(reviewed.validate(reviewed.reviewed_at).is_err());
+    reviewed.database = Some(DatabaseUpdatePlan {
+        source_version: 180001,
+        target_version: 180006,
+        target_image: format!("postgres@sha256:{}", "a".repeat(64)),
+    });
+    reviewed.validate(reviewed.reviewed_at).unwrap();
+    let roundtrip: UpdatePlan =
+        serde_json::from_value(serde_json::to_value(&reviewed).unwrap()).unwrap();
+    assert_eq!(roundtrip, reviewed);
+    reviewed.target.version = "0.1.2".into();
+    assert!(reviewed.validate(reviewed.reviewed_at).is_err());
+    reviewed.target = reviewed.source.clone();
+    for source in [160011, 170011, 180006, 180007, 190000] {
+        reviewed.database.as_mut().unwrap().source_version = source;
+        assert!(reviewed.validate(reviewed.reviewed_at).is_err());
+    }
+    reviewed.database.as_mut().unwrap().source_version = 180005;
+    reviewed.validate(reviewed.reviewed_at).unwrap();
+    reviewed.database.as_mut().unwrap().target_image = "postgres:latest".into();
+    assert!(reviewed.validate(reviewed.reviewed_at).is_err());
 }

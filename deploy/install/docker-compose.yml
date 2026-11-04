@@ -37,12 +37,13 @@ services:
     stop_grace_period: 30s
 
   pg_db:
-    image: postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+    image: ${PG_IMAGE:-postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_USER:-citadel}
       POSTGRES_PASSWORD: ${PG_PASSWORD:?Set PG_PASSWORD in .env}
       POSTGRES_DB: ${PG_DATABASE:-citadel}
+      PGDATA: ${PG_DATA:-/var/lib/postgresql/18/docker}
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:

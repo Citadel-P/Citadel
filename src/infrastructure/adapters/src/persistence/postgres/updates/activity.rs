@@ -10,8 +10,24 @@ pub(super) async fn operation_activity(
             "started",
             ActivityEventInfo::InstanceUpdateStarted {
                 operation_id: op.id,
-                source_version: op.plan.source.version.clone(),
-                target_version: op.plan.target.version.clone(),
+                source_version: op
+                    .plan
+                    .database
+                    .as_ref()
+                    .map(|db| {
+                        format!(
+                            "PostgreSQL {}.{}",
+                            db.source_version / 10000,
+                            db.source_version % 10000
+                        )
+                    })
+                    .unwrap_or_else(|| op.plan.source.version.clone()),
+                target_version: op
+                    .plan
+                    .database
+                    .as_ref()
+                    .map(|db| format!("PostgreSQL {}", db.target_display()))
+                    .unwrap_or_else(|| op.plan.target.version.clone()),
             },
             ActivityStatus::Information,
         ),
@@ -19,8 +35,24 @@ pub(super) async fn operation_activity(
             "outcome",
             ActivityEventInfo::InstanceUpdateCompleted {
                 operation_id: op.id,
-                source_version: op.plan.source.version.clone(),
-                target_version: op.plan.target.version.clone(),
+                source_version: op
+                    .plan
+                    .database
+                    .as_ref()
+                    .map(|db| {
+                        format!(
+                            "PostgreSQL {}.{}",
+                            db.source_version / 10000,
+                            db.source_version % 10000
+                        )
+                    })
+                    .unwrap_or_else(|| op.plan.source.version.clone()),
+                target_version: op
+                    .plan
+                    .database
+                    .as_ref()
+                    .map(|db| format!("PostgreSQL {}", db.target_display()))
+                    .unwrap_or_else(|| op.plan.target.version.clone()),
             },
             ActivityStatus::Success,
         ),

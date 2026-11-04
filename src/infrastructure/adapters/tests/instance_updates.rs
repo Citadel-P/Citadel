@@ -25,6 +25,29 @@ mod drain;
 mod ownership;
 
 #[tokio::test]
+#[ignore = "requires a disposable CITADEL_UPDATE_TEST_DATABASE_URL (database name citadel_update_test_*)"]
+async fn database_engine_version_comes_from_the_connected_server() {
+    let url = std::env::var("CITADEL_UPDATE_TEST_DATABASE_URL").unwrap();
+    assert!(
+        url::Url::parse(&url)
+            .unwrap()
+            .path()
+            .starts_with("/citadel_update_test_")
+    );
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&url)
+        .await
+        .unwrap();
+    let repo = PostgresUpdateRepository::new(pool.clone());
+    let version = repo.database_version().await.unwrap();
+    assert!((100_000..1_000_000).contains(&version));
+    // Closing the connected database must not return a cached image/build version.
+    pool.close().await;
+    assert!(repo.database_version().await.is_err());
+}
+
+#[tokio::test]
 #[ignore = "requires a fresh disposable CITADEL_UPDATE_TEST_DATABASE_URL (database name citadel_update_test_*)"]
 async fn update_state_activities_and_receipts_commit_atomically() {
     let url = std::env::var("CITADEL_UPDATE_TEST_DATABASE_URL").unwrap();
@@ -123,6 +146,7 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         architecture: "amd64".into(),
     };
     let plan = UpdatePlan {
+        database: None,
         id: Uuid::now_v7(),
         instance_id: instance,
         target: CoreIdentity {

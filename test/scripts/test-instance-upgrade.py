@@ -120,13 +120,16 @@ class UpgradeFixture(registration.Fixture):
         helpers = self.docker("ps", "-a", "--filter", "label=com.citadel.update-operation=" + operation_id,
                               "--filter", "status=exited", "--format", "{{.ID}}").stdout.decode().split()
         for helper in helpers:
-            inspected = self.docker("inspect", helper, check=False)
+            inspected = self.docker("container", "inspect", helper, check=False)
             if inspected.returncode:
                 # Finalization can remove the exact helper after the list query.
                 # Missing is not success: the caller still requires the committed
                 # outcome, released ownership and verified checkpoint archive.
-                require(b"No such object" in inspected.stderr or b"No such container" in inspected.stderr,
-                        "Cannot verify detached helper exit; output withheld")
+                if not (b"No such object" in inspected.stderr or b"No such container" in inspected.stderr):
+                    evidence = Path(tempfile.mkdtemp(prefix="citadel-helper-inspection-")) / "output.log"
+                    evidence.write_bytes(inspected.stdout + b"\n" + inspected.stderr)
+                    evidence.chmod(0o600)
+                    raise AssertionError(f"Cannot verify detached helper exit; private output: {evidence}")
                 continue
             require(json.loads(inspected.stdout)[0]["State"]["ExitCode"] == 0,
                     "Detached helper exited unsuccessfully; preserve its failure evidence")

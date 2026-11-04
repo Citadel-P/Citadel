@@ -96,7 +96,18 @@ impl InstallerComposeInputs {
     }
 }
 
-fn replace_image(original: &[u8], image: &str) -> Result<Zeroizing<Vec<u8>>, UpdateError> {
+pub(super) fn replace_image(
+    original: &[u8],
+    image: &str,
+) -> Result<Zeroizing<Vec<u8>>, UpdateError> {
+    replace_selector(original, "CITADEL_IMAGE", image)
+}
+
+pub(super) fn replace_selector(
+    original: &[u8],
+    selector: &str,
+    image: &str,
+) -> Result<Zeroizing<Vec<u8>>, UpdateError> {
     let text = std::str::from_utf8(original).map_err(|_| unsupported())?;
     let mut result = Zeroizing::new(Vec::with_capacity(original.len() + image.len() + 32));
     let mut found = false;
@@ -106,13 +117,14 @@ fn replace_image(original: &[u8], image: &str) -> Result<Zeroizing<Vec<u8>>, Upd
         let trimmed = line.trim();
         if trimmed
             .split_once('=')
-            .is_some_and(|(name, _)| name == "CITADEL_IMAGE")
+            .is_some_and(|(name, _)| name == selector)
         {
             if found {
                 return Err(unsupported());
             }
             found = true;
-            result.extend_from_slice(b"CITADEL_IMAGE=");
+            result.extend_from_slice(selector.as_bytes());
+            result.push(b'=');
             result.extend_from_slice(image.as_bytes());
             if line.ends_with("\r\n") {
                 result.extend_from_slice(b"\r\n");
@@ -127,7 +139,8 @@ fn replace_image(original: &[u8], image: &str) -> Result<Zeroizing<Vec<u8>>, Upd
         if !result.is_empty() && !result.ends_with(b"\n") {
             result.push(b'\n');
         }
-        result.extend_from_slice(b"CITADEL_IMAGE=");
+        result.extend_from_slice(selector.as_bytes());
+        result.push(b'=');
         result.extend_from_slice(image.as_bytes());
         result.push(b'\n');
     }

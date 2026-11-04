@@ -923,6 +923,10 @@ impl ReleaseSource for Fixture {
     }
 }
 impl ReleaseCheckRepository for Fixture {
+    fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>> {
+        Box::pin(async { Ok(180006) })
+    }
+
     fn observe_core_availability<'a>(
         &'a self,
         _: &'a str,

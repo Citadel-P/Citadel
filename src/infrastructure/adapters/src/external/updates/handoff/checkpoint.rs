@@ -173,7 +173,12 @@ impl OwnedUpdateHelper {
         )?;
         // The helper shares only the already-verified PostgreSQL network namespace.
         // Never reuse a host supplied in .env or expose a new database port.
-        let mut url = url::Url::parse("postgres://127.0.0.1:5432/").map_err(|_| conflict())?;
+        let mut url = url::Url::parse(if self.intent.operation.plan.database.is_some() {
+            "postgres://pg_db:5432/"
+        } else {
+            "postgres://127.0.0.1:5432/"
+        })
+        .map_err(|_| conflict())?;
         url.set_username(env["PG_USER"].as_str().ok_or_else(conflict)?)
             .map_err(|_| conflict())?;
         url.set_password(Some(env["PG_PASSWORD"].as_str().ok_or_else(conflict)?))

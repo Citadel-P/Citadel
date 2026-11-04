@@ -6,6 +6,42 @@ use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 
+#[tokio::test]
+async fn database_status_reads_version_without_host_commands_or_installation_lock() {
+    use citadel_updates::{UpdateError, UpdateInstallationRuntime};
+
+    let fixture = Fixture::new();
+    fixture.register().await.unwrap();
+    let state = super::super::JournalDirectory::open(fixture.state.clone()).unwrap();
+    let _owner = state.existing_lock().unwrap();
+    let path = fixture.state.clone();
+    let runner = Arc::new(Runner {
+        fixture,
+        response: Value::Null,
+        mode: "normal",
+        utility: Mutex::new(Value::Null),
+        calls: Default::default(),
+    });
+    // A closed lazy pool cannot connect to any real database. Reaching its error
+    // proves a status read did not fail first on the held installation lock.
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused@localhost/unused")
+        .unwrap();
+    pool.close().await;
+    let runtime = DockerUpdateInstallation::new(runner.clone(), path, "0.1.1".into(), pool);
+    let cancellation = CancellationToken::new();
+    assert!(matches!(
+        runtime.database_update(&cancellation).await,
+        Err(UpdateError::Storage(_))
+    ));
+    cancellation.cancel();
+    assert!(matches!(
+        runtime.database_update(&cancellation).await,
+        Err(UpdateError::Cancelled)
+    ));
+    assert!(runner.calls.lock().unwrap().is_empty());
+}
+
 struct Runner {
     fixture: Fixture,
     response: Value,

@@ -13,6 +13,7 @@ pub(in crate::service) struct State {
     pub(in crate::service) events: Vec<&'static str>,
     denied: bool,
     drift: bool,
+    database_drift: bool,
     pub(in crate::service) agent_drift: bool,
     fail_ack: bool,
     helper_failed: bool,
@@ -40,6 +41,7 @@ impl Fixture {
             state: Default::default(),
             launch_pause: None,
             plan: UpdatePlan {
+                database: None,
                 id: Uuid::now_v7(),
                 instance_id: Uuid::now_v7(),
                 target: CoreIdentity {
@@ -85,6 +87,10 @@ impl Fixture {
     }
 }
 impl ReleaseCheckRepository for Fixture {
+    fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>> {
+        Box::pin(async { Ok(180006) })
+    }
+
     fn observe_core_availability<'a>(
         &'a self,
         _: &'a str,
@@ -217,6 +223,19 @@ impl UpdateRepository for Fixture {
     }
 }
 impl UpdateInstallationRuntime for Fixture {
+    fn database_update<'a>(
+        &'a self,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<DatabaseUpdatePlan>, UpdateError>> {
+        Box::pin(async move {
+            Ok(if self.state.lock().unwrap().database_drift {
+                None
+            } else {
+                self.plan.database.clone()
+            })
+        })
+    }
+
     fn recover_source<'a>(
         &'a self,
         _: &'a UpdateOperation,
@@ -684,4 +703,48 @@ async fn verified_source_cleanup_commits_failure_before_notification_and_admissi
         &state.events[state.events.len() - 4..],
         ["recover", "abort", "notify", "reopen"]
     );
+}
+
+#[tokio::test]
+async fn database_review_reuses_the_claim_and_rechecks_engine_drift_before_launch() {
+    let mut fixture = Fixture::new();
+    fixture.plan.target = fixture.plan.source.clone();
+    fixture.plan.database = Some(DatabaseUpdatePlan {
+        source_version: 180001,
+        target_version: 180006,
+        target_image: format!("postgres@sha256:{}", "e".repeat(64)),
+    });
+    let (service, mut queue) = fixture.service();
+    let review = service.review_database(actor());
+    tokio::pin!(review);
+    let command =
+        tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut review => panic!() };
+    service
+        .execute(command, &CancellationToken::new())
+        .await
+        .unwrap();
+    let reviewed = review.await.unwrap();
+    assert_eq!(reviewed.source, reviewed.target);
+    assert_eq!(reviewed.database, fixture.plan.database);
+    assert_eq!(fixture.state.lock().unwrap().events, ["source", "review"]);
+    fixture.state.lock().unwrap().database_drift = true;
+    let approval = service.approve(actor(), fixture.plan.id, Uuid::now_v7());
+    tokio::pin!(approval);
+    let command = tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut approval => panic!() };
+    service
+        .execute(command, &CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(approval.await.is_err());
+    let state = fixture.state.lock().unwrap();
+    assert_eq!(
+        state
+            .events
+            .iter()
+            .filter(|event| **event == "source")
+            .count(),
+        2
+    );
+    assert!(state.operation.is_none());
+    assert!(!state.events.contains(&"launch"));
 }

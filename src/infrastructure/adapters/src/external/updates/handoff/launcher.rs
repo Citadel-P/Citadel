@@ -102,13 +102,21 @@ fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateEr
         "--platform".into(),
         format!("linux/{}", intent.operation.plan.source.architecture),
         "--restart=no".into(),
-        format!("--network=container:{}", reg.database_container_id),
+        format!(
+            "--network={}",
+            if intent.operation.plan.database.is_some() {
+                reg.network.clone()
+            } else {
+                format!("container:{}", reg.database_container_id)
+            }
+        ),
         "--read-only".into(),
+        "--tmpfs=/tmp:rw,noexec,nosuid,size=64m".into(),
         "--no-healthcheck".into(),
         "--user".into(),
         format!("{}:{}", reg.executor_uid, reg.executor_gid),
         "--env".into(),
-        format!("TMPDIR={}", reg.state_directory.display()),
+        "TMPDIR=/tmp".into(),
         "--label".into(),
         format!("{}={}", verification::NONCE, intent.nonce),
         "--label".into(),

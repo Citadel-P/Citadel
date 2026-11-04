@@ -97,7 +97,7 @@ pub async fn finalize_update(
     let observed = observe(
         allow_restart,
         &docker,
-        &intent.registration,
+        &execution.target_registration(intent)?,
         &replacement.configuration,
         running_helper,
     )
@@ -138,7 +138,7 @@ pub async fn finalize_update(
         || observe(
             allow_restart,
             &docker,
-            &intent.registration,
+            &execution.target_registration(intent)?,
             &replacement.configuration,
             running_helper,
         )
@@ -172,7 +172,7 @@ pub async fn finalize_update(
     if observe(
         allow_restart,
         &docker,
-        &intent.registration,
+        &execution.target_registration(intent)?,
         &replacement.configuration,
         None,
     )
@@ -182,7 +182,7 @@ pub async fn finalize_update(
     {
         return Err(conflict());
     }
-    let mut registration = intent.registration.clone();
+    let mut registration = execution.target_registration(intent)?;
     registration.core_container_id = target.container_id.clone();
     registration.configuration_sha256 = replacement
         .configuration

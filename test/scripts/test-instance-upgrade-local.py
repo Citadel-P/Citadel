@@ -70,6 +70,78 @@ class LocalUpgrade(upgrade.UpgradeFixture):
     interrupt_cleanup = False
     interruption = None
     concurrent_requests = False
+    database_source = None
+
+    def start(self, *args, **kwargs):
+        if self.database_source:
+            self.database_image = "postgres:18.1-alpine"
+            self.host("pull", self.database_image, timeout=300)
+        result = super().start(*args, **kwargs)
+        if self.database_source:
+            self.load(self.database_image)
+            self.extra_environment += f"PG_IMAGE={self.database_image}\nPG_DATA=/var/lib/postgresql/{self.database_source}/docker\n"
+        return result
+
+    def run_database_transition(self, preparation_failure=False):
+        registered, _, password = self.setup_installation()
+        core, database = registered["coreContainerId"], registered["databaseContainerId"]
+        keys = self.keys(core)
+        token = self.login(password)
+        self.http("resourceBindings/secrets", {"name": "database-upgrade-fixture", "value": str(uuid.uuid4())}, token)
+        ciphertext = self.sql(database, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid")
+        if preparation_failure:
+            self.sql(database, "SELECT pg_create_physical_replication_slot('citadel_preflight_fixture')")
+        status = self.http("updates", token=token)
+        require(status["databaseManaged"] and status["databaseAvailable"] == "18.6", "Qualified database update is not offered")
+        review = self.http("updates/review", {"database": True, "version": "18.6"}, token)
+        require(review["component"] == "Database" and review["targetVersion"] == "18.6", "Incorrect database review")
+        self.approval_attempted = True
+        request = {"reviewId": review["id"], "requestId": str(uuid.uuid4())}
+        operation = self.http("updates/approve", request, token)
+        operation_id = operation["id"]
+        require(operation["component"] == "Database", "Database operation lost component identity")
+        require(self.http("updates/approve", request, token)["id"] == operation_id, "Approval replay created another operation")
+        print("Database update approved once; waiting for verified replacement", flush=True)
+        deadline = time.monotonic() + (300 if preparation_failure else 1200)
+        while time.monotonic() < deadline:
+            if not preparation_failure:
+                self.check_exited_helpers(operation_id)
+            status = self.http("updates", token=token, optional=True)
+            outcome = self.http("updates/operations/" + operation_id, token=token, optional=True)
+            if outcome:
+                require(not preparation_failure or outcome["phase"] != "Succeeded", "Database preflight unexpectedly allowed replacement")
+                if preparation_failure and outcome["phase"] == "Failed" and status and status.get("operation") is None:
+                    require(self.json_command("inspect", database)[0]["State"]["Running"], "Preparation failure stopped PostgreSQL")
+                    require(self.json_command("inspect", core)[0]["State"]["Running"], "Preparation failure stopped Core")
+                    require(json.loads(self.read(self.state + "/installation.json")) == registered, "Preparation failure changed registration")
+                    require(self.sql(database, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid") == ciphertext, "Failure changed data")
+                    print("PASS: failed database preflight preserves Core, PostgreSQL, data and registration, and releases its claim", flush=True)
+                    return
+                require(outcome["phase"] not in ("Postponed", "RecoveryRequired") and (preparation_failure or outcome["phase"] != "Failed"), "Database updater reported failure")
+            if status and outcome and outcome["phase"] == "Succeeded" and status.get("operation") is None:
+                break
+            time.sleep(2)
+        else:
+            raise AssertionError("Database upgrade did not complete")
+        refreshed = json.loads(self.read(self.state + "/installation.json"))
+        target = refreshed["databaseContainerId"]
+        require(target != database and refreshed["coreContainerId"] != core, "Core/database were not replaced")
+        require(status["installedVersion"] == SOURCE, "Database update changed Core version")
+        require(status["databaseVersion"] == "18.6" and status["databaseAvailable"] is None, "Database status was not refreshed")
+        require(self.sql(target, "SHOW server_version_num") == b"180006", "Incorrect database engine")
+        require(self.sql(target, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid") == ciphertext, "Encrypted data changed")
+        require(self.keys(refreshed["coreContainerId"]) == keys, "Recovery keys changed")
+        require(self.sql(target, "SELECT count(*) FROM instanceupdates") == b"1", "Duplicate update operation")
+        require(self.sql(target, "SELECT count(*) FROM activityevents WHERE eventtype='InstanceUpdateCompleted'") == b"1", "Duplicate or missing completion")
+        # Portal readiness is independent of Docker's 30-second health sample.
+        # The installation diagnostic deliberately requires the latter as well.
+        healthy_deadline = time.monotonic() + 90
+        while self.json_command("inspect", refreshed["coreContainerId"])[0]["State"]["Health"]["Status"] != "healthy":
+            require(time.monotonic() < healthy_deadline, "Updated Core did not become Docker-healthy")
+            time.sleep(1)
+        self.utility("check-update-installation")
+        self.login(password)
+        print("PASS: database review, approval replay, replacement, retained data/keys, target acceptance and registration refresh", flush=True)
 
     def http(self, path, data=None, token=None, *, optional=False):
         result = super().http(path, data, token, optional=optional)
@@ -95,8 +167,8 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         # Leave discovery, review and approval to the person using the browser.
         print(f"\nOpen http://localhost:{port}/updates\n"
               f"Email: upgrade@example.test\nPassword: {password}\n\n"
-              f"Check now → Update now → Update and restart ({SOURCE} → {TARGET}).\n"
-              "Keep this process running. Ctrl+C removes this disposable installation.\n",
+              + (f"Review and update → PostgreSQL → Update and restart (PostgreSQL {self.database_source} → 18.6).\n" if self.database_source else f"Check now → Review and update → Update and restart ({SOURCE} → {TARGET}).\n")
+              + "Keep this process running. Ctrl+C removes this disposable installation.\n",
               flush=True)
         while True:
             time.sleep(1)
@@ -283,8 +355,9 @@ def main():
     parser.add_argument("--runtime-image", required=True, help="Locally built Core runtime image")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--browser", action="store_true", help="Keep an isolated installation open for manual UI testing")
-    mode.add_argument("--scenario", choices=["all", "upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure"], default="all",
+    mode.add_argument("--scenario", choices=["all", "upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure", "database-preparation-failure"], default="all",
                         help="Run all lifecycle and interruption scenarios by default")
+    parser.add_argument("--database-source", type=int, choices=[18], help="Exercise a PostgreSQL 18 minor upgrade, including in browser mode")
     parser.add_argument("--port", type=int, default=18080, help="Localhost port for --browser (default: 18080)")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
@@ -309,20 +382,26 @@ def main():
                 images[version] = build(args.runtime_image, version, directory, catalog, frontend)
             if args.browser:
                 fixture = LocalUpgrade(images[SOURCE], directory)
+                fixture.database_source = args.database_source
                 fixture.start(registry=True, browser_port=args.port)
                 fixture.prepare_images(images[TARGET])
                 fixture.serve_browser(args.port)
                 return
-            scenarios = ["upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure"] if args.scenario == "all" else [args.scenario]
+            scenarios = ["database"] if args.database_source else ["upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure"] if args.scenario == "all" else [args.scenario]
+            if args.database_source:
+                scenarios = ["database", "database-preparation-failure"] if args.scenario == "all" else ["database-preparation-failure" if args.scenario == "database-preparation-failure" else "database"]
             for scenario in scenarios:
                 print(f"Running lifecycle scenario: {scenario}", flush=True)
                 fixture = LocalUpgrade(images[SOURCE], directory)
+                fixture.database_source = args.database_source
                 fixture.concurrent_requests = scenario == "concurrent-requests"
                 fixture.interrupt_cleanup = scenario == "cleanup-restart"
                 fixture.interruption = {"receipt-restart": "receipt", "helper-exit-restart": "helper-exit"}.get(scenario)
                 fixture.start(registry=True)
                 fixture.prepare_images(images[TARGET])
-                if scenario == "preparation-failure":
+                if scenario in ("database", "database-preparation-failure"):
+                    fixture.run_database_transition(scenario == "database-preparation-failure")
+                elif scenario == "preparation-failure":
                     fixture.run_preparation_failure()
                 else:
                     fixture.run_transition(TARGET)

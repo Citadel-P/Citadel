@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct PreparedTarget {
-    descriptor: UpgradeDescriptor,
+    descriptor: Option<UpgradeDescriptor>,
     configuration: CheckedCoreReplacement,
     agent_versions: Vec<String>,
     checked_at: chrono::DateTime<chrono::Utc>,
@@ -40,27 +40,43 @@ impl OwnedUpdateHelper {
             return Err(UpdateError::Conflict("Registered Agent versions changed since the update review. Review again before updating.".into()));
         }
         let plan = &self.intent.operation.plan;
-        let target = inspector
-            .inspect(
-                &plan.target.version,
-                &plan.target.architecture,
-                cancellation,
-            )
-            .await?;
-        if target.identity != plan.target {
-            return Err(conflict());
-        }
-        target
-            .descriptor
-            .validate_transition(&plan.source, &plan.target, &agents)?;
         let reg = &self.intent.registration;
-        let configuration = InstallerComposeInputs {
+        let inputs = InstallerComposeInputs {
             directory: reg.directory.clone(),
             project: reg.project.clone(),
             compose_files: reg.compose_files.clone(),
-        }
-        .check_replacement(&plan.target.image, process, cancellation)
-        .await?;
+        };
+        let (descriptor, configuration) = if let Some(database) = &plan.database {
+            super::super::compose::validate_database_update(database)?;
+            self.prepare_database(process, cancellation).await?;
+            (
+                None,
+                inputs
+                    .prepare_database_replacement(database, process, cancellation)
+                    .await?
+                    .checked,
+            )
+        } else {
+            let target = inspector
+                .inspect(
+                    &plan.target.version,
+                    &plan.target.architecture,
+                    cancellation,
+                )
+                .await?;
+            if target.identity != plan.target {
+                return Err(conflict());
+            }
+            target
+                .descriptor
+                .validate_transition(&plan.source, &plan.target, &agents)?;
+            (
+                Some(target.descriptor),
+                inputs
+                    .check_replacement(&plan.target.image, process, cancellation)
+                    .await?,
+            )
+        };
         if configuration.source_configuration_sha256 != reg.configuration_sha256 {
             return Err(conflict());
         }
@@ -90,7 +106,7 @@ impl OwnedUpdateHelper {
             return Err(UpdateError::Cancelled);
         }
         execution.prepared = Some(PreparedTarget {
-            descriptor: target.descriptor,
+            descriptor,
             configuration,
             agent_versions: agents,
             checked_at: chrono::Utc::now(),
@@ -138,11 +154,17 @@ impl ExecutionJournal {
         {
             return Err(conflict());
         }
-        receipt.descriptor.validate_transition(
-            &plan.source,
-            &plan.target,
-            &receipt.agent_versions,
-        )?;
+        match (&plan.database, &receipt.descriptor) {
+            (Some(database), None) if plan.source == plan.target => {
+                super::super::compose::validate_database_update(database)?
+            }
+            (None, Some(descriptor)) => descriptor.validate_transition(
+                &plan.source,
+                &plan.target,
+                &receipt.agent_versions,
+            )?,
+            _ => return Err(conflict()),
+        }
         Ok(&receipt.configuration)
     }
 }
@@ -152,7 +174,7 @@ pub(super) fn record_fixture(state: &super::super::JournalDirectory, intent: &He
     let plan = &intent.operation.plan;
     let mut execution = ExecutionJournal::read(state, intent.operation.id).unwrap();
     execution.prepared = Some(PreparedTarget {
-        descriptor: UpgradeDescriptor {
+        descriptor: Some(UpgradeDescriptor {
             schema_version: 1,
             product: "citadel".into(),
             target_version: plan.target.version.clone(),
@@ -165,7 +187,7 @@ pub(super) fn record_fixture(state: &super::super::JournalDirectory, intent: &He
                 architectures: vec![plan.source.architecture.clone()],
                 agent_versions: vec![],
             }],
-        },
+        }),
         configuration: CheckedCoreReplacement {
             source_configuration_sha256: plan.configuration_sha256.clone(),
             target_configuration_sha256: "c".repeat(64),

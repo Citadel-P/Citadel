@@ -66,7 +66,7 @@ impl HelperRequest {
         if input.len() > MAX_HANDOFF_REQUEST {
             return Err(conflict());
         }
-        let temporary = format!("TMPDIR={}", self.operation.plan.checkpoint_directory);
+        let temporary = "TMPDIR=/tmp";
         loop {
             let output = docker
                 .run_with_input(
@@ -74,7 +74,7 @@ impl HelperRequest {
                         "exec",
                         "--interactive",
                         "--env",
-                        &temporary,
+                        temporary,
                         "--user",
                         user,
                         id,

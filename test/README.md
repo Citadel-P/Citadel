@@ -1094,3 +1094,43 @@ CITADEL_EXECUTION_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update
 The persistence test covers seeded Community rules, channel assignment, delivery
 deduplication, aggregate summary refresh, supersession, failed checks, offline
 observations and stale queued availability after installation. It never sends external notifications.
+
+
+### PostgreSQL engine maintenance
+
+The Updates page reads the connected server version through the existing status
+API and offers only the qualified target for a registered, supported installation.
+Status reads do not launch helpers or acquire the installation lock; review and
+approval perform the live preflight. Run its focused read/error and realtime checks with:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib database_version
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib database_review
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib database_status_reads_version
+python3 -m unittest discover -s test/release -p test_instance_upgrade.py
+npm --prefix src/frontend run test:run -- src/features/updates
+```
+
+The `database_engine_version_comes_from_the_connected_server` test in
+`citadel-adapters --test instance_updates` exercises the query and closed-pool failure.
+It uses the same disposable `CITADEL_UPDATE_TEST_DATABASE_URL` restriction as the
+other instance-update database tests; run with `--ignored` against that fixture.
+
+### Browser and full-lifecycle PostgreSQL upgrades
+
+Build the current Core image, then run the existing isolated updater fixture:
+
+```bash
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18
+# Retain a disposable installation for clicking through the real UI:
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18 --browser --port 18081
+```
+
+The first command exercises PostgreSQL 18.1 → 18.6 replacement via the real
+review/approve APIs, duplicate approval, checkpoint, retained credentials/keys,
+startup acceptance and registration refresh. It also verifies that an unsupported
+replication setup fails preflight without stopping Core or PostgreSQL. PostgreSQL
+17 and earlier are rejected; this runner does not qualify future major upgrades. Browser mode prints its own login;
+choose **Review and update → PostgreSQL → Update and restart**. Core remains the
+same version and existing Agent/production fixtures are untouched. Ctrl+C cleans up
+only this fixture. Private failure evidence is retained outside the repository.

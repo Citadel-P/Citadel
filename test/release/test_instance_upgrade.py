@@ -113,16 +113,18 @@ class PublishedUpgradeTests(unittest.TestCase):
         listed = subprocess.CompletedProcess([], 0, b'helper-id\n', b'')
         for result, allowed in [
             (subprocess.CompletedProcess([], 1, b'', b'Error: No such object: helper-id'), True),
+            (subprocess.CompletedProcess([], 1, b'', b'Error: No such container: helper-id'), True),
             (subprocess.CompletedProcess([], 1, b'', b'daemon unavailable'), False),
             (subprocess.CompletedProcess([], 0, b'[{"State":{"ExitCode":0}}]', b''), True),
             (subprocess.CompletedProcess([], 0, b'[{"State":{"ExitCode":1}}]', b''), False),
         ]:
-            with self.subTest(result=result), patch.object(fixture, 'docker', side_effect=[listed, result]):
+            with self.subTest(result=result), patch.object(fixture, 'docker', side_effect=[listed, result]) as docker:
                 if allowed:
                     fixture.check_exited_helpers('operation')
                 else:
                     with self.assertRaises(AssertionError):
                         fixture.check_exited_helpers('operation')
+                docker.assert_called_with('container', 'inspect', 'helper-id', check=False)
 
 
 class LocalUpgradeTests(unittest.TestCase):
@@ -186,6 +188,25 @@ class LocalUpgradeTests(unittest.TestCase):
                 {'RepoDigests': ['unrelated@sha256:' + 'b' * 64]}]):
             with self.assertRaisesRegex(AssertionError, 'Unexpected private digest'):
                 fixture.publish_private('image', 'target')
+
+    def test_database_preflight_failure_scenario_rejects_unexpected_success(self):
+        spec = importlib.util.spec_from_file_location(
+            'local_upgrade', ROOT / 'test/scripts/test-instance-upgrade-local.py')
+        local = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(local)
+        fixture = local.LocalUpgrade('unused', Path('/unused'))
+        response = dict(databaseManaged=True, databaseAvailable='18.6',
+                        component='Database', targetVersion='18.6', id='operation',
+                        phase='Succeeded', operation=None)
+        with (patch.object(fixture, 'setup_installation', return_value=(
+                dict(coreContainerId='core', databaseContainerId='db'), None, 'password')),
+                patch.object(fixture, 'keys', return_value='keys'),
+                patch.object(fixture, 'login', return_value='token'),
+                patch.object(fixture, 'sql', return_value=b'ciphertext'),
+                patch.object(fixture, 'http', return_value=response),
+                patch.object(fixture, 'read', return_value='{}')):
+            with self.assertRaisesRegex(AssertionError, 'preflight unexpectedly allowed replacement'):
+                fixture.run_database_transition(preparation_failure=True)
 
 
 if __name__ == '__main__':

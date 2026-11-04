@@ -44,7 +44,7 @@ Team administrators can schedule Core, selected Agents, or both. Core is exclude
 by default. Core updates first; selected Agents follow only after Core verification
 and cleanup. The interface temporarily disconnects during a Core restart. Use the
 standard cron and time-zone fields, then **Save**. **Next run** describes the saved
-schedule. Disabled schedules retain their settings; **Edit schedule** opens them.
+schedule. Disabled schedules keep their settings visible with disabled controls. Enable the schedule to edit them.
 
 Release checks contact GitHub without telemetry. Turning off automatic discovery
 does not disable an installation schedule, which verifies a release when due.

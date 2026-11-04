@@ -13,6 +13,9 @@ import { ReviewUpdates } from './review';
 const status: UpdateStatusView = {
   instanceId: '019a0000-0000-7000-8000-000000000001',
   installedVersion: '0.1.1',
+  databaseVersion: '18.6',
+  databaseAvailable: null,
+  databaseManaged: false,
   channel: 'stable',
   checksAllowed: true,
   checksEnabled: true,
@@ -295,4 +298,26 @@ it('remembers an explicit reload when storage recovers and clears the banner on 
   await waitFor(() => expect(getDefaultStore().get(pendingInstanceUpdateAtom)).toBeNull());
   expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
   expect(reload).toHaveBeenCalledOnce();
+});
+
+it('reports database completion against the database version while Core remains unchanged', async () => {
+  getDefaultStore().set(pendingInstanceUpdateAtom, {
+    instanceId: status.instanceId,
+    id: operation.id,
+    frontendReloaded: true,
+  });
+  server.use(
+    http.get(`http://localhost/api/v1/updates/operations/${operation.id}`, () =>
+      HttpResponse.json({ ...operation, component: 'Database', version: '18.6', phase: 'Succeeded' }),
+    ),
+  );
+  renderCitadel(progress({ ...status, databaseVersion: '18.6', installedVersion: '0.1.1' }));
+  await waitFor(() =>
+    expect(toast.success).toHaveBeenCalledWith(
+      'PostgreSQL updated successfully',
+      expect.objectContaining({ description: 'Version 18.6 is now running.' }),
+    ),
+  );
+  expect(reload).not.toHaveBeenCalled();
+  expect(getDefaultStore().get(pendingInstanceUpdateAtom)).toBeNull();
 });

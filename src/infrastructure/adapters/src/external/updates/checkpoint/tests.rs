@@ -72,6 +72,7 @@ impl Fixture {
         let now = chrono::Utc::now();
         let mut operation = UpdateOperation::approve(
             UpdatePlan {
+                database: None,
                 id: Uuid::now_v7(),
                 instance_id: instance,
                 target: CoreIdentity {

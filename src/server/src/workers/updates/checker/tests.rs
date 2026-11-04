@@ -21,6 +21,10 @@ struct Store {
     writes: AtomicUsize,
 }
 impl ReleaseCheckRepository for Store {
+    fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>> {
+        Box::pin(async { Ok(180006) })
+    }
+
     fn observe_core_availability<'a>(
         &'a self,
         _: &'a str,

@@ -18,6 +18,50 @@ Use the matching current Core, Agent, and frontend build. See
 for baseline and recovery considerations.
 Never rewrite applied migration history or checksums to force an upgrade.
 
+## PostgreSQL engine maintenance
+
+Core updates apply Citadel's SQL migrations but keep PostgreSQL running unchanged.
+The Updates page and info card show the connected PostgreSQL server version.
+A version alone does not establish update availability; failed version reads show
+**Version unavailable**. Registered bundled databases offer the PostgreSQL version
+qualified by this Citadel build. Select **Review and update → PostgreSQL**, review
+the versions and downtime, then confirm **Update and restart**. Citadel checkpoints,
+stops Core, upgrades the database, verifies it and restarts Core. Completion or failure
+appears in the portal and Activities. Core and Agent versions do not change.
+
+Citadel requires PostgreSQL 18 or newer. This build offers minor updates within
+PostgreSQL 18 to the qualified 18.6 image, retaining the existing data directory.
+PostgreSQL 17 and earlier are unsupported. Future major-version transitions need
+separate qualification before they can be offered.
+
+The bundled Alpine cluster must use `/var/lib/postgresql/18/docker`, owned by UID 70.
+Other layouts and external databases require operator/provider maintenance. Database
+updates are explicitly approved; the Core/Agent schedule does not include them.
+
+If execution fails after shutdown, preserve the operation state, checkpoint and database. Do not click retry or restart a source against ambiguous data. Use explicit
+recovery below. The following commands are the operator-run alternative.
+
+Before maintenance, finish all Core/Agent updates and resolve any retained recovery
+state. Create and verify a [system backup](/operations/control-plane-recovery),
+including the Core recovery keys. Stop Core before stopping PostgreSQL. Do not run
+another updater or start another container against the same data during maintenance.
+
+### Minor updates within PostgreSQL 18
+
+Set `PG_IMAGE` in the existing `.env` to the approved official PostgreSQL 18 image
+**digest**, retaining the Alpine variant and data directory. Pull it before downtime:
+
+```bash
+docker compose pull pg_db
+docker compose stop -t 60 server pg_db
+docker compose up -d --no-deps --wait pg_db
+docker compose up -d --no-deps server
+```
+
+Check the database version, Core health, sign-in and important resources. Keep the
+previous image digest and backup until validation finishes. Do not use a major-version
+image with the existing data directory.
+
 ## Release notifications
 
 [Update checks](/getting-started/configuration#allow-update-checks) are enabled
@@ -42,6 +86,11 @@ update-check setting changes.
 
 ## Update Agents
 
+Available updates lists **Citadel Core**, **Database**, then **Agents**. Database currently
+offers a qualified PostgreSQL upgrade for registered supported installations.
+**Manual updates** indicates an external, unregistered or unsupported database; use
+the [Compose maintenance procedure](#postgresql-engine-maintenance) or your provider.
+
 Use **Settings → Updates → Config → Available updates**. Agent availability is
 independent of Core: a current Core can still have Agents that need updating.
 **Check now** also verifies the official Agent image matching the running Core
@@ -58,7 +107,8 @@ same installation are combined. A managed Swarm node-agent service is one target
 the review shows how many nodes it covers. Its **Repair** action on the Platform
 page preserves the previously approved image.
 
-The update dialog and **Activities** show each outcome. Closing the browser
+The update dialog shows a spinner while Agents are updating, and **Activities** records each outcome.
+While the Updates configuration page is open, completion shows a success or error notification even if the dialog is closed. Closing the browser
 does not cancel an accepted operation. Citadel waits for the affected Agent's
 active work, replaces it, and verifies its authenticated connection, image and
 version before reporting success. A target that becomes unavailable is skipped;
@@ -88,7 +138,7 @@ current Agents may be enrolled for future updates; new registrations are never
 automatically selected. Manual selection remains separate.
 
 **Next run** uses the saved cron and time zone, not unsaved edits. A disabled
-schedule retains its settings behind **Edit schedule**. Community users can update
+schedule keeps its settings visible with disabled controls. Enable it to edit them. Community users can update
 manually; after Team expiry an administrator can still disable an existing schedule.
 
 When due, Citadel claims the saved scope and verifies the release independently of

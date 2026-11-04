@@ -35,6 +35,27 @@ impl DockerUpdateInstallation {
 }
 
 impl UpdateInstallationRuntime for DockerUpdateInstallation {
+    fn database_update<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<citadel_updates::DatabaseUpdatePlan>, UpdateError>> {
+        Box::pin(async move {
+            // Startup validates registration before constructing this runtime.
+            // Availability is advisory: never acquire the installation lock or
+            // launch preflight helpers for a status read. Review and approval
+            // each call source() separately before accepting a database plan.
+            if cancellation.is_cancelled() {
+                return Err(UpdateError::Cancelled);
+            }
+            let repository = crate::persistence::postgres::updates::PostgresUpdateRepository::new(
+                self.pool.clone(),
+            );
+            let version =
+                citadel_updates::ReleaseCheckRepository::database_version(&repository).await?;
+            super::super::compose::database_update(version)
+        })
+    }
+
     fn recover_source<'a>(
         &'a self,
         operation: &'a UpdateOperation,

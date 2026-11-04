@@ -18,9 +18,9 @@ import {
 } from '@/components/ui/dialog';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { CoreReviewDetails } from './installation';
-import { AgentUpdateProgress } from './agent-progress';
+import { AgentUpdateProgress, useAgentUpdateProgress } from './agent-progress';
 
-type Component = 'Core' | 'Agents';
+type Component = 'Core' | 'Database' | 'Agents';
 
 export function ReviewUpdates({
   status,
@@ -47,6 +47,9 @@ export function ReviewUpdates({
   const [agentReview, setAgentReview] = useState<AgentReviewView>();
   const [requestId, setRequestId] = useState('');
   const [operationId, setOperationId] = useState<string>();
+  const [approvedOperation, setApprovedOperation] = useState<string>();
+  const progressId = operationId ?? agents?.operation?.id;
+  const progress = useAgentUpdateProgress(progressId, !!progressId && approvedOperation === progressId);
   const prepareCore = useMutate('reviewInstanceUpdate', {
     onSuccess: ({ data }) => {
       setCoreReview(data);
@@ -88,10 +91,11 @@ export function ReviewUpdates({
         ['getAgentUpdateOperation', { id: data.id }],
         (previous: unknown) => previous ?? { data },
       );
+      setApprovedOperation(data.id);
       setOperationId(data.id);
       setAgentReview(undefined);
       onAgentsApproved?.();
-      toast.success('Agent updates started');
+      if (!data.finished) toast.success('Agent updates started');
     },
   });
   const targets =
@@ -99,6 +103,7 @@ export function ReviewUpdates({
       (target) => target.status === 'Available' && (!selected.length || selected.includes(target.id)),
     ) ?? [];
   const coreEligible = !!status?.available && !status.installationUnavailableReason && status.checksAllowed;
+  const databaseEligible = !!status?.databaseAvailable && status.databaseManaged && status.checksAllowed;
   const agentsEligible = !agentsFailed && targets.length > 0;
   const preparing = prepareCore.isPending || prepareAgents.isPending;
   const approving = approveCore.isPending || approveAgents.isPending;
@@ -107,13 +112,15 @@ export function ReviewUpdates({
     !!status?.operation ||
     (!!agents?.operation && !agents.operation.finished) ||
     (!!agents?.scheduleRun && agents.scheduleRun.phase !== 'Finished');
-  const canReview = allowed && !blocked && (coreEligible || agentsEligible);
-  const review = component === 'Core' ? coreReview : agentReview;
-  const prepareFailed = component === 'Core' ? prepareCore.isError : prepareAgents.isError;
-  const approveFailed = component === 'Core' ? approveCore.isError : approveAgents.isError;
+  const canReview = allowed && !blocked && (coreEligible || databaseEligible || agentsEligible);
+  const review = component !== 'Agents' ? coreReview : agentReview;
+  const prepareFailed = component !== 'Agents' ? prepareCore.isError : prepareAgents.isError;
+  const approveFailed = component !== 'Agents' ? approveCore.isError : approveAgents.isError;
   const prepare = (scope: Component) => {
     setComponent(scope);
     if (scope === 'Core' && coreEligible) prepareCore.mutate({ data: { version: status!.available!.version } });
+    if (scope === 'Database' && databaseEligible)
+      prepareCore.mutate({ data: { version: status!.databaseAvailable!, database: true } });
     if (scope === 'Agents' && agentsEligible)
       prepareAgents.mutate({ data: { targets: targets.map((target) => target.id) } });
   };
@@ -144,7 +151,8 @@ export function ReviewUpdates({
             approveCore.reset();
             approveAgents.reset();
             setOpen(true);
-            if (!(coreEligible && agentsEligible)) prepare(coreEligible ? 'Core' : 'Agents');
+            if ([coreEligible, databaseEligible, agentsEligible].filter(Boolean).length === 1)
+              prepare(coreEligible ? 'Core' : databaseEligible ? 'Database' : 'Agents');
           }}>
           <CloudDownload className="size-4" />
           Review and update
@@ -158,7 +166,7 @@ export function ReviewUpdates({
         <DialogContent className="max-h-[calc(100dvh_-_2rem)] w-[calc(100vw_-_2rem)] gap-5 overflow-y-auto">
           {operationId ? (
             <>
-              <AgentUpdateProgress payload={{ id: operationId }} />
+              <AgentUpdateProgress query={progress} />
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Close
@@ -169,28 +177,41 @@ export function ReviewUpdates({
             <>
               <DialogHeader>
                 <DialogTitle>
-                  {component === 'Core'
-                    ? 'Update Citadel'
-                    : component === 'Agents'
-                      ? 'Update Agents'
-                      : 'Review updates'}
+                  {component === 'Database'
+                    ? 'Update PostgreSQL'
+                    : component === 'Core'
+                      ? 'Update Citadel'
+                      : component === 'Agents'
+                        ? 'Update Agents'
+                        : 'Review updates'}
                 </DialogTitle>
                 <DialogDescription>
-                  {component === 'Core'
-                    ? 'Install the new version on this Citadel instance.'
-                    : component === 'Agents'
-                      ? 'Agents update one at a time. Core keeps running. Closing the dialog does not cancel an approved update.'
-                      : 'Choose which component to update. Update Core first to make its matching Agent release available.'}
+                  {component === 'Database'
+                    ? 'Upgrade the bundled database. Core and PostgreSQL will restart; managed workloads keep running.'
+                    : component === 'Core'
+                      ? 'Install the new version on this Citadel instance.'
+                      : component === 'Agents'
+                        ? 'Agents update one at a time. Core keeps running. Closing the dialog does not cancel an approved update.'
+                        : 'Choose which component to update. Update Core first to make its matching Agent release available.'}
                 </DialogDescription>
               </DialogHeader>
               {!component && (
                 <div className="grid gap-3">
-                  <Button variant="outline" disabled={!canReview || !coreEligible} onClick={() => prepare('Core')}>
-                    Citadel Core · {status?.available?.version}
-                  </Button>
-                  <Button variant="outline" disabled={!canReview || !agentsEligible} onClick={() => prepare('Agents')}>
-                    {targets.length} Agent update{targets.length === 1 ? '' : 's'}
-                  </Button>
+                  {coreEligible && (
+                    <Button variant="outline" disabled={!canReview} onClick={() => prepare('Core')}>
+                      Citadel Core · {status?.available?.version}
+                    </Button>
+                  )}
+                  {databaseEligible && (
+                    <Button variant="outline" disabled={!canReview} onClick={() => prepare('Database')}>
+                      PostgreSQL · {status?.databaseAvailable}
+                    </Button>
+                  )}
+                  {agentsEligible && (
+                    <Button variant="outline" disabled={!canReview} onClick={() => prepare('Agents')}>
+                      {targets.length} Agent update{targets.length === 1 ? '' : 's'}
+                    </Button>
+                  )}
                 </div>
               )}
               {preparing && (
@@ -199,7 +220,7 @@ export function ReviewUpdates({
                   Verifying update eligibility…
                 </p>
               )}
-              {component === 'Core' && coreReview && <CoreReviewDetails review={coreReview} />}
+              {component !== 'Agents' && coreReview && <CoreReviewDetails review={coreReview} />}
               {component === 'Agents' && agentReview && (
                 <>
                   <div className="divide-y rounded-md border">
@@ -248,10 +269,10 @@ export function ReviewUpdates({
                     disabled={approving || blocked || !allowed}
                     onClick={() => {
                       const data = { reviewId: review.id, requestId };
-                      if (component === 'Core') approveCore.mutate({ data });
+                      if (component !== 'Agents') approveCore.mutate({ data });
                       else approveAgents.mutate({ data });
                     }}>
-                    {approving ? 'Approving…' : component === 'Core' ? 'Update and restart' : 'Update now'}
+                    {approving ? 'Approving…' : component !== 'Agents' ? 'Update and restart' : 'Update now'}
                   </Button>
                 )}
               </DialogFooter>

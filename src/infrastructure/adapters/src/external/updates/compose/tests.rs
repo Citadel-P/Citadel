@@ -477,6 +477,26 @@ fn registered_file_names_and_order_are_not_bound_to_templates() {
 }
 
 #[test]
+fn explicit_installer_database_path_preserves_the_supported_volume_layout() {
+    let fixture = Fixture::new(false);
+    let mut config = resolved();
+    config["services"]["pg_db"]["environment"]["PGDATA"] = json!("/var/lib/postgresql/18/docker");
+    assert!(
+        fixture
+            .inputs
+            .validate_resolved(&config, "a".repeat(64))
+            .is_ok()
+    );
+    config["services"]["pg_db"]["environment"]["PGDATA"] = json!("/var/lib/postgresql/16/docker");
+    assert!(
+        fixture
+            .inputs
+            .validate_resolved(&config, "a".repeat(64))
+            .is_err()
+    );
+}
+
+#[test]
 fn resolved_configuration_must_keep_the_supported_storage_and_service_layout() {
     let fixture = Fixture::new(false);
     for mutation in 0..9 {

@@ -6287,6 +6287,7 @@ export interface ReviewAgentsInput {
 }
 
 export interface ReviewUpdateInput {
+  database?: boolean;
   version: string;
 }
 
@@ -7954,6 +7955,7 @@ export interface UpdateCurrentProfileRequest {
 }
 
 export interface UpdateOperationView {
+  component?: string | null;
   /** @format uuid */
   id: string;
   phase: string;
@@ -7963,6 +7965,7 @@ export interface UpdateOperationView {
 }
 
 export interface UpdateReviewView {
+  component?: string | null;
   /** @format date-time */
   expiresAt: string;
   /** @format uuid */
@@ -8022,6 +8025,10 @@ export interface UpdateStatusView {
   checkError: string | null;
   checksAllowed: boolean;
   checksEnabled: boolean;
+  databaseAvailable: string | null;
+  databaseManaged: boolean;
+  /** PostgreSQL server version; absence never means the engine is up to date. */
+  databaseVersion: string | null;
   installationUnavailableReason: string | null;
   installedVersion: string;
   /** @format uuid */

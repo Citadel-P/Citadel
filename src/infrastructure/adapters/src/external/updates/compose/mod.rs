@@ -11,3 +11,6 @@ pub use resolution::{CheckedInstallerCompose, InstallerComposeInputs};
 mod replacement_tests;
 #[cfg(test)]
 pub(super) mod tests;
+
+mod database;
+pub(in crate::external::updates) use database::{database_update, validate_database_update};

@@ -245,6 +245,7 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
         catalog_sha256: "b".repeat(64),
     };
     let plan = UpdatePlan {
+        database: None,
         id: Uuid::now_v7(),
         instance_id: sqlx::query_scalar(
             "SELECT instanceid FROM citadelinstanceidentity WHERE id=1",

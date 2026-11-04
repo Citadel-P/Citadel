@@ -77,6 +77,17 @@ impl ReleaseCheckService {
         &self.current_version
     }
 
+    /// Read-only engine identity. This does not establish update availability or
+    /// grant permission to replace a database, including externally managed ones.
+    pub async fn database_version(&self) -> Option<String> {
+        let version = self.repository.database_version().await.ok()?;
+        // PostgreSQL 10+ encodes major * 10000 + minor. Reject malformed values
+        // rather than displaying raw server diagnostics or claiming a current version.
+        (100_000..1_000_000)
+            .contains(&version)
+            .then(|| format!("{}.{}", version / 10_000, version % 10_000))
+    }
+
     pub fn channel(&self) -> ReleaseChannel {
         ReleaseChannel::for_version(&self.current_version)
     }
