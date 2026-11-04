@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { getDefaultStore } from 'jotai';
+import { useTaskSheet } from '@/lib/atoms';
 import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { toast } from 'sonner';
 import { useHTTPErrorHandler } from '@/lib/hooks';
@@ -22,7 +23,12 @@ vi.mock('@/lib/context/realtime-context', () => ({ useRealtimeContext: () => ({ 
 
 vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPlatform: undefined }) }));
 
-vi.mock('@/components/custom/task-sheet', () => ({ default: () => <div data-testid="activity-drawer" /> }));
+vi.mock('@/components/custom/task-sheet', () => ({
+  default: function TaskSheet() {
+    const { state } = useTaskSheet('Updates');
+    return state.open ? <div data-testid="activity-drawer" /> : null;
+  },
+}));
 vi.mock('@/hooks/useRealtimeGroup', () => ({ useRealtimeGroup: () => undefined }));
 vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => (value: string) => value }));
 
@@ -52,8 +58,12 @@ beforeEach(() => {
   vi.spyOn(toast, 'success').mockImplementation(() => 'notice');
   vi.spyOn(toast, 'error').mockImplementation(() => 'notice');
   server.use(
+    http.get('http://localhost/api/v1/license/entitlements', () => HttpResponse.json({ capabilities: [] })),
     http.get('http://localhost/api/v1/profile', () => HttpResponse.json({ authorization: { isAdministrator: true } })),
     http.get('http://localhost/api/v1/updates', () => HttpResponse.json(status)),
+    http.get('http://localhost/api/v1/updates/agents', () =>
+      HttpResponse.json({ targets: [], schedule: { targets: [], enabled: false, cron: '0 3 * * *', timeZone: 'UTC' } }),
+    ),
     http.get('http://localhost/api/v1/installation/settings', () => HttpResponse.json(settings)),
   );
 });
@@ -194,7 +204,11 @@ it('reports a manual check failure while retaining the last successful release',
   server.use(http.post('http://localhost/api/v1/updates/check', () => new HttpResponse(null, { status: 500 })));
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
   await user.click(await screen.findByRole('button', { name: 'Check now' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('The check could not finish.');
+  await waitFor(() =>
+    expect(
+      screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('The check could not finish.')),
+    ).toBe(true),
+  );
   expect(screen.getByRole('link', { name: 'Release notes' })).toHaveAttribute('href', status.available.releaseUrl);
   expect(screen.getByRole('button', { name: 'Check now' })).toBeEnabled();
   expect(toast.error).toHaveBeenCalledOnce();
@@ -273,7 +287,7 @@ it('shows progress and confirms a completed check even when no newer release is 
   expect(await screen.findByRole('button', { name: 'Checking…' })).toBeDisabled();
   await waitFor(() =>
     expect(toast.success).toHaveBeenCalledWith('Check complete', {
-      description: 'No newer release found.',
+      description: 'Release check complete. Review instance and Agent status.',
     }),
   );
   expect(screen.getByRole('button', { name: 'Check now' })).toBeEnabled();
@@ -290,7 +304,11 @@ it('does not report success when the response contains a failed check and retain
   );
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
   await user.click(await screen.findByRole('button', { name: 'Check now' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('GitHub is unavailable.');
+  await waitFor(() =>
+    expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('GitHub is unavailable.'))).toBe(
+      true,
+    ),
+  );
   expect(toast.error).toHaveBeenCalledWith('Update check failed', { description: 'GitHub is unavailable.' });
   expect(toast.success).not.toHaveBeenCalled();
   expect(screen.getByRole('link', { name: 'Release notes' })).toBeVisible();
@@ -313,4 +331,54 @@ it('keeps instance details in the tab info card and supports hover, keyboard foc
   await waitFor(() => expect(screen.queryByRole('region', { name: 'Instance information' })).not.toBeInTheDocument());
   await user.click(trigger);
   expect(await screen.findByRole('region', { name: 'Instance information' })).toBeVisible();
+});
+
+it('keeps current Agents visible and updates only the selected outdated Agent while Core is current', async () => {
+  const targets = ['A', 'B', 'C'].map((name) => ({
+    id: name,
+    name: `Agent ${name}`,
+    kind: 'Platform',
+    nodes: 1,
+    supported: true,
+    installedVersion: name === 'C' ? '0.1.0' : '0.1.1',
+    availableVersion: '0.1.1',
+    status: name === 'C' ? 'Available' : 'Current',
+  }));
+  const prepare = vi.fn();
+  const approve = vi.fn();
+  const save = vi.fn();
+  server.use(
+    http.get('http://localhost/api/v1/updates', () => HttpResponse.json({ ...status, available: null })),
+    http.get('http://localhost/api/v1/updates/agents', () =>
+      HttpResponse.json({ targets, schedule: { targets: ['A'], enabled: false, cron: '0 3 * * *', timeZone: 'UTC' } }),
+    ),
+    http.post('http://localhost/api/v1/updates/agents/review', async ({ request }) => {
+      prepare(await request.json());
+      return HttpResponse.json({ id: 'review', targets: [targets[2]], expiresAt: '2099-01-01T00:00:00Z' });
+    }),
+    http.post('http://localhost/api/v1/updates/agents/approve', async ({ request }) => {
+      approve(await request.json());
+      return HttpResponse.json({ id: 'operation', finished: false, targets: [] });
+    }),
+    http.put('http://localhost/api/v1/updates/agents/schedule', () => {
+      save();
+      return HttpResponse.json({});
+    }),
+  );
+  const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
+  expect(await screen.findByText('Citadel instance: Up to date')).toBeVisible();
+  expect(await screen.findByText('Agents: 1 update available · 2 up to date')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Review update' })).toBeDisabled();
+  await user.click(screen.getByRole('combobox', { name: /Select Agents to update/ }));
+  expect(screen.getByRole('option', { name: /Agent A/ })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('option', { name: /Agent B/ })).toHaveAttribute('aria-disabled', 'true');
+  await user.click(screen.getByRole('option', { name: /Agent C/ }));
+  await user.keyboard('{Escape}');
+  await user.click(screen.getByRole('button', { name: 'Review update' }));
+  await waitFor(() => expect(prepare).toHaveBeenCalledWith({ targets: ['C'] }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Agent C');
+  await user.click(screen.getByRole('button', { name: 'Update now' }));
+  await waitFor(() => expect(approve).toHaveBeenCalledWith({ reviewId: 'review', requestId: expect.any(String) }));
+  expect(save).not.toHaveBeenCalled();
+  expect(await screen.findByTestId('activity-drawer')).toBeVisible();
 });

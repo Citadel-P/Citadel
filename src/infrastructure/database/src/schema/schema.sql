@@ -2578,3 +2578,24 @@ ALTER TABLE instancesetupstates
 
 -- Observed through signed build-pool health checks, fenced by pool configuration.
 ALTER TABLE buildagentpools ADD COLUMN agentversion text;
+
+-- Central Agent settings and durable operations use the existing Activities journal.
+CREATE TABLE agentupdatesettings (
+    id integer PRIMARY KEY CHECK (id = 1),
+    schedule jsonb NOT NULL DEFAULT '{"targets":[],"enabled":false,"cron":"0 3 * * *","timeZone":"UTC"}',
+    release jsonb,
+    checkerror text,
+    observations jsonb NOT NULL DEFAULT '[]',
+    lastscheduledminute timestamptz
+);
+INSERT INTO agentupdatesettings(id) VALUES (1);
+CREATE TABLE agentupdateoperations (
+    id uuid PRIMARY KEY,
+    requestid uuid NOT NULL UNIQUE,
+    actorid uuid NOT NULL REFERENCES actors(id),
+    revision bigint NOT NULL DEFAULT 0 CHECK (revision >= 0),
+    operation jsonb NOT NULL,
+    finished boolean NOT NULL DEFAULT false,
+    createdat timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ix_agentupdateoperations_active ON agentupdateoperations((true)) WHERE NOT finished;

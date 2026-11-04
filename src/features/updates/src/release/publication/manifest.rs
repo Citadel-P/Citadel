@@ -57,6 +57,30 @@ impl PublishedReleaseManifest {
     /// Resolve only official publication identities. The returned reference is
     /// a candidate for cryptographic verification, not installation approval.
     pub fn core_image(&self, version: &str) -> Result<String, UpdateError> {
+        self.image(
+            version,
+            "core",
+            CORE_IMAGE,
+            "docker.io/citadelplane/citadel",
+        )
+    }
+
+    pub fn agent_image(&self, version: &str) -> Result<String, UpdateError> {
+        self.image(
+            version,
+            "agent",
+            "ghcr.io/citadel-p/citadel.agent",
+            "docker.io/citadelplane/citadel-agent",
+        )
+    }
+
+    fn image(
+        &self,
+        version: &str,
+        kind: &str,
+        repository: &str,
+        mirror: &str,
+    ) -> Result<String, UpdateError> {
         let parsed = release_version(version)?;
         let stable = parsed.pre.is_empty();
         let identity = release_signing_identity(version)?;
@@ -80,11 +104,11 @@ impl PublishedReleaseManifest {
         {
             return Err(invalid_publication());
         }
-        let core = self.images.get("core").ok_or_else(invalid_publication)?;
+        let core = self.images.get(kind).ok_or_else(invalid_publication)?;
         let repositories = if stable {
-            vec![CORE_IMAGE, "docker.io/citadelplane/citadel"]
+            vec![repository, mirror]
         } else {
-            vec![CORE_IMAGE]
+            vec![repository]
         };
         if core.len() != repositories.len() {
             return Err(invalid_publication());

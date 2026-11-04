@@ -40,6 +40,62 @@ it remains available when automatic checks are off, unless server configuration
 prohibits release checks. The **Activities** tab records discovered releases and
 update-check setting changes.
 
+## Update Agents
+
+Use **Settings → Updates → Config → Agent updates**. Agent availability is
+independent of Core: a current Core can still have Agents that need updating.
+**Check now** also verifies the official Agent image matching the running Core
+version. It does not install anything.
+
+Select eligible Agents, choose **Review update** (or **Review selected updates**),
+then confirm the displayed version transitions. Manual updates are available to
+administrators in Community and Team. Citadel updates the selected installations
+one at a time while Core keeps running. Platform and Build Pool references to the
+same installation are combined. A managed Swarm node-agent service is one target;
+the review shows how many nodes it covers. Its **Repair** action on the Platform
+page preserves the previously approved image.
+
+The progress sheet and **Activities** record each outcome. Closing the browser
+does not cancel an accepted operation. Citadel waits for the affected Agent's
+active work, replaces it, and verifies its authenticated connection, image and
+version before reporting success. A target that becomes unavailable is skipped;
+an installation failure stops the remaining targets.
+If Core restarts during replacement, it checks the existing attempt after startup
+instead of starting another. Swarm updates remain in progress while a disconnected
+node is waiting to resume work; cleanup retries after the node reconnects.
+
+Central replacement supports recognized standalone Docker Agents using the local
+Docker socket, standard bridge or host networking, and persistent identity storage
+for Edge mode. Custom hostnames, shared container networking, remote Docker
+sockets and unsupported storage profiles require a manual update. An Agent that
+does not implement the update protocol also requires a manual update first.
+These targets remain visible with an explanation. Use the generated installation
+command or your existing deployment manifest, preserving credentials and storage.
+
+### Scheduled Agent updates — Team
+
+Save one schedule with **Scheduled Agents**, **Enabled**, **Cron** and **Time Zone**.
+You can select supported Agents that are already current, and previously selected
+Agents can remain enrolled while offline. New registrations are not automatically
+enrolled. Manual selection does not change the saved schedule.
+
+Each occurrence rechecks only the saved targets. Current Agents need no update;
+unavailable targets are skipped. Missed or overlapping occurrences are not queued.
+Team expiry prevents new scheduled target starts but lets a started replacement
+settle; you can still disable the schedule or update manually. The server's update
+restriction also prevents scheduled starts.
+
+### If an Agent replacement fails
+
+Keep the updater helper, previous container and persistent data for inspection.
+The progress sheet identifies the affected Agent. Inspect containers labelled
+`com.citadel.agent-update` with that operation ID and their logs before retrying.
+Citadel does not blindly repeat a replacement after a lost response. It retains
+the previous container with automatic restart disabled and does not automatically
+roll back. Recreate the Agent
+from the generated instructions if recovery is needed, preserving its identity
+volume and configuration; verify the connection before removing retained containers.
+
 ## Install a qualified update
 
 A registered, supported Docker Compose installation can offer **Update now**
@@ -168,8 +224,8 @@ with a committed successful update can finish verified cleanup after a restart.
 4. Check important application endpoints and inspect recent **Activities** and
    **Alerts** for new failures. Review scheduled jobs as they resume.
 
-Update Agents to the matching current build using the generated installation
-commands. Check each connection after replacement; keep Agent image references
+Update Agents to the matching current build from **Settings → Updates** when
+eligible, or use the generated installation commands for manual replacement. Check each connection after replacement; keep Agent image references
 with the corresponding Core version. Retain the pre-upgrade backup until the
 installation and its normal operations have been verified.
 

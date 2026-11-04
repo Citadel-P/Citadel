@@ -13,7 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 
-type NodeAgentAction = 'install' | 'repair' | 'upgrade' | 'remove';
+type NodeAgentAction = 'install' | 'repair' | 'remove';
 
 export const SwarmNodeAgentCoveragePanel = ({
   platformId,
@@ -84,9 +84,6 @@ export const SwarmNodeAgentCoveragePanel = ({
             <>
               <Button size="sm" variant="outline" disabled={disabled} onClick={() => run('repair')}>
                 <RefreshCw className="size-3.5" /> Repair
-              </Button>
-              <Button size="sm" variant="outline" disabled={disabled} onClick={() => run('upgrade')}>
-                Upgrade
               </Button>
               <ActionWithDialog
                 name={platformName}

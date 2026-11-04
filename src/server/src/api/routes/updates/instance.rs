@@ -27,6 +27,7 @@ pub struct UpdateHttpState {
     pub identity: Arc<IdentityService>,
     pub checker: ReleaseCheckService,
     pub installer: Option<citadel_updates::UpdateInstallService>,
+    pub agents: Option<citadel_updates::AgentUpdateService>,
     pub licenses: Arc<LicenseService>,
 }
 
@@ -35,6 +36,7 @@ pub fn router(state: UpdateHttpState) -> Router {
 }
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<UpdateHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
+        .merge(super::agents::routes())
         .normalized_routes(utoipa_axum::routes!(status))
         .normalized_routes(utoipa_axum::routes!(check))
         .normalized_routes(utoipa_axum::routes!(review))
@@ -148,7 +150,7 @@ fn installation(
         ApiError::Conflict("This installation is not registered for updates.".into())
     })
 }
-fn actor(principal: ActorPrincipal) -> citadel_updates::UpdateActor {
+pub(super) fn actor(principal: ActorPrincipal) -> citadel_updates::UpdateActor {
     citadel_updates::UpdateActor {
         subject_id: principal.subject_id,
         actor_id: principal.actor_id,

@@ -61,6 +61,10 @@ pub async fn spawn_all(
         license_realtime_hub,
     } = services;
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
+    supervisor.spawn(
+        "agent-updates",
+        workers::updates::run_agents(state.agent_updates.clone(), cancellation.child_token()),
+    );
     if let Some((service, receiver)) = update_installation {
         supervisor.spawn(
             "update-installer",

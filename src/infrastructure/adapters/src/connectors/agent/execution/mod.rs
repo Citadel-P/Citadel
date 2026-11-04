@@ -763,7 +763,17 @@ pub(crate) async fn unary<T: Message, R: Message + Default + 'static>(
         .command(
             kind,
             request.encode_to_vec(),
-            Duration::from_secs(120),
+            Duration::from_secs(
+                if matches!(
+                    kind,
+                    EdgeCommandKind::PlatformUpdateAgent
+                        | EdgeCommandKind::PlatformAgentUpdateDrain
+                ) {
+                    450
+                } else {
+                    120
+                },
+            ),
             false,
         )
         .map_err(edge_error)?;
@@ -830,3 +840,5 @@ fn edge_error(error: EdgeError) -> RuntimeCapabilityError {
 
 #[cfg(test)]
 mod tests;
+
+mod updates;

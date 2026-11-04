@@ -453,7 +453,10 @@ Confirm that the Agent reconnects successfully by reviewing its logs and validat
 
 ## Update the Agent image
 
-After updating Citadel Core, update regular Agents to the matching image version displayed in the platform setup instructions.
+After updating Citadel Core, use **Settings → Updates → Config → Agent updates**
+for eligible installations. See [central Agent updates](/operations/upgrade-and-rollback#update-agents).
+If the Agent shows **Manual update required**, use the matching image version
+displayed in the platform setup instructions and follow the procedure below.
 
 ### Docker installation
 

@@ -994,3 +994,43 @@ source-to-target run, including checkpoint restore and interrupted cleanup recov
 is still required before publishing a qualified transition. Preserve private state
 and checkpoints on failure; never delete journals or clear database ownership merely
 to make startup pass.
+
+
+### Central Agent updates
+
+The focused service tests cover independent Agent eligibility, installation alias
+deduplication, stale reviews, request replay, sequential failure handling,
+interrupted-attempt reconciliation, Team scheduling and authorization rechecks.
+They also cover shutdown after dispatch, cancellation during verification and
+lost Swarm resume acknowledgements without releasing the claim or redispatching.
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::agents
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --lib
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib connectors::routing::agent_updates
+npm --prefix src/frontend run test:run -- src/features/updates/index.test.tsx src/features/activities/index.test.ts
+```
+
+`citadel-adapters --test agent_updates` exercises real PostgreSQL claims, concurrent
+approvals, revision fences, Activities and schedule occurrence claims. Create a
+fresh disposable database named `citadel_update_test_*`, then run:
+
+```bash
+CITADEL_UPDATE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/citadel_update_test_agents \
+  SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test agent_updates -- --ignored
+```
+
+The standalone replacement test uses the real Docker API against containers and a
+volume created by the test. It requires an already-pulled official Agent digest;
+set `CITADEL_AGENT_TEST_IMAGE` to `ghcr.io/citadel-p/citadel.agent@sha256:<digest>`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --test agent_replacement -- --ignored
+```
+
+This test verifies actual container replacement, persistent storage, environment,
+host ports and retained-source restart policy. It uses a shell fixture inside the
+Agent image; it does **not** establish an authenticated Direct/Edge rollout or a
+multi-node Swarm rollout. Those require release images containing the update RPCs
+and detached helper. Keep published-release signature verification separate from
+this Docker mutation fixture; do not weaken image validation for local testing.

@@ -46,3 +46,7 @@ pub use queries::read_instance_identity;
 pub use repository::PostgresUpdateRepository;
 use repository::storage;
 pub use startup::check_startup_updates;
+
+mod agent_operations;
+
+pub(crate) mod agent_inventory;

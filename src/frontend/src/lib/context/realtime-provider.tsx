@@ -29,6 +29,8 @@ type CancellationRef = { current: boolean };
 const liveBackedQueryKeys = new Set([
   'getApplicationInfo',
   'getInstanceUpdates',
+  'getAgentUpdates',
+  'getAgentUpdateOperation',
   'getInstanceUpdateOperation',
   'getInstallationSettings',
   'getProfileMfaStatus',
@@ -150,12 +152,16 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       conn.on('ApplicationInfoChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdateOperation'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdateOperation'] });
       });
 
       conn.on('InstallationSettingsChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['getInstallationSettings'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdateOperation'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdateOperation'] });
         void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
         void queryClient.invalidateQueries({ queryKey: ['getProfileMfaStatus'] });
@@ -274,6 +280,8 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
               [
                 'getApplicationInfo',
                 'getInstanceUpdates',
+                'getAgentUpdates',
+                'getAgentUpdateOperation',
                 'getInstanceUpdateOperation',
                 'getInstallationSettings',
                 'getProfileMfaStatus',

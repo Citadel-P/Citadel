@@ -49,6 +49,30 @@ Checks read metadata only. Missing comparison fields from older Agents yield an
 unavailable comparison in Core. No operation numbers or Swarm-node allowlists
 change; node-local registry checks remain unavailable.
 
+## Central Agent replacement
+
+Core verifies the official Agent image matching its current release before sending
+an immutable image reference through authenticated Direct or Edge transport.
+`GetAgentUpdateInfo` returns the live container/daemon identity and whether its
+installation profile supports replacement. Unsupported or missing update RPCs are
+reported as requiring manual update; a version string alone is not capability proof.
+`UpdateAgent` is dispatched once and uses a detached helper so stopping the source
+does not stop replacement. Admission closes while active mutations and reserved
+heavy work drain. The source retains its drain after an ambiguous helper start.
+Data, build and script reconciliation remain admitted during drain so authenticated
+cleanup can release existing reservations. Their authority and generation checks
+still apply; new reservations and workload mutations remain blocked.
+
+Managed Swarm node Agents permit update metadata and `SetAgentUpdateDrain` only;
+the manager's existing service rollout replaces their tasks. Drain/resume is fenced
+by operation identity, and cancellation before handoff reopens admission. Standalone
+self-replacement remains denied for the Swarm profile. Core verifies the new
+connection and expected version before marking a target successful.
+Core also requires acknowledgement of Swarm admission resume for the saved node
+selection. A disconnected node or lost acknowledgement keeps the operation owned
+for retry after reconnect. Shutdown preserves dispatched attempts for verification;
+it does not turn them into completed failures or cause another replacement.
+
 ## Network inventory
 
 Network list responses include attached endpoints in the additive shared
@@ -373,6 +397,8 @@ The protobuf sources are authoritative:
 [src/infrastructure/contracts/proto/](../src/infrastructure/contracts/proto/).
 Direct handlers live in [src/agent/src/direct/](../src/agent/src/direct/).
 Runtime reference paths below are relative to `src/infrastructure/docker/src/`.
+References prefixed with `agent/` identify Agent-owned admission and replacement
+logic under `src/agent/src/`.
 
 The final column identifies the behavior checks that apply. Every operation also
 requires G0 and G1; Swarm-node operations additionally require G8.
@@ -426,6 +452,9 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 | citadel.networks.v1.NetworkService/Create | citadel.networks.v1.CreateNetworkRequest | citadel.networks.v1.CreateNetworkResponse | unary | NETWORK_CREATE | 62 | denied | client/finite.rs:create_network | G1 |
 | citadel.networks.v1.NetworkService/Delete | citadel.networks.v1.DeleteNetworkRequest | citadel.networks.v1.DeleteNetworkResponse | unary | NETWORK_DELETE | 63 | denied | client/finite.rs:delete_network | G1 |
 | citadel.networks.v1.NetworkService/Inspect | citadel.networks.v1.InspectNetworkRequest | citadel.networks.v1.InspectNetworkResponse | unary | NETWORK_INSPECT | 61 | allowed | client/finite.rs:inspect_network | G1 |
+| citadel.platforms.v1.PlatformService/GetAgentUpdateInfo | google.protobuf.Empty | citadel.platforms.v1.AgentUpdateInfo | unary | PLATFORM_AGENT_UPDATE_INFO | 6 | allowed | agent/direct/updates/runtime.rs:agent_update_info | G1 |
+| citadel.platforms.v1.PlatformService/UpdateAgent | citadel.platforms.v1.UpdateAgentRequest | citadel.platforms.v1.UpdateAgentResponse | unary | PLATFORM_UPDATE_AGENT | 7 | denied | agent/direct/updates/runtime.rs:start_agent_update | G1 |
+| citadel.platforms.v1.PlatformService/SetAgentUpdateDrain | citadel.platforms.v1.AgentUpdateDrainRequest | google.protobuf.Empty | unary | PLATFORM_AGENT_UPDATE_DRAIN | 8 | allowed | agent/direct/updates/runtime.rs:drain_agent_update | G1 |
 | citadel.platforms.v1.PlatformService/GetPlatformInfo | google.protobuf.Empty | citadel.shared_models.v1.PlatformInfoResponse | unary | PLATFORM_GET_INFO | 2 | allowed | client/finite.rs:info | G1 |
 | citadel.platforms.v1.PlatformService/CheckHealth | google.protobuf.Empty | citadel.platforms.v1.CheckHealthResponse | unary | PLATFORM_CHECK_HEALTH | 1 | allowed | client/transport/mod.rs:ping | G1 |
 | citadel.platforms.v1.PlatformService/Prune | citadel.platforms.v1.PruneRequest | citadel.platforms.v1.PruneResponse | unary | PLATFORM_PRUNE | 5 | denied | client/finite.rs:prune_resources | G1 |

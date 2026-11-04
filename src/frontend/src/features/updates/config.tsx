@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { AgentUpdates } from './agents';
 import { useRead } from '@/lib/hooks';
 import { defineField, defineSection, FieldSelect, FieldSwitch, FormShell } from '@/components/custom/form-builder';
 import { useUpdateInstallationSettings } from '@/hooks/use-installation-settings';
@@ -42,7 +43,7 @@ export function UpdateCheckSettings() {
             key: 'updateChecksEnabled',
             label: 'Automatic checks',
             description: settings?.updateChecksAllowed
-              ? 'Check for new Citadel releases on a schedule. Updates are installed manually.'
+              ? 'Check for new Citadel releases on a schedule. Checking does not install updates.'
               : 'Disabled by server configuration.',
             render: (value, set) => (
               <FieldSwitch
@@ -136,6 +137,7 @@ export function UpdateCheckSettings() {
           await save.mutateAsync({ data: update });
         }}
       />
+      <AgentUpdates />
       {checkFailed && (
         <p role="alert" className="text-sm text-destructive">
           The check could not finish. Try again. Last successful release information is retained.

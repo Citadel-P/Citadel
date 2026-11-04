@@ -150,6 +150,7 @@ impl Commands {
                 () = cancel.cancelled() => Err(Status::cancelled("Edge command cancelled")),
                 () = async { if let Some(deadline) = deadline { tokio::time::sleep_until(deadline).await } else { std::future::pending::<()>().await } } => Err(Status::deadline_exceeded("Edge command timed out")),
                 result = async {
+                    let _update_permit = runtime.update_admission(kind)?;
                     let mut payload = command.payload;
                     if let EdgeProfile::SwarmNode(node) = &profile {
                         super::swarm_guard::authorize(&docker, node, kind, &mut payload).await?;

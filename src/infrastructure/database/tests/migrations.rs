@@ -33,7 +33,7 @@ async fn instance_updates_upgrade_preserves_existing_settings_and_migration_hist
             .await
             .unwrap();
     let result = MigrationRunner::migrate(&url).await.unwrap();
-    assert_eq!(result.applied, 1);
+    assert_eq!(result.applied, migration_count() - 1);
     assert_eq!(result.already_applied, 1);
     let settings: (bool, String, i32) = sqlx::query_as("SELECT updatechecksenabled, mfapolicy, updatecheckintervalhours FROM instancesetupstates WHERE id=1")
         .fetch_one(&mut connection).await.unwrap();

@@ -54,6 +54,7 @@ pub fn router(
         docker,
         updates,
         update_installation,
+        agent_updates,
         database_health,
         git_repositories,
         backup_coverage,
@@ -129,6 +130,7 @@ pub fn router(
             licenses: licenses.clone(),
             checker: updates.clone(),
             installer: update_installation,
+            agents: Some(agent_updates),
         },
     ))
     .merge(application_info_http::router(updates))

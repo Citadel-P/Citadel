@@ -12,3 +12,6 @@ pub use installation::InstallationSnapshot;
 pub use journal::{CompletionReceipt, UPDATE_PROTOCOL, UpdateJournal};
 pub use operations::{UpdateOperation, UpdatePhase};
 pub use plan::UpdatePlan;
+
+mod agents;
+pub use agents::*;

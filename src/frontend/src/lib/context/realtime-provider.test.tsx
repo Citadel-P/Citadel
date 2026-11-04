@@ -571,6 +571,10 @@ describe('RealtimeProvider', () => {
   });
 
   it.each([
+    ['getAgentUpdates', 'ApplicationInfoChanged'],
+    ['getAgentUpdates', 'InstallationSettingsChanged'],
+    ['getAgentUpdateOperation', 'ApplicationInfoChanged'],
+    ['getAgentUpdateOperation', 'InstallationSettingsChanged'],
     ['getInstanceUpdates', 'ApplicationInfoChanged'],
     ['getInstanceUpdates', 'InstallationSettingsChanged'],
     ['getInstallationSettings', 'InstallationSettingsChanged'],

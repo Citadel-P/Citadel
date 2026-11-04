@@ -56,6 +56,8 @@ it('keeps Updates administrator-only and includes all singleton update event typ
   );
   expect(getActivityEventOptions(ActivityResourceType.Updates)).toEqual(
     expect.arrayContaining([
+      ActivityEventType.AgentUpdate,
+      ActivityEventType.AgentUpdateScheduleChanged,
       ActivityEventType.UpdateDiscovered,
       ActivityEventType.UpdateChecksChanged,
       ActivityEventType.InstanceUpdateStarted,

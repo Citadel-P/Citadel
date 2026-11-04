@@ -20,6 +20,11 @@ fn official_publisher_fixtures_resolve_exact_core_digests() {
             format!("{CORE_IMAGE}@sha256:{}", "b".repeat(64))
         );
         assert!(manifest.core_image("1.2.5").is_err());
+        assert_eq!(
+            manifest.agent_image(version).unwrap(),
+            format!("ghcr.io/citadel-p/citadel.agent@sha256:{}", "a".repeat(64))
+        );
+        assert!(manifest.agent_image("1.2.5").is_err());
     }
 }
 
@@ -76,5 +81,31 @@ fn untrusted_publication_fields_cannot_change_the_expected_identity() {
         "1.2.3-rc.1",
     ] {
         assert!(release_signing_identity(version).is_err());
+    }
+}
+
+#[test]
+fn agent_manifest_rejects_unofficial_repository_or_mismatched_mirror() {
+    for (pointer, value) in [
+        (
+            "/images/agent/0/tag",
+            json!("ghcr.io/untrusted/agent:1.2.3"),
+        ),
+        (
+            "/images/agent/1/digest",
+            json!(format!(
+                "docker.io/citadelplane/citadel-agent@sha256:{}",
+                "b".repeat(64)
+            )),
+        ),
+    ] {
+        let mut doc: Value = serde_json::from_str(STABLE).unwrap();
+        *doc.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            serde_json::from_value::<PublishedReleaseManifest>(doc)
+                .unwrap()
+                .agent_image("1.2.3")
+                .is_err()
+        );
     }
 }

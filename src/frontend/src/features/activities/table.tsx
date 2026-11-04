@@ -133,6 +133,10 @@ function getActivitySummary(info: PublicActivityEventInfo | null | undefined): s
   if (!info?.$type) return null;
 
   switch (info.$type) {
+    case 'AgentUpdate':
+      return `${info.agent}: ${info.sourceVersion ?? 'Unknown'} → ${info.targetVersion} · ${info.phase}${info.message ? ` · ${info.message}` : ''}`;
+    case 'AgentUpdateScheduleChanged':
+      return `Agent schedule ${info.enabled ? 'enabled' : 'disabled'} · ${info.targetCount} selected`;
     case 'UpdateDiscovered':
       return `Citadel ${info.version} is available`;
     case 'UpdateChecksChanged':

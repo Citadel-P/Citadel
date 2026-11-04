@@ -30,6 +30,7 @@ pub struct ReleaseCheckService {
     available: Arc<RwLock<Option<ReleaseNotice>>>,
     check_lock: Arc<tokio::sync::Mutex<()>>,
     notifier: Arc<dyn UpdateChangeNotifier>,
+    agents: Option<crate::AgentUpdateService>,
 }
 
 impl ReleaseCheckService {
@@ -45,7 +46,13 @@ impl ReleaseCheckService {
             available: Default::default(),
             check_lock: Default::default(),
             notifier: Arc::new(NoopUpdateChangeNotifier),
+            agents: None,
         }
+    }
+
+    pub fn with_agents(mut self, agents: crate::AgentUpdateService) -> Self {
+        self.agents = Some(agents);
+        self
     }
 
     pub fn with_notifier(mut self, notifier: Arc<dyn UpdateChangeNotifier>) -> Self {
@@ -204,6 +211,9 @@ impl ReleaseCheckService {
             Ok(notice) => self.publish(notice, true),
             // The repository retains the last successful result on failure.
             Err(_) => self.publish(self.available(), true),
+        }
+        if let Some(agents) = &self.agents {
+            agents.check(cancellation).await?;
         }
         self.status().await
     }

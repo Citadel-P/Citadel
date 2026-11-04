@@ -139,7 +139,9 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         checkpoint_directory: "/private/fixture/checkpoints".into(),
         agent_requirements: vec![],
     };
-    repo.save_review(actor, &plan).await.unwrap();
+    UpdateRepository::save_review(&repo, actor, &plan)
+        .await
+        .unwrap();
     sqlx::query("UPDATE actors SET isenabled=FALSE WHERE id=$1")
         .bind(actor.actor_id.value())
         .execute(&pool)
@@ -297,7 +299,9 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         Some(journal.operation.clone())
     );
     let (replayed, created) = repo.claim(actor, &plan, key, Utc::now()).await.unwrap();
-    repo.save_review(actor, &plan).await.unwrap();
+    UpdateRepository::save_review(&repo, actor, &plan)
+        .await
+        .unwrap();
     assert_eq!(replayed, journal.operation);
     assert!(!created);
 
@@ -494,7 +498,10 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     repo.abort_source(&untouched).await.unwrap();
     assert!(repo.active().await.unwrap().is_none());
     assert_eq!(
-        repo.operation(untouched.id).await.unwrap().phase,
+        UpdateRepository::operation(&repo, untouched.id)
+            .await
+            .unwrap()
+            .phase,
         UpdatePhase::Failed
     );
     check_startup_updates(&pool, Some(instance)).await.unwrap();

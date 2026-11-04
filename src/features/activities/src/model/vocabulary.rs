@@ -66,6 +66,8 @@ database_string_enum! {
     pub enum ActivityEventType {
         UpdateDiscovered,
         UpdateChecksChanged,
+        AgentUpdate,
+        AgentUpdateScheduleChanged,
         InstanceUpdateStarted,
         InstanceUpdateCompleted,
         InstanceUpdateFailed,
@@ -318,6 +320,8 @@ impl ActivityEventType {
             }
             Self::UpdateDiscovered
             | Self::UpdateChecksChanged
+            | Self::AgentUpdate
+            | Self::AgentUpdateScheduleChanged
             | Self::InstanceUpdateStarted
             | Self::InstanceUpdateCompleted
             | Self::InstanceUpdateFailed

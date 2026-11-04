@@ -60,7 +60,7 @@ impl GithubReleaseArtifacts {
         Ok(body)
     }
 
-    async fn published_image(&self, version: &str) -> Result<String, UpdateError> {
+    async fn published_image(&self, version: &str, agent: bool) -> Result<String, UpdateError> {
         let parsed = release_version(version)?;
         let publication: Publication = serde_json::from_slice(
             &self
@@ -100,9 +100,30 @@ impl GithubReleaseArtifacts {
         if std::str::from_utf8(&checksum).map(str::trim).ok() != Some(expected.as_str()) {
             return Err(unavailable());
         }
-        serde_json::from_slice::<PublishedReleaseManifest>(&manifest)
-            .map_err(|_| unavailable())?
-            .core_image(version)
+        let manifest = serde_json::from_slice::<PublishedReleaseManifest>(&manifest)
+            .map_err(|_| unavailable())?;
+        if agent {
+            manifest.agent_image(version)
+        } else {
+            manifest.core_image(version)
+        }
+    }
+
+    pub async fn agent(
+        &self,
+        version: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<citadel_updates::AgentUpdateRelease, UpdateError> {
+        let image = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(UpdateError::Cancelled),
+            image = self.published_image(version, true) => image?,
+        };
+        self.verify_image(version, &image, cancellation).await?;
+        Ok(citadel_updates::AgentUpdateRelease {
+            version: version.into(),
+            image,
+        })
     }
 
     async fn verify_image(
@@ -177,7 +198,7 @@ impl ReleaseArtifactSource for GithubReleaseArtifacts {
             let image = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(UpdateError::Cancelled),
-                image = self.published_image(version) => image?,
+                image = self.published_image(version, false) => image?,
             };
             if cancellation.is_cancelled() {
                 return Err(UpdateError::Cancelled);
@@ -222,7 +243,8 @@ fn unavailable() -> UpdateError {
 }
 fn signature_failed() -> UpdateError {
     UpdateError::Unavailable(
-        "The Core image signature could not be verified against Citadel's release workflow.".into(),
+        "The release image signature could not be verified against Citadel's release workflow."
+            .into(),
     )
 }
 

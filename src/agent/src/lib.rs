@@ -10,3 +10,5 @@ mod edge;
 
 pub const VERSION: &str = env!("CITADEL_BUILD_VERSION");
 pub const INFORMATIONAL_VERSION: &str = env!("CITADEL_BUILD_INFORMATIONAL_VERSION");
+
+pub mod updates;

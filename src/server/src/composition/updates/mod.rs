@@ -26,3 +26,6 @@ pub(crate) mod fixtures;
 pub(crate) mod releases;
 #[cfg(test)]
 pub(crate) use fixtures as releases;
+
+mod agents;
+pub(super) use agents::build_agents;

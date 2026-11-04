@@ -35,3 +35,13 @@ pub use service::{
     NoopUpdateChangeNotifier, ReleaseCheckPolicy, ReleaseCheckService, ReleaseInspectionService,
     UpdateChangeNotifier, UpdateDrainService, UpdateInstallCommand, UpdateInstallService,
 };
+
+pub use model::{
+    AgentUpdateEligibility, AgentUpdateKind, AgentUpdateOperation, AgentUpdatePhase,
+    AgentUpdateRelease, AgentUpdateResult, AgentUpdateReview, AgentUpdateSchedule,
+    AgentUpdateState, AgentUpdateTarget,
+};
+
+pub use repository::AgentUpdateRepository;
+pub use runtime::{AgentUpdateEntitlements, AgentUpdateRuntime};
+pub use service::AgentUpdateService;

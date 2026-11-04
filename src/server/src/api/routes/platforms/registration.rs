@@ -450,25 +450,6 @@ setup_handler!(
     Repair
 );
 
-setup_handler!(
-    #[utoipa::path(
-    post,
-    path = "/api/v1/platforms/{id}/node-agents/upgrade",
-    operation_id = "upgradeSwarmNodeAgents",
-    tag = "Platforms",
-    summary = "Upgrade Docker Swarm node agents",
-    responses(
-        (status = 200, description = "Success", body = Vec<crate::api::resources::schema_models::platforms::NodeAgentProgressSchema>, content_type = "application/json"),
-        crate::openapi::errors::ResourceMutationErrors
-    ),
-    params(("id" = uuid::Uuid, Path)),
-    security(("Bearer" = [])),
-    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
-)]
-    upgrade_node_agents,
-    Upgrade
-);
-
 #[utoipa::path(
     delete,
     path = "/api/v1/platforms/{id}/node-agents",

@@ -12,3 +12,6 @@ pub use inspection::ReleaseInspectionService;
 
 #[cfg(test)]
 mod tests;
+
+mod agents;
+pub use agents::AgentUpdateService;

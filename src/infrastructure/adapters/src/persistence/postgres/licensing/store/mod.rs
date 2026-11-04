@@ -448,3 +448,5 @@ async fn insert_license_activity(
 fn storage(error: impl std::fmt::Display) -> LicenseError {
     LicenseError::Storage(error.to_string())
 }
+
+mod agent_updates;

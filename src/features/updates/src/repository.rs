@@ -1,4 +1,8 @@
 use crate::{
+    AgentUpdateOperation, AgentUpdateRelease, AgentUpdateReview, AgentUpdateSchedule,
+    AgentUpdateState,
+};
+use crate::{
     CheckState, CompletionReceipt, ReleaseNotice, UpdateError, UpdateJournal, UpdateOperation,
     UpdatePlan,
 };
@@ -84,4 +88,45 @@ pub trait UpdateRepository: ReleaseCheckRepository {
         journal: &'a UpdateJournal,
         running: &'a crate::CoreIdentity,
     ) -> BoxFuture<'a, Result<(), UpdateError>>;
+}
+
+pub trait AgentUpdateRepository: Send + Sync {
+    fn operation(&self, id: Uuid) -> BoxFuture<'_, Result<AgentUpdateOperation, UpdateError>>;
+    fn state(&self) -> BoxFuture<'_, Result<AgentUpdateState, UpdateError>>;
+    fn save_release<'a>(
+        &'a self,
+        release: Option<&'a AgentUpdateRelease>,
+        error: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+    fn save_schedule<'a>(
+        &'a self,
+        actor: UpdateActor,
+        schedule: &'a AgentUpdateSchedule,
+        allow_configuration: bool,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+    fn save_review<'a>(
+        &'a self,
+        actor: UpdateActor,
+        review: &'a AgentUpdateReview,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+    /// Atomically reauthorize, replay the exact request or claim the reviewed operation.
+    fn approve(
+        &self,
+        actor: UpdateActor,
+        review: Uuid,
+        request: Uuid,
+    ) -> BoxFuture<'_, Result<AgentUpdateOperation, UpdateError>>;
+    /// Recheck schedule revision/membership and claim this minute at most once, without a backlog.
+    fn scheduled<'a>(
+        &'a self,
+        schedule: &'a AgentUpdateSchedule,
+        review: &'a AgentUpdateReview,
+        minute: DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<bool, UpdateError>>;
+    fn authorize(&self, actor: ActorId) -> BoxFuture<'_, Result<(), UpdateError>>;
+    /// Compare-and-swap progress and its Activity together; returns the new revision.
+    fn save_operation<'a>(
+        &'a self,
+        operation: &'a AgentUpdateOperation,
+    ) -> BoxFuture<'a, Result<AgentUpdateOperation, UpdateError>>;
 }

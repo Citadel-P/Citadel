@@ -29,6 +29,27 @@ schema_model! {
 #[serde(tag = "$type")]
 #[schema(as = ActivityEventInfo)]
 pub enum ActivityEventInfoSchema {
+    AgentUpdate {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Agent")]
+        agent: String,
+        #[serde(rename = "SourceVersion")]
+        source_version: Option<String>,
+        #[serde(rename = "TargetVersion")]
+        target_version: String,
+        #[serde(rename = "Phase")]
+        phase: String,
+        #[serde(rename = "Message")]
+        message: Option<String>,
+    },
+    AgentUpdateScheduleChanged {
+        #[serde(rename = "Enabled")]
+        enabled: bool,
+        #[serde(rename = "TargetCount")]
+        target_count: usize,
+    },
+
     UpdateDiscovered {
         #[serde(rename = "Version")]
         version: String,
@@ -1098,6 +1119,28 @@ pub enum ActivityEventInfoSchema {
 impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
     fn from(value: citadel_activities::ActivityEventInfo) -> Self {
         match value {
+            citadel_activities::ActivityEventInfo::AgentUpdate {
+                operation_id,
+                agent,
+                source_version,
+                target_version,
+                phase,
+                message,
+            } => Self::AgentUpdate {
+                operation_id,
+                agent,
+                source_version,
+                target_version,
+                phase,
+                message,
+            },
+            citadel_activities::ActivityEventInfo::AgentUpdateScheduleChanged {
+                enabled,
+                target_count,
+            } => Self::AgentUpdateScheduleChanged {
+                enabled,
+                target_count,
+            },
             citadel_activities::ActivityEventInfo::UpdateDiscovered {
                 version,
                 release_url,
@@ -1980,6 +2023,8 @@ enum_schema!(
         InstallationSettingsUpdated,
         UpdateDiscovered,
         UpdateChecksChanged,
+        AgentUpdate,
+        AgentUpdateScheduleChanged,
         InstanceUpdateStarted,
         InstanceUpdateCompleted,
         InstanceUpdateFailed,

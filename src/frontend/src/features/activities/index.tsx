@@ -140,7 +140,8 @@ export function getActivityEventOptions(resourceType: ActivityFiltersState['reso
       : all.filter(
           (e) =>
             (e.startsWith(eventPrefix) ||
-              (resourceType === ActivityResourceType.Updates && e.startsWith('InstanceUpdate'))) &&
+              (resourceType === ActivityResourceType.Updates &&
+                (e.startsWith('InstanceUpdate') || e.startsWith('AgentUpdate')))) &&
             (resourceType !== ActivityResourceType.Build || !e.startsWith('BuildAgentPool')),
         );
   return events.flatMap<string | { value: string; label: string }>((event) =>

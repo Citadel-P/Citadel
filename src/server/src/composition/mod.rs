@@ -68,6 +68,7 @@ pub struct ServerComponents {
     pub backup_coverage: Arc<citadel_server::api::resources::backups::coverage::BackupCoverageService>,
     pub edge_service: citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer<citadel_adapters::connectors::edge::EdgeIntake>,
     pub updates: citadel_updates::ReleaseCheckService,
+    pub agent_updates: citadel_updates::AgentUpdateService,
     pub update_installation: Option<citadel_updates::UpdateInstallService>,
     pub docker: DockerClient,
     pub pool: PgPool,
@@ -327,6 +328,17 @@ impl ServerComponents {
             tokio::sync::mpsc::Receiver<citadel_updates::UpdateInstallCommand>,
         )> = None;
         let update_installation = installation.as_ref().map(|(service, _)| service.clone());
+        let agent_updates = updates::build_agents(
+            config,
+            &pool,
+            &docker,
+            agent.clone(),
+            edge_registry.clone(),
+            &platform_state,
+            entitlements.clone(),
+        )?;
+        let checker =
+            updates::build(&pool, realtime_hub.clone()).with_agents(agent_updates.clone());
         let background_services = background::BackgroundServices {
             docker: docker.clone(),
             agent,
@@ -346,7 +358,8 @@ impl ServerComponents {
                 git_repositories,
                 backup_coverage,
                 edge_service,
-                updates: updates::build(&pool, realtime_hub.clone()),
+                updates: checker,
+                agent_updates,
                 update_installation,
                 docker,
                 pool,

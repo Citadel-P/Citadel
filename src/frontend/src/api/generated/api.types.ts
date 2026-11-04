@@ -972,6 +972,24 @@ export enum AlertDestination {
   ZulipChat = "Zulip_Chat",
 }
 
+export enum AgentPhaseView {
+  Pending = "Pending",
+  Updating = "Updating",
+  Succeeded = "Succeeded",
+  Skipped = "Skipped",
+  Failed = "Failed",
+  NotStarted = "NotStarted",
+}
+
+export enum AgentEligibilityView {
+  Available = "Available",
+  Current = "Current",
+  Offline = "Offline",
+  Unknown = "Unknown",
+  ManualRequired = "ManualRequired",
+  Incompatible = "Incompatible",
+}
+
 export enum AdoptionIssueSeverity {
   Warning = "Warning",
   Blocker = "Blocker",
@@ -1086,6 +1104,8 @@ export enum ActivityEventType {
   InstallationSettingsUpdated = "InstallationSettingsUpdated",
   UpdateDiscovered = "UpdateDiscovered",
   UpdateChecksChanged = "UpdateChecksChanged",
+  AgentUpdate = "AgentUpdate",
+  AgentUpdateScheduleChanged = "AgentUpdateScheduleChanged",
   InstanceUpdateStarted = "InstanceUpdateStarted",
   InstanceUpdateCompleted = "InstanceUpdateCompleted",
   InstanceUpdateFailed = "InstanceUpdateFailed",
@@ -1296,6 +1316,36 @@ export interface AdoptionSource {
   state: string;
 }
 
+export interface AgentOperationView {
+  finished: boolean;
+  /** @format uuid */
+  id: string;
+  targets: AgentResultView[];
+  /** @format date-time */
+  updatedAt: string;
+}
+
+export interface AgentResultView {
+  message?: string | null;
+  phase: AgentPhaseView;
+  target: AgentTargetView;
+}
+
+export interface AgentReviewView {
+  /** @format date-time */
+  expiresAt: string;
+  /** @format uuid */
+  id: string;
+  targets: AgentTargetView[];
+}
+
+export interface AgentScheduleView {
+  cron: string;
+  enabled: boolean;
+  targets: string[];
+  timeZone: string;
+}
+
 /** Public installation instructions. The signing private key never enters this model. */
 export interface AgentSetupView {
   /** @format uuid */
@@ -1305,6 +1355,29 @@ export interface AgentSetupView {
   environment: Record<string, string>;
   hubPublicKey: string;
   requiresTls: boolean;
+}
+
+export interface AgentTargetView {
+  availableVersion?: string | null;
+  id: string;
+  installedVersion?: string | null;
+  kind: string;
+  name: string;
+  /**
+   * @format int32
+   * @min 0
+   */
+  nodes: number;
+  reason?: string | null;
+  status: AgentEligibilityView;
+  supported: boolean;
+}
+
+export interface AgentUpdatesView {
+  checkError?: string | null;
+  operation?: AgentOperationView | null;
+  schedule: AgentScheduleView;
+  targets: AgentTargetView[];
 }
 
 export interface AlertChannelInput {
@@ -4860,6 +4933,22 @@ export interface PrunePlatformView {
 
 export type PublicActivityEventInfo =
   | {
+      $type: "AgentUpdate";
+      agent: string;
+      message?: string | null;
+      /** @format uuid */
+      operationId: string;
+      phase: string;
+      sourceVersion?: string | null;
+      targetVersion: string;
+    }
+  | {
+      $type: "AgentUpdateScheduleChanged";
+      enabled: boolean;
+      /** @min 0 */
+      targetCount: number;
+    }
+  | {
       $type: "UpdateDiscovered";
       releaseUrl: string;
       version: string;
@@ -6184,6 +6273,10 @@ export interface RestoreInput {
 
 export interface Restores {
   runs: BackupRestoreRunView[];
+}
+
+export interface ReviewAgentsInput {
+  targets: string[];
 }
 
 export interface ReviewUpdateInput {
@@ -14755,33 +14848,6 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name UpgradeSwarmNodeAgents
-     * @summary Upgrade Docker Swarm node agents
-     * @request POST:/api/v1/platforms/{id}/node-agents/upgrade
-     * @secure
-     * @response `200` `(NodeAgentProgress)[]` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    upgradeSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
-      this.request<NodeAgentProgress[], ProblemDetails>({
-        path: `/api/v1/platforms/${id}/node-agents/upgrade`,
-        method: "POST",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Platforms
      * @name PrunePlatform
      * @summary Prune unused Docker resources
      * @request POST:/api/v1/platforms/{id}/prune
@@ -20792,6 +20858,143 @@ export class Api<
         path: `/api/v1/updates`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetAgentUpdates
+     * @summary Get Agent availability, schedule and durable progress
+     * @request GET:/api/v1/updates/agents
+     * @secure
+     * @response `200` `AgentUpdatesView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getAgentUpdates: (params: RequestParams = {}) =>
+      this.request<AgentUpdatesView, ProblemDetails>({
+        path: `/api/v1/updates/agents`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name ApproveAgentUpdates
+     * @summary Start a reviewed Agent selection
+     * @request POST:/api/v1/updates/agents/approve
+     * @secure
+     * @response `200` `AgentOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    approveAgentUpdates: (
+      data: ApproveUpdateInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<AgentOperationView, ProblemDetails>({
+        path: `/api/v1/updates/agents/approve`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetAgentUpdateOperation
+     * @summary Read durable Agent update progress
+     * @request GET:/api/v1/updates/agents/operations/{id}
+     * @secure
+     * @response `200` `AgentOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getAgentUpdateOperation: (id: string, params: RequestParams = {}) =>
+      this.request<AgentOperationView, ProblemDetails>({
+        path: `/api/v1/updates/agents/operations/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name ReviewAgentUpdates
+     * @summary Review selected Agent updates
+     * @request POST:/api/v1/updates/agents/review
+     * @secure
+     * @response `200` `AgentReviewView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    reviewAgentUpdates: (data: ReviewAgentsInput, params: RequestParams = {}) =>
+      this.request<AgentReviewView, ProblemDetails>({
+        path: `/api/v1/updates/agents/review`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name UpdateAgentSchedule
+     * @summary Save the Team Agent update schedule
+     * @request PUT:/api/v1/updates/agents/schedule
+     * @secure
+     * @response `200` `AgentScheduleView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    updateAgentSchedule: (
+      data: AgentScheduleView,
+      params: RequestParams = {},
+    ) =>
+      this.request<AgentScheduleView, ProblemDetails>({
+        path: `/api/v1/updates/agents/schedule`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

@@ -18,7 +18,7 @@ export function useCheckInstanceUpdates() {
           description: 'Review the release notes before upgrading.',
         });
       } else {
-        toast.success('Check complete', { description: 'No newer release found.' });
+        toast.success('Check complete', { description: 'Release check complete. Review instance and Agent status.' });
       }
     },
   });

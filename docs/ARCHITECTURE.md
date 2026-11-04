@@ -87,7 +87,7 @@ The installation UI offers Review update when a release is available and the
 installation runtime is configured. The server verifies registration, signatures,
 transition eligibility and Agent requirements before returning a review. Approval
 starts a durable operation shown in the Updates status alert. Channel switching
-and scheduled installation are deferred. Closing it, navigation or a browser refresh must neither cancel nor
+and scheduled Core installation are deferred. Closing it, navigation or a browser refresh must neither cancel nor
 repeat the operation. Realtime reports progress while Core is available; during
 restart the loaded page retains the last confirmed phase and reconnects, without
 inventing progress or offering actions that require Core. The external executor
@@ -115,6 +115,37 @@ begins, the supervised worker awaits cache publication and notification before
 exiting or applying a settings change. Policy monitoring and the worker are joined
 on shutdown; neither drops a committing check. The check endpoint returns the
 service result without rereading check state.
+
+Agent updates share the Updates page, release verification, Activities and realtime
+notifier. They have explicit installation targets and one durable sequential selection;
+Core and Agent claims share the identity mutation lock and cannot overlap. Reviews
+expire after five minutes, approval request IDs replay exactly, and progress uses
+revision-checked repository writes with Activity events in the same transaction.
+The supervised Agent worker uses the existing single-database background lease.
+Interrupted targets are observed, never redispatched. Each new target rechecks the
+requester's administrator access or the scheduled operation's Team entitlement.
+Shutdown during dispatch or verification preserves the target's Updating state.
+Swarm cleanup uses the reviewed node IDs stored in the operation. Missing sessions
+or resume acknowledgements keep the operation owned; the worker retries after
+reconnect and cannot start the next target or release the claim before cleanup.
+
+The supported standalone Docker executor drains affected Agent work and launches a
+separate container from the verified target image. It preserves configuration,
+identity mounts and host ports, retains previous containers for recovery, and
+requires authenticated reconnect with the expected image/version and changed
+container identity. Managed Swarm services reuse NodeAgentSetupService with a
+bounded node-local drain; Repair uses the stored approved digest. Mixed or stale
+node observations cannot establish successful rollout. Unsupported profiles remain
+manual. Additive update RPCs do not relax the Swarm mutation allowlist: node Agents
+allow metadata and drain/resume, but reject standalone self-replacement.
+Drain blocks new work while allowing the existing identity-fenced data, build and
+script reconciliation handlers to release retained admission capacity.
+
+The Team Agent schedule reuses CronSchedule and the Script form fields, saves
+explicit membership, and claims only the current minute. Busy/missed occurrences
+are skipped, with no queue or catch-up. Manual selection never edits the schedule.
+Core-current and Agent-current status are evaluated independently; the Agent
+release must match the running Core's verified release identity.
 
 The operation repository, detached executor and target startup share persisted
 ownership through draining, checkpoint creation, replacement and acceptance.

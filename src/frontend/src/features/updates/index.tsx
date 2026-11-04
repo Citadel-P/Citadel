@@ -18,7 +18,7 @@ import { ScopedActivitiesTable } from '@/features/activities/table';
 export const UpdatesComponents: TabbedResourceComponents = {
   Icon: RefreshCw,
   access: 'administrator',
-  showTaskSheet: false,
+  showTaskSheet: true,
   tabsVariant: 'bordered',
   header: {
     subtitle: 'Manage Citadel release checks and review update activity.',
@@ -149,7 +149,7 @@ function UpdateStatus() {
           ) : (
             !data.checkError && (
               <AlertMessage type="info" className="my-0 flex-wrap" date={data.lastSuccess ?? undefined}>
-                {data.lastSuccess ? 'No newer release found at the last check.' : 'No successful release check yet.'}
+                {data.lastSuccess ? 'Citadel instance: Up to date' : 'No successful release check yet.'}
               </AlertMessage>
             )
           )}

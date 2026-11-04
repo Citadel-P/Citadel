@@ -6,6 +6,26 @@ use super::*;
 // Activity construction solely to reduce the enum's stack size.
 #[allow(clippy::large_enum_variant)]
 pub enum ActivityEventInfo {
+    AgentUpdate {
+        #[serde(rename = "OperationId")]
+        operation_id: Uuid,
+        #[serde(rename = "Agent")]
+        agent: String,
+        #[serde(rename = "SourceVersion")]
+        source_version: Option<String>,
+        #[serde(rename = "TargetVersion")]
+        target_version: String,
+        #[serde(rename = "Phase")]
+        phase: String,
+        #[serde(rename = "Message")]
+        message: Option<String>,
+    },
+    AgentUpdateScheduleChanged {
+        #[serde(rename = "Enabled")]
+        enabled: bool,
+        #[serde(rename = "TargetCount")]
+        target_count: usize,
+    },
     UpdateDiscovered {
         #[serde(rename = "Version")]
         version: String,
@@ -1358,6 +1378,10 @@ impl ActivityEventInfo {
             }
             Self::UpdateDiscovered { .. } => ActivityEventType::UpdateDiscovered,
             Self::UpdateChecksChanged { .. } => ActivityEventType::UpdateChecksChanged,
+            Self::AgentUpdate { .. } => ActivityEventType::AgentUpdate,
+            Self::AgentUpdateScheduleChanged { .. } => {
+                ActivityEventType::AgentUpdateScheduleChanged
+            }
             Self::InstanceUpdateStarted { .. } => ActivityEventType::InstanceUpdateStarted,
             Self::InstanceUpdateCompleted { .. } => ActivityEventType::InstanceUpdateCompleted,
             Self::InstanceUpdateFailed { .. } => ActivityEventType::InstanceUpdateFailed,
