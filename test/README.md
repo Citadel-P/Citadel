@@ -410,11 +410,17 @@ helper, checkpoint, replacement, target verification and PostgreSQL persistence 
 unchanged. The fixture registry is reachable only inside a disconnected disposable
 Docker daemon. No fixture credentials or journals are stored in the checkout.
 
-The command runs a normal update and a target crash after host cleanup but before
-database ownership release. Both must complete without replacing PostgreSQL or
+The command runs a normal update and target crashes after receipt commit, after
+helper exit, and after host cleanup but before database ownership release. The
+first two use barriers compiled only into the fixture executable and exercise
+Docker's restart policy on the same accepted container. All must complete without replacing PostgreSQL or
 changing installation identity, volumes or recovery keys. Each restores its actual
 checkpoint into a fresh database and checks encrypted data and released recovery
-ownership. `--scenario upgrade` or `--scenario cleanup-restart` runs one case.
+ownership. Select one case with `--scenario upgrade`, `--scenario receipt-restart`,
+`--scenario helper-exit-restart` or `--scenario cleanup-restart`. Additional cases
+`--scenario concurrent-requests` and `--scenario preparation-failure` exercise the
+real admission middleware/worker during blocked helper preparation and automatic
+recovery of an unchanged source. All cases run by default.
 Ordinary `cargo test` does not start this fixture server; its test executable exits
 unless packaged with its private fixture file. Product binaries have no fixture
 setting, and candidate publication rejects the test executable's identity marker.

@@ -87,7 +87,7 @@ impl Fixture {
                 json!([{"Type":"volume","Name":"citadel-test_postgres_data","Destination":"/var/lib/postgresql","RW":true}])
             };
             json!({"Id":id,"Image":format!("sha256:{}", "d".repeat(64)),
-                "State":{"Running":true,"Paused":false,"Restarting":false,"Health":{"Status":"healthy"},"StartedAt":"2026-11-03T00:00:00Z"}, "RestartCount":0,
+                "State":{"Status":"running","OOMKilled":false,"Error":"","Running":true,"Paused":false,"Restarting":false,"Health":{"Status":"healthy"},"StartedAt":"2026-11-03T00:00:00Z"}, "RestartCount":0,
                 "Config":{"Hostname": &id[..12],"Image":service["image"],"Env": service["environment"].as_object().unwrap().iter().map(|(k,v)|format!("{k}={}",v.as_str().unwrap())).collect::<Vec<_>>(),
                     "Labels":{"com.docker.compose.project":"citadel-test","com.docker.compose.service":role,"com.docker.compose.oneoff":"False","com.docker.compose.container-number":"1", "com.docker.compose.project.working_dir":inputs.directory,"com.docker.compose.project.config_files":inputs.compose_files[0]}},
                 "HostConfig":{"Privileged":false,"NetworkMode":"citadel-test_default","RestartPolicy":{"Name":"unless-stopped"},"PortBindings":if role=="server" {json!({"8000/tcp":[{"HostIp":"127.0.0.1","HostPort":"18000"}]})} else {json!({})}},

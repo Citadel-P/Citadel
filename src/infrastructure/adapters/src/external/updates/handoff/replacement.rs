@@ -202,6 +202,16 @@ impl ExecutionJournal {
         intent: &HelperLaunchIntent,
     ) -> Result<Self, UpdateError> {
         let execution = Self::read_for(state, intent)?;
+        execution.validate_replacement(state, intent)?;
+        Ok(execution)
+    }
+
+    pub(super) fn validate_replacement(
+        &self,
+        state: &JournalDirectory,
+        intent: &HelperLaunchIntent,
+    ) -> Result<(), UpdateError> {
+        let execution = self;
         let acknowledgement = &execution.acknowledgement;
         if state.read::<HelperAcknowledgement>(&intent.file("shutdown-grant"))? != *acknowledgement
             || execution.stop.is_none()
@@ -249,7 +259,7 @@ impl ExecutionJournal {
         {
             return Err(conflict());
         }
-        Ok(execution)
+        Ok(())
     }
 
     pub(super) fn require_submission(&self) -> Result<(), UpdateError> {

@@ -84,14 +84,14 @@ mod database_tests {
             .unwrap();
         // Temporary tables shadow only these reads on this dedicated connection.
         // No application tables, identity, or stored credentials are modified.
-        sqlx::raw_sql("CREATE TEMP TABLE platforms (connectortype text, agentversion text); CREATE TEMP TABLE edgeagentbindings (platformid integer,lastseenversion text,revokedatutc timestamptz,profile text DEFAULT 'Ordinary'); CREATE TEMP TABLE swarmnodeagentinstallations(platformid integer,desiredstate text DEFAULT 'Installed');")
+        sqlx::raw_sql("CREATE TEMP TABLE platforms (connectortype text, agentversion text,id integer DEFAULT 99); CREATE TEMP TABLE buildagentpools(id integer,provider text DEFAULT 'SelfManagedVm',providerspec jsonb DEFAULT '{}',enabled bool DEFAULT true,archivedat timestamptz,agentversion text); CREATE TEMP TABLE edgeagentbindings (platformid integer,lastseenversion text,revokedatutc timestamptz,profile text DEFAULT 'Ordinary',resourcetype text DEFAULT 'Platform',resourceid integer); CREATE TEMP TABLE swarmnodeagentinstallations(platformid integer,desiredstate text DEFAULT 'Installed');")
             .execute(&pool).await.unwrap();
-        sqlx::raw_sql("INSERT INTO platforms VALUES ('Local',NULL)")
+        sqlx::raw_sql("INSERT INTO platforms(connectortype,agentversion) VALUES ('Local',NULL)")
             .execute(&pool)
             .await
             .unwrap();
         assert!(read_update_agent_versions(&pool).await.unwrap().is_empty());
-        sqlx::raw_sql("INSERT INTO platforms VALUES ('Agent',NULL)")
+        sqlx::raw_sql("INSERT INTO platforms(connectortype,agentversion) VALUES ('Agent',NULL)")
             .execute(&pool)
             .await
             .unwrap();
@@ -113,7 +113,7 @@ mod database_tests {
             .await
             .unwrap();
         assert!(read_update_agent_versions(&pool).await.is_err());
-        sqlx::raw_sql("INSERT INTO edgeagentbindings VALUES (1,'0.1.2',NULL,'SwarmNode')")
+        sqlx::raw_sql("INSERT INTO edgeagentbindings(platformid,lastseenversion,revokedatutc,profile) VALUES (1,'0.1.2',NULL,'SwarmNode')")
             .execute(&pool)
             .await
             .unwrap();
@@ -121,7 +121,41 @@ mod database_tests {
             read_update_agent_versions(&pool).await.unwrap(),
             ["0.1.1", "0.1.2"]
         );
-        sqlx::raw_sql("INSERT INTO platforms SELECT 'Agent','0.1.1' FROM generate_series(1,4097)")
+        // A Direct builder exists even with only Local platform coverage.
+        sqlx::raw_sql("INSERT INTO buildagentpools(id) VALUES (10)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(read_update_agent_versions(&pool).await.is_err());
+        sqlx::raw_sql("UPDATE buildagentpools SET agentversion='0.1.3'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            read_update_agent_versions(&pool).await.unwrap(),
+            ["0.1.1", "0.1.2", "0.1.3"]
+        );
+        sqlx::raw_sql(
+            "UPDATE buildagentpools SET providerspec='{\"connectionMode\":\"EdgeAgent\"}'",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(read_update_agent_versions(&pool).await.is_err());
+        sqlx::raw_sql("INSERT INTO edgeagentbindings(resourceid,resourcetype,lastseenversion) VALUES (10,'BuildAgentPool','0.1.4'); INSERT INTO platforms VALUES ('EdgeAgent','0.1.0',1); UPDATE edgeagentbindings SET profile='Ordinary' WHERE platformid=1; UPDATE swarmnodeagentinstallations SET desiredstate='Removed'").execute(&pool).await.unwrap();
+        assert_eq!(
+            read_update_agent_versions(&pool).await.unwrap(),
+            ["0.1.1", "0.1.2", "0.1.4"]
+        );
+        sqlx::raw_sql("UPDATE buildagentpools SET archivedat=now()")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            read_update_agent_versions(&pool).await.unwrap(),
+            ["0.1.1", "0.1.2"]
+        );
+        sqlx::raw_sql("INSERT INTO platforms(connectortype,agentversion) SELECT 'Agent','0.1.1' FROM generate_series(1,4097)")
             .execute(&pool)
             .await
             .unwrap();

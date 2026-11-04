@@ -14,6 +14,9 @@ pub struct UpdateDrainService {
 }
 
 impl UpdateDrainService {
+    pub(crate) fn reopen(&self, fence: uuid::Uuid) -> Result<(), UpdateError> {
+        self.runtime.reopen(fence)
+    }
     pub fn new(
         repository: Arc<dyn UpdateDrainRepository>,
         runtime: Arc<dyn UpdateDrainRuntime>,

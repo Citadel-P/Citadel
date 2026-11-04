@@ -61,3 +61,18 @@ async fn verify_source(
     }
     Ok(observed)
 }
+
+pub(in crate::external::updates) async fn verify_recoverable_source(
+    docker: &LocalDocker<'_>,
+    registration: &RegisteredComposeInstallation,
+    helper: Option<&str>,
+) -> Result<(), UpdateError> {
+    verify_source(
+        docker,
+        registration,
+        helper,
+        CoreState::AcceptedTargetRunning,
+    )
+    .await
+    .map(|_| ())
+}

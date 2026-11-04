@@ -55,15 +55,44 @@ After reconnection it reads the recorded outcome. While cleanup still holds
 maintenance, the status shows **Finishing update**. Once maintenance is released
 and the running version matches the completed update, the Updates page reloads
 once to load the new frontend, keeping the current URL. The completed banner clears
-after reload; the update remains in **Activities**.
+after reload and a toast confirms the successful update; the update remains in **Activities**.
 **Reload portal** is available if automatic reload cannot complete. Closing the
 browser does not cancel an approved update.
 
-If verification or cleanup fails, Citadel retains maintenance and recovery state.
+If verification or cleanup fails, an error toast appears and the recovery banner
+stays visible. Citadel retains maintenance and recovery state.
 Preserve the checkpoint and logs for operator recovery. It does not automatically
 roll back a migrated database. Until a release transition has been qualified, use
 the manual procedure below; an available release notice alone does not establish
 installation eligibility.
+
+### Recover an interrupted preparation
+
+If an update fails before shutdown, Citadel attempts to verify the original Core,
+retire its updater helper and reopen admission. It keeps the attempt in Activities
+and archives its execution evidence. A timeout or an exited helper alone is not
+proof that the source can resume.
+
+If automatic verification cannot finish, run this inside the **original Core
+container**, with its original environment, keys and data mounts:
+
+```bash
+docker compose exec server /app/citadel-server recover-update-source \
+  --state-directory /opt/citadel-update-state \
+  --operation-id <operation-id>
+```
+
+Use the registered state directory and the operation ID from Activities. After a
+successful result, restart the original Core. The command does not restore data,
+retry replacement or bypass maintenance. It refuses recorded or ambiguous source
+shutdown/replacement; preserve the state and use checkpoint recovery in that case.
+Do not delete journals or change database ownership flags manually.
+
+A target that already committed its completion receipt resumes verification and
+cleanup when it restarts, even if helper acknowledgement was interrupted. The
+original helper failure remains archived; replacement and migrations are not
+replayed. Admission stays closed until target identity, storage, database, keys and
+cleanup are verified.
 
 ## Before an upgrade
 

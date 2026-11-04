@@ -53,7 +53,8 @@ impl HostUpdateClient {
             | HostUpdateRequest::Check { state_directory } => state_directory.as_path(),
             HostUpdateRequest::Launch(operation)
             | HostUpdateRequest::Completed(operation)
-            | HostUpdateRequest::FailedJournal(operation) => {
+            | HostUpdateRequest::FailedJournal(operation)
+            | HostUpdateRequest::RecoverSource(operation) => {
                 std::path::Path::new(&operation.plan.checkpoint_directory)
             }
             HostUpdateRequest::Finalize(request) => {

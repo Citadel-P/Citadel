@@ -84,7 +84,15 @@ enum Command {
         #[arg(long)]
         refresh: bool,
     },
-    /// Revalidate a registered local installation without changing it or approving an update.
+    /// Verify and retire an interrupted updater before source shutdown; never force-unlock.
+    #[cfg(target_os = "linux")]
+    RecoverUpdateSource {
+        #[arg(long)]
+        state_directory: std::path::PathBuf,
+        #[arg(long)]
+        operation_id: uuid::Uuid,
+    },
+    /// Revalidate a registered installation without modifying it.
     #[cfg(target_os = "linux")]
     CheckUpdateInstallation {
         /// Existing registered private host directory; nothing is created or repaired.
@@ -363,6 +371,11 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string(&result)?);
             Ok(())
         }
+        #[cfg(target_os = "linux")]
+        Command::RecoverUpdateSource {
+            state_directory,
+            operation_id,
+        } => crate::cli_updates::recover_source(state_directory, operation_id).await,
         #[cfg(target_os = "linux")]
         Command::CheckUpdateInstallation { state_directory } => {
             let cancellation = CancellationToken::new();

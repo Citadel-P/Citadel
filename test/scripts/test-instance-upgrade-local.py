@@ -7,6 +7,8 @@ private registry impersonates ghcr.io only inside the disposable DinD fixture.
 Browser mode retains its network and exposes only the UI on localhost.
 """
 import argparse
+import concurrent.futures
+import uuid
 import importlib.util
 import json
 import os
@@ -66,6 +68,26 @@ def build(base, version, directory, catalog, frontend=None):
 
 class LocalUpgrade(upgrade.UpgradeFixture):
     interrupt_cleanup = False
+    interruption = None
+    concurrent_requests = False
+
+    def http(self, path, data=None, token=None, *, optional=False):
+        result = super().http(path, data, token, optional=optional)
+        if self.concurrent_requests and path == "updates/review":
+            self.review = result
+            self.review_token = token
+            core = self.json_command("inspect", "citadel_upgrade-server-1")[0]["Id"]
+            self.docker("exec", "--user", "65532:0", core, "touch", "/app/data/update-fixture-pause-preparation")
+        if self.concurrent_requests and path == "updates/approve":
+            self.approval = data
+        return result
+
+    def setup_installation(self, browser_port=None):
+        result = super().setup_installation(browser_port)
+        if self.interruption:
+            self.docker("exec", "--user", "65532:0", result[0]["coreContainerId"],
+                        "touch", "/app/data/update-fixture-pause-" + self.interruption)
+        return result
 
     def serve_browser(self, port):
         self.inspect_transition(TARGET)
@@ -80,6 +102,10 @@ class LocalUpgrade(upgrade.UpgradeFixture):
             time.sleep(1)
 
     def after_approval(self, operation_id, registered):
+        if self.concurrent_requests:
+            return self.check_concurrent_requests(operation_id, registered)
+        if self.interruption:
+            return self.interrupt_acceptance(operation_id, registered)
         if not self.interrupt_cleanup:
             return
         checkpoint = self.state + "/checkpoint-" + operation_id
@@ -116,6 +142,91 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         self.docker("update", "--restart=" + policy, target)
         self.docker("start", target)
         print("Interrupted final release; verifying restart resumes cleanup without replacement", flush=True)
+
+    def check_concurrent_requests(self, operation_id, registered):
+        deadline = time.monotonic() + 60
+        journal = self.state + "/" + operation_id + ".json"
+        while self.execute("test", "-f", journal, check=False).returncode:
+            require(time.monotonic() < deadline, "Helper never reached preparation barrier")
+            time.sleep(0.1)
+        # Real admission middleware and supervised worker, with preparation held
+        # at a file barrier instead of a timing-dependent slow registry response.
+        requests = [("updates/review", {"version": TARGET}),
+                    ("updates/approve", {"reviewId": self.review["id"], "requestId": str(uuid.uuid4())}),
+                    ("updates/approve", self.approval)]
+        started = time.monotonic()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as threads:
+            results = list(threads.map(lambda item: super(LocalUpgrade, self).http(
+                item[0], item[1], self.review_token, optional=True), requests))
+        require(time.monotonic() - started < 10, "Concurrent requests waited behind the executing worker")
+        require(results[0] is None and results[1] is None and results[2]["id"] == operation_id,
+                "Expected prompt busy responses and exact authorized replay")
+        require(self.sql(registered["databaseContainerId"], "SELECT count(*) FROM instanceupdates") == b"1", "More than one operation claimed")
+        helpers = self.docker("ps", "-aq", "--filter", "label=com.citadel.update-operation=" + operation_id).stdout.decode().split()
+        require(len(helpers) == 1, "More than one helper launched")
+        self.docker("exec", registered["coreContainerId"], "rm", "/app/data/update-fixture-pause-preparation")
+        print("Concurrent HTTP requests did not obstruct the accepted update", flush=True)
+
+    def run_preparation_failure(self):
+        registered, _, password = self.setup_installation()
+        core, database = registered["coreContainerId"], registered["databaseContainerId"]
+        before = self.json_command("inspect", database)[0]
+        keys = self.keys(core)
+        token = self.login(password)
+        self.http("updates/check", {}, token)
+        review = self.http("updates/review", {"version": TARGET}, token)
+        self.docker("exec", "--user", "65532:0", core, "touch", "/app/data/update-fixture-fail-preparation")
+        self.approval_attempted = True
+        operation = self.http("updates/approve", {"reviewId": review["id"], "requestId": str(uuid.uuid4())}, token)
+        deadline = time.monotonic() + 180
+        while True:
+            status = self.http("updates", token=token)
+            outcome = self.http("updates/operations/" + operation["id"], token=token)
+            if status.get("operation") is None and outcome["phase"] == "Failed":
+                break
+            require(time.monotonic() < deadline, "Untouched source recovery did not release ownership")
+            time.sleep(0.25)
+        require(self.json_command("inspect", core)[0]["State"]["Running"], "Source stopped during preparation recovery")
+        require(upgrade.database_state(before) == upgrade.database_state(self.json_command("inspect", database)[0]), "Recovery changed PostgreSQL")
+        require(self.keys(core) == keys, "Recovery changed source keys")
+        self.docker("exec", core, "rm", "/app/data/update-fixture-fail-preparation")
+        self.http("updates/review", {"version": TARGET}, token)
+        print("Failed helper preparation recovered the unchanged source and admitted a new review", flush=True)
+
+    def interrupt_acceptance(self, operation_id, registered):
+        deadline = time.monotonic() + 600
+        boundary = self.interruption
+        while True:
+            candidates = self.docker("ps", "-q", "--filter", "label=com.docker.compose.service=server").stdout.decode().split()
+            target = next((id for id in candidates if not registered["coreContainerId"].startswith(id)), None)
+            if target and not self.docker("exec", target, "test", "-f", "/app/data/update-fixture-paused-" + boundary, check=False).returncode:
+                break
+            require(time.monotonic() < deadline, "Target never reached the acceptance barrier")
+            time.sleep(0.25)
+        database = registered["databaseContainerId"]
+        require(self.sql(database, "SELECT operation->>'phase' FROM instanceupdates WHERE ownsinstallation") == b"Succeeded",
+                "Crash barrier must follow the real receipt commit")
+        checkpoint = self.state + "/checkpoint-" + operation_id
+        require(self.execute("test", "-f", checkpoint + "/finalization.json", check=False).returncode != 0,
+                "Expected interruption before the first finalization marker")
+        if boundary == "receipt":
+            helpers = self.docker("ps", "-q", "--filter", "label=com.citadel.update-operation=" + operation_id).stdout.decode().split()
+            require(len(helpers) == 1, "Expected the original waiting helper")
+            self.docker("kill", helpers[0])
+        # Keep the barrier in place until recovery completes: removing it before
+        # killing the process can let ordinary finalization race the interruption.
+        # Receipt-backed startup recovery does not enter this acceptance barrier.
+        # Kill the container process from its daemon's parent namespace. Unlike
+        # docker stop/start, this exercises the real unless-stopped restart policy.
+        pid = self.json_command("inspect", target)[0]["State"]["Pid"]
+        self.execute("kill", "-KILL", str(pid))
+        while self.execute("test", "-f", checkpoint + "/completed.json", check=False).returncode:
+            require(time.monotonic() < deadline, "Receipt-backed recovery did not finalize")
+            time.sleep(0.25)
+        self.docker("exec", target, "rm", "/app/data/update-fixture-pause-" + boundary)
+        require(self.json_command("inspect", target)[0]["RestartCount"] > 0,
+                "Expected a Docker policy restart of the same accepted target")
+        print("Recovered real receipt at boundary " + boundary + " after a policy restart", flush=True)
 
     def load(self, image):
         archive = self.directory / "target.tar"
@@ -171,8 +282,8 @@ def main():
     parser.add_argument("--runtime-image", required=True, help="Locally built Core runtime image")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--browser", action="store_true", help="Keep an isolated installation open for manual UI testing")
-    mode.add_argument("--scenario", choices=["all", "upgrade", "cleanup-restart"], default="all",
-                        help="Run normal upgrade and interrupted cleanup by default")
+    mode.add_argument("--scenario", choices=["all", "upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure"], default="all",
+                        help="Run all lifecycle and interruption scenarios by default")
     parser.add_argument("--port", type=int, default=18080, help="Localhost port for --browser (default: 18080)")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
@@ -201,14 +312,19 @@ def main():
                 fixture.prepare_images(images[TARGET])
                 fixture.serve_browser(args.port)
                 return
-            scenarios = ["upgrade", "cleanup-restart"] if args.scenario == "all" else [args.scenario]
+            scenarios = ["upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure"] if args.scenario == "all" else [args.scenario]
             for scenario in scenarios:
                 print(f"Running lifecycle scenario: {scenario}", flush=True)
                 fixture = LocalUpgrade(images[SOURCE], directory)
+                fixture.concurrent_requests = scenario == "concurrent-requests"
                 fixture.interrupt_cleanup = scenario == "cleanup-restart"
+                fixture.interruption = {"receipt-restart": "receipt", "helper-exit-restart": "helper-exit"}.get(scenario)
                 fixture.start(registry=True)
                 fixture.prepare_images(images[TARGET])
-                fixture.run_transition(TARGET)
+                if scenario == "preparation-failure":
+                    fixture.run_preparation_failure()
+                else:
+                    fixture.run_transition(TARGET)
                 fixture.close()
                 fixture = None
         except BaseException as error:

@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use std::{
     sync::{
         Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -1424,4 +1424,273 @@ async fn readiness_waits_for_initial_journal_but_never_grants_without_it() {
             .join(runner.intent.file("shutdown-grant"))
             .exists()
     );
+}
+
+struct SourceRecoveryRunner {
+    base: Arc<Runner>,
+    removed: AtomicBool,
+    fail_after_removal: bool,
+    present: bool,
+}
+impl ProcessRunner for SourceRecoveryRunner {
+    fn run<'a>(
+        &'a self,
+        request: ProcessRequest,
+        token: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<ProcessOutput, ProcessError>> {
+        Box::pin(async move {
+            let args: Vec<_> = request.arguments[2..]
+                .iter()
+                .map(|s| s.to_str().unwrap())
+                .collect();
+            let alive = self.present && !self.removed.load(Ordering::SeqCst);
+            let bytes = if args == ["container", "rm", HELPER] {
+                assert!(alive);
+                self.removed.store(true, Ordering::SeqCst);
+                if self.fail_after_removal {
+                    return Err(ProcessError::Timeout(Duration::from_secs(1)));
+                }
+                Some(vec![])
+            } else if args.first() == Some(&"container")
+                && args.get(1) == Some(&"ls")
+                && args.iter().any(|arg| {
+                    arg.contains("com.citadel.update-operation=") || *arg == format!("id={HELPER}")
+                })
+            {
+                Some(if alive {
+                    format!("\"{HELPER}\"\n").into_bytes()
+                } else {
+                    vec![]
+                })
+            } else if args.first() == Some(&"container")
+                && args.get(1) == Some(&"ls")
+                && args[5].ends_with("citadel_data")
+                && !alive
+            {
+                Some(format!("\"{CORE}\"\n").into_bytes())
+            } else {
+                None
+            };
+            if let Some(stdout) = bytes {
+                return Ok(ProcessOutput {
+                    exit_code: Some(0),
+                    stdout,
+                    stderr: vec![],
+                    stdout_truncated: false,
+                    stderr_truncated: false,
+                });
+            }
+            self.base.run(request, token).await
+        })
+    }
+}
+
+#[tokio::test]
+async fn source_recovery_fences_missing_and_exited_helpers_and_retains_evidence() {
+    for before_launch in [true, false] {
+        let base = if before_launch {
+            Runner::fixture(true).await
+        } else {
+            Runner::new().await
+        };
+        let operation = base.intent.operation.clone();
+        if !before_launch {
+            let helper = base.acknowledge().await.unwrap();
+            // A delayed grant is safe only once its exact executor is fenced and
+            // the journal proves no stop intent was ever published.
+            helper
+                .state
+                .create(
+                    &helper.intent.file("shutdown-grant"),
+                    &helper.acknowledgement,
+                )
+                .unwrap();
+            super::driver::record_failure(&helper).unwrap();
+            drop(helper);
+        }
+        *base.mode.lock().unwrap() = "exited-helper";
+        let runner = SourceRecoveryRunner {
+            base: base.clone(),
+            removed: AtomicBool::new(false),
+            fail_after_removal: false,
+            present: !before_launch,
+        };
+        super::recover_source(&operation, &runner, &CancellationToken::new())
+            .await
+            .unwrap();
+        super::recover_source(&operation, &runner, &CancellationToken::new())
+            .await
+            .unwrap();
+        let state = base.state();
+        state.require_registration_only().unwrap();
+        assert!(prepare_helper_launch(&state, &operation).is_err());
+        assert!(base.intent.verify_saved_identity(&state).is_err());
+        assert_eq!(base.stops.load(Ordering::SeqCst), 0);
+        let archive =
+            JournalDirectory::open(state.path().join(format!("checkpoint-{}", operation.id)))
+                .unwrap();
+        assert_eq!(
+            archive
+                .read::<UpdateOperation>("source-recovered.json")
+                .unwrap(),
+            operation
+        );
+        if !before_launch {
+            assert_eq!(
+                archive.journal(operation.id).unwrap().operation.phase,
+                UpdatePhase::Failed
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn ambiguous_creation_and_start_are_reconciled_without_a_fabricated_journal() {
+    for mode in ["create-timeout", "start-timeout"] {
+        let base = Runner::fixture(true).await;
+        let operation = base.intent.operation.clone();
+        *base.mode.lock().unwrap() = mode;
+        assert!(
+            launch_update_helper(
+                &base.state(),
+                &operation,
+                base.as_ref(),
+                &CancellationToken::new()
+            )
+            .await
+            .is_err()
+        );
+        *base.mode.lock().unwrap() = if mode == "create-timeout" {
+            "normal"
+        } else {
+            "exited-helper"
+        };
+        let runner = SourceRecoveryRunner {
+            base: base.clone(),
+            removed: AtomicBool::new(false),
+            fail_after_removal: false,
+            present: true,
+        };
+        super::recover_source(&operation, &runner, &CancellationToken::new())
+            .await
+            .unwrap_or_else(|error| panic!("{mode}: {error}"));
+        assert!(
+            base.state()
+                .read_optional::<Value>(&format!("{}.json", operation.id))
+                .unwrap()
+                .is_none()
+        );
+        assert!(prepare_helper_launch(&base.state(), &operation).is_err());
+    }
+}
+
+#[tokio::test]
+async fn source_recovery_refuses_an_ambiguous_stop_even_without_replacement() {
+    let base = Runner::new().await;
+    let helper = base.acknowledge().await.unwrap();
+    helper
+        .state
+        .create(
+            &helper.intent.file("shutdown-grant"),
+            &helper.acknowledgement,
+        )
+        .unwrap();
+    *base.mode.lock().unwrap() = "stop-timeout";
+    assert!(
+        helper
+            .stop_source(
+                base.as_ref(),
+                Duration::from_secs(1),
+                &CancellationToken::new()
+            )
+            .await
+            .is_err()
+    );
+    drop(helper);
+    *base.mode.lock().unwrap() = "exited-helper";
+    let runner = SourceRecoveryRunner {
+        base: base.clone(),
+        removed: AtomicBool::new(false),
+        fail_after_removal: false,
+        present: true,
+    };
+    assert!(
+        super::recover_source(&base.intent.operation, &runner, &CancellationToken::new())
+            .await
+            .is_err()
+    );
+    assert!(!runner.removed.load(Ordering::SeqCst));
+    let archive = JournalDirectory::open(
+        base.fixture
+            .state
+            .join(format!("checkpoint-{}", base.intent.operation.id)),
+    )
+    .unwrap();
+    assert!(
+        archive
+            .read_optional::<Value>("source-recovery.json")
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn source_recovery_resumes_after_helper_removal_and_partial_archival() {
+    for archived_files in 0..=3 {
+        let base = Runner::new().await;
+        let operation = base.intent.operation.clone();
+        let helper = base.acknowledge().await.unwrap();
+        super::driver::record_failure(&helper).unwrap();
+        drop(helper);
+        *base.mode.lock().unwrap() = "exited-helper";
+        let runner = SourceRecoveryRunner {
+            base: base.clone(),
+            removed: AtomicBool::new(false),
+            fail_after_removal: true,
+            present: true,
+        };
+        let token = CancellationToken::new();
+        assert!(
+            super::recover_source(&operation, &runner, &token)
+                .await
+                .is_err()
+        );
+        assert!(runner.removed.load(Ordering::SeqCst));
+        let state = base.state();
+        let archive =
+            JournalDirectory::open(state.path().join(format!("checkpoint-{}", operation.id)))
+                .unwrap();
+        assert!(
+            archive
+                .read_optional::<Value>("source-recovered.json")
+                .unwrap()
+                .is_none()
+        );
+        assert!(base.intent.verify_saved_identity(&state).is_err());
+        // Reproduce the durable prefixes left by a crash during file archival.
+        let owner = state.existing_lock().unwrap();
+        for name in [
+            base.intent.file("launch"),
+            base.intent.file("binding"),
+            format!("{}.json", operation.id),
+        ]
+        .into_iter()
+        .take(archived_files)
+        {
+            state.archive(&owner, &archive, &name).unwrap();
+        }
+        drop(owner);
+        super::recover_source(&operation, &runner, &token)
+            .await
+            .unwrap();
+        super::recover_source(&operation, &runner, &token)
+            .await
+            .unwrap();
+        state.require_registration_only().unwrap();
+        assert_eq!(
+            archive.journal(operation.id).unwrap().operation.phase,
+            UpdatePhase::Failed
+        );
+        assert_eq!(base.stops.load(Ordering::SeqCst), 0);
+    }
 }

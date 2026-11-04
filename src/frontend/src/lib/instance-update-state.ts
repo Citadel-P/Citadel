@@ -6,6 +6,7 @@ export type PendingInstanceUpdate = {
   id: string;
   restartUntil?: number;
   frontendReloaded?: boolean;
+  failureNotified?: boolean;
 };
 export const pendingInstanceUpdateAtom = atomWithStorage<PendingInstanceUpdate | null>(
   'citadel-instance-update',

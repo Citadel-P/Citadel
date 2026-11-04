@@ -1,6 +1,7 @@
 //! Reconcile a committed target after the detached executor exits.
 use super::super::{
-    JournalDirectory, RegisteredComposeInstallation, bootstrap::observe_replacement,
+    JournalDirectory, RegisteredComposeInstallation,
+    bootstrap::{observe_accepted_target, observe_replacement},
     docker::LocalDocker,
 };
 use super::{
@@ -18,6 +19,8 @@ use tokio_util::sync::CancellationToken;
 pub struct FinalizeUpdateRequest {
     pub intent: HelperLaunchIntent,
     pub completion: TargetUpdateCompletion,
+    #[serde(default)]
+    pub receipt_recovery: bool,
 }
 
 /// Runs in the registered host namespace. The caller still owns the database
@@ -47,6 +50,13 @@ pub async fn finalize_update(
         .is_some();
     let mut execution = if resuming {
         ExecutionJournal::read(if active { &state } else { &archive }, intent.operation.id)?
+    } else if request.receipt_recovery {
+        let execution = ExecutionJournal::read_for(&state, intent)?;
+        let mut accepted = execution.clone();
+        accepted.journal = request.completion.journal.clone();
+        accepted.journal.completion_acknowledged = true;
+        accepted.validate_replacement(&state, intent)?;
+        execution
     } else {
         ExecutionJournal::read_replacement(&state, intent)?
     };
@@ -55,7 +65,12 @@ pub async fn finalize_update(
     request.completion.receipt.validate_for(&acknowledged)?;
     let mut saved = execution.journal.clone();
     saved.maintenance_released = false;
-    if saved != acknowledged || acknowledged.operation.phase != UpdatePhase::Succeeded {
+    if (if request.receipt_recovery {
+        execution.receipt_completion(&acknowledged.operation)? != request.completion
+    } else {
+        saved != acknowledged
+    }) || acknowledged.operation.phase != UpdatePhase::Succeeded
+    {
         return Err(conflict());
     }
     execution.require_submission()?;
@@ -73,12 +88,14 @@ pub async fn finalize_update(
     let helper_present = helpers == [helper.clone()];
     if (!helper_present && (!helpers.is_empty() || !resuming))
         || (helper_present
-            && !verification::helper_exited(&docker, intent, &execution.acknowledgement).await?)
+            && !helper_exited(&docker, intent, &execution, request.receipt_recovery).await?)
     {
         return Err(conflict());
     }
     let running_helper = helper_present.then_some(helper.as_str());
-    let observed = observe_replacement(
+    let allow_restart = resuming || request.receipt_recovery;
+    let observed = observe(
+        allow_restart,
         &docker,
         &intent.registration,
         &replacement.configuration,
@@ -86,7 +103,7 @@ pub async fn finalize_update(
     )
     .await?;
     if observed != *target
-        && !(resuming
+        && !((resuming || request.receipt_recovery)
             && observed.container_id == target.container_id
             && observed.image_id == target.image_id
             && observed.runtime_sha256 == target.runtime_sha256
@@ -117,8 +134,9 @@ pub async fn finalize_update(
         != execution
         || receipt != request.completion.receipt
         || (helper_present
-            && !verification::helper_exited(&docker, intent, &execution.acknowledgement).await?)
-        || observe_replacement(
+            && !helper_exited(&docker, intent, &execution, request.receipt_recovery).await?)
+        || observe(
+            allow_restart,
             &docker,
             &intent.registration,
             &replacement.configuration,
@@ -134,10 +152,25 @@ pub async fn finalize_update(
     if !resuming {
         archive.create("finalization.json", request)?;
     }
+    if request.receipt_recovery {
+        let name = intent.file("target-completion");
+        match state.read_optional::<TargetUpdateCompletion>(&name)? {
+            Some(saved) if saved != request.completion => return Err(conflict()),
+            Some(_) => {}
+            None if archive
+                .read_optional::<TargetUpdateCompletion>(&name)?
+                .is_none() =>
+            {
+                state.create(&name, &request.completion)?
+            }
+            None => {}
+        }
+    }
     if helper_present {
         docker.run(&["container", "rm", helper]).await?;
     }
-    if observe_replacement(
+    if observe(
+        allow_restart,
         &docker,
         &intent.registration,
         &replacement.configuration,
@@ -158,7 +191,13 @@ pub async fn finalize_update(
     registration.runtime_sha256 = target.runtime_sha256.clone();
     registration.validate()?;
     drop(home);
-    execution.journal.maintenance_released = true;
+    let mut released = acknowledged;
+    released.maintenance_released = true;
+    // Keep a timed-out/failed executor's original history intact. The target
+    // receipt and finalization record independently explain the recovered success.
+    if !request.receipt_recovery {
+        execution.journal = released.clone();
+    }
     if active {
         execution.save(&state, &owner)?;
     } else if ExecutionJournal::read(&archive, intent.operation.id)? != execution {
@@ -198,7 +237,7 @@ pub async fn finalize_update(
     }
     state.write("installation.json", &registration)?;
     let completed = CompletedUpdate {
-        journal: execution.journal.clone(),
+        journal: released.clone(),
         registration,
     };
     match archive.read_optional::<CompletedUpdate>("completed.json")? {
@@ -207,7 +246,7 @@ pub async fn finalize_update(
         None => archive.create("completed.json", &completed)?,
     }
     state.require_registration_only()?;
-    Ok(execution.journal)
+    Ok(released)
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize)]
@@ -235,10 +274,46 @@ impl CompletedUpdate {
                     .registration
                     .state_directory
                     .join(format!("checkpoint-{}", operation.id))
-            || archive.journal(operation.id)? != self.journal
+            || (archive.journal(operation.id)? != self.journal && {
+                let request: FinalizeUpdateRequest = archive.read("finalization.json")?;
+                !request.receipt_recovery
+                    || ExecutionJournal::read(archive, operation.id)?
+                        .receipt_completion(operation)?
+                        != request.completion
+            })
         {
             return Err(conflict());
         }
         Ok(())
+    }
+}
+
+async fn helper_exited(
+    docker: &LocalDocker<'_>,
+    intent: &HelperLaunchIntent,
+    execution: &ExecutionJournal,
+    receipt_recovery: bool,
+) -> Result<bool, UpdateError> {
+    if !receipt_recovery {
+        return verification::helper_exited(docker, intent, &execution.acknowledgement).await;
+    }
+    let actual =
+        verification::helper_container(docker, intent, &execution.acknowledgement.binding).await?;
+    Ok(actual["State"]["Running"] == false
+        && actual["State"]["Status"] == "exited"
+        && actual["State"]["StartedAt"] == execution.acknowledgement.started_at)
+}
+
+async fn observe(
+    accepted: bool,
+    docker: &LocalDocker<'_>,
+    registration: &RegisteredComposeInstallation,
+    configuration: &super::super::CheckedCoreReplacement,
+    helper: Option<&str>,
+) -> Result<super::super::bootstrap::ObservedReplacement, UpdateError> {
+    if accepted {
+        observe_accepted_target(docker, registration, configuration, helper).await
+    } else {
+        observe_replacement(docker, registration, configuration, helper).await
     }
 }

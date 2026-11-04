@@ -31,6 +31,7 @@ impl HelperLaunchIntent {
 
     fn verify_identity(&self, state: &JournalDirectory) -> Result<(), UpdateError> {
         state.verify_location()?;
+        reject_recovered(state, self.operation.id)?;
         self.operation.plan.validate(self.operation.created_at)?;
         self.registration.validate()?;
         let op = &self.operation;
@@ -104,6 +105,7 @@ pub(super) fn prepare_helper_launch(
     operation: &UpdateOperation,
 ) -> Result<HelperLaunchIntent, UpdateError> {
     let lock = state.existing_lock()?;
+    reject_recovered(state, operation.id)?;
     state.require_registration_only()?;
     let intent = HelperLaunchIntent {
         protocol: UPDATE_PROTOCOL,
@@ -134,4 +136,16 @@ pub(super) fn binding(
 
 pub(super) fn conflict() -> UpdateError {
     UpdateError::Conflict("Update helper ownership or handoff evidence is missing, stale or inconsistent. Preserve the registered update state.".into())
+}
+
+fn reject_recovered(state: &JournalDirectory, id: Uuid) -> Result<(), UpdateError> {
+    let path = state.path().join(format!("checkpoint-{id}"));
+    if path.try_exists().map_err(|_| conflict())?
+        && JournalDirectory::open(path)?
+            .read_optional::<serde_json::Value>("source-recovery.json")?
+            .is_some()
+    {
+        return Err(conflict());
+    }
+    Ok(())
 }

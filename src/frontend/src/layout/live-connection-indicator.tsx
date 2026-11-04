@@ -123,7 +123,8 @@ export function LiveConnectionIndicator() {
     return null;
   }
 
-  const expectedRestart = !!expectedUpdate?.restartUntil && expectedUpdate.restartUntil !== expiredRestart && visibleState !== 'offline';
+  const expectedRestart =
+    !!expectedUpdate?.restartUntil && expectedUpdate.restartUntil !== expiredRestart && visibleState !== 'offline';
   const content = expectedRestart
     ? {
         label: 'Restarting Citadel…',

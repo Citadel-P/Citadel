@@ -92,6 +92,7 @@ it.each([
   expect(screen.queryByText(/Citadel 0.1.2 is available/)).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Release notes' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Update now' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Upgrade guide' })).not.toBeInTheDocument();
 });
 
 it('has exactly Config and Activities tabs and checks without installing or refetching status', async () => {
@@ -114,7 +115,11 @@ it('has exactly Config and Activities tabs and checks without installing or refe
     'href',
     status.available.releaseUrl,
   );
-  expect(screen.queryByRole('link', { name: 'Manual upgrade guide' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Upgrade guide' })).toHaveAttribute(
+    'href',
+    'https://docs.citadelplane.com/operations/upgrade-and-rollback/',
+  );
+  expect(screen.getByText(status.installationUnavailableReason)).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Check now' }));
   await waitFor(() => expect(check).toHaveBeenCalledOnce());
   expect(await screen.findByText(/Citadel 0.1.3 is available/)).toBeVisible();

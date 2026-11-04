@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { getDefaultStore } from 'jotai';
+import { toast } from 'sonner';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/server';
 import { renderCitadel } from '@/test/render-citadel';
@@ -27,41 +28,54 @@ const operation = {
   phase: 'Preparing',
   updatedAt: '2026-11-03T12:00:00Z',
 };
+afterEach(() => vi.unstubAllGlobals());
+
 beforeEach(() => {
   getDefaultStore().set(pendingInstanceUpdateAtom, null);
+  vi.spyOn(toast, 'success').mockImplementation(() => 'notice');
+  vi.spyOn(toast, 'error').mockImplementation(() => 'notice');
 });
 
-it('requires review and explicit approval, retaining the same key after an ambiguous failure', async () => {
-  const requests: unknown[] = [];
-  server.use(
-    http.post('http://localhost/api/v1/updates/review', async ({ request }) => {
-      expect(await request.json()).toEqual({ version: '0.1.2' });
-      return HttpResponse.json({
-        id: operation.id,
-        installedVersion: '0.1.1',
-        targetVersion: '0.1.2',
-        expiresAt: '2026-11-03T13:00:00Z',
-      });
-    }),
-    http.post('http://localhost/api/v1/updates/approve', async ({ request }) => {
-      requests.push(await request.json());
-      return requests.length === 1 ? new HttpResponse(null, { status: 503 }) : HttpResponse.json(operation);
-    }),
-  );
-  const { user } = renderCitadel(<InstallUpdate status={status} />);
-  await user.click(screen.getByRole('button', { name: 'Update now' }));
-  const dialog = await screen.findByRole('dialog');
-  expect(dialog).toHaveTextContent('Installed0.1.1');
-  expect(dialog).toHaveTextContent('New version0.1.2');
-  expect(requests).toHaveLength(0);
-  await user.click(screen.getByRole('button', { name: 'Update and restart' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Approval could not be confirmed');
-  await user.click(screen.getByRole('button', { name: 'Update and restart' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(requests).toHaveLength(2);
-  expect(requests[0]).toEqual(requests[1]);
-  expect(getDefaultStore().get(pendingInstanceUpdateAtom)?.id).toBe(operation.id);
-});
+it.each([true, false])(
+  'retains the approval key after an ambiguous failure (randomUUID available: %s)',
+  async (secureOrigin) => {
+    if (!secureOrigin) vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    const requests: unknown[] = [];
+    server.use(
+      http.post('http://localhost/api/v1/updates/review', async ({ request }) => {
+        expect(await request.json()).toEqual({ version: '0.1.2' });
+        return HttpResponse.json({
+          id: operation.id,
+          installedVersion: '0.1.1',
+          targetVersion: '0.1.2',
+          expiresAt: '2026-11-03T13:00:00Z',
+        });
+      }),
+      http.post('http://localhost/api/v1/updates/approve', async ({ request }) => {
+        requests.push(await request.json());
+        return requests.length === 1 ? new HttpResponse(null, { status: 503 }) : HttpResponse.json(operation);
+      }),
+    );
+    const { user } = renderCitadel(<InstallUpdate status={status} />);
+    await user.click(screen.getByRole('button', { name: 'Update now' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Installed0.1.1');
+    expect(dialog).toHaveTextContent('New version0.1.2');
+    expect(requests).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Update and restart' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Approval could not be confirmed');
+    await user.click(screen.getByRole('button', { name: 'Update and restart' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).toEqual(requests[1]);
+    expect(requests[0]).toEqual(
+      expect.objectContaining({
+        requestId: expect.stringMatching(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/),
+      }),
+    );
+    expect(getDefaultStore().get(pendingInstanceUpdateAtom)?.id).toBe(operation.id);
+  },
+);
 
 it('does not offer installation when registration is unavailable', () => {
   renderCitadel(<InstallUpdate status={{ ...status, installationUnavailableReason: 'Not registered' }} />);
@@ -98,6 +112,8 @@ it('shows an offline wait instead of advancing the saved phase', () => {
 });
 
 const reload = vi.fn();
+afterEach(() => vi.unstubAllGlobals());
+
 beforeEach(() => {
   reload.mockReset();
   vi.stubGlobal('location', {
@@ -147,6 +163,7 @@ it('waits for maintenance release, reloads once, then clears the completed banne
 
   view.rerender(progress(target));
   await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  expect(toast.success).not.toHaveBeenCalled();
   expect(location.href).toBe('http://localhost/updates/activities?filter=updates#operation');
   expect(JSON.parse(sessionStorage.getItem('citadel-instance-update')!)).toEqual({
     instanceId: status.instanceId,
@@ -159,6 +176,10 @@ it('waits for maintenance release, reloads once, then clears the completed banne
   expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
   expect(JSON.parse(sessionStorage.getItem('citadel-instance-update')!)).toBeNull();
   expect(reload).toHaveBeenCalledOnce();
+  expect(toast.success).toHaveBeenCalledExactlyOnceWith('Citadel updated successfully', {
+    id: `instance-update-${status.instanceId}-${operation.id}`,
+    description: 'Version 0.1.2 is now running.',
+  });
 });
 
 it('waits for reconnection before reloading a completed target', async () => {
@@ -189,6 +210,41 @@ it('does not reload on a historical success for a different running version', as
   renderCitadel(progress(status));
   expect(await screen.findByText('Update completed')).toBeVisible();
   expect(reload).not.toHaveBeenCalled();
+  expect(toast.success).not.toHaveBeenCalled();
+});
+
+it.each(['Failed', 'RecoveryRequired'])(
+  'notifies once for %s while retaining recovery state across remounts',
+  async (phase) => {
+    const current = { ...status, operation: { ...operation, phase } };
+    const view = renderCitadel(progress(current));
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith('Citadel update failed', {
+      id: `instance-update-${status.instanceId}-${operation.id}`,
+      description: 'The update to 0.1.2 needs manual recovery. Check Activities for details.',
+    });
+    expect(getDefaultStore().get(pendingInstanceUpdateAtom)).toMatchObject({
+      instanceId: status.instanceId,
+      id: operation.id,
+      failureNotified: true,
+    });
+    view.rerender(progress({ ...current, operation: { ...current.operation } }));
+    view.unmount();
+    renderCitadel(progress(current), { queryClient: view.queryClient });
+    expect(screen.getByText('Target version: Citadel 0.1.2.')).toBeVisible();
+    expect(toast.error).toHaveBeenCalledOnce();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  },
+);
+
+it('still reports a failure when session storage is unavailable', () => {
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Storage unavailable', 'SecurityError');
+  });
+  renderCitadel(progress({ ...status, operation: { ...operation, phase: 'Failed' } }));
+  expect(toast.error).toHaveBeenCalledOnce();
+  expect(screen.getByText('Update failed — operator recovery required')).toBeVisible();
+  expect(reload).not.toHaveBeenCalled();
 });
 
 it.each(['Failed', 'Postponed', 'RecoveryRequired'])('does not reload a %s operation', async (phase) => {
@@ -204,6 +260,8 @@ it('ignores a retained operation belonging to another instance', () => {
   renderCitadel(progress({ ...status, instanceId: 'another-instance', installedVersion: operation.version }));
   expect(reload).not.toHaveBeenCalled();
   expect(screen.queryByText('Update completed')).not.toBeInTheDocument();
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(toast.error).not.toHaveBeenCalled();
 });
 
 it('leaves a manual reload action if a durable reload marker cannot be saved', async () => {

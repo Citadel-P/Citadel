@@ -1,3 +1,4 @@
+import { randomUuid } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { useAtom, useStore } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,7 +28,7 @@ export function InstallUpdate({ status }: { status: UpdateStatusView }) {
   const prepare = useMutate('reviewInstanceUpdate', {
     onSuccess: ({ data }) => {
       setReview(data);
-      setRequestId(crypto.randomUUID());
+      setRequestId(randomUuid());
     },
   });
   const approve = useMutate('approveInstanceUpdate', {
@@ -189,6 +190,10 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
     try {
       if (saved.frontendReloaded) {
         store.set(pendingInstanceUpdateAtom, null);
+        toast.success('Citadel updated successfully', {
+          id: `instance-update-${status.instanceId}-${operation.id}`,
+          description: `Version ${operation.version} is now running.`,
+        });
         return;
       }
       // Persist before navigation. If session storage is unavailable, leave the
@@ -199,6 +204,30 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
       // Completion remains visible, with an explicit reload action below.
     }
   }, [completed, liveConnectionState, status.instanceId, status.installedVersion, operation, store]);
+
+  useEffect(() => {
+    if (!operation || !['Failed', 'RecoveryRequired'].includes(operation.phase)) return;
+    const saved = store.get(pendingInstanceUpdateAtom);
+    const sameOperation = saved?.instanceId === status.instanceId && saved?.id === operation.id;
+    if (sameOperation && saved.failureNotified) return;
+    toast.error('Citadel update failed', {
+      id: `instance-update-${status.instanceId}-${operation.id}`,
+      description: status.operation
+        ? `The update to ${operation.version} needs manual recovery. Check Activities for details.`
+        : 'The update was not installed. Citadel is running the original version. Check Activities for details.',
+    });
+    try {
+      store.set(pendingInstanceUpdateAtom, {
+        ...(sameOperation ? saved : {}),
+        instanceId: status.instanceId,
+        id: operation.id,
+        restartUntil: undefined,
+        failureNotified: true,
+      });
+    } catch {
+      // A storage failure must not suppress the error or hide recovery state.
+    }
+  }, [operation, status.instanceId, status.operation, store]);
 
   if (!operation) return null;
   const disconnected = liveConnectionState !== 'connected' && (!terminal.has(operation.phase) || finishing);

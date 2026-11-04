@@ -6,7 +6,7 @@ mod observation;
 mod preflight;
 mod registration;
 mod replacement;
-pub(super) use replacement::{ObservedReplacement, observe_replacement};
+pub(super) use replacement::{ObservedReplacement, observe_accepted_target, observe_replacement};
 
 pub use checkpoint::CheckpointStorage;
 pub use preflight::{CheckedUpdateInstallation, check_registered_compose_installation};
@@ -17,7 +17,7 @@ mod tests;
 
 mod handoff;
 pub(super) use executor::validate_executor_mounts;
-pub(super) use handoff::{verify_handoff_source, verify_stopped_source};
+pub(super) use handoff::{verify_handoff_source, verify_recoverable_source, verify_stopped_source};
 
 #[cfg(test)]
 pub(super) mod fixtures;

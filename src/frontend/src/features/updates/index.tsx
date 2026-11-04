@@ -127,6 +127,16 @@ function UpdateStatus() {
               action={
                 <div className="flex items-center gap-2">
                   <InstallUpdate status={data} />
+                  {data.installationUnavailableReason && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a
+                        href="https://docs.citadelplane.com/operations/upgrade-and-rollback/"
+                        target="_blank"
+                        rel="noreferrer">
+                        Upgrade guide <ExternalLink className="size-3.5" aria-hidden="true" />
+                      </a>
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" className="text-foreground" asChild>
                     <a href={data.available.releaseUrl} target="_blank" rel="noreferrer">
                       Release notes <ExternalLink className="size-3.5" aria-hidden="true" />
@@ -134,7 +144,7 @@ function UpdateStatus() {
                   </Button>
                 </div>
               }>
-              Review the release notes before upgrading.
+              {data.installationUnavailableReason ?? 'Review the release notes before upgrading.'}
             </AlertMessage>
           ) : (
             !data.checkError && (

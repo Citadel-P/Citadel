@@ -23,6 +23,13 @@ pub trait UpdateHandoffRuntime: Send + Sync {
 }
 
 pub trait UpdateInstallationRuntime: Send + Sync {
+    /// Fence the old executor, verify the unchanged source and archive its evidence.
+    fn recover_source<'a>(
+        &'a self,
+        operation: &'a crate::UpdateOperation,
+        cancellation: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+
     fn source<'a>(
         &'a self,
         cancellation: &'a tokio_util::sync::CancellationToken,
@@ -37,6 +44,7 @@ pub trait UpdateInstallationRuntime: Send + Sync {
 /// Process-owned admission and detached work, independent of the requesting browser.
 /// Closing never cancels admitted work. Resume requires a separate verified outcome.
 pub trait UpdateDrainRuntime: Send + Sync {
+    fn reopen(&self, fence: uuid::Uuid) -> Result<(), UpdateError>;
     fn close(&self, fence: uuid::Uuid) -> Result<(), UpdateError>;
     fn blockers(&self, fence: uuid::Uuid) -> Result<Vec<crate::UpdateDrainBlocker>, UpdateError>;
 }

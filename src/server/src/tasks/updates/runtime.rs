@@ -15,6 +15,15 @@ impl TrackedUpdateDrain {
 }
 
 impl UpdateDrainRuntime for TrackedUpdateDrain {
+    fn reopen(&self, fence: Uuid) -> Result<(), UpdateError> {
+        if !self.admission.is_closed() {
+            return Ok(());
+        }
+        self.admission
+            .reopen(fence)
+            .map_err(|_| UpdateError::Conflict("Maintenance ownership changed.".into()))
+    }
+
     fn close(&self, fence: Uuid) -> Result<(), UpdateError> {
         self.admission
             .close(fence)

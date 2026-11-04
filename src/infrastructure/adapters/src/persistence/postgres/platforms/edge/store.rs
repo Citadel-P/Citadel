@@ -386,7 +386,7 @@ impl PostgresEdgeStore {
         } else {
             None
         };
-        let updated = sqlx::query("UPDATE edgeagentbindings SET connectionstatus='Connected',lastconnectedatutc=$2,lastauthenticatedatutc=$2,lastheartbeatatutc=$2,updatedatutc=now() WHERE agentid=$1 AND dockernodeid IS NOT DISTINCT FROM $3 AND revokedatutc IS NULL AND (lastconnectedatutc IS NULL OR lastconnectedatutc<=$2)")
+        let updated = sqlx::query("UPDATE edgeagentbindings SET lastseenversion=NULL,connectionstatus='Connected',lastconnectedatutc=$2,lastauthenticatedatutc=$2,lastheartbeatatutc=$2,updatedatutc=now() WHERE agentid=$1 AND dockernodeid IS NOT DISTINCT FROM $3 AND revokedatutc IS NULL AND (lastconnectedatutc IS NULL OR lastconnectedatutc<=$2)")
             .bind(binding.agent_id).bind(at).bind(&binding.target.node_id).execute(&mut *tx).await?.rows_affected();
         if updated != 1 {
             return Err(EdgeStoreError::Unauthorized);
@@ -1019,9 +1019,13 @@ impl PostgresEdgeStore {
         &self,
         agent_id: Uuid,
         connected_at: DateTime<Utc>,
+        agent_version: &str,
     ) -> Result<(), EdgeStoreError> {
-        let updated = sqlx::query("UPDATE edgeagentbindings SET lastheartbeatatutc=now(),updatedatutc=now() WHERE agentid=$1 AND lastconnectedatutc=$2 AND revokedatutc IS NULL")
-            .bind(agent_id).bind(connected_at).execute(&self.pool).await?.rows_affected();
+        if agent_version.len() > 128 {
+            return Err(EdgeStoreError::Unauthorized);
+        }
+        let updated = sqlx::query("UPDATE edgeagentbindings SET lastseenversion=NULLIF($3,''),lastheartbeatatutc=now(),updatedatutc=now() WHERE agentid=$1 AND lastconnectedatutc=$2 AND connectionstatus='Connected' AND revokedatutc IS NULL")
+            .bind(agent_id).bind(connected_at).bind(agent_version).execute(&self.pool).await?.rows_affected();
         if updated != 1 {
             return Err(EdgeStoreError::Unauthorized);
         }

@@ -12,15 +12,19 @@ struct State {
     events: Vec<&'static str>,
     denied: bool,
     drift: bool,
+    agent_drift: bool,
     fail_ack: bool,
     helper_failed: bool,
     fail_grant: bool,
     busy: bool,
+    review_deleted: bool,
+    recoverable: bool,
 }
 #[derive(Clone)]
 struct Fixture {
     plan: UpdatePlan,
     state: Arc<Mutex<State>>,
+    launch_pause: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
 }
 impl Fixture {
     fn new() -> Self {
@@ -33,6 +37,7 @@ impl Fixture {
         };
         Self {
             state: Default::default(),
+            launch_pause: None,
             plan: UpdatePlan {
                 id: Uuid::now_v7(),
                 instance_id: Uuid::now_v7(),
@@ -91,6 +96,24 @@ impl ReleaseCheckRepository for Fixture {
     }
 }
 impl UpdateRepository for Fixture {
+    fn interrupt<'a>(&'a self, _: &'a UpdateOperation) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn abort_source<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            let mut state = self.state.lock().unwrap();
+            assert!(state.recoverable);
+            let mut failed = operation.clone();
+            failed.advance(failed.revision, UpdatePhase::Failed, Utc::now())?;
+            state.operation = Some(failed);
+            state.events.push("abort");
+            Ok(())
+        })
+    }
     fn save_review<'a>(
         &'a self,
         _: UpdateActor,
@@ -104,6 +127,10 @@ impl UpdateRepository for Fixture {
     fn review(&self, _: UpdateActor, id: Uuid) -> BoxFuture<'_, Result<UpdatePlan, UpdateError>> {
         Box::pin(async move {
             assert_eq!(id, self.plan.id);
+            if self.state.lock().unwrap().review_deleted {
+                return Err(UpdateError::NotFound);
+            }
+            self.plan.validate(Utc::now())?;
             Ok(self.plan.clone())
         })
     }
@@ -178,6 +205,21 @@ impl UpdateRepository for Fixture {
     }
 }
 impl UpdateInstallationRuntime for Fixture {
+    fn recover_source<'a>(
+        &'a self,
+        _: &'a UpdateOperation,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            if !self.state.lock().unwrap().recoverable {
+                return Err(UpdateError::Unavailable(
+                    "fixture source recovery unavailable".into(),
+                ));
+            }
+            self.state.lock().unwrap().events.push("recover");
+            Ok(())
+        })
+    }
     fn source<'a>(
         &'a self,
         _: &'a CancellationToken,
@@ -189,6 +231,9 @@ impl UpdateInstallationRuntime for Fixture {
             if state.drift {
                 source.configuration_sha256 = "f".repeat(64);
             }
+            if state.agent_drift {
+                source.agent_versions = vec!["0.1.3".into()];
+            }
             Ok(source)
         })
     }
@@ -199,6 +244,10 @@ impl UpdateInstallationRuntime for Fixture {
     ) -> BoxFuture<'a, Result<Arc<dyn UpdateHandoffRuntime>, UpdateError>> {
         Box::pin(async {
             self.state.lock().unwrap().events.push("launch");
+            if let Some((entered, release)) = &self.launch_pause {
+                entered.notify_one();
+                release.notified().await;
+            }
             Ok(Arc::new(self.clone()) as Arc<dyn UpdateHandoffRuntime>)
         })
     }
@@ -286,6 +335,10 @@ impl UpdateDrainRepository for Fixture {
     }
 }
 impl UpdateDrainRuntime for Fixture {
+    fn reopen(&self, _: Uuid) -> Result<(), UpdateError> {
+        self.state.lock().unwrap().events.push("reopen");
+        Ok(())
+    }
     fn close(&self, _: Uuid) -> Result<(), UpdateError> {
         self.state.lock().unwrap().events.push("close");
         Ok(())
@@ -350,6 +403,58 @@ fn actor() -> UpdateActor {
 }
 
 #[tokio::test]
+async fn reservation_covers_queued_and_executing_work_but_not_exact_replays() {
+    use futures_util::FutureExt;
+    let mut fixture = Fixture::new();
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    fixture.launch_pause = Some((entered.clone(), release.clone()));
+    let (service, mut queue) = fixture.service();
+    let actor = actor();
+    let key = Uuid::now_v7();
+    let approval = service.approve(actor, fixture.plan.id, key);
+    tokio::pin!(approval);
+    let command = tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut approval => panic!() };
+    // Dequeuing must not free capacity, even before the worker is polled.
+    assert!(matches!(
+        service.review(actor, "0.1.2").now_or_never(),
+        Some(Err(UpdateError::Conflict(_)))
+    ));
+    let token = CancellationToken::new();
+    let execution = service.execute(command, &token);
+    tokio::pin!(execution);
+    tokio::select! { () = entered.notified() => {}, _ = &mut execution => panic!() }
+    let accepted = approval.await.unwrap();
+    fixture.state.lock().unwrap().review_deleted = true;
+    assert!(matches!(
+        service.review(actor, "0.1.2").now_or_never(),
+        Some(Err(UpdateError::Conflict(_)))
+    ));
+    assert!(matches!(
+        service
+            .approve(actor, fixture.plan.id, Uuid::now_v7())
+            .now_or_never(),
+        Some(Err(UpdateError::Conflict(_)))
+    ));
+    assert_eq!(
+        service
+            .approve(actor, fixture.plan.id, key)
+            .now_or_never()
+            .unwrap()
+            .unwrap()
+            .id,
+        accepted.id
+    );
+    release.notify_one();
+    execution.await.unwrap();
+    assert!(queue.try_recv().is_err());
+    let events = &fixture.state.lock().unwrap().events;
+    assert_eq!(events.iter().filter(|event| **event == "claim").count(), 1);
+    assert_eq!(events.iter().filter(|event| **event == "launch").count(), 1);
+    assert!(events.contains(&"grant"));
+}
+
+#[tokio::test]
 async fn approval_survives_dropped_response_and_retry_never_relaunches() {
     let fixture = Fixture::new();
     let (service, mut queue) = fixture.service();
@@ -364,15 +469,11 @@ async fn approval_survives_dropped_response_and_retry_never_relaunches() {
         .await
         .unwrap();
     let first = approval.await.unwrap();
-    let retry = service.approve(actor, fixture.plan.id, key);
-    tokio::pin!(retry);
-    let command =
-        tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut retry => panic!() };
-    service
-        .execute(command, &CancellationToken::new())
-        .await
-        .unwrap();
-    assert_eq!(retry.await.unwrap().id, first.id);
+    fixture.state.lock().unwrap().review_deleted = true;
+    let retry = service.approve(actor, fixture.plan.id, key).await.unwrap();
+    assert_eq!(retry.id, first.id);
+    assert!(queue.try_recv().is_err());
+    assert!(service.approve(actor, Uuid::now_v7(), key).await.is_err());
     let events = &fixture.state.lock().unwrap().events;
     assert_eq!(events.iter().filter(|event| **event == "launch").count(), 1);
     assert_eq!(
@@ -401,12 +502,17 @@ async fn dropped_browser_receiver_does_not_cancel_claimed_execution() {
 
 #[tokio::test]
 async fn changed_source_or_revoked_administrator_prevents_claim_and_launch() {
-    for denied in [false, true] {
+    for (denied, drift, agent_drift) in [
+        (true, false, false),
+        (false, true, false),
+        (false, false, true),
+    ] {
         let fixture = Fixture::new();
         {
             let mut state = fixture.state.lock().unwrap();
             state.denied = denied;
-            state.drift = !denied;
+            state.drift = drift;
+            state.agent_drift = agent_drift;
         }
         let (service, mut queue) = fixture.service();
         let approval = service.approve(actor(), fixture.plan.id, Uuid::now_v7());
@@ -539,5 +645,31 @@ async fn exited_helper_failure_is_persisted_before_notification_without_releasin
     assert_eq!(
         &state.events[state.events.len() - 2..],
         &["import", "notify"]
+    );
+}
+
+#[tokio::test]
+async fn verified_source_cleanup_commits_failure_before_notification_and_admission() {
+    let fixture = Fixture::new();
+    {
+        let mut state = fixture.state.lock().unwrap();
+        state.fail_ack = true;
+        state.recoverable = true;
+    }
+    let (service, mut commands) = fixture.service();
+    let approve = service.approve(actor(), fixture.plan.id, Uuid::now_v7());
+    tokio::pin!(approve);
+    assert!(futures_util::poll!(&mut approve).is_pending());
+    let command = commands.recv().await.unwrap();
+    service
+        .execute(command, &CancellationToken::new())
+        .await
+        .unwrap();
+    approve.await.unwrap();
+    let state = fixture.state.lock().unwrap();
+    assert_eq!(state.operation.as_ref().unwrap().phase, UpdatePhase::Failed);
+    assert_eq!(
+        &state.events[state.events.len() - 4..],
+        ["recover", "abort", "notify", "reopen"]
     );
 }

@@ -35,6 +35,32 @@ impl DockerUpdateInstallation {
 }
 
 impl UpdateInstallationRuntime for DockerUpdateInstallation {
+    fn recover_source<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            if self.version != operation.plan.source.version {
+                return Err(super::super::docker::failed());
+            }
+            let (response, image, architecture) = self
+                .client
+                .exchange(
+                    HostUpdateRequest::RecoverSource(Box::new(operation.clone())),
+                    cancellation,
+                )
+                .await?;
+            if !matches!(response, HostUpdateResponse::SourceRecovered(ref saved) if **saved == *operation)
+                || image != operation.plan.source.image
+                || architecture != operation.plan.source.architecture
+            {
+                return Err(super::super::docker::failed());
+            }
+            Ok(())
+        })
+    }
+
     fn source<'a>(
         &'a self,
         cancellation: &'a CancellationToken,

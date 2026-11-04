@@ -103,8 +103,10 @@ the Updates page reloads the document once to load the new frontend, preserving
 the URL. It requires no active maintenance owner, the retained
 successful outcome, a connected realtime session and the matching running version.
 A session marker is persisted before reload; storage failure leaves a manual action
-instead. After reload, confirmed completion clears the session hint and banner;
-the durable operation remains in Activities. Release-check notices are hidden while
+instead. After reload, confirmed completion clears the session hint and banner and
+shows a success toast. Failed and recovery-required outcomes show an error toast
+once per operation per tab, retaining the recovery banner and operation hint.
+The durable operation remains in Activities. Release-check notices are hidden while
 an operation owns maintenance. A committed success still owning maintenance is shown as Finishing update. A fresh browser load may be unavailable while Core is down;
 the first version adds no independently hosted updater status endpoint.
 
@@ -120,11 +122,12 @@ Packaged source-to-target upgrade and recovery tests are still required before
 a release descriptor can authorize installation.
 Matching journal identity fields alone is not target readiness verification.
 
-When the helper records a terminal failure before Core stops, the coordinator
-imports that durable outcome before notifying the UI. An exited helper's journal
-is read by the existing host utility under the installation lock after validating
-the exact helper identity and exit. This read never releases maintenance or retries
-replacement; an ambiguous or missing record remains an unresolved claim.
+On execution failure, the coordinator first attempts verified unchanged-source
+reconciliation. If safety cannot be established, it imports an available owned
+terminal helper journal before notifying the UI and retains the claim. The host
+utility reads an exited helper's journal under the installation lock after checking
+its exact identity and exit. This fallback read alone never releases maintenance
+or retries replacement; missing or ambiguous evidence remains unresolved.
 
 Core now shares a process-local `AdmissionGate` between HTTP handling and work
 dispatch. A closed gate rejects ordinary HTTP requests with a no-store 503 and
@@ -360,7 +363,8 @@ continue. A fully reconciled archive can finish an interrupted database release 
 restart after rechecking image, container, configuration, storage, keys, catalog and
 committed receipt. A private finalization record is persisted after clean helper exit
 and target receipt verification, before cleanup. It permits exact interrupted archive
-moves to finish after revalidation, without replaying container replacement. Pre-stop failures retain maintenance as `Failed`;
+moves to finish after revalidation, without replaying container replacement. Pre-stop
+failures retain maintenance as `Failed` until unchanged-source reconciliation succeeds;
 ambiguous post-stop failures record `RecoveryRequired`, preserve evidence and never
 restart the source or roll back the database automatically.
 
@@ -387,8 +391,8 @@ and a private temporary filesystem. Core does not need writable host-root access
 locked state blocks startup. The check never creates or repairs evidence, holds
 the host lock while awaiting a helper, or treats a restored database without a
 claim as permission to ignore external evidence. Active or orphaned evidence requires recovery verification. Completed checkpoint
-archives are permitted only with validated completion and registration identities;
-a standalone successful journal does not authorize startup.
+archives are permitted only with validated completion or unchanged-source recovery
+and registration identities; a standalone successful journal does not authorize startup.
 
 Blocked startup serves a restricted listener: `/health` reports process liveness,
 `/ready` returns 503, application routes are unavailable, and no Edge RPCs are exposed.
@@ -533,7 +537,7 @@ Migration `0002_instance_updates` appends update state without changing the ship
 baseline. Discovery markers and operation receipts are separate from Activity
 retention. Update state and the corresponding Activities commit together; a
 completion journal cannot reopen an older restored source identity.
-An attempt that fails or is postponed before replacement can release ownership
+An attempt that fails or is postponed before source shutdown can release ownership
 after its outcome commits, helper cleanup completes and the running source's
 version, image, catalog and architecture are verified unchanged. Its original
 outcome stays terminal. Replacement uncertainty and `RecoveryRequired` retain
@@ -545,6 +549,36 @@ validates the immutable checkpoint, restores through the shared system recovery
 implementation, then checks catalog, claim identity and credential decryption before
 atomically recording failure and releasing the restored claim. Original host evidence
 and the original database remain intact; recovery never fabricates target success.
+
+### Update interruption reconciliation
+
+Installation requests use one nonblocking reservation covering queued and executing
+work; accepted replay reads the authorized durable operation before review expiry
+or queue admission. The worker retains the reservation after the HTTP reply.
+
+Recovery separates executor history from database ownership. Before source shutdown,
+the host reconciler stops only the exact owned helper, verifies that no stop or
+replacement was recorded, verifies the unchanged source and archives the attempt.
+A permanent recovery record fences delayed launches and grants. The repository then
+checks the source catalog and claim, records failure and releases ownership atomically;
+only afterward may process admission reopen. Unresolved failures retain ownership
+and can be retried with `recover-update-source` in the original Core.
+
+For a committed target receipt, startup reconstructs the exact completion from the
+retained Verifying history and verifies the receipt through target-owned code. It
+can retire a failed executor and finish archival without rewriting that executor's
+history or claiming a clean exit. Same-container policy restarts are allowed only
+in this receipt-backed path; first target acceptance still rejects restarts. Target
+identity, configuration, storage, retained PostgreSQL incarnation and recovery keys
+must match before database ownership is released.
+
+Update compatibility includes enabled, nonarchived build pools. Direct pool health
+checks persist the signed Agent version under the existing configuration fence;
+unobserved pools block eligibility. Edge bindings clear their observation on
+reconnect and accept version updates only from the authenticated current session.
+The binding, rather than duplicate ordinary Platform metadata, supplies Edge version
+evidence. No production source transition is qualified by the synthetic lifecycle
+fixture.
 
 ## Dependency rules
 

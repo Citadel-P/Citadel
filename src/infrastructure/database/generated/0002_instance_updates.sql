@@ -46,3 +46,6 @@ ALTER TABLE instancesetupstates
     ADD COLUMN updatecheckintervalhours integer NOT NULL DEFAULT 6,
     ADD CONSTRAINT ck_instancesetupstates_updatecheckintervalhours
         CHECK (updatecheckintervalhours IN (6, 12, 24));
+
+-- Observed through signed build-pool health checks, fenced by pool configuration.
+ALTER TABLE buildagentpools ADD COLUMN agentversion text;

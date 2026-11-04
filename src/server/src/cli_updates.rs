@@ -133,3 +133,24 @@ pub async fn target_receipt() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", serde_json::to_string(&completion.receipt)?);
     Ok(())
 }
+
+/// Run inside the original Core container, with its original configuration/keys.
+/// This command never restores a database or retries a destructive operation.
+pub async fn recover_source(
+    state_directory: PathBuf,
+    operation_id: Uuid,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let token = CancellationToken::new();
+    let recovery =
+        crate::composition::updates::recover_source(state_directory, operation_id, &token);
+    tokio::pin!(recovery);
+    tokio::select! {
+        result = &mut recovery => result?,
+        () = crate::app::shutdown_signal(token.clone()) => recovery.await?,
+    };
+    println!(
+        "Update {} safely stopped before source shutdown. Restart the original Core to resume normal admission.",
+        operation_id
+    );
+    Ok(())
+}

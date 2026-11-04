@@ -22,6 +22,7 @@ pub enum HostUpdateRequest {
     Finalize(Box<FinalizeUpdateRequest>),
     Completed(Box<UpdateOperation>),
     FailedJournal(Box<UpdateOperation>),
+    RecoverSource(Box<UpdateOperation>),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -37,6 +38,7 @@ pub enum HostUpdateResponse {
     Launched(Box<LaunchedUpdateHelper>),
     Finalized(Box<UpdateJournal>),
     FailedJournal(Box<UpdateJournal>),
+    SourceRecovered(Box<UpdateOperation>),
     Completed(Box<super::super::CompletedUpdateTarget>),
 }
 
@@ -46,6 +48,11 @@ pub async fn execute_host_update(
     cancellation: &CancellationToken,
 ) -> Result<HostUpdateResponse, UpdateError> {
     match request {
+        HostUpdateRequest::RecoverSource(operation) => {
+            super::super::handoff::recover_source(&operation, process, cancellation).await?;
+            Ok(HostUpdateResponse::SourceRecovered(operation))
+        }
+
         HostUpdateRequest::FailedJournal(operation) => {
             Ok(HostUpdateResponse::FailedJournal(Box::new(
                 super::super::handoff::failed_journal(&operation, process, cancellation).await?,

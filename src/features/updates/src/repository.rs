@@ -33,6 +33,19 @@ pub trait UpdateDrainRepository: Send + Sync {
 }
 
 pub trait UpdateRepository: ReleaseCheckRepository {
+    /// Record interrupted preparation without releasing the claim or inventing helper evidence.
+    fn interrupt<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+
+    /// After runtime source reconciliation: verify source catalog and exact claim,
+    /// persist failure/Activity and release ownership in one transaction.
+    fn abort_source<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+
     fn save_review<'a>(
         &'a self,
         actor: UpdateActor,

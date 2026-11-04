@@ -23,6 +23,7 @@ pub(super) enum CoreState {
     Healthy,
     Stopped,
     TargetRunning,
+    AcceptedTargetRunning,
 }
 
 pub(super) async fn observe(
@@ -277,14 +278,19 @@ fn validate_service(
             && actual["State"]["ExitCode"] == 0
             && actual["State"]["OOMKilled"] == false
             && actual["State"]["Error"] == ""
-    } else if state == CoreState::TargetRunning {
+    } else if matches!(
+        state,
+        CoreState::TargetRunning | CoreState::AcceptedTargetRunning
+    ) {
         // A maintenance listener deliberately fails readiness. Do not require a
         // healthy probe to identify the target, or infer completion from one.
         actual["State"]["Running"] == true
             && actual["State"]["Status"] == "running"
             && actual["State"]["OOMKilled"] == false
             && actual["State"]["Error"] == ""
-            && actual["RestartCount"] == 0
+            && actual["RestartCount"]
+                .as_u64()
+                .is_some_and(|count| state == CoreState::AcceptedTargetRunning || count == 0)
             && matches!(
                 actual["State"]["Health"]["Status"].as_str(),
                 Some("starting" | "healthy" | "unhealthy")

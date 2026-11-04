@@ -108,6 +108,22 @@ class PublishedUpgradeTests(unittest.TestCase):
             execute.assert_called_once()
             self.assertNotIn('private', str(failure.exception))
 
+    def test_exited_helper_removed_during_finalization_is_not_a_runner_failure(self):
+        fixture = upgrade.UpgradeFixture('unused', Path('/unused'))
+        listed = subprocess.CompletedProcess([], 0, b'helper-id\n', b'')
+        for result, allowed in [
+            (subprocess.CompletedProcess([], 1, b'', b'Error: No such object: helper-id'), True),
+            (subprocess.CompletedProcess([], 1, b'', b'daemon unavailable'), False),
+            (subprocess.CompletedProcess([], 0, b'[{"State":{"ExitCode":0}}]', b''), True),
+            (subprocess.CompletedProcess([], 0, b'[{"State":{"ExitCode":1}}]', b''), False),
+        ]:
+            with self.subTest(result=result), patch.object(fixture, 'docker', side_effect=[listed, result]):
+                if allowed:
+                    fixture.check_exited_helpers('operation')
+                else:
+                    with self.assertRaises(AssertionError):
+                        fixture.check_exited_helpers('operation')
+
 
 class LocalUpgradeTests(unittest.TestCase):
     def test_browser_publishes_only_loopback_ui_and_retains_its_own_network(self):

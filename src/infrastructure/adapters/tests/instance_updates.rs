@@ -273,7 +273,31 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         repo.previous(actor, key).await.unwrap(),
         Some(journal.operation.clone())
     );
+    let mut expired_plan = plan.clone();
+    expired_plan.expires_at = Utc::now() - Duration::seconds(1);
+    sqlx::query("UPDATE instanceupdateplans SET expiresat=$2,plan=$3 WHERE id=$1")
+        .bind(plan.id)
+        .bind(expired_plan.expires_at)
+        .bind(sqlx::types::Json(&expired_plan))
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(repo.review(actor, plan.id).await.is_err());
+    assert_eq!(
+        repo.previous(actor, key).await.unwrap(),
+        Some(journal.operation.clone())
+    );
+    sqlx::query("DELETE FROM instanceupdateplans WHERE id=$1")
+        .bind(plan.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.previous(actor, key).await.unwrap(),
+        Some(journal.operation.clone())
+    );
     let (replayed, created) = repo.claim(actor, &plan, key, Utc::now()).await.unwrap();
+    repo.save_review(actor, &plan).await.unwrap();
     assert_eq!(replayed, journal.operation);
     assert!(!created);
 
@@ -460,6 +484,20 @@ async fn update_state_activities_and_receipts_commit_atomically() {
     assert_eq!(count(&pool, "InstanceUpdatePostponed").await, 1);
     assert_eq!(count(&pool, "InstanceUpdateFailed").await, 1);
     assert_eq!(count(&pool, "InstanceUpdateCompleted").await, 1);
+
+    // No helper identity is invented for a failed pre-launch attempt.
+    let untouched = repo
+        .claim(actor, &plan, Uuid::now_v7(), Utc::now())
+        .await
+        .unwrap()
+        .0;
+    repo.abort_source(&untouched).await.unwrap();
+    assert!(repo.active().await.unwrap().is_none());
+    assert_eq!(
+        repo.operation(untouched.id).await.unwrap().phase,
+        UpdatePhase::Failed
+    );
+    check_startup_updates(&pool, Some(instance)).await.unwrap();
 
     let operation = repo
         .claim(actor, &plan, Uuid::now_v7(), Utc::now())

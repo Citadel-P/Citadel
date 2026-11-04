@@ -182,6 +182,27 @@ impl JournalDirectory {
                     .is_some_and(|id| Uuid::parse_str(id).is_ok())
             {
                 let archive = Self::open(self.path.join(name))?;
+                if let Some(recovered) = archive
+                    .read_optional::<citadel_updates::UpdateOperation>("source-recovered.json")?
+                {
+                    let registration: super::RegisteredComposeInstallation =
+                        self.read("installation.json")?;
+                    recovered.plan.validate(recovered.created_at)?;
+                    if archive.read::<citadel_updates::UpdateOperation>("source-recovery.json")?
+                        != recovered
+                        || recovered.instance_id != registration.instance_id
+                        || recovered.plan.registration_id != registration.id
+                        || std::path::Path::new(&recovered.plan.checkpoint_directory)
+                            != registration.state_directory
+                        || archive.path()
+                            != registration
+                                .state_directory
+                                .join(format!("checkpoint-{}", recovered.id))
+                    {
+                        return Err(unavailable_input());
+                    }
+                    continue;
+                }
                 let completed: super::handoff::CompletedUpdate = archive.read("completed.json")?;
                 completed.validate(&archive)?;
                 let registration: super::RegisteredComposeInstallation =

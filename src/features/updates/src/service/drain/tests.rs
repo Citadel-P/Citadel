@@ -47,6 +47,9 @@ impl UpdateDrainRepository for Fixture {
     }
 }
 impl UpdateDrainRuntime for Fixture {
+    fn reopen(&self, _: Uuid) -> Result<(), UpdateError> {
+        Ok(())
+    }
     fn close(&self, _: Uuid) -> Result<(), UpdateError> {
         assert!(self.reads.load(Ordering::SeqCst) > 0);
         self.closed.store(true, Ordering::SeqCst);

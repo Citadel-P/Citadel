@@ -20,6 +20,20 @@ impl PostgresUpdateRepository {
 }
 
 impl UpdateRepository for PostgresUpdateRepository {
+    fn interrupt<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(self.interrupt_impl(operation))
+    }
+
+    fn abort_source<'a>(
+        &'a self,
+        operation: &'a UpdateOperation,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(self.abort_source_impl(operation))
+    }
+
     fn save_review<'a>(
         &'a self,
         actor: UpdateActor,

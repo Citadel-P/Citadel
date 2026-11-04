@@ -23,6 +23,40 @@ pub(in crate::external::updates) async fn observe_replacement(
     configuration: &CheckedCoreReplacement,
     helper: Option<&str>,
 ) -> Result<ObservedReplacement, UpdateError> {
+    observe_target(
+        docker,
+        registration,
+        configuration,
+        helper,
+        CoreState::TargetRunning,
+    )
+    .await
+}
+
+/// Only callers that independently verify the committed target receipt may use this.
+pub(in crate::external::updates) async fn observe_accepted_target(
+    docker: &LocalDocker<'_>,
+    registration: &RegisteredComposeInstallation,
+    configuration: &CheckedCoreReplacement,
+    helper: Option<&str>,
+) -> Result<ObservedReplacement, UpdateError> {
+    observe_target(
+        docker,
+        registration,
+        configuration,
+        helper,
+        CoreState::AcceptedTargetRunning,
+    )
+    .await
+}
+
+async fn observe_target(
+    docker: &LocalDocker<'_>,
+    registration: &RegisteredComposeInstallation,
+    configuration: &CheckedCoreReplacement,
+    helper: Option<&str>,
+    core_state: CoreState,
+) -> Result<ObservedReplacement, UpdateError> {
     let inputs = InstallerComposeInputs {
         directory: registration.directory.clone(),
         project: registration.project.clone(),
@@ -45,7 +79,7 @@ pub(in crate::external::updates) async fn observe_replacement(
         &checked,
         &registration.state_directory,
         helper,
-        CoreState::TargetRunning,
+        core_state,
     )
     .await?;
     if observed.daemon != registration.daemon_id

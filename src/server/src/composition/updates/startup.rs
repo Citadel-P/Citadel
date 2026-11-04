@@ -50,6 +50,21 @@ async fn accept(
     // A restarted source, development executable or unrelated image must not
     // migrate under someone else's retained claim. Container identity is checked
     // independently by TargetUpdateSession before database verification.
+    if matches_target_build(&operation.plan.source)? && !cancellation.is_cancelled() {
+        use citadel_updates::UpdateInstallationRuntime;
+        let directory = config
+            .update_state_directory
+            .clone()
+            .ok_or_else(unavailable)?;
+        let runtime = citadel_adapters::external::updates::DockerUpdateInstallation::new(
+            std::sync::Arc::new(citadel_processes::SystemProcess),
+            directory,
+            env!("CITADEL_BUILD_VERSION").into(),
+            pool.clone(),
+        );
+        runtime.recover_source(&operation, cancellation).await?;
+        return repository.abort_source(&operation).await;
+    }
     if !matches_target_build(target)? || cancellation.is_cancelled() {
         return Err(unavailable());
     }
@@ -124,10 +139,19 @@ async fn accept(
         journal: completed,
         receipt,
     };
+    #[cfg(test)]
+    super::fixtures::pause_at("receipt", &config.execution.paths.data_root, cancellation).await?;
     session
         .acknowledge(&completion, &process, cancellation)
         .await?;
     session.wait_for_exit(&process, cancellation).await?;
+    #[cfg(test)]
+    super::fixtures::pause_at(
+        "helper-exit",
+        &config.execution.paths.data_root,
+        cancellation,
+    )
+    .await?;
     use citadel_adapters::external::updates::{
         FinalizeUpdateRequest, HostUpdateClient, HostUpdateRequest, HostUpdateResponse,
     };
@@ -138,6 +162,7 @@ async fn accept(
     let (response, _, _) = client
         .exchange(
             HostUpdateRequest::Finalize(Box::new(FinalizeUpdateRequest {
+                receipt_recovery: false,
                 intent: session.evidence.intent.clone(),
                 completion: completion.clone(),
             })),

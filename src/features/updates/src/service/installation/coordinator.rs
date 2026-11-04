@@ -4,17 +4,19 @@ use crate::{
     UpdateRepository,
 };
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 pub enum UpdateInstallCommand {
     Review {
+        reservation: OwnedSemaphorePermit,
         actor: UpdateActor,
         version: String,
         response: oneshot::Sender<Result<UpdatePlan, UpdateError>>,
     },
     Approve {
+        reservation: OwnedSemaphorePermit,
         actor: UpdateActor,
         plan_id: Uuid,
         key: Uuid,
@@ -30,6 +32,7 @@ pub struct UpdateInstallService {
     drain: UpdateDrainService,
     notifier: Arc<dyn UpdateChangeNotifier>,
     queue: mpsc::Sender<UpdateInstallCommand>,
+    slots: Arc<Semaphore>,
 }
 
 impl UpdateInstallService {
@@ -49,6 +52,7 @@ impl UpdateInstallService {
                 drain,
                 notifier,
                 queue,
+                slots: Arc::new(Semaphore::new(1)),
             },
             receiver,
         )
@@ -59,9 +63,11 @@ impl UpdateInstallService {
         actor: UpdateActor,
         version: &str,
     ) -> Result<UpdatePlan, UpdateError> {
+        let reservation = self.reserve()?;
         let (response, receiver) = oneshot::channel();
         self.queue
             .try_send(UpdateInstallCommand::Review {
+                reservation,
                 actor,
                 version: version.into(),
                 response,
@@ -120,9 +126,14 @@ impl UpdateInstallService {
                 "An update review and request key are required.".into(),
             ));
         }
+        if let Some(operation) = self.replay(actor, plan_id, key).await? {
+            return Ok(operation);
+        }
+        let reservation = self.reserve()?;
         let (response, receiver) = oneshot::channel();
         self.queue
             .try_send(UpdateInstallCommand::Approve {
+                reservation,
                 actor,
                 plan_id,
                 key,
@@ -134,6 +145,31 @@ impl UpdateInstallService {
                 "Update approval was interrupted; check its status before retrying.".into(),
             )
         })?
+    }
+
+    fn reserve(&self) -> Result<OwnedSemaphorePermit, UpdateError> {
+        self.slots.clone().try_acquire_owned().map_err(|_| {
+            UpdateError::Conflict("Another update request is running; check its status.".into())
+        })
+    }
+
+    async fn replay(
+        &self,
+        actor: UpdateActor,
+        plan_id: Uuid,
+        key: Uuid,
+    ) -> Result<Option<UpdateOperation>, UpdateError> {
+        let previous = self.repository.previous(actor, key).await?;
+        if let Some(operation) = &previous
+            && (operation.actor_id != actor.actor_id
+                || operation.idempotency_key != key
+                || operation.plan.id != plan_id)
+        {
+            return Err(UpdateError::Conflict(
+                "The request key belongs to another approval.".into(),
+            ));
+        }
+        Ok(previous)
     }
 
     pub async fn active(&self) -> Result<Option<UpdateOperation>, UpdateError> {
@@ -148,8 +184,9 @@ impl UpdateInstallService {
         command: UpdateInstallCommand,
         cancellation: &CancellationToken,
     ) -> Result<(), UpdateError> {
-        let (actor, plan_id, key, response) = match command {
+        let (actor, plan_id, key, response, _reservation) = match command {
             UpdateInstallCommand::Review {
+                reservation: _reservation,
                 actor,
                 version,
                 response,
@@ -159,22 +196,20 @@ impl UpdateInstallService {
                 return Ok(());
             }
             UpdateInstallCommand::Approve {
+                reservation,
                 actor,
                 plan_id,
                 key,
                 response,
-            } => (actor, plan_id, key, response),
+            } => (actor, plan_id, key, response, reservation),
         };
         let claim = async {
-            let plan = self.repository.review(actor, plan_id).await?;
-            // Exact retries return the stored claim before running source preflight,
-            // which intentionally refuses installations already in maintenance.
-            if self.repository.previous(actor, key).await?.is_some() {
-                return self
-                    .repository
-                    .claim(actor, &plan, key, chrono::Utc::now())
-                    .await;
+            // Replay is authorized by the repository and does not depend on a
+            // review that may have expired or been pruned after acceptance.
+            if let Some(operation) = self.replay(actor, plan_id, key).await? {
+                return Ok((operation, false));
             }
+            let plan = self.repository.review(actor, plan_id).await?;
             let source = self.runtime.source(cancellation).await?;
             check_source(&source, &plan)?;
             if cancellation.is_cancelled() {
@@ -197,8 +232,10 @@ impl UpdateInstallService {
         if !created {
             return Ok(());
         }
-        let runtime = self.runtime.launch(&operation, cancellation).await?;
+        let mut launched = None;
         let execution = async {
+            launched = Some(self.runtime.launch(&operation, cancellation).await?);
+            let runtime = launched.as_ref().expect("helper launched");
             runtime.acknowledged(&operation, cancellation).await?;
             let journal = runtime.journal(&operation, cancellation).await?;
             self.repository.import(&journal).await?;
@@ -220,27 +257,45 @@ impl UpdateInstallService {
         }
         .await;
         if execution.is_err() {
-            // Preserve independently committed helper failure for UI/Activities.
-            // A failed observation cannot release ownership or fabricate an outcome.
-            let observation = CancellationToken::new();
-            let read = runtime.journal(&operation, &observation);
-            tokio::pin!(read);
-            let observed = tokio::select! {
-                result = &mut read => result,
-                () = tokio::time::sleep(Duration::from_secs(60)) => {
-                    observation.cancel();
-                    read.await
+            // Recovery is worker-owned even if the caller disconnected or shutdown
+            // cancelled preparation. Ambiguous stop evidence fails closed.
+            let recovery = CancellationToken::new();
+            let current = self.repository.operation(operation.id).await?;
+            if let Err(error) = self.runtime.recover_source(&current, &recovery).await {
+                // Preserve the independent executor's terminal observation even
+                // when ambiguous shutdown prevents automatic source release.
+                if let Some(runtime) = launched {
+                    let observation = CancellationToken::new();
+                    let read = runtime.journal(&operation, &observation);
+                    tokio::pin!(read);
+                    let observed = tokio::select! {
+                        result = &mut read => result,
+                        () = tokio::time::sleep(Duration::from_secs(60)) => { observation.cancel(); read.await }
+                    };
+                    if let Ok(journal) = observed
+                        && matches!(
+                            journal.operation.phase,
+                            crate::UpdatePhase::Failed | crate::UpdatePhase::RecoveryRequired
+                        )
+                    {
+                        self.repository.import(&journal).await?;
+                        self.notifier.changed();
+                    }
                 }
-            };
-            if let Ok(journal) = observed
-                && matches!(
-                    journal.operation.phase,
-                    crate::UpdatePhase::Failed | crate::UpdatePhase::RecoveryRequired
-                )
-            {
-                self.repository.import(&journal).await?;
-                self.notifier.changed();
+                let latest = self.repository.operation(operation.id).await?;
+                if matches!(
+                    latest.phase,
+                    crate::UpdatePhase::Preparing | crate::UpdatePhase::Draining
+                ) {
+                    self.repository.interrupt(&latest).await?;
+                    self.notifier.changed();
+                }
+                return Err(error);
             }
+            self.repository.abort_source(&current).await?;
+            self.notifier.changed();
+            self.drain.reopen(current.fence)?;
+            return Ok(());
         }
         execution
     }

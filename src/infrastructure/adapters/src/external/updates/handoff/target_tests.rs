@@ -141,7 +141,7 @@ impl ProcessRunner for TargetRunner {
                 return Ok(output(serde_json::to_vec(&receipt).unwrap()));
             }
             if args == ["container", "rm", HELPER] {
-                assert_eq!(mode, "exit-clean");
+                assert!(matches!(mode, "exit-clean" | "exit-nonzero"));
                 assert!(!self.removed.swap(true, Ordering::SeqCst));
                 return Ok(output(HELPER.as_bytes().to_vec()));
             }
@@ -1151,6 +1151,7 @@ async fn finalization_reconciles_registration_and_archives_without_moving_checkp
     *runner.mode.lock().unwrap() = "exit-clean";
     let released = super::finalize_update(
         &super::FinalizeUpdateRequest {
+            receipt_recovery: false,
             intent: intent.clone(),
             completion: done.clone(),
         },
@@ -1214,7 +1215,7 @@ async fn finalization_reconciles_registration_and_archives_without_moving_checkp
         );
         state.require_registration_only().unwrap();
     }
-    for mode in ["normal", "manual-restart"] {
+    for mode in ["normal", "manual-restart", "restarted"] {
         *runner.mode.lock().unwrap() = mode;
         let recovered = super::completed_update_target(&released.operation, &runner, &token)
             .await
@@ -1251,6 +1252,7 @@ async fn finalization_rejects_changed_helper_before_cleanup() {
         assert!(
             super::finalize_update(
                 &super::FinalizeUpdateRequest {
+                    receipt_recovery: false,
                     intent: intent.clone(),
                     completion: done
                 },
@@ -1272,5 +1274,69 @@ async fn finalization_rejects_changed_helper_before_cleanup() {
         let registration: super::super::RegisteredComposeInstallation =
             state.read("installation.json").unwrap();
         assert_eq!(registration, intent.registration);
+    }
+}
+
+#[tokio::test]
+async fn committed_target_recovers_before_first_finalization_with_failed_executor_history() {
+    for failed in [false, true] {
+        let (runner, helper) = TargetRunner::new().await;
+        let token = CancellationToken::new();
+        let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+        let done = completion(&journal);
+        let id = helper.intent.operation.id;
+        if failed {
+            super::driver::record_failure(&helper).unwrap();
+        }
+        let original = execution(&helper.state, id);
+        drop(helper);
+        *runner.mode.lock().unwrap() = if failed { "exit-nonzero" } else { "exit-clean" };
+        let recovered = super::completed_update_target(&done.journal.operation, &runner, &token)
+            .await
+            .unwrap();
+        assert_eq!(recovered.journal.operation, done.journal.operation);
+        assert!(recovered.journal.maintenance_released);
+        let state = runner.previous.base.state();
+        let archive =
+            super::super::JournalDirectory::open(state.path().join(format!("checkpoint-{id}")))
+                .unwrap();
+        assert_eq!(
+            archive.read::<Value>(&format!("{id}.json")).unwrap(),
+            original
+        );
+        assert_eq!(
+            archive.read::<Value>("executor-exit.json").unwrap()["ExitCode"],
+            if failed { 1 } else { 0 }
+        );
+        *runner.mode.lock().unwrap() = "restarted";
+        let again = super::completed_update_target(&done.journal.operation, &runner, &token)
+            .await
+            .unwrap();
+        assert_eq!(again.journal, recovered.journal);
+    }
+}
+
+#[tokio::test]
+async fn receipt_recovery_rejects_uncommitted_or_changed_target_without_cleanup() {
+    for mode in [
+        "uncommitted",
+        "foreign-completion",
+        "wrong-image",
+        "bad-mount",
+        "database-restarted",
+    ] {
+        let (runner, helper) = TargetRunner::new().await;
+        let token = CancellationToken::new();
+        let journal = helper.observe_replacement(&runner, &token).await.unwrap();
+        let done = completion(&journal);
+        drop(helper);
+        *runner.mode.lock().unwrap() = mode;
+        assert!(
+            super::completed_update_target(&done.journal.operation, &runner, &token)
+                .await
+                .is_err(),
+            "{mode}"
+        );
+        assert!(!runner.removed.load(Ordering::SeqCst));
     }
 }

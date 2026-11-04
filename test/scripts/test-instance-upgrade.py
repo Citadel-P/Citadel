@@ -115,6 +115,21 @@ class UpgradeFixture(registration.Fixture):
         registered = self.register(refresh=True)
         return registered, password, admin_password
 
+    def check_exited_helpers(self, operation_id):
+        helpers = self.docker("ps", "-a", "--filter", "label=com.citadel.update-operation=" + operation_id,
+                              "--filter", "status=exited", "--format", "{{.ID}}").stdout.decode().split()
+        for helper in helpers:
+            inspected = self.docker("inspect", helper, check=False)
+            if inspected.returncode:
+                # Finalization can remove the exact helper after the list query.
+                # Missing is not success: the caller still requires the committed
+                # outcome, released ownership and verified checkpoint archive.
+                require(b"No such object" in inspected.stderr or b"No such container" in inspected.stderr,
+                        "Cannot verify detached helper exit; output withheld")
+                continue
+            require(json.loads(inspected.stdout)[0]["State"]["ExitCode"] == 0,
+                    "Detached helper exited unsuccessfully; preserve its failure evidence")
+
     def run_transition(self, target_version):
         source = self.inspect_transition(target_version)
         print("Source and target inspected; creating isolated installation", flush=True)
@@ -145,11 +160,7 @@ class UpgradeFixture(registration.Fixture):
                 source_logs = self.docker("logs", "--tail=100", core, check=False)
                 require(b"Citadel update stopped; retained maintenance" not in source_logs.stdout + source_logs.stderr,
                         "Source coordinator stopped before granting shutdown; preserve failure evidence")
-            failed = self.docker("ps", "-a", "--filter", "label=com.citadel.update-operation=" + operation_id,
-                                 "--filter", "status=exited", "--format", "{{.ID}}").stdout.decode().split()
-            for helper in failed:
-                require(self.json_command("inspect", helper)[0]["State"]["ExitCode"] == 0,
-                        "Detached helper exited unsuccessfully; preserve its failure evidence")
+            self.check_exited_helpers(operation_id)
             # Renew through normal login, without flooding authentication while
             # Core is offline or maintenance blocks new sessions.
             if time.monotonic() >= refresh_at:

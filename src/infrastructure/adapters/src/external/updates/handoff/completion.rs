@@ -93,3 +93,48 @@ impl OwnedUpdateHelper {
         Ok(true)
     }
 }
+
+impl ExecutionJournal {
+    /// Reconstruct the target's proposal from the retained Verifying prefix.
+    /// This is not acceptance: callers must prove the exact receipt in the target DB.
+    /// A later executor failure remains in the original journal and archive.
+    pub(super) fn receipt_completion(
+        &self,
+        operation: &citadel_updates::UpdateOperation,
+    ) -> Result<TargetUpdateCompletion, UpdateError> {
+        use citadel_updates::UpdatePhase;
+        self.journal
+            .validate_for(self.journal.history.first().ok_or_else(conflict)?)?;
+        self.require_submission()?;
+        if !matches!(
+            self.journal.operation.phase,
+            UpdatePhase::Verifying | UpdatePhase::Succeeded | UpdatePhase::RecoveryRequired
+        ) {
+            return Err(conflict());
+        }
+        let index = self
+            .journal
+            .history
+            .iter()
+            .position(|entry| entry.phase == UpdatePhase::Verifying)
+            .ok_or_else(conflict)?;
+        let mut prefix = self.journal.clone();
+        prefix.history.truncate(index + 1);
+        prefix.operation = prefix.history[index].clone();
+        prefix.verified_target = None;
+        prefix.completion_acknowledged = false;
+        prefix.maintenance_released = false;
+        let journal = prefix.completed(&operation.plan.target, operation.updated_at)?;
+        if journal.operation != *operation {
+            return Err(conflict());
+        }
+        let receipt = CompletionReceipt {
+            instance_id: operation.instance_id,
+            operation_id: operation.id,
+            fence: operation.fence,
+            revision: operation.revision,
+            target: operation.plan.target.clone(),
+        };
+        Ok(TargetUpdateCompletion { journal, receipt })
+    }
+}

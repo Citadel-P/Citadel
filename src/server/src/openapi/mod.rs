@@ -194,10 +194,17 @@ mod tests {
     fn activity_event_schema_uses_the_current_feature_vocabulary() {
         for public_only in [false, true] {
             let doc = serde_json::to_value(document(public_only)).unwrap();
-            assert_eq!(
-                doc["components"]["schemas"]["ActivityEventType"]["enum"],
+            let mut actual: Vec<String> = serde_json::from_value(
+                doc["components"]["schemas"]["ActivityEventType"]["enum"].clone(),
+            )
+            .unwrap();
+            let mut expected: Vec<String> = serde_json::from_value(
                 serde_json::to_value(citadel_activities::ActivityEventType::ALL).unwrap(),
-            );
+            )
+            .unwrap();
+            actual.sort();
+            expected.sort();
+            assert_eq!(actual, expected);
         }
     }
 
@@ -214,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 427);
+        assert_eq!(operations(&full), 432);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -227,6 +234,15 @@ mod tests {
         }
         assert_eq!(operations(&public), 317);
         for (path, method, operation_id) in [
+            ("/api/v1/updates", "get", "getInstanceUpdates"),
+            ("/api/v1/updates/check", "post", "checkInstanceUpdates"),
+            ("/api/v1/updates/review", "post", "reviewInstanceUpdate"),
+            ("/api/v1/updates/approve", "post", "approveInstanceUpdate"),
+            (
+                "/api/v1/updates/operations/{id}",
+                "get",
+                "getInstanceUpdateOperation",
+            ),
             (
                 "/api/v1/buildRuns/{id}/recovery",
                 "get",
