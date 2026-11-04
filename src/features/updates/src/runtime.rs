@@ -89,6 +89,7 @@ pub trait AgentUpdateRuntime: Send + Sync {
     ) -> BoxFuture<'a, Result<(), UpdateError>>;
     fn targets<'a>(
         &'a self,
+        selected: Option<&'a [String]>,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<AgentUpdateTarget>, UpdateError>>;
     fn release<'a>(

@@ -145,22 +145,52 @@ impl AgentUpdateRuntime for AgentUpdateRuntimeRouter {
             }
             if target.kind == AgentUpdateKind::SwarmService {
                 self.resume_swarm(target, operation, cancel).await?;
+            } else {
+                let r = self.registration(target).await?;
+                let client = self.client(&r, cancel).await?;
+                let info = client.update_info(cancel).await.map_err(error)?;
+                if info.installation_id != target.id {
+                    return Err(error("Agent installation identity changed during recovery"));
+                }
+                let (source, image) = target
+                    .revision
+                    .split_once(':')
+                    .ok_or_else(|| error("Agent source identity is missing"))?;
+                client
+                    .settle_update(
+                        citadel_contracts::citadel::platforms::v1::AgentUpdateDrainRequest {
+                            operation_id: operation.to_string(),
+                            resume: true,
+                            source_container_id: source.into(),
+                            source_image: image.into(),
+                        },
+                        cancel,
+                    )
+                    .await
+                    .map_err(error)?;
             }
             Ok(())
         })
     }
     fn targets<'a>(
         &'a self,
+        selected: Option<&'a [String]>,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<AgentUpdateTarget>, UpdateError>> {
         Box::pin(async move {
             let registrations = agent_inventory::registrations(&self.pool).await?;
-            let targets = futures_util::stream::iter(registrations)
-                .map(|r| self.observe(r, cancel))
-                .buffer_unordered(4)
-                .collect::<Vec<_>>()
-                .await;
-            agent_inventory::remember(&self.pool, &targets).await?;
+            // Cached identities select connections only. Each selected alias is observed live;
+            // the service still fences installation identity, revision and Swarm membership.
+            let targets = futures_util::stream::iter(registrations.into_iter().filter(|r| {
+                selected.is_none_or(|ids| r.previous.as_ref().is_some_and(|t| ids.contains(&t.id)))
+            }))
+            .map(|r| self.observe(r, cancel))
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+            if selected.is_none() {
+                agent_inventory::remember(&self.pool, &targets).await?;
+            }
             Ok(targets)
         })
     }

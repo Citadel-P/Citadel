@@ -1,18 +1,19 @@
 use crate::*;
-use chrono::{Timelike, Utc};
+use chrono::Utc;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct AgentUpdateService {
-    core_version: String,
-    updates_allowed: bool,
-    repository: Arc<dyn AgentUpdateRepository>,
-    runtime: Arc<dyn AgentUpdateRuntime>,
-    entitlements: Arc<dyn AgentUpdateEntitlements>,
-    notifier: Arc<dyn UpdateChangeNotifier>,
+    pub(super) core_version: String,
+    pub(super) updates_allowed: bool,
+    pub(super) repository: Arc<dyn AgentUpdateRepository>,
+    pub(super) runtime: Arc<dyn AgentUpdateRuntime>,
+    pub(super) entitlements: Arc<dyn AgentUpdateEntitlements>,
+    pub(super) notifier: Arc<dyn UpdateChangeNotifier>,
     execution: Arc<tokio::sync::Mutex<()>>,
+    pub(super) core: Option<Arc<super::schedule::ScheduledCore>>,
 }
 impl AgentUpdateService {
     pub fn new(
@@ -30,6 +31,7 @@ impl AgentUpdateService {
             entitlements,
             notifier,
             execution: Arc::new(tokio::sync::Mutex::new(())),
+            core: None,
         }
     }
     pub fn with_updates_allowed(mut self, allowed: bool) -> Self {
@@ -45,14 +47,15 @@ impl AgentUpdateService {
     ) -> Result<(AgentUpdateState, Vec<AgentUpdateTarget>), UpdateError> {
         let mut state = self.repository.state().await?;
         state.release = state.release.filter(|r| r.version == self.core_version);
-        let targets = self.targets(cancellation).await?;
+        let targets = self.targets(None, cancellation).await?;
         Ok((state, targets))
     }
-    async fn targets(
+    pub(super) async fn targets(
         &self,
+        selected: Option<&[String]>,
         cancellation: &CancellationToken,
     ) -> Result<Vec<AgentUpdateTarget>, UpdateError> {
-        let mut targets = self.runtime.targets(cancellation).await?;
+        let mut targets = self.runtime.targets(selected, cancellation).await?;
         targets.sort_by_key(|t| (!t.connected, t.resource_id));
         // Runtime keys identify an installation; resource aliases never create additional jobs.
         let mut unique: BTreeMap<String, AgentUpdateTarget> = BTreeMap::new();
@@ -84,16 +87,37 @@ impl AgentUpdateService {
                         None,
                         Some("The Agent release matching Core could not be verified."),
                     )
-                    .await?
+                    .await?;
+                self.notifier.changed();
+                return Ok(());
             }
         }
         self.notifier.changed();
+        self.refresh_availability(cancellation).await
+    }
+
+    async fn refresh_availability(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<(), UpdateError> {
+        let state = self.repository.state().await?;
+        if let Some(release) = state
+            .release
+            .filter(|release| release.version == self.core_version)
+        {
+            let observed_at = Utc::now();
+            let targets = self.targets(None, cancellation).await?;
+            self.repository
+                .observe_agent_availability(&release, &targets, observed_at)
+                .await?;
+        }
         Ok(())
     }
+
     pub async fn save_schedule(
         &self,
         actor: UpdateActor,
-        mut schedule: AgentUpdateSchedule,
+        mut schedule: UpdateSchedule,
         cancellation: &CancellationToken,
     ) -> Result<(), UpdateError> {
         self.repository.authorize(actor.actor_id).await?;
@@ -108,15 +132,28 @@ impl AgentUpdateService {
         let entitled = self.entitlements.automated_operations().await?;
         let previous = self.repository.state().await?.schedule;
         let disabling = !schedule.enabled
-            && AgentUpdateSchedule {
+            && UpdateSchedule {
                 enabled: false,
                 ..previous.clone()
             } == schedule;
         if !entitled && !disabling {
             return Err(UpdateError::Forbidden);
         }
+        if !disabling
+            && schedule.include_core
+            && !previous.include_core
+            && self
+                .core
+                .as_ref()
+                .and_then(|core| core.installer.as_ref())
+                .is_none()
+        {
+            return Err(UpdateError::Unavailable(
+                "Core installation is not configured on this instance.".into(),
+            ));
+        }
         if !disabling {
-            let targets = self.targets(cancellation).await?;
+            let targets = self.targets(None, cancellation).await?;
             if schedule
                 .targets
                 .iter()
@@ -170,7 +207,25 @@ impl AgentUpdateService {
             .ok_or_else(|| {
                 UpdateError::Conflict("Check releases before reviewing Agent updates.".into())
             })?;
-        let inventory = self.targets(cancellation).await?;
+        let targets = self
+            .prepare_targets(selected, &release, scheduled, cancellation)
+            .await?;
+        Ok(AgentUpdateReview {
+            id: Uuid::now_v7(),
+            actor_id: actor,
+            release,
+            targets,
+            expires_at: Utc::now() + chrono::Duration::minutes(5),
+        })
+    }
+    pub(super) async fn prepare_targets(
+        &self,
+        selected: &[String],
+        release: &AgentUpdateRelease,
+        scheduled: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<AgentUpdateTarget>, UpdateError> {
+        let inventory = self.targets(Some(selected), cancellation).await?;
         let mut targets = Vec::new();
         for id in selected.iter().collect::<std::collections::BTreeSet<_>>() {
             let missing = AgentUpdateTarget {
@@ -195,7 +250,7 @@ impl AgentUpdateService {
                         "An Agent registration changed. Review the selection again.".into(),
                     )
                 })?;
-            if target.eligibility(Some(&release)) != AgentUpdateEligibility::Available && !scheduled
+            if target.eligibility(Some(release)) != AgentUpdateEligibility::Available && !scheduled
             {
                 return Err(UpdateError::Conflict(format!(
                     "{} is no longer eligible for an update.",
@@ -204,13 +259,7 @@ impl AgentUpdateService {
             }
             targets.push(target.clone());
         }
-        Ok(AgentUpdateReview {
-            id: Uuid::now_v7(),
-            actor_id: actor,
-            release,
-            targets,
-            expires_at: Utc::now() + chrono::Duration::minutes(5),
-        })
+        Ok(targets)
     }
     pub async fn approve(
         &self,
@@ -232,7 +281,7 @@ impl AgentUpdateService {
             return Ok(());
         };
         let state = self.repository.state().await?;
-        if let Some(mut operation) = state.operation.filter(|op| !op.finished) {
+        if let Some(mut operation) = state.operation.clone().filter(|op| !op.finished) {
             let mut failed = false;
             for index in 0..operation.targets.len() {
                 use AgentUpdatePhase::*;
@@ -274,8 +323,7 @@ impl AgentUpdateService {
                         .resume(&target, operation.id, cancellation)
                         .await
                 {
-                    let message =
-                        "Waiting to restore Agent admission. Cleanup will retry after reconnect.";
+                    let message = "Agent update recovery required. Waiting for verified helper completion or admission cleanup; ownership is retained.";
                     if !cancellation.is_cancelled()
                         && operation.targets[index].message.as_deref() != Some(message)
                     {
@@ -300,39 +348,11 @@ impl AgentUpdateService {
             operation.updated_at = Utc::now();
             self.repository.save_operation(&operation).await?;
             self.notifier.changed();
+            // Alert observation failures must not retain a completed update claim.
+            self.refresh_availability(cancellation).await?;
             return Ok(());
         }
-        if cancellation.is_cancelled()
-            || !self.updates_allowed
-            || !state.schedule.enabled
-            || !self.entitlements.automated_operations().await?
-        {
-            return Ok(());
-        }
-        let now = Utc::now()
-            .with_second(0)
-            .and_then(|t| t.with_nanosecond(0))
-            .ok_or_else(|| UpdateError::Storage("Invalid scheduler clock.".into()))?;
-        if !citadel_primitives::schedule::schedule_is_due(
-            Some(&state.schedule.cron),
-            &state.schedule.time_zone,
-            now,
-        ) {
-            return Ok(());
-        }
-        // No delayed queue or catch-up; claim only this occurrence and its explicit saved targets.
-        let actor = citadel_primitives::ActorId::new(Uuid::nil());
-        let review = self
-            .prepare(actor, &state.schedule.targets, true, cancellation)
-            .await?;
-        if self
-            .repository
-            .scheduled(&state.schedule, &review, now)
-            .await?
-        {
-            self.notifier.changed();
-        }
-        Ok(())
+        self.tick_schedule(state, cancellation).await
     }
     async fn execute_target(
         &self,
@@ -362,7 +382,7 @@ impl AgentUpdateService {
         }
         let target = operation.targets[index].target.clone();
         let current = self
-            .targets(cancellation)
+            .targets(Some(std::slice::from_ref(&target.id)), cancellation)
             .await?
             .into_iter()
             .find(|t| t.id == target.id);

@@ -1,7 +1,7 @@
 use super::{UpdateHttpState, instance::actor};
 use crate::api::resources::updates::{
-    AgentOperationView, AgentReviewView, AgentScheduleView, AgentUpdatesView, ApproveUpdateInput,
-    ReviewAgentsInput,
+    AgentOperationView, AgentReviewView, AgentUpdatesView, ApproveUpdateInput, ReviewAgentsInput,
+    UpdateScheduleView,
 };
 use crate::{
     api::{
@@ -112,23 +112,23 @@ async fn approve(
         &headers,
     )
 }
-#[utoipa::path(put,path="/api/v1/updates/agents/schedule",operation_id="updateAgentSchedule",tag="Updates",summary="Save the Team Agent update schedule",request_body=AgentScheduleView,
-responses((status=200,description="Success",body=AgentScheduleView),crate::openapi::errors::AccessErrors),security(("Bearer"=[])),
+#[utoipa::path(put,path="/api/v1/updates/schedule",operation_id="updateUpdateSchedule",tag="Updates",summary="Save the shared Team update schedule",request_body=UpdateScheduleView,
+responses((status=200,description="Success",body=UpdateScheduleView),crate::openapi::errors::AccessErrors),security(("Bearer"=[])),
 extensions(("x-citadel-principal"=json!("administrator")),("x-citadel-public"=json!(false)),("x-citadel-setup-exempt"=json!(false))))]
 async fn schedule(
     State(state): State<UpdateHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    Json(input): Json<AgentScheduleView>,
+    Json(input): Json<UpdateScheduleView>,
 ) -> Response {
     response(
         async {
             let actor = actor(require_human_administrator(principal)?);
-            let schedule: citadel_updates::AgentUpdateSchedule = input.into();
+            let schedule: citadel_updates::UpdateSchedule = input.into();
             service(&state)?
                 .save_schedule(actor, schedule.clone(), &CancellationToken::new())
                 .await?;
-            Ok(AgentScheduleView::from(schedule))
+            Ok(UpdateScheduleView::from(schedule))
         }
         .await
         .map(Json),

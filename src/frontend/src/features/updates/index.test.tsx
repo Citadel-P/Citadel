@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { getDefaultStore } from 'jotai';
 import { useTaskSheet } from '@/lib/atoms';
 import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
@@ -100,9 +100,8 @@ it.each([
   renderCitadel(<UpdatesPage />, { route: '/updates' });
   expect(await screen.findByText(title)).toBeVisible();
   expect(screen.queryByText(/Citadel 0.1.2 is available/)).not.toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: 'Release notes' })).not.toBeInTheDocument();
+  expect(screen.getByText('An update is in progress or requires recovery.')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Update now' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: 'Upgrade guide' })).not.toBeInTheDocument();
 });
 
 it('has exactly Config and Activities tabs and checks without installing or refetching status', async () => {
@@ -125,14 +124,14 @@ it('has exactly Config and Activities tabs and checks without installing or refe
     'href',
     status.available.releaseUrl,
   );
-  expect(screen.getByRole('link', { name: 'Upgrade guide' })).toHaveAttribute(
+  expect(screen.getByRole('link', { name: 'Manual upgrade guide' })).toHaveAttribute(
     'href',
     'https://docs.citadelplane.com/operations/upgrade-and-rollback/',
   );
-  expect(screen.getByText(status.installationUnavailableReason)).toBeVisible();
+  expect(screen.getByText(status.installationUnavailableReason, { exact: false })).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Check now' }));
   await waitFor(() => expect(check).toHaveBeenCalledOnce());
-  expect(await screen.findByText(/Citadel 0.1.3 is available/)).toBeVisible();
+  expect(await screen.findByText('0.1.3')).toBeVisible();
   expect(read).toHaveBeenCalledOnce();
   expect(toast.success).toHaveBeenCalledWith('Citadel 0.1.3 is available', expect.any(Object));
   expect(screen.queryByTestId('activity-drawer')).not.toBeInTheDocument(); // Layout owns the activity drawer.
@@ -145,10 +144,12 @@ it('retains release information and shows a failed check separately', async () =
     ),
   );
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
-  expect(await screen.findByRole('alert')).toHaveTextContent('The official release check failed.');
+  expect(
+    (await screen.findByText(/The official release check failed\./)).closest('[role="alert"]'),
+  ).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Release notes' })).toBeVisible();
-  await user.hover(screen.getByRole('button', { name: 'Instance information' }));
-  expect(await screen.findByRole('region', { name: 'Instance information' })).toHaveTextContent(status.lastSuccess);
+  await user.hover(screen.getByRole('button', { name: 'Update information' }));
+  expect(await screen.findByRole('region', { name: 'Update information' })).toHaveTextContent(status.lastSuccess);
 });
 
 it('honors server policy for manual checks and the saved check setting', async () => {
@@ -162,7 +163,7 @@ it('honors server policy for manual checks and the saved check setting', async (
   );
   renderCitadel(<UpdatesPage />, { route: '/updates' });
   expect(await screen.findByRole('button', { name: 'Check now' })).toBeDisabled();
-  expect(await screen.findByRole('switch', { name: 'Automatic checks' })).toBeDisabled();
+  expect(await screen.findByRole('switch', { name: 'Check automatically' })).toBeDisabled();
 });
 
 it('isolates Updates history from global activity URL filters and paging', async () => {
@@ -191,13 +192,13 @@ it('uses generic tab routes and lets Config override the remembered Activities t
   );
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
   expect(await screen.findByRole('tab', { name: 'Config' })).toHaveAttribute('data-state', 'active');
-  expect(await screen.findByRole('switch', { name: 'Automatic checks' })).toBeVisible();
+  expect(await screen.findByRole('switch', { name: 'Check automatically' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Add Updates' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('tab', { name: 'Activities' }));
   expect(screen.getByRole('tab', { name: 'Activities' })).toHaveAttribute('data-state', 'active');
   await user.click(screen.getByRole('tab', { name: 'Config' }));
   expect(screen.getByRole('tab', { name: 'Config' })).toHaveAttribute('data-state', 'active');
-  expect(await screen.findByRole('switch', { name: 'Automatic checks' })).toBeVisible();
+  expect(await screen.findByRole('switch', { name: 'Check automatically' })).toBeVisible();
 });
 
 it('reports a manual check failure while retaining the last successful release', async () => {
@@ -233,7 +234,7 @@ it('saves frequency separately, preserves it when disabled, and still allows man
     }),
   );
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
-  const frequency = await screen.findByRole('combobox', { name: 'Check frequency' });
+  const frequency = await screen.findByRole('combobox', { name: 'Frequency' });
   expect(frequency).toHaveTextContent('Every 6 hours');
   await user.click(frequency);
   await user.click(screen.getByRole('option', { name: 'Every 12 hours' }));
@@ -241,13 +242,13 @@ it('saves frequency separately, preserves it when disabled, and still allows man
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
   await waitFor(() => expect(patch).toHaveBeenCalledWith({ updateCheckIntervalHours: 12 }));
   await waitFor(() => expect(frequency).toBeEnabled());
-  await user.click(screen.getByRole('switch', { name: 'Automatic checks' }));
+  await user.click(screen.getByRole('switch', { name: 'Check automatically' }));
   expect(frequency).toBeDisabled();
   expect(frequency).toHaveTextContent('Every 12 hours');
   expect(screen.getByRole('button', { name: 'Check now' })).toBeEnabled();
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
   await waitFor(() => expect(patch).toHaveBeenLastCalledWith({ updateChecksEnabled: false }));
-  expect(await screen.findByText('Next automatic check: Disabled')).toBeVisible();
+  expect(document.getElementById('release-checks')).toHaveTextContent('Next automatic checkDisabled');
   await user.click(screen.getByRole('button', { name: 'Check now' }));
   await waitFor(() => expect(check).toHaveBeenCalledOnce());
   expect(saved.updateCheckIntervalHours).toBe(12);
@@ -316,21 +317,21 @@ it('does not report success when the response contains a failed check and retain
 
 it('keeps instance details in the tab info card and supports hover, keyboard focus, and click', async () => {
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
-  const trigger = await screen.findByRole('button', { name: 'Instance information' });
+  const trigger = await screen.findByRole('button', { name: 'Update information' });
   expect(screen.queryByText('Citadel 0.1.1')).not.toBeInTheDocument();
   await user.hover(trigger);
-  const card = await screen.findByRole('region', { name: 'Instance information' });
+  const card = await screen.findByRole('region', { name: 'Update information' });
   expect(card).toHaveTextContent('Citadel 0.1.1');
   expect(card).toHaveTextContent('stable');
   expect(card).toHaveTextContent(status.lastSuccess);
   await user.unhover(trigger);
-  await waitFor(() => expect(screen.queryByRole('region', { name: 'Instance information' })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Update information' })).not.toBeInTheDocument());
   trigger.focus();
-  expect(await screen.findByRole('region', { name: 'Instance information' })).toBeVisible();
+  expect(await screen.findByRole('region', { name: 'Update information' })).toBeVisible();
   await user.keyboard('{Escape}');
-  await waitFor(() => expect(screen.queryByRole('region', { name: 'Instance information' })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Update information' })).not.toBeInTheDocument());
   await user.click(trigger);
-  expect(await screen.findByRole('region', { name: 'Instance information' })).toBeVisible();
+  expect(await screen.findByRole('region', { name: 'Update information' })).toBeVisible();
 });
 
 it('keeps current Agents visible and updates only the selected outdated Agent while Core is current', async () => {
@@ -360,25 +361,250 @@ it('keeps current Agents visible and updates only the selected outdated Agent wh
       approve(await request.json());
       return HttpResponse.json({ id: 'operation', finished: false, targets: [] });
     }),
-    http.put('http://localhost/api/v1/updates/agents/schedule', () => {
+    http.get('http://localhost/api/v1/updates/agents/operations/operation', () =>
+      HttpResponse.json({ id: 'operation', finished: false, targets: [] }),
+    ),
+    http.put('http://localhost/api/v1/updates/schedule', () => {
       save();
       return HttpResponse.json({});
     }),
   );
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
-  expect(await screen.findByText('Citadel instance: Up to date')).toBeVisible();
-  expect(await screen.findByText('Agents: 1 update available · 2 up to date')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Review update' })).toBeDisabled();
-  await user.click(screen.getByRole('combobox', { name: /Select Agents to update/ }));
+  expect(await screen.findByText('Up to date')).toBeVisible();
+  expect(await screen.findByText('1 update available')).toBeVisible();
+  expect(screen.getByText('2 up to date')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Update information' }));
+  const info = await screen.findByRole('region', { name: 'Update information' });
+  expect(info).toHaveTextContent('Citadel CoreUp to date');
+  expect(info).toHaveTextContent('3 registered1 update available2 up to date');
+  expect(within(info).getByText('Agent C').closest('li')).toHaveTextContent('0.1.0 → 0.1.1');
+  await user.keyboard('{Escape}');
+  expect(screen.getByRole('button', { name: 'Review and update' })).toBeEnabled();
+  await user.click(screen.getByRole('combobox', { name: 'Agents to update now' }));
   expect(screen.getByRole('option', { name: /Agent A/ })).toHaveAttribute('aria-disabled', 'true');
   expect(screen.getByRole('option', { name: /Agent B/ })).toHaveAttribute('aria-disabled', 'true');
   await user.click(screen.getByRole('option', { name: /Agent C/ }));
   await user.keyboard('{Escape}');
-  await user.click(screen.getByRole('button', { name: 'Review update' }));
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Review and update' }));
   await waitFor(() => expect(prepare).toHaveBeenCalledWith({ targets: ['C'] }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('Agent C');
   await user.click(screen.getByRole('button', { name: 'Update now' }));
   await waitFor(() => expect(approve).toHaveBeenCalledWith({ reviewId: 'review', requestId: expect.any(String) }));
   expect(save).not.toHaveBeenCalled();
-  expect(await screen.findByTestId('activity-drawer')).toBeVisible();
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Progress is saved by Citadel');
+  expect(screen.queryByTestId('activity-drawer')).not.toBeInTheDocument();
+});
+
+it('uses one form with the three sections and a compact Community schedule explanation', async () => {
+  const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
+  await screen.findByRole('button', { name: 'Check now' });
+  const menus = screen.getAllByRole('navigation', { name: 'Form sections' });
+  expect(menus).toHaveLength(1);
+  const menu = within(menus[0]);
+  expect(menu.getAllByRole('link').map((link) => link.textContent)).toEqual([
+    'Available updates',
+    'Release checks',
+    'Scheduled updates',
+  ]);
+  const schedule = menu.getByRole('link', { name: 'Scheduled updates' });
+  await user.click(schedule);
+  expect(schedule).toHaveAttribute('aria-current', 'location');
+  expect(document.querySelector(schedule.getAttribute('href')!)).toHaveTextContent(
+    'Team enables scheduled installation.',
+  );
+  expect(screen.queryByRole('checkbox', { name: 'Update Citadel Core' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: 'Cron' })).not.toBeInTheDocument();
+});
+
+it('keeps failed Agent schedule edits without resaving successful Core settings', async () => {
+  let saved = { ...settings };
+  const corePatch = vi.fn();
+  const scheduleSave = vi.fn();
+  server.use(
+    http.get('http://localhost/api/v1/license/entitlements', () =>
+      HttpResponse.json({
+        capabilities: [{ capability: 'AutomatedOperations', enabled: true }],
+      }),
+    ),
+    http.get('http://localhost/api/v1/updates/agents', () =>
+      HttpResponse.json({
+        targets: [
+          {
+            id: 'C',
+            name: 'Agent C',
+            kind: 'Platform',
+            nodes: 1,
+            supported: true,
+            installedVersion: '0.1.1',
+            availableVersion: '0.1.1',
+            status: 'Current',
+          },
+        ],
+        schedule: { targets: ['C'], enabled: false, cron: '0 3 * * *', timeZone: 'UTC' },
+      }),
+    ),
+    http.get('http://localhost/api/v1/installation/settings', () => HttpResponse.json(saved)),
+    http.patch('http://localhost/api/v1/installation/settings', async ({ request }) => {
+      const body = (await request.json()) as Partial<typeof settings>;
+      corePatch(body);
+      saved = { ...saved, ...body };
+      return HttpResponse.json(saved);
+    }),
+    http.put('http://localhost/api/v1/updates/schedule', async ({ request }) => {
+      scheduleSave(await request.json());
+      return scheduleSave.mock.calls.length === 1
+        ? HttpResponse.json(
+            { status: 400, title: 'Invalid schedule', detail: 'Select a registered Agent.' },
+            { status: 400 },
+          )
+        : HttpResponse.json({});
+    }),
+  );
+  const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
+  const frequency = await screen.findByRole('combobox', { name: 'Frequency' });
+  await user.click(frequency);
+  await user.click(screen.getByRole('option', { name: 'Every 12 hours' }));
+  const enabled = await screen.findByRole('switch', { name: 'Scheduled updates enabled' });
+  await waitFor(() => expect(enabled).toBeEnabled());
+  await user.click(enabled);
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  expect(await screen.findByText('Select a registered Agent.')).toBeVisible();
+  expect(corePatch).toHaveBeenCalledExactlyOnceWith({ updateCheckIntervalHours: 12 });
+  expect(enabled).toBeChecked();
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  await waitFor(() => expect(scheduleSave).toHaveBeenCalledTimes(2));
+  expect(scheduleSave).toHaveBeenLastCalledWith({
+    includeCore: false,
+    targets: ['C'],
+    enabled: true,
+    cron: '0 3 * * *',
+    timeZone: 'UTC',
+  });
+  expect(corePatch).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ['Current', 'All up to date'],
+  ['Available', '1 update available'],
+  ['Offline', '1 offline'],
+  ['Unknown', '1 version unknown'],
+  ['ManualRequired', '1 manual update required'],
+  ['Incompatible', '1 no compatible update'],
+])('shows independent Agent eligibility while Core is current (%s)', async (eligibility, summary) => {
+  server.use(
+    http.get('http://localhost/api/v1/updates', () => HttpResponse.json({ ...status, available: null })),
+    http.get('http://localhost/api/v1/updates/agents', () =>
+      HttpResponse.json({
+        targets: [
+          {
+            id: 'agent',
+            name: 'Agent',
+            kind: 'Platform',
+            nodes: 1,
+            supported: true,
+            installedVersion: '0.1.1',
+            status: eligibility,
+          },
+        ],
+        schedule: { includeCore: false, targets: [], enabled: false, cron: '0 3 * * *', timeZone: 'UTC' },
+      }),
+    ),
+  );
+  renderCitadel(<UpdatesPage />, { route: '/updates' });
+  expect(await screen.findByText(summary)).toBeVisible();
+  const review = screen.getByRole('button', { name: 'Review and update' });
+  if (eligibility === 'Available') expect(review).toBeEnabled();
+  else expect(review).toBeDisabled();
+  expect(screen.getByText('Up to date')).toBeVisible();
+  expect(screen.getByText('0.1.1')).toBeVisible();
+});
+
+it.each([
+  [true, false],
+  [false, true],
+  [true, true],
+])(
+  'saves the shared schedule with Core=%s and Agents=%s without starting updates',
+  async (includeCore, includeAgent) => {
+    const save = vi.fn();
+    const approve = vi.fn();
+    server.use(
+      http.get('http://localhost/api/v1/license/entitlements', () =>
+        HttpResponse.json({ capabilities: [{ capability: 'AutomatedOperations', enabled: true }] }),
+      ),
+      http.get('http://localhost/api/v1/updates', () =>
+        HttpResponse.json({ ...status, installationUnavailableReason: null }),
+      ),
+      http.get('http://localhost/api/v1/updates/agents', () =>
+        HttpResponse.json({
+          targets: [
+            {
+              id: 'A',
+              name: 'Agent A',
+              status: 'Current',
+              installedVersion: '0.1.1',
+              supported: true,
+              kind: 'Platform',
+              nodes: 1,
+            },
+          ],
+          schedule: { includeCore: false, enabled: false, targets: [], cron: '0 3 * * 0', timeZone: 'Europe/Paris' },
+          nextRun: null,
+        }),
+      ),
+      http.put('http://localhost/api/v1/updates/schedule', async ({ request }) => {
+        save(await request.json());
+        return HttpResponse.json({});
+      }),
+      http.post('http://localhost/api/v1/updates/approve', () => {
+        approve();
+        return HttpResponse.json({});
+      }),
+    );
+    const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
+    const enabled = await screen.findByRole('switch', { name: 'Scheduled updates enabled' });
+    expect(screen.queryByRole('textbox', { name: 'Cron' })).not.toBeInTheDocument();
+    await user.click(enabled);
+    if (includeCore) await user.click(screen.getByRole('checkbox', { name: 'Update Citadel Core' }));
+    if (includeAgent) {
+      await user.click(screen.getByRole('combobox', { name: 'Scheduled Agents' }));
+      await user.click(screen.getByRole('option', { name: /Agent A/ }));
+      await user.keyboard('{Escape}');
+    }
+    // Unsaved scope/timing must not be presented as an active schedule.
+    expect(document.getElementById('scheduled-updates')).toHaveTextContent('Next runDisabled');
+    expect(save).not.toHaveBeenCalled();
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        includeCore,
+        targets: includeAgent ? ['A'] : [],
+        enabled: true,
+        cron: '0 3 * * 0',
+        timeZone: 'Europe/Paris',
+      }),
+    );
+    expect(approve).not.toHaveBeenCalled();
+  },
+);
+
+it('lets an expired Team disable the retained scope without exposing a long disabled form', async () => {
+  const save = vi.fn();
+  const schedule = { includeCore: true, enabled: true, targets: ['A'], cron: '0 3 * * 0', timeZone: 'Europe/Paris' };
+  server.use(
+    http.get('http://localhost/api/v1/updates/agents', () =>
+      HttpResponse.json({ targets: [], schedule, nextRun: '2026-11-08T02:00:00Z' }),
+    ),
+    http.put('http://localhost/api/v1/updates/schedule', async ({ request }) => {
+      save(await request.json());
+      return HttpResponse.json({});
+    }),
+  );
+  const { user } = renderCitadel(<UpdatesPage />, { route: '/updates/config' });
+  await user.click(await screen.findByRole('switch', { name: 'Scheduled updates enabled' }));
+  expect(screen.queryByRole('textbox', { name: 'Cron' })).not.toBeInTheDocument();
+  expect(document.getElementById('scheduled-updates')).toHaveTextContent('Paused');
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  await waitFor(() => expect(save).toHaveBeenCalledWith({ ...schedule, enabled: false }));
 });

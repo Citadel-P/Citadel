@@ -332,3 +332,37 @@ fn target_completion_is_separate_from_commit_and_maintenance_release() {
             .is_err()
     );
 }
+#[test]
+fn shared_schedule_preserves_old_scope_and_accepts_only_explicit_nonempty_scopes() {
+    let existing: crate::UpdateSchedule = serde_json::from_value(serde_json::json!({
+        "enabled":true,"targets":["agent-a"],"cron":"0 3 * * *","timeZone":"Europe/Paris"
+    }))
+    .unwrap();
+    assert!(!existing.include_core);
+    assert_eq!(existing.targets, ["agent-a"]);
+    for (core, targets, valid) in [
+        (false, vec![], false),
+        (true, vec![], true),
+        (false, vec!["agent-a".into()], true),
+        (true, vec!["agent-a".into()], true),
+    ] {
+        assert_eq!(
+            crate::UpdateSchedule {
+                include_core: core,
+                targets,
+                ..existing.clone()
+            }
+            .validate()
+            .is_ok(),
+            valid
+        );
+    }
+    assert!(
+        crate::UpdateSchedule {
+            targets: vec!["a".into(); 101],
+            ..existing
+        }
+        .validate()
+        .is_err()
+    );
+}

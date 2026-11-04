@@ -601,3 +601,14 @@ assignments. Changing its other fields requires Advanced Alerting.
 If a Team license expires after its grace period, custom rules pause.
 Notification channels remain configured, and seeded system rules continue
 sending in-app and external notifications.
+
+## Citadel update availability
+
+Community and Team include two enabled **Info** rules:
+
+- **Core Update Available** appears after a successful release check verifies a newer release and confirms it is eligible for this installation. A release listing alone does not trigger it. Installations requiring a manual update are excluded.
+- **Agent Updates Available** combines eligible registered Agent installations into one alert. Multiple resource connections to the same installation count once. It lists Agent names and versions and links to **Settings → Updates**.
+
+Repeated checks for the same release do not send another notification. Agent summaries refresh as installations are updated; a newer target release supersedes the previous alert. Core alerts resolve when the advertised release is installed, and Agent alerts resolve when no registered installation still needs that update. Failed checks, failed updates, and unavailable version observations do not establish that an update was installed. Previously advertised Agents awaiting confirmation keep the alert open without counting as newly available updates.
+
+These rules create in-app alerts without a notification channel. To receive external notifications, explicitly assign an existing channel in **Settings → Alert Rules**. Community supports channel assignment for these built-in rules; no Updates-page setting is needed.

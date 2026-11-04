@@ -235,17 +235,18 @@ class LocalUpgrade(upgrade.UpgradeFixture):
             self.execute("docker", "load", stdin=stream, timeout=300)
         archive.unlink()
 
-    def publish_private(self, image, tag):
-        name = "ghcr.io/citadel-p/citadel:" + tag
+    def publish_private(self, image, tag, repository="ghcr.io/citadel-p/citadel"):
+        name = repository + ":" + tag
         self.docker("tag", image, name)
         self.docker("push", name, timeout=300)
         digests = self.json_command("image", "inspect", name)[0]["RepoDigests"]
-        digest = next((d for d in digests if d.startswith("ghcr.io/citadel-p/citadel@sha256:")), "")
-        require(digest.startswith("ghcr.io/citadel-p/citadel@sha256:"), "Unexpected private digest")
+        digest = next((d for d in digests if d.startswith(repository + "@sha256:")), "")
+        require(digest.startswith(repository + "@sha256:"), "Unexpected private digest")
         return digest
 
     def prepare_images(self, target):
-        self.load(target)
+        if target != self.core:
+            self.load(target)
         self.docker("run", "-d", "--network=host", "-e", "REGISTRY_HTTP_ADDR=0.0.0.0:80",
                     registration.REGISTRY)
         deadline = time.monotonic() + 30

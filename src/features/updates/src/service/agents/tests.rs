@@ -11,6 +11,8 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 struct Fixture {
+    core: Mutex<Option<crate::service::installation::tests::Fixture>>,
+    checks: Mutex<CheckState>,
     state: Mutex<AgentUpdateState>,
     targets: Mutex<Vec<AgentUpdateTarget>>,
     review: Mutex<Option<AgentUpdateReview>>,
@@ -23,6 +25,11 @@ struct Fixture {
     cancel_on_verify: AtomicBool,
     resume_fails: AtomicBool,
     claimed: Mutex<Option<DateTime<Utc>>>,
+    reservation: Mutex<Option<Uuid>>,
+    probes: Mutex<Vec<String>>,
+    pause_probe: AtomicBool,
+    probe_started: tokio::sync::Notify,
+    continue_probe: tokio::sync::Notify,
 }
 fn target(id: &str, version: &str) -> AgentUpdateTarget {
     AgentUpdateTarget {
@@ -48,14 +55,17 @@ fn actor() -> UpdateActor {
 impl Fixture {
     fn new() -> Arc<Self> {
         Arc::new(Self {
+            core: Mutex::new(None),
+            checks: Mutex::new(CheckState::default()),
             state: Mutex::new(AgentUpdateState {
                 release: Some(AgentUpdateRelease {
                     version: "0.1.2".into(),
                     image: format!("ghcr.io/citadel-p/citadel.agent@sha256:{}", "a".repeat(64)),
                 }),
                 check_error: None,
-                schedule: AgentUpdateSchedule::default(),
+                schedule: UpdateSchedule::default(),
                 operation: None,
+                run: None,
             }),
             targets: Mutex::new(vec![
                 target("A", "0.1.2"),
@@ -72,6 +82,11 @@ impl Fixture {
             cancel_on_verify: AtomicBool::new(false),
             resume_fails: AtomicBool::new(false),
             claimed: Mutex::new(None),
+            reservation: Mutex::new(None),
+            probes: Mutex::new(vec![]),
+            pause_probe: AtomicBool::new(false),
+            probe_started: tokio::sync::Notify::new(),
+            continue_probe: tokio::sync::Notify::new(),
         })
     }
     fn service(self: &Arc<Self>) -> AgentUpdateService {
@@ -141,9 +156,28 @@ impl AgentUpdateRuntime for Fixture {
     }
     fn targets<'a>(
         &'a self,
+        selected: Option<&'a [String]>,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<AgentUpdateTarget>, UpdateError>> {
-        Box::pin(async { Ok(self.targets.lock().unwrap().clone()) })
+        Box::pin(async move {
+            if self.pause_probe.swap(false, Ordering::SeqCst) {
+                self.probe_started.notify_one();
+                self.continue_probe.notified().await;
+            }
+            let targets: Vec<_> = self
+                .targets
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|t| selected.is_none_or(|ids| ids.contains(&t.id)))
+                .cloned()
+                .collect();
+            self.probes
+                .lock()
+                .unwrap()
+                .extend(targets.iter().map(|t| t.id.clone()));
+            Ok(targets)
+        })
     }
     fn release<'a>(
         &'a self,
@@ -206,6 +240,15 @@ impl AgentUpdateRuntime for Fixture {
     }
 }
 impl AgentUpdateRepository for Fixture {
+    fn observe_agent_availability<'a>(
+        &'a self,
+        _: &'a AgentUpdateRelease,
+        _: &'a [AgentUpdateTarget],
+        _: chrono::DateTime<chrono::Utc>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     fn operation(&self, id: Uuid) -> BoxFuture<'_, Result<AgentUpdateOperation, UpdateError>> {
         Box::pin(async move {
             self.state
@@ -237,11 +280,12 @@ impl AgentUpdateRepository for Fixture {
     fn save_schedule<'a>(
         &'a self,
         _: UpdateActor,
-        schedule: &'a AgentUpdateSchedule,
+        schedule: &'a UpdateSchedule,
         _: bool,
     ) -> BoxFuture<'a, Result<(), UpdateError>> {
         Box::pin(async move {
             self.state.lock().unwrap().schedule = schedule.clone();
+            *self.reservation.lock().unwrap() = None;
             Ok(())
         })
     }
@@ -284,30 +328,92 @@ impl AgentUpdateRepository for Fixture {
             Ok(self.claim(&saved, request, false))
         })
     }
-    fn scheduled<'a>(
+    fn reserve_schedule<'a>(
         &'a self,
-        schedule: &'a AgentUpdateSchedule,
-        review: &'a AgentUpdateReview,
+        schedule: &'a UpdateSchedule,
         minute: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<bool, UpdateError>> {
+    ) -> BoxFuture<'a, Result<Option<UpdateScheduleRun>, UpdateError>> {
         Box::pin(async move {
             if self.state.lock().unwrap().schedule != *schedule {
-                return Ok(false);
+                return Ok(None);
             }
             let mut last = self.claimed.lock().unwrap();
             if *last == Some(minute) {
-                return Ok(false);
+                return Ok(None);
             }
             *last = Some(minute);
-            if review
-                .targets
-                .iter()
-                .all(|t| t.eligibility(Some(&review.release)) == AgentUpdateEligibility::Current)
-            {
-                return Ok(false);
+            let run = UpdateScheduleRun::new(schedule.clone(), minute);
+            *self.reservation.lock().unwrap() = Some(run.id);
+            self.state.lock().unwrap().run = Some(run.clone());
+            Ok(Some(run))
+        })
+    }
+    fn save_run<'a>(
+        &'a self,
+        run: &'a UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<UpdateScheduleRun, UpdateError>> {
+        Box::pin(async move {
+            let mut state = self.state.lock().unwrap();
+            let previous = state.run.as_ref().ok_or(UpdateError::NotFound)?;
+            if previous.id != run.id || previous.revision != run.revision {
+                return Err(UpdateError::Conflict("stale run".into()));
             }
-            self.claim(review, Uuid::now_v7(), true);
-            Ok(true)
+            let mut next = run.clone();
+            next.revision += 1;
+            state.run = Some(next.clone());
+            Ok(next)
+        })
+    }
+    fn claim_core<'a>(
+        &'a self,
+        run: &'a UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<UpdateOperation, UpdateError>> {
+        Box::pin(async move {
+            let core = self
+                .core
+                .lock()
+                .unwrap()
+                .clone()
+                .ok_or(UpdateError::NotFound)?;
+            let mut core_state = core.state.lock().unwrap();
+            assert!(
+                core_state.operation.is_none(),
+                "a claimed Core replacement must not be replayed"
+            );
+            let mut state = self.state.lock().unwrap();
+            let saved = state.run.as_mut().unwrap();
+            assert_eq!(saved.revision, run.revision);
+            let op = UpdateOperation::approve(
+                run.core_plan.clone().unwrap(),
+                ActorId::new(Uuid::from_u128(99)),
+                run.id,
+                Utc::now(),
+            )?;
+            saved.core_operation = Some(op.id);
+            saved.revision += 1;
+            core_state.operation = Some(op.clone());
+            core_state.events.push("scheduled-claim");
+            Ok(op)
+        })
+    }
+    fn claim_agents<'a>(
+        &'a self,
+        run: &'a UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            let review = AgentUpdateReview {
+                id: run.id,
+                actor_id: actor().actor_id,
+                release: run.release.clone().unwrap(),
+                targets: run.targets.clone(),
+                expires_at: Utc::now() + chrono::Duration::minutes(5),
+            };
+            let op = self.claim(&review, run.id, true);
+            let mut next = run.clone();
+            next.agent_operation = Some(op.id);
+            next.revision += 1;
+            self.state.lock().unwrap().run = Some(next);
+            Ok(())
         })
     }
     fn authorize(&self, _: ActorId) -> BoxFuture<'_, Result<(), UpdateError>> {
@@ -432,7 +538,8 @@ async fn community_manual_is_free_but_schedule_and_non_admin_starts_are_denied()
     let f = Fixture::new();
     let service = f.service();
     let cancel = CancellationToken::new();
-    let schedule = AgentUpdateSchedule {
+    let schedule = UpdateSchedule {
+        include_core: false,
         targets: vec!["A".into()],
         enabled: true,
         cron: "* * * * *".into(),
@@ -450,7 +557,8 @@ async fn community_manual_is_free_but_schedule_and_non_admin_starts_are_denied()
     service
         .save_schedule(
             actor(),
-            AgentUpdateSchedule {
+            UpdateSchedule {
+                include_core: false,
                 enabled: false,
                 ..schedule
             },
@@ -470,7 +578,8 @@ async fn schedule_can_include_current_agents_and_manual_selection_does_not_modif
     f.team.store(true, Ordering::SeqCst);
     let service = f.service();
     let cancel = CancellationToken::new();
-    let schedule = AgentUpdateSchedule {
+    let schedule = UpdateSchedule {
+        include_core: false,
         targets: vec!["A".into()],
         enabled: true,
         cron: "* * * * *".into(),
@@ -586,7 +695,8 @@ async fn team_expiry_allows_started_target_to_finish_but_prevents_the_next() {
     service
         .save_schedule(
             actor(),
-            AgentUpdateSchedule {
+            UpdateSchedule {
+                include_core: false,
                 enabled: true,
                 targets: vec!["C".into(), "D".into()],
                 cron: "* * * * *".into(),
@@ -706,7 +816,7 @@ async fn lost_resume_acknowledgement_retains_claim_until_reconnect_without_redis
                 .message
                 .as_deref()
                 .unwrap()
-                .contains("Cleanup will retry")
+                .contains("ownership is retained")
         );
         assert!(
             service
@@ -734,4 +844,323 @@ async fn lost_resume_acknowledgement_retains_claim_until_reconnect_without_redis
             );
         }
     }
+}
+
+#[tokio::test]
+async fn dispatch_probes_only_selected_agents_then_refreshes_availability() {
+    let f = Fixture::new();
+    f.targets.lock().unwrap().push(target("D", "0.1.1"));
+    let service = f.service();
+    let cancel = CancellationToken::new();
+    let review = service
+        .review(actor(), &["C".into(), "D".into()], &cancel)
+        .await
+        .unwrap();
+    service
+        .approve(actor(), review.id, Uuid::now_v7())
+        .await
+        .unwrap();
+    service.tick(&cancel).await.unwrap();
+    // Preparation/dispatch stay scoped; the final inventory refresh updates the aggregate alert.
+    assert_eq!(
+        *f.probes.lock().unwrap(),
+        ["C", "D", "C", "D", "A", "B", "C", "D"]
+    );
+    assert_eq!(*f.installs.lock().unwrap(), ["C", "D"]);
+}
+
+#[tokio::test]
+async fn schedule_edits_after_claim_do_not_rewrite_the_frozen_selection() {
+    let f = Fixture::new();
+    f.team.store(true, Ordering::SeqCst);
+    let schedule = UpdateSchedule {
+        include_core: false,
+        enabled: true,
+        targets: vec!["C".into()],
+        cron: "* * * * *".into(),
+        time_zone: "UTC".into(),
+    };
+    f.state.lock().unwrap().schedule = schedule.clone();
+    f.pause_probe.store(true, Ordering::SeqCst);
+    let service = f.service();
+    let worker = tokio::spawn(async move { service.tick(&CancellationToken::new()).await });
+    f.probe_started.notified().await;
+    assert!(
+        f.reservation.lock().unwrap().is_some(),
+        "occurrence is owned before any RPC"
+    );
+    f.save_schedule(
+        actor(),
+        &UpdateSchedule {
+            include_core: false,
+            enabled: false,
+            ..schedule
+        },
+        true,
+    )
+    .await
+    .unwrap();
+    f.continue_probe.notify_one();
+    worker.await.unwrap().unwrap();
+    assert_eq!(
+        f.state.lock().unwrap().operation.as_ref().unwrap().targets[0]
+            .target
+            .id,
+        "C"
+    );
+    assert!(f.installs.lock().unwrap().is_empty());
+}
+
+impl ReleaseSource for Fixture {
+    fn releases(&self, _: ReleaseChannel) -> BoxFuture<'_, Result<Vec<Release>, UpdateError>> {
+        Box::pin(async {
+            Ok(vec![Release {
+                tag_name: "v0.1.2".into(),
+                draft: false,
+                prerelease: false,
+            }])
+        })
+    }
+}
+impl ReleaseCheckRepository for Fixture {
+    fn observe_core_availability<'a>(
+        &'a self,
+        _: &'a str,
+        _: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn checks(&self) -> BoxFuture<'_, Result<CheckState, UpdateError>> {
+        Box::pin(async { Ok(self.checks.lock().unwrap().clone()) })
+    }
+    fn record_check<'a>(
+        &'a self,
+        result: Result<Option<&'a ReleaseNotice>, &'a str>,
+        now: DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<bool, UpdateError>> {
+        Box::pin(async move {
+            let mut checks = self.checks.lock().unwrap();
+            checks.last_attempt = Some(now);
+            match result {
+                Ok(notice) => {
+                    checks.available = notice.cloned();
+                    checks.error = None;
+                    checks.last_success = Some(now);
+                }
+                Err(error) => checks.error = Some(error.into()),
+            }
+            Ok(true)
+        })
+    }
+}
+
+fn scheduled_core_fixture() -> (
+    Arc<Fixture>,
+    crate::service::installation::tests::Fixture,
+    AgentUpdateService,
+    UpdateInstallService,
+    tokio::sync::mpsc::Receiver<UpdateInstallCommand>,
+) {
+    let f = Fixture::new();
+    f.team.store(true, Ordering::SeqCst);
+    let core = crate::service::installation::tests::Fixture::new();
+    *f.core.lock().unwrap() = Some(core.clone());
+    f.state.lock().unwrap().schedule = UpdateSchedule {
+        include_core: true,
+        enabled: true,
+        targets: vec!["C".into()],
+        cron: "* * * * *".into(),
+        time_zone: "UTC".into(),
+    };
+    let checker = ReleaseCheckService::new("0.1.1".into(), f.clone(), f.clone());
+    let (installer, receiver) = core.service();
+    let mut service = f.service().with_core(checker, Some(installer.clone()));
+    service.core_version = "0.1.1".into();
+    (f, core, service, installer, receiver)
+}
+
+#[tokio::test]
+async fn combined_schedule_resumes_after_verified_core_cleanup_without_replaying_or_reselecting() {
+    let (f, core, service, installer, mut receiver) = scheduled_core_fixture();
+    let worker = tokio::spawn(async move {
+        installer
+            .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
+            .await
+    });
+    service.tick(&CancellationToken::new()).await.unwrap();
+    worker.await.unwrap().unwrap();
+    assert!(
+        f.state.lock().unwrap().operation.is_none(),
+        "no old-version Agent operation before restart"
+    );
+    assert!(f.installs.lock().unwrap().is_empty());
+    assert!(
+        !core.state.lock().unwrap().events.contains(&"review"),
+        "no administrator impersonation"
+    );
+    let id = f.state.lock().unwrap().run.as_ref().unwrap().id;
+    // A fresh coordinator sees the owned execution, even after schedule edits.
+    f.state.lock().unwrap().schedule.targets = vec!["A".into()];
+    f.state.lock().unwrap().schedule.enabled = false;
+    let checker = ReleaseCheckService::new("0.1.2".into(), f.clone(), f.clone());
+    let restarted = f.service().with_core(checker, Some(core.service().0));
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    assert!(
+        f.state.lock().unwrap().operation.is_none(),
+        "cleanup still owns Core"
+    );
+    {
+        let mut state = core.state.lock().unwrap();
+        state.operation.as_mut().unwrap().phase = UpdatePhase::Succeeded;
+        state.released = true;
+    }
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    let run = f.state.lock().unwrap().run.clone().unwrap();
+    assert_eq!(run.id, id);
+    assert_eq!(run.release.as_ref().unwrap().version, "0.1.2");
+    assert!(run.agent_operation.is_some());
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+    assert_eq!(
+        f.state.lock().unwrap().run.as_ref().unwrap().phase,
+        UpdateSchedulePhase::Finished
+    );
+    assert_eq!(
+        core.state
+            .lock()
+            .unwrap()
+            .events
+            .iter()
+            .filter(|event| **event == "scheduled-claim")
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn blocked_core_transition_stops_combined_occurrence_before_mutation() {
+    let (f, core, service, _, _receiver) = scheduled_core_fixture();
+    core.state.lock().unwrap().agent_drift = true;
+    assert!(service.tick(&CancellationToken::new()).await.is_err());
+    assert!(core.state.lock().unwrap().operation.is_none());
+    assert!(f.state.lock().unwrap().operation.is_none());
+    assert_eq!(
+        f.state.lock().unwrap().run.as_ref().unwrap().phase,
+        UpdateSchedulePhase::Finished
+    );
+}
+
+#[tokio::test]
+async fn core_failure_and_team_expiry_after_restart_prevent_the_agent_phase() {
+    for failed in [false, true] {
+        let (f, core, service, installer, mut receiver) = scheduled_core_fixture();
+        let worker = tokio::spawn(async move {
+            installer
+                .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
+                .await
+        });
+        service.tick(&CancellationToken::new()).await.unwrap();
+        worker.await.unwrap().unwrap();
+        {
+            let mut state = core.state.lock().unwrap();
+            state.operation.as_mut().unwrap().phase = if failed {
+                UpdatePhase::Failed
+            } else {
+                UpdatePhase::Succeeded
+            };
+            state.released = true;
+        }
+        if !failed {
+            f.team.store(false, Ordering::SeqCst);
+        }
+        let checker = ReleaseCheckService::new("0.1.2".into(), f.clone(), f.clone());
+        let restarted = f.service().with_core(checker, Some(core.service().0));
+        restarted.tick(&CancellationToken::new()).await.unwrap();
+        assert!(f.state.lock().unwrap().operation.is_none());
+        assert_eq!(
+            f.state.lock().unwrap().run.as_ref().unwrap().phase,
+            UpdateSchedulePhase::Finished
+        );
+    }
+}
+
+#[tokio::test]
+async fn current_core_proceeds_to_selected_agents_and_core_only_has_no_agent_execution() {
+    let (f, core, _, _, _) = scheduled_core_fixture();
+    let checker = ReleaseCheckService::new("0.1.2".into(), f.clone(), f.clone());
+    let service = f.service().with_core(checker, Some(core.service().0));
+    service.tick(&CancellationToken::new()).await.unwrap();
+    service.tick(&CancellationToken::new()).await.unwrap();
+    service.tick(&CancellationToken::new()).await.unwrap();
+    assert!(core.state.lock().unwrap().operation.is_none());
+    assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+
+    let (f, core, service, installer, mut receiver) = scheduled_core_fixture();
+    f.state.lock().unwrap().schedule.targets.clear();
+    let worker = tokio::spawn(async move {
+        installer
+            .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
+            .await
+    });
+    service.tick(&CancellationToken::new()).await.unwrap();
+    worker.await.unwrap().unwrap();
+    {
+        let mut state = core.state.lock().unwrap();
+        state.operation.as_mut().unwrap().phase = UpdatePhase::Succeeded;
+        state.released = true;
+    }
+    let restarted = f.service().with_core(
+        ReleaseCheckService::new("0.1.2".into(), f.clone(), f.clone()),
+        Some(core.service().0),
+    );
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    assert!(f.state.lock().unwrap().operation.is_none());
+    assert_eq!(
+        f.state.lock().unwrap().run.as_ref().unwrap().phase,
+        UpdateSchedulePhase::Finished
+    );
+}
+
+#[tokio::test]
+async fn agent_failure_after_core_success_keeps_core_and_stops_remaining_agents() {
+    let (f, core, service, installer, mut receiver) = scheduled_core_fixture();
+    f.targets.lock().unwrap().push(target("D", "0.1.1"));
+    f.state.lock().unwrap().schedule.targets.push("D".into());
+    let worker = tokio::spawn(async move {
+        installer
+            .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
+            .await
+    });
+    service.tick(&CancellationToken::new()).await.unwrap();
+    worker.await.unwrap().unwrap();
+    {
+        let mut state = core.state.lock().unwrap();
+        state.operation.as_mut().unwrap().phase = UpdatePhase::Succeeded;
+        state.released = true;
+    }
+    let restarted = f.service().with_core(
+        ReleaseCheckService::new("0.1.2".into(), f.clone(), f.clone()),
+        Some(core.service().0),
+    );
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    f.fail.store(true, Ordering::SeqCst);
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    restarted.tick(&CancellationToken::new()).await.unwrap();
+    assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+    assert_eq!(
+        core.state.lock().unwrap().operation.as_ref().unwrap().phase,
+        UpdatePhase::Succeeded
+    );
+    assert!(
+        f.state
+            .lock()
+            .unwrap()
+            .run
+            .as_ref()
+            .unwrap()
+            .message
+            .is_some()
+    );
 }

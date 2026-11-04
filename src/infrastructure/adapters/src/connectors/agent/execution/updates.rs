@@ -1,8 +1,27 @@
 use super::*;
 use citadel_contracts::citadel::platforms::v1::{
-    AgentUpdateInfo, UpdateAgentRequest, UpdateAgentResponse,
+    AgentUpdateDrainRequest, AgentUpdateInfo, UpdateAgentRequest, UpdateAgentResponse,
 };
 impl AgentExecutionClient {
+    pub(crate) async fn settle_update(
+        &self,
+        request: AgentUpdateDrainRequest,
+        cancel: &CancellationToken,
+    ) -> Result<(), RuntimeCapabilityError> {
+        match self {
+            Self::Direct(c) => c.settle_update(request, cancel).await,
+            Self::Edge(s) => {
+                unary(
+                    s,
+                    EdgeCommandKind::PlatformAgentUpdateDrain,
+                    request,
+                    cancel,
+                )
+                .await
+            }
+        }
+    }
+
     pub(crate) async fn agent_version(
         &self,
         cancel: &CancellationToken,

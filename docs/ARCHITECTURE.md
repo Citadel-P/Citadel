@@ -116,8 +116,24 @@ exiting or applying a settings change. Policy monitoring and the worker are join
 on shutdown; neither drops a committing check. The check endpoint returns the
 service result without rereading check state.
 
+Update availability uses the existing Alert Rules, observation outbox and delivery outbox.
+Core observations require the installer's verified transition qualification, without
+creating a review or claim. Agent observations follow a successful compatible release
+check and inventory refresh, and refresh again after a batch settles. Installation
+aliases are deduplicated; only names, versions, counts and opaque correlation hashes
+enter alert details. Offline/unknown previously advertised targets retain pending
+confirmation, while removed registrations and verified current versions can resolve.
+The latest observation is stored alongside each existing update-check state and
+revalidated under a row lock during alert evaluation, fencing delayed queue entries.
+Same-release summary changes preserve the event and enqueue no delivery; new releases
+reuse existing supersession. System-owned Info rules work in Community, with external
+channels assigned through the usual Alert Rules configuration.
+
 Agent updates share the Updates page, release verification, Activities and realtime
-notifier. They have explicit installation targets and one durable sequential selection;
+notifier. The shared **Review and update** dialog selects either Core or Agents;
+manual operations stay separate, and Agent progress remains in that dialog using
+existing realtime invalidation. It does not coordinate a browser-owned combined rollout.
+They have explicit installation targets and one durable sequential selection;
 Core and Agent claims share the identity mutation lock and cannot overlap. Reviews
 expire after five minutes, approval request IDs replay exactly, and progress uses
 revision-checked repository writes with Activity events in the same transaction.
@@ -125,6 +141,20 @@ The supervised Agent worker uses the existing single-database background lease.
 Interrupted targets are observed, never redispatched. Each new target rechecks the
 requester's administrator access or the scheduled operation's Team entitlement.
 Shutdown during dispatch or verification preserves the target's Updating state.
+Standalone settlement uses the reviewed source container/image and operation ID.
+Before helper creation is attempted, a completed preparation failure (including drain
+or image-pull failure) leaves one operation-fenced receipt in the live Agent gate.
+The unchanged running source can acknowledge that failure repeatedly, without
+requiring a helper, and the same operation cannot be dispatched again. A new operation
+replaces the receipt; Agent process loss removes it and requires manual recovery
+unless helper evidence establishes replacement. Helper absence alone is never proof
+that a request was cancelled.
+After helper creation is attempted, settlement locates the owned helper. The authenticated
+replacement must match the operation label and the helper's exact command/image;
+the helper must have exited successfully before ownership is released. Retained
+exited helpers provide idempotent evidence after lost replies and Core restarts.
+An unresolved or failed helper keeps the operation owned for manual recovery;
+timeouts never establish that a Docker mutation was cancelled.
 Swarm cleanup uses the reviewed node IDs stored in the operation. Missing sessions
 or resume acknowledgements keep the operation owned; the worker retries after
 reconnect and cannot start the next target or release the claim before cleanup.
@@ -141,11 +171,31 @@ allow metadata and drain/resume, but reject standalone self-replacement.
 Drain blocks new work while allowing the existing identity-fenced data, build and
 script reconciliation handlers to release retained admission capacity.
 
-The Team Agent schedule reuses CronSchedule and the Script form fields, saves
-explicit membership, and claims only the current minute. Busy/missed occurrences
-are skipped, with no queue or catch-up. Manual selection never edits the schedule.
-Core-current and Agent-current status are evaluated independently; the Agent
-release must match the running Core's verified release identity.
+The shared Team update schedule reuses CronSchedule and the Script form controls.
+Core is opt-in (`includeCore`, default false when reading stored schedules). The
+existing supervised Agent worker claims each due occurrence under the identity
+mutation lock, freezing explicit membership before network preparation. A small
+`updatescheduleruns` record holds the pinned Core plan, Agent release, installation
+identities, phase and execution IDs. Its active uniqueness constraint and the
+manual Core/Agent claim guards preserve one owner through the phase transition.
+No transaction spans Agent RPCs. Schedule edits affect future unclaimed occurrences;
+an owned occurrence may finish preparation across minute boundaries.
+
+Scheduled Core authorization is a dedicated installer command with a fresh Team
+check, not a fabricated administrator approval. It reuses qualification, source
+identity checks and the normal helper/drain/checkpoint/replacement execution.
+Core claim and occurrence linkage commit atomically. After restart, continuation
+waits for successful Core verification and released maintenance before atomically
+claiming the Agent phase. Agent execution uses the pinned release matching the new
+Core and rechecks the frozen target identity before each dispatch. Lost claim
+responses are reconciled, never blindly replayed. Uncertain execution keeps the
+shared owner. Agent failure does not undo Core success.
+
+Every occurrence resolves a verified release even if periodic discovery is off.
+Policy and Team entitlement fence new starts but allow existing execution cleanup.
+Busy/missed occurrences are skipped without catch-up. Manual selection never edits
+the saved schedule. Next-run presentation uses the same cron/time-zone parser as
+execution, including DST folds and gaps, and always describes saved settings.
 
 The operation repository, detached executor and target startup share persisted
 ownership through draining, checkpoint creation, replacement and acceptance.

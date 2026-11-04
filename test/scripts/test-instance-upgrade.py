@@ -25,6 +25,7 @@ class UpgradeFixture(registration.Fixture):
     installation = "/opt/citadel-upgrade"
     state = "/opt/citadel-upgrade-state"
     project = "citadel_upgrade"
+    extra_environment = ""
 
     def json_command(self, *args):
         return json.loads(self.docker(*args, timeout=600).stdout)
@@ -39,7 +40,7 @@ class UpgradeFixture(registration.Fixture):
                               timeout=45, check=False)
         if optional and result.returncode:
             return None
-        require(result.returncode == 0, "Fixture HTTP request failed; response withheld")
+        require(result.returncode == 0, f"Fixture HTTP request failed at {path}; response withheld")
         return json.loads(result.stdout)
 
     def login(self, password, *, optional=False):
@@ -100,7 +101,7 @@ class UpgradeFixture(registration.Fixture):
         self.write(self.installation + "/docker-compose.yml",
                    (registration.ROOT / "deploy/install/docker-compose.yml").read_text())
         password, admin_password = secrets.token_hex(24), secrets.token_hex(24)
-        env = f"CITADEL_IMAGE={self.core}\nPG_PASSWORD={password}\n"
+        env = f"CITADEL_IMAGE={self.core}\nPG_PASSWORD={password}\n" + self.extra_environment
         if browser_port:
             # Bind within the isolated daemon; its outer port remains localhost-only.
             env += f"CITADEL_BIND_ADDRESS=0.0.0.0\nCITADEL_PUBLIC_URL=http://localhost:{browser_port}\n"

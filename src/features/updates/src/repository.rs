@@ -1,6 +1,5 @@
 use crate::{
-    AgentUpdateOperation, AgentUpdateRelease, AgentUpdateReview, AgentUpdateSchedule,
-    AgentUpdateState,
+    AgentUpdateOperation, AgentUpdateRelease, AgentUpdateReview, AgentUpdateState, UpdateSchedule,
 };
 use crate::{
     CheckState, CompletionReceipt, ReleaseNotice, UpdateError, UpdateJournal, UpdateOperation,
@@ -19,6 +18,13 @@ pub struct UpdateActor {
 }
 
 pub trait ReleaseCheckRepository: Send + Sync {
+    /// Availability must come from verified transition qualification, not release discovery.
+    fn observe_core_availability<'a>(
+        &'a self,
+        installed: &'a str,
+        available: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+
     fn checks(&self) -> BoxFuture<'_, Result<CheckState, UpdateError>>;
     fn record_check<'a>(
         &'a self,
@@ -91,6 +97,13 @@ pub trait UpdateRepository: ReleaseCheckRepository {
 }
 
 pub trait AgentUpdateRepository: Send + Sync {
+    fn observe_agent_availability<'a>(
+        &'a self,
+        release: &'a AgentUpdateRelease,
+        targets: &'a [crate::AgentUpdateTarget],
+        observed_at: DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
+
     fn operation(&self, id: Uuid) -> BoxFuture<'_, Result<AgentUpdateOperation, UpdateError>>;
     fn state(&self) -> BoxFuture<'_, Result<AgentUpdateState, UpdateError>>;
     fn save_release<'a>(
@@ -101,7 +114,7 @@ pub trait AgentUpdateRepository: Send + Sync {
     fn save_schedule<'a>(
         &'a self,
         actor: UpdateActor,
-        schedule: &'a AgentUpdateSchedule,
+        schedule: &'a UpdateSchedule,
         allow_configuration: bool,
     ) -> BoxFuture<'a, Result<(), UpdateError>>;
     fn save_review<'a>(
@@ -116,13 +129,26 @@ pub trait AgentUpdateRepository: Send + Sync {
         review: Uuid,
         request: Uuid,
     ) -> BoxFuture<'_, Result<AgentUpdateOperation, UpdateError>>;
-    /// Recheck schedule revision/membership and claim this minute at most once, without a backlog.
-    fn scheduled<'a>(
+    /// Atomically claim the saved scope before network preparation. Busy occurrences are consumed.
+    fn reserve_schedule<'a>(
         &'a self,
-        schedule: &'a AgentUpdateSchedule,
-        review: &'a AgentUpdateReview,
+        schedule: &'a UpdateSchedule,
         minute: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<bool, UpdateError>>;
+    ) -> BoxFuture<'a, Result<Option<crate::UpdateScheduleRun>, UpdateError>>;
+    fn save_run<'a>(
+        &'a self,
+        run: &'a crate::UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<crate::UpdateScheduleRun, UpdateError>>;
+    /// Trusted scheduled authorization, separate from administrator approval. Links the
+    /// execution and occurrence atomically; an existing link is never dispatched again.
+    fn claim_core<'a>(
+        &'a self,
+        run: &'a crate::UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<UpdateOperation, UpdateError>>;
+    fn claim_agents<'a>(
+        &'a self,
+        run: &'a crate::UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
     fn authorize(&self, actor: ActorId) -> BoxFuture<'_, Result<(), UpdateError>>;
     /// Compare-and-swap progress and its Activity together; returns the new revision.
     fn save_operation<'a>(

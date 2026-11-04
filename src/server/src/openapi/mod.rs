@@ -246,11 +246,7 @@ mod tests {
                 "post",
                 "approveAgentUpdates",
             ),
-            (
-                "/api/v1/updates/agents/schedule",
-                "put",
-                "updateAgentSchedule",
-            ),
+            ("/api/v1/updates/schedule", "put", "updateUpdateSchedule"),
             (
                 "/api/v1/updates/agents/operations/{id}",
                 "get",

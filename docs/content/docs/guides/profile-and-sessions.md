@@ -34,13 +34,22 @@ automatically. It is Optional by default. Administrators can require MFA for
 administrators or all local-password users, subject to the minimum set by server
 configuration. Users can enable MFA in **Profile → Security**.
 
-To change **Automatic checks** or its frequency, open **Settings → Updates → Config** and
-select **Save** after editing. Release checks contact GitHub without Citadel
-telemetry or automatic installation. Server configuration can force checks off.
-Select **Check now** beside the frequency to check immediately. A notification
-confirms whether a release was found or the check failed; checking does not install an update.
-Hover over or select the info icon at the right of the tabs to see the installed
-version, release channel, and last successful check.
+Open **Settings → Updates → Config** for **Available updates**, **Scheduled updates**,
+and **Release checks** in one settings form. Available updates shows the installed
+Core version and Agent status independently. **Check now** discovers releases without
+installing them. Manual review and approval never change scheduled membership or
+save unrelated settings.
+
+Team administrators can schedule Core, selected Agents, or both. Core is excluded
+by default. Core updates first; selected Agents follow only after Core verification
+and cleanup. The interface temporarily disconnects during a Core restart. Use the
+standard cron and time-zone fields, then **Save**. **Next run** describes the saved
+schedule. Disabled schedules retain their settings; **Edit schedule** opens them.
+
+Release checks contact GitHub without telemetry. Turning off automatic discovery
+does not disable an installation schedule, which verifies a release when due.
+Server configuration can prohibit both. The info icon at the right of the tabs
+shows the Core version, release channel, last successful check, and Agent versions.
 
 MFA policy changes apply to subsequent local-password sign-ins and do not revoke
 existing browser sessions. Instance settings remain separate from personal

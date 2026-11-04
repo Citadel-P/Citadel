@@ -1,6 +1,14 @@
 use super::*;
 
 impl ReleaseCheckRepository for PostgresUpdateRepository {
+    fn observe_core_availability<'a>(
+        &'a self,
+        installed: &'a str,
+        available: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(super::availability::core(self, installed, available))
+    }
+
     fn checks(&self) -> BoxFuture<'_, Result<CheckState, UpdateError>> {
         Box::pin(async {
             let row = sqlx::query("SELECT lastattempt,lastsuccess,error,available FROM instanceupdatechecks WHERE id=1").fetch_optional(&self.pool).await.map_err(storage)?;

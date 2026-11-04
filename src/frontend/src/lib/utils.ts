@@ -105,8 +105,16 @@ export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const pluralize = (word: string) => (word.endsWith('y') ? word.slice(0, -1) + 'ies' : word + 's');
 
-export const formatActivityEvent = (event: string) =>
-  event === 'SwarmServiceForceUpdated' ? 'Swarm Service Tasks Restarted' : event.replace(/([a-z])([A-Z])/g, '$1 $2');
+export const formatActivityEvent = (event: string) => {
+  switch (event) {
+    case 'AgentUpdate':
+      return 'Agent Updated';
+    case 'SwarmServiceForceUpdated':
+      return 'Swarm Service Tasks Restarted';
+    default:
+      return event.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+};
 
 const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const environmentReferencePattern = /\$\{([^}]+)\}/g;

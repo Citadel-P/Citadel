@@ -2,10 +2,24 @@ use super::*;
 use chrono::Utc;
 use citadel_updates::{
     AgentUpdateOperation, AgentUpdatePhase, AgentUpdateRelease, AgentUpdateRepository,
-    AgentUpdateResult, AgentUpdateReview, AgentUpdateSchedule, AgentUpdateState,
+    AgentUpdateResult, AgentUpdateReview, AgentUpdateState, UpdateSchedule,
 };
 
 impl AgentUpdateRepository for PostgresUpdateRepository {
+    fn observe_agent_availability<'a>(
+        &'a self,
+        release: &'a AgentUpdateRelease,
+        targets: &'a [citadel_updates::AgentUpdateTarget],
+        observed_at: DateTime<Utc>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(super::availability::agents(
+            self,
+            release,
+            targets,
+            observed_at,
+        ))
+    }
+
     fn operation(&self, id: Uuid) -> BoxFuture<'_, Result<AgentUpdateOperation, UpdateError>> {
         Box::pin(async move {
             sqlx::query_scalar::<_, sqlx::types::Json<AgentUpdateOperation>>(
@@ -29,8 +43,9 @@ impl AgentUpdateRepository for PostgresUpdateRepository {
             .map_err(storage)?;
             let operation = sqlx::query_scalar::<_, sqlx::types::Json<AgentUpdateOperation>>("SELECT operation FROM agentupdateoperations ORDER BY createdat DESC,id DESC LIMIT 1").fetch_optional(&self.pool).await.map_err(storage)?.map(|v| v.0);
             Ok(AgentUpdateState {
+                run: super::schedule::latest(&self.pool).await?,
                 schedule: row
-                    .try_get::<sqlx::types::Json<AgentUpdateSchedule>, _>("schedule")
+                    .try_get::<sqlx::types::Json<UpdateSchedule>, _>("schedule")
                     .map_err(storage)?
                     .0,
                 release: row
@@ -55,14 +70,14 @@ impl AgentUpdateRepository for PostgresUpdateRepository {
     fn save_schedule<'a>(
         &'a self,
         actor: UpdateActor,
-        schedule: &'a AgentUpdateSchedule,
+        schedule: &'a UpdateSchedule,
         allow_configuration: bool,
     ) -> BoxFuture<'a, Result<(), UpdateError>> {
         Box::pin(async move {
             let _fence = self.authorization.read_fence().await;
             let mut tx = self.pool.begin().await.map_err(storage)?;
             authorize(&mut tx, actor).await?;
-            let previous = sqlx::query_scalar::<_, sqlx::types::Json<AgentUpdateSchedule>>(
+            let previous = sqlx::query_scalar::<_, sqlx::types::Json<UpdateSchedule>>(
                 "SELECT schedule FROM agentupdatesettings WHERE id=1 FOR UPDATE",
             )
             .fetch_one(&mut *tx)
@@ -72,7 +87,7 @@ impl AgentUpdateRepository for PostgresUpdateRepository {
             if !allow_configuration
                 && (schedule.enabled
                     || *schedule
-                        != AgentUpdateSchedule {
+                        != UpdateSchedule {
                             enabled: false,
                             ..previous.clone()
                         })
@@ -87,6 +102,7 @@ impl AgentUpdateRepository for PostgresUpdateRepository {
                     id,
                     actor.actor_id,
                     ActivityEventInfo::AgentUpdateScheduleChanged {
+                        include_core: Some(schedule.include_core),
                         enabled: schedule.enabled,
                         target_count: schedule.targets.len(),
                     },
@@ -151,42 +167,35 @@ impl AgentUpdateRepository for PostgresUpdateRepository {
                 return Ok(previous.0);
             }
             let review=sqlx::query_scalar::<_,sqlx::types::Json<AgentUpdateReview>>("SELECT plan FROM instanceupdateplans WHERE id=$1 AND actorid=$2 AND expiresat>now() FOR UPDATE").bind(review).bind(actor.actor_id.value()).fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| UpdateError::Conflict("Review expired. Review the Agent selection again.".into()))?.0;
-            let operation = claim(&mut tx, &review, request, false).await?;
+            let operation = claim(&mut tx, &review, request, false, None).await?;
             tx.commit().await.map_err(storage)?;
             Ok(operation)
         })
     }
-    fn scheduled<'a>(
+    fn reserve_schedule<'a>(
         &'a self,
-        schedule: &'a AgentUpdateSchedule,
-        review: &'a AgentUpdateReview,
+        schedule: &'a UpdateSchedule,
         minute: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<bool, UpdateError>> {
-        Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(storage)?;
-            lock_identity_mutations(&mut tx).await.map_err(storage)?;
-            let changed=sqlx::query("UPDATE agentupdatesettings SET lastscheduledminute=$2 WHERE id=1 AND schedule=$1 AND (lastscheduledminute IS NULL OR lastscheduledminute<$2) AND date_trunc('minute',now())=$2").bind(sqlx::types::Json(schedule)).bind(minute).execute(&mut *tx).await.map_err(storage)?.rows_affected();
-            if changed == 0 {
-                return Ok(false);
-            }
-            if busy(&mut tx).await? {
-                tx.commit().await.map_err(storage)?;
-                return Ok(false);
-            }
-            // A check that finds nothing to install is not a successful update Activity.
-            if review.targets.iter().all(|t| {
-                t.eligibility(Some(&review.release))
-                    == citadel_updates::AgentUpdateEligibility::Current
-            }) {
-                tx.commit().await.map_err(storage)?;
-                return Ok(false);
-            }
-            let mut review = review.clone();
-            review.actor_id = ActorId::new(SYSTEM_ACTOR_ID);
-            claim(&mut tx, &review, Uuid::now_v7(), true).await?;
-            tx.commit().await.map_err(storage)?;
-            Ok(true)
-        })
+    ) -> BoxFuture<'a, Result<Option<citadel_updates::UpdateScheduleRun>, UpdateError>> {
+        Box::pin(super::schedule::reserve(&self.pool, schedule, minute))
+    }
+    fn save_run<'a>(
+        &'a self,
+        run: &'a citadel_updates::UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<citadel_updates::UpdateScheduleRun, UpdateError>> {
+        Box::pin(super::schedule::save(&self.pool, run))
+    }
+    fn claim_core<'a>(
+        &'a self,
+        run: &'a citadel_updates::UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<UpdateOperation, UpdateError>> {
+        Box::pin(super::schedule::claim_core(&self.pool, run))
+    }
+    fn claim_agents<'a>(
+        &'a self,
+        run: &'a citadel_updates::UpdateScheduleRun,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(super::schedule::claim_agents(&self.pool, run))
     }
     fn authorize(&self, actor: ActorId) -> BoxFuture<'_, Result<(), UpdateError>> {
         Box::pin(async move {
@@ -276,16 +285,20 @@ impl AgentUpdateRepository for PostgresUpdateRepository {
         })
     }
 }
-async fn busy(tx: &mut Transaction<'_, Postgres>) -> Result<bool, UpdateError> {
-    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM instanceupdates WHERE ownsinstallation)").fetch_one(&mut **tx).await.map_err(storage)
+pub(super) async fn busy(
+    tx: &mut Transaction<'_, Postgres>,
+    owner: Option<Uuid>,
+) -> Result<bool, UpdateError> {
+    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM instanceupdates WHERE ownsinstallation) OR EXISTS(SELECT 1 FROM updatescheduleruns WHERE NOT finished AND ($1::uuid IS NULL OR id<>$1))").bind(owner).fetch_one(&mut **tx).await.map_err(storage)
 }
-async fn claim(
+pub(super) async fn claim(
     tx: &mut Transaction<'_, Postgres>,
     review: &AgentUpdateReview,
     request: Uuid,
     scheduled: bool,
+    owner: Option<Uuid>,
 ) -> Result<AgentUpdateOperation, UpdateError> {
-    if busy(tx).await? {
+    if busy(tx, owner).await? {
         return Err(UpdateError::Conflict(
             "Another update is running or requires recovery.".into(),
         ));

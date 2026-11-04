@@ -914,6 +914,8 @@ export enum AlertType {
   BuildAgentPoolUnavailable = "BuildAgentPoolUnavailable",
   LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
   LicenseExpired = "LicenseExpired",
+  CoreUpdateAvailable = "CoreUpdateAvailable",
+  AgentUpdatesAvailable = "AgentUpdatesAvailable",
 }
 
 export enum AlertSeverity {
@@ -938,6 +940,7 @@ export enum AlertResourceType {
   BuildAgentPool = "BuildAgentPool",
   BackupPolicy = "BackupPolicy",
   License = "License",
+  Updates = "Updates",
   SwarmService = "SwarmService",
 }
 
@@ -1106,6 +1109,7 @@ export enum ActivityEventType {
   UpdateChecksChanged = "UpdateChecksChanged",
   AgentUpdate = "AgentUpdate",
   AgentUpdateScheduleChanged = "AgentUpdateScheduleChanged",
+  UpdateScheduleFinished = "UpdateScheduleFinished",
   InstanceUpdateStarted = "InstanceUpdateStarted",
   InstanceUpdateCompleted = "InstanceUpdateCompleted",
   InstanceUpdateFailed = "InstanceUpdateFailed",
@@ -1339,13 +1343,6 @@ export interface AgentReviewView {
   targets: AgentTargetView[];
 }
 
-export interface AgentScheduleView {
-  cron: string;
-  enabled: boolean;
-  targets: string[];
-  timeZone: string;
-}
-
 /** Public installation instructions. The signing private key never enters this model. */
 export interface AgentSetupView {
   /** @format uuid */
@@ -1375,8 +1372,11 @@ export interface AgentTargetView {
 
 export interface AgentUpdatesView {
   checkError?: string | null;
+  /** @format date-time */
+  nextRun?: string | null;
   operation?: AgentOperationView | null;
-  schedule: AgentScheduleView;
+  schedule: UpdateScheduleView;
+  scheduleRun?: UpdateScheduleRunView | null;
   targets: AgentTargetView[];
 }
 
@@ -4943,8 +4943,15 @@ export type PublicActivityEventInfo =
       targetVersion: string;
     }
   | {
+      $type: "UpdateScheduleFinished";
+      message: string;
+      /** @format uuid */
+      runId: string;
+    }
+  | {
       $type: "AgentUpdateScheduleChanged";
       enabled: boolean;
+      includeCore?: boolean | null;
       /** @min 0 */
       targetCount: number;
     }
@@ -7962,6 +7969,25 @@ export interface UpdateReviewView {
   id: string;
   installedVersion: string;
   targetVersion: string;
+}
+
+export interface UpdateScheduleRunView {
+  /** @format uuid */
+  agentOperation?: string | null;
+  /** @format uuid */
+  coreOperation?: string | null;
+  /** @format uuid */
+  id: string;
+  message?: string | null;
+  phase: string;
+}
+
+export interface UpdateScheduleView {
+  cron: string;
+  enabled: boolean;
+  includeCore?: boolean;
+  targets: string[];
+  timeZone: string;
 }
 
 export interface UpdateScriptInput {
@@ -20973,36 +20999,6 @@ export class Api<
      * No description
      *
      * @tags Updates
-     * @name UpdateAgentSchedule
-     * @summary Save the Team Agent update schedule
-     * @request PUT:/api/v1/updates/agents/schedule
-     * @secure
-     * @response `200` `AgentScheduleView` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    updateAgentSchedule: (
-      data: AgentScheduleView,
-      params: RequestParams = {},
-    ) =>
-      this.request<AgentScheduleView, ProblemDetails>({
-        path: `/api/v1/updates/agents/schedule`,
-        method: "PUT",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Updates
      * @name ApproveInstanceUpdate
      * @summary Approve a reviewed instance update
      * @request POST:/api/v1/updates/approve
@@ -21102,6 +21098,36 @@ export class Api<
       this.request<UpdateReviewView, ProblemDetails>({
         path: `/api/v1/updates/review`,
         method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name UpdateUpdateSchedule
+     * @summary Save the shared Team update schedule
+     * @request PUT:/api/v1/updates/schedule
+     * @secure
+     * @response `200` `UpdateScheduleView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    updateUpdateSchedule: (
+      data: UpdateScheduleView,
+      params: RequestParams = {},
+    ) =>
+      this.request<UpdateScheduleView, ProblemDetails>({
+        path: `/api/v1/updates/schedule`,
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,

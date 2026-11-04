@@ -136,4 +136,10 @@ message UpdateAgentRequest {
     string target_image = 4;
 }
 message UpdateAgentResponse { string helper_id = 1; }
-message AgentUpdateDrainRequest { string operation_id = 1; bool resume = 2; }
+message AgentUpdateDrainRequest {
+    string operation_id = 1;
+    bool resume = 2;
+    // Standalone settlement: exact reviewed source, recoverable after a lost launch reply.
+    string source_container_id = 3;
+    string source_image = 4;
+}

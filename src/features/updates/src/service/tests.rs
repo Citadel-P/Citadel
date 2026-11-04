@@ -47,6 +47,7 @@ async fn scheduled_check_rechecks_due_time_after_a_concurrent_manual_check() {
 #[derive(Default)]
 struct Store {
     state: Mutex<CheckState>,
+    availability: Mutex<Vec<Option<String>>>,
     reads: AtomicUsize,
     writes: AtomicUsize,
     fail: AtomicBool,
@@ -55,6 +56,20 @@ struct Store {
     resume: Notify,
 }
 impl ReleaseCheckRepository for Store {
+    fn observe_core_availability<'a>(
+        &'a self,
+        _: &'a str,
+        available: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            self.availability
+                .lock()
+                .unwrap()
+                .push(available.map(Into::into));
+            Ok(())
+        })
+    }
+
     fn checks(&self) -> BoxFuture<'_, Result<CheckState, UpdateError>> {
         Box::pin(async {
             self.reads.fetch_add(1, Ordering::SeqCst);
@@ -275,4 +290,56 @@ async fn restored_notices_are_filtered_by_installed_version_and_channel() {
         service.clear_notice();
         assert!(service.available().is_none());
     }
+}
+
+#[tokio::test]
+async fn core_availability_requires_successful_check_and_transition_qualification() {
+    let (service, store, source, _) = fixture();
+    let token = CancellationToken::new();
+    service.check_now(POLICY, &token).await.unwrap();
+    assert!(
+        store
+            .availability
+            .lock()
+            .unwrap()
+            .iter()
+            .all(Option::is_none)
+    );
+    let mut installer = super::installation::tests::Fixture::new();
+    installer.plan.source.version = "1.0.0".into();
+    installer.plan.target.version = "1.1.0".into();
+    let (installation, _receiver) = installer.service();
+    let service = service.with_installer(Some(installation));
+    service.check_now(POLICY, &token).await.unwrap();
+    assert_eq!(
+        store.availability.lock().unwrap().last(),
+        Some(&Some("1.1.0".into()))
+    );
+    assert_eq!(
+        installer.state.lock().unwrap().events,
+        ["source", "verify", "inspect"]
+    );
+    assert!(installer.state.lock().unwrap().operation.is_none());
+    store.availability.lock().unwrap().clear();
+    source.fail.store(true, Ordering::SeqCst);
+    service.check_now(POLICY, &token).await.unwrap();
+    assert!(
+        store
+            .availability
+            .lock()
+            .unwrap()
+            .iter()
+            .all(Option::is_none)
+    );
+    source.fail.store(false, Ordering::SeqCst);
+    installer.state.lock().unwrap().agent_drift = true;
+    service.check_now(POLICY, &token).await.unwrap();
+    assert!(
+        store
+            .availability
+            .lock()
+            .unwrap()
+            .iter()
+            .all(Option::is_none)
+    );
 }

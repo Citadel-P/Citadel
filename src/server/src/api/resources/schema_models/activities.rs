@@ -43,7 +43,15 @@ pub enum ActivityEventInfoSchema {
         #[serde(rename = "Message")]
         message: Option<String>,
     },
+    UpdateScheduleFinished {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Message")]
+        message: String,
+    },
     AgentUpdateScheduleChanged {
+        #[serde(rename = "IncludeCore")]
+        include_core: Option<bool>,
         #[serde(rename = "Enabled")]
         enabled: bool,
         #[serde(rename = "TargetCount")]
@@ -1134,10 +1142,15 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
                 phase,
                 message,
             },
+            citadel_activities::ActivityEventInfo::UpdateScheduleFinished { run_id, message } => {
+                Self::UpdateScheduleFinished { run_id, message }
+            }
             citadel_activities::ActivityEventInfo::AgentUpdateScheduleChanged {
+                include_core,
                 enabled,
                 target_count,
             } => Self::AgentUpdateScheduleChanged {
+                include_core,
                 enabled,
                 target_count,
             },
@@ -2025,6 +2038,7 @@ enum_schema!(
         UpdateChecksChanged,
         AgentUpdate,
         AgentUpdateScheduleChanged,
+        UpdateScheduleFinished,
         InstanceUpdateStarted,
         InstanceUpdateCompleted,
         InstanceUpdateFailed,

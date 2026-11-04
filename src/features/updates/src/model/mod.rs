@@ -15,3 +15,5 @@ pub use plan::UpdatePlan;
 
 mod agents;
 pub use agents::*;
+mod schedule;
+pub use schedule::*;

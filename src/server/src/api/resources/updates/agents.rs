@@ -51,15 +51,18 @@ impl AgentTargetView {
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AgentScheduleView {
+pub struct UpdateScheduleView {
+    #[serde(default)]
+    pub include_core: bool,
     pub targets: Vec<String>,
     pub enabled: bool,
     pub cron: String,
     pub time_zone: String,
 }
-impl From<AgentUpdateSchedule> for AgentScheduleView {
-    fn from(s: AgentUpdateSchedule) -> Self {
+impl From<UpdateSchedule> for UpdateScheduleView {
+    fn from(s: UpdateSchedule) -> Self {
         Self {
+            include_core: s.include_core,
             targets: s.targets,
             enabled: s.enabled,
             cron: s.cron,
@@ -67,9 +70,10 @@ impl From<AgentUpdateSchedule> for AgentScheduleView {
         }
     }
 }
-impl From<AgentScheduleView> for AgentUpdateSchedule {
-    fn from(s: AgentScheduleView) -> Self {
+impl From<UpdateScheduleView> for UpdateSchedule {
+    fn from(s: UpdateScheduleView) -> Self {
         Self {
+            include_core: s.include_core,
             targets: s.targets,
             enabled: s.enabled,
             cron: s.cron,
@@ -155,13 +159,35 @@ impl From<AgentUpdateOperation> for AgentOperationView {
 #[serde(rename_all = "camelCase")]
 pub struct AgentUpdatesView {
     pub targets: Vec<AgentTargetView>,
-    pub schedule: AgentScheduleView,
+    pub schedule: UpdateScheduleView,
     pub operation: Option<AgentOperationView>,
     pub check_error: Option<String>,
+    pub next_run: Option<chrono::DateTime<chrono::Utc>>,
+    pub schedule_run: Option<UpdateScheduleRunView>,
 }
 impl AgentUpdatesView {
     pub fn new(state: AgentUpdateState, targets: Vec<AgentUpdateTarget>) -> Self {
+        let next_run = state
+            .schedule
+            .enabled
+            .then(|| {
+                citadel_primitives::schedule::CronSchedule::parse(
+                    &state.schedule.cron,
+                    &state.schedule.time_zone,
+                )
+                .ok()
+                .and_then(|schedule| schedule.next_after(chrono::Utc::now()))
+            })
+            .flatten();
         Self {
+            next_run,
+            schedule_run: state.run.map(|run| UpdateScheduleRunView {
+                id: run.id,
+                phase: format!("{:?}", run.phase),
+                message: run.message,
+                core_operation: run.core_operation,
+                agent_operation: run.agent_operation,
+            }),
             targets: targets
                 .into_iter()
                 .map(|t| AgentTargetView::new(t, state.release.as_ref()))
@@ -171,4 +197,14 @@ impl AgentUpdatesView {
             check_error: state.check_error,
         }
     }
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateScheduleRunView {
+    pub id: Uuid,
+    pub phase: String,
+    pub message: Option<String>,
+    pub core_operation: Option<Uuid>,
+    pub agent_operation: Option<Uuid>,
 }

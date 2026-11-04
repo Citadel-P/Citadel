@@ -80,23 +80,26 @@ impl AgentUpdateTarget {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentUpdateSchedule {
+pub struct UpdateSchedule {
+    #[serde(default)]
+    pub include_core: bool,
     pub targets: Vec<String>,
     pub enabled: bool,
     pub cron: String,
     pub time_zone: String,
 }
-impl Default for AgentUpdateSchedule {
+impl Default for UpdateSchedule {
     fn default() -> Self {
         Self {
             targets: vec![],
+            include_core: false,
             enabled: false,
             cron: "0 3 * * *".into(),
             time_zone: "UTC".into(),
         }
     }
 }
-impl AgentUpdateSchedule {
+impl UpdateSchedule {
     pub fn validate(&self) -> Result<(), UpdateError> {
         CronSchedule::parse(&self.cron, &self.time_zone)
             .map_err(|e| UpdateError::Validation(e.into()))?;
@@ -105,10 +108,10 @@ impl AgentUpdateSchedule {
                 .targets
                 .iter()
                 .any(|id| id.is_empty() || id.len() > 256)
-            || self.enabled && self.targets.is_empty()
+            || self.enabled && !self.include_core && self.targets.is_empty()
         {
             return Err(UpdateError::Validation(
-                "Select between one and 100 registered Agent installations.".into(),
+                "Select Core or at least one Agent, with at most 100 Agent installations.".into(),
             ));
         }
         Ok(())
@@ -164,6 +167,7 @@ pub struct AgentUpdateOperation {
 pub struct AgentUpdateState {
     pub release: Option<AgentUpdateRelease>,
     pub check_error: Option<String>,
-    pub schedule: AgentUpdateSchedule,
+    pub schedule: UpdateSchedule,
+    pub run: Option<crate::UpdateScheduleRun>,
     pub operation: Option<AgentUpdateOperation>,
 }

@@ -24,6 +24,7 @@ pub use acceptance::{check_committed_update_receipt, check_target_update_databas
 mod agents;
 pub(crate) use agents::read_update_agent_versions;
 mod authorization;
+mod availability;
 mod checkpoint;
 mod checks;
 mod credentials;
@@ -48,5 +49,6 @@ use repository::storage;
 pub use startup::check_startup_updates;
 
 mod agent_operations;
+mod schedule;
 
 pub(crate) mod agent_inventory;

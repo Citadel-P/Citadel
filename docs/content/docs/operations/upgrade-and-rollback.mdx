@@ -42,20 +42,23 @@ update-check setting changes.
 
 ## Update Agents
 
-Use **Settings → Updates → Config → Agent updates**. Agent availability is
+Use **Settings → Updates → Config → Available updates**. Agent availability is
 independent of Core: a current Core can still have Agents that need updating.
 **Check now** also verifies the official Agent image matching the running Core
 version. It does not install anything.
 
-Select eligible Agents, choose **Review update** (or **Review selected updates**),
-then confirm the displayed version transitions. Manual updates are available to
+Choose **Review and update** in Available updates, then confirm the displayed
+Agent version transitions. You can narrow the selection with **Agents to update now**;
+leaving it empty reviews all available Agents. When Core also has an eligible update,
+the dialog lets you choose Core or Agents. Core and Agent operations run separately;
+updating Core first makes its matching Agent release available. Manual updates are available to
 administrators in Community and Team. Citadel updates the selected installations
 one at a time while Core keeps running. Platform and Build Pool references to the
 same installation are combined. A managed Swarm node-agent service is one target;
 the review shows how many nodes it covers. Its **Repair** action on the Platform
 page preserves the previously approved image.
 
-The progress sheet and **Activities** record each outcome. Closing the browser
+The update dialog and **Activities** show each outcome. Closing the browser
 does not cancel an accepted operation. Citadel waits for the affected Agent's
 active work, replaces it, and verifies its authenticated connection, image and
 version before reporting success. A target that becomes unavailable is skipped;
@@ -63,42 +66,61 @@ an installation failure stops the remaining targets.
 If Core restarts during replacement, it checks the existing attempt after startup
 instead of starting another. Swarm updates remain in progress while a disconnected
 node is waiting to resume work; cleanup retries after the node reconnects.
+Standalone updates also wait for the owned helper to finish successfully. An
+uncertain helper outcome remains recovery-required and blocks another Core or
+Agent update; a timeout does not release that ownership.
 
 Central replacement supports recognized standalone Docker Agents using the local
 Docker socket, standard bridge or host networking, and persistent identity storage
-for Edge mode. Custom hostnames, shared container networking, remote Docker
+for Edge mode. Edge key and identity files must be inside the persistent
+`/app/data` directory, including the generated Build Pool paths. Custom hostnames, shared container networking, remote Docker
 sockets and unsupported storage profiles require a manual update. An Agent that
 does not implement the update protocol also requires a manual update first.
 These targets remain visible with an explanation. Use the generated installation
 command or your existing deployment manifest, preserving credentials and storage.
 
-### Scheduled Agent updates — Team
+### Scheduled updates — Team
 
-Save one schedule with **Scheduled Agents**, **Enabled**, **Cron** and **Time Zone**.
-You can select supported Agents that are already current, and previously selected
-Agents can remain enrolled while offline. New registrations are not automatically
-enrolled. Manual selection does not change the saved schedule.
+Use **Scheduled updates** to enable one schedule for **Update Citadel Core**,
+**Scheduled Agents**, or both, then set **Cron** and **Time Zone** and select **Save**.
+Core is excluded by default, including from existing Agent schedules. Supported
+current Agents may be enrolled for future updates; new registrations are never
+automatically selected. Manual selection remains separate.
 
-Each occurrence rechecks only the saved targets. Current Agents need no update;
-unavailable targets are skipped. Missed or overlapping occurrences are not queued.
-Team expiry prevents new scheduled target starts but lets a started replacement
-settle; you can still disable the schedule or update manually. The server's update
-restriction also prevents scheduled starts.
+**Next run** uses the saved cron and time zone, not unsaved edits. A disabled
+schedule retains its settings behind **Edit schedule**. Community users can update
+manually; after Team expiry an administrator can still disable an existing schedule.
+
+When due, Citadel claims the saved scope and verifies the release independently of
+periodic discovery. If Core has an update, its normal compatibility checks, recovery
+checkpoint and installation run first. Core temporarily disconnects the interface.
+The saved occurrence resumes only after Core is verified and maintenance cleanup
+finishes. Selected Agents then update sequentially to that pinned Core release.
+If Core is already current, selected outdated Agents can update directly.
+
+Schedule edits affect future unclaimed occurrences. Busy or missed occurrences
+are skipped without catch-up. A Core failure or uncertain replacement prevents the
+Agent phase. An Agent failure stops the remaining Agents without rolling Core back.
+Team expiry or server policy prevents new component starts while existing
+replacements settle safely. Activities record the component outcomes and schedule
+completion or blocking reason.
 
 ### If an Agent replacement fails
 
 Keep the updater helper, previous container and persistent data for inspection.
-The progress sheet identifies the affected Agent. Inspect containers labelled
+The update dialog identifies the affected Agent. Inspect containers labelled
 `com.citadel.agent-update` with that operation ID and their logs before retrying.
 Citadel does not blindly repeat a replacement after a lost response. It retains
 the previous container with automatic restart disabled and does not automatically
-roll back. Recreate the Agent
-from the generated instructions if recovery is needed, preserving its identity
-volume and configuration; verify the connection before removing retained containers.
+roll back. Before manually recreating an Agent, establish that its helper can no
+longer change the installation. Preserve the identity volume and configuration,
+and verify the connection before removing retained containers. Recreating an Agent
+alone does not clear an unresolved update's ownership; keep its evidence for
+operator recovery.
 
 ## Install a qualified update
 
-A registered, supported Docker Compose installation can offer **Update now**
+A registered, supported Docker Compose installation can offer **Review and update**
 for an available release. This opens a review that verifies the installation and release before
 anything is approved. The target release must explicitly support your installed
 version, database catalog, architecture and connected Agent versions.

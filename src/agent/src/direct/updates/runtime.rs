@@ -41,6 +41,55 @@ impl Runtime {
         let operation = uuid::Uuid::parse_str(&request.operation_id)
             .map_err(|_| Status::invalid_argument("Invalid Agent update operation"))?;
         if request.resume {
+            if !request.source_container_id.is_empty() {
+                if request.source_container_id.len() != 64
+                    || !request
+                        .source_container_id
+                        .bytes()
+                        .all(|b| b.is_ascii_hexdigit())
+                {
+                    return Err(Status::invalid_argument(
+                        "Invalid source container identity",
+                    ));
+                }
+                let id = self.runtime_container.as_ref().ok_or_else(|| {
+                    Status::failed_precondition("Agent container identity is unavailable")
+                })?;
+                let current = self
+                    .docker
+                    .inspect_container_document(id)
+                    .await
+                    .map_err(docker_error)?;
+                if current["Id"] == request.source_container_id {
+                    if current["Image"] != request.source_image
+                        || current["State"]["Running"] != true
+                    {
+                        return Err(Status::failed_precondition(
+                            "Agent source changed during recovery",
+                        ));
+                    }
+                    // Only the live admission gate can prove preparation ended before
+                    // helper creation. Helper absence alone cannot fence delayed Docker calls.
+                    return self.update_gate.settle_preparation(operation);
+                }
+                let name = crate::updates::helper_name(
+                    &request.operation_id,
+                    &request.source_container_id,
+                );
+                let helper = self
+                    .docker
+                    .inspect_container_document(&name)
+                    .await
+                    .map_err(docker_error)?;
+                crate::updates::settled(
+                    &current,
+                    &helper,
+                    &request.source_container_id,
+                    &request.source_image,
+                    &request.operation_id,
+                )
+                .map_err(Status::failed_precondition)?;
+            }
             return self.update_gate.resume(operation);
         }
         let mut drain = self.update_gate.drain(operation).await?;
@@ -114,15 +163,7 @@ impl Runtime {
         uuid::Uuid::parse_str(&request.operation_id)
             .map_err(|_| Status::invalid_argument("Operation ID is invalid"))?;
         crate::updates::validate_image(&request.target_image).map_err(Status::invalid_argument)?;
-        let info = self.agent_update_info().await?;
-        if !info.supported
-            || info.installation_id != request.installation_id
-            || info.source_image != request.source_image
-        {
-            return Err(Status::failed_precondition(
-                "Agent installation changed or requires manual update",
-            ));
-        }
+        let info = self.agent_update_info().await;
         let mut drain = self
             .update_gate
             .drain(
@@ -131,6 +172,16 @@ impl Runtime {
             )
             .await?;
         let preparation = async {
+            let info = info?;
+            if !info.supported
+                || info.installation_id != request.installation_id
+                || info.source_image != request.source_image
+            {
+                return Err(Status::failed_precondition(
+                    "Agent installation changed or requires manual update",
+                ));
+            }
+
             // Reservation permits include unresolved builds/data operations; never erase ownership to update.
             let _heavy = tokio::time::timeout(
                 std::time::Duration::from_secs(120),
@@ -152,7 +203,9 @@ impl Runtime {
                     return Err(Status::unavailable("Agent image pull failed"));
                 }
             }
-            let helper=self.docker.create_container(&format!("citadel-agent-updater-{}-{}",request.operation_id, &info.container_id[..12.min(info.container_id.len())]),&json!({
+            // Creation can also complete after a lost response. Retain admission before dispatch.
+            drain.retain()?;
+            let helper=self.docker.create_container(&crate::updates::helper_name(&request.operation_id, &info.container_id),&json!({
                 "Image":request.target_image,"Entrypoint":["/app/citadel-agent"],
                 "Cmd":["replace-agent",info.container_id,info.source_image,request.target_image,request.operation_id],
                 "Labels":{"com.citadel.system":"true","com.citadel.system-role":"agent-updater","com.citadel.agent-update":request.operation_id},

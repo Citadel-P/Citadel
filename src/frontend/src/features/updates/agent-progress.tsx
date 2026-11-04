@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useRead } from '@/lib/hooks';
-import { SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { AlertMessage } from './alert-message';
+import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { StateBadge } from '@/components/custom/state-badge';
+import { AlertMessage } from '@/components/custom/alert-message';
 
 export function AgentUpdateProgress({ payload }: { payload: { id: string } }) {
   const query = useRead('getAgentUpdateOperation', { id: payload.id });
@@ -29,21 +30,27 @@ export function AgentUpdateProgress({ payload }: { payload: { id: string } }) {
   }, [operation]);
   return (
     <div className="space-y-4">
-      <SheetHeader>
-        <SheetTitle>Agent updates</SheetTitle>
-        <SheetDescription>
-          {operation?.finished ? 'Update results' : 'Progress is saved by Citadel. You can close this sheet.'}
-        </SheetDescription>
-      </SheetHeader>
+      <DialogHeader>
+        <DialogTitle>Agent updates</DialogTitle>
+        <DialogDescription>
+          {operation?.finished ? 'Update results' : 'Progress is saved by Citadel. You can close this dialog.'}
+        </DialogDescription>
+      </DialogHeader>
       {!operation ? (
         <p role="status">{query.isError ? 'Progress could not be loaded.' : 'Loading progress…'}</p>
       ) : (
         operation.targets.map((result) => (
           <div key={result.target.id} className="space-y-1 border-b p-3 text-sm">
-            <p className="font-medium">{result.target.name}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-medium">{result.target.name}</p>
+              <StateBadge
+                value={['Updating', 'Draining'].includes(result.phase) ? 'Running' : result.phase}
+                kind="run"
+                label={result.phase === 'NotStarted' ? 'Not started' : result.phase}
+              />
+            </div>
             <p className="text-muted-foreground">
-              {result.target.installedVersion} → {result.target.availableVersion} ·{' '}
-              {result.phase === 'NotStarted' ? 'Not started' : result.phase}
+              {result.target.installedVersion} → {result.target.availableVersion}
             </p>
             {result.message &&
               (result.phase === 'Failed' ? (

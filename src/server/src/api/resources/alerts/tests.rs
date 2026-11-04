@@ -153,6 +153,13 @@ fn event_view_preserves_runtime_details_and_native_actor_type() {
         created_at: now,
         updated_at: now,
     };
+    for kind in ["CoreUpdateAvailable", "AgentUpdatesAvailable"] {
+        let mut update = event.clone();
+        update.alert_type = kind.into();
+        update.resource_type = "Updates".into();
+        let update = AlertEventView::try_from(update).unwrap();
+        assert_eq!(update.resource_path.as_deref(), Some("/updates"));
+    }
     let view = AlertEventView::try_from(event).unwrap();
     let wire = serde_json::to_value(view).unwrap();
     assert_eq!(wire["info"], info);

@@ -41,6 +41,7 @@ impl AgentUpdateRuntimeRouter {
                     AgentUpdateDrainRequest {
                         operation_id: operation.to_string(),
                         resume: false,
+                        ..Default::default()
                     },
                     cancel,
                 )
@@ -150,7 +151,7 @@ impl AgentUpdateRuntimeRouter {
 }
 
 /// Missing sessions and lost acknowledgements are unresolved cleanup, never success.
-async fn resume_nodes(
+pub(super) async fn resume_nodes(
     edge: &EdgeRegistry,
     platform: Uuid,
     nodes: &[String],
@@ -171,6 +172,7 @@ async fn resume_nodes(
                     AgentUpdateDrainRequest {
                         operation_id: operation.to_string(),
                         resume: true,
+                        ..Default::default()
                     },
                     cancel,
                 ),
@@ -188,7 +190,3 @@ async fn resume_nodes(
     results.into_iter().collect::<Result<Vec<_>, _>>()?;
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "swarm_tests.rs"]
-mod tests;

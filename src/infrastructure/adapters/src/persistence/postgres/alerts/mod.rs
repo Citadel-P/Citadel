@@ -43,3 +43,5 @@ pub mod observations;
 pub(crate) mod update_resolution;
 
 pub mod platform_metrics;
+
+mod instance_updates;

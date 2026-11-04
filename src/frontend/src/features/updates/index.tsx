@@ -1,10 +1,10 @@
 import { useId, useState } from 'react';
-import { ExternalLink, Info, RefreshCw } from 'lucide-react';
+import { Info, RefreshCw } from 'lucide-react';
 import { ActivityResourceType } from '@/api/generated/api.types';
 import { UpdateCheckSettings } from './config';
-import { InstallUpdate, UpdateProgress } from './installation';
+import { UpdateProgress } from './installation';
+import { AgentStatusBadge, AgentStatusSummary, CoreStatusBadge } from './status-badge';
 import { Timestamp } from '@/components/custom/timestamp';
-import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import Loader from '@/components/ui/loader';
@@ -21,7 +21,7 @@ export const UpdatesComponents: TabbedResourceComponents = {
   showTaskSheet: true,
   tabsVariant: 'bordered',
   header: {
-    subtitle: 'Manage Citadel release checks and review update activity.',
+    subtitle: 'Update Citadel and its Agents, configure scheduled updates, and review activity.',
     variant: 'plain',
     showSearch: false,
     showAdd: false,
@@ -36,6 +36,7 @@ export const UpdatesComponents: TabbedResourceComponents = {
 
 function UpdateInfo() {
   const { data, isError } = useRead('getInstanceUpdates');
+  const agents = useRead('getAgentUpdates');
   const formatDate = useProfileDateTimeFormatter();
   const [open, setOpen] = useState(false);
   const cardId = useId();
@@ -48,7 +49,7 @@ function UpdateInfo() {
           variant="ghost"
           size="icon"
           className="size-8 text-muted-foreground"
-          aria-label="Instance information"
+          aria-label="Update information"
           aria-expanded={open}
           aria-controls={open ? cardId : undefined}
           onClick={() => setOpen(true)}
@@ -61,16 +62,22 @@ function UpdateInfo() {
       <HoverCardContent
         id={cardId}
         role="region"
-        aria-label="Instance information"
+        aria-label="Update information"
         align="end"
         sideOffset={8}
         collisionPadding={12}
         className="w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg p-0 shadow-md">
         <div className="border-b bg-muted/20 px-4 py-3">
-          <h2 className="text-sm font-semibold">Instance information</h2>
+          <h2 className="text-sm font-semibold">Update information</h2>
         </div>
         {status ? (
           <dl className="space-y-3 p-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-medium">Citadel Core</dt>
+              <dd>
+                <CoreStatusBadge status={status} failed={isError} />
+              </dd>
+            </div>
             <div className="space-y-1.5">
               <dt className="text-xs text-muted-foreground">Installed version</dt>
               <dd className="rounded-md bg-muted/40 px-2.5 py-2 font-mono text-xs leading-relaxed break-all">
@@ -97,77 +104,37 @@ function UpdateInfo() {
             {isError ? 'Information unavailable.' : 'Loading instance information…'}
           </p>
         )}
+        <div className="border-t p-4 text-xs">
+          <h3 className="mb-2 font-medium">Agents</h3>
+          <AgentStatusSummary state={agents.data?.data} failed={agents.isError} />
+          {agents.data?.data.checkError && <p className="mt-2 text-muted-foreground">{agents.data.data.checkError}</p>}
+          {!!agents.data?.data.targets.length && (
+            <ul className="mt-3 max-h-56 space-y-3 overflow-y-auto">
+              {agents.data.data.targets.map((target) => (
+                <li key={target.id} className="space-y-1">
+                  <div className="flex justify-between gap-3">
+                    <span className="min-w-0 break-words font-medium">{target.name}</span>
+                    <AgentStatusBadge status={target.status} />
+                  </div>
+                  <p className="break-all font-mono text-muted-foreground">
+                    {target.installedVersion ?? 'Version unknown'}
+                    {target.status === 'Available' && target.availableVersion && ` → ${target.availableVersion}`}
+                  </p>
+                  {target.nodes > 1 && <p className="text-muted-foreground">{target.nodes} nodes</p>}
+                  {target.reason && <p className="text-muted-foreground">{target.reason}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </HoverCardContent>
     </HoverCard>
   );
 }
 
 function UpdateStatus() {
-  const status = useRead('getInstanceUpdates');
-  const data = status.data?.data;
-  if (status.isPending) return <Loader />;
-  if (!data)
-    return (
-      <div>
-        <p role="alert">Could not load update status.</p>
-        <Button onClick={() => void status.refetch()}>Retry</Button>
-      </div>
-    );
-  return (
-    <div className="space-y-2" aria-live="polite">
-      <UpdateProgress status={data} />
-      {!data.operation && (
-        <>
-          {data.available ? (
-            <AlertMessage
-              type="info"
-              title={`Citadel ${data.available.version} is available.`}
-              date={data.lastSuccess ?? undefined}
-              className="my-0 flex-wrap"
-              action={
-                <div className="flex items-center gap-2">
-                  <InstallUpdate status={data} />
-                  {data.installationUnavailableReason && (
-                    <Button variant="outline" size="sm" asChild>
-                      <a
-                        href="https://docs.citadelplane.com/operations/upgrade-and-rollback/"
-                        target="_blank"
-                        rel="noreferrer">
-                        Upgrade guide <ExternalLink className="size-3.5" aria-hidden="true" />
-                      </a>
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" className="text-foreground" asChild>
-                    <a href={data.available.releaseUrl} target="_blank" rel="noreferrer">
-                      Release notes <ExternalLink className="size-3.5" aria-hidden="true" />
-                    </a>
-                  </Button>
-                </div>
-              }>
-              {data.installationUnavailableReason ?? 'Review the release notes before upgrading.'}
-            </AlertMessage>
-          ) : (
-            !data.checkError && (
-              <AlertMessage type="info" className="my-0 flex-wrap" date={data.lastSuccess ?? undefined}>
-                {data.lastSuccess ? 'Citadel instance: Up to date' : 'No successful release check yet.'}
-              </AlertMessage>
-            )
-          )}
-          {data.checkError && (
-            <div role="alert">
-              <AlertMessage
-                type="warning"
-                title="Update check failed"
-                className="my-0 flex-wrap"
-                date={data.lastAttempt ?? undefined}>
-                {data.checkError} Last successful release information is retained.
-              </AlertMessage>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
+  const { data } = useRead('getInstanceUpdates');
+  return data ? <UpdateProgress status={data.data} /> : null;
 }
 
 function InstanceActivities() {

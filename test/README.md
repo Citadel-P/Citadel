@@ -61,6 +61,7 @@ Instance update contract tests:
 
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-updates
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --lib updates
 SQLX_OFFLINE=true cargo test --locked -p citadel-database --lib
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::updates::checker::tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --test update_release_cli
@@ -88,6 +89,10 @@ CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLI
 docker build -t citadel-core:update-acceptance -f Dockerfile .
 python3 test/scripts/test-update-registration.py citadel-core:update-acceptance
 ```
+
+Agent update tests use a fake Docker daemon to cover failed image pulls before
+handoff, drain timeouts, idempotent settlement, rejected replay and changed identity.
+Ambiguous helper creation and lost Agent-process evidence must retain recovery ownership.
 
 These cover release/operation invariants, bounded release HTTP requests, cancellation
 before persistence, completion of notification after commit during settings changes
@@ -998,6 +1003,44 @@ to make startup pass.
 
 ### Central Agent updates
 
+To test real Direct and Edge Agent updates in the browser without publishing a
+release, run:
+
+```bash
+python3 test/scripts/test-agent-upgrade-local.py \
+  --runtime-image YOUR_LOCAL_CORE_IMAGE \
+  --agent-runtime-image YOUR_LOCAL_AGENT_IMAGE --browser
+```
+
+Use existing Core and Agent runtime images as bases. The runner builds the current
+frontend and binaries from this checkout, starts Core at `0.1.1-dev.9002`, and
+registers a Direct Agent and an Edge Agent at `0.1.1-dev.9001`. Each Agent has its
+own disposable Docker engine and persistent identity volume. The private catalog
+offers an Agent image matching Core; no Core update is needed.
+
+The terminal prints `http://localhost:18080/updates` and a generated password for
+`upgrade@example.test`. Under **Config → Available updates**, select both Agents,
+click **Review and update**, then **Update now**. Check progress in the same dialog,
+Activities, and both Agents returning as up to date. Core remains available.
+Reloading or closing the page must not cancel the operation. Run the command again
+to reset the fixture. Use `--port 18081` if needed; **Ctrl+C** removes its containers,
+volumes, network and built images. Existing installations are untouched.
+
+Omit `--browser` for automated approval and verification of authenticated
+reconnection, target digest, changed container IDs, preserved identity mounts and
+ports, and retained source containers. It updates Direct first and verifies the
+unselected Edge container is unchanged, then updates Edge using the generated
+`edge-agent` label and mixed-case Edge mode. Both must settle their exited helper
+before the operation finishes. This mode disconnects the outer test daemon
+from its network after loading prerequisites. Browser mode publishes only the UI
+on loopback and retains outbound connectivity. Neither mode exposes Docker or
+PostgreSQL on the host.
+
+Only the test Core replaces release verification with its private catalog.
+Production binaries have no switch for it. These runs cover standalone Direct and
+Edge updates; they do not qualify published signatures, Build Pool registration,
+Team schedules, or multi-node Swarm rollouts.
+
 The focused service tests cover independent Agent eligibility, installation alias
 deduplication, stale reviews, request replay, sequential failure handling,
 interrupted-attempt reconciliation, Team scheduling and authorization rechecks.
@@ -1012,7 +1055,12 @@ npm --prefix src/frontend run test:run -- src/features/updates/index.test.tsx sr
 ```
 
 `citadel-adapters --test agent_updates` exercises real PostgreSQL claims, concurrent
-approvals, revision fences, Activities and schedule occurrence claims. Create a
+approvals, unresolved ownership, revision fences, Activities and schedule occurrence
+reservations across minute boundaries. It checks duplicate/busy occurrences and
+rejects stale pre-claim configurations while preserving the frozen scope of an
+already-owned occurrence after schedule edits. Service tests cover shared schedule
+continuation after simulated Core restart and cleanup, compatibility blocking and
+Team expiry. These simulated restarts do not replace packaged replacement tests. Create a
 fresh disposable database named `citadel_update_test_*`, then run:
 
 ```bash
@@ -1031,6 +1079,18 @@ SQLX_OFFLINE=true cargo test --locked -p citadel-agent --test agent_replacement 
 This test verifies actual container replacement, persistent storage, environment,
 host ports and retained-source restart policy. It uses a shell fixture inside the
 Agent image; it does **not** establish an authenticated Direct/Edge rollout or a
-multi-node Swarm rollout. Those require release images containing the update RPCs
-and detached helper. Keep published-release signature verification separate from
-this Docker mutation fixture; do not weaken image validation for local testing.
+multi-node Swarm rollout. Use the local runner above for authenticated standalone
+rollouts. Keep published-release signature verification separate from these Docker
+fixtures; do not weaken image validation for local testing.
+
+Update availability alerts use the existing alert persistence test fixture. Run against
+a **fresh disposable** database named `citadel_update_test_*`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib availability
+CITADEL_EXECUTION_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_alerts SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test alert_persistence instance_updates:: -- --ignored --test-threads=1
+```
+
+The persistence test covers seeded Community rules, channel assignment, delivery
+deduplication, aggregate summary refresh, supersession, failed checks, offline
+observations and stale queued availability after installation. It never sends external notifications.

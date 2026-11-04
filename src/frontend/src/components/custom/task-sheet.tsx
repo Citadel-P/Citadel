@@ -1,4 +1,3 @@
-import { AgentUpdateProgress } from './agent-update-progress';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { Timestamp } from '@/components/custom/timestamp';
 import { memo, ReactNode, useCallback, useEffect, useId, useMemo, useState } from 'react';
@@ -116,7 +115,6 @@ type ScriptRunParams = {
 } & RunInput;
 
 export type TaskSpec =
-  | { kind: 'agentUpdates'; payload: { id: string } }
   | { kind: 'pull'; payload: PullImageParams }
   | { kind: 'deploy'; payload: DeployParams }
   | { kind: 'swarmService'; payload: SwarmServiceMutationParams }
@@ -1485,7 +1483,6 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
   deploy: ApplyDeployTaskRenderer,
   swarmService: SwarmServiceTaskRenderer,
   swarmNodeAgents: SwarmNodeAgentsTaskRenderer,
-  agentUpdates: AgentUpdateProgress,
   stack: ApplyStackTaskRenderer,
   stackRollback: RollbackStackTaskRenderer,
   backupRun: BackupRunTaskRenderer,

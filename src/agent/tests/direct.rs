@@ -342,7 +342,8 @@ async fn every_direct_rpc_is_registered_and_requires_authentication() {
             count += 1;
         }
     }
-    assert_eq!(count, 75);
+    // Includes Agent update metadata, drain/resume and standalone replacement.
+    assert_eq!(count, 78);
     assert_eq!(host.state.calls.load(Ordering::SeqCst), 0);
 }
 

@@ -98,6 +98,15 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
     operation.targets[0].phase = AgentUpdatePhase::Updating;
     operation = repo.save_operation(&operation).await.unwrap();
     assert!(repo.save_operation(&stale).await.is_err());
+    // A worker restart sees the same unresolved attempt, and cannot approve another.
+    let restarted = PostgresUpdateRepository::new(pool.clone());
+    assert!(!restarted.state().await.unwrap().operation.unwrap().finished);
+    assert!(
+        restarted
+            .approve(actor, review.id, Uuid::now_v7())
+            .await
+            .is_err()
+    );
     operation.targets[0].phase = AgentUpdatePhase::Succeeded;
     operation.finished = true;
     operation = repo.save_operation(&operation).await.unwrap();
@@ -116,7 +125,8 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
         .unwrap(),
         2
     );
-    let schedule = AgentUpdateSchedule {
+    let schedule = UpdateSchedule {
+        include_core: false,
         enabled: true,
         targets: vec![review.targets[0].id.clone()],
         cron: "* * * * *".into(),
@@ -137,20 +147,169 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
         .unwrap()
         .with_nanosecond(0)
         .unwrap();
+    assert!(
+        repo.reserve_schedule(&schedule, minute - Duration::minutes(1))
+            .await
+            .unwrap()
+            .is_none()
+    );
     let (a, b) = tokio::join!(
-        repo.scheduled(&schedule, &review, minute),
-        repo.scheduled(&schedule, &review, minute)
+        repo.reserve_schedule(&schedule, minute),
+        repo.reserve_schedule(&schedule, minute)
     );
-    assert_eq!(
-        [a.unwrap(), b.unwrap()].into_iter().filter(|v| *v).count(),
-        1
-    );
-    assert!(repo.state().await.unwrap().operation.unwrap().scheduled);
-    let disabled = AgentUpdateSchedule {
+    let reservations: Vec<_> = [a.unwrap(), b.unwrap()].into_iter().flatten().collect();
+    assert_eq!(reservations.len(), 1);
+    let mut run = reservations[0].clone();
+    // Persist a frozen plan before crossing the minute boundary or restarting the worker.
+    run.release = Some(review.release.clone());
+    run.targets = review.targets.clone();
+    run.phase = UpdateSchedulePhase::Agents;
+    run = repo.save_run(&run).await.unwrap();
+    let previous = minute - Duration::minutes(1);
+    run.minute = previous;
+    sqlx::query("UPDATE updatescheduleruns SET minute=$2,run=$3 WHERE id=$1")
+        .bind(run.id)
+        .bind(previous)
+        .bind(sqlx::types::Json(&run))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let restarted = PostgresUpdateRepository::new(pool.clone());
+    assert_eq!(restarted.state().await.unwrap().run, Some(run.clone()));
+    // Editing future occurrences cannot overwrite this claimed selection.
+    let disabled = UpdateSchedule {
         enabled: false,
-        ..schedule
+        ..schedule.clone()
     };
     repo.save_schedule(actor, &disabled, false).await.unwrap();
+    assert!(
+        repo.approve(actor, review.id, Uuid::now_v7())
+            .await
+            .is_err()
+    );
+    restarted.claim_agents(&run).await.unwrap();
+    assert!(repo.claim_agents(&run).await.is_err());
+    let owned = repo.state().await.unwrap();
+    assert!(owned.operation.as_ref().unwrap().scheduled);
+    assert_eq!(
+        owned.operation.as_ref().unwrap().targets[0].target,
+        review.targets[0]
+    );
+    let mut finished = owned.run.unwrap();
+    finished.phase = UpdateSchedulePhase::Finished;
+    assert!(
+        repo.save_run(&finished).await.is_err(),
+        "active Agent must retain shared ownership"
+    );
+    let mut completed = owned.operation.unwrap();
+    completed.finished = true;
+    repo.save_operation(&completed).await.unwrap();
+    repo.save_run(&finished).await.unwrap();
+    // A stale pre-claim configuration is refused after an administrator edits the scope.
+    sqlx::query("UPDATE agentupdatesettings SET lastscheduledminute=NULL")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        repo.reserve_schedule(&schedule, minute)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // A combined occurrence keeps the exclusive owner between verified Core cleanup
+    // and the Agent claim, including after a new repository/worker is constructed.
+    let combined = UpdateSchedule {
+        include_core: true,
+        ..schedule.clone()
+    };
+    repo.save_schedule(actor, &combined, true).await.unwrap();
+    sqlx::query("UPDATE agentupdatesettings SET lastscheduledminute=NULL")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let minute = Utc::now()
+        .with_second(0)
+        .unwrap()
+        .with_nanosecond(0)
+        .unwrap();
+    let mut run = repo
+        .reserve_schedule(&combined, minute)
+        .await
+        .unwrap()
+        .unwrap();
+    let source = CoreIdentity {
+        version: "0.1.1".into(),
+        image: format!("{CORE_IMAGE}@sha256:{}", "a".repeat(64)),
+        architecture: "amd64".into(),
+        catalog_sha256: "b".repeat(64),
+    };
+    let plan = UpdatePlan {
+        id: Uuid::now_v7(),
+        instance_id: sqlx::query_scalar(
+            "SELECT instanceid FROM citadelinstanceidentity WHERE id=1",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        source: source.clone(),
+        target: CoreIdentity {
+            version: "0.1.2".into(),
+            image: format!("{CORE_IMAGE}@sha256:{}", "c".repeat(64)),
+            ..source.clone()
+        },
+        helper_image: source.image,
+        configuration_sha256: "d".repeat(64),
+        registration_id: Uuid::now_v7(),
+        reviewed_at: Utc::now(),
+        expires_at: Utc::now() + Duration::minutes(10),
+        checkpoint_directory: "/opt/update-state".into(),
+        agent_requirements: vec![],
+    };
+    run.core_plan = Some(plan.clone());
+    run.release = Some(review.release.clone());
+    run.targets = review.targets.clone();
+    run.phase = UpdateSchedulePhase::Core;
+    run = repo.save_run(&run).await.unwrap();
+    let core = repo.claim_core(&run).await.unwrap();
+    assert_eq!(core.actor_id.value(), SYSTEM_ACTOR_ID);
+    assert!(
+        repo.claim_core(&run).await.is_err(),
+        "lost responses must not redispatch Core"
+    );
+    UpdateRepository::save_review(&repo, actor, &plan)
+        .await
+        .unwrap();
+    assert!(
+        UpdateRepository::claim(&repo, actor, &plan, Uuid::now_v7(), Utc::now())
+            .await
+            .is_err()
+    );
+    let restarted = PostgresUpdateRepository::new(pool.clone());
+    let mut run = restarted.state().await.unwrap().run.unwrap();
+    run.phase = UpdateSchedulePhase::Agents;
+    assert!(
+        restarted.save_run(&run).await.is_err(),
+        "Core cleanup is not verified"
+    );
+    // Simulate the existing verified completion transaction, not an observation by the scheduler.
+    sqlx::query("UPDATE instanceupdates SET ownsinstallation=false,operation=jsonb_set(operation,'{phase}','\"Succeeded\"') WHERE id=$1")
+        .bind(core.id).execute(&pool).await.unwrap();
+    run = restarted.save_run(&run).await.unwrap();
+    assert!(
+        repo.approve(actor, review.id, Uuid::now_v7())
+            .await
+            .is_err(),
+        "no gap between component phases"
+    );
+    restarted.claim_agents(&run).await.unwrap();
+    let state = restarted.state().await.unwrap();
+    let mut agents = state.operation.unwrap();
+    agents.finished = true;
+    restarted.save_operation(&agents).await.unwrap();
+    let mut run = state.run.unwrap();
+    run.phase = UpdateSchedulePhase::Finished;
+    restarted.save_run(&run).await.unwrap();
     sqlx::query("DELETE FROM actorroles WHERE actorid=$1")
         .bind(actor.actor_id.value())
         .execute(&pool)

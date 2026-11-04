@@ -38,10 +38,14 @@ pub use service::{
 
 pub use model::{
     AgentUpdateEligibility, AgentUpdateKind, AgentUpdateOperation, AgentUpdatePhase,
-    AgentUpdateRelease, AgentUpdateResult, AgentUpdateReview, AgentUpdateSchedule,
-    AgentUpdateState, AgentUpdateTarget,
+    AgentUpdateRelease, AgentUpdateResult, AgentUpdateReview, AgentUpdateState, AgentUpdateTarget,
+    UpdateSchedule,
 };
 
+pub use model::{UpdateSchedulePhase, UpdateScheduleRun};
 pub use repository::AgentUpdateRepository;
 pub use runtime::{AgentUpdateEntitlements, AgentUpdateRuntime};
 pub use service::AgentUpdateService;
+
+mod availability;
+pub use availability::agent_availability;

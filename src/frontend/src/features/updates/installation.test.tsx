@@ -7,7 +7,8 @@ import { renderCitadel } from '@/test/render-citadel';
 import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { RealtimeContext } from '@/lib/context/realtime-context';
 import type { UpdateStatusView } from '@/api/generated/api.types';
-import { InstallUpdate, UpdateProgress } from './installation';
+import { UpdateProgress } from './installation';
+import { ReviewUpdates } from './review';
 
 const status: UpdateStatusView = {
   instanceId: '019a0000-0000-7000-8000-000000000001',
@@ -56,8 +57,8 @@ it.each([true, false])(
         return requests.length === 1 ? new HttpResponse(null, { status: 503 }) : HttpResponse.json(operation);
       }),
     );
-    const { user } = renderCitadel(<InstallUpdate status={status} />);
-    await user.click(screen.getByRole('button', { name: 'Update now' }));
+    const { user } = renderCitadel(<ReviewUpdates status={status} />);
+    await user.click(screen.getByRole('button', { name: 'Review and update' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Installed0.1.1');
     expect(dialog).toHaveTextContent('New version0.1.2');
@@ -78,8 +79,8 @@ it.each([true, false])(
 );
 
 it('does not offer installation when registration is unavailable', () => {
-  renderCitadel(<InstallUpdate status={{ ...status, installationUnavailableReason: 'Not registered' }} />);
-  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  renderCitadel(<ReviewUpdates status={{ ...status, installationUnavailableReason: 'Not registered' }} />);
+  expect(screen.getByRole('button', { name: 'Review and update' })).toBeDisabled();
 });
 
 it('recovers a retained operation from the API without inventing progress while disconnected', async () => {

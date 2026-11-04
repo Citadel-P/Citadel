@@ -2599,3 +2599,23 @@ CREATE TABLE agentupdateoperations (
     createdat timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX ix_agentupdateoperations_active ON agentupdateoperations((true)) WHERE NOT finished;
+
+-- Keep existing Agent membership and require explicit opt-in for scheduled Core updates.
+UPDATE agentupdatesettings SET schedule = '{"includeCore":false}'::jsonb || schedule;
+ALTER TABLE agentupdatesettings ALTER COLUMN schedule SET DEFAULT '{"includeCore":false,"targets":[],"enabled":false,"cron":"0 3 * * *","timeZone":"UTC"}';
+CREATE TABLE updatescheduleruns (
+    id uuid PRIMARY KEY,
+    minute timestamptz NOT NULL UNIQUE,
+    revision bigint NOT NULL DEFAULT 0 CHECK (revision >= 0),
+    run jsonb NOT NULL,
+    finished boolean NOT NULL DEFAULT false
+);
+CREATE UNIQUE INDEX ix_updatescheduleruns_active ON updatescheduleruns((true)) WHERE NOT finished;
+
+ALTER TABLE instanceupdatechecks ADD COLUMN availability jsonb;
+ALTER TABLE agentupdatesettings ADD COLUMN availability jsonb;
+
+INSERT INTO alertrules(id,name,type,severity,status,createdbyactorid,limitedto,quiethours,createdat)
+VALUES
+('019d0000-0001-7000-8001-000000000025', 'Core Update Available', 'CoreUpdateAvailable', 'Info', 'Enabled', '00000000-0000-0000-0000-000000000001', '[]', '[]', TIMESTAMPTZ '2026-01-01T00:00:00Z'),
+('019d0000-0001-7000-8001-000000000026', 'Agent Updates Available', 'AgentUpdatesAvailable', 'Info', 'Enabled', '00000000-0000-0000-0000-000000000001', '[]', '[]', TIMESTAMPTZ '2026-01-01T00:00:00Z');

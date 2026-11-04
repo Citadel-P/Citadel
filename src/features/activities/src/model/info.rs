@@ -20,7 +20,15 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Message")]
         message: Option<String>,
     },
+    UpdateScheduleFinished {
+        #[serde(rename = "RunId")]
+        run_id: Uuid,
+        #[serde(rename = "Message")]
+        message: String,
+    },
     AgentUpdateScheduleChanged {
+        #[serde(rename = "IncludeCore")]
+        include_core: Option<bool>,
         #[serde(rename = "Enabled")]
         enabled: bool,
         #[serde(rename = "TargetCount")]
@@ -1379,6 +1387,7 @@ impl ActivityEventInfo {
             Self::UpdateDiscovered { .. } => ActivityEventType::UpdateDiscovered,
             Self::UpdateChecksChanged { .. } => ActivityEventType::UpdateChecksChanged,
             Self::AgentUpdate { .. } => ActivityEventType::AgentUpdate,
+            Self::UpdateScheduleFinished { .. } => ActivityEventType::UpdateScheduleFinished,
             Self::AgentUpdateScheduleChanged { .. } => {
                 ActivityEventType::AgentUpdateScheduleChanged
             }

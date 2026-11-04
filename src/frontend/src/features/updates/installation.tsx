@@ -1,125 +1,52 @@
-import { randomUuid } from '@/lib/utils';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useAtom, useStore } from 'jotai';
-import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CircleAlert, CloudDownload, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowRight, RefreshCw, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMutate, useRead } from '@/lib/hooks';
+import { useRead } from '@/lib/hooks';
 import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
 import type { UpdateReviewView, UpdateStatusView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertMessage } from '@/components/custom/alert-message';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
-export function InstallUpdate({ status }: { status: UpdateStatusView }) {
-  const queryClient = useQueryClient();
-  const [, remember] = useAtom(pendingInstanceUpdateAtom);
-  const [review, setReview] = useState<UpdateReviewView>();
-  const [requestId, setRequestId] = useState('');
-  const prepare = useMutate('reviewInstanceUpdate', {
-    onSuccess: ({ data }) => {
-      setReview(data);
-      setRequestId(randomUuid());
-    },
-  });
-  const approve = useMutate('approveInstanceUpdate', {
-    onSuccess: async ({ data }) => {
-      try {
-        remember({ instanceId: status.instanceId, id: data.id, restartUntil: Date.now() + 15 * 60_000 });
-      } catch {
-        // A browser storage failure cannot undo a server-approved operation.
-      }
-      await queryClient.cancelQueries({ queryKey: ['getInstanceUpdates'] });
-      queryClient.setQueryData(['getInstanceUpdates', {}], { data: { ...status, operation: data } });
-      setReview(undefined);
-      toast.success('Update approved', { description: 'Citadel will prepare a recovery checkpoint and restart.' });
-    },
-  });
-  if (!status.available || status.operation || status.installationUnavailableReason) return null;
+export function CoreReviewDetails({ review }: { review: UpdateReviewView }) {
   return (
     <>
-      <Button
-        size="sm"
-        disabled={prepare.isPending}
-        onClick={() => prepare.mutate({ data: { version: status.available!.version } })}>
-        {prepare.isPending ? <RefreshCw className="size-4 animate-spin" /> : <CloudDownload className="size-4" />}
-        {prepare.isPending ? 'Preparing review…' : 'Update now'}
-      </Button>
-      <Dialog
-        open={!!review}
-        onOpenChange={(open) => {
-          if (!open && !approve.isPending) setReview(undefined);
-        }}>
-        <DialogContent className="max-h-[calc(100dvh_-_2rem)] w-[calc(100vw_-_2rem)] gap-5 overflow-y-auto">
-          <DialogHeader className="text-left">
-            <DialogTitle>Update Citadel</DialogTitle>
-            <DialogDescription>Install the new version on this Citadel instance.</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)] items-center gap-3 rounded-md border bg-muted/30 p-4 text-center text-sm">
-            <dl className="min-w-0 space-y-1">
-              <dt className="text-xs text-muted-foreground">Installed</dt>
-              <dd className="wrap-anywhere font-medium">{review?.installedVersion}</dd>
-            </dl>
-            <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
-            <dl className="min-w-0 space-y-1">
-              <dt className="text-xs text-muted-foreground">New version</dt>
-              <dd className="wrap-anywhere font-medium">{review?.targetVersion}</dd>
-            </dl>
+      <div className="grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)] items-center gap-3 rounded-md border bg-muted/30 p-4 text-center text-sm">
+        <dl className="min-w-0 space-y-1">
+          <dt className="text-xs text-muted-foreground">Installed</dt>
+          <dd className="wrap-anywhere font-medium">{review.installedVersion}</dd>
+        </dl>
+        <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
+        <dl className="min-w-0 space-y-1">
+          <dt className="text-xs text-muted-foreground">New version</dt>
+          <dd className="wrap-anywhere font-medium">{review.targetVersion}</dd>
+        </dl>
+      </div>
+      <div className="space-y-4 text-sm">
+        <div className="flex items-start gap-3">
+          <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="font-medium">Recovery checkpoint</p>
+            <p className="leading-relaxed text-muted-foreground">
+              Citadel waits for active work to finish, then creates a checkpoint before updating.
+            </p>
           </div>
-          <div className="space-y-4 text-sm">
-            <div className="flex items-start gap-3">
-              <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <div className="space-y-1">
-                <p className="font-medium">Recovery checkpoint</p>
-                <p className="leading-relaxed text-muted-foreground">
-                  Citadel waits for active work to finish, then creates a checkpoint before updating.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <RefreshCw aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <div className="space-y-1">
-                <p className="font-medium">Portal restart</p>
-                <p className="leading-relaxed text-muted-foreground">
-                  The portal will be temporarily unavailable and reconnect automatically. Your managed workloads keep
-                  running.
-                </p>
-              </div>
-            </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <RefreshCw aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="font-medium">Portal restart</p>
+            <p className="leading-relaxed text-muted-foreground">
+              The portal will be temporarily unavailable and reconnect automatically. Your managed workloads keep
+              running.
+            </p>
           </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            If verification fails, Citadel remains in maintenance and requires manual recovery.
-          </p>
-          {approve.isError && (
-            <Alert variant="destructive">
-              <CircleAlert aria-hidden="true" />
-              <AlertTitle>Approval could not be confirmed</AlertTitle>
-              <AlertDescription>
-                Try again. Retrying uses the same request and will not start a second update.
-              </AlertDescription>
-            </Alert>
-          )}
-          <DialogFooter className="border-t pt-4">
-            <Button variant="outline" disabled={approve.isPending} onClick={() => setReview(undefined)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={approve.isPending || !review}
-              onClick={() => approve.mutate({ data: { reviewId: review!.id, requestId } })}>
-              {approve.isPending ? 'Approving…' : 'Update and restart'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        If verification fails, Citadel remains in maintenance and requires manual recovery.
+      </p>
     </>
   );
 }

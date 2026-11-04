@@ -121,6 +121,7 @@
           "UpdateChecksChanged",
           "AgentUpdate",
           "AgentUpdateScheduleChanged",
+          "UpdateScheduleFinished",
           "InstanceUpdateStarted",
           "InstanceUpdateCompleted",
           "InstanceUpdateFailed",
@@ -712,33 +713,6 @@
         ],
         "type": "object"
       },
-      "AgentScheduleView": {
-        "additionalProperties": false,
-        "properties": {
-          "cron": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "targets": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "timeZone": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "targets",
-          "enabled",
-          "cron",
-          "timeZone"
-        ],
-        "type": "object"
-      },
       "AgentSetupView": {
         "description": "Public installation instructions. The signing private key never enters this model.",
         "properties": {
@@ -837,6 +811,13 @@
               "null"
             ]
           },
+          "nextRun": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "operation": {
             "oneOf": [
               {
@@ -848,7 +829,17 @@
             ]
           },
           "schedule": {
-            "$ref": "#/components/schemas/AgentScheduleView"
+            "$ref": "#/components/schemas/UpdateScheduleView"
+          },
+          "scheduleRun": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UpdateScheduleRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "targets": {
             "items": {
@@ -1244,6 +1235,7 @@
           "BuildAgentPool",
           "BackupPolicy",
           "License",
+          "Updates",
           "SwarmService"
         ],
         "type": "string"
@@ -1596,7 +1588,9 @@
           "BackupRunFailed",
           "BuildAgentPoolUnavailable",
           "LicenseEnteredGracePeriod",
-          "LicenseExpired"
+          "LicenseExpired",
+          "CoreUpdateAvailable",
+          "AgentUpdatesAvailable"
         ],
         "type": "string"
       },
@@ -15334,12 +15328,41 @@
             "properties": {
               "$type": {
                 "enum": [
+                  "UpdateScheduleFinished"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
                   "AgentUpdateScheduleChanged"
                 ],
                 "type": "string"
               },
               "enabled": {
                 "type": "boolean"
+              },
+              "includeCore": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "targetCount": {
                 "minimum": 0,
@@ -27760,6 +27783,72 @@
           "installedVersion",
           "targetVersion",
           "expiresAt"
+        ],
+        "type": "object"
+      },
+      "UpdateScheduleRunView": {
+        "properties": {
+          "agentOperation": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coreOperation": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phase": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phase"
+        ],
+        "type": "object"
+      },
+      "UpdateScheduleView": {
+        "additionalProperties": false,
+        "properties": {
+          "cron": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "includeCore": {
+            "type": "boolean"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timeZone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "targets",
+          "enabled",
+          "cron",
+          "timeZone"
         ],
         "type": "object"
       },
@@ -78103,105 +78192,6 @@
         "x-citadel-setup-exempt": false
       }
     },
-    "/api/v1/updates/agents/schedule": {
-      "put": {
-        "operationId": "updateAgentSchedule",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentScheduleView"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentScheduleView"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Save the Team Agent update schedule",
-        "tags": [
-          "Updates"
-        ],
-        "x-citadel-principal": "administrator",
-        "x-citadel-public": false,
-        "x-citadel-setup-exempt": false
-      }
-    },
     "/api/v1/updates/approve": {
       "post": {
         "operationId": "approveInstanceUpdate",
@@ -78582,6 +78572,105 @@
           }
         ],
         "summary": "Review a verified release without installing",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/schedule": {
+      "put": {
+        "operationId": "updateUpdateSchedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduleView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateScheduleView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Save the shared Team update schedule",
         "tags": [
           "Updates"
         ],

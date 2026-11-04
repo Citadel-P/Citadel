@@ -406,7 +406,13 @@ mod tests {
                 .filter(|line| line.starts_with("INSERT INTO "))
                 .count()
         };
-        assert_eq!(seeds(MIGRATIONS[0].sql), seeds(super::super::SCHEMA_SQL));
+        assert_eq!(
+            MIGRATIONS
+                .iter()
+                .map(|migration| seeds(migration.sql))
+                .sum::<usize>(),
+            seeds(super::super::SCHEMA_SQL)
+        );
     }
 
     #[test]

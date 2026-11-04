@@ -22,8 +22,10 @@ pub(crate) fn replacement_config(
 ) -> Result<Value, &'static str> {
     validate_image(image)?;
     let config = &source["Config"];
-    if config["Labels"]["com.citadel.system-role"] != "agent"
-        || config["Labels"]["com.citadel.system"] != "true"
+    if !matches!(
+        config["Labels"]["com.citadel.system-role"].as_str(),
+        Some("agent" | "edge-agent")
+    ) || config["Labels"]["com.citadel.system"] != "true"
         || config["Labels"]
             .get("com.docker.swarm.service.id")
             .is_some()
@@ -64,19 +66,47 @@ pub(crate) fn replacement_config(
     let env = config["Env"]
         .as_array()
         .ok_or("Agent environment is unavailable.")?;
-    if env
-        .iter()
-        .filter_map(Value::as_str)
-        .any(|v| v.starts_with("CITADEL_AGENT_MODE=edge"))
-        && !mounts.iter().any(|m| {
+    let value = |key: &str| {
+        env.iter().filter_map(Value::as_str).find_map(|entry| {
+            entry
+                .split_once('=')
+                .filter(|(name, _)| *name == key)
+                .map(|(_, value)| value)
+        })
+    };
+    if value("CITADEL_AGENT_MODE").is_some_and(|mode| mode.eq_ignore_ascii_case("edge")) {
+        if !mounts.iter().any(|m| {
             m["Destination"] == "/app/data"
                 && m["RW"] == true
                 && matches!(m["Type"].as_str(), Some("bind" | "volume"))
-        })
-    {
-        return Err(
-            "Manual update required: Edge identity must be stored in a persistent /app/data mount.",
-        );
+        }) {
+            return Err(
+                "Manual update required: Edge identity must be stored in a persistent /app/data mount.",
+            );
+        }
+        for key in ["CITADEL_EDGE_AGENT_KEY_PATH", "CITADEL_EDGE_IDENTITY_PATH"] {
+            if let Some(path) = value(key) {
+                // Only the standard directory is supported, including Build Pool filenames.
+                let Some(file) = path.strip_prefix("/app/data/") else {
+                    return Err(
+                        "Manual update required: Edge key and identity paths must be files in /app/data.",
+                    );
+                };
+                if file.is_empty() || file == "." || file == ".." || file.contains('/') {
+                    return Err(
+                        "Manual update required: Edge key and identity paths must be files in /app/data.",
+                    );
+                }
+            }
+        }
+        // A nested mount could shadow the durable identity directory or a file within it.
+        if mounts.iter().any(|m| {
+            m["Destination"]
+                .as_str()
+                .is_some_and(|p| p.starts_with("/app/data/"))
+        }) {
+            return Err("Manual update required: nested Edge identity mounts are unsupported.");
+        }
     }
     if source["HostConfig"]["Mounts"]
         .as_array()

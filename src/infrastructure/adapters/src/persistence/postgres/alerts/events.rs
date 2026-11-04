@@ -204,6 +204,12 @@ impl PostgresAlertRepository {
     ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
         Box::pin(async move {
             if !observation.matched
+                && super::instance_updates::is_instance_update(&observation.alert_type)
+            {
+                self.resolve_instance_update(observation).await?;
+                return Ok(None);
+            }
+            if !observation.matched
                 && citadel_alerts::update_resolution::is_update_available(&observation.alert_type)
             {
                 self.resolve_applied_update(observation).await?;

@@ -21,6 +21,14 @@ struct Store {
     writes: AtomicUsize,
 }
 impl ReleaseCheckRepository for Store {
+    fn observe_core_availability<'a>(
+        &'a self,
+        _: &'a str,
+        _: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     fn checks(&self) -> BoxFuture<'_, Result<CheckState, UpdateError>> {
         Box::pin(async { Ok(self.state.lock().unwrap().clone()) })
     }

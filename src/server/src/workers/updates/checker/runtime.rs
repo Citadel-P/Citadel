@@ -54,6 +54,11 @@ pub(super) async fn run_enabled(
         if cancellation.is_cancelled() {
             return Ok(());
         }
+        if let Err(error) = service.resolve_installed_alert().await {
+            tracing::warn!(%error, "Could not resolve installed Core update alert");
+            tokio::select! { () = cancellation.cancelled() => return Ok(()), () = tokio::time::sleep(Duration::from_secs(30)) => {} }
+            continue;
+        }
         let schedule = *enabled.borrow_and_update();
         if !schedule.enabled {
             service.clear_notice();

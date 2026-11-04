@@ -338,7 +338,9 @@ impl ServerComponents {
             entitlements.clone(),
         )?;
         let checker =
-            updates::build(&pool, realtime_hub.clone()).with_agents(agent_updates.clone());
+            updates::build(&pool, realtime_hub.clone()).with_installer(update_installation.clone());
+        let agent_updates = agent_updates.with_core(checker.clone(), update_installation.clone());
+        let checker = checker.with_agents(agent_updates.clone());
         let background_services = background::BackgroundServices {
             docker: docker.clone(),
             agent,

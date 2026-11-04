@@ -110,6 +110,7 @@
           "UpdateChecksChanged",
           "AgentUpdate",
           "AgentUpdateScheduleChanged",
+          "UpdateScheduleFinished",
           "InstanceUpdateStarted",
           "InstanceUpdateCompleted",
           "InstanceUpdateFailed",
@@ -924,6 +925,7 @@
           "BuildAgentPool",
           "BackupPolicy",
           "License",
+          "Updates",
           "SwarmService"
         ],
         "type": "string"
@@ -1276,7 +1278,9 @@
           "BackupRunFailed",
           "BuildAgentPoolUnavailable",
           "LicenseEnteredGracePeriod",
-          "LicenseExpired"
+          "LicenseExpired",
+          "CoreUpdateAvailable",
+          "AgentUpdatesAvailable"
         ],
         "type": "string"
       },
@@ -12415,12 +12419,41 @@
             "properties": {
               "$type": {
                 "enum": [
+                  "UpdateScheduleFinished"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
                   "AgentUpdateScheduleChanged"
                 ],
                 "type": "string"
               },
               "enabled": {
                 "type": "boolean"
+              },
+              "includeCore": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "targetCount": {
                 "minimum": 0,

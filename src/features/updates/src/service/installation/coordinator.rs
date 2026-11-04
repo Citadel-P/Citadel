@@ -9,6 +9,13 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 pub enum UpdateInstallCommand {
+    Scheduled {
+        reservation: OwnedSemaphorePermit,
+        run: crate::UpdateScheduleRun,
+        repository: Arc<dyn crate::AgentUpdateRepository>,
+        entitlements: Arc<dyn crate::AgentUpdateEntitlements>,
+        response: oneshot::Sender<Result<UpdateOperation, UpdateError>>,
+    },
     Review {
         reservation: OwnedSemaphorePermit,
         actor: UpdateActor,
@@ -58,6 +65,17 @@ impl UpdateInstallService {
         )
     }
 
+    pub(crate) async fn qualify_availability(
+        &self,
+        version: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(), UpdateError> {
+        let _reservation = self.reserve()?;
+        self.prepare_scheduled(version, cancellation)
+            .await
+            .map(|_| ())
+    }
+
     pub async fn review(
         &self,
         actor: UpdateActor,
@@ -81,6 +99,17 @@ impl UpdateInstallService {
     async fn prepare_review(
         &self,
         actor: UpdateActor,
+        version: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<UpdatePlan, UpdateError> {
+        let plan = self.prepare_scheduled(version, cancellation).await?;
+        self.repository.save_review(actor, &plan).await?;
+        Ok(plan)
+    }
+
+    /// Qualification is shared; scheduled authorization does not impersonate an administrator.
+    pub(crate) async fn prepare_scheduled(
+        &self,
         version: &str,
         cancellation: &CancellationToken,
     ) -> Result<UpdatePlan, UpdateError> {
@@ -109,7 +138,6 @@ impl UpdateInstallService {
             agent_requirements: source.agent_versions,
         };
         plan.validate(now)?;
-        self.repository.save_review(actor, &plan).await?;
         Ok(plan)
     }
 
@@ -143,6 +171,30 @@ impl UpdateInstallService {
         receiver.await.map_err(|_| {
             UpdateError::Unavailable(
                 "Update approval was interrupted; check its status before retrying.".into(),
+            )
+        })?
+    }
+
+    pub(crate) async fn schedule(
+        &self,
+        run: crate::UpdateScheduleRun,
+        repository: Arc<dyn crate::AgentUpdateRepository>,
+        entitlements: Arc<dyn crate::AgentUpdateEntitlements>,
+    ) -> Result<UpdateOperation, UpdateError> {
+        let reservation = self.reserve()?;
+        let (response, receiver) = oneshot::channel();
+        self.queue
+            .try_send(UpdateInstallCommand::Scheduled {
+                reservation,
+                run,
+                repository,
+                entitlements,
+                response,
+            })
+            .map_err(|_| UpdateError::Conflict("Another update request is running.".into()))?;
+        receiver.await.map_err(|_| {
+            UpdateError::Unavailable(
+                "Scheduled approval interrupted; ownership will be reconciled.".into(),
             )
         })?
     }
@@ -185,6 +237,38 @@ impl UpdateInstallService {
         cancellation: &CancellationToken,
     ) -> Result<(), UpdateError> {
         let (actor, plan_id, key, response, _reservation) = match command {
+            UpdateInstallCommand::Scheduled {
+                reservation: _reservation,
+                run,
+                repository,
+                entitlements,
+                response,
+            } => {
+                let claim = async {
+                    if !entitlements.automated_operations().await? {
+                        return Err(UpdateError::Forbidden);
+                    }
+                    let plan = run.core_plan.as_ref().ok_or_else(|| {
+                        UpdateError::Conflict("Missing scheduled Core review.".into())
+                    })?;
+                    check_source(&self.runtime.source(cancellation).await?, plan)?;
+                    if cancellation.is_cancelled() {
+                        return Err(UpdateError::Cancelled);
+                    }
+                    repository.claim_core(&run).await
+                }
+                .await;
+                let operation = match claim {
+                    Ok(op) => op,
+                    Err(error) => {
+                        let _ = response.send(Err(error));
+                        return Ok(());
+                    }
+                };
+                self.notifier.changed();
+                let _ = response.send(Ok(operation.clone()));
+                return self.execute_claimed(operation, cancellation).await;
+            }
             UpdateInstallCommand::Review {
                 reservation: _reservation,
                 actor,
@@ -232,6 +316,14 @@ impl UpdateInstallService {
         if !created {
             return Ok(());
         }
+        self.execute_claimed(operation, cancellation).await
+    }
+
+    async fn execute_claimed(
+        &self,
+        operation: UpdateOperation,
+        cancellation: &CancellationToken,
+    ) -> Result<(), UpdateError> {
         let mut launched = None;
         let execution = async {
             launched = Some(self.runtime.launch(&operation, cancellation).await?);

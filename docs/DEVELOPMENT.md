@@ -425,6 +425,12 @@ anything. It uses a test-only release dependency; shipped binaries always use th
 official verifier and cannot enable the fixture through configuration. Candidate
 acceptance runs this regression on both supported architectures.
 
+The local Agent updater runner in [`test/README.md`](../test/README.md) uses the same
+test-only Core catalog boundary with real Direct/Edge Agents, separate disposable
+Docker engines and source/target images built from the checkout. Its browser mode
+leaves approval to the user; its automated mode verifies replacement and
+authenticated reconnect. It does not bypass production artifact verification.
+
 The opt-in published-transition smoke test in [`test/README.md`](../test/README.md)
 uses the real update APIs and signature checks on a disposable Docker daemon, then
 restores the resulting checkpoint into a fresh database. It requires a source that

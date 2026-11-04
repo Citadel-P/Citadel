@@ -1540,7 +1540,7 @@ export function FormShell<T>({
                       <div className="flex flex-col gap-4 w-full">
                         {(group.title || group.label || group.description || group.requiredLicense) && (
                           <div className="-mx-(--surface-padding) -mt-(--surface-padding) flex items-start justify-between gap-3 rounded-t-lg border-b bg-muted/15 px-(--surface-padding) py-3">
-                            <div className="flex min-w-0 flex-col gap-1.5">
+                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                               {(group.title || group.label) && (
                                 <h3 className="text-sm font-semibold tracking-tight text-foreground/90">
                                   {group.title || group.label}

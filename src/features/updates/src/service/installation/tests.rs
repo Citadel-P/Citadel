@@ -7,12 +7,13 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[derive(Default)]
-struct State {
-    operation: Option<UpdateOperation>,
-    events: Vec<&'static str>,
+pub(in crate::service) struct State {
+    pub(in crate::service) released: bool,
+    pub(in crate::service) operation: Option<UpdateOperation>,
+    pub(in crate::service) events: Vec<&'static str>,
     denied: bool,
     drift: bool,
-    agent_drift: bool,
+    pub(in crate::service) agent_drift: bool,
     fail_ack: bool,
     helper_failed: bool,
     fail_grant: bool,
@@ -21,13 +22,13 @@ struct State {
     recoverable: bool,
 }
 #[derive(Clone)]
-struct Fixture {
-    plan: UpdatePlan,
-    state: Arc<Mutex<State>>,
+pub(in crate::service) struct Fixture {
+    pub(in crate::service) plan: UpdatePlan,
+    pub(in crate::service) state: Arc<Mutex<State>>,
     launch_pause: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(in crate::service) fn new() -> Self {
         let now = Utc::now();
         let source = CoreIdentity {
             version: "0.1.1".into(),
@@ -67,7 +68,7 @@ impl Fixture {
             agent_versions: vec![],
         }
     }
-    fn service(
+    pub(in crate::service) fn service(
         &self,
     ) -> (
         UpdateInstallService,
@@ -84,6 +85,14 @@ impl Fixture {
     }
 }
 impl ReleaseCheckRepository for Fixture {
+    fn observe_core_availability<'a>(
+        &'a self,
+        _: &'a str,
+        _: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     fn checks(&self) -> BoxFuture<'_, Result<CheckState, UpdateError>> {
         Box::pin(async { unreachable!() })
     }
@@ -172,7 +181,10 @@ impl UpdateRepository for Fixture {
         })
     }
     fn active(&self) -> BoxFuture<'_, Result<Option<UpdateOperation>, UpdateError>> {
-        Box::pin(async { Ok(self.state.lock().unwrap().operation.clone()) })
+        Box::pin(async {
+            let state = self.state.lock().unwrap();
+            Ok(state.operation.clone().filter(|_| !state.released))
+        })
     }
     fn operation(&self, _: Uuid) -> BoxFuture<'_, Result<UpdateOperation, UpdateError>> {
         Box::pin(async {

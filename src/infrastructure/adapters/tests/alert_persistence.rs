@@ -912,3 +912,6 @@ async fn recurring_offline_observations_survive_cooldown_and_expose_responsible_
         .await
         .unwrap();
 }
+
+#[path = "alert_persistence/instance_updates.rs"]
+mod instance_updates;

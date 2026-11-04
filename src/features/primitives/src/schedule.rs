@@ -10,6 +10,44 @@ pub struct CronSchedule {
     zone: Tz,
 }
 impl CronSchedule {
+    /// Search local calendar days using the same rules as execution. Both sides of
+    /// a DST fold are candidates; nonexistent local times are skipped.
+    pub fn next_after(&self, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        use chrono::TimeZone;
+        let mut date = now.with_timezone(&self.zone).date_naive();
+        for _ in 0..(366 * 8) {
+            let matches = |i: usize, value: u32| self.fields[i] & (1 << value) != 0;
+            let dom = matches(2, date.day());
+            let weekday = date.weekday().num_days_from_sunday();
+            let dow = matches(4, weekday) || (weekday == 0 && matches(4, 7));
+            let day = if !self.day_of_month_wildcard && !self.day_of_week_wildcard {
+                dom || dow
+            } else {
+                dom && dow
+            };
+            if matches(3, date.month()) && day {
+                let mut next = None;
+                for hour in (0..24).filter(|h| matches(1, *h)) {
+                    for minute in (0..60).filter(|m| matches(0, *m)) {
+                        let local = self
+                            .zone
+                            .from_local_datetime(&date.and_hms_opt(hour, minute, 0)?);
+                        for value in [local.earliest(), local.latest()].into_iter().flatten() {
+                            let candidate = value.with_timezone(&Utc);
+                            if candidate > now && next.is_none_or(|previous| candidate < previous) {
+                                next = Some(candidate);
+                            }
+                        }
+                    }
+                }
+                if next.is_some() {
+                    return next;
+                }
+            }
+            date = date.succ_opt()?;
+        }
+        None
+    }
     pub fn parse(expression: &str, time_zone: &str) -> Result<Self, &'static str> {
         let parts: Vec<_> = expression.split_whitespace().collect();
         if parts.len() != 5 {
@@ -89,6 +127,29 @@ pub fn schedule_is_due(expression: Option<&str>, time_zone: &str, now: DateTime<
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    #[test]
+    fn next_run_uses_saved_zone_and_handles_dst_gaps_and_both_fold_occurrences() {
+        let weekly = CronSchedule::parse("0 3 * * 0", "Europe/Paris").unwrap();
+        assert_eq!(
+            weekly.next_after(Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap()),
+            Some(Utc.with_ymd_and_hms(2026, 11, 8, 2, 0, 0).unwrap())
+        );
+        let daily = CronSchedule::parse("30 2 * * *", "Europe/Paris").unwrap();
+        assert_eq!(
+            daily.next_after(Utc.with_ymd_and_hms(2026, 3, 29, 0, 0, 0).unwrap()),
+            Some(Utc.with_ymd_and_hms(2026, 3, 30, 0, 30, 0).unwrap())
+        );
+        assert_eq!(
+            daily.next_after(Utc.with_ymd_and_hms(2026, 10, 25, 0, 30, 0).unwrap()),
+            Some(Utc.with_ymd_and_hms(2026, 10, 25, 1, 30, 0).unwrap())
+        );
+        assert!(
+            CronSchedule::parse("0 0 30 2 *", "UTC")
+                .unwrap()
+                .next_after(Utc::now())
+                .is_none()
+        );
+    }
     #[test]
     fn rejects_every_invalid_list_member_and_timezone() {
         for value in [
