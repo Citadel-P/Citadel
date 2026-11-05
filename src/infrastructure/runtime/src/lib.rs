@@ -22,3 +22,5 @@ pub mod notifications;
 pub mod maintenance;
 
 pub mod database_health;
+
+pub mod admission;

@@ -1,4 +1,4 @@
-use super::*;
+use super::runtime::*;
 use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRepository;
 use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_git::*;
@@ -6,6 +6,8 @@ use citadel_primitives::ActorId;
 use citadel_primitives::WebhookConfig;
 use futures_util::future::BoxFuture;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{sync::Arc, time::Duration};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -130,7 +132,12 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
     ));
     let cancellation = CancellationToken::new();
     let (_sender, wake) = tokio::sync::watch::channel(());
-    let worker = tokio::spawn(git_repository_sync(cancellation.clone(), service, wake));
+    let worker = tokio::spawn(git_repository_sync(
+        citadel_runtime::admission::AdmissionGate::default(),
+        cancellation.clone(),
+        service,
+        wake,
+    ));
     tokio::task::yield_now().await;
     // Cross the staggered scheduler deadline before the execution completes.
     // Advancing straight to 120s makes both select branches ready together.
@@ -176,7 +183,12 @@ async fn idle_git_waits_for_committed_signals_with_a_bounded_fallback() {
     ));
     let cancel = CancellationToken::new();
     let (sender, wake) = tokio::sync::watch::channel(());
-    let worker = tokio::spawn(git_repository_sync(cancel.clone(), service, wake));
+    let worker = tokio::spawn(git_repository_sync(
+        citadel_runtime::admission::AdmissionGate::default(),
+        cancel.clone(),
+        service,
+        wake,
+    ));
     for _ in 0..4 {
         tokio::task::yield_now().await;
     }
@@ -202,6 +214,78 @@ async fn idle_git_waits_for_committed_signals_with_a_bounded_fallback() {
         initial + 2,
         "lost notifications fall back within 30 seconds"
     );
+    cancel.cancel();
+    worker.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn maintenance_keeps_git_queued_and_does_not_drop_an_admitted_execution() {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@localhost/unused")
+        .unwrap();
+    let store = Arc::new(SlowStore {
+        delay: Duration::from_secs(120),
+        ..Default::default()
+    });
+    let accounts = Arc::new(GitAccountService::new(
+        Arc::new(PostgresGitAccountRepository::new(pool)),
+        Arc::new(AesGcmSecretProtector::new(&[91; 32]).unwrap()),
+    ));
+    let service = Arc::new(GitRepositoryExecutionService::new(
+        store.clone(),
+        accounts,
+        Arc::new(GitCli::new(
+            Arc::new(citadel_processes::SystemProcess),
+            Arc::new(
+                citadel_adapters::filesystem::git_workspace::LocalGitWorkspace::new(
+                    citadel_runtime::DynamicTasks::new(CancellationToken::new()),
+                ),
+            ),
+            Duration::from_secs(300),
+        )),
+        std::env::temp_dir(),
+        Duration::from_secs(300),
+    ));
+    let admission = citadel_runtime::admission::AdmissionGate::default();
+    let first = Uuid::now_v7();
+    admission.close(first).unwrap();
+    let cancel = CancellationToken::new();
+    let (_sender, wake) = tokio::sync::watch::channel(());
+    let worker = tokio::spawn(git_repository_sync(
+        admission.clone(),
+        cancel.clone(),
+        service,
+        wake,
+    ));
+    tokio::task::yield_now().await;
+    tokio::time::advance(Duration::from_secs(180)).await;
+    tokio::task::yield_now().await;
+    assert_eq!(store.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(store.schedules.load(Ordering::SeqCst), 0);
+    admission.reopen(first).unwrap();
+    for _ in 0..4 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(store.calls.load(Ordering::SeqCst), 1);
+    let second = Uuid::now_v7();
+    admission.close(second).unwrap();
+    assert!(matches!(
+        admission
+            .drain(second, Duration::from_millis(1), &cancel)
+            .await,
+        Err(citadel_runtime::admission::AdmissionError::Busy(_))
+    ));
+    assert!(!cancel.is_cancelled());
+    tokio::time::advance(Duration::from_secs(120)).await;
+    for _ in 0..4 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(store.completed.load(Ordering::SeqCst), 1);
+    assert_eq!(store.calls.load(Ordering::SeqCst), 1);
+    admission
+        .drain(second, Duration::from_secs(1), &cancel)
+        .await
+        .unwrap();
     cancel.cancel();
     worker.await.unwrap().unwrap();
 }

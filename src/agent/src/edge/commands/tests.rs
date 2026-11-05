@@ -207,7 +207,7 @@ async fn every_generated_command_reaches_its_protobuf_decoder() {
             count += 1;
         }
     }
-    assert_eq!(count, 75);
+    assert_eq!(count, 78);
     assert_eq!(h.calls.load(Ordering::SeqCst), 0);
 }
 

@@ -1,3 +1,4 @@
+import { PasswordFeedback } from '@/components/custom/password-feedback';
 import { useSetupContext } from '@/features/setup/setup-context';
 import {
   PatchUserRequest,
@@ -220,10 +221,7 @@ export const UserForm = ({
               defineField<UserInput, 'password'>({
                 key: 'password',
                 label: 'Password',
-                description:
-                  mode === 'edit'
-                    ? `Leave blank to keep the current password. New passwords require ${passwordMinimumLength} to ${passwordMaximumLength} characters.`
-                    : `Use ${passwordMinimumLength} to ${passwordMaximumLength} characters.`,
+                description: mode === 'edit' ? 'Leave blank to keep the current password.' : undefined,
                 required: mode === 'add',
                 validate: (value) => {
                   const password = String(value ?? '');
@@ -239,12 +237,19 @@ export const UserForm = ({
                   return null;
                 },
                 render: (value, set) => (
-                  <FieldInput
-                    type="password"
-                    value={value ?? ''}
-                    onChange={(v) => set({ password: v })}
-                    placeholder={mode === 'edit' ? 'Leave blank to keep current password' : undefined}
-                  />
+                  <div className="space-y-2">
+                    <FieldInput
+                      type="password"
+                      value={value ?? ''}
+                      onChange={(v) => set({ password: v })}
+                      placeholder={mode === 'edit' ? 'Leave blank to keep current password' : undefined}
+                    />
+                    <PasswordFeedback
+                      password={value ?? ''}
+                      minimumLength={passwordMinimumLength}
+                      maximumLength={passwordMaximumLength}
+                    />
+                  </div>
                 ),
               }),
               {

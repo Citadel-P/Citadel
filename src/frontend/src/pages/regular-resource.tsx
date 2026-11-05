@@ -58,6 +58,8 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
           icon={Components.Icon}
           title={headerCfg.title}
           subtitle={headerCfg.subtitle}
+          variant={headerCfg.variant}
+          Details={headerCfg.Details}
           showSearch={headerCfg.showSearch}
           showAdd={headerCfg.showAdd}
           showTagFilter={headerCfg.showTagFilter}

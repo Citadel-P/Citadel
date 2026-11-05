@@ -167,7 +167,6 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Platform
         .normalized_routes(utoipa_axum::routes!(remove_node_agents))
         .normalized_routes(utoipa_axum::routes!(install_node_agents))
         .normalized_routes(utoipa_axum::routes!(repair_node_agents))
-        .normalized_routes(utoipa_axum::routes!(upgrade_node_agents))
         .normalized_routes(utoipa_axum::routes!(revoke))
         .normalized_routes(utoipa_axum::routes!(update_platform_metadata))
         .normalized_routes(utoipa_axum::routes!(list_containers))

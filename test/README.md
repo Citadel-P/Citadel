@@ -57,6 +57,447 @@ for each architecture and pinned builder, and do not share it between concurrent
 runs. The script retains this explicitly supplied directory while removing its
 temporary fixtures. Without this variable, compilation remains disposable.
 
+Instance update contract tests:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --lib updates
+SQLX_OFFLINE=true cargo test --locked -p citadel-database --lib
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::updates::checker::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test update_release_cli
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib diagnostics_http::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test configuration
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::releases::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::artifacts::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::inspection::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::bootstrap::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::recovery_keys::tests
+# Requires Docker Compose CLI, but no daemon access; uses private disposable inputs.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose::tests::actual_compose -- --ignored
+python3 -m unittest discover -s test/release -p 'test_update_fixtures.py'
+python3 -m unittest discover -s test/release -p 'test_candidates.py'
+python3 -m unittest discover -s test/release -p 'test_release.py'
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_update_journal
+# Fresh disposable database only; its name must start with citadel_update_test_.
+CITADEL_UPDATE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_state SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_updates -- --ignored --test-threads=1
+# Separate fresh disposable database for read-only preflight validation.
+CITADEL_UPDATE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_preflight SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test update_preflight -- --ignored
+# Dedicated disposable PostgreSQL with CREATE DATABASE permission; no Docker socket.
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test bootstrap_process updates:: -- --ignored --test-threads=1
+# Docker bootstrap acceptance: use a Core image built from this checkout.
+docker build -t citadel-core:update-acceptance -f Dockerfile .
+python3 test/scripts/test-update-registration.py citadel-core:update-acceptance
+```
+
+Agent update tests use a fake Docker daemon to cover failed image pulls before
+handoff, drain timeouts, idempotent settlement, rejected replay and changed identity.
+Ambiguous helper creation and lost Agent-process evidence must retain recovery ownership.
+
+These cover release/operation invariants, bounded release HTTP requests, cancellation
+before persistence, completion of notification after commit during settings changes
+and shutdown, protected journal files and transactional state/Activities. Stopped
+attempts cover committed outcomes, unchanged-source release, retry ownership and
+retention of unresolved recovery. Frontend installation-settings tests cover saved
+status during realtime disconnection and cancellation of stale reads. Artifact
+tests use local HTTP fixtures and an injected process runner to verify publication
+rejections, exact signature policy, credential isolation, output limits and failure
+handling. They do not replace a live signature-verification run or qualify a packaged updater, an installation profile,
+a published source-to-target transition or database recovery. Descriptor checks
+cover embedded catalog identity, offline CLI output, per-architecture acceptance
+and preservation of accepted metadata during publication recovery. Empty source
+lists intentionally provide no installation eligibility.
+
+Core replacement boundary tests use private disposable installer/checkpoint files
+and an injected Docker runner:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib replacement
+```
+
+They check durable intent/journal ordering before mutation, exact Core-only Compose
+arguments, private atomic `.env` publication, preservation of checkpoint inputs,
+rejection of changed/missing checkpoint receipts, tampered bundles and installer
+snapshots, cached image identity, runtime drift, cancellation, timeout, failed/truncated responses and no
+replay. Successful command submission must leave maintenance active and must not
+claim verified startup or completion. These do not exercise a real Core replacement
+or qualify an end-to-end update; packaged driver/startup/recovery acceptance remains
+required before enabling installation.
+
+Replacement observation tests reuse the handoff/replacement fixtures and enforce a
+read-only Docker command allowlist:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::handoff::target_tests
+```
+
+They cover target binding while readiness is unhealthy, repeated observations,
+interruption between binding and journal publication, target/helper restarts,
+changed PostgreSQL configuration/start identity, recreated storage/network, leftover
+source containers, installer edits during observation, malformed evidence and
+cancelled/timed-out commands. The journal may advance only to `Verifying`; no
+completion flags or maintenance release are inferred. These tests do not exercise
+target migrations or a packaged end-to-end upgrade. Target exchange tests also
+exercise the Compose/startup binding race: repeated pending reads preserve the
+journal, a published binding becomes ready, and conflicting fences/grants,
+terminal journals or a missing installation lock fail closed. Key-identity tests
+reject replaced JWT/encryption/signing keys, stale loaded keys, changes to key
+sources, and edited checkpoint key files/checksum metadata without generating
+new keys or rewriting the journal. Bootstrap-process
+tests continue to enforce maintenance before ordinary migrations, including
+corrupt operation JSON and retained external evidence.
+
+Target-inspection service tests enforce signature-before-execution, exact release
+identity, supported target metadata and awaited cancellation cleanup. Injected Docker
+runner tests cover immutable image selection, architecture/digest mismatches,
+explicit platform selection with both architectures cached and distinct manifest/local IDs,
+image-declared volumes, container isolation, ambiguous creation, cancellation,
+nonzero/running results, malformed/truncated output, foreign ownership and failed
+cleanup. CLI tests reject invalid input or disabled network policy before external
+work. These tests do not pull images or touch Docker/databases, and do not substitute
+for signed-image inspection on a disposable daemon or packaged updater acceptance.
+
+Update-check frequency regressions cover six/twelve/twenty-four-hour scheduling,
+restart and manual-check timing, settings changes without restart, and cancellation
+through persistence. `mfa_http::installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa`
+also verifies frequency validation and concurrent settings patches. The
+`migrations::instance_updates_upgrade_preserves_existing_settings_and_migration_history`
+test requires its own fresh disposable `CITADEL_TEST_DATABASE_URL`; it builds the
+initial catalog before applying the consolidated instance-update migration. Updates UI tests cover
+disabled controls, manual checks, saved frequency and realtime synchronization.
+
+Installer Compose checks cover private snapshots, explicit input order, unsafe
+files, unsupported settings, changed inputs, cancellation cleanup and redacted
+failures. Dependency checks reject external files and remote includes before the
+Compose process starts. The opt-in Compose tests resolve both the shipped layout
+and compatible custom filenames, comments and resource names without starting
+services. Installer templates are test inputs, not compiled runtime dependencies.
+These configuration checks do not validate a live installation or qualify the detached update executor. Bootstrap tests use an
+injected bounded Docker runner and private temporary files to cover stable runtime
+binding, input and runtime drift, conflicting identity, exclusive volume ownership,
+cancellation, secret redaction and idempotent registration. Live registration checks
+reuse those observations and test missing/unsafe state, executor mismatch, changed
+inputs and instance identity, runtime drift, concurrent evidence/registration changes,
+lock contention and cancellation without rewriting registration. CLI tests assert
+missing state is not created and local checks are independent of release-network policy.
+Catalog tests reject missing, incomplete, failed, duplicate, altered and unknown
+migration entries. The disposable PostgreSQL preflight test verifies initialized
+identity, exact catalog matching, retained ownership (even corrupt operation JSON),
+bounded lock waits, cancellation and preservation of migration history. Storage
+tests cover capacity arithmetic and a private write/sync/remove probe without
+modifying registration or existing recovery evidence. Recovery-key tests check
+file/environment precedence, encoding and size limits, private permissions,
+symlink/FIFO refusal, missing-key preservation and secret-free output. Bootstrap
+tests require the key diagnostic to run as Core's packaged service user, bind
+external key sources to installer settings, and reject failures/cancellation
+without rewriting registration. CLI tests exercise file and external keys without
+database configuration or normal Core initialization. These checks do not create
+or restore-test a checkpoint, prove keys match in-memory state, or test decryption
+of all stored ciphertext.
+The opt-in Docker bootstrap script checks live revalidation for both the base and
+Edge profiles, including drift and preservation of registration/recovery evidence.
+Journal tests check exclusive atomic creation without replacing existing files or following links.
+The disposable PostgreSQL test also verifies that the identity diagnostic refuses
+missing identity or incomplete setup without creating state. These tests do not
+replace packaged bootstrap acceptance against an isolated Docker daemon.
+
+Startup checks cover a pristine database, retained and terminal-but-unreleased
+ownership, mismatched registration identity, corrupt operation JSON and missing
+migrated state. Filesystem tests cover private registration, lock contention,
+missing state, foreign paths/ownership, unsafe files and preserved orphan/completed
+journals. Process tests verify that maintenance precedes migrations/setup even
+without a database claim, survives restart, excludes normal API/Edge routes,
+retains the single-Core lease and stops listening on lease loss. Startup lease-loss
+regressions also hold migrations blocked or resume them immediately after another
+owner takes the lease, checking that the original Core exits without creating an
+administrator or opening listeners. A valid claim targeting another build also
+remains in maintenance without migrations or changes to the saved operation.
+These process checks do not qualify a packaged target migration or automatic
+recovery/resume. Target acceptance, host reconciliation and normal admission are connected.
+Packaged source-to-target qualification remains separate from these process tests.
+
+The live admission barrier has targeted runtime, HTTP and worker regressions:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-runtime admission::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib api::admission::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::git::tests
+# Each command below needs a fresh disposable CITADEL_EXECUTION_DATABASE_URL.
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::builds::tests::queued_builds_execute_concurrently_and_shutdown_drains_both -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::backups::tests::dispatcher_bounds_claims_and_drains_controllers_on_shutdown -- --ignored --test-threads=1
+# Separate disposable CITADEL_PLATFORM_DATABASE_URL with CREATE DATABASE permission.
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test platforms_http realtime_groups::terminal_websocket_requires_join_and_terminal_permission_and_owns_its_session -- --ignored --test-threads=1
+```
+
+These cover admission/close races, ownership fencing, timeout/cancellation without
+automatic resume, paused queues, admitted execution completion, streaming response
+lifetimes and maintenance HTTP responses. The terminal regression rejects new Edge
+sessions during maintenance while keeping admitted input/output and authorization
+revocation working. The database-backed cases preserve queued
+work and distinguish maintenance from normal shutdown cancellation. They do not
+qualify a complete drain of durable reservations, writer quiescence, checkpoint
+creation or detached handoff. The installation coordinator activates this barrier
+after importing the acknowledged helper journal.
+
+Owned drain regressions also exercise the feature coordinator and Server task
+adapter:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::drain::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib tasks::updates::tests
+# Fresh disposable CITADEL_UPDATE_TEST_DATABASE_URL, named citadel_update_test_*.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_updates -- --ignored --test-threads=1
+```
+
+The PostgreSQL test checks exact claim ownership, corrupt/released/stale records,
+bounded lock waits, queued versus running work, expired source leases and executor
+reservations retained after terminal run status. The coordinator tests reject stale
+ownership before closing admission, retain maintenance on timeout/cancellation or
+read failure, and detect a local-to-remote handoff during a database snapshot.
+The Server adapter test keeps detached cleanup visible after the request ends
+without closing the task tracker needed for further cleanup. These checks do not
+qualify final writer quiescence, journal handoff, checkpoint creation or source resume.
+
+Checkpoint preparation and shared recovery bundle regressions:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::checkpoint::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::backups::system_recovery
+# Two fresh, distinct disposable databases, both named citadel_update_test_*:
+# CITADEL_UPDATE_TEST_DATABASE_URL and CITADEL_CHECKPOINT_TARGET_DATABASE_URL.
+# Set CITADEL_PG_DUMP and CITADEL_PG_RESTORE to compatible PostgreSQL executables.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::checkpoint::tests::checkpoint_builds_real_bundle_and_preserves_failed_or_interrupted_attempts -- --ignored
+# Use two NEW empty databases for this separate test:
+# CITADEL_CHECKPOINT_DATABASE_URL and CITADEL_CHECKPOINT_TARGET_DATABASE_URL.
+# Both names must start with citadel_update_test_; set the same PG tool variables.
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::checkpoint::recovery_tests::restores_checkpoint_and_releases_only_the_verified_fresh_database -- --ignored
+```
+
+These verify exact journal/registration/lock checks, ordered private installer
+snapshots, refusal to reuse interrupted attempts, ENOSPC write handling, symlink
+refusal, cancellation with awaited subprocess cleanup, failed/corrupt dumps,
+configuration drift and mismatched database identity. The disposable PostgreSQL
+case creates a real archive and restores its instance identity and marker into
+the clean target. The existing `citadel_system_recovery` integration test separately
+covers the full schema and encrypted-state round trip. No test authorizes a live
+replacement: helper acknowledgement, Core shutdown/writer quiescence, crash-time
+power-loss durability and packaged source-to-target recovery remain unqualified.
+
+Live updates verify checkpoint integrity without launching a PostgreSQL restore
+sandbox. Replacement tests cover missing/foreign receipts, tampered dump/key/input
+files, unsafe paths and cancellation before any installer mutation. The existing
+checkpoint round trip above and `citadel_system_recovery` test exercise restoration
+through the production recovery implementation. They are qualification checks, not
+steps performed during every update.
+
+Target acceptance retains decryption checks for stored credentials. The
+`instance_updates` database test covers more than two pages of encrypted values,
+a wrong key and malformed data on the final page; failure must retain maintenance
+and leave the stored data unchanged. All six credential stores are exercised,
+including optional OIDC secrets and missing required provider tokens. These tests do not qualify a published
+source-to-target transition or a packaged end-to-end update.
+
+Handoff and shutdown guards:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::installation::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::handoff::
+```
+
+These use private temporary state, real OS installation locks and an injected
+Docker runner. They cover launch/binding exclusivity, lock release before helper
+startup, verified create/bind/start ordering, missing start binding, wrong user/mounts,
+automatic removal, create/start cancellation and ambiguous timeout retention.
+Launch retries cannot create a second helper or replay start. The helper profile
+requires the exact PostgreSQL network namespace and a read-only Core data mount;
+host networking and writable data mounts fail verification. Stopped-source checks
+reject restart, unclean exit, lost PostgreSQL and changed helper profiles. They also cover
+stale/dead/restarted helpers, retained evidence after helper loss, busy
+drains, cancellation, grant-before-stop ordering, changed inputs, clean-exit
+journal history and refusal to replay ambiguous stops. A failed/nonzero exit,
+restarted Core, unavailable database or shutdown timeout never reaches `BackingUp`.
+They do not launch the packaged helper or stop a live Core/Docker installation;
+that process/daemon acceptance remains required before enabling installation.
+The namespace regression gives Core nonexistent host paths and a different
+executor UID, and routes only the bounded Docker exec request into the helper's
+private state. Source authorization and target acceptance exercise the same
+`update-helper-handoff` command, including action/phase, operation and process
+identity checks. Exit-wait tests reject changed helper images, labels, commands,
+mounts, users and network/privilege settings, as well as restart, OOM, daemon error,
+nonzero exit and unexpected lifecycle states. Clean exit and cancellation retain the
+journal and maintenance claim. CLI tests reject invalid/oversized input without starting Core.
+The replacement evidence checks are shared by observation, pending target reads
+and completion; changing the saved checkpoint or configuration must fail all of
+them without advancing the journal or granting/replaying execution.
+
+Target-completion tests reject uncommitted or foreign receipts, changed target incarnations,
+altered history, preparation changes during receipt verification and premature
+maintenance release. Failure recording rejects a changed helper acknowledgement.
+The mailbox never writes journal history concurrently with the driver.
+Execution-state regressions require phase and
+target identity to be published atomically, reject mismatched snapshots, prevent a
+phase-only write from discarding execution evidence, and retain preparation on failure.
+They also reject saved target or preparation changes during runtime inspection without
+overwriting that evidence. Readiness tests cover waiting for preparation, preparation
+finishing during helper verification, and cancellation without granting shutdown. Failure after replacement preserves the
+checkpoint and records recovery without issuing another Docker mutation.
+The `instance_updates` disposable-database test rejects inconsistent claim columns
+on import, release and receipt verification, and proves rejected writes leave the
+operation and Activities unchanged. An injected completion-Activity failure rolls
+back the imported outcome. Released terminal imports and releases remain read-only,
+including when a newer attempt owns the instance. It also exercises source-catalog
+verification and target credential decryption over multiple pages, including a
+wrong key and a malformed final page. This is current-schema verification, not
+qualification of a published source-to-target transition.
+
+Target preparation regressions reject shutdown without a fresh, matching preparation
+receipt. Compose comparison tests exercise the real base installer and Edge overlay,
+keep the input files byte-for-byte unchanged, and reject changes to credentials,
+ports, volumes, PostgreSQL, ignored image selectors and concurrent input edits.
+These are configuration and handoff checks, **not** a source-to-target update test.
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose -- --include-ignored
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib persistence::postgres::updates::agents::tests
+# Disposable database only, named citadel_update_test_*:
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib persistence::postgres::updates::agents::database_tests -- --ignored
+```
+
+The ignored `root_helper_reads_packaged_core_keys_without_trusting_other_owners`
+test requires root inside a disposable container, a fresh tmpfs mounted at
+`/app/data`, and `CITADEL_TEST_PACKAGED_KEYS=1`. Run the compiled adapters test
+binary read-only with no Docker socket, host data mounts or network. It verifies
+the root helper can read UID 65532 keys while refusing other owners, permissive
+key modes and symlinks. Never point it at an installation's data volume.
+
+Resource-copy continuation during maintenance has database-backed regressions:
+
+```bash
+# Fresh disposable CITADEL_EXECUTION_DATABASE_URL.
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test execution_resources_http resource_copies:: -- --ignored --test-threads=1
+```
+
+These finish an admitted two-volume copy after admission closes, reject new HTTP
+starts, and verify restricted restore claims skip an older unrelated queued run.
+They use fake storage executors; no workload containers or volumes are touched.
+
+`test-update-registration.py` runs the unmodified base installer and a compatible
+Edge-overlay installation with custom filenames, comments and resource names,
+completes setup through HTTP and invokes the Rust bootstrap
+from a separate Core-image container. It checks real Docker metadata, initialized
+database identity, private registration, identical retries, unsafe input permissions,
+input drift, additional volume/network consumers and preservation of conflicting
+registration evidence. It runs the packaged host utility with its read-only root,
+private tmpfs, no network and restricted mounts. An explicit Core recreation then
+checks that `--refresh` preserves installation/storage identity and all three
+recovery keys, rejects unresolved recovery evidence, and leaves PostgreSQL running.
+Registration and revalidation themselves never restart or replace either service.
+The candidate release gate runs this check against each accepted Core architecture;
+missing or failed registration evidence prevents promotion. It needs Python 3 and local Docker socket access on the test
+host; installed users do not need Python. All services and data run inside its
+own privileged Docker-in-Docker fixture, with no host socket passed to Core and no
+published host ports. A temporary private network allows the pinned PostgreSQL pull;
+it is removed before Core starts. The test removes only its own daemon and storage,
+including on failures. It does not qualify image replacement, recovery or source-to-target
+database transitions.
+
+Run the updater lifecycle locally before publishing a release:
+
+```bash
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image YOUR_LOCAL_CORE_IMAGE
+# Verify source-helper / target acceptance across revisions using a separate checkout:
+# git worktree add --detach /tmp/citadel-update-source <source-commit>
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image YOUR_LOCAL_CORE_IMAGE --source-tree /tmp/citadel-update-source --scenario upgrade
+```
+
+Use a Core runtime image built from this checkout. The runner compiles two
+test-only Core executables with distinct versions and packages them using that
+runtime. Only the release discovery/trust dependency is replaced by a private
+fixture. With `--source-tree`, both the source executable and its initial Compose
+file come from that checkout; the target comes from the current checkout. The
+real HTTP setup/login, review/approval, Docker inspection, detached
+helper, checkpoint, replacement, target verification and PostgreSQL persistence run
+unchanged. The fixture registry is reachable only inside a disconnected disposable
+Docker daemon. No fixture credentials or journals are stored in the checkout.
+
+The command runs a normal update and target crashes after receipt commit, after
+helper exit, and after host cleanup but before database ownership release. The
+first two use barriers compiled only into the fixture executable and exercise
+Docker's restart policy on the same accepted container. All must complete without replacing PostgreSQL or
+changing installation identity, volumes or recovery keys. Each restores its actual
+checkpoint into a fresh database and checks encrypted data and released recovery
+ownership. Select one case with `--scenario upgrade`, `--scenario receipt-restart`,
+`--scenario helper-exit-restart` or `--scenario cleanup-restart`. Additional cases
+`--scenario concurrent-requests` and `--scenario preparation-failure` exercise the
+real admission middleware/worker during blocked helper preparation and automatic
+recovery of an unchanged source. All cases run by default.
+Ordinary `cargo test` does not start this fixture server; its test executable exits
+unless packaged with its private fixture file. Product binaries have no fixture
+setting, and candidate publication rejects the test executable's identity marker.
+
+This is a lifecycle regression test, not a signature test or proof that an arbitrary
+older release can migrate to a future candidate. Keep production artifact verification
+and source/target compatibility checks enabled. Real release transition qualification
+must use the intended source catalog and target build.
+
+For manual testing in a browser, use the same runner:
+
+```bash
+python3 test/scripts/test-instance-upgrade-local.py \
+  --runtime-image YOUR_LOCAL_CORE_IMAGE --browser
+```
+
+This also builds the current frontend (`npm ci --prefix src/frontend` is required
+first if dependencies are missing) and includes it in both test images. After setup,
+the terminal prints `http://localhost:18080/updates` and a generated administrator
+password for `upgrade@example.test`. Sign in, click **Check now**, then **Update
+now → Update and restart** to move from `0.1.1-dev.9001` to `0.1.1-dev.9002`.
+Observe the restart indicator, reconnection, completed operation and frontend reload.
+You control approval; the runner does not install the update for you or restore a
+checkpoint in this mode. It stays running after the update so you can inspect the UI.
+
+Use `--port 18081` if the default port is occupied. Only the UI port is published,
+bound to `127.0.0.1`; the inner Docker daemon and PostgreSQL are not exposed.
+Browser mode retains the fixture's bridge network for port forwarding, so it has
+outbound network access. Its test registry remains inside that daemon. Existing
+Citadel instances, host volumes and development servers are not modified. Press
+**Ctrl+C** in the runner terminal to remove its installation, data, network and test
+images. Run it again for a fresh source version and new credentials.
+
+`test-instance-upgrade.py` is a separate opt-in smoke test for an **already eligible
+published transition**, not a pre-publication qualification bypass. It requires an
+exact official source digest with the updater, and the target must be the release
+currently offered to that source. Both signatures are verified by Core; the target's
+embedded source list must allow the source catalog and architecture. Empty or
+mismatched eligibility stops before creating an installation. The current descriptor
+has no eligible transitions, so a complete run cannot pass yet.
+
+```bash
+python3 test/scripts/test-instance-upgrade.py \
+  --source-image ghcr.io/citadel-p/citadel@sha256:SOURCE_DIGEST \
+  --target-version TARGET_VERSION
+python3 -m unittest discover -s test/release -p test_instance_upgrade.py
+```
+
+The runner reuses the registration fixture's private Docker daemon, retaining
+outbound access for official release verification. It exposes no host ports and
+passes no host socket to Core. Setup and an encrypted Secret use the real HTTP API;
+review/approval are submitted once. It waits for the persisted success and released
+maintenance, then checks PostgreSQL uptime, installation/storage identity, all three
+recovery keys, retained ciphertext and sign-in. It stops only fixture Core and uses
+the exact source image to restore the checkpoint into a separate empty PostgreSQL
+container, checking restored identity, ciphertext and released maintenance while
+preserving the original successful database and host evidence. After an approval
+attempt fails, private state and bounded container logs are copied to a private
+`/tmp/citadel-upgrade-failure-*` directory before fixture cleanup. These files may
+contain fixture credentials; keep them outside Git. The daemon, its data and network
+are removed on success or failure.
+
+This smoke test does not qualify an unsigned candidate or test crash injection during
+replacement/finalization. Its Python unit tests cover refusal and assertion logic;
+they are not evidence that a published upgrade succeeded. The full candidate upgrade
+and interrupted-recovery qualification remains a release prerequisite.
+
 Execution recovery regressions use a separate disposable PostgreSQL database:
 
 ```bash
@@ -543,3 +984,163 @@ redaction, host-file/subprocess/network restrictions and process cleanup after a
 lost stream. `token_safety` uses its own disposable `CITADEL_TOKEN_SAFETY_DATABASE_URL`
 and verifies run tokens become invalid on cancellation, attempt replacement and
 completion, in addition to its HTTP/realtime credential restrictions.
+
+
+Updater installation integration checks now cover the supervised approval queue,
+dropped browser responses, source drift, revoked administrators, idempotent retries,
+acknowledgement failure, busy drains and failed grants without replay or release.
+Finalization tests verify target registration, preserved checkpoint paths, archived
+completion and refusal to remove changed/nonzero-exit helpers. Frontend tests cover
+review-before-approval, a stable retry key, retained operation lookup, offline
+progress and bounded planned-restart feedback. Completion tests distinguish a
+committed success from released maintenance, wait for the matching running version
+and reconnect, and verify one-time frontend reload with the URL retained and the
+completed session hint/banner cleared after reload. Active operations hide release notices.
+Failed outcomes, foreign instances and unavailable session storage do not cause an
+automatic reload; a manual action remains available after completion.
+
+These tests do not authorize adding a source to a release descriptor. A packaged
+source-to-target run, including checkpoint restore and interrupted cleanup recovery,
+is still required before publishing a qualified transition. Preserve private state
+and checkpoints on failure; never delete journals or clear database ownership merely
+to make startup pass.
+
+
+### Central Agent updates
+
+To test real Direct and Edge Agent updates in the browser without publishing a
+release, run:
+
+```bash
+python3 test/scripts/test-agent-upgrade-local.py \
+  --runtime-image YOUR_LOCAL_CORE_IMAGE \
+  --agent-runtime-image YOUR_LOCAL_AGENT_IMAGE --browser
+```
+
+Use existing Core and Agent runtime images as bases. The runner builds the current
+frontend and binaries from this checkout, starts Core at `0.1.1-dev.9002`, and
+registers a Direct Agent and an Edge Agent at `0.1.1-dev.9001`. Each Agent has its
+own disposable Docker engine and persistent identity volume. The private catalog
+offers an Agent image matching Core; no Core update is needed.
+
+The terminal prints `http://localhost:18080/updates` and a generated password for
+`upgrade@example.test`. Under **Config → Available updates**, select both Agents,
+click **Review and update**, then **Update now**. Check progress in the same dialog,
+Activities, and both Agents returning as up to date. Core remains available.
+Reloading or closing the page must not cancel the operation. Run the command again
+to reset the fixture. Use `--port 18081` if needed; **Ctrl+C** removes its containers,
+volumes, network and built images. Existing installations are untouched.
+
+Omit `--browser` for automated approval and verification of authenticated
+reconnection, target digest, changed container IDs, preserved identity mounts and
+ports, and retained source containers. It updates Direct first and verifies the
+unselected Edge container is unchanged, then updates Edge using the generated
+`edge-agent` label and mixed-case Edge mode. Both must settle their exited helper
+before the operation finishes. This mode disconnects the outer test daemon
+from its network after loading prerequisites. Browser mode publishes only the UI
+on loopback and retains outbound connectivity. Neither mode exposes Docker or
+PostgreSQL on the host.
+
+Only the test Core replaces release verification with its private catalog.
+Production binaries have no switch for it. These runs cover standalone Direct and
+Edge updates; they do not qualify published signatures, Build Pool registration,
+Team schedules, or multi-node Swarm rollouts.
+
+The focused service tests cover independent Agent eligibility, installation alias
+deduplication, stale reviews, request replay, sequential failure handling,
+interrupted-attempt reconciliation, Team scheduling and authorization rechecks.
+They also cover shutdown after dispatch, cancellation during verification and
+lost Swarm resume acknowledgements without releasing the claim or redispatching.
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::agents
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --lib
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib connectors::routing::agent_updates
+npm --prefix src/frontend run test:run -- src/features/updates/index.test.tsx src/features/activities/index.test.ts
+```
+
+`citadel-adapters --test agent_updates` exercises real PostgreSQL claims, concurrent
+approvals, unresolved ownership, revision fences, Activities and schedule occurrence
+reservations across minute boundaries. It checks duplicate/busy occurrences and
+rejects stale pre-claim configurations while preserving the frozen scope of an
+already-owned occurrence after schedule edits. Service tests cover shared schedule
+continuation after simulated Core restart and cleanup, compatibility blocking and
+Team expiry. These simulated restarts do not replace packaged replacement tests. Create a
+fresh disposable database named `citadel_update_test_*`, then run:
+
+```bash
+CITADEL_UPDATE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/citadel_update_test_agents \
+  SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test agent_updates -- --ignored
+```
+
+The standalone replacement test uses the real Docker API against containers and a
+volume created by the test. It requires an already-pulled official Agent digest;
+set `CITADEL_AGENT_TEST_IMAGE` to `ghcr.io/citadel-p/citadel.agent@sha256:<digest>`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --test agent_replacement -- --ignored
+```
+
+This test verifies actual container replacement, persistent storage, environment,
+host ports and retained-source restart policy. It uses a shell fixture inside the
+Agent image; it does **not** establish an authenticated Direct/Edge rollout or a
+multi-node Swarm rollout. Use the local runner above for authenticated standalone
+rollouts. Keep published-release signature verification separate from these Docker
+fixtures; do not weaken image validation for local testing.
+
+Update availability alerts use the existing alert persistence test fixture. Run against
+a **fresh disposable** database named `citadel_update_test_*`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib availability
+CITADEL_EXECUTION_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_alerts SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test alert_persistence instance_updates:: -- --ignored --test-threads=1
+```
+
+The persistence test covers seeded Community rules, channel assignment, delivery
+deduplication, aggregate summary refresh, supersession, failed checks, offline
+observations and stale queued availability after installation. It never sends external notifications.
+
+
+### PostgreSQL engine maintenance
+
+The Updates page reads the connected server version through the existing status
+API and offers only the qualified target for a registered, supported installation.
+Status reads do not launch helpers or acquire the installation lock; review and
+approval perform the live preflight. Run its focused read/error and realtime checks with:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib database_version
+SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib database_review
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib database_status_reads_version
+python3 -m unittest discover -s test/release -p test_instance_upgrade.py
+npm --prefix src/frontend run test:run -- src/features/updates
+```
+
+The `database_engine_version_comes_from_the_connected_server` test in
+`citadel-adapters --test instance_updates` exercises the query and closed-pool failure.
+It uses the same disposable `CITADEL_UPDATE_TEST_DATABASE_URL` restriction as the
+other instance-update database tests; run with `--ignored` against that fixture.
+
+### Browser and full-lifecycle PostgreSQL upgrades
+
+Build the current Core image, then run the existing isolated updater fixture:
+
+```bash
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18
+# Retain a disposable installation for clicking through the real UI:
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18 --browser --port 18081
+```
+
+The first command exercises PostgreSQL 18.1 → 18.6 replacement via the real
+review/approve APIs, duplicate approval, checkpoint, retained credentials/keys,
+startup acceptance and registration refresh. It also verifies that an unsupported
+replication setup fails preflight without stopping Core or PostgreSQL. PostgreSQL
+17 and earlier are rejected; this runner does not qualify future major upgrades. Browser mode prints its own login;
+choose **Review and update → PostgreSQL → Update and restart**. Core remains the
+same version and existing Agent/production fixtures are untouched. Ctrl+C cleans up
+only this fixture. Private failure evidence is retained outside the repository.
+
+The `--database-source 18 --scenario database-preparation-failure` scenario
+creates a replication slot and verifies that review is rejected before ownership.
+It then reviews without the slot, recreates it, and verifies that approval also
+rejects the changed eligibility without stopping Core or PostgreSQL.

@@ -1,4 +1,5 @@
-use super::*;
+use super::postgres::*;
+use std::{ffi::OsString, path::Path};
 
 // Additional backup/recovery regression: database URL components must reach
 // libpq decoded exactly once, without putting credentials in process arguments.

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { CloudOff, LoaderCircle, RefreshCw, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,14 @@ const statusContent: Record<VisibleConnectionState, { label: string; description
 
 export function LiveConnectionIndicator() {
   const { liveConnectionState, interruptedAt, retryConnection } = useRealtimeContext();
+  const expectedUpdate = useAtomValue(pendingInstanceUpdateAtom);
+  const [expiredRestart, setExpiredRestart] = useState<number>();
+  useEffect(() => {
+    const until = expectedUpdate?.restartUntil;
+    if (!until) return;
+    const timer = window.setTimeout(() => setExpiredRestart(until), Math.max(0, until - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [expectedUpdate?.restartUntil]);
   const [visibleInterruptionAt, setVisibleInterruptionAt] = useState<number>();
   const [retryPending, setRetryPending] = useState(false);
   const recoveryToastForRef = useRef<number | undefined>(undefined);
@@ -113,8 +123,15 @@ export function LiveConnectionIndicator() {
     return null;
   }
 
-  const content = statusContent[visibleState];
-  const isDisconnected = visibleState === 'disconnected';
+  const expectedRestart =
+    !!expectedUpdate?.restartUntil && expectedUpdate.restartUntil !== expiredRestart && visibleState !== 'offline';
+  const content = expectedRestart
+    ? {
+        label: 'Restarting Citadel…',
+        description: 'An approved update is in progress. Waiting for the server to reconnect.',
+      }
+    : statusContent[visibleState];
+  const isDisconnected = visibleState === 'disconnected' && !expectedRestart;
   const isOffline = visibleState === 'offline';
   const Icon = isOffline ? WifiOff : isDisconnected ? CloudOff : LoaderCircle;
 

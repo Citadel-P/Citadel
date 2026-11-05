@@ -28,14 +28,28 @@ log timestamps and scheduled execution times remain precise.
 
 ## Instance settings
 
-Administrators also see **Instance settings**. These choices apply to everyone
-in the installation and save automatically:
+Administrators also see **Instance settings** in Profile. The **Two-factor
+authentication policy** applies to everyone in the installation and saves
+automatically. It is Optional by default. Administrators can require MFA for
+administrators or all local-password users, subject to the minimum set by server
+configuration. Users can enable MFA in **Profile → Security**.
 
-- **Check for Citadel updates** contacts GitHub for new releases, with no Citadel
-  telemetry or automatic installation. Server configuration can force checks off.
-- **Two-factor authentication policy** is Optional by default. Users can enable MFA
-  later in **Profile → Security**. Administrators can require MFA for administrators
-  or all local-password users, subject to the minimum set by server configuration.
+Open **Settings → Updates → Config** for **Available updates**, **Scheduled updates**,
+and **Release checks** in one settings form. Available updates shows the installed
+Core version and Agent status independently. **Check now** discovers releases without
+installing them. Manual review and approval never change scheduled membership or
+save unrelated settings.
+
+Team administrators can schedule Core, selected Agents, or both. Core is excluded
+by default. Core updates first; selected Agents follow only after Core verification
+and cleanup. The interface temporarily disconnects during a Core restart. Use the
+standard cron and time-zone fields, then **Save**. **Next run** describes the saved
+schedule. Disabled schedules keep their settings visible with disabled controls. Enable the schedule to edit them.
+
+Release checks contact GitHub without telemetry. Turning off automatic discovery
+does not disable an installation schedule, which verifies a release when due.
+Server configuration can prohibit both. The info icon at the right of the tabs
+shows the Core version, release channel, last successful check, and Agent versions.
 
 MFA policy changes apply to subsequent local-password sign-ins and do not revoke
 existing browser sessions. Instance settings remain separate from personal

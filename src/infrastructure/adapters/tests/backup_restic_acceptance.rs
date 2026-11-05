@@ -334,7 +334,7 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
         assert!(persisted.bytes_processed.unwrap() >= PAYLOAD.len() as i64);
         let queued = store.enqueue_restore(BackupRestoreRequest { actor, backup_run_id: run.id, target_platform_id: platform,
             target_volume_name: target.clone(), target_host_path: None, overwrite_existing: false, target_docker_node_id: None, source_backup_run_item_id: None }).await.unwrap();
-        let restore = store.claim_restore(Utc::now() - chrono::Duration::hours(1)).await.unwrap().unwrap();
+        let restore = store.claim_restore(Utc::now() - chrono::Duration::hours(1), citadel_backups::RestoreClaimScope::All).await.unwrap().unwrap();
         assert_eq!(restore.run.id, queued.id);
         if use_agent && s3_endpoint.is_none() {
             let mut wrong_host = restore.clone();

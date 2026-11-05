@@ -8,6 +8,10 @@ use std::{sync::Arc, time::Duration};
 
 /// Background-only services and worker inputs that must be started once.
 pub struct BackgroundServices {
+    pub update_installation: Option<(
+        citadel_updates::UpdateInstallService,
+        tokio::sync::mpsc::Receiver<citadel_updates::UpdateInstallCommand>,
+    )>,
     pub docker: citadel_docker::client::DockerClient,
     pub agent: Option<citadel_adapters::connectors::agent::client::AgentClient>,
     pub volume_content:
@@ -45,6 +49,7 @@ pub async fn spawn_all(
         ..
     } = state;
     let BackgroundServices {
+        update_installation,
         docker,
         agent,
         volume_content,
@@ -57,11 +62,22 @@ pub async fn spawn_all(
     } = services;
     let mut supervisor = TaskSupervisor::new(cancellation.clone());
     supervisor.spawn(
+        "agent-updates",
+        workers::updates::run_agents(state.agent_updates.clone(), cancellation.child_token()),
+    );
+    if let Some((service, receiver)) = update_installation {
+        supervisor.spawn(
+            "update-installer",
+            workers::updates::run_installation(service, receiver, cancellation.child_token()),
+        );
+    }
+    supervisor.spawn(
         "update-checker",
-        state
-            .updates
-            .clone()
-            .run(state.identity.clone(), cancellation.child_token()),
+        citadel_server::workers::updates::run(
+            state.updates.clone(),
+            state.identity.clone(),
+            cancellation.child_token(),
+        ),
     );
     supervisor.spawn(
         "service-account-last-used",
@@ -93,6 +109,7 @@ pub async fn spawn_all(
         &mut supervisor,
         cancellation,
         workers::WorkerDependencies {
+            admission: state.admission.clone(),
             image_updates: platform_state.image_updates.clone(),
             targets: runtime_targets.clone(),
             volume_content,
@@ -152,6 +169,7 @@ pub async fn spawn_all(
     supervisor.spawn(
         "image-scanner",
         workers::image_scanning::run(
+            state.admission.clone(),
             cancellation.child_token(),
             image_scanner.clone(),
             deployments.clone(),

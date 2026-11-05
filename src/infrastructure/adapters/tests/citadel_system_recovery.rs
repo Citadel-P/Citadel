@@ -67,11 +67,13 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         std::env::var_os("CITADEL_PG_DUMP").unwrap_or_else(|| "pg_dump".into()),
         staging.clone(),
         256 * 1024,
+        "0.1.1".into(),
     );
     let bundle = builder.build(Uuid::now_v7(), &cancellation).await.unwrap();
     let manifest: serde_json::Value =
         serde_json::from_slice(&tokio::fs::read(bundle.join("manifest.json")).await.unwrap())
             .unwrap();
+    assert_eq!(manifest["coreVersion"], "0.1.1");
     let instance = Uuid::parse_str(manifest["instanceId"].as_str().unwrap()).unwrap();
     assert!(
         !tokio::fs::read_to_string(bundle.join("manifest.json"))

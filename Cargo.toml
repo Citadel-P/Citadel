@@ -4,6 +4,7 @@ members = [
     "src/agent",
     "src/server",
     "src/features/activities",
+    "src/features/updates",
     "src/features/alerts",
     "src/features/scripts",
     "src/features/backups",
@@ -65,7 +66,7 @@ prost = "=0.14.4"
 prost-types = "=0.14.4"
 protoc-bin-vendored = "=3.3.0"
 reqwest = { version = "=0.13.5", default-features = false, features = ["json", "stream", "rustls"] }
-rustix = { version = "=1.1.5", features = ["fs"] }
+rustix = { version = "=1.1.5", features = ["fs", "process"] }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 semver = "=1.0.28"
@@ -78,6 +79,7 @@ sha2 = "=0.11.1"
 sha1 = "=0.11.0"
 sqlx = { version = "=0.9.0", default-features = false, features = ["chrono", "macros", "postgres", "runtime-tokio", "uuid"] }
 subtle = "=2.6.1"
+tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 tokio = { version = "=1.54.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-stream = "=0.1.19"

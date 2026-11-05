@@ -99,12 +99,16 @@ async fn startup_registers_routes_starts_workers_and_shuts_down_both_listeners()
         .await
         .expect("supervised workers must start");
 
-        let spec: Value = fixture
+        let spec_response = fixture
             .client
             .get(format!("{}/openapi/v1.json", server.url))
             .send()
-            .await
-            .unwrap()
+            .await;
+        let spec_response = match spec_response {
+            Ok(response) => response,
+            Err(error) => panic!("OpenAPI request failed: {error}\n{}", server.stop().await),
+        };
+        let spec: Value = spec_response
             .error_for_status()
             .unwrap()
             .json()

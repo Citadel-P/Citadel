@@ -361,11 +361,24 @@ fn allowed_host(transport: &TransportConfig, request: &Request<Body>) -> bool {
     if transport.mode == TransportMode::Disabled && transport.allowed_hosts.is_empty() {
         return true;
     }
-    let Some(host) = request
+    let Ok(header) = request
         .headers()
         .get(HOST)
-        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_str())
+        .transpose()
     else {
+        return false;
+    };
+    // HTTP/2 carries :authority in the URI; gRPC need not send a Host header.
+    let authority = (request.version() == axum::http::Version::HTTP_2)
+        .then(|| request.uri().authority().map(Authority::as_str))
+        .flatten();
+    if let (Some(header), Some(authority)) = (header, authority)
+        && !header.eq_ignore_ascii_case(authority)
+    {
+        return false;
+    }
+    let Some(host) = header.or(authority) else {
         return false;
     };
     let Ok(authority) = Authority::from_str(host) else {
@@ -1142,5 +1155,46 @@ mod tests {
                 .body(Body::empty())
                 .unwrap()
         ));
+    }
+
+    #[test]
+    fn http2_authority_uses_the_host_allowlist_without_accepting_conflicts() {
+        use axum::http::Version;
+        let mut transport = fixture_transport();
+        transport.allowed_hosts = vec!["fixture-core".into()];
+        for (version, authority, header, allowed) in [
+            (Version::HTTP_2, "fixture-core:8001", None, true),
+            (Version::HTTP_2, "evil.test:8001", None, false),
+            (
+                Version::HTTP_2,
+                "fixture-core:8001",
+                Some("fixture-core:8001"),
+                true,
+            ),
+            (
+                Version::HTTP_2,
+                "fixture-core:8001",
+                Some("evil.test:8001"),
+                false,
+            ),
+            (
+                Version::HTTP_2,
+                "evil.test:8001",
+                Some("fixture-core:8001"),
+                false,
+            ),
+            (Version::HTTP_11, "fixture-core:8001", None, false),
+        ] {
+            let mut request = Request::builder()
+                .version(version)
+                .uri(format!("http://{authority}/"));
+            if let Some(header) = header {
+                request = request.header(HOST, header);
+            }
+            assert_eq!(
+                allowed_host(&transport, &request.body(Body::empty()).unwrap()),
+                allowed
+            );
+        }
     }
 }

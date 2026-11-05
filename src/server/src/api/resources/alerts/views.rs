@@ -248,6 +248,7 @@ pub(crate) fn alert_resource_path(event: &citadel_alerts::AlertEvent) -> Option<
         "BackupPolicy" => "backup-policies",
         "SwarmService" => "swarm-services",
         "License" => return Some("/license".into()),
+        "Updates" => return Some("/updates".into()),
         _ => return None,
     };
     let mut path = format!("/{prefix}/edit/{id}");

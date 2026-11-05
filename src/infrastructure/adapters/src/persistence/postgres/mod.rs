@@ -38,3 +38,5 @@ pub mod notifications;
 pub mod job_lease;
 
 pub mod resource_copies;
+
+pub mod updates;

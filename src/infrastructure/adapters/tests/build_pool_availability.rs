@@ -88,6 +88,7 @@ async fn check(builds: &PostgresBuildRepository, id: Uuid, ready: bool) {
         .record_pool_health(
             &current,
             &BuildPoolCheck {
+                agent_version: None,
                 ready,
                 message: if ready {
                     "Docker ready"

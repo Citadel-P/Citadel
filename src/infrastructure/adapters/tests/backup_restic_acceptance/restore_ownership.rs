@@ -52,7 +52,7 @@ pub(super) async fn reject_raced_destinations(
                 overwrite_existing: false, target_docker_node_id: None,
                 source_backup_run_item_id: None,
             }).await.unwrap();
-            let claim = store.claim_restore(Utc::now() - chrono::Duration::hours(1)).await.unwrap().unwrap();
+            let claim = store.claim_restore(Utc::now() - chrono::Duration::hours(1), citadel_backups::RestoreClaimScope::All).await.unwrap().unwrap();
             assert_eq!(claim.run.id, queued.id);
             let executor = DockerResticBackupExecutor::new(
                 path, IMAGE, Arc::new(Password), 256 * 1024, pool.clone(),

@@ -150,6 +150,7 @@ pub(super) async fn verify(
         .await
         .unwrap();
     let result = citadel_builds::BuildPoolCheck {
+        agent_version: None,
         ready: false,
         message: "Recovered test".into(),
     };
@@ -230,6 +231,7 @@ pub(super) async fn verify(
 
 async fn verify_health_persistence(db: &sqlx::PgPool, builds: &Arc<BuildService>, id: Uuid) {
     let healthy = citadel_builds::BuildPoolCheck {
+        agent_version: Some("0.1.2".into()),
         ready: true,
         message: "health-ready".into(),
     };
@@ -240,6 +242,17 @@ async fn verify_health_persistence(db: &sqlx::PgPool, builds: &Arc<BuildService>
             .record_pool_health(&initial, &healthy)
             .await
             .unwrap()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Option<String>>(
+            "SELECT agentversion FROM buildagentpools WHERE id=$1"
+        )
+        .bind(id)
+        .fetch_one(db)
+        .await
+        .unwrap()
+        .as_deref(),
+        Some("0.1.2")
     );
     let fresh = builds.store().get_pool(id).await.unwrap();
     assert!(
@@ -511,6 +524,7 @@ async fn verify_edits(
         .finish_pool_test(
             &claim,
             &citadel_builds::BuildPoolCheck {
+                agent_version: None,
                 ready: true,
                 message: "Ready".into(),
             },

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "tag": "v1.2.4-dev.1",
+  "metadata": {
+    "schemaVersion": 1,
+    "productVersion": "1.2.4",
+    "displayVersion": "1.2.4-dev.1",
+    "informationalVersion": "1.2.4-dev.1+height.5.sha.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "versionHeight": 5,
+    "dirty": false,
+    "nbgvPublicRelease": true,
+    "releaseEligible": false,
+    "identityStatus": "resolved",
+    "toolIdentity": "https://github.com/dotnet/Nerdbank.GitVersioning.git@71caefc18092ab128cc61c156340cd7d63db1d27",
+    "developmentReleaseEligible": true
+  },
+  "verifiedSignatures": {
+    "ghcr.io/citadel-p/citadel.agent:1.2.4-dev.1": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ghcr.io/citadel-p/citadel:1.2.4-dev.1": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "architectures": [
+    "amd64",
+    "arm64"
+  ],
+  "images": {
+    "agent": [
+      {
+        "tag": "ghcr.io/citadel-p/citadel.agent:1.2.4-dev.1",
+        "digest": "ghcr.io/citadel-p/citadel.agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "core": [
+      {
+        "tag": "ghcr.io/citadel-p/citadel:1.2.4-dev.1",
+        "digest": "ghcr.io/citadel-p/citadel@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ]
+  },
+  "signatures": {
+    "tool": "cosign",
+    "certificateIdentity": "https://github.com/Citadel-P/Citadel/.github/workflows/ci.yml@refs/tags/v1.2.4-dev.1",
+    "certificateOidcIssuer": "https://token.actions.githubusercontent.com"
+  },
+  "releaseNotesSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "upgradeDescriptor": {
+    "schemaVersion": 1,
+    "product": "citadel",
+    "targetVersion": "1.2.4-dev.1",
+    "targetCatalogSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "installerFormat": 1,
+    "updateProtocol": 1,
+    "sources": []
+  }
+}

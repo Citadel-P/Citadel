@@ -18,11 +18,66 @@ Use the matching current Core, Agent, and frontend build. See
 for baseline and recovery considerations.
 Never rewrite applied migration history or checksums to force an upgrade.
 
+## PostgreSQL engine maintenance
+
+Core updates apply Citadel's SQL migrations but keep PostgreSQL running unchanged.
+The Updates page and info card show the connected PostgreSQL server version.
+A version alone does not establish update availability; failed version reads show
+**Version unavailable**. Registered bundled databases offer the PostgreSQL version
+qualified by this Citadel build. Select **Review and update → PostgreSQL**, review
+the versions and downtime, then confirm **Update and restart**. Citadel checkpoints,
+stops Core, upgrades the database, verifies it and restarts Core. Completion or failure
+appears in the portal and Activities. Core and Agent versions do not change.
+
+Citadel requires PostgreSQL 18 or newer. This build offers minor updates within
+PostgreSQL 18 to the qualified 18.6 image, retaining the existing data directory.
+PostgreSQL 17 and earlier are unsupported. Future major-version transitions need
+separate qualification before they can be offered.
+
+The bundled Alpine cluster must use `/var/lib/postgresql/18/docker`, owned by UID 70.
+Other layouts and external databases require operator/provider maintenance. Database
+updates are explicitly approved; the Core/Agent schedule does not include them.
+
+Review checks the database layout, ownership, replication, tablespaces and Compose
+configuration before offering approval. Unsupported configurations show a blocker
+without stopping services. Citadel repeats these checks at approval and during
+preparation. Keep the Compose files and `.env` unchanged until the update finishes;
+an edit detected after shutdown stops replacement and requires recovery.
+
+If execution fails after shutdown, preserve the operation state, checkpoint and database. Do not click retry or restart a source against ambiguous data. Use explicit
+recovery below. The following commands are the operator-run alternative.
+
+Before maintenance, finish all Core/Agent updates and resolve any retained recovery
+state. Create and verify a [system backup](/operations/control-plane-recovery),
+including the Core recovery keys. Stop Core before stopping PostgreSQL. Do not run
+another updater or start another container against the same data during maintenance.
+
+### Minor updates within PostgreSQL 18
+
+Set `PG_IMAGE` in the existing `.env` to the approved official PostgreSQL 18 image
+**digest**, retaining the Alpine variant and data directory. Pull it before downtime:
+
+```bash
+docker compose pull pg_db
+docker compose stop -t 60 server pg_db
+docker compose up -d --no-deps --wait pg_db
+docker compose up -d --no-deps server
+```
+
+Check the database version, Core health, sign-in and important resources. Keep the
+previous image digest and backup until validation finishes. Do not use a major-version
+image with the existing data directory.
+
 ## Release notifications
 
 [Update checks](/getting-started/configuration#allow-update-checks) are enabled
-by default. Administrators can change the installation-wide choice in **Profile →
-Instance settings**. `CITADEL_UPDATE_CHECKS_ENABLED=false` forces checks off.
+by default, every six hours. In **Settings → Updates → Config**, administrators
+can choose **Every 6 hours**, **Every 12 hours**, or **Daily**, then select **Save**.
+The saved frequency applies without restarting Core. The next check is based on
+the last completed attempt, including manual checks and failed release requests;
+restarting Core preserves that schedule. Disabling automatic checks preserves the
+frequency and disables its selector. `CITADEL_UPDATE_CHECKS_ENABLED=false` prohibits
+both automatic and manual checks.
 Administrators see newer releases in their installed channel on
 Home and beside the sidebar version. Checks use completed public GitHub releases,
 which Citadel publishes after verifying its Core and Agent images; pushing an
@@ -30,8 +85,151 @@ image tag alone does not trigger a notification. Stable installations track stab
 releases, while development installations (`-dev.N`) track development releases.
 A stable publication does not produce an update notice for the development channel.
 
-Updates remain manual. With checks disabled, follow the
-[release notes](https://github.com/Citadel-P/Citadel/releases) yourself.
+**Check now** checks once without installing;
+it remains available when automatic checks are off, unless server configuration
+prohibits release checks. The **Activities** tab records discovered releases and
+update-check setting changes.
+
+## Update Agents
+
+Available updates lists **Citadel Core**, **Database**, then **Agents**. Database currently
+offers a qualified PostgreSQL upgrade for registered supported installations.
+**In-app updates unavailable** means the installation is not registered for supported
+database updates. This can also apply to a database bundled with Core in Compose; use
+the [Compose maintenance procedure](#postgresql-engine-maintenance) or your provider.
+
+Use **Settings → Updates → Config → Available updates**. Agent availability is
+independent of Core: a current Core can still have Agents that need updating.
+**Check now** also verifies the official Agent image matching the running Core
+version. It does not install anything.
+When no Agents are registered, the page and info card show **No Agents registered**
+and skip the Agent release check. A local Platform does not require an Agent.
+
+Choose **Review and update** in Available updates, then confirm the displayed
+Agent version transitions. You can narrow the selection with **Agents to update now**;
+leaving it empty reviews all available Agents. When Core also has an eligible update,
+the dialog lets you choose Core or Agents. Core and Agent operations run separately;
+updating Core first makes its matching Agent release available. Manual updates are available to
+administrators in Community and Team. Citadel updates the selected installations
+one at a time while Core keeps running. Platform and Build Pool references to the
+same installation are combined. A managed Swarm node-agent service is one target;
+the review shows how many nodes it covers. Its **Repair** action on the Platform
+page preserves the previously approved image.
+
+The update dialog shows a spinner while Agents are updating, and **Activities** records each outcome.
+While the Updates configuration page is open, completion shows a success or error notification even if the dialog is closed. Closing the browser
+does not cancel an accepted operation. Citadel waits for the affected Agent's
+active work, replaces it, and verifies its authenticated connection, image and
+version before reporting success. A target that becomes unavailable is skipped;
+an installation failure stops the remaining targets.
+If Core restarts during replacement, it checks the existing attempt after startup
+instead of starting another. Swarm updates remain in progress while a disconnected
+node is waiting to resume work; cleanup retries after the node reconnects.
+Standalone updates also wait for the owned helper to finish successfully. An
+uncertain helper outcome remains recovery-required and blocks another Core or
+Agent update; a timeout does not release that ownership.
+
+Central replacement supports recognized standalone Docker Agents using the local
+Docker socket, standard bridge or host networking, and persistent identity storage
+for Edge mode. Edge key and identity files must be inside the persistent
+`/app/data` directory, including the generated Build Pool paths. Custom hostnames, shared container networking, remote Docker
+sockets and unsupported storage profiles require a manual update. An Agent that
+does not implement the update protocol also requires a manual update first.
+These targets remain visible with an explanation. Use the generated installation
+command or your existing deployment manifest, preserving credentials and storage.
+
+### Scheduled updates — Team
+
+Use **Scheduled updates** to enable one schedule for **Update Citadel Core**,
+**Scheduled Agents**, or both, then set **Cron** and **Time Zone** and select **Save**.
+Core is excluded by default, including from existing Agent schedules. Supported
+current Agents may be enrolled for future updates; new registrations are never
+automatically selected. Manual selection remains separate.
+
+**Next run** uses the saved cron and time zone, not unsaved edits. A disabled
+schedule keeps its settings visible with disabled controls. Enable it to edit them. Community users can update
+manually; after Team expiry an administrator can still disable an existing schedule.
+
+When due, Citadel claims the saved scope and verifies the release independently of
+periodic discovery. If Core has an update, its normal compatibility checks, recovery
+checkpoint and installation run first. Core temporarily disconnects the interface.
+The saved occurrence resumes only after Core is verified and maintenance cleanup
+finishes. Selected Agents then update sequentially to that pinned Core release.
+If Core is already current, selected outdated Agents can update directly.
+
+Schedule edits affect future unclaimed occurrences. Busy or missed occurrences
+are skipped without catch-up. A Core failure or uncertain replacement prevents the
+Agent phase. An Agent failure stops the remaining Agents without rolling Core back.
+Team expiry or server policy prevents new component starts while existing
+replacements settle safely. Activities record the component outcomes and schedule
+completion or blocking reason.
+
+### If an Agent replacement fails
+
+Keep the updater helper, previous container and persistent data for inspection.
+The update dialog identifies the affected Agent. Inspect containers labelled
+`com.citadel.agent-update` with that operation ID and their logs before retrying.
+Citadel does not blindly repeat a replacement after a lost response. It retains
+the previous container with automatic restart disabled and does not automatically
+roll back. Before manually recreating an Agent, establish that its helper can no
+longer change the installation. Preserve the identity volume and configuration,
+and verify the connection before removing retained containers. Recreating an Agent
+alone does not clear an unresolved update's ownership; keep its evidence for
+operator recovery.
+
+## Install a qualified update
+
+A registered, supported Docker Compose installation can offer **Review and update**
+for an available release. This opens a review that verifies the installation and release before
+anything is approved. The target release must explicitly support your installed
+version, database catalog, architecture and connected Agent versions.
+
+Select **Update and restart** to approve the reviewed version. Citadel waits for
+active work, creates a recovery checkpoint and replaces Core. Running managed
+workloads normally continue. During the restart, the portal displays its last known
+phase and waits to reconnect; it cannot stream progress while Core is offline.
+After reconnection it reads the recorded outcome. While cleanup still holds
+maintenance, the status shows **Finishing update**. Once maintenance is released
+and the running version matches the completed update, the Updates page reloads
+once to load the new frontend, keeping the current URL. The completed banner clears
+after reload and a toast confirms the successful update; the update remains in **Activities**.
+**Reload portal** is available if automatic reload cannot complete. Closing the
+browser does not cancel an approved update.
+
+If verification or cleanup fails, an error toast appears and the recovery banner
+stays visible. Citadel retains maintenance and recovery state.
+Preserve the checkpoint and logs for operator recovery. It does not automatically
+roll back a migrated database. Until a release transition has been qualified, use
+the manual procedure below; an available release notice alone does not establish
+installation eligibility.
+
+### Recover an interrupted preparation
+
+If an update fails before shutdown, Citadel attempts to verify the original Core,
+retire its updater helper and reopen admission. It keeps the attempt in Activities
+and archives its execution evidence. A timeout or an exited helper alone is not
+proof that the source can resume.
+
+If automatic verification cannot finish, run this inside the **original Core
+container**, with its original environment, keys and data mounts:
+
+```bash
+docker compose exec server /app/citadel-server recover-update-source \
+  --state-directory /opt/citadel-update-state \
+  --operation-id <operation-id>
+```
+
+Use the registered state directory and the operation ID from Activities. After a
+successful result, restart the original Core. The command does not restore data,
+retry replacement or bypass maintenance. It refuses recorded or ambiguous source
+shutdown/replacement; preserve the state and use checkpoint recovery in that case.
+Do not delete journals or change database ownership flags manually.
+
+A target that already committed its completion receipt resumes verification and
+cleanup when it restarts, even if helper acknowledgement was interrupted. The
+original helper failure remains archived; replacement and migrations are not
+replayed. Admission stays closed until target identity, storage, database, keys and
+cleanup are verified.
 
 ## Before an upgrade
 
@@ -89,6 +287,14 @@ Citadel applies database migrations during startup. If startup fails, read the
 logs before trying another image. A healthy container confirms that Core
 responds; complete the checks below before ending maintenance.
 
+If Core logs that it is in **update maintenance**, `/health` can respond while
+`/ready` returns 503 and the application remains unavailable. Core has detected
+unresolved update ownership or cannot verify a configured update-state directory.
+Preserve the database and update-state files while investigating; deleting a
+journal or changing its completion flags is not a recovery procedure. This
+startup safeguard does not replay an interrupted container replacement. A target
+with a committed successful update can finish verified cleanup after a restart.
+
 ## Verify the upgrade
 
 1. Confirm the intended Citadel version is running and an administrator can sign in.
@@ -99,8 +305,8 @@ responds; complete the checks below before ending maintenance.
 4. Check important application endpoints and inspect recent **Activities** and
    **Alerts** for new failures. Review scheduled jobs as they resume.
 
-Update Agents to the matching current build using the generated installation
-commands. Check each connection after replacement; keep Agent image references
+Update Agents to the matching current build from **Settings → Updates** when
+eligible, or use the generated installation commands for manual replacement. Check each connection after replacement; keep Agent image references
 with the corresponding Core version. Retain the pre-upgrade backup until the
 installation and its normal operations have been verified.
 
@@ -123,3 +329,26 @@ actual state with the recovered configuration before deploying again.
 
 Use exact patch versions or digests when you need a repeatable installation.
 Core releases publish `latest` alongside patch, minor, and major aliases.
+
+### Recover an in-app update checkpoint
+
+If the updater created a completed checkpoint before failure, stop Core and its
+update helper and preserve their database, volumes and private update-state directory.
+Use the checkpoint's recorded source image and the original encryption key. Configure
+that image to connect to a **new, empty PostgreSQL database**, and mount the checkpoint
+at its original absolute path:
+
+```bash
+citadel-server restore-update-checkpoint \
+  --checkpoint-directory /opt/citadel-update-state/checkpoint-OPERATION_UUID \
+  --confirm-instance-replacement
+```
+
+The command verifies the checkpoint and restored database before releasing the
+restored maintenance claim. It records the update as failed. It does not replace
+the original database, restart containers or clear the original journal. Restore
+the original keys and required Core data using the control-plane recovery procedure,
+then start the recorded source image with the recovered database and a new update-state
+directory. If verification fails, preserve the result for investigation; the command
+will not overwrite a nonempty database. An incomplete checkpoint is not recoverable
+through this command; use a verified earlier control-plane backup.

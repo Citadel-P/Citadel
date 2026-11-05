@@ -56,10 +56,10 @@ pub(super) async fn verify_copy_lifecycle(
                 let result = storage.copy_current(&claimed, &job, &cancel).await;
                 assert!(result.is_ok(), "{result:?}");
                 copies.finish_current(actor, plan.preview.id, job.id, result.map_err(|e|e.to_string())).await.unwrap();
-                assert!(backups.claim_restore(Utc::now()-chrono::Duration::hours(1)).await.unwrap().is_none());
+                assert!(backups.claim_restore(Utc::now()-chrono::Duration::hours(1), citadel_backups::RestoreClaimScope::All).await.unwrap().is_none());
             } else {
             assert!(!backups.acquire_repository_operation(run.backup_repository_id,Uuid::now_v7(),"Prune",Utc::now()+chrono::Duration::minutes(1)).await.unwrap());
-            let claim=backups.claim_restore(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();
+            let claim=backups.claim_restore(Utc::now()-chrono::Duration::hours(1), citadel_backups::RestoreClaimScope::All).await.unwrap().unwrap();
             assert_eq!(claim.run.id,started.restores[0].id);
             let restored=executor.restore(&claim,&cancel).await;
             assert_eq!(restored.status,BackupRestoreStatus::Succeeded,"{:?}",restored.error_message);

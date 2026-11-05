@@ -5,33 +5,41 @@ use citadel_backups::{BackupError, BackupService};
 use tokio_util::sync::CancellationToken;
 
 pub async fn backup_runs(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<BackupService>,
     options: crate::config::BackupWorkerConfig,
     wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
-    dispatch_runs(cancellation, service, false, options, wake).await
+    dispatch_runs(admission, cancellation, service, false, options, wake).await
 }
 
 pub async fn restore_runs(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<BackupService>,
     options: crate::config::BackupWorkerConfig,
     wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), BackupError> {
-    dispatch_runs(cancellation, service, true, options, wake).await
+    dispatch_runs(admission, cancellation, service, true, options, wake).await
 }
 
 pub async fn policy_scheduler(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<BackupService>,
     options: crate::config::BackupWorkerConfig,
 ) -> Result<(), BackupError> {
     while !cancellation.is_cancelled() {
-        if options.enabled
-            && let Err(error) = service.queue_due_scheduled(chrono::Utc::now()).await
         {
-            tracing::error!(%error, "Backup Policy scheduler iteration failed");
+            let Some(_admission) = admission.enter("Backup schedules", &cancellation).await else {
+                return Ok(());
+            };
+            if options.enabled
+                && let Err(error) = service.queue_due_scheduled(chrono::Utc::now()).await
+            {
+                tracing::error!(%error, "Backup Policy scheduler iteration failed");
+            }
         }
         tokio::select! {
             () = cancellation.cancelled() => break,
@@ -42,6 +50,7 @@ pub async fn policy_scheduler(
 }
 
 async fn dispatch_runs(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     service: Arc<BackupService>,
     restores: bool,
@@ -68,9 +77,21 @@ async fn dispatch_runs(
         // Only this dispatcher polls its queue. The claim carries a shared
         // tracking permit, including while completion persistence is retried.
         if controllers.len() < options.tracking_slots {
+            // Copy children belong to an already committed parent, which remains
+            // a durable drain blocker. Continue only those when admission closes.
+            let permit = if restores {
+                admission.try_enter("Restores")
+            } else {
+                let Some(permit) = admission.enter("Backups", &cancellation).await else {
+                    break;
+                };
+                Some(permit)
+            };
             let claim = {
                 let _iteration = family.start();
-                if restores {
+                if restores && permit.is_none() {
+                    service.claim_copy_restore(&cancellation).await
+                } else if restores {
                     service.claim_restore(&cancellation).await
                 } else {
                     service.claim_backup(&cancellation).await
@@ -83,7 +104,10 @@ async fn dispatch_runs(
                     let token = cancellation.clone();
                     // Complete claims even if shutdown arrived during SQL; every
                     // claimed run gets an owned controller and cleanup path.
-                    controllers.spawn(async move { service.execute_claim(claim, &token).await });
+                    controllers.spawn(async move {
+                        let _admission = permit;
+                        service.execute_claim(claim, &token).await
+                    });
                     delay = minimum;
                     continue;
                 }

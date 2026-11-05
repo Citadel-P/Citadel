@@ -1,3 +1,5 @@
+import { getDefaultStore } from 'jotai';
+import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { RealtimeContext, RealtimeContextType } from '@/lib/context/realtime-context';
 import { LiveConnectionIndicator } from './live-connection-indicator';
@@ -26,6 +28,7 @@ const indicator = (overrides: Partial<RealtimeContextType> = {}) => (
 describe('LiveConnectionIndicator', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    getDefaultStore().set(pendingInstanceUpdateAtom, null);
   });
 
   afterEach(() => {
@@ -140,3 +143,26 @@ function deferred<T>() {
 
   return { promise, resolve, reject };
 }
+
+it('labels an approved restart without hiding offline state and expires the expectation', () => {
+  vi.useFakeTimers();
+  getDefaultStore().set(pendingInstanceUpdateAtom, {
+    instanceId: 'instance',
+    id: 'operation',
+    restartUntil: Date.now() + 60_000,
+  });
+  const view = render(indicator({ liveConnectionState: 'disconnected', interruptedAt: Date.now() }));
+  act(() => {
+    vi.advanceTimersByTime(1);
+  });
+  expect(screen.getByRole('status')).toHaveTextContent('Restarting Citadel');
+  view.rerender(indicator({ liveConnectionState: 'offline', interruptedAt: Date.now() }));
+  expect(screen.getByRole('status')).toHaveTextContent("You're offline");
+  view.rerender(indicator({ liveConnectionState: 'disconnected', interruptedAt: Date.now() }));
+  act(() => {
+    vi.advanceTimersByTime(60_000);
+  });
+  expect(screen.getByRole('button', { name: /Live updates unavailable/ })).toBeVisible();
+  getDefaultStore().set(pendingInstanceUpdateAtom, null);
+  vi.useRealTimers();
+});

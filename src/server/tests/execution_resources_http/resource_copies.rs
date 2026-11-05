@@ -689,8 +689,15 @@ async fn verify_restore_progress_changes(
     store.start(actor, id).await.unwrap();
     assert_eq!(next_copy_change(&mut changes).await, id);
     let backups = PostgresBackupPersistence::new(pool.clone());
+    // An older unrelated restore must stay queued while admitted copy children drain.
+    let unrelated = Uuid::now_v7();
+    sqlx::query("INSERT INTO backuprestoreruns(id,backuprunid,backuprepositoryid,sourcebackuprunitemid,targetplatformid,targetdockernodeid,targetvolumename,overwriteexisting,targetvolumecreatedbycitadel,status,triggeredbyactorid,queuedat) SELECT $1,r.backuprunid,r.backuprepositoryid,r.sourcebackuprunitemid,r.targetplatformid,r.targetdockernodeid,'unrelated-maintenance-target',false,false,'Queued',r.triggeredbyactorid,r.queuedat-INTERVAL '1 minute' FROM backuprestoreruns r JOIN resourcecopyrestores cr ON cr.restoreid=r.id WHERE cr.copyid=$2 LIMIT 1")
+        .bind(unrelated).bind(id).execute(pool).await.unwrap();
     let claim = backups
-        .claim_restore(chrono::Utc::now() - chrono::Duration::hours(5))
+        .claim_restore(
+            chrono::Utc::now() - chrono::Duration::hours(5),
+            citadel_backups::RestoreClaimScope::ResourceCopies,
+        )
         .await
         .unwrap()
         .unwrap();
@@ -708,6 +715,21 @@ async fn verify_restore_progress_changes(
     };
     backups.finish_restore(&claim, &result).await.unwrap();
     assert_eq!(next_copy_change(&mut changes).await, id);
+    assert_eq!(
+        backups.get_restore(unrelated).await.unwrap().status,
+        BackupRestoreStatus::Queued
+    );
+    assert!(
+        backups
+            .claim_restore(
+                chrono::Utc::now() - chrono::Duration::hours(5),
+                citadel_backups::RestoreClaimScope::ResourceCopies
+            )
+            .await
+            .unwrap()
+            .is_none()
+    );
+    backups.cancel_restore(unrelated).await.unwrap();
     assert_eq!(
         store.get(actor, id).await.unwrap().restores[0]
             .message

@@ -16,10 +16,21 @@ This is a short working contract, **not** a second architecture specification. W
 3. Identify invariants, affected API/protocol/schema contracts, cancellation/recovery behavior, and the smallest useful test scope.
 4. Prefer a focused change. Do not opportunistically rename modules, redesign the architecture, or change product semantics while solving another task.
 
+For feature implementation or structural/integration changes, use
+[the Citadel feature workflow](.agents/skills/citadel-feature-workflow/SKILL.md).
+Name the implemented reference and follow its naming, module organization and
+integration patterns across the affected layers. New contributors should be able
+to navigate equivalent features the same way; add only files the feature needs.
+Explain meaningful deviations rather than introducing a parallel convention.
+Keep new or refactored Rust `lib.rs` and `mod.rs` files thin, with declarations and exports;
+place implementation in sibling files organized by responsibility as described in
+`docs/ARCHITECTURE.md`.
+
 For nontrivial changes, provide a concise implementation plan in the conversation; do **not** generate a hierarchy of specification documents unless explicitly requested.
 
 ## Documentation and release context
 
+- For release preparation, publication, recovery, or release-driven demo/preview deployment, use [the Citadel release workflow](.agents/skills/citadel-release-workflow/SKILL.md). Follow the existing version resolver and publication tooling; distinguish publication from environment deployment.
 - User-facing product docs belong in `docs/content/docs/`. Architecture and development guidance live in the repository documents listed above; keep changes aligned with those sources.
 - Update affected documentation when behavior changes. Describe implemented behavior and actual limitations; do not invent historical compatibility restrictions or infer backup coverage from a UI label.
 - Citadel is pre-release and targets one current Core/Agent/frontend build. Do not retain historical-version configuration aliases or mixed-version release prerequisites. Use `version.json` and the release workflow for version identity; preserve stored data, applied migration history and publication safeguards.
@@ -60,8 +71,10 @@ For nontrivial changes, provide a concise implementation plan in the conversatio
 ## Contracts, data, and frontend
 
 - Rust Server owns OpenAPI/`utoipa` definitions. For API changes, run `cargo run --locked -p xtask -- openapi`, then verify with `cargo run --locked -p xtask -- openapi --check` and `npm run api:verify --prefix src/frontend`. Never hand-edit generated schemas or TypeScript API models.
+- Run API generation and verification sequentially, and finish them before frontend tests, lint, or type checks. `api:verify` temporarily regenerates files before restoring them; concurrent frontend checks can observe missing or intermediate outputs.
 - The schema source is `src/infrastructure/database/src/schema/schema.sql`. `database refresh-baseline` changes new-install baselines; **it is not an upgrade migration for existing installations**. Don't change applied checksums or migration history to suppress failures.
 - Preserve frontend architecture: API/shared primitives must not import resource screens or app routing; reuse resource UI patterns and shared appearance tokens. Follow the existing React Query and realtime invalidation flows rather than creating a parallel state-sync mechanism.
+- Register frontend screens through the existing resource page/form abstractions and use FormBuilder where applicable. Reuse realtime snapshots/invalidation and reconnect handling; do not add bespoke routes or refresh mechanisms when the shared infrastructure supports the feature.
 - Before adding a selector, filter, status indicator or hover card, inspect the shared components and an equivalent resource screen. Reuse their selection behavior, accessibility and semantic colors consistently across resource types.
 - For Agent protocol or Docker API changes, review version compatibility, generation checks, Core/Agent mappings and Direct/Edge behavior together.
 

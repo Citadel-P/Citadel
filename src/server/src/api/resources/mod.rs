@@ -34,3 +34,5 @@ pub mod resource_access;
 pub mod schema_models;
 
 pub mod resource_copies;
+
+pub mod updates;

@@ -11,6 +11,8 @@ const metrics = [
   'memoryUsage',
   'rxBytes',
   'txBytes',
+  'rxBytesDelta',
+  'txBytesDelta',
   'diskUsage',
   'diskUsedBytes',
   'diskTotalBytes',
@@ -18,6 +20,7 @@ const metrics = [
 type Accumulator<T> = {
   seconds: number;
   latest: T;
+  baseline?: T;
   sums: Partial<Record<(typeof metrics)[number], number>>;
   counts: Partial<Record<(typeof metrics)[number], number>>;
 };
@@ -49,14 +52,18 @@ export function appendLiveStatBucket<T extends Stat>(
   const state: Accumulator<T> = {
     seconds,
     latest: next,
+    baseline: previous?.latest,
     sums: sameBucket ? { ...previous?.sums } : {},
     counts: sameBucket ? { ...previous?.counts } : {},
   };
   const duplicate = sameBucket && previous && timestamp === Number(previous.latest.created);
+  if (duplicate) state.baseline = previous.baseline;
+  const measured = withNetworkDelta(next, state.baseline);
+  const previousMeasured = previous ? withNetworkDelta(previous.latest, previous.baseline) : undefined;
   const point: Bucket<T> = { ...next, created: sameBucket ? last?.created : next.created, [accumulator]: state };
   for (const key of metrics) {
-    const value = (next as Record<string, unknown>)[key];
-    const oldValue = duplicate ? (previous.latest as Record<string, unknown>)[key] : undefined;
+    const value = (measured as Record<string, unknown>)[key];
+    const oldValue = duplicate ? (previousMeasured as Record<string, unknown>)[key] : undefined;
     let sum = state.sums[key] ?? 0;
     let count = state.counts[key] ?? 0;
     if (oldValue != null && Number.isFinite(Number(oldValue))) {
@@ -69,7 +76,9 @@ export function appendLiveStatBucket<T extends Stat>(
     }
     state.sums[key] = sum;
     state.counts[key] = count;
-    if (key in next || count) (point as Record<string, unknown>)[key] = count ? sum / count : null;
+    if (key in measured || count) {
+      (point as Record<string, unknown>)[key] = count ? (key.endsWith('Delta') ? sum : sum / count) : null;
+    }
   }
   const retained = (sameBucket ? current.slice(0, -1) : current).filter(
     (stat) => Number(stat.created) >= timestamp - windowSeconds - seconds,
@@ -105,4 +114,30 @@ export function mergeStatsBuckets<T extends Stat>(history: readonly T[], live: r
   // with raw samples or replace it with a partial live bucket after joining.
   for (const stat of history) byBucket.set(Math.floor(Number(stat.created) / seconds), stat);
   return [...byBucket.entries()].sort(([a], [b]) => a - b).map(([, stat]) => stat);
+}
+
+/** Convert a raw live observation before averaging; each Container has its own baseline. */
+export function withNetworkDelta<T extends Stat>(next: T, previous?: T): T {
+  const point = { ...next } as T & Record<string, unknown>;
+  const current = next as Record<string, unknown>;
+  const before = previous as Record<string, unknown> | undefined;
+  for (const field of ['rxBytes', 'txBytes'] as const) {
+    const delta = `${field}Delta`;
+    if (delta in current || !(field in current)) continue;
+    const value = current[field];
+    const baseline = before?.[field];
+    const sameContainer = !current.containerId || !before?.containerId || current.containerId === before.containerId;
+    const valid =
+      sameContainer &&
+      previous &&
+      Number(next.created) > Number(previous.created) &&
+      typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      typeof baseline === 'number' &&
+      Number.isFinite(baseline) &&
+      baseline >= 0;
+    (point as Record<string, unknown>)[delta] = valid ? (value >= baseline ? value - baseline : value) : null;
+  }
+  return point;
 }

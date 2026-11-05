@@ -2,8 +2,8 @@ use sha2::{Digest, Sha256};
 
 #[test]
 fn protocol_sources_preserve_the_accepted_wire_contract() {
-    // The pre-release Script rename changes service/message names only;
-    // execution field numbers and Edge command discriminants are retained.
+    // Central Agent updates add commands 6–8 and new RPC/messages. Existing
+    // field numbers, command discriminants and authenticated envelopes are unchanged.
     let sources = [
         (
             "script_service.proto",
@@ -13,7 +13,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "edge_agent_service.proto",
             include_str!("../proto/edge_agent_service.proto"),
-            "d3aef861ec91fb951f9f3e17bb556d46fd9583b64b47d48d2a4ed177baac55f3",
+            "78a0b999195399f3fedf18ba49f86902438e718ced499c958430338719329fd1",
         ),
         (
             "shared_models.proto",
@@ -23,7 +23,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "platform_service.proto",
             include_str!("../proto/platform_service.proto"),
-            "c8d4c61b5122a39ac5ff3b247c4f3423fa470598d608a97ed8d77310709df66b",
+            "3768a366363cbb76104e49b69ca254604ffaa64826eb4ce19ef16edc10124c87",
         ),
         (
             "container_service.proto",
@@ -436,4 +436,14 @@ fn network_attachment_fields_keep_their_wire_numbers() {
         NetworkAttachment::decode(bytes.as_slice()).unwrap(),
         attachment
     );
+}
+
+#[test]
+fn central_update_commands_are_additive_and_keep_platform_discriminants() {
+    use citadel_contracts::citadel::edge::v1::EdgeCommandKind::*;
+    assert_eq!(PlatformCheckHealth as i32, 1);
+    assert_eq!(PlatformPrune as i32, 5);
+    assert_eq!(PlatformAgentUpdateInfo as i32, 6);
+    assert_eq!(PlatformUpdateAgent as i32, 7);
+    assert_eq!(PlatformAgentUpdateDrain as i32, 8);
 }

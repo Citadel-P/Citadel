@@ -52,6 +52,7 @@ pub enum ConfigError {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub updates_enabled: bool,
+    pub update_state_directory: Option<PathBuf>,
     pub execution: execution::ExecutionConfig,
     pub listen_address: SocketAddr,
     pub database_url: String,
@@ -203,6 +204,7 @@ pub struct RealtimeConfig {
 #[serde(rename_all = "camelCase")]
 pub struct EffectiveConfig {
     pub updates_enabled: bool,
+    pub update_state_directory: Option<PathBuf>,
     pub password_minimum_length: usize,
     pub service_account_limits: citadel_identity::ServiceAccountLimitsDetails,
     pub service_account_last_used_interval_seconds: u64,
@@ -314,7 +316,8 @@ impl Config {
         let identity = identity_config(&transport)?;
 
         Ok(Self {
-            updates_enabled: parse_env("CITADEL_UPDATE_CHECKS_ENABLED", true)?,
+            updates_enabled: release_checks_allowed_from_env()?,
+            update_state_directory: update_state_directory_from_env()?,
             execution,
             listen_address,
             database_url,
@@ -385,6 +388,7 @@ impl Config {
         })?;
         Ok(EffectiveConfig {
             updates_enabled: self.updates_enabled,
+            update_state_directory: self.update_state_directory.clone(),
             service_account_limits: self.identity.service_account_limits,
             service_account_last_used_interval_seconds: self
                 .identity
@@ -1242,6 +1246,30 @@ impl std::str::FromStr for LogFormat {
             _ => Err("must be text or json"),
         }
     }
+}
+
+pub fn release_checks_allowed_from_env() -> Result<bool, ConfigError> {
+    parse_env("CITADEL_UPDATE_CHECKS_ENABLED", true)
+}
+
+fn update_state_directory_from_env() -> Result<Option<PathBuf>, ConfigError> {
+    let name = "CITADEL_UPDATE_STATE_DIRECTORY";
+    let Some(value) = env::var_os(name) else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(value);
+    if !path.is_absolute()
+        || path == std::path::Path::new("/")
+        || path
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+    {
+        return Err(ConfigError::Invalid {
+            name,
+            message: "must be an absolute private registration directory without '..'".into(),
+        });
+    }
+    Ok(Some(path))
 }
 
 pub fn log_format_from_env() -> Result<LogFormat, ConfigError> {

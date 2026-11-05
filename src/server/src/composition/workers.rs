@@ -40,6 +40,7 @@ pub struct WorkerSettings {
 }
 
 pub struct WorkerDependencies {
+    pub admission: citadel_runtime::admission::AdmissionGate,
     pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
     pub targets: Arc<PlatformRuntimeRegistry>,
     pub volume_content:
@@ -110,6 +111,7 @@ pub async fn register(
             .run(Box::new(target_listener), cancellation.child_token()),
     );
     let WorkerDependencies {
+        admission,
         image_updates,
         targets,
         volume_content,
@@ -197,6 +199,7 @@ pub async fn register(
     supervisor.spawn(
         "swarm-task-pruning",
         crate::workers::pruning::run(
+            admission.clone(),
             cancellation.child_token(),
             container_reader.clone(),
             containers,
@@ -206,6 +209,7 @@ pub async fn register(
     supervisor.spawn(
         "stack-event-drift",
         crate::workers::stacks::event_drift(
+            admission.clone(),
             cancellation.child_token(),
             stacks.clone(),
             Box::new(drift_listener),
@@ -215,6 +219,7 @@ pub async fn register(
     supervisor.spawn(
         "git-repository-sync",
         crate::workers::git::git_repository_sync(
+            admission.clone(),
             cancellation.child_token(),
             git,
             notifications.subscribe(RuntimeSignal::Git),
@@ -223,6 +228,7 @@ pub async fn register(
     supervisor.spawn(
         "scripts-runs",
         crate::workers::scripts::script_runs(
+            admission.clone(),
             cancellation.child_token(),
             Arc::clone(&scripts),
             notifications.subscribe(citadel_runtime::RuntimeSignal::Script),
@@ -234,7 +240,11 @@ pub async fn register(
     );
     supervisor.spawn(
         "scripts-scheduler",
-        crate::workers::scripts::script_scheduler(cancellation.child_token(), scripts),
+        crate::workers::scripts::script_scheduler(
+            admission.clone(),
+            cancellation.child_token(),
+            scripts,
+        ),
     );
     supervisor.spawn(
         "platform-threshold-alerts",
@@ -250,6 +260,7 @@ pub async fn register(
     supervisor.spawn(
         "alert-deliveries",
         crate::workers::alerts::deliveries(
+            admission.clone(),
             cancellation.child_token(),
             alert_deliveries,
             notifications.subscribe(RuntimeSignal::AlertDelivery),
@@ -258,6 +269,7 @@ pub async fn register(
     supervisor.spawn(
         "build-runs",
         crate::workers::builds::build_runs(
+            admission.clone(),
             cancellation.child_token(),
             Arc::clone(&builds),
             settings.build_tracking_slots,
@@ -267,6 +279,7 @@ pub async fn register(
     supervisor.spawn(
         "build-consumers",
         crate::workers::builds::build_consumers(
+            admission.clone(),
             cancellation.child_token(),
             citadel_builds::BuildCompletionService::new(
                 Arc::new(
@@ -303,6 +316,7 @@ pub async fn register(
     supervisor.spawn(
         "backup-runs",
         crate::workers::backups::backup_runs(
+            admission.clone(),
             cancellation.child_token(),
             Arc::clone(&backups),
             settings.backup_workers.clone(),
@@ -312,6 +326,7 @@ pub async fn register(
     supervisor.spawn(
         "backup-restore-runs",
         crate::workers::backups::restore_runs(
+            admission.clone(),
             cancellation.child_token(),
             Arc::clone(&backups),
             settings.backup_workers.clone(),
@@ -321,6 +336,7 @@ pub async fn register(
     supervisor.spawn(
         "backup-policy-scheduler",
         crate::workers::backups::policy_scheduler(
+            admission.clone(),
             cancellation.child_token(),
             backups,
             settings.backup_workers.clone(),
@@ -336,7 +352,11 @@ pub async fn register(
     );
     supervisor.spawn(
         "deployment-image-updates",
-        crate::workers::deployments::image_updates(cancellation.child_token(), deployments),
+        crate::workers::deployments::image_updates(
+            admission.clone(),
+            cancellation.child_token(),
+            deployments,
+        ),
     );
     supervisor.spawn(
         "swarm-service-operation-reconciliation",
@@ -357,6 +377,7 @@ pub async fn register(
     supervisor.spawn(
         "swarm-service-image-updates",
         crate::workers::swarm_services::swarm_service_image_updates(
+            admission.clone(),
             cancellation.child_token(),
             swarm_services,
         ),
@@ -372,6 +393,7 @@ pub async fn register(
     supervisor.spawn(
         "stack-drift-monitor",
         crate::workers::stacks::stack_drift_monitor(
+            admission.clone(),
             cancellation.child_token(),
             Arc::clone(&stacks),
         ),
@@ -379,6 +401,7 @@ pub async fn register(
     supervisor.spawn(
         "stack-webhooks",
         crate::workers::stacks::stack_webhooks(
+            admission.clone(),
             cancellation.child_token(),
             stacks.clone(),
             notifications.subscribe(RuntimeSignal::StackWebhooks),
@@ -387,6 +410,7 @@ pub async fn register(
     supervisor.spawn(
         "stack-updates",
         crate::workers::stacks::stack_updates(
+            admission.clone(),
             cancellation.child_token(),
             stacks.clone(),
             git_completed,

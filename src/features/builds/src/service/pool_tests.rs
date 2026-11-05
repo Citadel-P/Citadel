@@ -59,12 +59,14 @@ impl BuildService {
         let result = match checked {
             Ok(Ok(result)) => result,
             Ok(Err(error)) => BuildPoolCheck {
+                agent_version: None,
                 ready: false,
                 message: format!("Citadel Agent build capability check failed: {error}"),
             },
             Err(_) => {
                 cancellation.cancel();
                 BuildPoolCheck {
+                    agent_version: None,
                     ready: false,
                     message: "Citadel Agent build capability check timed out.".into(),
                 }

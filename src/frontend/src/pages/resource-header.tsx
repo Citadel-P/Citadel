@@ -4,10 +4,13 @@ import { SearchField } from '@/components/custom/search-field';
 import { Button } from '@/components/ui/button';
 import { ResourceTagFilter } from '@/features/tags/components';
 import { ResourcePlatformFilter } from '@/features/platforms/platform-filter';
+import { cn } from '@/lib/utils';
 import { Plus } from 'lucide-react';
 
 type ResourceHeaderProps = {
   type: string;
+  variant?: 'plain' | 'card';
+  Details?: React.FC;
   icon?: React.ComponentType<{ className?: string }>;
   title?: string;
   subtitle?: string;
@@ -24,6 +27,8 @@ type ResourceHeaderProps = {
 
 export const ResourceHeader = ({
   type,
+  variant,
+  Details,
   icon,
   title,
   subtitle,
@@ -41,18 +46,25 @@ export const ResourceHeader = ({
   const defaultTitle = PluralResourceMap[type as ResourceType] ?? type;
   return (
     <div className="space-y-(--section-gap)">
-      <PageHeader
-        title={title ?? defaultTitle}
-        description={subtitle}
-        icon={Icon && <Icon className="size-5" />}
-        actions={
-          showAdd && (
-            <Button type="button" onClick={onAdd} disabled={addDisabled}>
-              <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
-            </Button>
-          )
-        }
-      />
+      <div className={cn(variant === 'card' && 'rounded-lg border bg-card p-(--surface-padding) shadow-xs')}>
+        <PageHeader
+          title={title ?? defaultTitle}
+          description={subtitle}
+          icon={Icon && <Icon className="size-5" />}
+          actions={
+            showAdd && (
+              <Button type="button" onClick={onAdd} disabled={addDisabled}>
+                <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
+              </Button>
+            )
+          }
+        />
+        {Details && (
+          <div className="mt-3 sm:pl-14">
+            <Details />
+          </div>
+        )}
+      </div>
       {(showSearch || showTagFilter || showPlatformFilter || Extra) && (
         <div
           role="region"

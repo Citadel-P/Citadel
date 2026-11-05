@@ -15,3 +15,5 @@ pub mod swarm_services;
 pub mod volumes;
 
 pub mod resource_copies;
+
+pub mod agent_updates;

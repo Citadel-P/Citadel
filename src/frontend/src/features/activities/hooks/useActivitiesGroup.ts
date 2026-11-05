@@ -7,7 +7,7 @@ import {
   PagedActivityView,
 } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
-import { useActivityQuery } from '@/lib/atoms';
+import { useActivityQuery, type ActivityQueryState } from '@/lib/atoms';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 
@@ -17,6 +17,18 @@ export const useActivitiesGroup = (
   pageSize?: number | undefined,
 ) => {
   const [query] = useActivityQuery();
+  return useActivityResults(query, resourceId, resourceType, pageSize);
+};
+
+export const useScopedActivitiesGroup = (query: ActivityQueryState) =>
+  useActivityResults(query, query.resourceId, query.resourceType === 'All' ? undefined : query.resourceType);
+
+const useActivityResults = (
+  query: ActivityQueryState,
+  resourceId?: string,
+  resourceType?: `${ActivityResourceType}`,
+  pageSize?: number,
+) => {
   const eventType =
     query.eventType === 'BackupRunFailed'
       ? ActivityEventType.BackupRunCompleted
@@ -51,7 +63,7 @@ export const useActivitiesGroup = (
         (!selectedResourceType || activity.resourceType === selectedResourceType) &&
         (!selectedResourceId || activity.resourceId === selectedResourceId),
     );
-    if (matchingLiveActivities.length === 0) return base;
+    if (matchingLiveActivities.length === 0 || query.page !== 1) return base;
 
     const pageSize = Number(base.pageSize) || base.items?.length || 1;
     const baseItems = base.items || [];
@@ -67,12 +79,12 @@ export const useActivitiesGroup = (
       items: mergedItems,
       totalCount: Number(base.totalCount) + matchingLiveActivities.filter((act) => !liveIds.has(act.id)).length,
     };
-  }, [data, liveActivities, eventType, status, selectedResourceType, selectedResourceId]);
+  }, [data, liveActivities, eventType, status, selectedResourceType, selectedResourceId, query.page]);
 
   const handleActivityEventReceived = useCallback((activity: ActivityView) => {
     setLiveActivities((prev) => {
       if (prev.some((item) => item.id === activity.id)) return prev;
-      return [activity, ...prev];
+      return [activity, ...prev].slice(0, 200);
     });
   }, []);
 

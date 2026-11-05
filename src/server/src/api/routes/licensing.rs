@@ -2,8 +2,8 @@
 use crate::{
     api::{
         error::{ApiError, error_response, no_store},
+        resource_access::require_human_administrator,
         resources::licensing::{requests::InstallLicenseRequest, views},
-        routes::authentication::require_human_administrator,
     },
     openapi::router::OpenApiRouterExt,
 };

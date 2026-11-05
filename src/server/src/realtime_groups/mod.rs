@@ -145,11 +145,16 @@ impl Group {
             return true;
         }
         if matches!(self.topic(), Topic::Activity { .. }) {
-            // The existing Alert router publishes a coarse Alert invalidation
-            // for Rule mutations too. Reload through the authorized activity
-            // reader; never broadcast audit payloads directly to subscribers.
+            // Some committed changes own activities under a different resource.
+            // Reload through the authorized activity reader; never broadcast
+            // audit payloads directly to subscribers.
             let resource_matches = self.reference() == Some(event.resource_type)
-                || (self.reference() == Some("AlertRule") && event.resource_type == "Alert");
+                || matches!(
+                    (self.reference(), event.resource_type),
+                    (Some("AlertRule"), "Alert")
+                        | (Some("Updates"), "ApplicationInfo" | "InstallationSettings")
+                        | (Some("User"), "InstallationSettings")
+                );
             return event.payload["dockerResourceType"] != "containerStats"
                 && resource_matches
                 && event.affects_resource(self.id());
@@ -1079,6 +1084,28 @@ mod tests {
         event.payload = json!({"dockerResourceType":"containerStats"});
         assert!(!group.affected_by(&event));
     }
+    #[test]
+    fn instance_changes_refresh_only_their_authorized_activity_topics() {
+        let hub = crate::realtime::RealtimeHub::new(
+            8,
+            std::sync::Arc::new(crate::metrics::Metrics::default()),
+        );
+        let mut receiver = hub.subscribe();
+        let id = Uuid::now_v7();
+        let updates = Group::parse(&format!("activity:Updates:{id}")).unwrap();
+        let user = Group::parse(&format!("activity:User:{id}")).unwrap();
+        let stack = Group::parse(&format!("activity:Stack:{id}")).unwrap();
+        for resource in ["ApplicationInfo", "InstallationSettings"] {
+            hub.publish_resource_change(resource, Uuid::nil(), "resourceChanged");
+            let event = receiver.try_recv().unwrap();
+            assert!(updates.affected_by(&event));
+            assert_eq!(user.affected_by(&event), resource == "InstallationSettings");
+            assert!(!stack.affected_by(&event));
+        }
+        hub.publish_resource_change("Stack", Uuid::nil(), "resourceChanged");
+        assert!(!updates.affected_by(&receiver.try_recv().unwrap()));
+    }
+
     #[test]
     fn rejects_private_untyped_malformed_and_unimplemented_stream_groups() {
         for name in [

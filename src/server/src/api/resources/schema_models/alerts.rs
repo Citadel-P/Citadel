@@ -55,5 +55,7 @@ enum_schema!(
         BuildAgentPoolUnavailable,
         LicenseEnteredGracePeriod,
         LicenseExpired,
+        CoreUpdateAvailable,
+        AgentUpdatesAvailable,
     ]
 );

@@ -87,7 +87,14 @@ fn validate_operations(inventory: &str) -> Result<(), String> {
         let (file, operation) = cells[7]
             .split_once(':')
             .ok_or("missing runtime reference")?;
-        if !docker.join(file).is_file() || operation.is_empty() {
+        let source = if let Some(file) = file.strip_prefix("agent/") {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../agent/src")
+                .join(file)
+        } else {
+            docker.join(file)
+        };
+        if !source.is_file() || operation.is_empty() {
             return Err(format!("invalid runtime reference: {}", cells[7]));
         }
         if cells[8].is_empty() || !inventory.contains(&format!("**{} —", cells[8])) {

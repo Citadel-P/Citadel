@@ -2,6 +2,7 @@ use crate::api::resources::resource_access::ResourceAccessInput;
 use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
+        resource_access::require_human_administrator,
         resources::{
             common::PagedResult,
             users::{
@@ -12,7 +13,6 @@ use crate::{
                 views::UsersResponse,
             },
         },
-        routes::authentication::require_human_administrator,
     },
     openapi::router::OpenApiRouterExt,
 };

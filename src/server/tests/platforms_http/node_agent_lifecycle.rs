@@ -42,6 +42,7 @@ async fn removal_routes_to_exact_edge_manager_and_checks_ownership_before_each_d
         manager_node_id: "manager".into(),
         manager_daemon_id: "daemon".into(),
         service_id: None,
+        approved_image: None,
         ca_config_id: None,
         secret_ids: vec![],
     };

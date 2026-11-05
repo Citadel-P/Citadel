@@ -107,7 +107,10 @@ pub(super) async fn verify(
                 .unwrap();
         } else {
             let claim = backups
-                .claim_restore(Utc::now() - chrono::Duration::hours(1))
+                .claim_restore(
+                    Utc::now() - chrono::Duration::hours(1),
+                    citadel_backups::RestoreClaimScope::All,
+                )
                 .await
                 .unwrap()
                 .unwrap();

@@ -49,18 +49,30 @@ pub struct IdentityHttpState {
 
 pub fn router(state: IdentityHttpState) -> Router {
     let mfa = crate::api::routes::mfa::router(state.clone());
-    documented_routes()
+    authentication_routes()
         .split_for_parts()
         .0
-        .with_state(state)
+        .with_state(state.clone())
+        .merge(crate::api::mutation_notifications::notify_mutations(
+            installation_routes().split_for_parts().0.with_state(state),
+            "InstallationSettings",
+        ))
         .merge(mfa)
 }
 
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
+    authentication_routes().merge(installation_routes())
+}
+
+fn installation_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
-        .normalized_routes(utoipa_axum::routes!(setup_status))
         .normalized_routes(utoipa_axum::routes!(get_installation_settings))
         .normalized_routes(utoipa_axum::routes!(patch_installation_settings))
+}
+
+fn authentication_routes() -> utoipa_axum::router::OpenApiRouter<IdentityHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(setup_status))
         .normalized_routes(utoipa_axum::routes!(initialize))
         .normalized_routes(utoipa_axum::routes!(login))
         .normalized_routes(utoipa_axum::routes!(refresh))
@@ -393,30 +405,9 @@ fn with_authentication_action(
     }
 }
 
-pub(crate) fn require_human(
-    principal: Option<Extension<ActorPrincipal>>,
-) -> Result<ActorPrincipal, IdentityError> {
-    let Some(Extension(principal)) = principal else {
-        return Err(IdentityError::Unauthenticated);
-    };
-    if !principal.is_human() {
-        return Err(IdentityError::Forbidden);
-    }
-    Ok(principal)
-}
-
-pub(crate) fn require_human_administrator(
-    principal: Option<Extension<ActorPrincipal>>,
-) -> Result<ActorPrincipal, IdentityError> {
-    let principal = require_human(principal)?;
-    if !principal.is_administrator() {
-        return Err(IdentityError::Forbidden);
-    }
-    Ok(principal)
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::api::resource_access::require_human_administrator;
     const REQUEST_ID: &str = "x-request-id";
 
     use crate::api::{error::api_result, routes::authentication::*};

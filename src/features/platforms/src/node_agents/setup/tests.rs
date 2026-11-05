@@ -35,6 +35,7 @@ fn claim() -> NodeAgentRemovalClaim {
         manager_node_id: "manager".into(),
         manager_daemon_id: "daemon".into(),
         service_id: None,
+        approved_image: None,
         ca_config_id: None,
         secret_ids: vec![],
     }

@@ -101,6 +101,11 @@ bash ../tools/dev/dev.sh exec npm run dev -- --host 0.0.0.0 --port 5173 --strict
 To start only the development Compose services, use
 `bash src/tools/dev/dev.sh compose-up` from the repository root.
 
+This development Compose setup mounts a locally built Core executable and is not
+registered for in-app Core or PostgreSQL updates. Sharing a Compose project does
+not enable updater registration. To test replacement in the browser, use the
+[isolated updater fixture](../test/README.md#browser-and-full-lifecycle-postgresql-upgrades).
+
 ## Configuration and persistent data
 
 | File or location | Purpose |
@@ -138,8 +143,305 @@ Inspect non-secret effective configuration without connecting to PostgreSQL:
 bash src/tools/dev/dev.sh exec cargo run --locked -p citadel-server -- print-effective-config
 ```
 
-This command reports deployment configuration. Database-managed update-check and
-MFA-policy choices are shown in administrator **Profile → Instance settings**.
+This command reports deployment configuration. Administrators manage the persisted
+update-check choice in **Settings → Updates → Config** and the MFA policy in
+**Profile → Instance settings**.
+
+For updater development, `citadel-server verify-update-release --version VERSION`
+checks a completed official release manifest and its exact Core image signature.
+The packaged Core includes Cosign; native runs require `cosign` on PATH. This
+explicit diagnostic does not need a database or start Core. It honours
+`CITADEL_UPDATE_CHECKS_ENABLED=false`, sends no instance credentials, and prints
+only the verified version and digest reference. It does not establish upgrade
+eligibility or perform installation. Automatic checks keep their existing setup
+and policy gates.
+
+`citadel-server upgrade-descriptor-json` prints the local build's version,
+embedded migration-catalog SHA-256, installer/update protocol versions and
+qualified source transitions. It needs neither configuration, network access nor
+a database connection. The source list is currently empty: no automatic upgrade
+path is qualified. Release acceptance compares this output from both Core image
+architectures with the tagged checkout; it does not enable update execution.
+
+On Linux, inspect the descriptor from a verified published target with:
+
+```bash
+citadel-server inspect-update-release --version 1.2.3 --architecture amd64
+```
+
+Use an actual completed release version and `amd64` or `arm64`. This operator
+diagnostic requires Cosign, a Docker CLI supporting `image inspect --platform`
+and a daemon supporting API 1.49 or newer, plus access to `/var/run/docker.sock`;
+`CITADEL_UPDATE_CHECKS_ENABLED=false` also prohibits it. It verifies the signature
+before pulling the immutable image and runs a disposable descriptor-only container
+without installation mounts or network access. It returns JSON containing the
+target identity and embedded descriptor. It does not start Core services, migrate
+a database, register an installation, save a review or install the release.
+The target architecture must be executable by the daemon; emulation is not configured.
+Both pull and image inspection explicitly select that architecture, including when
+multiple platforms of the same release are cached.
+
+Cancellation waits for bounded probe cleanup. Failures return no successful JSON;
+a cleanup failure names the probe requiring inspection. A process/host crash or a
+late Docker create after a timeout can leave an unstarted probe labelled
+`com.citadel.update-inspection`; inspect that exact probe, rather than removing
+installation containers. Pulled images remain cached. Successful inspection proves
+target metadata, not a qualified source-to-target transition or recovery readiness.
+
+On Linux, `citadel-server check-update-compose` checks the configuration portion
+of updater registration using the Compose CLI packaged in Core:
+
+```bash
+citadel-server check-update-compose \
+  --directory /opt/citadel --project citadel \
+  --compose-file /opt/citadel/docker-compose.yml
+```
+
+Supply the actual original project name and canonical host paths. If the original
+invocation used the Edge overlay, append
+`--compose-file /opt/citadel/compose.edge.yml`. A container running this diagnostic
+needs the installation directory mounted read-only at that same path and a user
+that can read its private files. It needs no Docker socket or database access.
+Do not relax file permissions to make the check pass.
+
+The Docker Compose adapter accepts one to four distinct `.yaml`/`.yml` files
+directly inside the installation directory, in their original invocation order.
+It validates configuration rather than comparing files with embedded templates.
+Comments, filenames, labels, published Core ports and explicit volume/network names
+can differ from the examples. The current profile still requires `server` and
+`pg_db`, the `citadel_data`/`postgres_data` volume roles, the default bridge network,
+and the supported persistent mount paths. An installation kind identifies this
+profile as Docker Compose; Podman and Kubernetes are not implemented.
+
+Settings use a private `.env` containing unique `NAME=value` assignments without
+variable interpolation. Service `env_file` references must point to that same
+`.env` with `format: raw`. Includes, extends, builds, external configuration/secret
+files, YAML merge/tag extensions and unrecognized fields are rejected before
+Compose runs. External databases, remote Core Agents, additional services and
+storage-root overrides are not supported. It resolves captured bytes in a private
+temporary directory, rejects input changes during the check, and prints only
+the project, configuration fingerprint and desired image/volume/network names.
+Errors omit Compose output because it may contain secrets. It does not save a
+registration or prove that running containers match these settings.
+
+The next step for a current-build development installation is the Linux bootstrap
+command below. The state directory must already exist, be mode `0700`, and belong
+to the user intended to execute updates. Use a dedicated host path outside Docker's
+data directory and the Citadel volumes. The command requires local Docker socket
+access, a healthy single-Core Compose project and completed instance setup:
+
+```bash
+citadel-server register-update-installation \
+  --directory /opt/citadel --project citadel \
+  --compose-file /opt/citadel/docker-compose.yml \
+  --state-directory /opt/citadel-update-state
+```
+
+Supply the original ordered Edge overlay here too, when used. This Rust command
+is also included in the Core image; no host Python installation is required.
+For containerized execution, use Docker's default hostname and mount exactly the
+installer directory read-only, the private state directory read-write and
+`/var/run/docker.sock`, each at its original host path. Run as the intended updater
+user with socket access and permission to read the protected installer files.
+Use `--entrypoint /app/citadel-server` to invoke the diagnostic directly: the normal
+Core entrypoint switches root to the Core service UID. Set `--user UID:GID` to the
+owner of the private installer inputs and state; add the socket's group for a
+non-root executor when needed. Do not change those files' permissions to bypass
+an ownership mismatch.
+The command verifies these mounts against its own container on that daemon.
+The registration container needs no network attachment: the database identity diagnostic executes in the
+existing Core container, using Core's existing database configuration.
+
+The bootstrap compares running services and storage with the supplied inputs,
+reads the initialized database identity without migrations or writes, and creates
+`installation.json` with mode `0600`. The file records the installation kind, identities and fingerprints;
+it contains no environment values. Unknown kinds or malformed registration are
+refused without replacing existing evidence. Identical retries preserve its ID. Drift,
+conflicting registration, corrupt files and orphaned recovery evidence cause a
+refusal without overwriting state. It does not stop services, approve an update,
+establish source-to-target compatibility or enable automatic installation.
+
+For UI installation, use the root executor (`0:0`). First register the healthy
+installation, then add `CITADEL_UPDATE_STATE_DIRECTORY=/opt/citadel-update-state`
+to its existing `.env` and recreate Core with the original Compose invocation.
+After Core is healthy, repeat `register-update-installation` with `--refresh` and
+the same paths. This explicitly accepts the changed Core container/configuration
+while preserving the instance, daemon, database, volumes, network and registration
+ID. Refresh requires an idle, healthy installation with a verified catalog; active
+or orphaned recovery evidence blocks it. It is never an escape from maintenance.
+Do not enable the state-directory setting before the initial registration exists.
+
+To revalidate an existing registration without changing it, use:
+
+```bash
+citadel-server check-update-installation --state-directory /opt/citadel-update-state
+```
+
+Use the same executor UID/GID and mounts as registration. The command derives the
+Compose invocation from protected registration, takes the existing nonblocking
+installation lock, and compares fresh configuration, daemon, container, storage,
+network and instance observations with the saved values. It returns JSON with
+`registration`, `database`, `recoveryKeys` and `checkpointStorage`; no registration or
+lock file is created or repaired. Edited
+inputs, changed resources, lock contention or recovery evidence cause refusal.
+The lock is released on success, failure or cancellation. Release-network policy
+does not disable this local check. It invokes
+`instance-identity-json --verify-migrations` inside the source Core to read initialized
+identity, update ownership, the migration journal and database size. Missing,
+incomplete, failed, unknown or checksum-mismatched migrations fail closed without
+changing migration history. A retained update owner also blocks the check.
+
+It also invokes `check-update-recovery-keys` inside Core as its packaged service
+user (65532:0). This read-only diagnostic uses existing key files or explicitly
+configured JWT/encryption keys; it does not initialize Core or create replacements.
+It checks availability, encoding and length, with bounded private file reads and
+no symlink traversal. Its JSON reports only `DataVolume` or `Environment`
+for JWT, secret encryption and Agent signing. External keys must be represented
+in the protected installer inputs and match the running container environment.
+Neither values nor key fingerprints are returned. Preserve the original keys;
+passing this check is not proof of successful decryption or an independent backup.
+
+Checkpoint storage requires available space of twice the current database size
+plus 64 MiB in the registered state directory. A private 4 KiB file is written,
+synchronized and removed to test executor access. A crash can leave a
+`.checkpoint-probe-*` file; preserve the state directory and inspect that exact
+probe before retrying. This budget does not reserve space or guarantee that a
+future dump fits.
+
+This supplies database and storage evidence for preflight; it does not qualify a
+target transition, create or restore-test a checkpoint, save an update review or
+permit replacement. Its result is a
+point-in-time observation; the executor must revalidate under ownership before
+any future replacement.
+
+The initial profile requires the Compose network and Citadel data volumes to be
+used only by these two services; additional consumers are rejected as ambiguous.
+Registration remains an explicit operator step. Registered Linux Compose
+installations now have review/approval endpoints and a supervised execution path.
+Only a signed target descriptor that explicitly qualifies the source version,
+catalog, architecture and Agent versions permits a review. Packaged transition
+qualification remains required before publishing an eligible transition.
+
+Live update admission has a shared process-local gate wired into HTTP and worker
+dispatch. `UpdateDrainService` validates a committed claim with the PostgreSQL
+reader, closes the gate through the Server runtime port, and observes local tasks
+and durable operations/reservations within a deadline. It does not mutate journal
+history, release ownership or create checkpoints. Run it under a separate supervised
+owner, not inside the `DynamicTasks` tracker it observes. The installation worker invokes this step after the driver's acknowledged
+journal has been imported. All writers must be quiescent before checkpoint creation. See the admission and
+owned-drain regression commands in [`test/README.md`](../test/README.md).
+
+`prepare_update_checkpoint` is an internal helper building block, not a CLI or HTTP
+action. It requires the held installation lock and matching backup-phase journal,
+preserves installer inputs, reuses the system recovery builder and durably publishes
+a preparation receipt after integrity checks. It never initializes database
+identity, advances the journal or resumes Core. Failed/interrupted attempt
+directories are evidence, not disposable cache. The caller must finish draining
+and stop source writers first; the detached helper driver enforces those steps
+before calling this primitive. Run the checkpoint regressions with dedicated disposable source
+and restore databases as described in [`test/README.md`](../test/README.md).
+
+`verify_checkpoint_integrity` rechecks the operation, registration, saved installer
+inputs and recovery-bundle checksums immediately before replacement. It performs no
+Docker mutations and does not restore the archive. Runtime updates need no restore
+sandbox, restore receipt or sandbox resource budget. Validate actual restoration
+with the shared recovery tests and the disposable checkpoint round trip in
+[`test/README.md`](../test/README.md); never describe integrity checks as restore tests.
+Target startup still validates keys, migrations and stored credential decryption.
+
+The detached updater has three entry points: `launch_update_helper` in the
+registered executor namespace, `run_update_helper` in the pinned source helper,
+and `TargetUpdateSession` in replacement Core startup. Individual execution phases
+are private to the adapter. Core invokes the launcher through a short-lived `update-host` utility from its
+actual installed image. Only installer inputs, private state and the local socket
+are bound into the utility; temporary files use a separate tmpfs. Its exact ID,
+image, labels, command, mounts and privilege profile are checked before execution
+and cleanup. No Python installation or embedded Compose template is required.
+
+The helper driver owns its lock and journal for preparation, authorized shutdown,
+checkpoint creation and integrity verification, Core-only replacement and completion.
+`UpdateInstallService`
+waits for prepared-helper readiness, then drains before granting shutdown. Preparation
+must have published its fresh target/Agent/configuration evidence before a grant can succeed.
+Core and target both use the same bounded `update-helper-handoff` Docker-exec
+command, with typed actions and exact operation/helper identity. Only the driver
+writes the complete execution journal; command handlers publish grants or completion
+mailboxes. Read-only pending responses share one bounded, cancellation-aware wait.
+No request executes replacement, retries a stop or releases maintenance.
+
+Post-publication validation is shared by replacement observation, target startup
+and completion. A replacing operation may return pending while Compose starts the
+target before the helper binds it. Bound targets require unchanged configuration,
+checkpoint, PostgreSQL/storage/network and container/start identity. Readiness can
+still fail in maintenance; Docker health is not update success.
+
+Target startup validates the source catalog and recovery keys, runs supported
+migrations, verifies the target catalog and credential decryption, and commits
+completion under the monitored single-Core lease. The helper asks the target's
+read-only `update-target-receipt` command to verify that committed receipt before
+acknowledging completion and exiting. No source-schema queries run after replacement.
+Host reconciliation and final admission are connected to target acceptance.
+A durable finalization record permits interrupted cleanup and archive moves to finish
+after validating the committed target again; replacement is never replayed. A complete
+archive can finish an interrupted database release. Failures before committed
+completion retain maintenance for explicit operator recovery. Only qualified release transitions can be approved.
+Helper acknowledgement, preparation, stop,
+replacement and target binding now live with the phase history in one atomic journal.
+The launcher still owns launch intent/start binding, and other processes publish only
+the shutdown grant/completion mailbox. Standalone checkpoint journals, database
+claims and migration history retain their formats. Existing fragmented operation
+state is retained and blocks automatic relaunch; it is not silently migrated or replayed.
+
+For a failed update with a completed checkpoint, `restore-update-checkpoint`
+restores the source into a **new empty database**. Stop the original Core and helper,
+preserve their volumes and journals, and use the exact source image recorded in
+`checkpoint.json`. Supply the original encryption key and configure the new database.
+Mount the private checkpoint at its original absolute path, then run:
+
+```bash
+citadel-server restore-update-checkpoint \
+  --checkpoint-directory /opt/citadel-update-state/checkpoint-OPERATION_UUID \
+  --confirm-instance-replacement
+```
+
+The command refuses a nonempty destination or a live Core database lease. It checks
+artifact integrity and source build/catalog before restoring, then validates instance,
+claim identity, applied catalog and stored credential decryption. The restored
+attempt is recorded as failed and its claim is released atomically with its Activity.
+The original database and host journal are untouched. If post-restore verification
+fails, the restored claim remains closed; preserve that database and retry recovery
+into another empty database after correcting the cause. Restore the original JWT,
+Agent signing and encryption material and the required Core data before starting the
+source image against the recovered database with a **new** update-state directory.
+Register that recovered installation separately; do not erase the original evidence.
+
+For the execution invariants and module responsibilities, see
+[instance updates](ARCHITECTURE.md#instance-update-work-in-progress). Do not expose
+internal commands as operator shortcuts around the full update/recovery flow.
+
+Validate bootstrap changes with the isolated Docker acceptance command in
+[`test/README.md`](../test/README.md). It exercises the shipped layout and a compatible customized Edge-overlay installation
+and containerized registration with completed HTTP setup. This is a registration
+gate; it does not qualify a source-to-target upgrade or recovery path.
+
+The local lifecycle runner in [`test/README.md`](../test/README.md) exercises normal
+replacement, interrupted final release and checkpoint restore without publishing
+anything. It uses a test-only release dependency; shipped binaries always use the
+official verifier and cannot enable the fixture through configuration. Candidate
+acceptance runs this regression on both supported architectures.
+
+The local Agent updater runner in [`test/README.md`](../test/README.md) uses the same
+test-only Core catalog boundary with real Direct/Edge Agents, separate disposable
+Docker engines and source/target images built from the checkout. Its browser mode
+leaves approval to the user; its automated mode verifies replacement and
+authenticated reconnect. It does not bypass production artifact verification.
+
+The opt-in published-transition smoke test in [`test/README.md`](../test/README.md)
+uses the real update APIs and signature checks on a disposable Docker daemon, then
+restores the resulting checkpoint into a fresh database. It requires a source that
+already contains the updater and an eligible published target; it cannot qualify
+the first transition while the compiled source list is empty. Do not add a source
+entry merely to make this test reach approval.
 
 For deployment settings, use the [configuration guide](content/docs/getting-started/configuration.md).
 
@@ -190,6 +492,11 @@ Verify committed artifacts with:
 cargo run --locked -p xtask -- openapi --check
 npm run api:verify --prefix src/frontend
 ```
+
+Run generation and both verification commands sequentially. Finish them before
+frontend tests, lint, or TypeScript checks: `api:verify` temporarily regenerates
+outputs and restores the original files, so concurrent checks can observe missing
+or intermediate generated files.
 
 Do not hand-edit generated schemas or TypeScript models. Documentation-site
 commands are in [docs/README.md](README.md).
@@ -292,8 +599,8 @@ currently configured.
 
 ## Database schema changes
 
-The pre-release migration catalog contains only `0001_initial.sql`, generated
-from `src/infrastructure/database/src/schema/schema.sql`. It includes workload
+The migration catalog starts with `0001_initial.sql` and appends numbered upgrade
+migrations. The initial migration includes workload
 statistics, alert observation ordering, secret-use grants, and build, backup,
 restore and script execution ownership/capacity changes.
 
@@ -316,19 +623,19 @@ otherwise retain captured grants exactly, including revocations. Rehearse the
 import before cutover. Normal deployments must continue to preserve applied
 migration checksums.
 
-While this baseline remains unpublished, update the schema authority and regenerate
-the single initial migration and its catalog:
+For the current catalog, preserve applied migrations and add each schema change
+as the next numbered SQL migration under `src/infrastructure/database/generated/`.
+Append the same SQL to `src/infrastructure/database/src/schema/schema.sql`; the
+verifier checks it against the ordered migration SQL. Then regenerate the catalog:
 
 ```bash
-cargo run --locked -p xtask -- database refresh-baseline
+cargo run --locked -p xtask -- database refresh-catalog
 cargo run --locked -p xtask -- database verify
 ```
 
-After release, preserve applied migrations and add each change as the next numbered
-SQL migration under `src/infrastructure/database/generated/`. Update the schema
-authority as well, then run `database refresh-catalog` and `database verify`.
 Test fresh installation and upgrades against separate disposable databases.
-`refresh-baseline` is not an upgrade path. Never rewrite applied migration journals
+`refresh-baseline` only supports a single unpublished initial migration; it is not
+an upgrade path for this catalog. Never rewrite applied migration journals
 or checksums to suppress an `AppliedChecksum` error.
 
 ## Agent development

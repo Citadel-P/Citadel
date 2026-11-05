@@ -6,7 +6,7 @@ use crate::{
     realtime::RealtimeHub,
 };
 use axum::{extract::Extension, http::HeaderMap};
-use citadel_identity::{ActorPrincipal, IdentityService};
+use citadel_identity::{ActorPrincipal, IdentityError, IdentityService};
 use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
 use uuid::Uuid;
 
@@ -235,4 +235,26 @@ pub(crate) fn publish_resource_change(
         // authoritative, permission-filtered read after this invalidation.
         realtime.publish_resource_change(resource_type, Uuid::nil(), event_kind);
     }
+}
+
+pub(crate) fn require_human(
+    principal: Option<Extension<ActorPrincipal>>,
+) -> Result<ActorPrincipal, IdentityError> {
+    let Some(Extension(principal)) = principal else {
+        return Err(IdentityError::Unauthenticated);
+    };
+    if !principal.is_human() {
+        return Err(IdentityError::Forbidden);
+    }
+    Ok(principal)
+}
+
+pub(crate) fn require_human_administrator(
+    principal: Option<Extension<ActorPrincipal>>,
+) -> Result<ActorPrincipal, IdentityError> {
+    let principal = require_human(principal)?;
+    if !principal.is_administrator() {
+        return Err(IdentityError::Forbidden);
+    }
+    Ok(principal)
 }

@@ -1,3 +1,4 @@
+import { PasswordFeedback } from '@/components/custom/password-feedback';
 import { Timestamp } from '@/components/custom/timestamp';
 import { InstallationSettingsControls } from './installation-settings';
 import { useSetupContext } from '@/features/setup/setup-context';
@@ -400,11 +401,18 @@ function PasswordCommand() {
             </label>
             <Input
               id="profile-new-password"
+              aria-describedby="profile-password-feedback"
               type="password"
               value={newPassword}
               autoComplete="new-password"
               disabled={changePassword.isPending}
               onChange={(event) => setNewPassword(event.target.value)}
+            />
+            <PasswordFeedback
+              id="profile-password-feedback"
+              password={newPassword}
+              minimumLength={passwordMinimumLength}
+              maximumLength={passwordMaximumLength}
             />
           </div>
           <div className="space-y-2">
@@ -420,12 +428,6 @@ function PasswordCommand() {
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
           </div>
-          {!validationError && (
-            <p className="text-xs text-muted-foreground">
-              Use {passwordMinimumLength} to {passwordMaximumLength} characters.
-            </p>
-          )}
-
           {(validationError || changePassword.validationErrors) && (
             <p className="text-sm text-destructive">{validationError ?? changePassword.validationErrors}</p>
           )}

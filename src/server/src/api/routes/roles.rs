@@ -2,6 +2,7 @@ use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
         request_validation::ApiPath,
+        resource_access::require_human_administrator,
         resources::roles::{
             requests::{
                 CreateRoleRequest, DeleteRolesRequest, PatchRolePermissionsRequest,
@@ -9,7 +10,6 @@ use crate::{
             },
             views::{PermissionMatrixViewItem, RolesResponse},
         },
-        routes::authentication::require_human_administrator,
     },
     openapi::router::OpenApiRouterExt,
 };

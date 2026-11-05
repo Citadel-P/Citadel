@@ -1,0 +1,51 @@
+//! Durable Docker-helper handoff and shutdown, separate from release discovery.
+mod checkpoint;
+mod command;
+mod completion;
+mod driver;
+mod evidence;
+mod finalization;
+mod keys;
+mod launcher;
+mod preparation;
+mod replacement;
+mod resume;
+mod runtime;
+pub use resume::{CompletedUpdateTarget, completed_update_target};
+mod session;
+mod source_recovery;
+mod state;
+pub(super) use source_recovery::recover_source;
+mod target;
+mod target_runtime;
+mod verification;
+
+pub use command::{MAX_HANDOFF_REQUEST, execute_helper_handoff};
+pub use completion::TargetUpdateCompletion;
+pub use driver::{UpdateHelperBudget, run_update_helper};
+pub use evidence::HelperLaunchIntent;
+pub(super) use finalization::CompletedUpdate;
+pub use finalization::{FinalizeUpdateRequest, finalize_update};
+pub use keys::TargetRecoveryKeys;
+pub use launcher::{LaunchedUpdateHelper, launch_update_helper};
+pub use runtime::DockerHelperHandoff;
+use session::OwnedUpdateHelper;
+pub(super) use state::{ExecutionJournal, failed_journal};
+pub use target::TargetUpdateEvidence;
+pub use target_runtime::TargetUpdateSession;
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+mod replacement_tests;
+
+#[cfg(test)]
+mod target_tests;
+
+mod database;
+mod database_eligibility;
+pub(super) use database_eligibility::check_database_eligibility;
+
+#[cfg(test)]
+mod database_tests;

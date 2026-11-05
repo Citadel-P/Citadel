@@ -342,6 +342,27 @@ class RecoveryStorageTests(unittest.TestCase):
                 action()
         self.assertIsNotNone(self.backend.release(self.storage))
 
+    def test_cleanup_retains_evidence_when_public_upgrade_descriptor_is_lost_or_changed(self):
+        descriptor = release.expected_upgrade_descriptor(self.data)
+        self.value['evidence'] = {arch: {'upgradeDescriptor': descriptor} for arch in release.POLICY['architectures']}
+        self.complete()
+        key = self.value['tag'], 'release-manifest.json'
+        original = json.loads(self.backend.bytes[key])
+        self.assertEqual(original['upgradeDescriptor'], descriptor)
+        for replacement in [None, dict(descriptor, targetCatalogSha256='f'*64)]:
+            manifest = copy.deepcopy(original)
+            if replacement is None:
+                manifest.pop('upgradeDescriptor')
+            else:
+                manifest['upgradeDescriptor'] = replacement
+            raw = json.dumps(manifest).encode()
+            self.backend.bytes[key] = raw
+            self.backend.bytes[self.value['tag'], 'SHA256SUMS'] = (
+                release.digest(raw).split(':')[1] + '  release-manifest.json\n').encode()
+            with self.assertRaisesRegex(ValueError, 'keep recovery files'):
+                self.backend.cleanup(self.data)
+            self.assertIsNotNone(self.backend.release(self.storage))
+
     def test_interrupted_cleanup_retries_without_rebuilding_or_republishing(self):
         self.complete()
         self.backend.fail_delete = True

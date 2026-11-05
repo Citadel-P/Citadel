@@ -20,16 +20,21 @@ Enter:
 3. A password meeting the configured length requirement (15 to 128 characters by default).
 4. The same password again.
 
-**Advanced** is collapsed by default. Open it to change update checks (enabled
-by default) or the two-factor authentication policy (Optional by default).
+The password field shows a character count and an estimated strength. The estimate
+uses a lightweight check of length, variety, and repetition in your browser. It
+is advisory and does not check breached-password lists or a comprehensive dictionary;
+the configured length limits still apply. Longer, uncommon passphrases can help you choose a stronger password.
+Repetitive passwords with small variations are rated conservatively; adding a
+symbol or space does not automatically make them strong.
 
 **MFA is optional by default.** You and other users can enable it later in
-**Profile → Security → Two-factor authentication**. Selecting a required policy
-starts MFA enrollment after the administrator account is created. A policy
-enforced by server configuration cannot be weakened during setup.
+**Profile → Security → Two-factor authentication**. If the server requires MFA,
+enrollment starts after the administrator account is created.
 
-Update checks send no Citadel telemetry and never install updates. Core waits
-until the setup choices have been saved before making a release-check request.
+Setup uses the server-provided installation settings. Update checks are enabled
+by default and can be changed later in **Updates → Config**. They send no Citadel
+telemetry and never install updates. Core waits until setup is complete before
+making a release-check request.
 See [update checks and privacy](/getting-started/configuration#allow-update-checks).
 
 Select **Create administrator**. Citadel creates the account with the built-in

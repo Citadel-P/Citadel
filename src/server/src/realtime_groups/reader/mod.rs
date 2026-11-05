@@ -24,6 +24,7 @@ mod tests;
 // during delivery of one invalidation, after each reader checks authorization.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
+    pub admission: citadel_runtime::admission::AdmissionGate,
     pub image_store: Arc<dyn citadel_platforms::image_mutations::ImageMutationStore>,
     pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,
@@ -1452,7 +1453,13 @@ impl ApplicationGroupReader {
         use citadel_activities::ActivityResourceType as A;
         if matches!(
             kind,
-            A::User | A::Team | A::Role | A::ServiceAccount | A::OidcProvider | A::License
+            A::User
+                | A::Team
+                | A::Role
+                | A::ServiceAccount
+                | A::OidcProvider
+                | A::License
+                | A::Updates
         ) {
             if !p.is_administrator() {
                 return Err(RealtimeReadError::Authorization);

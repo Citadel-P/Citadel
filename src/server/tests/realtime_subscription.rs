@@ -1289,7 +1289,7 @@ async fn tracked_group_connections_still_reauthenticate_on_the_safety_interval()
 }
 
 #[tokio::test]
-async fn application_info_changes_only_notify_administrator_users() {
+async fn instance_settings_and_release_changes_only_notify_administrator_users() {
     use citadel_server::realtime_groups::{Group, GroupReadPort, GroupSnapshot};
     struct Reader {
         inner: FakeReader,
@@ -1364,12 +1364,16 @@ async fn application_info_changes_only_notify_administrator_users() {
         socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":TOKEN}).to_string().into())).await.unwrap();
         assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
         hub.publish_resource_change("ApplicationInfo", Uuid::nil(), "resourceChanged");
+        hub.publish_resource_change("InstallationSettings", Uuid::nil(), "resourceChanged");
         // A following event acts as a barrier: no timing-based absence assertion.
         hub.publish_resource_change("License", Uuid::nil(), "licenseStateChanged");
         if notified {
             let event = receive_json(&mut socket).await;
             assert_eq!(event["target"], "ApplicationInfoChanged");
             assert_eq!(event["arguments"], json!([]));
+            let settings_event = receive_json(&mut socket).await;
+            assert_eq!(settings_event["target"], "InstallationSettingsChanged");
+            assert_eq!(settings_event["arguments"], json!([]));
         }
         assert_eq!(
             receive_json(&mut socket).await["target"],

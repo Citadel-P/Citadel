@@ -42,8 +42,8 @@ impl PostgresBuildRepository {
                 .await
                 .map_err(storage)?;
             let message: String = result.message.chars().take(2048).collect();
-            let count = sqlx::query("UPDATE buildagentpools SET lastvalidationstatus=$3,lastvalidationmessage=$4,lastvalidatedat=now(),controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND enabled AND archivedat IS NULL AND (controlstate='Idle' OR controlstartedat < EXTRACT(EPOCH FROM now())::bigint-180) AND (lastvalidationstatus IS DISTINCT FROM $3 OR lastvalidationmessage IS DISTINCT FROM $4 OR lastvalidatedat IS NULL OR lastvalidatedat < now()-INTERVAL '5 minutes' OR controlstate<>'Idle')")
-                .bind(pool.id).bind(pool.row_version).bind(if result.ready {"Ready"} else {"Invalid"}).bind(&message).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+            let count = sqlx::query("UPDATE buildagentpools SET agentversion=$5,lastvalidationstatus=$3,lastvalidationmessage=$4,lastvalidatedat=now(),controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND enabled AND archivedat IS NULL AND (controlstate='Idle' OR controlstartedat < EXTRACT(EPOCH FROM now())::bigint-180) AND (agentversion IS DISTINCT FROM $5 OR lastvalidationstatus IS DISTINCT FROM $3 OR lastvalidationmessage IS DISTINCT FROM $4 OR lastvalidatedat IS NULL OR lastvalidatedat < now()-INTERVAL '5 minutes' OR controlstate<>'Idle')")
+                .bind(pool.id).bind(pool.row_version).bind(if result.ready {"Ready"} else {"Invalid"}).bind(&message).bind(&result.agent_version).execute(&mut *tx).await.map_err(storage)?.rows_affected();
             let observation = citadel_alerts::AlertObservation {
                 alert_type: "BuildAgentPoolUnavailable".into(),
                 resource_id: pool.id,
@@ -227,8 +227,8 @@ impl PostgresBuildRepository {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let message: String = result.message.chars().take(2048).collect();
-            let row = sqlx::query("UPDATE buildagentpools SET controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,lastvalidationstatus=$3,lastvalidationmessage=$4,lastvalidatedat=now(),updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' RETURNING *")
-                .bind(claim.id).bind(claim.row_version).bind(if result.ready { "Ready" } else { "Invalid" }).bind(&message)
+            let row = sqlx::query("UPDATE buildagentpools SET agentversion=$5,controlstate='Idle',controltriggeredby=NULL,controlstartedat=NULL,lastvalidationstatus=$3,lastvalidationmessage=$4,lastvalidatedat=now(),updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND controlstate='Processing' RETURNING *")
+                .bind(claim.id).bind(claim.row_version).bind(if result.ready { "Ready" } else { "Invalid" }).bind(&message).bind(&result.agent_version)
                 .fetch_optional(&mut *tx).await.map_err(storage)?
                 .ok_or_else(|| BuildError::Conflict("The Build Pool check has been superseded.".into()))?;
             let pool = map_pool(row)?;
@@ -265,7 +265,7 @@ impl PostgresBuildRepository {
     ) -> BoxFuture<'a, Result<BuildAgentPool, BuildError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let row = sqlx::query("UPDATE buildagentpools SET name=$3,normalizedname=$4,description=$5,enabled=$6,provider=$7,providerspec=$8,maxactivebuilders=$9,queuetimeoutseconds=$10,provisioningtimeoutseconds=$11,registrationtimeoutseconds=$12,heartbeattimeoutseconds=$13,cleanuptimeoutseconds=$14,maximuminstancelifetimeseconds=$15,failureretentionminutes=$16,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND archivedat IS NULL AND controlstate='Idle' RETURNING *")
+            let row = sqlx::query("UPDATE buildagentpools SET agentversion=CASE WHEN providerspec IS DISTINCT FROM $8 OR enabled IS DISTINCT FROM $6 THEN NULL ELSE agentversion END,name=$3,normalizedname=$4,description=$5,enabled=$6,provider=$7,providerspec=$8,maxactivebuilders=$9,queuetimeoutseconds=$10,provisioningtimeoutseconds=$11,registrationtimeoutseconds=$12,heartbeattimeoutseconds=$13,cleanuptimeoutseconds=$14,maximuminstancelifetimeseconds=$15,failureretentionminutes=$16,updatedat=now(),rowversion=rowversion+1 WHERE id=$1 AND rowversion=$2 AND archivedat IS NULL AND controlstate='Idle' RETURNING *")
                 .bind(current.id).bind(current.row_version).bind(&input.name).bind(input.name.to_uppercase())
                 .bind(&input.description).bind(input.enabled).bind(input.provider_spec["$type"].as_str()).bind(&input.provider_spec)
                 .bind(input.max_active_builders).bind(input.queue_timeout_seconds).bind(input.provisioning_timeout_seconds)

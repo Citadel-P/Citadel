@@ -270,6 +270,27 @@ impl DockerClient {
             .await?
             .id)
     }
+    pub async fn disable_container_restart(&self, id: &str) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        let update = body(&serde_json::json!({"RestartPolicy":{"Name":"no"}}))?;
+        self.api_result(
+            ContainerApiClient::new(self.configuration().await?)
+                .container_update(id, update)
+                .await,
+        )
+        .await?;
+        Ok(())
+    }
+    pub async fn rename_container(&self, id: &str, name: &str) -> Result<(), DockerError> {
+        validate_identifier(id)?;
+        validate_identifier(name)?;
+        self.api_result(
+            ContainerApiClient::new(self.configuration().await?)
+                .container_rename(id, name)
+                .await,
+        )
+        .await
+    }
     pub async fn start_container(&self, id: &str) -> Result<(), DockerError> {
         self.change_container_state(id, citadel_platforms::containers::ContainerAction::Start)
             .await

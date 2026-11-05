@@ -77,6 +77,7 @@ function SearchSection() {
       [AlertResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
       [AlertResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
       [AlertResourceType.License]: CitadelIcons.License,
+      [AlertResourceType.Updates]: CitadelIcons.Updates,
     };
 
     return Object.values(AlertResourceType).map((value) => ({
@@ -141,6 +142,7 @@ function SearchSection() {
       />
       {query.resourceType !== 'All' &&
         query.resourceType !== AlertResourceType.Webhook &&
+        query.resourceType !== AlertResourceType.Updates &&
         query.resourceType !== AlertResourceType.License && (
           <ResourceSelectorField
             sourceType={LookupResourceType.Alert}
@@ -164,6 +166,8 @@ function SearchSection() {
 }
 
 function getAlertTypeResourceType(type: AlertType): AlertResourceType {
+  if (type === AlertType.CoreUpdateAvailable || type === AlertType.AgentUpdatesAvailable)
+    return AlertResourceType.Updates;
   if (type.startsWith('Script')) return AlertResourceType.Script;
   if (type.startsWith('Webhook')) return AlertResourceType.Webhook;
   if (type.startsWith('License')) return AlertResourceType.License;

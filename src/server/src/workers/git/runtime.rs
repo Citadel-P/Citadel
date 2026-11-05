@@ -1,0 +1,73 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use citadel_git::GitRepositoryExecutionService;
+use tokio_util::sync::CancellationToken;
+
+const IDLE_DELAY: Duration = Duration::from_secs(30);
+const FAILURE_DELAY: Duration = Duration::from_secs(5);
+const SCHEDULE_INTERVAL: Duration = Duration::from_secs(60);
+
+pub(crate) async fn git_repository_sync(
+    admission: citadel_runtime::admission::AdmissionGate,
+    cancellation: CancellationToken,
+    service: Arc<GitRepositoryExecutionService>,
+    mut wake: tokio::sync::watch::Receiver<()>,
+) -> Result<(), String> {
+    let mut schedule = super::super::schedule::interval("git-sync", SCHEDULE_INTERVAL);
+    schedule.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        if cancellation.is_cancelled() {
+            return Ok(());
+        }
+        // Keep a claimed execution alive across scheduling ticks. Dropping it
+        // here used to interrupt clones taking longer than a minute and leave
+        // their durable claim awaiting stale-run recovery.
+        let Some(permit) = admission.enter("Git synchronization", &cancellation).await else {
+            return Ok(());
+        };
+        let iteration = citadel_runtime::runtime_metrics::RuntimeWork::GitSync.start();
+        let execution = service.process_one(&cancellation);
+        tokio::pin!(execution);
+        let result = loop {
+            tokio::select! {
+                result = &mut execution => break result,
+                _ = schedule.tick(), if !cancellation.is_cancelled() => {
+                    if let Some(_schedule) = admission.try_enter("Git schedules")
+                        && let Err(error) = service.enqueue_due(100).await {
+                        tracing::warn!(%error, "failed to enqueue due Git repository synchronizations");
+                    }
+                }
+            }
+        };
+        drop(iteration);
+        drop(permit);
+        match result {
+            Ok(true) => {}
+            Ok(false) => {
+                tokio::select! {
+                    () = super::super::notifications::wait(&mut wake, &cancellation, IDLE_DELAY) => {},
+                    _ = schedule.tick() => {
+                        if let Some(_schedule) = admission.try_enter("Git schedules")
+                        && let Err(error) = service.enqueue_due(100).await {
+                            tracing::warn!(%error, "failed to enqueue due Git repository synchronizations");
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::error!(%error, "Git repository synchronization worker failed");
+                if wait_or_cancel(&cancellation, FAILURE_DELAY).await {
+                    return Ok(());
+                }
+            }
+        }
+    }
+}
+
+async fn wait_or_cancel(cancellation: &CancellationToken, duration: Duration) -> bool {
+    tokio::select! {
+        () = cancellation.cancelled() => true,
+        () = tokio::time::sleep(duration) => false,
+    }
+}

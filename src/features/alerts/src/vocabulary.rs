@@ -33,6 +33,8 @@ PlatformCpuHigh,
     BuildAgentPoolUnavailable,
     LicenseEnteredGracePeriod,
     LicenseExpired,
+    CoreUpdateAvailable,
+    AgentUpdatesAvailable,
     }
 }
 

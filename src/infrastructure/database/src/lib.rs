@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
+mod catalog;
 mod runner;
+pub use catalog::AppliedMigration;
 
 pub use runner::{MigrationError, MigrationOutcome, MigrationRunner};
 
