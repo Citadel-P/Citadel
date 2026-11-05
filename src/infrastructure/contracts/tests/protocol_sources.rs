@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 fn protocol_sources_preserve_the_accepted_wire_contract() {
     // Central Agent updates add commands 6–8 and new RPC/messages. Existing
     // field numbers, command discriminants and authenticated envelopes are unchanged.
+    // Container block I/O counters add optional fields 7–8 without changing existing statistics.
     let sources = [
         (
             "script_service.proto",
@@ -18,7 +19,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "1724f857da584bad61bd67048aeb56606c3d72c7ce4e3e29d4b947ec3a34072c",
+            "ab8345474b2a45449f801e0f21774e8890b1177a19889fd8d1c2c8a3461781d3",
         ),
         (
             "platform_service.proto",
@@ -228,6 +229,35 @@ fn container_mount_inventory_uses_additive_fields_and_preserves_unknown_state() 
     let round_trip = ContainerMessage::decode(observed.encode_to_vec().as_slice()).unwrap();
     assert!(round_trip.mounts_observed);
     assert_eq!(round_trip.mounts.len(), 1);
+}
+
+#[test]
+fn container_block_io_counters_are_optional_additive_wire_fields() {
+    use citadel_contracts::citadel::shared_models::v1::ContainerStatMessage;
+    use prost::Message;
+
+    let absent = ContainerStatMessage::decode(&[][..]).unwrap();
+    assert!(absent.block_read_bytes.is_none());
+    assert!(absent.block_write_bytes.is_none());
+
+    let counters = ContainerStatMessage {
+        block_read_bytes: Some(0.0),
+        block_write_bytes: Some(0.0),
+        ..Default::default()
+    };
+    // Fields 7 and 8 are DoubleValue messages, preserving observed zero vs absence.
+    assert_eq!(counters.encode_to_vec(), [0x3a, 0, 0x42, 0]);
+    let sample = ContainerStatMessage {
+        rx_bytes: 123.0,
+        tx_bytes: 456.0,
+        block_read_bytes: Some(789.0),
+        block_write_bytes: Some(1011.0),
+        ..Default::default()
+    };
+    assert_eq!(
+        ContainerStatMessage::decode(sample.encode_to_vec().as_slice()).unwrap(),
+        sample
+    );
 }
 
 #[test]

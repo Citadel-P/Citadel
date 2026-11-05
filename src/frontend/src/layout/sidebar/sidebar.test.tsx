@@ -1,6 +1,5 @@
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { renderCitadel } from '@/test/render-citadel';
-import userEvent from '@testing-library/user-event';
 import { screen } from '@testing-library/react';
 import { UpdateNotice } from '../update-notice';
 import { Sidebar } from './sidebar';
@@ -73,24 +72,14 @@ describe('Sidebar license link', () => {
     expect(screen.getByRole('link', { name: 'Team' })).toHaveAttribute('href', '/license');
   });
 
-  it.each([true, false])('opens release details from the version indicator (expanded: %s)', async (open) => {
+  it.each([true, false])('links the version indicator to Updates (expanded: %s)', (open) => {
     mocks.isAdministrator = true;
     mocks.availableUpdate = {
       version: '1.1.0',
       releaseUrl: 'https://github.com/Citadel-P/Citadel/releases/tag/v1.1.0',
     };
     renderSidebar(open);
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Citadel 1.1.0 available' }));
-    expect(screen.getByRole('dialog')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Release notes' })).toHaveAttribute(
-      'href',
-      mocks.availableUpdate.releaseUrl,
-    );
-    expect(screen.getByRole('link', { name: 'Upgrade guide' })).toHaveAttribute(
-      'href',
-      'https://docs.citadelplane.com/operations/upgrade-and-rollback/',
-    );
+    expect(screen.getByRole('link', { name: 'Citadel 1.1.0 available' })).toHaveAttribute('href', '/updates');
   });
 
   it('hides update controls from non-administrators', () => {
@@ -100,7 +89,7 @@ describe('Sidebar license link', () => {
     };
     renderSidebar();
     renderCitadel(<UpdateNotice />);
-    expect(screen.queryByRole('button', { name: 'Citadel 1.1.0 available' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Citadel 1.1.0 available' })).not.toBeInTheDocument();
     expect(screen.queryByText('New version available')).not.toBeInTheDocument();
   });
 
@@ -115,6 +104,6 @@ describe('Sidebar license link', () => {
     };
     renderCitadel(<UpdateNotice />);
     expect(screen.getByText('New version available')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'View update' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'View update' })).toHaveAttribute('href', '/updates');
   });
 });
