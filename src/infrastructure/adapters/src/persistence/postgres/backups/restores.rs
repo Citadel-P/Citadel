@@ -101,12 +101,13 @@ impl PostgresBackupPersistence {
     pub(super) fn claim_restore_impl(
         &self,
         stale_before: DateTime<Utc>,
+        scope: citadel_backups::RestoreClaimScope,
     ) -> BoxFuture<'_, Result<Option<RestoreClaim>, BackupError>> {
         Box::pin(async move {
             for _ in 0..16 {
                 let mut tx = self.pool.begin().await.map_err(storage)?;
                 recover_stale(&mut tx, stale_before).await?;
-                let row=sqlx::query("SELECT r.id,r.backuprunid,r.backuprepositoryid,r.sourcebackuprunitemid,r.targetplatformid,r.targetdockernodeid,r.targetvolumename,r.targethostpath FROM backuprestoreruns r JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND (r.nextattemptat IS NULL OR r.nextattemptat<=CURRENT_TIMESTAMP) AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid) ORDER BY COALESCE(r.nextattemptat,r.queuedat),r.queuedat,r.id FOR UPDATE OF r,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
+                let row=sqlx::query("SELECT r.id,r.backuprunid,r.backuprepositoryid,r.sourcebackuprunitemid,r.targetplatformid,r.targetdockernodeid,r.targetvolumename,r.targethostpath FROM backuprestoreruns r JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND (NOT $1 OR EXISTS(SELECT 1 FROM resourcecopyrestores cr JOIN resourcecopies cp ON cp.id=cr.copyid WHERE cr.restoreid=r.id AND cp.status='Restoring')) AND (r.nextattemptat IS NULL OR r.nextattemptat<=CURRENT_TIMESTAMP) AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid) ORDER BY COALESCE(r.nextattemptat,r.queuedat),r.queuedat,r.id FOR UPDATE OF r,br SKIP LOCKED LIMIT 1").bind(scope == citadel_backups::RestoreClaimScope::ResourceCopies).fetch_optional(&mut *tx).await.map_err(storage)?;
                 let Some(row) = row else {
                     tx.commit().await.map_err(storage)?;
                     return Ok(None);

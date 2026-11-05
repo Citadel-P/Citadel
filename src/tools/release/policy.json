@@ -5,6 +5,8 @@
     "arm64"
   ],
   "protocolVersion": 2,
+  "updateProtocol": 1,
+  "installerFormat": 1,
   "registries": {
     "agent": [
       "ghcr.io/citadel-p/citadel.agent",

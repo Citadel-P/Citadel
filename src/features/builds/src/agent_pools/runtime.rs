@@ -71,6 +71,7 @@ pub fn pool_target(spec: &Value) -> Result<BuildPoolTarget, BuildError> {
 }
 
 pub struct BuildPoolCheck {
+    pub agent_version: Option<String>,
     pub ready: bool,
     pub message: String,
 }

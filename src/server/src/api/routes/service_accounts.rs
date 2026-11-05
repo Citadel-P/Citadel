@@ -2,6 +2,7 @@ use crate::{
     api::{
         error::{HttpResult, api_result},
         request_validation::{ApiPath, ApiQuery, ValidatedJson},
+        resource_access::{require_human, require_human_administrator},
         resources::{
             capabilities::ResourceCapabilitiesView,
             service_accounts::{
@@ -18,7 +19,6 @@ use crate::{
                 },
             },
         },
-        routes::authentication::{require_human, require_human_administrator},
     },
     openapi::router::OpenApiRouterExt,
 };

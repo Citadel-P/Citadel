@@ -24,6 +24,7 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
+        admission: citadel_runtime::admission::AdmissionGate::default(),
         image_store: f.lookup_state.platforms.image_store.clone(),
         image_updates: f.lookup_state.platforms.image_updates.clone(),
         registries: f.lookup_state.platforms.registries.clone(),
@@ -747,6 +748,8 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
     .await;
     let group = format!("container-exec:{id}:browser-session");
     let reader = reader(&f);
+    let admission = reader.admission.clone();
+    let fence = Uuid::now_v7();
     assert!(
         reader
             .read(&principal, &Group::parse(&group).unwrap(), None)
@@ -850,7 +853,22 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
         .await
         .unwrap();
     assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
+    admission.close(fence).unwrap();
+    assert!(invoke_args(&mut socket, "StartExecProcess", start.clone()).await["error"].is_string());
+    assert!(
+        commands.try_recv().is_err(),
+        "maintenance must not open an Edge terminal"
+    );
+    admission.reopen(fence).unwrap();
     assert!(invoke_args(&mut socket, "StartExecProcess", start.clone()).await["error"].is_null());
+    admission.close(fence).unwrap();
+    assert!(matches!(
+        admission
+            .drain(fence, StdDuration::from_millis(10), &cancellation)
+            .await,
+        Err(citadel_runtime::admission::AdmissionError::Busy(_))
+    ));
+    assert!(!cancellation.is_cancelled());
     let command = commands.recv().await.unwrap();
     let command_id = Uuid::parse_str(&command.command_id).unwrap();
     let Some(core_envelope::Body::Command(open)) = command.body else {
@@ -936,6 +954,11 @@ async fn terminal_websocket_requires_join_and_terminal_permission_and_owns_its_s
             .body,
         Some(core_envelope::Body::CancelCommand(_))
     ));
+    admission
+        .drain(fence, StdDuration::from_secs(3), &cancellation)
+        .await
+        .unwrap();
+    assert!(admission.is_closed());
     registry.remove(&session);
     cancellation.cancel();
     server.await.unwrap();

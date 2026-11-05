@@ -33,6 +33,14 @@ Open the container's detail page and choose the information you need:
 | **Terminal** | Run commands inside a running container |
 | **Stats** | Check CPU, memory, and network usage |
 
+In **Network Usage**, Received and Sent show traffic recorded between samples in
+the selected time range, rather than the container's lifetime counters. Citadel
+calculates counter increases before grouping samples for the chart, including
+observed counter resets. Totals need at least two recorded samples and remain
+available for stopped containers with recorded history. The first sample in the
+range establishes the baseline; traffic before it or hidden by unobserved resets
+cannot be reconstructed.
+
 For memory accounting and host capacity, see
 [Platform monitoring](/operations/platform-monitoring).
 

@@ -78,3 +78,19 @@ impl SwarmServiceChangeNotifier for SwarmServicesRealtimeNotifier {
         }
     }
 }
+
+pub struct UpdatesRealtimeNotifier {
+    realtime: Option<RealtimeHub>,
+}
+impl UpdatesRealtimeNotifier {
+    pub fn new(realtime: Option<RealtimeHub>) -> Self {
+        Self { realtime }
+    }
+}
+impl citadel_updates::UpdateChangeNotifier for UpdatesRealtimeNotifier {
+    fn changed(&self) {
+        if let Some(realtime) = &self.realtime {
+            realtime.publish_resource_change("ApplicationInfo", Uuid::nil(), "resourceChanged");
+        }
+    }
+}

@@ -22,6 +22,8 @@ pub struct NodeAgentRemovalClaim {
     pub manager_node_id: String,
     pub manager_daemon_id: String,
     pub service_id: Option<String>,
+    /// Last approved immutable image; Repair must never resolve a newer tag.
+    pub approved_image: Option<String>,
     pub ca_config_id: Option<String>,
     pub secret_ids: Vec<String>,
 }

@@ -3,6 +3,7 @@ use crate::{
     api::{
         error::{HttpResult, api_result, no_store},
         request_validation::{ApiPath, ValidatedJson},
+        resource_access::require_human_administrator,
         resources::{
             common::PagedResult,
             teams::{
@@ -14,7 +15,6 @@ use crate::{
                 views::TeamsResponse,
             },
         },
-        routes::authentication::require_human_administrator,
     },
     openapi::router::OpenApiRouterExt,
 };

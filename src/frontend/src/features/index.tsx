@@ -40,6 +40,7 @@ export const SwarmResourcePages: Record<SwarmResourceType, ReturnType<typeof lis
 };
 
 export const ResourcePages: Partial<Record<ResourceType, ReturnType<typeof list>>> = {
+  Updates: list(() => import('./updates').then((m) => m.UpdatesComponents)),
   Image: list(() => import('./docker-resources/images').then((m) => m.ImageComponents)),
   Volume: list(() => import('./docker-resources/volumes').then((m) => m.VolumeComponents)),
   Network: list(() => import('./docker-resources/networks').then((m) => m.NetworkComponents)),

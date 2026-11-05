@@ -1,4 +1,5 @@
 //! Install/repair/upgrade share one idempotent system-Service workflow.
+mod image;
 use super::lifecycle::*;
 use crate::RuntimeCapabilityError;
 use crate::RuntimeInventorySnapshot;
@@ -181,7 +182,7 @@ impl NodeAgentSetupService {
         actor: ActorId,
         id: Uuid,
         kind: SetupKind,
-        options: SetupOptions,
+        mut options: SetupOptions,
         sender: mpsc::Sender<NodeAgentProgress>,
         cancel: CancellationToken,
     ) {
@@ -226,7 +227,10 @@ impl NodeAgentSetupService {
         (self.changed)(id);
         let result = tokio::select! {
             () = cancel.cancelled() => Err(fail("Node-agent setup canceled. Repair coverage can reconcile partial state.")),
-            result = tokio::time::timeout(options.policy.setup_timeout, self.execute(&claim, &options, &sender, &cancel)) => {
+            result = tokio::time::timeout(options.policy.setup_timeout, async {
+                options.image = image::selected(kind, &options.image, claim.approved_image.as_deref())?;
+                self.execute(&claim, &options, &sender, &cancel).await
+            }) => {
                 result.unwrap_or_else(|_| Err(fail("Node-agent setup timed out. Repair coverage after checking missing nodes.")))
             }
         };

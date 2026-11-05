@@ -12,7 +12,7 @@ use citadel_platforms::node_agents::{
 };
 use citadel_server::api::resources::platforms::edge::EdgeHttpContext;
 
-// Ports Install_AfterRemoval_ShouldRestoreInstalledDesiredState and the install/repair/upgrade
+// Ports Install_AfterRemoval_ShouldRestoreInstalledDesiredState and the install/repair
 // permission theory through actual HTTP handlers and PostgreSQL transactions.
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
@@ -35,7 +35,7 @@ async fn setup_endpoints_authorize_and_restore_removed_manager_only_installation
     sqlx::query("UPDATE platforms SET clusterid=$2,platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"node-1\",\"daemonId\":\"daemon-test\"}' WHERE id=$1").bind(id).bind(&cluster).execute(&f.pool).await.unwrap();
     sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,clusterid,managerdockernodeid,managerdockerdaemonid,dockerservicename,agentimagereference,agentimagedigest,desiredstate) VALUES($1,$2,'node-1','daemon-test','fixture','','','Removed')").bind(id).bind(&cluster).execute(&f.pool).await.unwrap();
     let reader = super::lookup::subject(&f).await;
-    for action in ["install", "repair", "upgrade"] {
+    for action in ["install", "repair"] {
         let path = format!("/api/v1/platforms/{id}/node-agents/{action}");
         let send = |principal: Option<ActorPrincipal>| {
             let app = app.clone();
@@ -240,6 +240,7 @@ async fn setup_uses_exact_edge_manager_and_canonical_system_service_commands() {
         manager_node_id: "manager".into(),
         manager_daemon_id: "daemon".into(),
         service_id: None,
+        approved_image: None,
         secret_ids: vec![],
         ca_config_id: None,
     };

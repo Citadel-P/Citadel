@@ -125,7 +125,7 @@ impl EdgeAgentService for EdgeIntake {
                         match incoming.body {
                             Some(agent_envelope::Body::Heartbeat(heartbeat)) => {
                                 if !heartbeat_identity_matches(&binding, &heartbeat) { Err(Status::permission_denied("Edge Docker identity changed."))?; }
-                                store.heartbeat(binding.agent_id, at).await.map_err(|_| Status::unauthenticated("Edge binding is no longer active."))?;
+                                store.heartbeat(binding.agent_id, at, &heartbeat.agent_version).await.map_err(|_| Status::unauthenticated("Edge binding is no longer active."))?;
                                 heartbeat_deadline = tokio::time::Instant::now() + Duration::from_secs(90);
                             }
                             Some(agent_envelope::Body::CommandOutput(output)) => {

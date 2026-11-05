@@ -36,6 +36,7 @@ impl NodeAgentLifecycleStore for Fixture {
                 manager_node_id: "manager".into(),
                 manager_daemon_id: "daemon".into(),
                 service_id: Some("agent-service".into()),
+                approved_image: Some("agent@sha256:approved".into()),
                 secret_ids: vec!["bootstrap".into()],
                 ca_config_id: Some("ca".into()),
             })

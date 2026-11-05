@@ -265,9 +265,10 @@ impl BackupPersistence for Store {
     fn claim_restore(
         &self,
         stale_before: DateTime<Utc>,
+        scope: citadel_backups::RestoreClaimScope,
     ) -> BoxFuture<'_, Result<Option<RestoreClaim>, BackupError>> {
         self.claims.fetch_add(1, Ordering::SeqCst);
-        self.inner.claim_restore(stale_before)
+        self.inner.claim_restore(stale_before, scope)
     }
     fn finish_restore<'a>(
         &'a self,

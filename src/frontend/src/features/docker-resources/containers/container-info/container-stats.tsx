@@ -43,7 +43,7 @@ export const ContainerStatsCharts = ({ resource, query, liveStats }: StatsPanelP
           <>
             <MemoryUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
             <CpuUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
-            <NetworkUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
+            <NetworkUsage stats={stats} isLoading={query.isLoading} />
           </>
         )}
       </StatsChartRange>

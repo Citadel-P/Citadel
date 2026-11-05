@@ -116,6 +116,7 @@ impl IdentityService {
         let settings = InstallationSettings {
             initialized: true,
             update_checks_enabled: request.update_checks_enabled.unwrap_or(true),
+            update_check_interval_hours: 6,
             mfa_policy: request.mfa_policy.unwrap_or_default(),
         };
         validate_name(&request.name)?;

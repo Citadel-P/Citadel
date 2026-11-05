@@ -436,7 +436,10 @@ pub(super) async fn verify_queue_progress_and_owner_recovery(
     }
     assert!(
         store
-            .claim_restore(Utc::now() - Duration::minutes(5))
+            .claim_restore(
+                Utc::now() - Duration::minutes(5),
+                citadel_backups::RestoreClaimScope::All
+            )
             .await
             .unwrap()
             .is_none()
@@ -444,7 +447,10 @@ pub(super) async fn verify_queue_progress_and_owner_recovery(
     sqlx::query("UPDATE backuprestoreruns SET nextattemptat=clock_timestamp() WHERE id=ANY($1) AND nextattemptat IS NOT NULL")
         .bind(restores.iter().map(|r| r.id).collect::<Vec<_>>()).execute(pool).await.unwrap();
     let restore = store
-        .claim_restore(Utc::now() - Duration::minutes(5))
+        .claim_restore(
+            Utc::now() - Duration::minutes(5),
+            citadel_backups::RestoreClaimScope::All,
+        )
         .await
         .unwrap()
         .unwrap();
@@ -528,7 +534,10 @@ pub(super) async fn verify_queue_progress_and_owner_recovery(
         .await
         .unwrap();
     let restore = store
-        .claim_restore(Utc::now() - Duration::minutes(5))
+        .claim_restore(
+            Utc::now() - Duration::minutes(5),
+            citadel_backups::RestoreClaimScope::All,
+        )
         .await
         .unwrap()
         .unwrap();

@@ -59,6 +59,7 @@ pub struct RefreshTokenClaims {
 pub struct InstallationSettings {
     pub initialized: bool,
     pub update_checks_enabled: bool,
+    pub update_check_interval_hours: i32,
     pub mfa_policy: crate::MfaPolicy,
 }
 

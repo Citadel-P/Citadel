@@ -11,6 +11,29 @@ use tonic::{Request, Response, Status};
 
 #[tonic::async_trait]
 impl platform_service_server::PlatformService for Runtime {
+    async fn set_agent_update_drain(
+        &self,
+        request: Request<AgentUpdateDrainRequest>,
+    ) -> Result<Response<()>, Status> {
+        self.drain_agent_update(request.into_inner()).await?;
+        Ok(Response::new(()))
+    }
+
+    async fn get_agent_update_info(
+        &self,
+        _: Request<()>,
+    ) -> Result<Response<AgentUpdateInfo>, Status> {
+        self.agent_update_info().await.map(Response::new)
+    }
+    async fn update_agent(
+        &self,
+        request: Request<UpdateAgentRequest>,
+    ) -> Result<Response<UpdateAgentResponse>, Status> {
+        self.start_agent_update(request.into_inner())
+            .await
+            .map(Response::new)
+    }
+
     async fn get_platform_info(
         &self,
         _: Request<()>,

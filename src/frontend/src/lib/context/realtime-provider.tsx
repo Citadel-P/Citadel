@@ -28,6 +28,12 @@ type CancellationRef = { current: boolean };
 // Refetching them here can request a resource just deleted by the user.
 const liveBackedQueryKeys = new Set([
   'getApplicationInfo',
+  'getInstanceUpdates',
+  'getAgentUpdates',
+  'getAgentUpdateOperation',
+  'getInstanceUpdateOperation',
+  'getInstallationSettings',
+  'getProfileMfaStatus',
   'getBackupRepository',
   'getBuildRun',
   'getBuildRunLogs',
@@ -145,6 +151,20 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
       conn.on('ApplicationInfoChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
+        void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdateOperation'] });
+        void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdateOperation'] });
+      });
+
+      conn.on('InstallationSettingsChanged', () => {
+        void queryClient.invalidateQueries({ queryKey: ['getInstallationSettings'] });
+        void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdates'] });
+        void queryClient.invalidateQueries({ queryKey: ['getAgentUpdateOperation'] });
+        void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdateOperation'] });
+        void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
+        void queryClient.invalidateQueries({ queryKey: ['getProfileMfaStatus'] });
       });
 
       conn.on('LicenseStateChanged', () => {
@@ -256,7 +276,17 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
             await reconcileLiveQueries();
           } else {
             // Cover changes between the initial HTTP read and the live subscription.
-            await queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
+            await Promise.all(
+              [
+                'getApplicationInfo',
+                'getInstanceUpdates',
+                'getAgentUpdates',
+                'getAgentUpdateOperation',
+                'getInstanceUpdateOperation',
+                'getInstallationSettings',
+                'getProfileMfaStatus',
+              ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+            );
           }
 
           return conn;

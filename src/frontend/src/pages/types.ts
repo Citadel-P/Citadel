@@ -9,6 +9,12 @@ type ResourceContentProps<T = any> = {
 };
 
 interface BaseResourceComponents<T = any> {
+  /** Hide restricted content until the current profile is authorized; the API enforces access. */
+  access?: 'administrator';
+
+  /** Override the default task sheet for resources without task actions. */
+  showTaskSheet?: boolean;
+
   /** Optional configuration for header */
   header?: HeaderOptions;
 
@@ -46,6 +52,10 @@ export interface RegularResourceComponents<T = any> extends BaseResourceComponen
  * Defines the components needed to render a tabbed resource page.
  */
 export interface TabbedResourceComponents<T = any> extends BaseResourceComponents<T> {
+  /** Tab bar styling, independent of the page header. Defaults to plain. */
+  tabsVariant?: 'plain' | 'bordered';
+  /** Persistent controls at the right of the resource tab bar. */
+  TabActions?: React.FC;
   /** Tabs configuration */
   Tabs: TabElement<T>[];
   Content?: never;
@@ -187,6 +197,10 @@ interface ResourceInfoHookResult<T> extends ResourceReadState {
 }
 
 interface HeaderOptions {
+  /** Presentation of the page header only. */
+  variant?: 'plain' | 'card';
+  /** Resource metadata rendered below the title and description. */
+  Details?: React.FC;
   /** Override title */
   title?: string;
   /** Override subtitle */

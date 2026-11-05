@@ -21,14 +21,14 @@ const INFORMATIONAL_VERSION: &str = env!("CITADEL_BUILD_INFORMATIONAL_VERSION");
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationInfoView {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub available_update: Option<crate::release_updates::AvailableUpdate>,
+    pub available_update: Option<crate::api::resources::updates::AvailableUpdate>,
     pub name: &'static str,
     pub version: &'static str,
     pub informational_version: &'static str,
     pub realtime_transport: &'static str,
 }
 
-pub fn router(updates: crate::release_updates::UpdateChecker) -> Router {
+pub fn router(updates: citadel_updates::ReleaseCheckService) -> Router {
     documented_routes()
         .split_for_parts()
         .0
@@ -50,7 +50,7 @@ pub fn router(updates: crate::release_updates::UpdateChecker) -> Router {
 )]
 async fn get_application_info(
     principal: Option<Extension<ActorPrincipal>>,
-    Extension(updates): Extension<crate::release_updates::UpdateChecker>,
+    Extension(updates): Extension<citadel_updates::ReleaseCheckService>,
     headers: HeaderMap,
 ) -> Response {
     let Some(Extension(principal)) = principal else {
@@ -58,7 +58,7 @@ async fn get_application_info(
     };
     let mut info = application_info();
     if principal.is_administrator() {
-        info.available_update = updates.available().await;
+        info.available_update = updates.available().map(Into::into);
     }
     no_store(Json(info).into_response())
 }

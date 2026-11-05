@@ -914,6 +914,8 @@ export enum AlertType {
   BuildAgentPoolUnavailable = "BuildAgentPoolUnavailable",
   LicenseEnteredGracePeriod = "LicenseEnteredGracePeriod",
   LicenseExpired = "LicenseExpired",
+  CoreUpdateAvailable = "CoreUpdateAvailable",
+  AgentUpdatesAvailable = "AgentUpdatesAvailable",
 }
 
 export enum AlertSeverity {
@@ -938,6 +940,7 @@ export enum AlertResourceType {
   BuildAgentPool = "BuildAgentPool",
   BackupPolicy = "BackupPolicy",
   License = "License",
+  Updates = "Updates",
   SwarmService = "SwarmService",
 }
 
@@ -970,6 +973,24 @@ export enum AlertDestination {
   Telegram = "Telegram",
   WeCom = "WeCom",
   ZulipChat = "Zulip_Chat",
+}
+
+export enum AgentPhaseView {
+  Pending = "Pending",
+  Updating = "Updating",
+  Succeeded = "Succeeded",
+  Skipped = "Skipped",
+  Failed = "Failed",
+  NotStarted = "NotStarted",
+}
+
+export enum AgentEligibilityView {
+  Available = "Available",
+  Current = "Current",
+  Offline = "Offline",
+  Unknown = "Unknown",
+  ManualRequired = "ManualRequired",
+  Incompatible = "Incompatible",
 }
 
 export enum AdoptionIssueSeverity {
@@ -1005,6 +1026,7 @@ export enum ActivityResourceType {
   Team = "Team",
   Role = "Role",
   License = "License",
+  Updates = "Updates",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
@@ -1083,6 +1105,16 @@ export enum ActivityEventType {
   StackImported = "StackImported",
   StackWebhookReceived = "StackWebhookReceived",
   InstallationSettingsUpdated = "InstallationSettingsUpdated",
+  UpdateDiscovered = "UpdateDiscovered",
+  UpdateChecksChanged = "UpdateChecksChanged",
+  AgentUpdate = "AgentUpdate",
+  AgentUpdateScheduleChanged = "AgentUpdateScheduleChanged",
+  UpdateScheduleFinished = "UpdateScheduleFinished",
+  InstanceUpdateStarted = "InstanceUpdateStarted",
+  InstanceUpdateCompleted = "InstanceUpdateCompleted",
+  InstanceUpdateFailed = "InstanceUpdateFailed",
+  InstanceUpdatePostponed = "InstanceUpdatePostponed",
+  InstanceUpdateRecovered = "InstanceUpdateRecovered",
   InitialAdministratorCreated = "InitialAdministratorCreated",
   UserProfileUpdated = "UserProfileUpdated",
   UserPreferencesUpdated = "UserPreferencesUpdated",
@@ -1288,6 +1320,29 @@ export interface AdoptionSource {
   state: string;
 }
 
+export interface AgentOperationView {
+  finished: boolean;
+  /** @format uuid */
+  id: string;
+  targets: AgentResultView[];
+  /** @format date-time */
+  updatedAt: string;
+}
+
+export interface AgentResultView {
+  message?: string | null;
+  phase: AgentPhaseView;
+  target: AgentTargetView;
+}
+
+export interface AgentReviewView {
+  /** @format date-time */
+  expiresAt: string;
+  /** @format uuid */
+  id: string;
+  targets: AgentTargetView[];
+}
+
 /** Public installation instructions. The signing private key never enters this model. */
 export interface AgentSetupView {
   /** @format uuid */
@@ -1297,6 +1352,32 @@ export interface AgentSetupView {
   environment: Record<string, string>;
   hubPublicKey: string;
   requiresTls: boolean;
+}
+
+export interface AgentTargetView {
+  availableVersion?: string | null;
+  id: string;
+  installedVersion?: string | null;
+  kind: string;
+  name: string;
+  /**
+   * @format int32
+   * @min 0
+   */
+  nodes: number;
+  reason?: string | null;
+  status: AgentEligibilityView;
+  supported: boolean;
+}
+
+export interface AgentUpdatesView {
+  checkError?: string | null;
+  /** @format date-time */
+  nextRun?: string | null;
+  operation?: AgentOperationView | null;
+  schedule: UpdateScheduleView;
+  scheduleRun?: UpdateScheduleRunView | null;
+  targets: AgentTargetView[];
 }
 
 export interface AlertChannelInput {
@@ -1479,6 +1560,13 @@ export interface ApplyStackInput {
   /** @format uuid */
   id: string;
   recreate?: boolean | null;
+}
+
+export interface ApproveUpdateInput {
+  /** @format uuid */
+  requestId: string;
+  /** @format uuid */
+  reviewId: string;
 }
 
 export interface ArchiveServiceAccountsRequest {
@@ -2536,8 +2624,16 @@ export interface ContainerStatSnapshot {
   memoryLimit: number;
   /** @format double */
   rxBytes: number;
+  /**
+   * Bytes transferred between recorded samples in this history bucket.
+   * Absent on raw runtime observations and when no baseline exists.
+   * @format double
+   */
+  rxBytesDelta?: number | null;
   /** @format double */
   txBytes: number;
+  /** @format double */
+  txBytesDelta?: number | null;
 }
 
 export interface ContainerStatView {
@@ -2555,8 +2651,16 @@ export interface ContainerStatView {
   memoryLimit: number;
   /** @format double */
   rxBytes: number;
+  /**
+   * Bytes transferred between recorded samples in this history bucket.
+   * Absent on raw runtime observations and when no baseline exists.
+   * @format double
+   */
+  rxBytesDelta?: number | null;
   /** @format double */
   txBytes: number;
+  /** @format double */
+  txBytesDelta?: number | null;
 }
 
 export interface ContainerSummaryView {
@@ -3598,8 +3702,16 @@ export interface HistoryContainerStatSnapshot {
     memoryLimit: number;
     /** @format double */
     rxBytes: number;
+    /**
+     * Bytes transferred between recorded samples in this history bucket.
+     * Absent on raw runtime observations and when no baseline exists.
+     * @format double
+     */
+    rxBytesDelta?: number | null;
     /** @format double */
     txBytes: number;
+    /** @format double */
+    txBytesDelta?: number | null;
   }[];
 }
 
@@ -3869,6 +3981,8 @@ export interface InstallLicenseRequest {
 export interface InstallationSettingsView {
   mfaPolicy: MfaPolicy;
   minimumMfaPolicy: MfaPolicy;
+  /** @format int32 */
+  updateCheckIntervalHours: number;
   updateChecksAllowed: boolean;
   updateChecksEnabled: boolean;
 }
@@ -4517,6 +4631,11 @@ export interface PatchDeploymentMetadataInput {
 
 export interface PatchInstallationSettingsRequest {
   mfaPolicy?: MfaPolicy | null;
+  /**
+   * Automatic release-check interval. Supported values: 6, 12, 24 hours.
+   * @format int32
+   */
+  updateCheckIntervalHours?: number | null;
   updateChecksEnabled?: boolean | null;
 }
 
@@ -4837,6 +4956,78 @@ export interface PrunePlatformView {
 }
 
 export type PublicActivityEventInfo =
+  | {
+      $type: "AgentUpdate";
+      agent: string;
+      message?: string | null;
+      /** @format uuid */
+      operationId: string;
+      phase: string;
+      sourceVersion?: string | null;
+      targetVersion: string;
+    }
+  | {
+      $type: "UpdateScheduleFinished";
+      message: string;
+      /** @format uuid */
+      runId: string;
+    }
+  | {
+      $type: "AgentUpdateScheduleChanged";
+      enabled: boolean;
+      includeCore?: boolean | null;
+      /** @min 0 */
+      targetCount: number;
+    }
+  | {
+      $type: "UpdateDiscovered";
+      releaseUrl: string;
+      version: string;
+    }
+  | {
+      $type: "UpdateChecksChanged";
+      /** @format int32 */
+      previousUpdateCheckIntervalHours?: number | null;
+      previousUpdateChecksEnabled: boolean;
+      /** @format int32 */
+      updateCheckIntervalHours?: number | null;
+      updateChecksEnabled: boolean;
+    }
+  | {
+      $type: "InstanceUpdateStarted";
+      /** @format uuid */
+      operationId: string;
+      sourceVersion: string;
+      targetVersion: string;
+    }
+  | {
+      $type: "InstanceUpdateCompleted";
+      /** @format uuid */
+      operationId: string;
+      sourceVersion: string;
+      targetVersion: string;
+    }
+  | {
+      $type: "InstanceUpdateFailed";
+      message: string;
+      /** @format uuid */
+      operationId: string;
+      phase: string;
+    }
+  | {
+      $type: "InstanceUpdatePostponed";
+      message: string;
+      /** @format uuid */
+      operationId: string;
+    }
+  | {
+      $type: "InstanceUpdateRecovered";
+      /** @format uuid */
+      operationId: string;
+      /** @format uuid */
+      recoveryId: string;
+      version: string;
+    }
   | {
       $type: "InstallationSettingsUpdated";
       mfaPolicy: string;
@@ -6113,6 +6304,15 @@ export interface RestoreInput {
 
 export interface Restores {
   runs: BackupRestoreRunView[];
+}
+
+export interface ReviewAgentsInput {
+  targets: string[];
+}
+
+export interface ReviewUpdateInput {
+  database?: boolean;
+  version: string;
 }
 
 export interface RevokeOtherProfileSessionsView {
@@ -7778,6 +7978,45 @@ export interface UpdateCurrentProfileRequest {
   displayName: string;
 }
 
+export interface UpdateOperationView {
+  component?: string | null;
+  /** @format uuid */
+  id: string;
+  phase: string;
+  /** @format date-time */
+  updatedAt: string;
+  version: string;
+}
+
+export interface UpdateReviewView {
+  component?: string | null;
+  /** @format date-time */
+  expiresAt: string;
+  /** @format uuid */
+  id: string;
+  installedVersion: string;
+  targetVersion: string;
+}
+
+export interface UpdateScheduleRunView {
+  /** @format uuid */
+  agentOperation?: string | null;
+  /** @format uuid */
+  coreOperation?: string | null;
+  /** @format uuid */
+  id: string;
+  message?: string | null;
+  phase: string;
+}
+
+export interface UpdateScheduleView {
+  cron: string;
+  enabled: boolean;
+  includeCore?: boolean;
+  targets: string[];
+  timeZone: string;
+}
+
 export interface UpdateScriptInput {
   alertOnFailure?: boolean;
   code?: string;
@@ -7802,6 +8041,27 @@ export interface UpdateScriptMetadata {
 export interface UpdateServiceAccountRequest {
   description?: string | null;
   isEnabled?: boolean | null;
+}
+
+export interface UpdateStatusView {
+  available: AvailableUpdate | null;
+  channel: string;
+  checkError: string | null;
+  checksAllowed: boolean;
+  checksEnabled: boolean;
+  databaseAvailable: string | null;
+  databaseManaged: boolean;
+  /** PostgreSQL server version; absence never means the engine is up to date. */
+  databaseVersion: string | null;
+  installationUnavailableReason: string | null;
+  installedVersion: string;
+  /** @format uuid */
+  instanceId: string;
+  /** @format date-time */
+  lastAttempt: string | null;
+  /** @format date-time */
+  lastSuccess: string | null;
+  operation: UpdateOperationView | null;
 }
 
 export interface UpdateSwarmNodeInput {
@@ -14645,33 +14905,6 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name UpgradeSwarmNodeAgents
-     * @summary Upgrade Docker Swarm node agents
-     * @request POST:/api/v1/platforms/{id}/node-agents/upgrade
-     * @secure
-     * @response `200` `(NodeAgentProgress)[]` Success
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `409` `ProblemDetails` Conflict
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    upgradeSwarmNodeAgents: (id: string, params: RequestParams = {}) =>
-      this.request<NodeAgentProgress[], ProblemDetails>({
-        path: `/api/v1/platforms/${id}/node-agents/upgrade`,
-        method: "POST",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Platforms
      * @name PrunePlatform
      * @summary Prune unused Docker resources
      * @request POST:/api/v1/platforms/{id}/prune
@@ -20657,6 +20890,278 @@ export class Api<
         path: `/api/v1/teams/${id}/roles/${roleId}`,
         method: "DELETE",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetInstanceUpdates
+     * @summary Get instance update status
+     * @request GET:/api/v1/updates
+     * @secure
+     * @response `200` `UpdateStatusView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceUpdates: (params: RequestParams = {}) =>
+      this.request<UpdateStatusView, ProblemDetails>({
+        path: `/api/v1/updates`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetAgentUpdates
+     * @summary Get Agent availability, schedule and durable progress
+     * @request GET:/api/v1/updates/agents
+     * @secure
+     * @response `200` `AgentUpdatesView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getAgentUpdates: (params: RequestParams = {}) =>
+      this.request<AgentUpdatesView, ProblemDetails>({
+        path: `/api/v1/updates/agents`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name ApproveAgentUpdates
+     * @summary Start a reviewed Agent selection
+     * @request POST:/api/v1/updates/agents/approve
+     * @secure
+     * @response `200` `AgentOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    approveAgentUpdates: (
+      data: ApproveUpdateInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<AgentOperationView, ProblemDetails>({
+        path: `/api/v1/updates/agents/approve`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetAgentUpdateOperation
+     * @summary Read durable Agent update progress
+     * @request GET:/api/v1/updates/agents/operations/{id}
+     * @secure
+     * @response `200` `AgentOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getAgentUpdateOperation: (id: string, params: RequestParams = {}) =>
+      this.request<AgentOperationView, ProblemDetails>({
+        path: `/api/v1/updates/agents/operations/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name ReviewAgentUpdates
+     * @summary Review selected Agent updates
+     * @request POST:/api/v1/updates/agents/review
+     * @secure
+     * @response `200` `AgentReviewView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    reviewAgentUpdates: (data: ReviewAgentsInput, params: RequestParams = {}) =>
+      this.request<AgentReviewView, ProblemDetails>({
+        path: `/api/v1/updates/agents/review`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name ApproveInstanceUpdate
+     * @summary Approve a reviewed instance update
+     * @request POST:/api/v1/updates/approve
+     * @secure
+     * @response `200` `UpdateOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    approveInstanceUpdate: (
+      data: ApproveUpdateInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UpdateOperationView, ProblemDetails>({
+        path: `/api/v1/updates/approve`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name CheckInstanceUpdates
+     * @summary Check official releases once without installing
+     * @request POST:/api/v1/updates/check
+     * @secure
+     * @response `200` `UpdateStatusView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    checkInstanceUpdates: (params: RequestParams = {}) =>
+      this.request<UpdateStatusView, ProblemDetails>({
+        path: `/api/v1/updates/check`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name GetInstanceUpdateOperation
+     * @summary Read an instance update operation
+     * @request GET:/api/v1/updates/operations/{id}
+     * @secure
+     * @response `200` `UpdateOperationView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceUpdateOperation: (id: string, params: RequestParams = {}) =>
+      this.request<UpdateOperationView, ProblemDetails>({
+        path: `/api/v1/updates/operations/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name ReviewInstanceUpdate
+     * @summary Review a verified release without installing
+     * @request POST:/api/v1/updates/review
+     * @secure
+     * @response `200` `UpdateReviewView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    reviewInstanceUpdate: (
+      data: ReviewUpdateInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UpdateReviewView, ProblemDetails>({
+        path: `/api/v1/updates/review`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Updates
+     * @name UpdateUpdateSchedule
+     * @summary Save the shared Team update schedule
+     * @request PUT:/api/v1/updates/schedule
+     * @secure
+     * @response `200` `UpdateScheduleView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    updateUpdateSchedule: (
+      data: UpdateScheduleView,
+      params: RequestParams = {},
+    ) =>
+      this.request<UpdateScheduleView, ProblemDetails>({
+        path: `/api/v1/updates/schedule`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),

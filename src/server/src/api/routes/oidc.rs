@@ -2,14 +2,13 @@ use crate::{
     api::{
         error::{error_response, no_store},
         request_validation::ApiPath,
+        resource_access::require_human_administrator,
         resources::oidc::requests::{
             BeginLoginQuery, CallbackQuery, CreateOidcProviderRequest,
             PatchOidcProviderMetadataRequest, PatchOidcProviderRequest, RenameOidcProviderRequest,
             TestOidcDiscoveryRequest,
         },
-        routes::authentication::{
-            cookie, require_human_administrator, session_metadata, with_refresh_cookie,
-        },
+        routes::authentication::{cookie, session_metadata, with_refresh_cookie},
     },
     openapi::router::OpenApiRouterExt,
 };

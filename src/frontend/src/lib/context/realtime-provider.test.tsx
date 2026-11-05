@@ -570,6 +570,41 @@ describe('RealtimeProvider', () => {
     expect(queryFn).toHaveBeenCalledTimes(3);
   });
 
+  it.each([
+    ['getAgentUpdates', 'ApplicationInfoChanged'],
+    ['getAgentUpdates', 'InstallationSettingsChanged'],
+    ['getAgentUpdateOperation', 'ApplicationInfoChanged'],
+    ['getAgentUpdateOperation', 'InstallationSettingsChanged'],
+    ['getInstanceUpdates', 'ApplicationInfoChanged'],
+    ['getInstanceUpdates', 'InstallationSettingsChanged'],
+    ['getInstallationSettings', 'InstallationSettingsChanged'],
+    ['getApplicationInfo', 'InstallationSettingsChanged'],
+    ['getProfileMfaStatus', 'InstallationSettingsChanged'],
+  ])('reconciles %s on connection, %s, and reconnect', async (queryKey, event) => {
+    const fake = new FakeRealtimeConnection();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData([queryKey, { id: 'resource-1' }], 'cached before subscription');
+    const queryFn = vi
+      .fn()
+      .mockResolvedValueOnce('connected snapshot')
+      .mockResolvedValueOnce('changed from another browser')
+      .mockResolvedValueOnce('missed while disconnected');
+    render(
+      <RealtimeTestRoot fake={fake} queryClient={queryClient}>
+        <LiveQuerySubscriber queryFn={queryFn} queryKey={queryKey} />
+      </RealtimeTestRoot>,
+    );
+    expect(await screen.findByText('connected snapshot')).toBeVisible();
+    act(() => fake.emit(event));
+    expect(await screen.findByText('changed from another browser')).toBeVisible();
+    act(() => {
+      fake.reconnecting();
+      fake.reconnected();
+    });
+    expect(await screen.findByText('missed while disconnected')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(3);
+  });
+
   it('does not refetch an inactive live-backed query after reconnecting', async () => {
     const fake = new FakeRealtimeConnection();
     const queryClient = new QueryClient({

@@ -116,11 +116,14 @@ export const AlertRuleForm = ({
     AlertType.BackupRunFailed,
     AlertType.LicenseEnteredGracePeriod,
     AlertType.LicenseExpired,
+    AlertType.CoreUpdateAvailable,
+    AlertType.AgentUpdatesAvailable,
   ];
   const showCooldown = !!merged.type && !noCooldownTypes.includes(merged.type);
 
   const resourceFromAlertType = useCallback((): ResourceType => {
     if (!merged.type) return 'Platform';
+    if ([AlertType.CoreUpdateAvailable, AlertType.AgentUpdatesAvailable].includes(merged.type)) return 'Updates';
     if (merged.type.startsWith('Script')) return 'Script';
     if (merged.type.startsWith('Webhook')) return 'Webhook';
     if (merged.type.startsWith('License')) return 'License';
@@ -132,7 +135,7 @@ export const AlertRuleForm = ({
     if (merged.type.includes('Stack')) return 'Stack';
     return 'Platform';
   }, [merged.type]);
-  const showScope = !['Webhook', 'License'].includes(resourceFromAlertType());
+  const showScope = !['Webhook', 'License', 'Updates'].includes(resourceFromAlertType());
 
   const schema = useMemo(
     () => ({

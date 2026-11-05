@@ -154,7 +154,7 @@ use citadel_adapters::connectors::routing::containers::ContainerRuntimeRouter;
             let selected = persisted.items.iter().find(|item| item.host_path.as_deref() == source.to_str()).unwrap();
             let request = BackupRestoreRequest { actor, backup_run_id: run.id, target_platform_id: platform, target_volume_name: String::new(), target_host_path: Some(target.display().to_string()), overwrite_existing: overwrite, target_docker_node_id: None, source_backup_run_item_id: Some(selected.id) };
             store.enqueue_restore(request.clone()).await.unwrap();
-            let restore = store.claim_restore(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();
+            let restore = store.claim_restore(Utc::now()-chrono::Duration::hours(1), citadel_backups::RestoreClaimScope::All).await.unwrap().unwrap();
             assert_eq!(restore.run.target_host_path.as_deref(), target.to_str());
             let restored = executor.restore(&restore, &cancel).await;
             store.finish_restore(&restore, &restored).await.unwrap();

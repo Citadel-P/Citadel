@@ -17,7 +17,7 @@ esac
 # Apply fixes to packages inherited from the pinned Deno image too.
 apk upgrade --no-cache
 apk add --no-cache \
-  bash ca-certificates git openssh-client postgresql18-client restic setpriv tini
+  bash ca-certificates cosign git openssh-client postgresql18-client restic setpriv tini
 apk add --no-cache --virtual .fetch-deps curl
 
 archive_path=$(mktemp)
@@ -40,3 +40,4 @@ deno --version
 shoutrrr --version
 pg_dump --version
 restic version
+cosign version

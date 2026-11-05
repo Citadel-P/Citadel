@@ -3175,3 +3175,5 @@ mod platform_stats_mapping_tests {
         assert_eq!(sample.disk(), None);
     }
 }
+
+mod updates;

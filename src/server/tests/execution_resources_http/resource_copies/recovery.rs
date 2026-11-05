@@ -583,3 +583,86 @@ async fn finalization_storage_faults_and_lost_commit_acknowledgements_reconcile_
     assert_eq!(count, 1);
     assert_eq!(storage.executions.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL"]
+async fn maintenance_allows_admitted_multivolume_copy_to_finish() {
+    let _fixture = FIXTURE_LOCK.lock().await;
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .unwrap();
+    let actor = seed_administrator(&pool).await.actor_id;
+    let ids = seed_dependencies(&pool, actor).await;
+    let deployment = PostgresDeploymentRepository::new(pool.clone()).create(actor, true, &citadel_deployments::CreateDeployment {
+        name: format!("maintenance-source-{}", Uuid::now_v7().simple()), platform_id: ids.platform, description: None, tag_ids: vec![], duplicate_source: None,
+        spec: serde_json::from_value(json!({"image":{"$type":"Local","imageId":"fixture"},"volumes":["first:/data","second:/other"]})).unwrap(),
+    }).await.unwrap();
+    let store = Arc::new(PostgresCopyRepository::new(pool.clone()));
+    let storage = Arc::new(PausedStorage::default());
+    let backups = Arc::new(BackupService::new(
+        Arc::new(PostgresBackupPersistence::new(pool.clone())),
+        Arc::new(FakeBackupExecutor),
+        Arc::new(FakeBackupPlanner::default()),
+        Duration::minutes(5),
+        Arc::new(AllowBackupExecution),
+    ));
+    let copies = Arc::new(CopyService::new(
+        store.clone(),
+        storage.clone(),
+        backups,
+        Arc::new(|_, _| {}),
+    ));
+    let source = store
+        .source(actor, CopyKind::Deployment, deployment.id)
+        .await
+        .unwrap();
+    let id = queue(&store, actor, &source).await;
+    let gate = citadel_runtime::admission::AdmissionGate::default();
+    let cancel = CancellationToken::new();
+    let worker = tokio::spawn(citadel_server::workers::resource_copies::run(
+        cancel.clone(),
+        copies.clone(),
+    ));
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        storage.started.notified().await;
+        gate.close(Uuid::now_v7()).unwrap();
+        // The HTTP admission boundary rejects further parent starts.
+        let app = Router::new()
+            .route("/start", axum::routing::post(|| async { StatusCode::OK }))
+            .layer(axum::middleware::from_fn_with_state(
+                gate.clone(),
+                citadel_server::api::admission::admit,
+            ));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/start")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        storage.release.notify_one();
+        storage.started.notified().await;
+        storage.release.notify_one();
+        loop {
+            if store.get(actor, id).await.unwrap().status == CopyStatus::Succeeded {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert_eq!(storage.executions.load(Ordering::SeqCst), 2);
+        assert_eq!(storage.cancelled.load(Ordering::SeqCst), 0);
+        assert!(gate.is_closed());
+    })
+    .await;
+    cancel.cancel();
+    worker.await.unwrap().unwrap();
+    result.unwrap();
+}

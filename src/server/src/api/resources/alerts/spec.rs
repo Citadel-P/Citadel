@@ -72,6 +72,7 @@ pub enum AlertResourceType {
     BuildAgentPool,
     BackupPolicy,
     License,
+    Updates,
     SwarmService,
 }
 impl AlertResourceType {
@@ -87,6 +88,7 @@ impl AlertResourceType {
             Self::BuildAgentPool => "BuildAgentPool",
             Self::BackupPolicy => "BackupPolicy",
             Self::License => "License",
+            Self::Updates => "Updates",
             Self::SwarmService => "SwarmService",
         }
     }

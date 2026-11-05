@@ -96,6 +96,7 @@ restic backup --json /tmp/runtime-fixture/payload >/dev/null
 restic restore latest --target /tmp/restored >/dev/null
 cmp /tmp/runtime-fixture/payload /tmp/restored/tmp/runtime-fixture/payload
 shoutrrr --version
+cosign version
 echo 'Git HTTPS, SSH, Deno TypeScript sandbox and Restic backup/restore passed.'
 SH
 

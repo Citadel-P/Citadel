@@ -105,8 +105,16 @@ export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const pluralize = (word: string) => (word.endsWith('y') ? word.slice(0, -1) + 'ies' : word + 's');
 
-export const formatActivityEvent = (event: string) =>
-  event === 'SwarmServiceForceUpdated' ? 'Swarm Service Tasks Restarted' : event.replace(/([a-z])([A-Z])/g, '$1 $2');
+export const formatActivityEvent = (event: string) => {
+  switch (event) {
+    case 'AgentUpdate':
+      return 'Agent Updated';
+    case 'SwarmServiceForceUpdated':
+      return 'Swarm Service Tasks Restarted';
+    default:
+      return event.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+};
 
 const environmentNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const environmentReferencePattern = /\$\{([^}]+)\}/g;
@@ -160,3 +168,13 @@ export const isUnmanagedContainer = (container: {
   deploymentId?: string | null;
   stackId?: string | null;
 }) => container.isSystem !== true && container.isSwarmTask !== true && !container.deploymentId && !container.stackId;
+
+/** Web Crypto UUIDs also work on HTTP LAN origins without randomUUID. */
+export function randomUuid(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}

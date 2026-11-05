@@ -129,7 +129,11 @@ async fn dispatcher_bounds_claims_and_drains_controllers_on_shutdown() {
         )
         .with_tracking_slots(2),
     );
+    let admission = citadel_runtime::admission::AdmissionGate::default();
+    let fence = Uuid::now_v7();
+    admission.close(fence).unwrap();
     let worker = tokio::spawn(backup_runs(
+        admission.clone(),
         shutdown.clone(),
         service,
         crate::config::BackupWorkerConfig {
@@ -140,12 +144,30 @@ async fn dispatcher_bounds_claims_and_drains_controllers_on_shutdown() {
         },
         tokio::sync::watch::channel(()).1,
     ));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(authorization.entered.load(Ordering::SeqCst), 0);
+    let queued: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM backupruns WHERE id=ANY($1) AND status='Queued'")
+            .bind(&runs)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(queued, runs.len() as i64);
+    admission.reopen(fence).unwrap();
     let started = tokio::time::timeout(Duration::from_secs(5), async {
         while authorization.entered.load(Ordering::SeqCst) < 2 {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
     .await;
+    admission.close(fence).unwrap();
+    assert!(matches!(
+        admission
+            .drain(fence, Duration::from_millis(10), &shutdown)
+            .await,
+        Err(citadel_runtime::admission::AdmissionError::Busy(_))
+    ));
+    assert!(!shutdown.is_cancelled());
     // Always stop the worker before assertions so failed fixtures do not detach tasks.
     shutdown.cancel();
     tokio::time::timeout(Duration::from_secs(5), worker)

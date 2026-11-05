@@ -1,11 +1,14 @@
-use super::*;
+use super::runtime::*;
 use citadel_adapters::persistence::postgres::builds::PostgresBuildRepository;
+use citadel_builds::BuildService;
 use citadel_builds::{
     BuildClaim, BuildExecutionResult, BuildExecutor, BuildLogSink, BuildProjectConfiguration,
     BuildRepository,
 };
 use citadel_primitives::ActorId;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{sync::Arc, time::Duration};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 struct BlockingExecutor(AtomicUsize);
@@ -56,12 +59,23 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
         executor.clone(),
         chrono::Duration::minutes(5),
     ));
+    let admission = citadel_runtime::admission::AdmissionGate::default();
+    let fence = Uuid::now_v7();
+    admission.close(fence).unwrap();
     let worker = tokio::spawn(build_runs(
+        admission.clone(),
         token.clone(),
         service,
         2,
         tokio::sync::watch::channel(()).1,
     ));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(
+        executor.0.load(Ordering::SeqCst),
+        0,
+        "maintenance must not claim queued builds"
+    );
+    admission.reopen(fence).unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while executor.0.load(Ordering::SeqCst) < 2 {
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -69,6 +83,17 @@ async fn queued_builds_execute_concurrently_and_shutdown_drains_both() {
     })
     .await
     .expect("the second build must start before the first completes");
+    admission.close(fence).unwrap();
+    assert!(matches!(
+        admission
+            .drain(fence, Duration::from_millis(10), &token)
+            .await,
+        Err(citadel_runtime::admission::AdmissionError::Busy(_))
+    ));
+    assert!(
+        !token.is_cancelled(),
+        "maintenance must not cancel admitted builds"
+    );
     token.cancel();
     tokio::time::timeout(Duration::from_secs(5), worker)
         .await
@@ -420,6 +445,7 @@ async fn two_preparations_can_track_six_executions_and_drain() {
         );
         let started = std::time::Instant::now();
         let worker = tokio::spawn(build_runs(
+            citadel_runtime::admission::AdmissionGate::default(),
             token.clone(),
             service,
             6,

@@ -2,6 +2,15 @@
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     match args.as_slice() {
+        [command, source, source_image, image, operation] if command == "replace-agent" => {
+            citadel_agent::updates::replace(
+                source.to_str().ok_or("Invalid source")?,
+                source_image.to_str().ok_or("Invalid image")?,
+                image.to_str().ok_or("Invalid image")?,
+                operation.to_str().ok_or("Invalid operation")?,
+            )
+            .await
+        }
         [] => citadel_agent::app::run().await,
         [command] if command == "--version" => {
             println!("citadel-agent {}", citadel_agent::INFORMATIONAL_VERSION);

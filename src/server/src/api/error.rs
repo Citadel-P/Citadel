@@ -13,6 +13,8 @@ const REQUEST_ID: &str = "x-request-id";
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ApiError {
+    #[error("Citadel is preparing an update")]
+    Maintenance,
     #[error("Too many authentication attempts. Try again later.")]
     RateLimited,
     #[error(transparent)]
@@ -129,6 +131,12 @@ fn render_error(error: ApiError, request_id: String) -> Response {
                 message.to_owned(),
             )
         }
+        ApiError::Maintenance => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "maintenance",
+            "Temporarily unavailable",
+            "Citadel is preparing an update. New work is temporarily unavailable.".into(),
+        ),
         ApiError::RateLimited => (
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limit_exceeded",

@@ -229,6 +229,7 @@ const alertResourceIconStyles: Record<AlertResourceType, string> = {
   [AlertResourceType.Build]: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   [AlertResourceType.BuildAgentPool]: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   [AlertResourceType.License]: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  [AlertResourceType.Updates]: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
 };
 
 const alertSeverityStyles: Record<AlertSeverity, { dot: string; text: string }> = {

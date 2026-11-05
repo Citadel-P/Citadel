@@ -649,6 +649,8 @@ fn node_command_allowed(kind: EdgeCommandKind) -> bool {
     matches!(
         kind,
         PlatformCheckHealth
+            | PlatformAgentUpdateInfo
+            | PlatformAgentUpdateDrain
             | PlatformGetInfo
             | PlatformStatsStream
             | PlatformDaemonEventsStream

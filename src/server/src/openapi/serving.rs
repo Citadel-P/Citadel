@@ -10,7 +10,13 @@ use std::sync::{Arc, LazyLock};
 use utoipa::openapi::Server;
 use utoipa_swagger_ui::Config;
 
+static DOCUMENTS: LazyLock<[utoipa::openapi::OpenApi; 2]> =
+    LazyLock::new(|| [super::document(false), super::document(true)]);
+
 pub fn router(default_scheme: &'static str) -> Router {
+    // Generate once during composition, before listeners open. Doing this deep
+    // inside the first request's middleware stack can overflow a worker thread.
+    LazyLock::force(&DOCUMENTS);
     Router::new()
         .route("/openapi/v1.json", get(full))
         .route("/openapi/public/v1.json", get(public))
@@ -88,8 +94,6 @@ fn response(public: bool, default_scheme: &str, headers: &HeaderMap, uri: &Uri) 
         .filter(|v| *v == "https")
         .or(uri.scheme_str())
         .unwrap_or(default_scheme);
-    static DOCUMENTS: LazyLock<[utoipa::openapi::OpenApi; 2]> =
-        LazyLock::new(|| [super::document(false), super::document(true)]);
     let mut document = DOCUMENTS[usize::from(public)].clone();
     document.servers = Some(vec![Server::new(
         host.map(|host| format!("{scheme}://{host}"))

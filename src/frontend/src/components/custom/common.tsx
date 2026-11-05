@@ -916,6 +916,7 @@ export const TargetCell = ({
     [ActivityResourceType.BackupPolicy]: { Icon: CalendarClock, path: `/backup-policies/edit/${resourceId}` },
     [ActivityResourceType.User]: { Icon: User, path: `/access/users/edit/${resourceId}` },
     [ActivityResourceType.Team]: { Icon: Users, path: `/access/teams/edit/${resourceId}` },
+    [ActivityResourceType.Updates]: { Icon: Server, path: '/updates' },
     [ActivityResourceType.Role]: { Icon: Shield, path: '/access/roles' },
     [ActivityResourceType.ServiceAccount]: {
       Icon: Bot,

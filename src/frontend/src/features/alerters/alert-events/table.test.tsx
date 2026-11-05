@@ -18,6 +18,7 @@ it('links alert targets and sorts by their displayed names instead of resource p
     { resourceType: AlertResourceType.Platform, resourceName: 'Zulu', resourcePath: '/a' },
     { resourceType: AlertResourceType.BackupPolicy, resourceName: 'Daily backup', resourcePath: '/z' },
     { resourceType: AlertResourceType.Deployment, resourceName: 'App', resourcePath: '/m' },
+    { resourceType: AlertResourceType.Updates, resourceName: 'Citadel updates', resourcePath: '/updates' },
   ].map((target, index) => ({
     ...target,
     id: `alert-${index}`,
@@ -54,6 +55,8 @@ it('links alert targets and sorts by their displayed names instead of resource p
   );
   expect(screen.getByRole('link', { name: 'App' })).toHaveAttribute('href', '/deployments/edit/resource-2');
 
+  expect(screen.getByRole('link', { name: 'Citadel updates' })).toHaveAttribute('href', '/updates');
+
   const sortButton = within(screen.getByRole('columnheader', { name: 'Target' })).getByRole('button', { hidden: true });
   const targetNames = () =>
     screen
@@ -61,7 +64,7 @@ it('links alert targets and sorts by their displayed names instead of resource p
       .slice(1)
       .map((row) => within(row).getByRole('link').textContent);
   await user.click(sortButton);
-  expect(targetNames()).toEqual(['App', 'Daily backup', 'Zulu']);
+  expect(targetNames()).toEqual(['App', 'Citadel updates', 'Daily backup', 'Zulu']);
   await user.click(sortButton);
-  expect(targetNames()).toEqual(['Zulu', 'Daily backup', 'App']);
+  expect(targetNames()).toEqual(['Zulu', 'Daily backup', 'Citadel updates', 'App']);
 });

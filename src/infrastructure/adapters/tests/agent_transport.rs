@@ -40,6 +40,31 @@ struct FixtureService {
 
 #[tonic::async_trait]
 impl PlatformService for FixtureService {
+    async fn set_agent_update_drain(
+        &self,
+        _: tonic::Request<citadel_contracts::citadel::platforms::v1::AgentUpdateDrainRequest>,
+    ) -> Result<tonic::Response<()>, tonic::Status> {
+        Err(tonic::Status::unimplemented("fixture"))
+    }
+    async fn get_agent_update_info(
+        &self,
+        _: tonic::Request<()>,
+    ) -> Result<
+        tonic::Response<citadel_contracts::citadel::platforms::v1::AgentUpdateInfo>,
+        tonic::Status,
+    > {
+        Err(tonic::Status::unimplemented("fixture"))
+    }
+    async fn update_agent(
+        &self,
+        _: tonic::Request<citadel_contracts::citadel::platforms::v1::UpdateAgentRequest>,
+    ) -> Result<
+        tonic::Response<citadel_contracts::citadel::platforms::v1::UpdateAgentResponse>,
+        tonic::Status,
+    > {
+        Err(tonic::Status::unimplemented("fixture"))
+    }
+
     async fn get_platform_info(
         &self,
         request: Request<()>,

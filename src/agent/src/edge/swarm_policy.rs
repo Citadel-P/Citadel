@@ -20,6 +20,8 @@ pub(super) fn allowed(kind: EdgeCommandKind) -> bool {
     matches!(
         kind,
         PlatformCheckHealth
+            | PlatformAgentUpdateDrain
+            | PlatformAgentUpdateInfo
             | PlatformGetInfo
             | PlatformStatsStream
             | PlatformDaemonEventsStream
@@ -370,7 +372,7 @@ mod tests {
             assert_eq!(allowed(kind), columns[7] != "denied", "{kind:?}");
             count += 1;
         }
-        assert_eq!(count, 75);
+        assert_eq!(count, 78);
         assert!(!allowed(EdgeCommandKind::Unspecified));
     }
     #[test]

@@ -75,7 +75,7 @@ pub(super) async fn verify(
             storage.check(&plan,None,&cancel).await.unwrap();
             store.save_review(actor,&plan).await.unwrap();
             let started=store.start(actor,plan.preview.id).await.unwrap();
-            let claim=backups.claim_restore(Utc::now()-chrono::Duration::hours(1)).await.unwrap().unwrap();
+            let claim=backups.claim_restore(Utc::now()-chrono::Duration::hours(1), citadel_backups::RestoreClaimScope::All).await.unwrap().unwrap();
             assert_eq!(claim.run.id,started.restores[0].id);
             assert_eq!(claim.run.target_platform_id,target);
             let result=executor.restore(&claim,&cancel).await;

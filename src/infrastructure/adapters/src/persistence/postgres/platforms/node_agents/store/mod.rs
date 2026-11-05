@@ -76,7 +76,7 @@ impl PostgresNodeAgentLifecycleStore {
             }
         }
         let operation_id = Uuid::now_v7();
-        let saved = sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,clusterid,managerdockernodeid,managerdockerdaemonid,dockerservicename,agentimagereference,agentimagedigest,desiredstate,operationid,operationkind,operationstate,operationstartedatutc,operationactorid) VALUES($1,$2,$3,$4,$5,'','',CASE WHEN $8='Remove' THEN 'Removed' ELSE 'Installed' END,$6,$8,'Running',now(),$7) ON CONFLICT(platformid) DO UPDATE SET operationid=$6,operationkind=$8,operationstate='Running',operationstartedatutc=now(),operationactorid=$7,operationerror=NULL,updatedatutc=now(),managerdockernodeid=$3,managerdockerdaemonid=$4,desiredstate=CASE WHEN $8='Remove' THEN swarmnodeagentinstallations.desiredstate ELSE 'Installed' END WHERE swarmnodeagentinstallations.clusterid=$2 AND (swarmnodeagentinstallations.operationstate IS DISTINCT FROM 'Running' OR swarmnodeagentinstallations.operationstartedatutc<now()-interval '30 minutes') RETURNING dockerserviceid,dockercaconfigid")
+        let saved = sqlx::query("INSERT INTO swarmnodeagentinstallations(platformid,clusterid,managerdockernodeid,managerdockerdaemonid,dockerservicename,agentimagereference,agentimagedigest,desiredstate,operationid,operationkind,operationstate,operationstartedatutc,operationactorid) VALUES($1,$2,$3,$4,$5,'','',CASE WHEN $8='Remove' THEN 'Removed' ELSE 'Installed' END,$6,$8,'Running',now(),$7) ON CONFLICT(platformid) DO UPDATE SET operationid=$6,operationkind=$8,operationstate='Running',operationstartedatutc=now(),operationactorid=$7,operationerror=NULL,updatedatutc=now(),managerdockernodeid=$3,managerdockerdaemonid=$4,desiredstate=CASE WHEN $8='Remove' THEN swarmnodeagentinstallations.desiredstate ELSE 'Installed' END WHERE swarmnodeagentinstallations.clusterid=$2 AND (swarmnodeagentinstallations.operationstate IS DISTINCT FROM 'Running' OR swarmnodeagentinstallations.operationstartedatutc<now()-interval '30 minutes') RETURNING dockerserviceid,dockercaconfigid,agentimagereference,agentimagedigest")
                 .bind(id).bind(cluster.as_deref()).bind(node).bind(daemon).bind(format!("citadel-node-agent-{}", id.simple())).bind(operation_id).bind(actor.value()).bind(kind)
                 .fetch_optional(&mut *tx).await.map_err(storage)?.ok_or_else(|| invalid("A node-agent operation is already running, or its cluster identity changed."))?;
         let secret_ids = sqlx::query_scalar("SELECT DISTINCT dockersecretid FROM swarmnodeagentbootstraps WHERE platformid=$1 AND dockersecretid IS NOT NULL LIMIT 1001")
@@ -95,6 +95,17 @@ impl PostgresNodeAgentLifecycleStore {
             manager_node_id: node.unwrap().into(),
             manager_daemon_id: daemon.unwrap().into(),
             service_id: saved.try_get("dockerserviceid").map_err(storage)?,
+            approved_image: {
+                let reference: String = saved.try_get("agentimagereference").map_err(storage)?;
+                let digest: String = saved.try_get("agentimagedigest").map_err(storage)?;
+                if reference.is_empty() && digest.is_empty() {
+                    None
+                } else {
+                    Some(citadel_platforms::node_agents::setup::pin_image_reference(
+                        &reference, &digest,
+                    )?)
+                }
+            },
             ca_config_id: saved.try_get("dockercaconfigid").map_err(storage)?,
             secret_ids,
         };

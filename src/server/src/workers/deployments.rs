@@ -8,6 +8,7 @@ const STALE_AFTER: Duration = Duration::from_secs(11 * 60);
 const MAXIMUM_BATCH: i64 = 10;
 
 pub(crate) async fn image_updates(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,
     deployments: Arc<DeploymentService>,
 ) -> Result<(), std::convert::Infallible> {
@@ -16,6 +17,12 @@ pub(crate) async fn image_updates(
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! { biased; () = cancellation.cancelled() => return Ok(()), _ = ticker.tick() => {} }
+        let Some(_admission) = admission
+            .enter("Workload image updates", &cancellation)
+            .await
+        else {
+            return Ok(());
+        };
         if let Err(error) = deployments.run_scheduled_update_checks(&cancellation).await {
             tracing::warn!(%error, "Deployment image update sweep failed");
         }

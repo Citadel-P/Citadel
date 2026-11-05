@@ -8,6 +8,12 @@ impl PostgresAlertRepository {
         receipt: Option<Uuid>,
     ) -> Result<Option<AlertEvent>, AlertError> {
         let mut transaction = self.pool.begin().await.map_err(storage)?;
+        let instance_update = super::instance_updates::is_instance_update(&observation.alert_type);
+        if instance_update
+            && !super::instance_updates::is_current(&mut transaction, observation).await?
+        {
+            return Ok(None);
+        }
         if super::update_resolution::already_applied(&mut transaction, observation).await? {
             transaction.commit().await.map_err(storage)?;
             return Ok(None);
@@ -62,7 +68,8 @@ impl PostgresAlertRepository {
             .map_err(storage)?
             .flatten();
         let update_available =
-            citadel_alerts::update_resolution::is_update_available(&observation.alert_type);
+            citadel_alerts::update_resolution::is_update_available(&observation.alert_type)
+                || instance_update;
         let last_observed = state
             .as_ref()
             .map(|row| row.try_get::<Option<DateTime<Utc>>, _>("lastobservedat"))
@@ -149,8 +156,15 @@ impl PostgresAlertRepository {
             false
         };
         if inserted.is_none() {
+            let refreshed = if instance_update {
+                sqlx::query("UPDATE alertevents SET info=$2,updatedat=$3 WHERE openincidentkey=$1 AND info::jsonb IS DISTINCT FROM $2::jsonb")
+                    .bind(&deduplication_key).bind(&observation.info).bind(observation.observed_at)
+                    .execute(&mut *transaction).await.map_err(storage)?.rows_affected() > 0
+            } else {
+                false
+            };
             transaction.commit().await.map_err(storage)?;
-            if superseded {
+            if superseded || refreshed {
                 self.changed();
             }
             return Ok(None);

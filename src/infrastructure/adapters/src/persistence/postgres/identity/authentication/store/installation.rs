@@ -4,7 +4,7 @@ use citadel_identity::{InstallationSettings, MfaPolicy, PatchInstallationSetting
 use citadel_primitives::PatchField;
 
 pub(super) async fn load(pool: &PgPool) -> Result<InstallationSettings, IdentityError> {
-    let row = sqlx::query("SELECT initializedat IS NOT NULL AS initialized, updatechecksenabled, mfapolicy FROM instancesetupstates WHERE id = 1")
+    let row = sqlx::query("SELECT initializedat IS NOT NULL AS initialized, updatechecksenabled, updatecheckintervalhours, mfapolicy FROM instancesetupstates WHERE id = 1")
         .fetch_one(pool).await.map_err(storage)?;
     map(&row)
 }
@@ -44,7 +44,7 @@ SELECT EXISTS (
     if !authorized {
         return Err(IdentityError::Forbidden);
     }
-    let row = sqlx::query("SELECT initializedat IS NOT NULL AS initialized, updatechecksenabled, mfapolicy FROM instancesetupstates WHERE id = 1 FOR UPDATE")
+    let row = sqlx::query("SELECT initializedat IS NOT NULL AS initialized, updatechecksenabled, updatecheckintervalhours, mfapolicy FROM instancesetupstates WHERE id = 1 FOR UPDATE")
         .fetch_one(&mut *tx).await.map_err(storage)?;
     let old = map(&row)?;
     if !old.initialized {
@@ -58,29 +58,60 @@ SELECT EXISTS (
             PatchField::Value(value) => value,
             _ => old.update_checks_enabled,
         },
+        update_check_interval_hours: match patch.update_check_interval_hours {
+            PatchField::Value(value) => value,
+            _ => old.update_check_interval_hours,
+        },
         mfa_policy: match patch.mfa_policy {
             PatchField::Value(value) => value,
             _ => old.mfa_policy,
         },
     };
     if next != old {
-        sqlx::query("UPDATE instancesetupstates SET updatechecksenabled=$1, mfapolicy=$2, updatedat=$3 WHERE id=1")
-            .bind(next.update_checks_enabled).bind(next.mfa_policy.as_database_str()).bind(now)
+        sqlx::query("UPDATE instancesetupstates SET updatechecksenabled=$1, mfapolicy=$2, updatedat=$3, updatecheckintervalhours=$4 WHERE id=1")
+            .bind(next.update_checks_enabled).bind(next.mfa_policy.as_database_str()).bind(now).bind(next.update_check_interval_hours)
             .execute(&mut *tx).await.map_err(storage)?;
-        let event = ActivityEvent::new_user_event(
-            principal.subject_id,
-            principal.name.clone(),
-            principal.actor_id,
-            ActivityEventInfo::InstallationSettingsUpdated {
-                previous_update_checks_enabled: old.update_checks_enabled,
-                update_checks_enabled: next.update_checks_enabled,
-                previous_mfa_policy: old.mfa_policy.as_database_str().into(),
-                mfa_policy: next.mfa_policy.as_database_str().into(),
-            },
-            now,
-        )
-        .map_err(invalid_activity)?;
-        insert_activity(&mut tx, &event).await?;
+        if next.update_checks_enabled != old.update_checks_enabled
+            || next.update_check_interval_hours != old.update_check_interval_hours
+        {
+            let instance = crate::persistence::postgres::licensing::store::get_or_create_identity(
+                &mut tx, now,
+            )
+            .await
+            .map_err(|error| IdentityError::Storage(error.to_string()))?;
+            let event = ActivityEvent::new_updates_event(
+                instance.instance_id,
+                principal.actor_id,
+                ActivityEventInfo::UpdateChecksChanged {
+                    previous_update_checks_enabled: old.update_checks_enabled,
+                    update_checks_enabled: next.update_checks_enabled,
+                    previous_update_check_interval_hours: Some(old.update_check_interval_hours),
+                    update_check_interval_hours: Some(next.update_check_interval_hours),
+                },
+                citadel_activities::ActivityStatus::Success,
+                now,
+            )
+            .map_err(invalid_activity)?;
+            insert_activity(&mut tx, &event).await?;
+        }
+        if next.mfa_policy != old.mfa_policy {
+            let event = ActivityEvent::new_user_event(
+                principal.subject_id,
+                principal.name.clone(),
+                principal.actor_id,
+                ActivityEventInfo::InstallationSettingsUpdated {
+                    // Preserve historical decoding without describing the separate
+                    // Updates property twice in a combined settings mutation.
+                    previous_update_checks_enabled: next.update_checks_enabled,
+                    update_checks_enabled: next.update_checks_enabled,
+                    previous_mfa_policy: old.mfa_policy.as_database_str().into(),
+                    mfa_policy: next.mfa_policy.as_database_str().into(),
+                },
+                now,
+            )
+            .map_err(invalid_activity)?;
+            insert_activity(&mut tx, &event).await?;
+        }
     }
     tx.commit().await.map_err(storage)?;
     Ok(next)
@@ -91,6 +122,7 @@ fn map(row: &sqlx::postgres::PgRow) -> Result<InstallationSettings, IdentityErro
     Ok(InstallationSettings {
         initialized: row.try_get("initialized").map_err(storage)?,
         update_checks_enabled: row.try_get("updatechecksenabled").map_err(storage)?,
+        update_check_interval_hours: row.try_get("updatecheckintervalhours").map_err(storage)?,
         mfa_policy: MfaPolicy::from_database_str(&policy)
             .ok_or_else(|| IdentityError::Storage("Invalid installation MFA policy.".into()))?,
     })

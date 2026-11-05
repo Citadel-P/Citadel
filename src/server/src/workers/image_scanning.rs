@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
 
 pub async fn run(
+    admission: citadel_runtime::admission::AdmissionGate,
     cancel: CancellationToken,
     scanner: Arc<citadel_adapters::connectors::routing::images::scanner::ImageScanner>,
     deployments: Arc<citadel_deployments::DeploymentService>,
@@ -16,6 +17,9 @@ pub async fn run(
     let mut first = true;
     loop {
         tokio::select! {biased;()=cancel.cancelled()=>return Ok(()),_=ticker.tick()=>{}}
+        let Some(_admission) = admission.enter("Image scans", &cancel).await else {
+            return Ok(());
+        };
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::ImageScan.start();
         match scanner.run_cycle(&cancel).await {
             Ok(count) => tracing::debug!(count, "Registry image scan completed"),

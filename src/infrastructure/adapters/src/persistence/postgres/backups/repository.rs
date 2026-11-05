@@ -256,8 +256,9 @@ impl BackupPersistence for PostgresBackupPersistence {
     fn claim_restore(
         &self,
         stale_before: DateTime<Utc>,
+        scope: citadel_backups::RestoreClaimScope,
     ) -> BoxFuture<'_, Result<Option<RestoreClaim>, BackupError>> {
-        self.claim_restore_impl(stale_before)
+        self.claim_restore_impl(stale_before, scope)
     }
 
     fn finish_restore<'a>(

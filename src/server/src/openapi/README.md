@@ -61,7 +61,9 @@ Serialization and HTTP tests cover request/response behavior.
 
 With `CITADEL_HTTP_OPENAPI_ENABLED=true`, the running API serves the same Utoipa documents at
 `/openapi/v1.json` and `/openapi/public/v1.json`. It no longer embeds potentially
-stale generated JSON files. The existing setting still defaults to disabled. The frontend uses this same full contract. `openapi --check` remains read-only and
+stale generated JSON files. Router construction initializes the shared document
+cache before listeners open, so the first request does not generate the schemas
+inside the middleware stack. The existing setting still defaults to disabled. The frontend uses this same full contract. `openapi --check` remains read-only and
 does not require Node.js; `npm run api:verify` checks generated frontend freshness.
 
 ## Native contracts

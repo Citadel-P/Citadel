@@ -38,6 +38,46 @@ aliases, documentation and public attachment checks succeed. Registry copies can
 be transactional across providers; the existing journal resumes partial publication.
 The GitHub release page is the final user-facing completion signal.
 
+The Core `verify-update-release` diagnostic independently checks the published
+manifest and runs Cosign against the exact Core digest with the expected
+`Citadel-P/Citadel/.github/workflows/ci.yml@refs/tags/vVERSION` certificate identity
+and GitHub Actions OIDC issuer. Its trust checks follow
+[Cosign's identity-based verification](https://docs.sigstore.dev/cosign/verifying/verify/).
+The manifest's signature checkpoints are publication receipts, not a substitute
+for this verification. The shared stable/development fixtures under
+`test/release/fixtures/` are checked against the publisher's actual output and
+consumed by Rust tests. No source-to-target upgrade eligibility is implied by
+a valid image signature.
+
+New candidate evidence also records Core's `upgrade-descriptor-json` output.
+Acceptance runs it without network access on each architecture and compares its
+version, migration-catalog digest, installer/update protocols and source list with
+the tagged build contract. Promotion rejects missing or mismatched evidence.
+The catalog digest covers the exact embedded `migrations.json` bytes; Core first
+validates the SQL checksums referenced by that catalog. It does not describe the
+current state of any installed database.
+
+`release-manifest.json` includes the accepted `upgradeDescriptor` when present in
+the retained evidence. Retries preserve those bytes and never derive a replacement
+descriptor from a later checkout. Existing retained publications without descriptor
+evidence keep their original attachment format. A public descriptor is only metadata:
+an updater must read the descriptor from the verified image before trusting it.
+Each candidate also runs the disposable installer registration test, including
+host utility execution and explicit registration refresh after Core recreation.
+Promotion requires that check on both architectures. Candidate acceptance also
+runs the disposable update lifecycle test: normal replacement, a crash during
+final ownership release, and checkpoint recovery into a fresh database. The
+test-only executable shares Core's lifecycle but substitutes its release catalog;
+it is marked unpublishable and never replaces the accepted candidate archive.
+This validates lifecycle behavior without needing to publish a test release.
+
+`src/server/upgrade-sources.json` owns the source list embedded in the target
+image and compared by release tooling. It currently remains empty: the local
+lifecycle regression does not qualify arbitrary earlier published versions.
+Declare an intended source version, catalog, architecture and Agent compatibility
+before building its target candidate, and qualify that actual transition before
+publication. Do not rebuild accepted artifacts to add eligibility afterward.
+
 ## Retention and retries
 
 **Thirty-day Actions retention is not a durable recovery policy.** Actions artifacts

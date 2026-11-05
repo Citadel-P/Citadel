@@ -1276,6 +1276,21 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
             .unwrap();
     assert_eq!(descriptor["imageUsedBytes"], 2048);
     assert_eq!(descriptor["volumeUsedBytes"], 4096);
+    // Authenticated current-session observations replace enrollment versions.
+    store
+        .heartbeat(current.agent_id, current.connected_at, "0.1.2")
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT lastseenversion FROM edgeagentbindings WHERE agentid=$1"
+        )
+        .bind(current.agent_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "0.1.2"
+    );
     // An old stream's late heartbeat/disconnect must not touch its replacement.
     store
         .disconnected(previous.agent_id, previous.connected_at)
@@ -1283,13 +1298,23 @@ async fn grpc_enrollment_reconnect_command_and_revocation_lifecycle() {
         .unwrap();
     assert!(
         store
-            .heartbeat(previous.agent_id, previous.connected_at)
+            .heartbeat(previous.agent_id, previous.connected_at, "0.1.0")
             .await
             .is_err()
     );
     assert_eq!(
         store.status(&target).await.unwrap().connection_status,
         "Connected"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT lastseenversion FROM edgeagentbindings WHERE agentid=$1"
+        )
+        .bind(current.agent_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "0.1.2"
     );
     let mut command = current
         .command(

@@ -117,6 +117,16 @@
           "StackImported",
           "StackWebhookReceived",
           "InstallationSettingsUpdated",
+          "UpdateDiscovered",
+          "UpdateChecksChanged",
+          "AgentUpdate",
+          "AgentUpdateScheduleChanged",
+          "UpdateScheduleFinished",
+          "InstanceUpdateStarted",
+          "InstanceUpdateCompleted",
+          "InstanceUpdateFailed",
+          "InstanceUpdatePostponed",
+          "InstanceUpdateRecovered",
           "InitialAdministratorCreated",
           "UserProfileUpdated",
           "UserPreferencesUpdated",
@@ -211,6 +221,7 @@
           "Team",
           "Role",
           "License",
+          "Updates",
           "Build",
           "BuildAgentPool",
           "Volume",
@@ -607,6 +618,101 @@
         ],
         "type": "object"
       },
+      "AgentEligibilityView": {
+        "enum": [
+          "Available",
+          "Current",
+          "Offline",
+          "Unknown",
+          "ManualRequired",
+          "Incompatible"
+        ],
+        "type": "string"
+      },
+      "AgentOperationView": {
+        "properties": {
+          "finished": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/AgentResultView"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "finished",
+          "updatedAt",
+          "targets"
+        ],
+        "type": "object"
+      },
+      "AgentPhaseView": {
+        "enum": [
+          "Pending",
+          "Updating",
+          "Succeeded",
+          "Skipped",
+          "Failed",
+          "NotStarted"
+        ],
+        "type": "string"
+      },
+      "AgentResultView": {
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phase": {
+            "$ref": "#/components/schemas/AgentPhaseView"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AgentTargetView"
+          }
+        },
+        "required": [
+          "target",
+          "phase"
+        ],
+        "type": "object"
+      },
+      "AgentReviewView": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/AgentTargetView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "expiresAt",
+          "targets"
+        ],
+        "type": "object"
+      },
       "AgentSetupView": {
         "description": "Public installation instructions. The signing private key never enters this model.",
         "properties": {
@@ -643,6 +749,108 @@
           "agentImage",
           "dockerRunCommand",
           "requiresTls"
+        ],
+        "type": "object"
+      },
+      "AgentTargetView": {
+        "properties": {
+          "availableVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "installedVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentEligibilityView"
+          },
+          "supported": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "status",
+          "supported",
+          "nodes"
+        ],
+        "type": "object"
+      },
+      "AgentUpdatesView": {
+        "properties": {
+          "checkError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextRun": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AgentOperationView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/UpdateScheduleView"
+          },
+          "scheduleRun": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UpdateScheduleRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/AgentTargetView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "targets",
+          "schedule"
         ],
         "type": "object"
       },
@@ -1027,6 +1235,7 @@
           "BuildAgentPool",
           "BackupPolicy",
           "License",
+          "Updates",
           "SwarmService"
         ],
         "type": "string"
@@ -1379,7 +1588,9 @@
           "BackupRunFailed",
           "BuildAgentPoolUnavailable",
           "LicenseEnteredGracePeriod",
-          "LicenseExpired"
+          "LicenseExpired",
+          "CoreUpdateAvailable",
+          "AgentUpdatesAvailable"
         ],
         "type": "string"
       },
@@ -1451,6 +1662,24 @@
         },
         "required": [
           "id"
+        ],
+        "type": "object"
+      },
+      "ApproveUpdateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reviewId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reviewId",
+          "requestId"
         ],
         "type": "object"
       },
@@ -5600,9 +5829,24 @@
             "format": "double",
             "type": "number"
           },
+          "rxBytesDelta": {
+            "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
+          },
+          "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -5647,9 +5891,24 @@
             "format": "double",
             "type": "number"
           },
+          "rxBytesDelta": {
+            "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
+          },
+          "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -10012,9 +10271,24 @@
                   "format": "double",
                   "type": "number"
                 },
+                "rxBytesDelta": {
+                  "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
                 "txBytes": {
                   "format": "double",
                   "type": "number"
+                },
+                "txBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -11062,6 +11336,10 @@
           "minimumMfaPolicy": {
             "$ref": "#/components/schemas/MfaPolicy"
           },
+          "updateCheckIntervalHours": {
+            "format": "int32",
+            "type": "integer"
+          },
           "updateChecksAllowed": {
             "type": "boolean"
           },
@@ -11071,6 +11349,7 @@
         },
         "required": [
           "updateChecksEnabled",
+          "updateCheckIntervalHours",
           "updateChecksAllowed",
           "mfaPolicy",
           "minimumMfaPolicy"
@@ -13707,6 +13986,14 @@
               }
             ]
           },
+          "updateCheckIntervalHours": {
+            "description": "Automatic release-check interval. Supported values: 6, 12, 24 hours.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "updateChecksEnabled": {
             "type": [
               "boolean",
@@ -15039,6 +15326,291 @@
       },
       "PublicActivityEventInfo": {
         "oneOf": [
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "AgentUpdate"
+                ],
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "message": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "agent",
+              "targetVersion",
+              "phase",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateScheduleFinished"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "AgentUpdateScheduleChanged"
+                ],
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "includeCore": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "targetCount": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "enabled",
+              "targetCount",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateDiscovered"
+                ],
+                "type": "string"
+              },
+              "releaseUrl": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "releaseUrl",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateChecksChanged"
+                ],
+                "type": "string"
+              },
+              "previousUpdateCheckIntervalHours": {
+                "format": "int32",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "previousUpdateChecksEnabled": {
+                "type": "boolean"
+              },
+              "updateCheckIntervalHours": {
+                "format": "int32",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "updateChecksEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "previousUpdateChecksEnabled",
+              "updateChecksEnabled",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateStarted"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": "string"
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "sourceVersion",
+              "targetVersion",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateCompleted"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": "string"
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "sourceVersion",
+              "targetVersion",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateFailed"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "phase",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdatePostponed"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateRecovered"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "recoveryId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "recoveryId",
+              "version",
+              "$type"
+            ],
+            "type": "object"
+          },
           {
             "properties": {
               "$type": {
@@ -20383,6 +20955,36 @@
         },
         "required": [
           "runs"
+        ],
+        "type": "object"
+      },
+      "ReviewAgentsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "targets"
+        ],
+        "type": "object"
+      },
+      "ReviewUpdateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
         ],
         "type": "object"
       },
@@ -27175,12 +27777,140 @@
         ],
         "type": "string"
       },
+      "UpdateOperationView": {
+        "properties": {
+          "component": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "phase",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "UpdateOrder": {
         "enum": [
           "StopFirst",
           "StartFirst"
         ],
         "type": "string"
+      },
+      "UpdateReviewView": {
+        "properties": {
+          "component": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "installedVersion": {
+            "type": "string"
+          },
+          "targetVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "installedVersion",
+          "targetVersion",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "UpdateScheduleRunView": {
+        "properties": {
+          "agentOperation": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coreOperation": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phase": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phase"
+        ],
+        "type": "object"
+      },
+      "UpdateScheduleView": {
+        "additionalProperties": false,
+        "properties": {
+          "cron": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "includeCore": {
+            "type": "boolean"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timeZone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "targets",
+          "enabled",
+          "cron",
+          "timeZone"
+        ],
+        "type": "object"
       },
       "UpdateScriptInput": {
         "additionalProperties": false,
@@ -27278,6 +28008,105 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "UpdateStatusView": {
+        "properties": {
+          "available": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AvailableUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channel": {
+            "type": "string"
+          },
+          "checkError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checksAllowed": {
+            "type": "boolean"
+          },
+          "checksEnabled": {
+            "type": "boolean"
+          },
+          "databaseAvailable": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "databaseManaged": {
+            "type": "boolean"
+          },
+          "databaseVersion": {
+            "description": "PostgreSQL server version; absence never means the engine is up to date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installationUnavailableReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installedVersion": {
+            "type": "string"
+          },
+          "instanceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastAttempt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastSuccess": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UpdateOperationView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "instanceId",
+          "installedVersion",
+          "databaseVersion",
+          "databaseAvailable",
+          "databaseManaged",
+          "channel",
+          "checksAllowed",
+          "checksEnabled",
+          "lastAttempt",
+          "lastSuccess",
+          "checkError",
+          "available",
+          "installationUnavailableReason",
+          "operation"
+        ],
         "type": "object"
       },
       "UpdateSwarmNodeInput": {
@@ -53424,129 +54253,6 @@
         "x-citadel-setup-exempt": false
       }
     },
-    "/api/v1/platforms/{id}/node-agents/upgrade": {
-      "post": {
-        "operationId": "upgradeSwarmNodeAgents",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NodeAgentProgress"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Upgrade Docker Swarm node agents",
-        "tags": [
-          "Platforms"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
     "/api/v1/platforms/{id}/prune": {
       "post": {
         "operationId": "prunePlatform",
@@ -77083,6 +77789,969 @@
         "summary": "Remove a Role from a Team",
         "tags": [
           "Teams"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates": {
+      "get": {
+        "operationId": "getInstanceUpdates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateStatusView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get instance update status",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/agents": {
+      "get": {
+        "operationId": "getAgentUpdates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUpdatesView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Agent availability, schedule and durable progress",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/agents/approve": {
+      "post": {
+        "operationId": "approveAgentUpdates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveUpdateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentOperationView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Start a reviewed Agent selection",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/agents/operations/{id}": {
+      "get": {
+        "operationId": "getAgentUpdateOperation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentOperationView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Read durable Agent update progress",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/agents/review": {
+      "post": {
+        "operationId": "reviewAgentUpdates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewAgentsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentReviewView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Review selected Agent updates",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/approve": {
+      "post": {
+        "operationId": "approveInstanceUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveUpdateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateOperationView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Approve a reviewed instance update",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/check": {
+      "post": {
+        "operationId": "checkInstanceUpdates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateStatusView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Check official releases once without installing",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/operations/{id}": {
+      "get": {
+        "operationId": "getInstanceUpdateOperation",
+        "parameters": [
+          {
+            "description": "Operation ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateOperationView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Read an instance update operation",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/review": {
+      "post": {
+        "operationId": "reviewInstanceUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewUpdateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateReviewView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Review a verified release without installing",
+        "tags": [
+          "Updates"
+        ],
+        "x-citadel-principal": "administrator",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/updates/schedule": {
+      "put": {
+        "operationId": "updateUpdateSchedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduleView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateScheduleView"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Save the shared Team update schedule",
+        "tags": [
+          "Updates"
         ],
         "x-citadel-principal": "administrator",
         "x-citadel-public": false,

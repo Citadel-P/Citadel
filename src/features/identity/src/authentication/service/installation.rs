@@ -61,7 +61,16 @@ impl IdentityService {
                 ));
             }
         };
-        if enabled.is_none() && policy.is_none() {
+        let interval = match patch.update_check_interval_hours {
+            PatchField::Value(value @ (6 | 12 | 24)) => Some(value),
+            PatchField::Missing => None,
+            _ => {
+                return Err(IdentityError::Validation(
+                    "Update check frequency must be 6, 12 or 24 hours.".into(),
+                ));
+            }
+        };
+        if enabled.is_none() && policy.is_none() && interval.is_none() {
             return Err(IdentityError::Validation(
                 "At least one installation setting is required.".into(),
             ));

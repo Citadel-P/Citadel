@@ -803,6 +803,10 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     for invalid in [
         json!({}),
         json!({"updateChecksEnabled":null}),
+        json!({"updateCheckIntervalHours":null}),
+        json!({"updateCheckIntervalHours":0}),
+        json!({"updateCheckIntervalHours":7}),
+        json!({"updateCheckIntervalHours":-6}),
         json!({"mfaPolicy":null}),
         json!({"mfaPolicy":"Unknown"}),
     ] {
@@ -838,7 +842,17 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
         "Completed"
     );
     // Independent administrator patches must preserve each other's field.
-    let (updates, mfa) = tokio::join!(
+    assert_eq!(
+        fixture
+            .identity
+            .installation_settings()
+            .await
+            .unwrap()
+            .update_check_interval_hours,
+        6
+    );
+    let mut changes = fixture.identity.installation_changes();
+    let (updates, mfa, frequency) = tokio::join!(
         send_json(
             &fixture.app,
             Method::PATCH,
@@ -854,12 +868,25 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
             json!({"mfaPolicy":"RequiredForAllUsers"}),
             Some(fixture.principal.clone()),
             None
+        ),
+        send_json(
+            &fixture.app,
+            Method::PATCH,
+            "/api/v1/installation/settings",
+            json!({"updateCheckIntervalHours":24}),
+            Some(fixture.principal.clone()),
+            None
         )
     );
     assert_eq!(updates.status(), StatusCode::OK);
     assert_eq!(mfa.status(), StatusCode::OK);
+    assert_eq!(frequency.status(), StatusCode::OK);
+    assert_eq!(json_body(frequency).await["updateCheckIntervalHours"], 24);
+    assert!(changes.has_changed().unwrap());
+    changes.borrow_and_update();
     let persisted = fixture.identity.installation_settings().await.unwrap();
     assert!(persisted.update_checks_enabled);
+    assert_eq!(persisted.update_check_interval_hours, 24);
     assert_eq!(persisted.mfa_policy, MfaPolicy::RequiredForAllUsers);
     let restarted = identity(&fixture.pool, Arc::new(Argon2PasswordHasher::default()));
     assert_eq!(restarted.installation_settings().await.unwrap(), persisted);
@@ -923,13 +950,20 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     )
     .await;
     assert_eq!(revoked.status(), StatusCode::FORBIDDEN);
-    let audit: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM activityevents WHERE eventtype='InstallationSettingsUpdated'",
+    let audit: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT eventtype, count(*) FROM activityevents WHERE eventtype IN ('InstallationSettingsUpdated','UpdateChecksChanged') GROUP BY eventtype ORDER BY eventtype",
     )
-    .fetch_one(&fixture.pool)
+    .fetch_all(&fixture.pool)
     .await
     .unwrap();
-    assert!(audit >= 3);
+    assert_eq!(
+        audit,
+        vec![
+            ("InstallationSettingsUpdated".into(), 2),
+            ("UpdateChecksChanged".into(), 2),
+        ],
+        "MFA edits and update-check edits have separate histories; rejected requests must not add events"
+    );
     fixture.pool.close().await;
     drop(fixture);
     sqlx::query(sqlx::AssertSqlSafe(format!(

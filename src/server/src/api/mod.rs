@@ -8,3 +8,5 @@ pub(crate) mod request_validation;
 pub(crate) mod resource_access;
 pub mod resources;
 pub mod routes;
+
+pub mod admission;

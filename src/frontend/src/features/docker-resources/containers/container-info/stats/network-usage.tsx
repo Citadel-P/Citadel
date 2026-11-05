@@ -1,6 +1,7 @@
 import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
 import { useStatsChartBounds } from '@/components/custom/stats-chart-range';
-import { statsAxis } from '@/lib/stats-range';
+import { filterStatsRange, statsAxis } from '@/lib/stats-range';
+import { mergeStatsByCreated } from '@/lib/live-stats';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   CHART_ACTIVE_DOT,
@@ -19,51 +20,45 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ReactNode, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { ContainerStatView } from '@/api/generated/api.types';
-import type { ContainerStatsResource } from './types';
 import { byteTransform } from '@/lib/bytes.helper';
 
-const NetworkUsageHeader = ({
-  container,
-  controls,
-}: {
-  container: ContainerStatsResource | undefined;
-  controls?: ReactNode;
-}) => (
-  <StatsPanelHeader
-    title="Network Usage"
-    description="Showing total network usage over the selected period"
-    controls={controls}>
-    <StatsSummaryItem
-      label="Received"
-      value={
-        container?.state === 'Running' && container?.containerStat
-          ? byteTransform(container.containerStat.rxBytes, 2)
-          : '-'
-      }
-    />
-    <StatsSummaryItem
-      label="Sent"
-      value={
-        container?.state === 'Running' && container?.containerStat
-          ? byteTransform(container.containerStat.txBytes, 2)
-          : '-'
-      }
-    />
+type NetworkSample = Pick<ContainerStatView, 'created' | 'rxBytesDelta' | 'txBytesDelta'>;
+
+// History contains sums of raw counter increases, calculated before bucketing.
+// Rendering only accumulates the returned traffic; it never differences averages.
+function networkUsage(stats: NetworkSample[]) {
+  let received: number | undefined;
+  let sent: number | undefined;
+  const data = mergeStatsByCreated([], stats).map((stat) => {
+    if (stat.rxBytesDelta != null && Number.isFinite(stat.rxBytesDelta)) received = (received ?? 0) + stat.rxBytesDelta;
+    if (stat.txBytesDelta != null && Number.isFinite(stat.txBytesDelta)) sent = (sent ?? 0) + stat.txBytesDelta;
+    return { created: stat.created, rxBytes: received, txBytes: sent };
+  });
+  return {
+    data,
+    received: received === undefined ? '-' : byteTransform(received, 2),
+    sent: sent === undefined ? '-' : byteTransform(sent, 2),
+  };
+}
+
+const NetworkUsageHeader = ({ usage, controls }: { usage: ReturnType<typeof networkUsage>; controls?: ReactNode }) => (
+  <StatsPanelHeader title="Network Usage" description="Traffic recorded over the selected period" controls={controls}>
+    <StatsSummaryItem label="Received" value={usage.received} />
+    <StatsSummaryItem label="Sent" value={usage.sent} />
   </StatsPanelHeader>
 );
 
 const NetworkUsage = ({
   stats,
-  container,
   isLoading,
   controls,
 }: {
   stats: Omit<ContainerStatView, 'containerId'>[];
-  container: ContainerStatsResource | undefined;
   isLoading: boolean;
   controls?: ReactNode;
 }) => {
   const bounds = useStatsChartBounds();
+  const usage = useMemo(() => networkUsage(bounds ? filterStatsRange(stats, bounds) : stats), [stats, bounds]);
   const chartConfig = useMemo(
     () =>
       ({
@@ -97,7 +92,7 @@ const NetworkUsage = ({
 
   const memoizedChart = useMemo(
     () => (
-      <AreaChart data={statsChartData(stats, bounds)} accessibilityLayer>
+      <AreaChart data={statsChartData(usage.data, bounds)} accessibilityLayer>
         {gradientDefs}
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
         <YAxis {...statsValueAxis('bytes')} />
@@ -145,14 +140,14 @@ const NetworkUsage = ({
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [stats, gradientDefs, bounds],
+    [usage.data, gradientDefs, bounds],
   );
 
   return isLoading ? (
     <Skeleton className="h-56.25 w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
-      <NetworkUsageHeader container={container} controls={controls} />
+      <NetworkUsageHeader usage={usage} controls={controls} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-62.5 w-full">
           {memoizedChart}

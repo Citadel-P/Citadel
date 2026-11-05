@@ -106,6 +106,16 @@
           "StackImported",
           "StackWebhookReceived",
           "InstallationSettingsUpdated",
+          "UpdateDiscovered",
+          "UpdateChecksChanged",
+          "AgentUpdate",
+          "AgentUpdateScheduleChanged",
+          "UpdateScheduleFinished",
+          "InstanceUpdateStarted",
+          "InstanceUpdateCompleted",
+          "InstanceUpdateFailed",
+          "InstanceUpdatePostponed",
+          "InstanceUpdateRecovered",
           "InitialAdministratorCreated",
           "UserProfileUpdated",
           "UserPreferencesUpdated",
@@ -200,6 +210,7 @@
           "Team",
           "Role",
           "License",
+          "Updates",
           "Build",
           "BuildAgentPool",
           "Volume",
@@ -914,6 +925,7 @@
           "BuildAgentPool",
           "BackupPolicy",
           "License",
+          "Updates",
           "SwarmService"
         ],
         "type": "string"
@@ -1266,7 +1278,9 @@
           "BackupRunFailed",
           "BuildAgentPoolUnavailable",
           "LicenseEnteredGracePeriod",
-          "LicenseExpired"
+          "LicenseExpired",
+          "CoreUpdateAvailable",
+          "AgentUpdatesAvailable"
         ],
         "type": "string"
       },
@@ -5328,9 +5342,24 @@
             "format": "double",
             "type": "number"
           },
+          "rxBytesDelta": {
+            "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
+          },
+          "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -5375,9 +5404,24 @@
             "format": "double",
             "type": "number"
           },
+          "rxBytesDelta": {
+            "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
+          },
+          "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -8791,9 +8835,24 @@
                   "format": "double",
                   "type": "number"
                 },
+                "rxBytesDelta": {
+                  "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
                 "txBytes": {
                   "format": "double",
                   "type": "number"
+                },
+                "txBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -12358,6 +12417,291 @@
       },
       "PublicActivityEventInfo": {
         "oneOf": [
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "AgentUpdate"
+                ],
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "message": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "agent",
+              "targetVersion",
+              "phase",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateScheduleFinished"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "runId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "AgentUpdateScheduleChanged"
+                ],
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "includeCore": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "targetCount": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "enabled",
+              "targetCount",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateDiscovered"
+                ],
+                "type": "string"
+              },
+              "releaseUrl": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "releaseUrl",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "UpdateChecksChanged"
+                ],
+                "type": "string"
+              },
+              "previousUpdateCheckIntervalHours": {
+                "format": "int32",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "previousUpdateChecksEnabled": {
+                "type": "boolean"
+              },
+              "updateCheckIntervalHours": {
+                "format": "int32",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "updateChecksEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "previousUpdateChecksEnabled",
+              "updateChecksEnabled",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateStarted"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": "string"
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "sourceVersion",
+              "targetVersion",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateCompleted"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "sourceVersion": {
+                "type": "string"
+              },
+              "targetVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "sourceVersion",
+              "targetVersion",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateFailed"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "phase",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdatePostponed"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "message",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceUpdateRecovered"
+                ],
+                "type": "string"
+              },
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "recoveryId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operationId",
+              "recoveryId",
+              "version",
+              "$type"
+            ],
+            "type": "object"
+          },
           {
             "properties": {
               "$type": {
@@ -45241,129 +45585,6 @@
           }
         ],
         "summary": "Repair Docker Swarm node-agent coverage",
-        "tags": [
-          "Platforms"
-        ],
-        "x-citadel-principal": "actor",
-        "x-citadel-public": true,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/platforms/{id}/node-agents/upgrade": {
-      "post": {
-        "operationId": "upgradeSwarmNodeAgents",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NodeAgentProgress"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Upgrade Docker Swarm node agents",
         "tags": [
           "Platforms"
         ],

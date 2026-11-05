@@ -99,8 +99,6 @@ pub(crate) mod token_safety;
 
 pub mod tasks;
 
-pub mod release_updates;
-
 pub mod composition {
     pub mod workers;
 }

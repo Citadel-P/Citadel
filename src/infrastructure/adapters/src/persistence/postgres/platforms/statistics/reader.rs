@@ -28,6 +28,8 @@ fn map_container(row: PgRow) -> Result<ContainerStatSnapshot, RuntimeCapabilityE
         memory_limit: row.try_get("memorylimit").map_err(storage)?,
         rx_bytes: row.try_get("rxbytes").map_err(storage)?,
         tx_bytes: row.try_get("txbytes").map_err(storage)?,
+        rx_bytes_delta: row.try_get("rxbytesdelta").map_err(storage)?,
+        tx_bytes_delta: row.try_get("txbytesdelta").map_err(storage)?,
     })
 }
 impl StatisticsReader for PostgresStatisticsReader {
@@ -181,14 +183,18 @@ impl StatisticsReader for PostgresStatisticsReader {
             if ids.len() > 500 {
                 return Err(capacity("Statistics request exceeds 500 Containers"));
             }
-            let rows=sqlx::query(r#"SELECT containerid,MIN(created) AS created,COALESCE(AVG(cpuusage),0) AS cpuusage,
-                COALESCE(AVG(memoryactive),0) AS memoryactive,COALESCE(AVG(memorycache),0) AS memorycache,
-                COALESCE(AVG(memorylimit),0) AS memorylimit,COALESCE(AVG(rxbytes),0) AS rxbytes,COALESCE(AVG(txbytes),0) AS txbytes
-                FROM containerstats WHERE containerid=ANY($1) AND created>=$2 AND created<=$4
-                GROUP BY containerid,(created/$3) ORDER BY MIN(created),containerid LIMIT 65537"#)
-                .bind(ids).bind(window.since(now)).bind(window.bucket_seconds()).bind(window.until(now)).fetch_all(&self.pool).await.map_err(storage)?;
+            let rows = sqlx::query(include_str!("container_history.sql"))
+                .bind(ids)
+                .bind(window.since(now))
+                .bind(window.bucket_seconds())
+                .bind(window.until(now))
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
             if rows.len() > 65_536 {
-                return Err(capacity("History exceeds 65536 samples; request individual Container history."));
+                return Err(capacity(
+                    "History exceeds 65536 samples; request individual Container history.",
+                ));
             }
             rows.into_iter().map(map_container).collect()
         }
@@ -232,23 +238,23 @@ impl StatisticsReader for PostgresStatisticsReader {
         async move {
             // Bucket by logical slot first: replacing a Task must not double count
             // replicas, and deleting Container projections must not erase history.
-            sqlx::query(r#"WITH task_buckets AS (
-                SELECT taskkey,(created/$7) AS bucket,MIN(created) AS created,AVG(cpuusage) AS cpuusage,
-                    AVG(memoryactive) AS memoryactive,AVG(memorycache) AS memorycache,AVG(memorylimit) AS memorylimit,
-                    AVG(rxbytes) AS rxbytes,AVG(txbytes) AS txbytes FROM swarmservicestats
-                WHERE created>=$6 AND created<=$8 AND (
-                    ($3::uuid IS NOT NULL AND (swarmserviceid=$3 OR (swarmserviceid IS NULL AND stackid IS NULL AND platformid=$1 AND dockerserviceid=$2))) OR
-                    ($3 IS NULL AND $4::uuid IS NOT NULL AND ((stackid=$4 AND servicename=$5) OR (swarmserviceid IS NULL AND stackid IS NULL AND platformid=$1 AND dockerserviceid=$2))) OR
-                    ($3 IS NULL AND $4 IS NULL AND platformid=$1 AND dockerserviceid=$2))
-                GROUP BY taskkey,(created/$7))
-                SELECT '00000000-0000-0000-0000-000000000000'::uuid AS containerid,MIN(created) AS created,
-                    SUM(cpuusage) AS cpuusage,SUM(memoryactive) AS memoryactive,SUM(memorycache) AS memorycache,
-                    SUM(memorylimit) AS memorylimit,SUM(rxbytes) AS rxbytes,SUM(txbytes) AS txbytes
-                FROM task_buckets GROUP BY bucket ORDER BY bucket"#)
-                .bind(id.platform_id).bind(id.docker_service_id).bind(id.managed_service_id).bind(id.stack_id).bind(id.service_name)
-                .bind(window.since(now)).bind(window.bucket_seconds()).bind(window.until(now)).fetch_all(&self.pool).await.map_err(storage)?
-                .into_iter().map(map_container).collect()
-        }.boxed()
+            sqlx::query(include_str!("service_history.sql"))
+                .bind(id.platform_id)
+                .bind(id.docker_service_id)
+                .bind(id.managed_service_id)
+                .bind(id.stack_id)
+                .bind(id.service_name)
+                .bind(window.since(now))
+                .bind(window.bucket_seconds())
+                .bind(window.until(now))
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?
+                .into_iter()
+                .map(map_container)
+                .collect()
+        }
+        .boxed()
     }
 }
 

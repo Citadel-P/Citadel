@@ -30,8 +30,8 @@ impl BuildService {
                     () = shutdown.cancelled() => return Ok(updated),
                     result = tokio::time::timeout(std::time::Duration::from_secs(30),checker.check(&pool,&cancellation)) => match result {
                         Ok(Ok(result)) => result,
-                        Ok(Err(error)) => BuildPoolCheck {ready:false,message:format!("Citadel Agent build capability check failed: {error}")},
-                        Err(_) => { cancellation.cancel(); BuildPoolCheck {ready:false,message:"Citadel Agent build capability check timed out.".into()} }
+                        Ok(Err(error)) => BuildPoolCheck {agent_version: None, ready:false,message:format!("Citadel Agent build capability check failed: {error}")},
+                        Err(_) => { cancellation.cancel(); BuildPoolCheck {agent_version: None, ready:false,message:"Citadel Agent build capability check timed out.".into()} }
                     }
                 };
                 if self.store.record_pool_health(&pool, &result).await? {

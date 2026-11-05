@@ -1,4 +1,4 @@
-import { appendLiveStatBucket } from '@/lib/stats-buckets';
+import { appendLiveStatBucket, latestLiveStat, withNetworkDelta } from '@/lib/stats-buckets';
 import { ContainerStatView } from '@/api/generated/api.types';
 import { useStatsRange } from '@/hooks/useStatsRange';
 import { StatsQueryState } from '@/features/docker-resources/containers/container-info/container-stats';
@@ -65,14 +65,30 @@ export const useServiceStatsStream = (
         const latestByContainer =
           previous.identity === identity ? new Map(previous.latestByContainer) : new Map<string, ContainerStatView>();
         let changed = false;
+        let rxBytesDelta: number | undefined;
+        let txBytesDelta: number | undefined;
         for (const stat of stats) {
           if (!stat.containerId || !idSet.has(stat.containerId)) continue;
+          const before = latestByContainer.get(stat.containerId);
+          if (before && stat.created <= before.created) continue;
+          const measured = withNetworkDelta(stat, before);
+          if (measured.rxBytesDelta != null) rxBytesDelta = (rxBytesDelta ?? 0) + measured.rxBytesDelta;
+          if (measured.txBytesDelta != null) txBytesDelta = (txBytesDelta ?? 0) + measured.txBytesDelta;
           latestByContainer.set(stat.containerId, stat);
           changed = true;
         }
         if (!changed) return previous;
 
         const aggregate = aggregateCurrentStats(latestByContainer.values());
+        const latest = previous.identity === identity ? latestLiveStat(previous.stats) : undefined;
+        // Different containers can arrive separately at the same timestamp.
+        // Their gauges replace the aggregate; their independent traffic adds up.
+        if (latest?.created === aggregate.created) {
+          if (latest.rxBytesDelta != null) rxBytesDelta = (rxBytesDelta ?? 0) + latest.rxBytesDelta;
+          if (latest.txBytesDelta != null) txBytesDelta = (txBytesDelta ?? 0) + latest.txBytesDelta;
+        }
+        aggregate.rxBytesDelta = rxBytesDelta ?? null;
+        aggregate.txBytesDelta = txBytesDelta ?? null;
         return {
           identity,
           latestByContainer,

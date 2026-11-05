@@ -17,6 +17,7 @@ mod stacks;
 mod swarm;
 mod swarm_mapping;
 mod swarm_spec;
+mod updates;
 mod volumes;
 
 use axum::{Router, middleware};
@@ -50,6 +51,7 @@ pub struct Runtime {
     stack_root: std::path::PathBuf,
     shutdown: CancellationToken,
     runtime_container: Option<String>,
+    update_gate: updates::Gate,
 }
 
 impl Runtime {
@@ -75,6 +77,7 @@ impl Runtime {
             stack_root: "/app/data/stacks".into(),
             shutdown,
             runtime_container,
+            update_gate: updates::Gate::default(),
         }
     }
     /// Command cancellation is scoped; daemon admission and sampling are shared
@@ -133,6 +136,7 @@ impl Runtime {
 }
 
 pub(crate) fn router(runtime: Runtime, key: VerifyingKey, audience: &str) -> Router {
+    let gate = runtime.update_gate.clone();
     let verifier = auth::Verifier::new(key, audience).with_shutdown(runtime.shutdown.clone());
     tonic::service::Routes::new(citadel_contracts::citadel::containers::v1::container_service_server::ContainerServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .add_service(citadel_contracts::citadel::scripts::v1::script_service_server::ScriptServiceServer::new(runtime.clone()).max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
@@ -146,6 +150,7 @@ pub(crate) fn router(runtime: Runtime, key: VerifyingKey, audience: &str) -> Rou
         .add_service(NetworkServiceServer::new(runtime)
             .max_decoding_message_size(MAX_MESSAGE_BYTES).max_encoding_message_size(MAX_MESSAGE_BYTES))
         .into_axum_router()
+        .layer(middleware::from_fn_with_state(gate, updates::admission))
         .layer(middleware::from_fn_with_state(Arc::new(verifier), auth::authenticate))
 }
 

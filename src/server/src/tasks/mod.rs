@@ -5,3 +5,4 @@ pub mod platforms;
 pub mod scripts;
 pub mod stacks;
 pub mod swarm_services;
+pub mod updates;

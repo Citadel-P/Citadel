@@ -21,6 +21,7 @@ impl BuildPoolChecker for AgentBuildPoolChecker {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<BuildPoolCheck, BuildError>> {
         Box::pin(async move {
+            let mut agent_version = None;
             let capabilities = match pool_target(&pool.provider_spec)? {
                 BuildPoolTarget::Edge => {
                     let session = self
@@ -43,6 +44,11 @@ impl BuildPoolChecker for AgentBuildPoolChecker {
                         .for_address(&endpoint, pool.id, cancellation)
                         .await
                         .map_err(|error| BuildError::Validation(error.to_string()))?;
+                    agent_version = client
+                        .handshake(cancellation)
+                        .await
+                        .map_err(|error| BuildError::Validation(error.to_string()))?
+                        .agent_version;
                     client.check_build_host(cancellation).await
                 }
             }
@@ -57,6 +63,7 @@ impl BuildPoolChecker for AgentBuildPoolChecker {
                 .min(capabilities.heavy_capacity)
                 .min(pool.max_active_builders as u32);
             let mut result = capability_result(capabilities);
+            result.agent_version = agent_version;
             result.message.push_str(&format!(
                 " - Effective build capacity {effective} (pool policy {})",
                 pool.max_active_builders
@@ -83,6 +90,7 @@ impl BuildPoolChecker for AgentBuildPoolChecker {
 fn capability_result(info: CheckBuildHostResponse) -> BuildPoolCheck {
     if !info.available {
         return BuildPoolCheck {
+            agent_version: None,
             ready: false,
             message:
                 "Citadel Agent can be reached, but Docker build capabilities are not available."
@@ -130,6 +138,7 @@ fn capability_result(info: CheckBuildHostResponse) -> BuildPoolCheck {
         parts.push(format!("Shared heavy-work limit {}", info.heavy_capacity));
     }
     BuildPoolCheck {
+        agent_version: None,
         ready: true,
         message: parts.join(" - "),
     }

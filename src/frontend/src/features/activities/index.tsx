@@ -1,4 +1,4 @@
-import { Activity, MoveUpRight, SquareStack } from 'lucide-react';
+import { Activity, MoveUpRight, SquareStack, RefreshCw } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
@@ -24,6 +24,7 @@ const activityResourceIcons = {
   [ActivityResourceType.Team]: CitadelIcons.Team,
   [ActivityResourceType.Role]: CitadelIcons.Role,
   [ActivityResourceType.License]: CitadelIcons.License,
+  [ActivityResourceType.Updates]: RefreshCw,
   [ActivityResourceType.Volume]: CitadelIcons.Volume,
   [ActivityResourceType.Build]: CitadelIcons.Build,
   [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
@@ -45,6 +46,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.Team]: 'Team',
   [ActivityResourceType.Role]: 'Role',
   [ActivityResourceType.License]: 'License',
+  [ActivityResourceType.Updates]: 'Update',
   [ActivityResourceType.Volume]: 'Volume',
   [ActivityResourceType.Build]: 'Build',
   [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
@@ -72,13 +74,14 @@ const activityLookupTargets = {
   [ActivityResourceType.Team]: LookupResourceType.Team,
   [ActivityResourceType.Role]: LookupResourceType.Role,
   [ActivityResourceType.License]: LookupResourceType.License,
+  [ActivityResourceType.Updates]: undefined,
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
   [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
   [ActivityResourceType.BackupPolicy]: LookupResourceType.BackupPolicy,
   [ActivityResourceType.SwarmService]: LookupResourceType.SwarmService,
   [ActivityResourceType.ServiceAccount]: LookupResourceType.ServiceAccount,
-} satisfies Record<ActivityResourceType, LookupResourceType>;
+} satisfies Record<ActivityResourceType, LookupResourceType | undefined>;
 
 const administratorActivityResourceTypes = new Set<ActivityResourceType>([
   ActivityResourceType.OidcProvider,
@@ -86,6 +89,7 @@ const administratorActivityResourceTypes = new Set<ActivityResourceType>([
   ActivityResourceType.Team,
   ActivityResourceType.Role,
   ActivityResourceType.License,
+  ActivityResourceType.Updates,
   ActivityResourceType.ServiceAccount,
 ]);
 
@@ -135,7 +139,9 @@ export function getActivityEventOptions(resourceType: ActivityFiltersState['reso
       ? all
       : all.filter(
           (e) =>
-            e.startsWith(eventPrefix) &&
+            (e.startsWith(eventPrefix) ||
+              (resourceType === ActivityResourceType.Updates &&
+                (e.startsWith('InstanceUpdate') || e.startsWith('AgentUpdate')))) &&
             (resourceType !== ActivityResourceType.Build || !e.startsWith('BuildAgentPool')),
         );
   return events.flatMap<string | { value: string; label: string }>((event) =>
@@ -189,7 +195,7 @@ function SearchSection() {
         allIcon={SquareStack}
         className={filterFieldClassName}
       />
-      {query.resourceType != 'All' && (
+      {query.resourceType !== 'All' && query.resourceType !== ActivityResourceType.Updates && (
         <ResourceSelectorField
           targetType={activityLookupTargets[query.resourceType]}
           onSelect={handleResourceChange as any}
