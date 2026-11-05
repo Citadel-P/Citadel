@@ -1643,6 +1643,8 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
             memory_limit: 128.0,
             rx_bytes: 0.0,
             tx_bytes: 0.0,
+            block_read_bytes: None,
+            block_write_bytes: None,
             created: 2,
         }],
     );

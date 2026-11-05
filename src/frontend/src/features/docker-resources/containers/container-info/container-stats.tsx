@@ -9,6 +9,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import MemoryUsage from './stats/memory-usage';
 import CpuUsage from './stats/cpu-usage';
 import NetworkUsage from './stats/network-usage';
+import DiskUsage from './stats/disk-usage';
 import type { ContainerStatsResource } from './stats/types';
 
 type StatsPanelProps = {
@@ -44,6 +45,7 @@ export const ContainerStatsCharts = ({ resource, query, liveStats }: StatsPanelP
             <MemoryUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
             <CpuUsage container={chartResource} stats={stats} isLoading={query.isLoading} />
             <NetworkUsage stats={stats} isLoading={query.isLoading} />
+            <DiskUsage stats={stats} isLoading={query.isLoading} />
           </>
         )}
       </StatsChartRange>

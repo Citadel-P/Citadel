@@ -5314,6 +5314,48 @@
       },
       "ContainerStatSnapshot": {
         "properties": {
+          "blockReadBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockReadBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockReadBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "containerId": {
             "format": "uuid",
             "type": "string"
@@ -5350,11 +5392,25 @@
               "null"
             ]
           },
+          "rxBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
           },
           "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "txBytesPerSecond": {
             "format": "double",
             "type": [
               "number",
@@ -5376,6 +5432,48 @@
       },
       "ContainerStatView": {
         "properties": {
+          "blockReadBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockReadBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockReadBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "containerId": {
             "format": "uuid",
             "type": "string"
@@ -5412,11 +5510,25 @@
               "null"
             ]
           },
+          "rxBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
           },
           "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "txBytesPerSecond": {
             "format": "double",
             "type": [
               "number",
@@ -8807,6 +8919,48 @@
           "stats": {
             "items": {
               "properties": {
+                "blockReadBytes": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockReadBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockReadBytesPerSecond": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockWriteBytes": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockWriteBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockWriteBytesPerSecond": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
                 "containerId": {
                   "format": "uuid",
                   "type": "string"
@@ -8843,11 +8997,25 @@
                     "null"
                   ]
                 },
+                "rxBytesPerSecond": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
                 "txBytes": {
                   "format": "double",
                   "type": "number"
                 },
                 "txBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "txBytesPerSecond": {
                   "format": "double",
                   "type": [
                     "number",

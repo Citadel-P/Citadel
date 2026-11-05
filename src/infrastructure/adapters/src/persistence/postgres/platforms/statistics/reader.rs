@@ -21,6 +21,14 @@ fn storage(e: impl std::fmt::Display) -> RuntimeCapabilityError {
 fn map_container(row: PgRow) -> Result<ContainerStatSnapshot, RuntimeCapabilityError> {
     Ok(ContainerStatSnapshot {
         container_id: row.try_get("containerid").map_err(storage)?,
+        block_read_bytes: row.try_get("blockreadbytes").map_err(storage)?,
+        block_write_bytes: row.try_get("blockwritebytes").map_err(storage)?,
+        block_read_bytes_delta: row.try_get("blockreadbytesdelta").map_err(storage)?,
+        block_write_bytes_delta: row.try_get("blockwritebytesdelta").map_err(storage)?,
+        rx_bytes_per_second: row.try_get("rxbytespersecond").map_err(storage)?,
+        tx_bytes_per_second: row.try_get("txbytespersecond").map_err(storage)?,
+        block_read_bytes_per_second: row.try_get("blockreadbytespersecond").map_err(storage)?,
+        block_write_bytes_per_second: row.try_get("blockwritebytespersecond").map_err(storage)?,
         created: row.try_get("created").map_err(storage)?,
         cpu_usage: row.try_get("cpuusage").map_err(storage)?,
         memory_active: row.try_get("memoryactive").map_err(storage)?,

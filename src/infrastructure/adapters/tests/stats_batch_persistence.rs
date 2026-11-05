@@ -37,6 +37,8 @@ fn container(scope: &StatsScope, id: &str, created: i64, cpu: f64) -> ContainerS
             memory_limit: 200.0,
             rx_bytes: 3.0,
             tx_bytes: 4.0,
+            block_read_bytes: None,
+            block_write_bytes: None,
         },
     }
 }
@@ -299,11 +301,11 @@ async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instanc
         (second, vec![(100, 5000., 10000.), (105, 5100., 10100.)]),
     ] {
         for (created, rx, tx) in samples {
-            sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,10,100,20,200,$4,$5)")
+            sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) VALUES($1,$2,$3,10,100,20,200,$4,$5,$4*2,$5*2)")
                 .bind(Uuid::now_v7()).bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
-            sqlx::query("INSERT INTO workloadstats(id,platformid,deploymentid,servicename,replicakey,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,'','deployment',$4,$5,10,100,20,200,$6,$7)")
+            sqlx::query("INSERT INTO workloadstats(id,platformid,deploymentid,servicename,replicakey,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) VALUES($1,$2,$3,'','deployment',$4,$5,10,100,20,200,$6,$7,$6*2,$7*2)")
                 .bind(Uuid::now_v7()).bind(scope.platform_id).bind(deployment).bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
-            sqlx::query("INSERT INTO swarmservicestats(id,platformid,dockerserviceid,dockertaskid,servicename,taskkey,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,'network-service',$3,'network-service','slot:1',$4,10,100,20,200,$5,$6)")
+            sqlx::query("INSERT INTO swarmservicestats(id,platformid,dockerserviceid,dockertaskid,servicename,taskkey,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) VALUES($1,$2,'network-service',$3,'network-service','slot:1',$4,10,100,20,200,$5,$6,$5*2,$6*2)")
                 .bind(Uuid::now_v7()).bind(scope.platform_id).bind(id.to_string()).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
         }
     }
@@ -319,6 +321,13 @@ async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instanc
         (Some(125.), Some(63.))
     );
     assert_eq!(a.cpu_usage, 10.);
+    assert_eq!(
+        (a.block_read_bytes_delta, a.block_write_bytes_delta),
+        (Some(250.), Some(126.))
+    );
+    assert!((a.rx_bytes_per_second.unwrap() - 125. / 8.).abs() < 0.000001);
+    assert_eq!(a.tx_bytes_per_second, Some(63. / 8.));
+    assert_eq!(a.block_write_bytes_per_second, Some(126. / 8.));
     let b = history.iter().find(|s| s.container_id == second).unwrap();
     assert_eq!(
         (b.rx_bytes_delta, b.tx_bytes_delta),
@@ -341,6 +350,8 @@ async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instanc
         .await
         .unwrap();
     assert_eq!(service.len(), 1);
+    assert_eq!(service[0].block_read_bytes_delta, Some(450.));
+    assert_eq!(service[0].block_write_bytes_per_second, Some(326. / 13.));
     assert_eq!(
         (service[0].rx_bytes_delta, service[0].tx_bytes_delta),
         (Some(225.), Some(163.))
@@ -357,6 +368,7 @@ async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instanc
         .unwrap()
         .unwrap();
     assert_eq!(workload.len(), 1);
+    assert_eq!(workload[0].stats[0].block_read_bytes_delta, Some(450.));
     assert_eq!(
         (
             workload[0].stats[0].rx_bytes_delta,
@@ -381,6 +393,9 @@ async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instanc
         (single[0].rx_bytes_delta, single[0].tx_bytes_delta),
         (None, None)
     );
+    assert_eq!(single[0].block_read_bytes_delta, None);
+    assert_eq!(single[0].rx_bytes_per_second, None);
+    assert_eq!(single[0].block_read_bytes_per_second, None);
     assert!(
         reader
             .containers(&[first], StatsWindow::between(90, 99, 120).unwrap(), 120)
@@ -405,6 +420,95 @@ async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instanc
         .execute(&pool)
         .await
         .unwrap();
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn block_io_persists_through_batch_and_legacy_writes_and_missing_samples_are_not_zero() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::{
+        reader::PostgresStatisticsReader, store::PostgresContainerStatsStore,
+    };
+    use citadel_platforms::{ContainerStatsStore, StatisticsReader, StatsWindow};
+    let pool = fixture().await;
+    let scope = platform(&pool).await;
+    let id = add_container(&pool, &scope, "io-persistence").await;
+    let batch = PostgresStatsBatchStore::new(pool.clone());
+    let legacy = PostgresContainerStatsStore::new(pool.clone());
+    let reader = PostgresStatisticsReader::new(pool.clone());
+    for (created, bytes) in [
+        (100, None),
+        (110, Some(1000.)),
+        (120, Some(1020.)),
+        (130, Some(5.)),
+    ] {
+        let mut sample = container(&scope, "io-persistence", created, 1.);
+        sample.sample.block_read_bytes = bytes;
+        sample.sample.block_write_bytes = bytes;
+        if created == 130 {
+            legacy
+                .persist(scope.platform_id, &[sample.sample])
+                .await
+                .unwrap();
+        } else {
+            batch
+                .persist_batch(&[sample.clone(), sample])
+                .await
+                .unwrap();
+        }
+    }
+    let rows = reader
+        .containers(&[id], StatsWindow::between(100, 140, 140).unwrap(), 140)
+        .await
+        .unwrap();
+    assert_eq!(rows[0].block_read_bytes, None);
+    assert_eq!(rows[1].block_read_bytes_delta, None);
+    assert_eq!(rows[2].block_read_bytes_delta, Some(20.));
+    assert_eq!(rows[2].block_read_bytes_per_second, Some(2.));
+    assert_eq!(rows[3].block_read_bytes_delta, Some(5.));
+    assert_eq!(rows[3].block_write_bytes_per_second, Some(0.5));
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn throughput_weights_elapsed_time_and_excludes_intervals_without_a_counter_baseline() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_platforms::{StatisticsReader, StatsWindow};
+    let pool = fixture().await;
+    let scope = platform(&pool).await;
+    let id = add_container(&pool, &scope, "weighted-throughput").await;
+    let batch = PostgresStatsBatchStore::new(pool.clone());
+    for (created, network, disk) in [
+        (301, 1000., None),
+        (302, 2000., Some(1000.)),
+        (322, 2000., Some(1200.)),
+    ] {
+        let mut sample = container(&scope, "weighted-throughput", created, 1.);
+        sample.sample.rx_bytes = network;
+        sample.sample.tx_bytes = network;
+        sample.sample.block_read_bytes = disk;
+        sample.sample.block_write_bytes = disk;
+        batch.persist_batch(&[sample]).await.unwrap();
+    }
+    let rows = PostgresStatisticsReader::new(pool.clone())
+        .containers(&[id], StatsWindow::between(300, 4000, 4000).unwrap(), 4000)
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].rx_bytes_delta, Some(1000.));
+    assert_eq!(rows[0].rx_bytes_per_second, Some(1000. / 21.));
+    assert_eq!(rows[0].tx_bytes_per_second, Some(1000. / 21.));
+    assert_eq!(rows[0].block_read_bytes_per_second, Some(10.));
+    assert_eq!(rows[0].block_write_bytes_per_second, Some(10.));
     sqlx::query("DELETE FROM platforms WHERE id=$1")
         .bind(scope.platform_id)
         .execute(&pool)

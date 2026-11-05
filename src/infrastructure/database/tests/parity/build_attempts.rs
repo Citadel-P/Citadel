@@ -6,7 +6,7 @@ async fn baseline_restart_preserves_build_runs_ownership_and_checksum() {
     let database = Database::create().await;
     let mut connection = PgConnection::connect(&database.url).await.unwrap();
     let installed = MigrationRunner::migrate(&database.url).await.unwrap();
-    assert_eq!(installed.applied, 1);
+    assert_eq!(installed.applied, crate::migration_count());
     assert_eq!(installed.already_applied, 0);
     let manifest: serde_json::Value =
         serde_json::from_str(citadel_database::MIGRATION_MANIFEST_JSON).unwrap();
@@ -44,7 +44,7 @@ async fn baseline_restart_preserves_build_runs_ownership_and_checksum() {
         runs.push((run, status, attempt, before));
     }
     let outcome = MigrationRunner::migrate(&database.url).await.unwrap();
-    assert_eq!(outcome.already_applied, 1);
+    assert_eq!(outcome.already_applied, crate::migration_count());
     assert_eq!(outcome.applied, 0);
     let (held_after, attempt): (serde_json::Value, Option<Uuid>) = sqlx::query_as(
         "SELECT to_jsonb(l),attemptid FROM backupsourceleases l WHERE sourcekey='held-source'",

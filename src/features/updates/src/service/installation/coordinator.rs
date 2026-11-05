@@ -11,7 +11,7 @@ use uuid::Uuid;
 pub enum UpdateInstallCommand {
     Scheduled {
         reservation: OwnedSemaphorePermit,
-        run: crate::UpdateScheduleRun,
+        run: Box<crate::UpdateScheduleRun>,
         repository: Arc<dyn crate::AgentUpdateRepository>,
         entitlements: Arc<dyn crate::AgentUpdateEntitlements>,
         response: oneshot::Sender<Result<UpdateOperation, UpdateError>>,
@@ -239,7 +239,7 @@ impl UpdateInstallService {
         self.queue
             .try_send(UpdateInstallCommand::Scheduled {
                 reservation,
-                run,
+                run: Box::new(run),
                 repository,
                 entitlements,
                 response,

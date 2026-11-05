@@ -5,6 +5,13 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ActivitiesTable } from './table';
 
+const mocks = vi.hoisted(() => ({ open: vi.fn() }));
+
+vi.mock('@/lib/atoms', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/atoms')>()),
+  useTaskSheet: () => ({ open: mocks.open }),
+}));
+
 vi.mock('@/lib/use-profile-date-time', () => ({
   useProfileDateTimeFormatter: () => (value: unknown) => String(value),
 }));
@@ -62,7 +69,7 @@ describe('ActivitiesTable', () => {
     ['Information', 'Info', 'noop', 'No relevant path changes', 'no watched path changes'],
     ['Success', 'Success', 'queued', null, null],
     ['Failure', 'Failure', 'rejected', 'Webhook authentication failed.', 'Webhook authentication failed.'],
-  ])('shows the %s build webhook outcome and reason', (severity, badge, status, reason, formattedReason) => {
+  ])('shows the %s webhook badge', (severity, badge, status, reason, formattedReason) => {
     const activity = {
       id: 'webhook-activity',
       resourceId: 'build-id',
@@ -90,10 +97,10 @@ describe('ActivitiesTable', () => {
     expect(screen.getByText('Build Webhook Received')).toBeVisible();
     expect(screen.getByText(badge!)).toBeVisible();
     expect(
-      screen.getByText(
+      screen.queryByText(
         [status, formattedReason, status === 'queued' ? 'queued main' : 'branch main'].filter(Boolean).join(' - '),
       ),
-    ).toBeVisible();
+    ).not.toBeInTheDocument();
   });
 
   it.each([
@@ -102,7 +109,7 @@ describe('ActivitiesTable', () => {
     ['SwarmServiceWebhookReceived', 'SwarmService'],
     ['ScriptWebhookReceived', 'Script'],
     ['BackupPolicyWebhookReceived', 'BackupPolicy'],
-  ])('shows the shared warning summary for %s', (eventType, resourceType) => {
+  ])('shows the event and warning badge for %s without its description', (eventType, resourceType) => {
     const activity = {
       id: 'webhook-activity',
       resourceId: 'resource-id',
@@ -127,7 +134,9 @@ describe('ActivitiesTable', () => {
     );
     expect(screen.getByText(formatActivityEvent(eventType))).toBeVisible();
     expect(screen.getByText('Warning')).toBeVisible();
-    expect(screen.getByText('noop - Automated operations require an active license entitlement.')).toBeVisible();
+    expect(
+      screen.queryByText('noop - Automated operations require an active license entitlement.'),
+    ).not.toBeInTheDocument();
   });
 
   it.each([
@@ -167,14 +176,15 @@ describe('ActivitiesTable', () => {
       `/backup-policies/edit/${activity.resourceId}`,
     );
     expect(screen.getByText('Backup Run Completed')).toBeVisible();
-    expect(screen.getByText(summary)).toBeVisible();
+    expect(screen.queryByText(summary)).not.toBeInTheDocument();
   });
 
   it('describes a Swarm task restart without exposing Docker force-update terminology', () => {
     expect(formatActivityEvent('SwarmServiceForceUpdated')).toBe('Swarm Service Tasks Restarted');
   });
 
-  it('constrains a long activity summary without hiding its full value', () => {
+  it('opens full activity details without rendering a long description in the table', async () => {
+    const user = userEvent.setup();
     const summary =
       "Could not connect to repository. Check your URL and credentials. Error: fatal: unable to access 'http://host.docker.internal3222/admin01/test/': Could not resolve host: host.docker.internal3222 (Domain name not found)";
     const activity = {
@@ -202,14 +212,14 @@ describe('ActivitiesTable', () => {
       <ActivitiesTable pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }} isLoading={false} />,
     );
 
-    const summaryCell = screen.getByText(summary);
-    expect(summaryCell).toHaveClass('truncate');
-    expect(summaryCell).toHaveAttribute('title', summary);
-    expect(summaryCell.closest('button')).toHaveClass('max-w-96', 'overflow-hidden');
-    expect(screen.getByText('Git Repo Cloned')).toBeVisible();
+    const event = screen.getByRole('button', { name: 'Git Repo Cloned' });
+    expect(event).toHaveClass('max-w-96', 'overflow-hidden');
+    expect(screen.queryByText(summary)).not.toBeInTheDocument();
+    await user.click(event);
+    expect(mocks.open).toHaveBeenCalledWith({ kind: 'activity', payload: activity });
   });
 
-  it('summarizes a managed Service webhook result', () => {
+  it('shows a managed Service webhook event without its description', () => {
     const activity = {
       id: '019fbf2c-1c80-790f-a50a-11bbec0241d5',
       platformId: '019fbf2c-1c80-790f-a50a-11bbec0241d6',
@@ -239,7 +249,7 @@ describe('ActivitiesTable', () => {
       <ActivitiesTable pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }} isLoading={false} />,
     );
 
-    expect(screen.getByText('queued - A newer image digest is available.')).toBeVisible();
+    expect(screen.queryByText('queued - A newer image digest is available.')).not.toBeInTheDocument();
     expect(screen.getByText('Swarm Service Webhook Received')).toBeVisible();
   });
 

@@ -159,6 +159,8 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
                     memory_limit: 1024.0,
                     rx_bytes: 12.0,
                     tx_bytes: 34.0,
+                    block_read_bytes: None,
+                    block_write_bytes: None,
                     created: observed_at,
                 }],
             )
@@ -184,6 +186,8 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
                     memory_limit: 4096.0,
                     rx_bytes: 1000.0,
                     tx_bytes: 1000.0,
+                    block_read_bytes: None,
+                    block_write_bytes: None,
                     created: observed_at + 1,
                 }],
             )
@@ -637,6 +641,8 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
         memory_limit: 1024.0,
         rx_bytes: 12.0,
         tx_bytes: 34.0,
+        block_read_bytes: None,
+        block_write_bytes: None,
         created,
     }];
     let store = PostgresContainerStatsStore::new(pool.clone());

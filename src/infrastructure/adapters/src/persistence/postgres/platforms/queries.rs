@@ -111,7 +111,8 @@ SELECT container.id, container.health, container.platformid, container.dockercon
        stat.containerid AS stat_containerid, stat.memoryactive AS stat_memoryactive,
        stat.memorycache AS stat_memorycache, stat.cpuusage AS stat_cpuusage,
        stat.memorylimit AS stat_memorylimit, stat.rxbytes AS stat_rxbytes,
-       stat.txbytes AS stat_txbytes, stat.created AS stat_created
+       stat.txbytes AS stat_txbytes, stat.blockreadbytes AS stat_blockreadbytes,
+       stat.blockwritebytes AS stat_blockwritebytes, stat.created AS stat_created
 FROM containers container
 LEFT JOIN images image ON image.id=container.imageid AND image.platformid=container.platformid
 LEFT JOIN deployments deployment ON deployment.id=container.deploymentid AND deployment.platformid=container.platformid

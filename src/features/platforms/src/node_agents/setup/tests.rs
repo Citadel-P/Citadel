@@ -395,7 +395,7 @@ impl NodeAgentSetupRuntime for Fixture {
         true
     }
 }
-async fn run(f: Arc<Fixture>) -> Vec<NodeAgentProgress> {
+async fn run(f: Arc<Fixture>, kind: SetupKind) -> Vec<NodeAgentProgress> {
     let (tx, mut rx) = mpsc::channel(32);
     NodeAgentSetupService {
         store: f.clone(),
@@ -405,7 +405,7 @@ async fn run(f: Arc<Fixture>) -> Vec<NodeAgentProgress> {
     .run(
         ActorId::new(Uuid::now_v7()),
         Uuid::now_v7(),
-        SetupKind::Install,
+        kind,
         options(),
         tx,
         CancellationToken::new(),
@@ -418,25 +418,43 @@ async fn run(f: Arc<Fixture>) -> Vec<NodeAgentProgress> {
     result
 }
 #[tokio::test]
-async fn manager_only_install_needs_no_bootstrap_or_system_service() {
-    let f = Arc::new(Fixture {
-        manager_only: true,
-        ..Default::default()
-    });
-    let p = run(f.clone()).await;
-    assert!(p.last().unwrap().error_message.is_none());
+async fn manager_only_install_and_repair_need_no_image_bootstrap_or_system_service() {
+    for kind in [SetupKind::Install, SetupKind::Repair] {
+        let f = Arc::new(Fixture {
+            manager_only: true,
+            ..Default::default()
+        });
+        let p = run(f.clone(), kind).await;
+        assert!(p.last().unwrap().error_message.is_none());
+        let calls = f.calls.lock().unwrap();
+        assert!(calls.iter().any(|c| c == "promote-manager"));
+        assert!(
+            !calls
+                .iter()
+                .any(|c| matches!(c.as_str(), "distribution" | "bootstrap" | "apply"))
+        );
+        assert_eq!(calls.last().unwrap(), "finish:completed");
+    }
+}
+
+#[tokio::test]
+async fn repair_with_workers_requires_an_approved_image_before_changing_coverage() {
+    let f = Arc::new(Fixture::default());
+    let p = run(f.clone(), SetupKind::Repair).await;
     assert!(
-        !f.calls
-            .lock()
+        p.last()
             .unwrap()
-            .iter()
-            .any(|c| c == "bootstrap" || c == "apply")
+            .error_message
+            .as_deref()
+            .unwrap()
+            .contains("No approved Agent image")
     );
+    assert_eq!(*f.calls.lock().unwrap(), ["claim", "finish:failed"]);
 }
 #[tokio::test]
 async fn setup_persists_identity_before_waiting_for_current_task_coverage() {
     let f = Arc::new(Fixture::default());
-    let p = run(f.clone()).await;
+    let p = run(f.clone(), SetupKind::Install).await;
     assert!(p.last().unwrap().error_message.is_none());
     let calls = f.calls.lock().unwrap();
     assert!(
@@ -453,7 +471,7 @@ async fn initial_install_accepts_both_docker_empty_and_agent_none_update_states(
             update_state: Some(state),
             ..Default::default()
         });
-        let progress = run(fixture).await;
+        let progress = run(fixture, SetupKind::Install).await;
         assert_eq!(progress.last().unwrap().stage, "completed", "{state}");
     }
 }
@@ -475,7 +493,7 @@ async fn paused_rollout_and_cancellation_persist_failure() {
         },
     ] {
         let f = Arc::new(f);
-        let p = run(f.clone()).await;
+        let p = run(f.clone(), SetupKind::Install).await;
         assert!(p.last().unwrap().error_message.is_some());
         assert_eq!(f.calls.lock().unwrap().last().unwrap(), "finish:failed");
     }
@@ -487,7 +505,7 @@ async fn old_connected_task_cannot_complete_upgrade_and_times_out() {
         ..Default::default()
     });
     let started = tokio::time::Instant::now();
-    let p = run(f.clone()).await;
+    let p = run(f.clone(), SetupKind::Install).await;
     assert_eq!(started.elapsed(), Duration::from_secs(30));
     assert!(
         p.last()

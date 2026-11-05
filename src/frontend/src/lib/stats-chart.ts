@@ -21,7 +21,7 @@ export function statsChartData<T extends { created?: number | string | null }>(
   return result;
 }
 
-export const statsValueAxis = (unit: 'percent' | 'bytes') => ({
+export const statsValueAxis = (unit: 'percent' | 'bytes' | 'bytesPerSecond') => ({
   domain: [0, 'auto'] as [number, string],
   width: 68,
   tickCount: 5,
@@ -30,5 +30,7 @@ export const statsValueAxis = (unit: 'percent' | 'bytes') => ({
   axisLine: false,
   tickMargin: 8,
   tickFormatter: (value: number) =>
-    unit === 'percent' ? `${Number(value.toFixed(2))}%` : String(byteTransform(value, 1)),
+    unit === 'percent'
+      ? `${Number(value.toFixed(2))}%`
+      : `${byteTransform(value, 1)}${unit === 'bytesPerSecond' ? '/s' : ''}`,
 });

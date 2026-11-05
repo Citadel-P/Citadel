@@ -236,8 +236,24 @@ impl DockerClient {
         let value = tokio::select! {
             biased;
             () = cancellation.cancelled() => return Err(cancelled_error()),
-            result = self.container_stats_once(id) => result.map_err(normalize_docker_error)?,
-        };
+            result = self.container_stats_once(id) => result,
+        }
+        .map_err(|error| {
+            let error = normalize_docker_error(error);
+            if matches!(
+                error.kind,
+                citadel_platforms::RuntimeErrorKind::NotFound
+                    | citadel_platforms::RuntimeErrorKind::Conflict
+                    | citadel_platforms::RuntimeErrorKind::Cancelled
+            ) {
+                tracing::debug!(docker_container_id = id, error_kind = ?error.kind,
+                    retryable = error.retryable, %error, "Container statistics sample skipped");
+            } else {
+                tracing::warn!(docker_container_id = id, error_kind = ?error.kind,
+                    retryable = error.retryable, %error, "Container statistics sample failed");
+            }
+            error
+        })?;
         Ok(map_container_stat(id, value))
     }
 }
@@ -296,6 +312,19 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
             total.1.saturating_add(item.tx_bytes),
         )
     });
+    let block_bytes = value
+        .blkio_stats
+        .as_ref()
+        .and_then(|stats| stats.io_service_bytes_recursive.as_ref())
+        .map(|entries| {
+            entries.iter().fold((0_u64, 0_u64), |(read, write), entry| {
+                match (entry.op.as_deref(), entry.value) {
+                    (Some("Read" | "read"), Some(bytes)) => (read.saturating_add(bytes), write),
+                    (Some("Write" | "write"), Some(bytes)) => (read, write.saturating_add(bytes)),
+                    _ => (read, write),
+                }
+            })
+        });
     RuntimeContainerStat {
         docker_container_id: id.to_owned(),
         memory_active: usage.saturating_sub(memory_cache) as f64,
@@ -304,6 +333,8 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
         memory_limit: value.memory_stats.limit as f64,
         rx_bytes: rx_bytes as f64,
         tx_bytes: tx_bytes as f64,
+        block_read_bytes: block_bytes.map(|bytes| bytes.0 as f64),
+        block_write_bytes: block_bytes.map(|bytes| bytes.1 as f64),
         created: Utc::now().timestamp(),
     }
 }
@@ -692,6 +723,44 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(map_service(service).network_ids, ["overlay"]);
+    }
+
+    #[test]
+    fn maps_block_io_across_devices_without_counting_total_or_sync_entries() {
+        let wire: citadel_docker_api::models::ContainerStatsResponse =
+            serde_json::from_value(json!({
+                "blkio_stats": {"io_service_bytes_recursive": [
+                    {"major": 8, "minor": 0, "op": "Read", "value": 100},
+                    {"major": 8, "minor": 1, "op": "Read", "value": 25},
+                    {"major": 8, "minor": 0, "op": "Write", "value": 60},
+                    {"op": "Total", "value": 185},
+                    {"op": "Sync", "value": 185}
+                ]}
+            }))
+            .unwrap();
+        let stat = map_container_stat("io", wire.try_into().unwrap());
+        assert_eq!(
+            (stat.block_read_bytes, stat.block_write_bytes),
+            (Some(125.), Some(60.))
+        );
+        for (value, expected) in [
+            (json!({}), None),
+            (json!({"blkio_stats": null}), None),
+            (
+                json!({"blkio_stats": {"io_service_bytes_recursive": null}}),
+                None,
+            ),
+            (
+                json!({"blkio_stats": {"io_service_bytes_recursive": []}}),
+                Some(0.),
+            ),
+        ] {
+            let wire: citadel_docker_api::models::ContainerStatsResponse =
+                serde_json::from_value(value).unwrap();
+            let stat = map_container_stat("io", wire.try_into().unwrap());
+            assert_eq!(stat.block_read_bytes, expected);
+            assert_eq!(stat.block_write_bytes, expected);
+        }
     }
 
     #[test]

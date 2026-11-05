@@ -2610,6 +2610,18 @@ export interface ContainerRuntimeView {
 }
 
 export interface ContainerStatSnapshot {
+  /** @format double */
+  blockReadBytes?: number | null;
+  /** @format double */
+  blockReadBytesDelta?: number | null;
+  /** @format double */
+  blockReadBytesPerSecond?: number | null;
+  /** @format double */
+  blockWriteBytes?: number | null;
+  /** @format double */
+  blockWriteBytesDelta?: number | null;
+  /** @format double */
+  blockWriteBytesPerSecond?: number | null;
   /** @format uuid */
   containerId: string;
   /** @format double */
@@ -2631,12 +2643,28 @@ export interface ContainerStatSnapshot {
    */
   rxBytesDelta?: number | null;
   /** @format double */
+  rxBytesPerSecond?: number | null;
+  /** @format double */
   txBytes: number;
   /** @format double */
   txBytesDelta?: number | null;
+  /** @format double */
+  txBytesPerSecond?: number | null;
 }
 
 export interface ContainerStatView {
+  /** @format double */
+  blockReadBytes?: number | null;
+  /** @format double */
+  blockReadBytesDelta?: number | null;
+  /** @format double */
+  blockReadBytesPerSecond?: number | null;
+  /** @format double */
+  blockWriteBytes?: number | null;
+  /** @format double */
+  blockWriteBytesDelta?: number | null;
+  /** @format double */
+  blockWriteBytesPerSecond?: number | null;
   /** @format uuid */
   containerId: string;
   /** @format double */
@@ -2658,9 +2686,13 @@ export interface ContainerStatView {
    */
   rxBytesDelta?: number | null;
   /** @format double */
+  rxBytesPerSecond?: number | null;
+  /** @format double */
   txBytes: number;
   /** @format double */
   txBytesDelta?: number | null;
+  /** @format double */
+  txBytesPerSecond?: number | null;
 }
 
 export interface ContainerSummaryView {
@@ -3688,6 +3720,18 @@ export interface HealthResponse {
 
 export interface HistoryContainerStatSnapshot {
   stats: {
+    /** @format double */
+    blockReadBytes?: number | null;
+    /** @format double */
+    blockReadBytesDelta?: number | null;
+    /** @format double */
+    blockReadBytesPerSecond?: number | null;
+    /** @format double */
+    blockWriteBytes?: number | null;
+    /** @format double */
+    blockWriteBytesDelta?: number | null;
+    /** @format double */
+    blockWriteBytesPerSecond?: number | null;
     /** @format uuid */
     containerId: string;
     /** @format double */
@@ -3709,9 +3753,13 @@ export interface HistoryContainerStatSnapshot {
      */
     rxBytesDelta?: number | null;
     /** @format double */
+    rxBytesPerSecond?: number | null;
+    /** @format double */
     txBytes: number;
     /** @format double */
     txBytesDelta?: number | null;
+    /** @format double */
+    txBytesPerSecond?: number | null;
   }[];
 }
 

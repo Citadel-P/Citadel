@@ -599,6 +599,8 @@ async fn verify_node_projection_isolation(
         cpu_usage: 1.,
         rx_bytes: 2.,
         tx_bytes: 3.,
+        block_read_bytes: None,
+        block_write_bytes: None,
         created: observed.timestamp(),
     }];
     assert_eq!(

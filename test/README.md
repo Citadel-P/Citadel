@@ -1144,3 +1144,25 @@ The `--database-source 18 --scenario database-preparation-failure` scenario
 creates a replication slot and verifies that review is rejected before ownership.
 It then reviews without the slot, recreates it, and verifies that approval also
 rejects the changed eligibility without stopping Core or PostgreSQL.
+
+### Container network throughput and disk I/O
+
+The shared container statistics panels offer accumulated bytes and per-second
+throughput. Focused frontend coverage is in `stats/network-usage.test.tsx`,
+`lib/stats-buckets.test.ts` and `useServiceStats.test.ts`. The Docker mapping test
+`maps_block_io_across_devices_without_counting_total_or_sync_entries` covers
+optional counters and device totals. Agent mapping preserves optional block I/O
+in the existing statistics transport tests.
+
+`stats_batch_persistence` tests use a disposable `CITADEL_STATISTICS_DATABASE_URL`
+and exercise history for containers, workload replacements and Swarm Tasks,
+including resets, elapsed-time-weighted rates, irregular sample intervals, missing baselines, duplicate writes
+and both persistence paths. Run them serially with `--ignored --test-threads=1`.
+The consolidated `0002_instance_updates.sql` migration adds nullable counters
+without filling historical samples with zero. The block-I/O migration test upgrades
+from `0001` and verifies that recorded statistics and its applied checksum survive.
+
+Container sampling error propagation and recovery are covered by
+`cargo test --locked -p citadel-docker --test docker_transport container_stat_sampling`.
+This reuses the Unix-socket transport fixture to verify typed failures retain
+Docker's error cause and a subsequent successful reading works normally.

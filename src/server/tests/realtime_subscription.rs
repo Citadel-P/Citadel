@@ -557,6 +557,8 @@ async fn global_subscription_streams_committed_platform_stats_after_store_recrea
                 memory_limit: 4096.0,
                 rx_bytes: 10.0,
                 tx_bytes: 20.0,
+                block_read_bytes: None,
+                block_write_bytes: None,
             })
             .collect();
         assert_eq!(

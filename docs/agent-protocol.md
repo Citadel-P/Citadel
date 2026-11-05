@@ -4,6 +4,13 @@ This is the developer reference for Core/Agent transport, authentication and
 Swarm-node restrictions. For image builds and local setup, see
 [Agent development](DEVELOPMENT.md#agent-development).
 
+Container statistics carry optional `blockReadBytes` and `blockWriteBytes` counters
+in `ContainerStatMessage`. Both Direct and Edge map the same Docker block-device
+byte totals. Absent counters stay unknown, including on platforms that do not
+report block I/O; they are not interpreted as zero. Core calculates historical
+rates and period totals from captured samples, using each container's own baseline.
+No operations or Swarm-node permissions are added for these metrics.
+
 ## Transports
 
 | Transport | Connection | Authentication |
@@ -84,6 +91,8 @@ the manager's existing service rollout replaces their tasks. Drain/resume is fen
 by operation identity, and cancellation before handoff reopens admission. Standalone
 self-replacement remains denied for the Swarm profile. Core verifies the new
 connection and expected version before marking a target successful.
+Manager-only Swarms need no node-Agent image or Service for coverage installation
+or repair. Repairing worker coverage still requires the previously approved image.
 Core also requires acknowledgement of Swarm admission resume for the saved node
 selection. A disconnected node or lost acknowledgement keeps the operation owned
 for retry after reconnect. Shutdown preserves dispatched attempts for verification;

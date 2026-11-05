@@ -147,6 +147,8 @@ mod tests {
                     memory_limit: 0.0,
                     rx_bytes: 0.0,
                     tx_bytes: 0.0,
+                    block_read_bytes: None,
+                    block_write_bytes: None,
                     created: 0,
                 })
             }

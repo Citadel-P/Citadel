@@ -21,6 +21,8 @@ fn sample(id: &str, created: i64) -> RuntimeContainerStat {
         memory_limit: 200.0,
         rx_bytes: 3.0,
         tx_bytes: 4.0,
+        block_read_bytes: None,
+        block_write_bytes: None,
     }
 }
 
@@ -139,11 +141,13 @@ async fn invalid_sample_cannot_poison_writes_or_publish_a_partial_host_total() {
     };
     let mut bad = sample("bad", 10);
     bad.cpu_usage = f64::NAN;
+    let mut bad_io = sample("bad-io", 10);
+    bad_io.block_read_bytes = Some(-1.0);
     assert!(
         ingress
             .submit(
                 scope(None),
-                vec![sample("valid", 10), bad],
+                vec![sample("valid", 10), bad, bad_io],
                 None,
                 &CancellationToken::new()
             )

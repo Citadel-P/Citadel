@@ -999,6 +999,18 @@ data, not zero traffic. The shared container network panel accumulates these
 bucket totals for the selected window. Live observations calculate differences
 before bucketing as well; CPU and memory retain their existing averages. Missing
 observations can still hide traffic before an unobserved counter reset.
+Container statistics also retain optional Docker block-device read/write byte
+counters. They use the same reset-aware history and live aggregation as network
+traffic. History returns per-second network and block-I/O rates calculated from
+the sum of raw counter differences divided by their measured elapsed time in
+each bucket; intervals without a counter baseline do not enter the denominator.
+Live buckets use the same time weighting. Replica rates are summed only after
+each replica has been aggregated in time. Instantaneous usage summaries retain
+the latest raw observations independently of chart averages.
+The shared container charts offer accumulated bytes and throughput views. Disk
+I/O is unavailable when Docker omits the counters; old samples are not backfilled
+with zeros. These additive protobuf fields use optional values on Direct and Edge
+transports. Existing generation/session fencing and seven-day retention apply.
 
 ## Runtime routing and observations
 

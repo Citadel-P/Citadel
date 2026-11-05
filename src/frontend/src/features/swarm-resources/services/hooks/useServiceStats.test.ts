@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { latestLiveStat } from '@/lib/stats-buckets';
 import { useServiceStatsStream } from './useServiceStats';
 
 const { useRealtimeGroupMock } = vi.hoisted(() => ({ useRealtimeGroupMock: vi.fn() }));
@@ -57,13 +58,75 @@ it('counts traffic per Agent container before summing, including separate arriva
   });
   act(() =>
     receive([
-      { containerId: 'a', created: 301, rxBytes: 1000, txBytes: 2000 },
-      { containerId: 'b', created: 301, rxBytes: 3000, txBytes: 4000 },
+      { containerId: 'a', created: 301, rxBytes: 1000, txBytes: 2000, blockReadBytes: 100, blockWriteBytes: 200 },
+      { containerId: 'b', created: 301, rxBytes: 3000, txBytes: 4000, blockReadBytes: 300, blockWriteBytes: 400 },
     ]),
   );
-  act(() => receive([{ containerId: 'a', created: 311, rxBytes: 10, txBytes: 2005 }]));
-  act(() => receive([{ containerId: 'b', created: 311, rxBytes: 3100, txBytes: 4007 }]));
-  expect(result.current.stats[0]).toMatchObject({ rxBytesDelta: 110, txBytesDelta: 12 });
-  act(() => receive([{ containerId: 'b', created: 311, rxBytes: 3100, txBytes: 4007 }]));
-  expect(result.current.stats[0]).toMatchObject({ rxBytesDelta: 110, txBytesDelta: 12 });
+  act(() =>
+    receive([{ containerId: 'a', created: 311, rxBytes: 10, txBytes: 2005, blockReadBytes: 2, blockWriteBytes: 210 }]),
+  );
+  act(() =>
+    receive([
+      { containerId: 'b', created: 311, rxBytes: 3100, txBytes: 4007, blockReadBytes: 310, blockWriteBytes: 420 },
+    ]),
+  );
+  expect(result.current.stats[0]).toMatchObject({
+    rxBytesDelta: 110,
+    txBytesDelta: 12,
+    rxBytesPerSecond: 11,
+    txBytesPerSecond: 1.2,
+    blockReadBytesDelta: 12,
+    blockWriteBytesDelta: 30,
+    blockReadBytesPerSecond: 1.2,
+    blockWriteBytesPerSecond: 3,
+  });
+  act(() =>
+    receive([
+      { containerId: 'b', created: 311, rxBytes: 3100, txBytes: 4007, blockReadBytes: 310, blockWriteBytes: 420 },
+    ]),
+  );
+  expect(result.current.stats[0]).toMatchObject({
+    rxBytesDelta: 110,
+    txBytesDelta: 12,
+    rxBytesPerSecond: 11,
+    txBytesPerSecond: 1.2,
+    blockReadBytesDelta: 12,
+    blockWriteBytesDelta: 30,
+    blockReadBytesPerSecond: 1.2,
+    blockWriteBytesPerSecond: 3,
+  });
+});
+
+it('averages each task over its measured time before summing asynchronous arrivals', () => {
+  useRealtimeGroupMock.mockReset();
+  const { result, rerender } = renderHook(({ ids }) => useServiceStatsStream('p', ids, 300), {
+    initialProps: { ids: ['a', 'b'] },
+  });
+  let receive: (samples: unknown[]) => void = () => {};
+  useRealtimeGroupMock.mock.calls[0][0].setupEventListeners({
+    on: (_event: string, handler: typeof receive) => {
+      receive = handler;
+    },
+  });
+  act(() =>
+    receive([
+      { containerId: 'a', created: 301, rxBytes: 100, blockReadBytes: 100, cpuUsage: 1 },
+      { containerId: 'b', created: 301, rxBytes: 100, blockReadBytes: 100, cpuUsage: 2 },
+    ]),
+  );
+  act(() => receive([{ containerId: 'a', created: 311, rxBytes: 200, blockReadBytes: 200, cpuUsage: 3 }]));
+  act(() => receive([{ containerId: 'a', created: 321, rxBytes: 400, blockReadBytes: 400, cpuUsage: 5 }]));
+  act(() => receive([{ containerId: 'b', created: 321, rxBytes: 500, blockReadBytes: 500, cpuUsage: 4 }]));
+  expect(result.current.stats[0]).toMatchObject({
+    rxBytesPerSecond: 35,
+    blockReadBytesPerSecond: 35,
+    rxBytesDelta: 700,
+    blockReadBytesDelta: 700,
+    cpuUsage: 6,
+  });
+  expect(latestLiveStat(result.current.stats)).toMatchObject({ cpuUsage: 9, created: 321 });
+  act(() => receive([{ containerId: 'b', created: 321, rxBytes: 500, blockReadBytes: 500, cpuUsage: 4 }]));
+  expect(result.current.stats[0]).toMatchObject({ rxBytesPerSecond: 35, rxBytesDelta: 700 });
+  rerender({ ids: ['replacement'] });
+  expect(result.current.stats).toEqual([]);
 });
