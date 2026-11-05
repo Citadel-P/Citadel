@@ -7,14 +7,14 @@ mod container_io;
 
 // Dedicated child databases keep these destructive migration probes independent
 // of each other and of the existing checksum-tampering test.
-struct Database {
+pub(super) struct Database {
     admin_url: String,
-    url: String,
+    pub(super) url: String,
     name: String,
 }
 
 impl Database {
-    async fn create() -> Self {
+    pub(super) async fn create() -> Self {
         let admin_url = super::database_url();
         let name = format!("citadel_migration_{}", Uuid::now_v7().simple());
         let mut admin = PgConnection::connect(&admin_url).await.unwrap();
@@ -32,7 +32,7 @@ impl Database {
         }
     }
 
-    async fn close(self) {
+    pub(super) async fn close(self) {
         let mut admin = PgConnection::connect(&self.admin_url).await.unwrap();
         sqlx::query(sqlx::AssertSqlSafe(format!(
             "DROP DATABASE {} WITH (FORCE)",
