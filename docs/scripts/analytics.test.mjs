@@ -95,13 +95,21 @@ async function open(page, route = '/') {
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).waitFor();
 }
 
+async function savePreference(page, label) {
+  const names = { 'Accept all': 'Full', 'Reject non-essentials': 'Basic' };
+  const dialog = page.getByRole('dialog', { name: 'Analytics preferences', exact: true });
+  await dialog.getByRole('radio', { name: names[label] ?? label, exact: true }).check();
+  await dialog.getByRole('button', { name: 'Save preferences', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+}
+
 test('opt-in, clean payload, client navigation, hashes and withdrawal', async (t) => {
   const { page, sends, configs } = await fixture(t);
   await open(page, '/?secret=never-send#private');
   await settle(page);
   assert.equal(sends.length, 0);
   assert.equal(configs.length, 1);
-  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept all', exact: true }).click();
   await until(() => sends.length === 1);
   assert.deepEqual(sends[0].payload, { type: 'event', payload: {
     website: config.websiteId, hostname: config.hostname, url: '/', title: 'What is Citadel?',
@@ -117,32 +125,81 @@ test('opt-in, clean payload, client navigation, hashes and withdrawal', async (t
   assert.equal(sends[1].payload.payload.url, '/getting-started/quick-start');
   assert.equal(configs.length, 1, 'Navigation should keep the analytics provider mounted');
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-  assert.equal(await page.locator(':focus').getAttribute('aria-label'), 'Optional analytics');
-  await page.getByRole('button', { name: 'Decline', exact: true }).click();
+  assert.equal(await page.locator(':focus').getAttribute('aria-labelledby'), 'docs-analytics-title');
+  await savePreference(page, 'Off');
   assert.equal(await page.locator(':focus').textContent(), 'Analytics preferences');
   await page.goto(origin + '/resources/');
   await settle(page);
   assert.equal(sends.length, 2);
 });
 
-test('decline is remembered and can be changed', async (t) => {
+test('preferences are centered, trap focus and discard unsaved changes', async (t) => {
+  const { page, sends } = await fixture(t, { viewport: { width: 390, height: 844 } });
+  await page.goto(origin + '/');
+  const trigger = page.getByRole('button', { name: 'Manage preferences', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Analytics preferences', exact: true });
+  await trigger.click();
+  await dialog.waitFor();
+  assert.equal(await page.getByRole('region', { name: 'Optional analytics' }).count(), 0);
+  await page.screenshot({ path: '/tmp/citadel-docs-analytics-dialog-mobile.png' });
+  const bounds = await dialog.boundingBox();
+  // The docs reserve a scrollbar gutter, so center within the usable viewport.
+  const width = await page.evaluate(() => document.documentElement.getBoundingClientRect().width);
+  assert(Math.abs(bounds.x + bounds.width / 2 - width / 2) < 2);
+  assert(Math.abs(bounds.y + bounds.height / 2 - 422) < 2);
+  assert(bounds.y >= 16 && bounds.y + bounds.height <= 828);
+  assert.equal(await dialog.getByRole('radio', { name: 'Basic', exact: true }).isChecked(), true);
+  await dialog.getByRole('radio', { name: 'Full', exact: true }).check();
+  assert.equal(await page.evaluate((key) => localStorage.getItem(key), storageKey), null);
+  await dialog.getByRole('button', { name: 'Save preferences' }).focus();
+  await page.keyboard.press('Tab');
+  assert(await dialog.evaluate((element) => element.contains(document.activeElement)));
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  assert(await trigger.evaluate((element) => element === document.activeElement));
+  await trigger.click();
+  assert.equal(await dialog.getByRole('radio', { name: 'Basic', exact: true }).isChecked(), true);
+  await page.screenshot({ path: '/tmp/citadel-docs-analytics-dialog-mobile.png' });
+  await dialog.getByRole('radio', { name: 'Off', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  assert.equal(await page.evaluate((key) => localStorage.getItem(key), storageKey), null);
+  assert.equal(sends.length, 0);
+  await trigger.click();
+  await dialog.getByRole('button', { name: 'Save preferences', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  await until(() => sends.length === 1);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+  assert.equal(await dialog.getByRole('radio', { name: 'Basic', exact: true }).isChecked(), true);
+  await dialog.getByRole('radio', { name: 'Full', exact: true }).check();
+  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).choice, storageKey), 'basic');
+  assert.equal(sends.length, 1);
+});
+
+test('Off is remembered and can be changed', async (t) => {
   const { page, sends } = await fixture(t);
   await open(page);
-  await page.getByRole('button', { name: 'Decline', exact: true }).click();
+  await page.getByRole('button', { name: 'Manage preferences', exact: true }).click();
+  await savePreference(page, 'Off');
   await page.reload();
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).waitFor();
   assert.equal(await page.getByRole('region', { name: 'Optional analytics' }).count(), 0);
   assert.equal(sends.length, 0);
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  assert.equal(await page.getByRole('radio', { name: 'Off', exact: true }).isChecked(), true);
+  await savePreference(page, 'Accept all');
   await until(() => sends.length === 1);
+  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+  assert.equal(await page.getByRole('radio', { name: 'Full', exact: true }).isChecked(), true);
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
 });
 
 for (const signal of ['dnt', 'gpc']) test(`${signal} blocks saved and new consent`, async (t) => {
   const { page, sends } = await fixture(t, { saved: accepted(), signal });
   await open(page);
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await savePreference(page, 'Accept all');
   await settle(page);
   assert.equal(sends.length, 0);
 });
@@ -150,7 +207,7 @@ for (const signal of ['dnt', 'gpc']) test(`${signal} blocks saved and new consen
 test('expired or invalid consent cannot authorize collection', async (t) => {
   const { page, sends } = await fixture(t, { saved: { choice: 'accepted', expires: Date.now() - 1 } });
   await open(page);
-  await page.getByRole('button', { name: 'Accept', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Accept all', exact: true }).waitFor();
   assert.equal(sends.length, 0);
 });
 
@@ -161,20 +218,20 @@ test('active consent expires and reopens the notice', async (t) => {
   await page.clock.install();
   await page.clock.fastForward(6000);
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await page.getByRole('button', { name: 'Accept', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Accept all', exact: true }).waitFor();
   assert.equal(sends.length, 1);
 });
 
 test('withdrawal propagates to another open tab', async (t) => {
   const { page, context, sends } = await fixture(t);
   await open(page);
-  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept all', exact: true }).click();
   await until(() => sends.length === 1);
   const second = await context.newPage();
   await open(second);
   await until(() => sends.length === 2);
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-  await page.getByRole('button', { name: 'Decline', exact: true }).click();
+  await savePreference(page, 'Off');
   await settle(second);
   await second.locator('a[href="/getting-started/quick-start/"]').first().click();
   await settle(second);
@@ -184,10 +241,10 @@ test('withdrawal propagates to another open tab', async (t) => {
 test('unavailable storage permits only a page-session choice', async (t) => {
   const { page, sends } = await fixture(t, { storageUnavailable: true });
   await open(page);
-  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept all', exact: true }).click();
   await until(() => sends.length === 1);
   await page.reload();
-  await page.getByRole('button', { name: 'Accept', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Accept all', exact: true }).waitFor();
   await settle(page);
   assert.equal(sends.length, 1);
 });
@@ -235,8 +292,8 @@ test('API reference and mobile consent controls remain accessible', async (t) =>
   await notice.waitFor();
   const bounds = await notice.boundingBox();
   assert(bounds.x >= 0 && bounds.x + bounds.width <= 390);
-  const accept = page.getByRole('button', { name: 'Accept', exact: true });
-  const decline = page.getByRole('button', { name: 'Decline', exact: true });
+  const accept = page.getByRole('button', { name: 'Accept all', exact: true });
+  const decline = page.getByRole('button', { name: 'Reject non-essentials', exact: true });
   const acceptBounds = await accept.boundingBox();
   const declineBounds = await decline.boundingBox();
   assert(Math.abs(acceptBounds.width - declineBounds.width) <= 1);
@@ -246,12 +303,13 @@ test('API reference and mobile consent controls remain accessible', async (t) =>
     await decline.evaluate((button) => getComputedStyle(button).backgroundColor),
   );
   await page.screenshot({ path: '/tmp/citadel-docs-analytics-mobile.png' });
-  await page.getByRole('button', { name: 'Decline', exact: true }).click();
+  await page.getByRole('button', { name: 'Manage preferences', exact: true }).click();
+  await savePreference(page, 'Off');
   await page.setViewportSize({ width: 1440, height: 1000 });
   await open(page, '/reference/api/');
-  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-  await notice.waitFor();
   await page.getByRole('button', { name: 'Toggle Theme', exact: true }).click();
+  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Analytics preferences' }).waitFor();
   await page.screenshot({ path: '/tmp/citadel-docs-analytics-dark.png' });
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
@@ -259,6 +317,87 @@ test('API reference and mobile consent controls remain accessible', async (t) =>
 });
 
 const customEvents = (sends) => sends.filter((send) => send.payload.payload.name).map((send) => send.payload.payload);
+
+test('basic choice is explicit, remembers reduced measurement and excludes search events', async (t) => {
+  const { page, sends } = await fixture(t);
+  await open(page, '/?private=secret#bearer');
+  assert.equal(sends.length, 0);
+  await page.getByRole('button', { name: 'Reject non-essentials', exact: true }).click();
+  await until(() => sends.length === 1);
+  assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).choice, storageKey), 'basic');
+  await searchFor(page, 'zzPrivateSearch_123459');
+  await page.getByText('No results found', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Close Search', exact: true }).click();
+  await settle(page);
+  assert.deepEqual(customEvents(sends), []);
+  await page.getByRole('button', { name: 'Yes, this page was helpful', exact: true }).click();
+  await until(() => customEvents(sends).length === 1);
+  assert.equal(customEvents(sends)[0].name, 'page_helpful');
+  assert.equal(customEvents(sends)[0].data, undefined);
+  await page.reload();
+  await until(() => sends.filter((s) => !s.payload.payload.name).length === 2);
+  assert.equal(await page.getByRole('region', { name: 'Optional analytics' }).count(), 0);
+  assert(!/secret|bearer|zzPrivateSearch/.test(JSON.stringify(sends.map((s) => s.payload))));
+});
+
+test('basic/full changes and navigation do not duplicate pageviews', async (t) => {
+  const { page, sends } = await fixture(t);
+  const views = () => sends.filter((s) => !s.payload.payload.name).map((s) => s.payload.payload.url);
+  const choose = async (label) => {
+    await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+    await savePreference(page, label);
+  };
+  await open(page);
+  await page.getByRole('button', { name: 'Reject non-essentials', exact: true }).click();
+  await until(() => views().length === 1);
+  await choose('Accept all');
+  await choose('Reject non-essentials');
+  await settle(page);
+  assert.deepEqual(views(), ['/']);
+  await page.locator('a[href="/getting-started/quick-start/"]').first().click();
+  await until(() => views().length === 2);
+  await page.goBack();
+  await until(() => views().length === 3);
+  assert.deepEqual(views(), ['/', '/getting-started/quick-start', '/']);
+  await choose('Off');
+  await page.getByRole('link', { name: 'Documentation privacy', exact: true }).click();
+  await settle(page);
+  assert.equal(views().length, 3);
+});
+
+test('basic mode excludes the privacy page and full mode measures it once', async (t) => {
+  const { page, sends } = await fixture(t, { saved: { choice: 'basic', expires: Date.now() + 60_000 } });
+  await open(page, '/privacy/');
+  await settle(page);
+  assert.equal(sends.length, 0);
+  assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
+  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+  await savePreference(page, 'Accept all');
+  await until(() => sends.length === 1);
+  assert.equal(sends[0].payload.payload.url, '/privacy');
+});
+
+test('cross-tab downgrade changes event scope without recounting the article', async (t) => {
+  const { page, context, sends } = await fixture(t);
+  await open(page);
+  await page.getByRole('button', { name: 'Accept all', exact: true }).click();
+  await until(() => sends.length === 1);
+  const second = await context.newPage();
+  await open(second);
+  await until(() => sends.length === 2);
+  await second.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+  await savePreference(second, 'Reject non-essentials');
+  await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).choice === 'basic', storageKey);
+  await searchFor(page, 'zzPrivateSearch_123459');
+  await page.getByText('No results found', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Close Search', exact: true }).click();
+  await settle(page);
+  assert.equal(sends.length, 2);
+  await page.getByRole('button', { name: 'No, this page was not helpful', exact: true }).click();
+  await until(() => customEvents(sends).length === 1);
+  assert.equal(customEvents(sends)[0].name, 'page_unhelpful');
+  assert.equal(customEvents(sends)[0].data, undefined);
+});
 
 test('embedded API navigation renders endpoints and survives a static-page reload', async (t) => {
   const { page } = await fixture(t);
@@ -274,6 +413,7 @@ test('embedded API navigation renders endpoints and survives a static-page reloa
   await reference.getByRole('link', { name: 'Activities', exact: true }).click();
   await reference.getByRole('link', { name: /List authorized activities/ }).first().click();
   await reference.getByRole('heading', { name: /List authorized activities$/ }).waitFor();
+  await page.waitForURL((url) => url.hash.startsWith('#/activities/'));
   assert.equal(new URL(page.url()).pathname, '/reference/api/');
   assert(new URL(page.url()).hash.startsWith('#/activities/'));
   await page.reload();
@@ -326,7 +466,7 @@ test('page helpfulness sends one response per page per tab session', async (t) =
   const { page, sends } = await fixture(t);
   await open(page);
   assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
-  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept all', exact: true }).click();
   const yes = page.getByRole('button', { name: 'Yes, this page was helpful', exact: true });
   await yes.click();
   await until(() => customEvents(sends).length === 1);
@@ -348,7 +488,7 @@ test('page helpfulness sends one response per page per tab session', async (t) =
   assert(await yes.isDisabled());
   assert.equal(customEvents(sends).length, 2);
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-  await page.getByRole('button', { name: 'Decline', exact: true }).click();
+  await savePreference(page, 'Off');
   assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
 });
 
@@ -430,7 +570,7 @@ test('homepage licensing fragment redirects without changing ordinary home links
   assert.equal(page.url(), origin + '/');
 });
 
-for (const choice of ['accepted', 'declined']) test(`installation copy success respects ${choice} consent`, async (t) => {
+for (const choice of ['basic', 'accepted', 'declined']) test(`installation copy success respects ${choice} consent`, async (t) => {
   const { page, sends } = await fixture(t, { saved: { choice, expires: Date.now() + 60_000 } });
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => {} } });
@@ -438,11 +578,11 @@ for (const choice of ['accepted', 'declined']) test(`installation copy success r
   await open(page, '/getting-started/quick-start/');
   await page.getByRole('button', { name: 'Copy Text', exact: true }).first().click();
   await page.getByRole('button', { name: 'Copied Text', exact: true }).waitFor();
-  if (choice === 'accepted') {
+  if (choice !== 'declined') {
     await until(() => sends.some(e => e.payload.payload.name === 'install_command_copied'));
     const event = sends.find(e => e.payload.payload.name === 'install_command_copied').payload.payload;
     assert.equal(event.url, '/getting-started/quick-start');
-    assert.deepEqual(event.data, { step: 'download' });
+    assert.deepEqual(event.data, choice === 'accepted' ? { step: 'download' } : undefined);
   } else assert.equal(sends.length, 0);
   const count = sends.length;
   await page.evaluate(() => { navigator.clipboard.writeText = async () => { throw new Error('Denied'); }; });
@@ -453,8 +593,8 @@ for (const choice of ['accepted', 'declined']) test(`installation copy success r
   assert(!/docker compose|PG_PASSWORD|curl/.test(JSON.stringify(sends)));
 });
 
-test('OpenAPI download records intent without schema contents', async (t) => {
-  const { page, sends } = await fixture(t, { saved: accepted() });
+for (const choice of ['basic', 'accepted']) test(`OpenAPI download records ${choice} intent without schema contents`, async (t) => {
+  const { page, sends } = await fixture(t, { saved: { choice, expires: Date.now() + 60_000 } });
   await open(page, '/reference/api/');
   await page.getByRole('link', { name: 'Download OpenAPI schema' }).click();
   await until(() => sends.some(e => e.payload.payload.name === 'openapi_download_requested'));
