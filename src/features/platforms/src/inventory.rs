@@ -292,6 +292,9 @@ pub struct RuntimeContainerStat {
     pub memory_limit: f64,
     pub rx_bytes: f64,
     pub tx_bytes: f64,
+    /// Block-device I/O bytes; absent when Docker does not report these counters.
+    pub block_read_bytes: Option<f64>,
+    pub block_write_bytes: Option<f64>,
     pub created: i64,
 }
 

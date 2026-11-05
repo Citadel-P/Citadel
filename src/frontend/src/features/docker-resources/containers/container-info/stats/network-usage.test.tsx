@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { useStatsChartBounds } from '@/components/custom/stats-chart-range';
 import NetworkUsage from './network-usage';
+import DiskUsage from './disk-usage';
 
 vi.mock('@/components/custom/stats-chart-range', () => ({ useStatsChartBounds: vi.fn() }));
 vi.mock('recharts', async (importOriginal) => ({
@@ -79,4 +80,51 @@ it('distinguishes unavailable deltas from a measured zero without falling back t
   // One bucket can contain multiple raw samples: zero is a valid measurement.
   rerender(<NetworkUsage stats={[sample(10, 0, 0)]} isLoading={false} />);
   expect(screen.getAllByText('0 B')).toHaveLength(2);
+});
+
+it('switches the same network chart to backend throughput while preserving period totals', () => {
+  vi.mocked(useStatsChartBounds).mockReturnValue({ from: 10, to: 30 });
+  render(
+    <NetworkUsage
+      stats={[
+        { ...sample(10), rxBytesPerSecond: null, txBytesPerSecond: null },
+        { ...sample(20, 20, 10), rxBytesPerSecond: 2 * kib, txBytesPerSecond: kib },
+        { ...sample(30, 40, 20), rxBytesPerSecond: 4 * kib, txBytesPerSecond: 2 * kib },
+      ]}
+      isLoading={false}
+    />,
+  );
+  expect(chart().at(-1)).toMatchObject({ rxBytes: 60 * kib, txBytes: 30 * kib });
+  fireEvent.click(screen.getByRole('radio', { name: 'Throughput' }));
+  expect(screen.getByRole('radio', { name: 'Throughput' })).toBeChecked();
+  expect(chart().at(-1)).toMatchObject({ rxBytes: 4 * kib, txBytes: 2 * kib });
+  expect(screen.getByText('60 kB')).toBeVisible();
+  expect(screen.getByText('30 kB')).toBeVisible();
+  fireEvent.click(screen.getByRole('radio', { name: 'Accumulated' }));
+  expect(chart().at(-1)).toMatchObject({ rxBytes: 60 * kib, txBytes: 30 * kib });
+});
+
+it('shows disk read/write rates and period totals, with unavailable measurements kept distinct from zero', () => {
+  vi.mocked(useStatsChartBounds).mockReturnValue(undefined);
+  const stats = [
+    {
+      ...sample(10),
+      blockReadBytes: 100000,
+      blockWriteBytes: 200000,
+      blockReadBytesDelta: 100 * kib,
+      blockWriteBytesDelta: 50 * kib,
+      blockReadBytesPerSecond: 10 * kib,
+      blockWriteBytesPerSecond: 5 * kib,
+    },
+  ];
+  const { rerender } = render(<DiskUsage stats={stats} isLoading={false} />);
+  expect(screen.getByText('Disk I/O')).toBeVisible();
+  expect(screen.getByText('100 kB')).toBeVisible();
+  expect(screen.getByText('50 kB')).toBeVisible();
+  expect(chart().at(-1)).toMatchObject({ blockReadBytes: 10 * kib, blockWriteBytes: 5 * kib });
+  fireEvent.click(screen.getByRole('radio', { name: 'Accumulated' }));
+  expect(chart().at(-1)).toMatchObject({ blockReadBytes: 100 * kib, blockWriteBytes: 50 * kib });
+  rerender(<DiskUsage stats={[sample(10)]} isLoading={false} />);
+  expect(screen.getByText(/Disk I\/O is not reported/)).toBeVisible();
+  expect(screen.getAllByText('-')).toHaveLength(2);
 });

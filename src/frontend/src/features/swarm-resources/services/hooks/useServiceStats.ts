@@ -1,4 +1,4 @@
-import { appendLiveStatBucket, latestLiveStat, withNetworkDelta } from '@/lib/stats-buckets';
+import { appendLiveStatBucket, latestLiveStat, sumStatBuckets } from '@/lib/stats-buckets';
 import { ContainerStatView } from '@/api/generated/api.types';
 import { useStatsRange } from '@/hooks/useStatsRange';
 import { StatsQueryState } from '@/features/docker-resources/containers/container-info/container-stats';
@@ -49,56 +49,26 @@ export const useServiceStatsStream = (
 ) => {
   const [liveStats, setLiveStats] = useState<{
     identity: string;
-    latestByContainer: Map<string, ContainerStatView>;
-    stats: Omit<ContainerStatView, 'containerId'>[];
-  }>({
-    identity: '',
-    latestByContainer: new Map(),
-    stats: [],
-  });
+    byContainer: Map<string, ContainerStatView[]>;
+  }>({ identity: '', byContainer: new Map() });
   const idSet = useMemo(() => new Set(containerIds), [containerIds]);
   const identity = useMemo(() => [...containerIds].sort().join(','), [containerIds]);
 
   const handleStats = useCallback(
     (stats: ContainerStatView[]) => {
       setLiveStats((previous) => {
-        const latestByContainer =
-          previous.identity === identity ? new Map(previous.latestByContainer) : new Map<string, ContainerStatView>();
+        const byContainer =
+          previous.identity === identity ? new Map(previous.byContainer) : new Map<string, ContainerStatView[]>();
         let changed = false;
-        let rxBytesDelta: number | undefined;
-        let txBytesDelta: number | undefined;
         for (const stat of stats) {
           if (!stat.containerId || !idSet.has(stat.containerId)) continue;
-          const before = latestByContainer.get(stat.containerId);
+          const series = byContainer.get(stat.containerId) ?? [];
+          const before = latestLiveStat(series);
           if (before && stat.created <= before.created) continue;
-          const measured = withNetworkDelta(stat, before);
-          if (measured.rxBytesDelta != null) rxBytesDelta = (rxBytesDelta ?? 0) + measured.rxBytesDelta;
-          if (measured.txBytesDelta != null) txBytesDelta = (txBytesDelta ?? 0) + measured.txBytesDelta;
-          latestByContainer.set(stat.containerId, stat);
+          byContainer.set(stat.containerId, appendLiveStatBucket(series, stat, seconds, windowSeconds));
           changed = true;
         }
-        if (!changed) return previous;
-
-        const aggregate = aggregateCurrentStats(latestByContainer.values());
-        const latest = previous.identity === identity ? latestLiveStat(previous.stats) : undefined;
-        // Different containers can arrive separately at the same timestamp.
-        // Their gauges replace the aggregate; their independent traffic adds up.
-        if (latest?.created === aggregate.created) {
-          if (latest.rxBytesDelta != null) rxBytesDelta = (rxBytesDelta ?? 0) + latest.rxBytesDelta;
-          if (latest.txBytesDelta != null) txBytesDelta = (txBytesDelta ?? 0) + latest.txBytesDelta;
-        }
-        aggregate.rxBytesDelta = rxBytesDelta ?? null;
-        aggregate.txBytesDelta = txBytesDelta ?? null;
-        return {
-          identity,
-          latestByContainer,
-          stats: appendLiveStatBucket(
-            previous.identity === identity ? previous.stats : [],
-            aggregate,
-            seconds,
-            windowSeconds,
-          ),
-        };
+        return changed ? { identity, byContainer } : previous;
       });
     },
     [idSet, identity, seconds, windowSeconds],
@@ -119,31 +89,10 @@ export const useServiceStatsStream = (
     skip: !platformId,
   });
 
-  return liveStats.identity === identity
-    ? { stats: liveStats.stats, observedContainers: liveStats.latestByContainer.size }
-    : { stats: EMPTY_STATS, observedContainers: 0 };
-};
-
-const aggregateCurrentStats = (stats: Iterable<ContainerStatView>): Omit<ContainerStatView, 'containerId'> => {
-  const aggregate: Omit<ContainerStatView, 'containerId'> = {
-    memoryActive: 0,
-    memoryCache: 0,
-    cpuUsage: 0,
-    memoryLimit: 0,
-    rxBytes: 0,
-    txBytes: 0,
-    created: 0,
-  };
-
-  for (const stat of stats) {
-    aggregate.memoryActive = Number(aggregate.memoryActive) + Number(stat.memoryActive ?? 0);
-    aggregate.memoryCache = Number(aggregate.memoryCache) + Number(stat.memoryCache ?? 0);
-    aggregate.cpuUsage = Number(aggregate.cpuUsage) + Number(stat.cpuUsage ?? 0);
-    aggregate.memoryLimit = Number(aggregate.memoryLimit) + Number(stat.memoryLimit ?? 0);
-    aggregate.rxBytes = Number(aggregate.rxBytes) + Number(stat.rxBytes ?? 0);
-    aggregate.txBytes = Number(aggregate.txBytes) + Number(stat.txBytes ?? 0);
-    aggregate.created = Math.max(Number(aggregate.created), Number(stat.created ?? 0));
-  }
-
-  return aggregate;
+  const stats = useMemo(
+    () =>
+      liveStats.identity === identity ? sumStatBuckets([...liveStats.byContainer.values()], seconds) : EMPTY_STATS,
+    [liveStats, identity, seconds],
+  );
+  return { stats, observedContainers: liveStats.identity === identity ? liveStats.byContainer.size : 0 };
 };

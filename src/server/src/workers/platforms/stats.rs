@@ -1,5 +1,6 @@
 use super::*;
 use citadel_platforms::PlatformInfoPort;
+use tracing::Instrument;
 
 pub(crate) async fn local_container_stats(
     cancellation: CancellationToken,
@@ -37,7 +38,11 @@ pub(crate) async fn local_container_stats(
             connected_at: None,
             closed: None,
         };
-        let sample = match sampler.sample(&cancellation).await {
+        let sample = match sampler
+            .sample(&cancellation)
+            .instrument(tracing::info_span!("local_container_stats", %platform_id))
+            .await
+        {
             Ok(sample) => sample,
             Err(error) => {
                 if cancellation.is_cancelled() {
@@ -51,7 +56,7 @@ pub(crate) async fn local_container_stats(
         RuntimeWork::LocalStats.units((batch.stats.len() + batch.failed_samples) as u64);
         RuntimeWork::LocalStats.failures(batch.failed_samples as u64);
         if batch.failed_samples != 0 {
-            tracing::warn!(
+            tracing::debug!(
                 failed_samples = batch.failed_samples,
                 %platform_id,
                 "some local container statistics samples failed"

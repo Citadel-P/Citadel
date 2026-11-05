@@ -110,3 +110,48 @@ it('does not count a replacement container lifetime counter as live traffic', ()
     appendLiveStatBucket(replacement, { containerId: 'new', created: 30, rxBytes: 9030 }, 10, 900)[2],
   ).toMatchObject({ rxBytesDelta: 30 });
 });
+
+it('derives network and disk throughput from raw intervals before averaging, including counter resets and missing baselines', () => {
+  const samples = [
+    { created: 301, rxBytes: 1000, blockReadBytes: null as number | null, blockWriteBytes: 1000 },
+    { created: 311, rxBytes: 1100, blockReadBytes: 10000, blockWriteBytes: 1200 },
+    { created: 331, rxBytes: 10, blockReadBytes: 10200, blockWriteBytes: 20 },
+  ];
+  const live = samples.reduce(
+    (buckets, sample) => appendLiveStatBucket(buckets, sample, 300, 3600),
+    [] as typeof samples,
+  );
+  expect(live[0]).toMatchObject({
+    rxBytesDelta: 110,
+    rxBytesPerSecond: 110 / 30,
+    blockReadBytesDelta: 200,
+    blockReadBytesPerSecond: 10,
+    blockWriteBytesDelta: 220,
+    blockWriteBytesPerSecond: 220 / 30,
+  });
+  const corrected = appendLiveStatBucket(live, { ...samples[2], rxBytes: 30 }, 300, 3600);
+  expect(corrected[0]).toMatchObject({ rxBytesDelta: 130, rxBytesPerSecond: 130 / 30 });
+  const replacement = appendLiveStatBucket([], { containerId: 'old', created: 1, blockReadBytes: 10 }, 10, 900);
+  expect(
+    appendLiveStatBucket(replacement, { containerId: 'new', created: 11, blockReadBytes: 1000 }, 10, 900)[1],
+  ).toMatchObject({ blockReadBytesDelta: null, blockReadBytesPerSecond: null });
+});
+
+it('weights throughput by elapsed time rather than the number of observations', () => {
+  const samples = [
+    { created: 301, rxBytes: 1000, blockReadBytes: 1000 },
+    { created: 302, rxBytes: 2000, blockReadBytes: 2000 },
+    { created: 322, rxBytes: 2000, blockReadBytes: 2000 },
+  ];
+  const live = samples.reduce(
+    (buckets, sample) => appendLiveStatBucket(buckets, sample, 300, 3600),
+    [] as typeof samples,
+  );
+  expect(live[0]).toMatchObject({
+    rxBytesDelta: 1000,
+    rxBytesPerSecond: 1000 / 21,
+    blockReadBytesPerSecond: 1000 / 21,
+  });
+  const corrected = appendLiveStatBucket(live, { ...samples[2], rxBytes: 2100 }, 300, 3600);
+  expect(corrected[0]).toMatchObject({ rxBytesDelta: 1100, rxBytesPerSecond: 1100 / 21 });
+});

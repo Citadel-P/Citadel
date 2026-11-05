@@ -90,3 +90,8 @@ INSERT INTO alertrules(id,name,type,severity,status,createdbyactorid,limitedto,q
 VALUES
 ('019d0000-0001-7000-8001-000000000025', 'Core Update Available', 'CoreUpdateAvailable', 'Info', 'Enabled', '00000000-0000-0000-0000-000000000001', '[]', '[]', TIMESTAMPTZ '2026-01-01T00:00:00Z'),
 ('019d0000-0001-7000-8001-000000000026', 'Agent Updates Available', 'AgentUpdatesAvailable', 'Info', 'Enabled', '00000000-0000-0000-0000-000000000001', '[]', '[]', TIMESTAMPTZ '2026-01-01T00:00:00Z');
+
+-- Optional Docker block-device counters; historical samples remain unknown.
+ALTER TABLE containerstats ADD COLUMN blockreadbytes double precision, ADD COLUMN blockwritebytes double precision;
+ALTER TABLE workloadstats ADD COLUMN blockreadbytes double precision, ADD COLUMN blockwritebytes double precision;
+ALTER TABLE swarmservicestats ADD COLUMN blockreadbytes double precision, ADD COLUMN blockwritebytes double precision;

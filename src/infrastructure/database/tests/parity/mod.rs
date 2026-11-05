@@ -3,6 +3,7 @@ use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
 mod build_attempts;
+mod container_io;
 
 // Dedicated child databases keep these destructive migration probes independent
 // of each other and of the existing checksum-tampering test.

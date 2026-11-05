@@ -162,6 +162,8 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
         memory_limit: 100.0,
         rx_bytes: 3.0,
         tx_bytes: 4.0,
+        block_read_bytes: None,
+        block_write_bytes: None,
         created: bucket + 1,
     };
     assert_eq!(
@@ -490,6 +492,8 @@ async fn workload_history_requires_its_own_permission_and_preserves_stack_groupi
         memory_limit: 100.0,
         rx_bytes: 3.0,
         tx_bytes: 4.0,
+        block_read_bytes: None,
+        block_write_bytes: None,
     };
     assert_eq!(
         store
@@ -721,6 +725,8 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
         memory_limit: 1.0,
         rx_bytes: 0.0,
         tx_bytes: 0.0,
+        block_read_bytes: None,
+        block_write_bytes: None,
         created: now,
     };
     // Duplicate conflict keys abort the write, including independent workload history.
@@ -838,6 +844,8 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
         memory_limit: 100.0,
         rx_bytes: 1.0,
         tx_bytes: 2.0,
+        block_read_bytes: None,
+        block_write_bytes: None,
         created: Utc::now().timestamp(),
     };
     writer.persist(f.platform_id, &[sample]).await.unwrap();
@@ -966,6 +974,8 @@ async fn workload_history_survives_replacement_and_keeps_service_replica_and_own
             memory_limit: 100.0,
             rx_bytes: 3.0,
             tx_bytes: 4.0,
+            block_read_bytes: None,
+            block_write_bytes: None,
         };
         if index % 2 == 0 {
             writer

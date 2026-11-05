@@ -187,6 +187,22 @@ pub struct ContainerStatView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_bytes_delta: Option<f64>,
     pub created: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_per_second: Option<f64>,
 }
 
 impl From<citadel_platforms::ContainerStatSnapshot> for ContainerStatView {
@@ -201,6 +217,14 @@ impl From<citadel_platforms::ContainerStatSnapshot> for ContainerStatView {
             tx_bytes: value.tx_bytes,
             rx_bytes_delta: value.rx_bytes_delta,
             tx_bytes_delta: value.tx_bytes_delta,
+            block_read_bytes: value.block_read_bytes,
+            block_write_bytes: value.block_write_bytes,
+            block_read_bytes_delta: value.block_read_bytes_delta,
+            block_write_bytes_delta: value.block_write_bytes_delta,
+            rx_bytes_per_second: value.rx_bytes_per_second,
+            tx_bytes_per_second: value.tx_bytes_per_second,
+            block_read_bytes_per_second: value.block_read_bytes_per_second,
+            block_write_bytes_per_second: value.block_write_bytes_per_second,
             created: value.created,
         }
     }
