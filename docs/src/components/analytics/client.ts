@@ -3,7 +3,14 @@ export const collector = 'https://analytics.citadelplane.com/docs';
 const productionOrigin = 'https://docs.citadelplane.com';
 const storageKey = 'citadel.docs.analytics-consent.v1';
 const lifetime = 180 * 24 * 60 * 60 * 1000;
-type Choice = 'accepted' | 'declined';
+// Reuse the existing accepted/declined values for full/off preferences.
+type Choice = 'basic' | 'accepted' | 'declined';
+const events = ['search_used', 'search_no_results', 'search_result_opened',
+  'page_helpful', 'page_unhelpful', 'install_command_copied', 'openapi_download_requested'] as const;
+type AnalyticsEvent = typeof events[number];
+const basicEvents = new Set<AnalyticsEvent>([
+  'page_helpful', 'page_unhelpful', 'install_command_copied', 'openapi_download_requested',
+]);
 type Consent = { choice: Choice; expires: number };
 type Config = { websiteId: string; hostname: string };
 type State = { enabled: boolean; choice: Choice | null; editing: boolean; collecting: boolean; preview: boolean };
@@ -21,25 +28,28 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
   const site = new URL(siteUrl);
   const basePath = site.pathname.replace(/\/+$/, '');
   const normalize = (path: string) => path.replace(/\/+$/, '') || '/';
+  // The layout supplies exact published source paths. Policy pages are not articles.
+  const basicRoutes = new Set(Object.keys(routes).filter((route) => route !== '/privacy'));
 
   function permitted() {
-    return !state.preview && config !== null && consent?.choice === 'accepted' && consent.expires > Date.now() &&
+    return !state.preview && config !== null &&
+      (consent?.choice === 'basic' || consent?.choice === 'accepted') && consent.expires > Date.now() &&
       navigator.doNotTrack !== '1' &&
       (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl !== true;
   }
   function update() {
     state = { ...state, choice: consent?.choice ?? null, collecting: permitted() };
+    if (state.choice !== 'basic' && state.choice !== 'accepted') lastPage = null;
     listeners.forEach((listener) => listener());
   }
   function cancel() {
     pending.forEach((controller) => controller.abort());
     pending.clear();
-    lastPage = null;
   }
   function readConsent(): Consent | null {
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-      if ((value?.choice === 'accepted' || value?.choice === 'declined') &&
+      if ((value?.choice === 'basic' || value?.choice === 'accepted' || value?.choice === 'declined') &&
           Number.isFinite(value.expires) && value.expires > Date.now() &&
           value.expires <= Date.now() + lifetime) return value;
     } catch { /* Storage is optional; default to no consent. */ }
@@ -70,9 +80,16 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
     const route = normalize(path.slice(basePath.length));
     return Object.hasOwn(routes, route) ? route : null;
   }
-  function send(route: string, event?: { name: string; data?: Record<string, string | number> }) {
+  function canCollectPage(path: string) {
+    const route = normalize(path);
+    return permitted() && Object.hasOwn(routes, route) &&
+      (consent?.choice !== 'basic' || basicRoutes.has(route));
+  }
+  function send(route: string, event?: { name: AnalyticsEvent; data?: Record<string, string | number> }) {
     checkExpiry();
-    if (!permitted() || !config || currentRoute() !== route) return false;
+    if (!config || !canCollectPage(route) || currentRoute() !== route) return false;
+    if (event && !events.includes(event.name)) return false;
+    if (consent?.choice === 'basic' && event && !basicEvents.has(event.name)) return false;
     const controller = new AbortController();
     pending.add(controller);
     const timeout = setTimeout(() => controller.abort(), 4000);
@@ -83,7 +100,8 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
       body: JSON.stringify({ type: 'event', payload: {
         website: config.websiteId, hostname: config.hostname,
         url: `${basePath}${route}`, title: routes[route],
-        ...(event ? { name: event.name, ...(event.data ? { data: event.data } : {}) } : {}),
+        ...(event ? { name: event.name,
+          ...(consent?.choice === 'accepted' && event.data ? { data: event.data } : {}) } : {}),
       } }),
     }).catch(() => undefined).finally(() => {
       clearTimeout(timeout);
@@ -135,6 +153,7 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
         window.removeEventListener('storage', storageChanged);
         document.removeEventListener('visibilitychange', checkExpiry);
         cancel();
+        lastPage = null;
         config = null;
         state = initial;
       };
@@ -152,10 +171,12 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
       update();
     },
     isPage: (path: string) => Object.hasOwn(routes, normalize(path)),
+    canCollectPage,
     trackPage(path: string) {
       const route = normalize(path);
-      if (!Object.hasOwn(routes, route)) { lastPage = null; return; }
-      if (lastPage !== route && send(route)) lastPage = route;
+      if (lastPage === route) return;
+      lastPage = null;
+      if (Object.hasOwn(routes, route) && send(route)) lastPage = route;
     },
     searchCompleted(resultCount: number) {
       const route = currentRoute();

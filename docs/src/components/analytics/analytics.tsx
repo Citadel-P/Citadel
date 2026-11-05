@@ -29,34 +29,90 @@ export function Analytics({ routes, siteUrl, children }: {
   const [client] = useState(() => createAnalytics(routes, siteUrl));
   const state = useSyncExternalStore(client.subscribe, client.snapshot, client.serverSnapshot);
   const pathname = usePathname();
-  const notice = useRef<HTMLElement>(null);
   useEffect(() => client.start(), [client]);
   useEffect(() => client.trackPage(pathname), [client, pathname, state.choice, state.enabled]);
-  useEffect(() => {
-    if (!state.editing) return;
-    const trigger = document.activeElement;
-    notice.current?.focus({ preventScroll: true });
-    return () => {
-      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true });
-    };
-  }, [state.editing]);
-  const visible = state.enabled && (state.editing || (!state.choice && client.isPage(pathname)));
+  const visible = state.enabled && !state.choice && client.isPage(pathname);
   return <Context.Provider value={client}>
     {children}
-    {visible && <section ref={notice} tabIndex={-1} className="docs-analytics-notice" aria-label="Optional analytics">
-      <div>
-        <strong>Help improve Citadel</strong>
-        <p>Allow cookie-free analytics to help us improve guides and search?</p>
-        <p className="docs-analytics-assurance">No advertising or session recording. <Link href="/privacy">Privacy details</Link></p>
-        {state.preview && <p className="docs-analytics-assurance">Local preview — no analytics are sent.</p>}
-      </div>
+    {visible && <section hidden={state.editing} className="docs-analytics-notice" aria-label="Optional analytics">
+      <strong>Help improve Citadel</strong>
+      <p>
+        Analytics help us understand what’s useful. Reject non-essentials keeps basic analytics.{' '}
+        <span className="docs-analytics-description-links">
+          <Link href="/privacy">Privacy details</Link>{' · '}
+          <button className="docs-analytics-inline-preferences" type="button" aria-label="Manage preferences"
+            onClick={() => client.edit(true)}>Preferences</button>
+        </span>
+      </p>
       <div className="docs-analytics-actions">
-        <button type="button" onClick={() => client.choose('declined')}>Decline</button>
-        <button type="button" className="docs-analytics-accept" onClick={() => client.choose('accepted')}>Accept</button>
-        {state.editing && state.choice && <button type="button" onClick={() => client.edit(false)}>Close</button>}
+        <button type="button" onClick={() => client.choose('basic')}>Reject non-essentials</button>
+        <button type="button" className="docs-analytics-accept" onClick={() => client.choose('accepted')}>Accept all</button>
       </div>
     </section>}
+    {state.enabled && state.editing && <PreferencesDialog client={client} choice={state.choice} />}
   </Context.Provider>;
+}
+
+function PreferencesDialog({ client, choice }: { client: Client; choice: Parameters<Client['choose']>[0] | null }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [selected, setSelected] = useState(choice ?? 'basic');
+  useEffect(() => {
+    const trigger = document.activeElement;
+    const element = dialog.current;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    element?.showModal();
+    element?.focus({ preventScroll: true });
+    return () => {
+      element?.close();
+      document.body.style.overflow = overflow;
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true });
+    };
+  }, []);
+  return <dialog ref={dialog} tabIndex={-1} className="docs-analytics-dialog"
+    aria-labelledby="docs-analytics-title" aria-describedby="docs-analytics-description"
+    onCancel={() => client.edit(false)}
+    onKeyDown={(event) => {
+      if (event.key !== 'Tab') return;
+      const controls = event.currentTarget.querySelectorAll<HTMLElement>('button, a[href], input');
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }}>
+    <div className="docs-analytics-heading">
+      <h2 id="docs-analytics-title">Analytics preferences</h2>
+      <button className="docs-analytics-close" type="button" aria-label="Close" onClick={() => client.edit(false)}>
+        <span aria-hidden="true">×</span>
+      </button>
+    </div>
+    <p id="docs-analytics-description">
+      Choose how you help improve Citadel.{' '}
+      <Link href="/privacy" onClick={() => client.edit(false)}>Privacy details</Link>
+    </p>
+    <form onSubmit={(event) => { event.preventDefault(); client.choose(selected); }}>
+      <fieldset className="docs-analytics-options">
+        <legend className="sr-only">Analytics level</legend>
+        {([
+          ['basic', 'Basic', 'Public page visits and selected interactions.'],
+          ['accepted', 'Full', 'Broader usage measurement with additional event details.'],
+          ['declined', 'Off', 'No analytics collected.'],
+        ] as const).map(([value, title, description]) => <label key={value} className="docs-analytics-option">
+          <span><strong>{title}</strong><span>{description}</span></span>
+          <input type="radio" name="analytics-level" value={value} aria-label={title}
+            checked={selected === value} onChange={() => setSelected(value)} />
+        </label>)}
+      </fieldset>
+      <div className="docs-analytics-actions">
+        <button type="submit" className="docs-analytics-accept">Save preferences</button>
+      </div>
+    </form>
+  </dialog>;
 }
 
 export function PageHelpfulness({ path }: { path: string }) {
@@ -66,7 +122,7 @@ export function PageHelpfulness({ path }: { path: string }) {
 
 function Helpfulness({ client, path }: { client: Client; path: string }) {
   const state = useSyncExternalStore(client.subscribe, client.snapshot, client.serverSnapshot);
-  if (!state.collecting) return null;
+  if (!state.collecting || !client.canCollectPage(path)) return null;
   const answered = client.hasFeedback(path);
   return <section className="docs-helpfulness" aria-label="Page feedback">
     <span>Was this page helpful?</span>

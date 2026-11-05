@@ -103,22 +103,36 @@ available on touch devices, using Fumadocs' existing scroll-area behavior.
 ### Optional documentation analytics
 
 The production docs use a separate **Citadel Docs** website in the existing
-self-hosted Umami instance. `src/components/analytics` owns opt-in consent and
-best-effort page views and a fixed set of search/feedback events. The root layout provides an allowlist of page paths and
+self-hosted Umami instance. `src/components/analytics` owns basic/full/off choices and
+best-effort page views and explicit interaction allowlists. The root layout provides an allowlist of page paths and
 titles from the documentation source; redirects, unknown paths, search text,
 queries, fragments and referrers are not collected. The embedded API reference
 is included; the separate `api-out` export has no analytics integration.
 
 Collection requires both the build URL and browser origin to be
 `https://docs.citadelplane.com`. The browser fetches the public runtime config at
-`https://analytics.citadelplane.com/docs/config.json`, then sends accepted page
+`https://analytics.citadelplane.com/docs/config.json`, then sends permitted page
 views and events to `/docs/api/send` on that host. Missing, disabled or invalid configuration
 fails closed. No website ID, secret or additional GitHub Actions variable is
 needed in the build. Existing `DOCS_SITE_URL` publication configuration suffices.
 
-The consent notice and preferences follow the website's opt-in behavior, with
-an independent docs-origin choice, 180-day expiry, cross-tab withdrawal and
-DNT/GPC handling. Requests omit credentials and referrers, time out after four
+Nothing is collected before a choice. **Reject non-essentials enables basic
+measurement** of source-listed public articles (excluding `/privacy`), plus only
+`page_helpful`, `page_unhelpful`, `install_command_copied` and
+`openapi_download_requested` on eligible pages. Both the page and event allowlists
+are enforced at the send boundary. Basic events never contain a `data` object.
+**Accept all** retains all source-listed pages and the full event set below,
+including its validated properties. Search remains full-only.
+
+**Preferences** and **Analytics preferences** open a centered dialog with Basic,
+Full and **Off** choices. Basic is preselected when no choice is saved; collection
+remains disabled until the visitor confirms. Changes apply on **Save preferences**;
+closing or pressing Escape discards unsaved changes and restores focus to the trigger.
+Docs preferences remain independent of the website, with 180-day expiry,
+cross-tab changes and DNT/GPC blocking both levels. Expiry disables collection.
+Changing between basic and full cancels pending requests without recounting the
+current page; navigating away and back counts a new pageview.
+Requests omit credentials and referrers, time out after four
 seconds and are never retried. See the [visitor privacy page](content/docs/privacy.md).
 
 The analytics provider wraps Fumadocs' root provider so its search dialog shares
@@ -137,15 +151,15 @@ no document-wide click scraping or search-query telemetry is involved.
 Search events are attributed to the page where search was used. Intermediate
 keystrokes, empty queries, pending requests and search failures are not counted.
 A search interaction records its final query's outcome once, so counts do not
-represent every query tried. Helpfulness appears only for consenting readers
-without a blocking privacy signal, on regular pages and the embedded API page.
+represent every query tried. Helpfulness appears only when the chosen level
+permits the current page and no browser privacy signal blocks collection.
 Responses are deduplicated per page in memory until reload; no vote history is
 persisted. Delivery is best-effort, without retries or acknowledgement guarantees.
 
 Use `search_no_results / search_used` to assess completed searches with no hits,
 compare `search_result_opened` against `search_used` for result selection, and
 review `page_unhelpful` alongside page views and total feedback by page. These
-are counts from consenting readers, not unique users or proof of successful
+are counts from measured readers, not unique users or proof of successful
 installation. Search terms cannot be reconstructed from this instrumentation;
 use issues and support conversations to understand missing topics.
 
@@ -155,8 +169,12 @@ the sibling **Citadel.Web** repository's `scripts/analytics/add-docs.py`; its
 before publishing this docs build through the existing release workflow.
 
 The shared Umami stack uses monthly salt rotation to estimate returning readers
-within each UTC calendar month. Docs and portal visitors remain separate. The
-Retention report covers consenting, unblocked readers; IP/browser changes and
+within each UTC calendar month. Umami derives its pseudonymous session ID from
+the website ID, IP address, user agent and rotating salt; no browser visitor ID
+or account identity is added. These clients do not retain Umami's cache token,
+so separate visit IDs use hourly grouping rather than exact browser sessions.
+Docs and portal visitors remain separate. The Retention report covers permitted,
+unblocked traffic; IP/browser changes and
 month boundaries break recognition. Existing installations need the explicit
 salt-setting rollout in `Citadel.Web/docs/ANALYTICS.md`; historical daily IDs are
 not retroactively joined.
@@ -165,7 +183,9 @@ not retroactively joined.
 boards for the docs and portal. The docs board includes traffic, entry/exit pages,
 installation-copy intent, completed searches without results, and helpfulness by
 page. Its page tables count measured readers, while its event table counts
-interactions. Use the separate Retention report for return visits. Existing board
+interactions. Traffic and feedback combine basic and full measurement; search
+reports cover only full mode. Neither represents readers who disabled analytics.
+Use the separate Retention report for return visits. Existing board
 customizations survive reruns.
 
 Browser regression checks intercept all collector requests against a local
@@ -178,8 +198,8 @@ NEXT_PUBLIC_DOCS_URL=https://docs.citadelplane.com npm run build --prefix docs
 npm run test:analytics --prefix docs
 ```
 
-They cover consent/expiry, DNT/GPC, storage failures, clean payloads, navigation,
-cross-tab withdrawal, collector failures, unknown/local pages, mobile controls,
+They cover basic/full/off choices, expiry, DNT/GPC, storage failures, clean payloads,
+navigation deduplication, cross-tab changes, collector failures, unknown/local pages, mobile controls,
 search outcomes, keyboard selection, query exclusion and page feedback.
 
 ### Publication URL
