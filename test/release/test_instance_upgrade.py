@@ -109,6 +109,25 @@ class PublishedUpgradeTests(unittest.TestCase):
             execute.assert_called_once()
             self.assertNotIn('private', str(failure.exception))
 
+    def test_core_health_waits_for_a_running_healthy_container(self):
+        fixture = upgrade.UpgradeFixture('unused', Path('/unused'))
+        states = [dict(Running=True, Health=dict(Status='starting')),
+                  dict(Running=False, Health=dict(Status='healthy')),
+                  dict(Running=True, Health=dict(Status='healthy'))]
+        with patch.object(fixture, 'json_command', side_effect=[[dict(State=s)] for s in states]), \
+                patch.object(upgrade.time, 'sleep') as sleep:
+            fixture.wait_core_healthy('target')
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_core_health_timeout_does_not_accept_an_unhealthy_target(self):
+        fixture = upgrade.UpgradeFixture('unused', Path('/unused'))
+        with patch.object(fixture, 'json_command', return_value=[dict(
+                State=dict(Running=True, Health=dict(Status='unhealthy')))]), \
+                patch.object(upgrade.time, 'monotonic', side_effect=[0, 91]), \
+                patch.object(upgrade.time, 'sleep'):
+            with self.assertRaisesRegex(AssertionError, 'did not become Docker-healthy'):
+                fixture.wait_core_healthy('target')
+
     def test_exited_helper_removed_during_finalization_is_not_a_runner_failure(self):
         fixture = upgrade.UpgradeFixture('unused', Path('/unused'))
         listed = subprocess.CompletedProcess([], 0, b'helper-id\n', b'')

@@ -134,9 +134,9 @@ impl Runner {
         let intent: HelperLaunchIntent = self.state().read(&self.intent.file("launch")).unwrap();
         let reg = &intent.registration;
         json!({"Id": HELPER, "Name": format!("/{}", intent.helper_name()), "Image": format!("sha256:{}", "d".repeat(64)),
-            "Config": {"Hostname": &DATABASE[..12], "Env": [format!("TMPDIR={}", reg.state_directory.display())], "User": format!("{}:{}", reg.executor_uid, reg.executor_gid), "Healthcheck": {"Test": ["NONE"]}, "Image": intent.operation.plan.helper_image, "Labels": {verification::NONCE: intent.nonce.to_string(), verification::OPERATION: intent.operation.id.to_string()}},
+            "Config": {"Hostname": &DATABASE[..12], "Env": ["TMPDIR=/tmp"], "User": format!("{}:{}", reg.executor_uid, reg.executor_gid), "Healthcheck": {"Test": ["NONE"]}, "Image": intent.operation.plan.helper_image, "Labels": {verification::NONCE: intent.nonce.to_string(), verification::OPERATION: intent.operation.id.to_string()}},
             "State": {"Running": true, "Paused": false, "Restarting": false, "Status": "running", "StartedAt": "2026-11-03T00:00:00Z"}, "RestartCount": 0,
-            "HostConfig": {"RestartPolicy": {"Name": "no"}, "NetworkMode": format!("container:{}", reg.database_container_id), "Privileged": false, "ReadonlyRootfs": true, "AutoRemove": false, "Tmpfs": null},
+            "HostConfig": {"RestartPolicy": {"Name": "no"}, "NetworkMode": format!("container:{}", reg.database_container_id), "Privileged": false, "ReadonlyRootfs": true, "AutoRemove": false, "Tmpfs": {"/tmp":"rw,noexec,nosuid,size=64m"}},
             "Path": "/app/citadel-server", "Args": ["run-update-helper", "--state-directory", reg.state_directory, "--operation-id", intent.operation.id.to_string(), "--fence", intent.operation.fence.to_string()],
             "Mounts": [{"Type":"bind", "Source":reg.directory, "Destination":reg.directory, "RW":true}, {"Type":"bind", "Source":reg.state_directory, "Destination":reg.state_directory, "RW":true}, {"Type":"bind", "Source":SOCKET, "Destination":SOCKET, "RW":true}, {"Type":"volume","Name":reg.core_volume,"Destination":"/app/data","RW":false}]
         })
@@ -186,13 +186,8 @@ impl ProcessRunner for Runner {
                     ] {
                         assert!(rest.contains(&required));
                     }
-                    assert!(
-                        rest.contains(
-                            &format!("TMPDIR={}", saved.registration.state_directory.display())
-                                .as_str()
-                        )
-                    );
-                    assert!(!rest.iter().any(|arg| arg.starts_with("--tmpfs")));
+                    assert!(rest.contains(&"TMPDIR=/tmp"));
+                    assert!(rest.contains(&"--tmpfs=/tmp:rw,noexec,nosuid,size=64m"));
                     assert_eq!(rest.iter().filter(|s| **s == "--mount").count(), 4);
                     assert!(
                         rest.contains(
@@ -252,13 +247,7 @@ impl ProcessRunner for Runner {
                     "/app/citadel-server",
                     "update-helper-handoff",
                 ] => {
-                    assert_eq!(
-                        *temporary,
-                        format!(
-                            "TMPDIR={}",
-                            self.intent.registration.state_directory.display()
-                        )
-                    );
+                    assert_eq!(*temporary, "TMPDIR=/tmp");
                     self.exchanges.fetch_add(1, Ordering::SeqCst);
                     let output =
                         execute_helper_handoff(request.stdin.as_ref().unwrap(), self, cancellation)
@@ -313,8 +302,14 @@ impl ProcessRunner for Runner {
                         "prepare-during-check" => {
                             super::preparation::record_fixture(&self.state(), &self.intent);
                         }
-                        "temporary-state" => helper["Config"]["Env"] = json!(["TMPDIR=/tmp"]),
+                        "temporary-state" => {
+                            helper["Config"]["Env"] = json!([format!(
+                                "TMPDIR={}",
+                                self.intent.registration.state_directory.display()
+                            )]);
+                        }
                         "unbounded-temp" => helper["HostConfig"]["Tmpfs"] = json!({"/tmp":"rw"}),
+                        "missing-tmpfs" => helper["HostConfig"]["Tmpfs"] = Value::Null,
                         "missing-temp" => helper["Config"]["Env"] = json!([]),
                         "wrong-user" => helper["Config"]["User"] = json!("unexpected"),
                         "auto-remove" => helper["HostConfig"]["AutoRemove"] = json!(true),
@@ -665,21 +660,10 @@ impl ProcessRunner for CoreNamespace {
                 payload.operation = self.helper.intent.operation.clone();
                 let temporary = request
                     .arguments
-                    .iter_mut()
+                    .iter()
                     .find(|argument| argument.to_string_lossy().starts_with("TMPDIR="))
                     .unwrap();
-                assert_eq!(
-                    *temporary,
-                    std::ffi::OsString::from(format!(
-                        "TMPDIR={}",
-                        self.intent.registration.state_directory.display()
-                    ))
-                );
-                *temporary = format!(
-                    "TMPDIR={}",
-                    self.helper.intent.registration.state_directory.display()
-                )
-                .into();
+                assert_eq!(*temporary, std::ffi::OsString::from("TMPDIR=/tmp"));
                 request.stdin = Some(serde_json::to_vec(&payload).unwrap());
                 return self.helper.run(request, cancellation).await;
             }
@@ -689,8 +673,6 @@ impl ProcessRunner for CoreNamespace {
                 let mut value: Value = serde_json::from_slice(&output.stdout).unwrap();
                 let reg = &self.intent.registration;
                 value[0]["Args"][2] = json!(reg.state_directory);
-                value[0]["Config"]["Env"] =
-                    json!([format!("TMPDIR={}", reg.state_directory.display())]);
                 value[0]["Config"]["User"] =
                     json!(format!("{}:{}", reg.executor_uid, reg.executor_gid));
                 for (index, path) in [(0, &reg.directory), (1, &reg.state_directory)] {
@@ -993,6 +975,7 @@ async fn invalid_created_helpers_never_start() {
         "wrong-mount",
         "temporary-state",
         "unbounded-temp",
+        "missing-tmpfs",
         "missing-temp",
         "writable-data",
         "wrong-network",

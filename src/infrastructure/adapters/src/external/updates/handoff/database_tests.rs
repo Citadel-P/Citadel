@@ -148,7 +148,7 @@ async fn eligibility_reports_database_blockers_without_mutation() {
 }
 
 #[tokio::test]
-async fn helper_profile_is_stable_for_core_and_strict_for_database_updates() {
+async fn core_and_database_helpers_require_bounded_disposable_scratch_storage() {
     let base = Runner::new().await;
     let home = tempfile::tempdir().unwrap();
     let token = CancellationToken::new();
@@ -161,18 +161,12 @@ async fn helper_profile_is_stable_for_core_and_strict_for_database_updates() {
                 intent.operation.plan.database = Some(plan());
                 intent.operation.plan.target = intent.operation.plan.source.clone();
                 helper["Config"]["Hostname"] = json!(&HELPER[..12]);
-                helper["Config"]["Env"] = json!(["TMPDIR=/tmp"]);
-                helper["HostConfig"]["Tmpfs"] = json!({"/tmp":"rw,noexec,nosuid,size=64m"});
                 helper["HostConfig"]["NetworkMode"] = json!(intent.registration.network);
                 helper["NetworkSettings"]["Networks"] =
                     json!({intent.registration.network.clone(): {}});
             }
             if !valid {
-                helper["HostConfig"]["Tmpfs"] = if database {
-                    Value::Null
-                } else {
-                    json!({"/tmp":"rw,noexec,nosuid,size=64m"})
-                };
+                helper["HostConfig"]["Tmpfs"] = Value::Null;
             }
             runner.helper = Some(helper);
             let docker = LocalDocker {

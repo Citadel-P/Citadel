@@ -1,7 +1,9 @@
 import copy
 import importlib.util
+import io
 import json
 from pathlib import Path
+import tarfile
 import unittest
 from unittest.mock import call, patch
 
@@ -68,5 +70,50 @@ class CandidateIdentityTests(unittest.TestCase):
                 if failure=='architecture': inspected['Architecture']='arm64'
                 if failure=='protocol': actual['protocolVersion']=1
                 if failure=='qualification': actual['qualificationBuild']=True
-                with patch.object(candidates.release.version,'run',side_effect=[json.dumps(actual),json.dumps([inspected])]):
+                with patch.object(candidates.release.version,'run',side_effect=[json.dumps(actual),json.dumps([inspected]), ValueError('Unverified export')]):
                     with self.assertRaises(ValueError): candidates.check_image('candidate',metadata,'amd64',image['Id'])
+
+    def test_manifest_image_id_requires_matching_exported_config_bytes(self):
+        metadata = dict(productVersion='1.2.3', displayVersion='1.2.3',
+                        informationalVersion='1.2.3+fixture', sourceRevision='a'*40)
+        binary = dict(version='1.2.3', informationalVersion='1.2.3+fixture', protocolVersion=2)
+        config = b'{"architecture":"amd64","config":{"Labels":{}},"rootfs":{"diff_ids":["original"]}}'
+        digest = candidates.release.digest(config)
+        image = dict(Architecture='amd64', Id='sha256:'+'b'*64, Config={'Labels':{
+            'org.opencontainers.image.version':'1.2.3',
+            'org.opencontainers.image.revision':'a'*40,
+            'com.citadel.informational-version':'1.2.3+fixture'}})
+        for mode in ['exact', 'changed', 'ambiguous', 'missing', 'symlink']:
+            with self.subTest(mode=mode):
+                def command(*args):
+                    if args[:2] == ('docker', 'run'):
+                        return json.dumps(binary)
+                    if args[:3] == ('docker', 'image', 'inspect'):
+                        return json.dumps([image])
+                    self.assertEqual(args[:4], ('docker', 'image', 'save', '--output'))
+                    self.assertEqual(args[5], image['Id'])
+                    # Retain a digest-looking filename even when its bytes differ.
+                    name = 'blobs/sha256/' + digest.removeprefix('sha256:')
+                    manifest = [{'Config':name}]
+                    if mode == 'ambiguous': manifest *= 2
+                    with tarfile.open(args[4], 'w') as output:
+                        entries = [('manifest.json', json.dumps(manifest).encode())]
+                        if mode != 'missing':
+                            entries.append((name, config if mode != 'changed' else config.replace(b'original', b'changed')))
+                        for filename, data in entries:
+                            entry = tarfile.TarInfo(filename)
+                            if filename == name and mode == 'symlink':
+                                entry.type = tarfile.SYMTYPE
+                                entry.linkname = 'manifest.json'
+                                output.addfile(entry)
+                            else:
+                                entry.size = len(data)
+                                output.addfile(entry, io.BytesIO(data))
+                    return ''
+                with patch.object(candidates.release.version, 'run', side_effect=command):
+                    if mode == 'exact':
+                        result = candidates.check_image('candidate', metadata, 'amd64', digest)
+                        self.assertEqual(result['configDigest'], digest)
+                    else:
+                        with self.assertRaises(ValueError):
+                            candidates.check_image('candidate', metadata, 'amd64', digest)

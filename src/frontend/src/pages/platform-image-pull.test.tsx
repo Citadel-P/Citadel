@@ -89,6 +89,9 @@ it('starts pulling from image details immediately and keeps one stream when navi
     );
     await act(async () => {
       await navigate('/platforms/platform-1/images');
+      // Navigation starts a lazy import. Await the screen before checking its
+      // request; compilation time is unrelated to the active pull's lifetime.
+      await vi.dynamicImportSettled();
     });
     await waitFor(() => expect(listed).toHaveBeenCalled());
     expect(screen.getByRole('dialog', { name: 'Pull Image' })).toBe(sheet);
