@@ -86,6 +86,17 @@ class UpgradeFixture(registration.Fixture):
                             "--project", self.project, "--compose-file",
                             self.installation + "/docker-compose.yml", *(["--refresh"] if refresh else []))
 
+    def wait_core_healthy(self, core):
+        # API admission can precede Docker's next periodic health probe. Keep
+        # installation validation strict, but wait for its health prerequisite.
+        deadline = time.monotonic() + 90
+        while True:
+            state = self.json_command("inspect", core)[0]["State"]
+            if state.get("Running") and state.get("Health", {}).get("Status") == "healthy":
+                return
+            require(time.monotonic() < deadline, "Updated Core did not become Docker-healthy")
+            time.sleep(1)
+
     def sql(self, database, statement):
         # Only the fixture-created database container is used; no host connection.
         return self.docker("exec", database, "psql", "-U", "citadel", "-d", "citadel",
@@ -205,6 +216,7 @@ class UpgradeFixture(registration.Fixture):
         require(self.keys(refreshed["coreContainerId"]) == keys, "Update changed recovery keys")
         require(self.sql(database, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid") == ciphertext,
                 "Update changed the encrypted fixture credential")
+        self.wait_core_healthy(refreshed["coreContainerId"])
         checked = self.utility("check-update-installation")
         require(checked["database"]["instanceId"] == registered["instanceId"], "Instance identity changed")
         self.restore_checkpoint(operation_id, registered, password, ciphertext)

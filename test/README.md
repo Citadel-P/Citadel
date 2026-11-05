@@ -312,7 +312,8 @@ Docker runner. They cover launch/binding exclusivity, lock release before helper
 startup, verified create/bind/start ordering, missing start binding, wrong user/mounts,
 automatic removal, create/start cancellation and ambiguous timeout retention.
 Launch retries cannot create a second helper or replay start. The helper profile
-requires the exact PostgreSQL network namespace and a read-only Core data mount;
+requires the exact PostgreSQL network namespace, a read-only Core data mount,
+and bounded scratch storage at `/tmp` outside the durable update-state directory;
 host networking and writable data mounts fail verification. Stopped-source checks
 reject restart, unclean exit, lost PostgreSQL and changed helper profiles. They also cover
 stale/dead/restarted helpers, retained evidence after helper loss, busy

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tarfile
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -15,6 +16,28 @@ def run_acceptance(core, agent):
     subprocess.run(["bash", "test/scripts/test-agent-acceptance.sh", core, agent], check=True)
     subprocess.run([sys.executable, "test/scripts/test-update-registration.py", core], check=True)
     subprocess.run([sys.executable, "test/scripts/test-instance-upgrade-local.py", "--runtime-image", core], check=True)
+
+
+def loaded_config_digest(image_id):
+    # Containerd-backed Docker stores expose a manifest digest as ImageInspect.Id.
+    # Export that immutable image ID and hash its config bytes, rather than
+    # mistaking the manifest ID for the original candidate's config digest.
+    with tempfile.TemporaryDirectory() as temporary:
+        archive = Path(temporary) / "loaded.tar"
+        release.version.run("docker", "image", "save", "--output", str(archive), image_id)
+        with tarfile.open(archive) as source:
+            def read(name):
+                member = source.getmember(name)
+                if not member.isfile() or member.size > 16 * 1024 * 1024:
+                    raise ValueError("Invalid loaded candidate metadata")
+                return source.extractfile(member).read()
+            try:
+                manifests = json.loads(read("manifest.json"))
+                if not isinstance(manifests, list) or len(manifests) != 1:
+                    raise ValueError("Expected one loaded candidate image")
+                return release.digest(read(manifests[0]["Config"]))
+            except (KeyError, TypeError, tarfile.TarError) as error:
+                raise ValueError("Cannot verify loaded candidate config") from error
 
 
 def check_image(image, metadata, arch, config_digest):
@@ -30,10 +53,11 @@ def check_image(image, metadata, arch, config_digest):
                 "org.opencontainers.image.revision": metadata["sourceRevision"],
                 "com.citadel.informational-version": metadata["informationalVersion"]}
     if (any(labels.get(k) != v for k, v in expected.items()) or info["Architecture"] != arch
-            or actual.get("protocolVersion") != release.POLICY["protocolVersion"]
-            or info["Id"] != config_digest):
+            or actual.get("protocolVersion") != release.POLICY["protocolVersion"]):
         raise ValueError(f"{image}: OCI metadata differs from resolved identity")
-    return dict(identity=actual, configDigest=info["Id"], architecture=arch)
+    if info["Id"] != config_digest and loaded_config_digest(info["Id"]) != config_digest:
+        raise ValueError(f"{image}: loaded config differs from the candidate archive")
+    return dict(identity=actual, configDigest=config_digest, architecture=arch)
 
 
 def check_upgrade_descriptor(image, metadata):

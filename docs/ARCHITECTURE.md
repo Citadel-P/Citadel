@@ -664,9 +664,9 @@ replacement container/version, and binds its incarnation before target acceptanc
 Target startup distinguishes a database operation by its actual engine version;
 it still verifies the exact Core container, catalog, keys and committed receipt.
 No timeout replays replacement or silently restarts the source. Temporary Docker and inspection files
-use a bounded `/tmp` mount for database operations. Core operations preserve the
-source helper contract (`TMPDIR` points to the registered state directory, without
-a `/tmp` tmpfs), including target-side acceptance and helper commands. Database
+use a bounded `/tmp` tmpfs for both Core and database operations, including helper
+commands. Abrupt helper termination cannot leave disposable files in the durable
+update-state directory; startup still rejects unexpected entries there. Database
 replacement rechecks the approved input fingerprint after shutdown and immediately
 before submitting Compose, so edits during shutdown cannot be applied silently.
 

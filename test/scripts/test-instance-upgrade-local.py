@@ -171,10 +171,7 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         require(self.sql(target, "SELECT count(*) FROM activityevents WHERE eventtype='InstanceUpdateCompleted'") == b"1", "Duplicate or missing completion")
         # Portal readiness is independent of Docker's 30-second health sample.
         # The installation diagnostic deliberately requires the latter as well.
-        healthy_deadline = time.monotonic() + 90
-        while self.json_command("inspect", refreshed["coreContainerId"])[0]["State"]["Health"]["Status"] != "healthy":
-            require(time.monotonic() < healthy_deadline, "Updated Core did not become Docker-healthy")
-            time.sleep(1)
+        self.wait_core_healthy(refreshed["coreContainerId"])
         self.utility("check-update-installation")
         self.login(password)
         print("PASS: database review, approval replay, replacement, retained data/keys, target acceptance and registration refresh", flush=True)

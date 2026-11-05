@@ -49,6 +49,11 @@ for this verification. The shared stable/development fixtures under
 consumed by Rust tests. No source-to-target upgrade eligibility is implied by
 a valid image signature.
 
+Candidate acceptance verifies the loaded image's config digest against the original
+OCI archive. When Docker's containerd image store reports a manifest digest as the
+image ID, acceptance exports that immutable image ID and hashes the actual config
+bytes; matching labels alone cannot establish artifact identity.
+
 New candidate evidence also records Core's `upgrade-descriptor-json` output.
 Acceptance runs it without network access on each architecture and compares its
 version, migration-catalog digest, installer/update protocols and source list with

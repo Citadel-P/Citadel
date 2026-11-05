@@ -183,20 +183,8 @@ pub(super) async fn helper_container(
     if actual["Config"]["Hostname"] != hostname {
         return Err(conflict());
     }
-    // Core helpers are launched by the source build and survive replacement.
-    // Keep that profile stable; only database operations require scratch tmpfs.
-    let database_update = intent.operation.plan.database.is_some();
-    let temporary = if database_update {
-        "TMPDIR=/tmp".to_owned()
-    } else {
-        format!("TMPDIR={}", intent.registration.state_directory.display())
-    };
-    let tmpfs = &actual["HostConfig"]["Tmpfs"];
-    let valid_tmpfs = if database_update {
-        *tmpfs == json!({"/tmp":"rw,noexec,nosuid,size=64m"})
-    } else {
-        tmpfs.is_null() || tmpfs.as_object().is_some_and(|value| value.is_empty())
-    };
+    // A killed helper must not leave disposable Docker configuration in the
+    // durable journal directory, where unknown entries prevent safe admission.
     if actual["Id"] != *id
         || actual["Name"] != format!("/{}", intent.helper_name())
         || actual["Config"]["Image"] != intent.operation.plan.helper_image
@@ -219,12 +207,12 @@ pub(super) async fn helper_container(
             }
         || actual["HostConfig"]["Privileged"] != false
         || actual["HostConfig"]["ReadonlyRootfs"] != true
-        || !valid_tmpfs
+        || actual["HostConfig"]["Tmpfs"] != json!({"/tmp":"rw,noexec,nosuid,size=64m"})
         || !actual["Config"]["Env"].as_array().is_some_and(|env| {
             env.iter()
                 .filter_map(Value::as_str)
                 .filter(|value| value.starts_with("TMPDIR="))
-                .eq([temporary.as_str()])
+                .eq(["TMPDIR=/tmp"])
         })
         || actual["HostConfig"]["AutoRemove"] != false
         || actual["Config"]["Healthcheck"]["Test"] != json!(["NONE"])
