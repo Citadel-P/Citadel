@@ -8,6 +8,10 @@ async fn nested(f: &Fixture, role: &str, args: &[&str]) -> String {
     docker(&command).await
 }
 
+async fn service(f: &Fixture, name: &str) -> Value {
+    serde_json::from_str(&nested(f, "swarm-manager", &["service", "inspect", name]).await).unwrap()
+}
+
 fn native_manifest_reference(manifest: &Value, image: &Value) -> String {
     let native = "registry:5000/citadel-agent:acceptance-native";
     let Some(entries) = manifest["manifests"].as_array() else {
@@ -322,10 +326,7 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
         assert_eq!(coverage["missingNodes"], 0, "{coverage}");
         let stack = health::swarm_stack(f, id, role).await;
         let service_name = format!("citadel-node-agent-{}", id.replace('-', ""));
-        let spec: Value = serde_json::from_str(
-            &nested(f, "swarm-manager", &["service", "inspect", &service_name]).await,
-        )
-        .unwrap();
+        let spec = service(f, &service_name).await;
         assert!(
             spec[0]["Spec"]["TaskTemplate"]["ContainerSpec"]["Image"]
                 .as_str()
@@ -473,10 +474,47 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
             })
         })
         .await;
+        let before_repair = service(f, &service_name).await;
         operation(f, id, "repair").await;
         covered(f, id).await;
-        operation(f, id, "upgrade").await;
-        covered(f, id).await;
+        let repaired = service(f, &service_name).await;
+        assert!(
+            repaired[0]["Version"]["Index"].as_u64().unwrap()
+                > before_repair[0]["Version"]["Index"].as_u64().unwrap()
+        );
+        assert_eq!(
+            repaired[0]["Spec"]["TaskTemplate"]["ContainerSpec"]["Image"],
+            spec[0]["Spec"]["TaskTemplate"]["ContainerSpec"]["Image"],
+            "repair must preserve the approved pinned image"
+        );
+
+        let updates = f.api(Method::GET, "/api/v1/updates/agents", None).await;
+        let target_id = format!("swarm:{id}");
+        let targets: Vec<_> = updates["targets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|target| target["id"] == target_id)
+            .collect();
+        assert_eq!(targets.len(), 1, "{updates}");
+        let target = targets[0];
+        assert_eq!(target["kind"], "SwarmService");
+        assert_eq!(target["nodes"], nodes.len());
+        assert_eq!(target["supported"], true, "{target}");
+        assert!(
+            matches!(target["status"].as_str(), Some("Current" | "Unknown")),
+            "{target}"
+        );
+        // Candidates may be unpublished; neither an unknown release nor this same-version
+        // Core/Agent pair permits approving an update.
+        let (status, problem) = f
+            .request(
+                Method::POST,
+                "/api/v1/updates/agents/review",
+                Some(json!({"targets":[target_id]})),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CONFLICT, "{problem}");
 
         f.wait(&format!("/api/v1/stacks/{stack}"), |v| {
             v["probeHealth"]["status"] == "Healthy"
@@ -521,7 +559,7 @@ pub(super) async fn exercise(f: &mut Fixture, image: &str, public_key: &str, cor
             nested(f, worker, &["network", "rm", "acceptance-worker-network"]).await;
         }
         println!(
-            "Swarm {connector}: Core install, pinned image, worker routing, volume browsing, manager/worker recovery, repair, upgrade and removal passed"
+            "Swarm {connector}: Core install, pinned image, worker routing, volume browsing, manager/worker recovery, repair rollout, central update discovery and removal passed"
         );
     }
 }
