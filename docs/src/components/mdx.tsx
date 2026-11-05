@@ -3,6 +3,7 @@ import { ImageZoom } from 'fumadocs-ui/components/image-zoom';
 import type { MDXComponents } from 'mdx/types';
 import type { ImgHTMLAttributes } from 'react';
 import { docsAssetUrl } from '@/lib/shared';
+import { DocumentationCodeBlock, InstallationStep } from './installation-commands';
 
 function DocumentationImage(props: ImgHTMLAttributes<HTMLImageElement>) {
   const Image = defaultMdxComponents.img;
@@ -19,6 +20,8 @@ function DocumentationImage(props: ImgHTMLAttributes<HTMLImageElement>) {
 export function getMDXComponents(components?: MDXComponents) {
   return {
     ...defaultMdxComponents,
+    pre: DocumentationCodeBlock,
+    InstallationStep,
     img: DocumentationImage,
     ...components,
   } satisfies MDXComponents;

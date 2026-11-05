@@ -12,6 +12,8 @@ The installation uses published container images.
 For a new installation, create a directory and download the Compose file and
 environment template:
 
+<InstallationStep name="download">
+
 ```bash
 mkdir -p citadel
 cd citadel
@@ -19,6 +21,8 @@ curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/instal
 curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
 chmod 600 .env
 ```
+
+</InstallationStep>
 
 Keep both files in this directory. For an existing installation, follow
 [upgrade and rollback](/operations/upgrade-and-rollback) and keep your
@@ -82,21 +86,29 @@ For a complete reverse-proxy setup using the same Compose installation, follow
 For local HTTP, run from your `citadel`
 installation directory:
 
+<InstallationStep name="start">
+
 ```bash
 docker compose pull
 docker compose up -d
 docker compose ps
 ```
 
+</InstallationStep>
+
 For direct TLS, download the overlay described in the
 [TLS guide](/operations/tls-and-secure-agent-transport#direct-core-tls)
 and use these commands instead:
+
+<InstallationStep name="start_tls">
 
 ```bash
 docker compose -f docker-compose.yml -f compose.direct-tls.yml pull
 docker compose -f docker-compose.yml -f compose.direct-tls.yml up -d
 docker compose -f docker-compose.yml -f compose.direct-tls.yml ps
 ```
+
+</InstallationStep>
 
 The overlay mounts the certificate directory; the base Compose file controls
 the browser host binding and port. For Edge Agents, also include the Edge
