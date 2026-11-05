@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { docsAssetUrl } from '@/lib/shared';
+import { useDocsAnalytics } from './analytics/analytics';
 
 const Redoc = dynamic(async () => {
   const [{ RedocStandalone }, { HashRouter }] = await Promise.all([
@@ -26,6 +27,7 @@ const Redoc = dynamic(async () => {
 });
 
 export function ApiReference() {
+  const analytics = useDocsAnalytics();
   const { resolvedTheme } = useTheme();
   useEffect(() => {
     if (!resolvedTheme) return;
@@ -46,7 +48,8 @@ export function ApiReference() {
   return (
     <section aria-label="OpenAPI reference" className="docs-api-reference not-prose min-w-0 w-full border-t border-fd-border">
       <div className="flex flex-wrap gap-4 border-b border-fd-border px-4 py-3 text-sm">
-        <a href={docsAssetUrl('/api/openapi')} download="citadel-public-v1.json" className="text-fd-primary hover:underline">
+        <a href={docsAssetUrl('/api/openapi')} download="citadel-public-v1.json" className="text-fd-primary hover:underline"
+          onClick={() => analytics?.openApiDownloaded()}>
           Download OpenAPI schema
         </a>
       </div>

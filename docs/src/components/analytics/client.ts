@@ -6,8 +6,8 @@ const lifetime = 180 * 24 * 60 * 60 * 1000;
 type Choice = 'accepted' | 'declined';
 type Consent = { choice: Choice; expires: number };
 type Config = { websiteId: string; hostname: string };
-type State = { enabled: boolean; choice: Choice | null; editing: boolean; collecting: boolean };
-const initial: State = { enabled: false, choice: null, editing: false, collecting: false };
+type State = { enabled: boolean; choice: Choice | null; editing: boolean; collecting: boolean; preview: boolean };
+const initial: State = { enabled: false, choice: null, editing: false, collecting: false, preview: false };
 
 export function createAnalytics(routes: Record<string, string>, siteUrl: string) {
   let state = initial;
@@ -23,7 +23,7 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
   const normalize = (path: string) => path.replace(/\/+$/, '') || '/';
 
   function permitted() {
-    return config !== null && consent?.choice === 'accepted' && consent.expires > Date.now() &&
+    return !state.preview && config !== null && consent?.choice === 'accepted' && consent.expires > Date.now() &&
       navigator.doNotTrack !== '1' &&
       (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl !== true;
   }
@@ -78,7 +78,7 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
     const timeout = setTimeout(() => controller.abort(), 4000);
     // Construct payloads here; never spread caller-provided objects into telemetry.
     void fetch(`${collector}/api/send`, {
-      method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store',
+      method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', keepalive: true,
       headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
       body: JSON.stringify({ type: 'event', payload: {
         website: config.websiteId, hostname: config.hostname,
@@ -100,8 +100,10 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
     snapshot: () => state,
     serverSnapshot: () => initial,
     start() {
+      const preview = process.env.NODE_ENV === 'development' &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
       // A production build served on a preview or localhost must still send nothing.
-      if (site.origin !== productionOrigin || location.origin !== site.origin) return;
+      if (!preview && (site.origin !== productionOrigin || location.origin !== site.origin)) return;
       let stopped = false;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4000);
@@ -109,7 +111,10 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
       checkExpiry();
       window.addEventListener('storage', storageChanged);
       document.addEventListener('visibilitychange', checkExpiry);
-      void fetch(`${collector}/config.json`, {
+      if (preview) {
+        state = { ...state, enabled: true, preview: true };
+        update();
+      } else void fetch(`${collector}/config.json`, {
         credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store',
         signal: controller.signal,
       }).then(async (response) => {
@@ -158,6 +163,16 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
       if (send(route, { name: 'search_used', data: { result_count: Math.min(resultCount, 1000) } }) && resultCount === 0) {
         send(route, { name: 'search_no_results' });
       }
+    },
+    installCommandCopied(path: string, step: string) {
+      const route = normalize(path);
+      if (!['/getting-started/install', '/getting-started/quick-start'].includes(route) ||
+          !['download', 'start', 'start_tls'].includes(step)) return;
+      send(route, { name: 'install_command_copied', data: { step } });
+    },
+    openApiDownloaded() {
+      const route = currentRoute();
+      if (route === '/reference/api') send(route, { name: 'openapi_download_requested' });
     },
     searchResultOpened(url: string) {
       const route = currentRoute();

@@ -148,16 +148,21 @@ class LocalUpgradeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / 'older-checkout'
-            binary = root / 'source-executable'
+            binary = source / 'target/upgrade-fixture/debug/deps/source-executable'
+            binary.parent.mkdir(parents=True)
             binary.write_bytes(b'source build')
             artifact = dict(reason='compiler-artifact', target=dict(name='instance_upgrade_fixture'),
-                            executable=str(binary))
+                            executable='/source/target/debug/deps/source-executable')
             with patch.object(local.subprocess, 'run', return_value=subprocess.CompletedProcess(
                     [], 0, json.dumps(artifact).encode(), b'')) as compile_binary, \
-                    patch.object(local.registration, 'run'):
+                    patch.object(local.registration, 'run', return_value=subprocess.CompletedProcess(
+                        [], 0, json.dumps(dict(version=local.SOURCE, qualificationBuild=True)).encode(), b'')) as docker:
                 local.build('runtime', local.SOURCE, root, 'a' * 64, source_root=source)
-            self.assertEqual(compile_binary.call_args.kwargs['cwd'], source)
-            self.assertEqual(compile_binary.call_args.kwargs['env']['CARGO_TARGET_DIR'], str(source / 'target'))
+            builder = docker.call_args_list[0].args[0]
+            self.assertEqual(builder[builder.index('--file') + 1], str(source / 'Dockerfile'))
+            self.assertEqual(builder[-1], str(source))
+            self.assertIn(f'type=bind,src={source}/target/upgrade-fixture,dst=/source/target',
+                          compile_binary.call_args.args[0])
             self.assertEqual((root / local.SOURCE / 'citadel-server').read_bytes(), b'source build')
             descriptor = json.loads((root / local.SOURCE / 'upgrade-fixture.json').read_text())
             self.assertEqual(descriptor['sources'][0]['catalogSha256'], 'a' * 64)

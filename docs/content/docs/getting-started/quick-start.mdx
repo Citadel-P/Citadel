@@ -15,6 +15,8 @@ editor. Check with `docker --version`, `docker compose version`, and
 
 Download the installation files into a new directory:
 
+<InstallationStep name="download">
+
 ```bash
 mkdir -p citadel
 cd citadel
@@ -22,6 +24,8 @@ curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/instal
 curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
 chmod 600 .env
 ```
+
+</InstallationStep>
 
 If repository access is restricted, use the signed-in download steps in the
 [installation guide](/getting-started/install).
@@ -36,11 +40,15 @@ use that port in the browser address below.
 
 Start Citadel:
 
+<InstallationStep name="start">
+
 ```bash
 docker compose pull
 docker compose up -d
 docker compose ps
 ```
+
+</InstallationStep>
 
 The first image download can take several minutes. Wait until `server` and `pg_db` are
 healthy. If either fails, use the

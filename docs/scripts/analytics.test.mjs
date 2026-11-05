@@ -235,6 +235,16 @@ test('API reference and mobile consent controls remain accessible', async (t) =>
   await notice.waitFor();
   const bounds = await notice.boundingBox();
   assert(bounds.x >= 0 && bounds.x + bounds.width <= 390);
+  const accept = page.getByRole('button', { name: 'Accept', exact: true });
+  const decline = page.getByRole('button', { name: 'Decline', exact: true });
+  const acceptBounds = await accept.boundingBox();
+  const declineBounds = await decline.boundingBox();
+  assert(Math.abs(acceptBounds.width - declineBounds.width) <= 1);
+  assert(acceptBounds.height >= 40 && declineBounds.height >= 40);
+  assert.notEqual(
+    await accept.evaluate((button) => getComputedStyle(button).backgroundColor),
+    await decline.evaluate((button) => getComputedStyle(button).backgroundColor),
+  );
   await page.screenshot({ path: '/tmp/citadel-docs-analytics-mobile.png' });
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -418,4 +428,37 @@ test('homepage licensing fragment redirects without changing ordinary home links
   await open(page);
   await settle(page);
   assert.equal(page.url(), origin + '/');
+});
+
+for (const choice of ['accepted', 'declined']) test(`installation copy success respects ${choice} consent`, async (t) => {
+  const { page, sends } = await fixture(t, { saved: { choice, expires: Date.now() + 60_000 } });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => {} } });
+  });
+  await open(page, '/getting-started/quick-start/');
+  await page.getByRole('button', { name: 'Copy Text', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Copied Text', exact: true }).waitFor();
+  if (choice === 'accepted') {
+    await until(() => sends.some(e => e.payload.payload.name === 'install_command_copied'));
+    const event = sends.find(e => e.payload.payload.name === 'install_command_copied').payload.payload;
+    assert.equal(event.url, '/getting-started/quick-start');
+    assert.deepEqual(event.data, { step: 'download' });
+  } else assert.equal(sends.length, 0);
+  const count = sends.length;
+  await page.evaluate(() => { navigator.clipboard.writeText = async () => { throw new Error('Denied'); }; });
+  await page.getByRole('button', { name: 'Copy Text', exact: true }).last().click();
+  await page.getByRole('button', { name: 'Copy failed. Select the commands to copy them.', exact: true }).waitFor();
+  await settle(page);
+  assert.equal(sends.length, count);
+  assert(!/docker compose|PG_PASSWORD|curl/.test(JSON.stringify(sends)));
+});
+
+test('OpenAPI download records intent without schema contents', async (t) => {
+  const { page, sends } = await fixture(t, { saved: accepted() });
+  await open(page, '/reference/api/');
+  await page.getByRole('link', { name: 'Download OpenAPI schema' }).click();
+  await until(() => sends.some(e => e.payload.payload.name === 'openapi_download_requested'));
+  const event = sends.find(e => e.payload.payload.name === 'openapi_download_requested').payload.payload;
+  assert.equal(event.url, '/reference/api');
+  assert.equal(event.data, undefined);
 });

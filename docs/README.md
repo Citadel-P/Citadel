@@ -131,6 +131,8 @@ no document-wide click scraping or search-query telemetry is involved.
 | `search_no_results` | That completed search returned zero entries. |
 | `search_result_opened` | A result was selected by pointer or keyboard; `selected_page` is an allowlisted page path with no query or hash. |
 | `page_helpful` / `page_unhelpful` | Yes/No feedback, attributed to the current page; no additional data. |
+| `install_command_copied` | Successful clipboard write from a marked install/quick-start example; fixed `step`: `download`, `start`, or `start_tls`. No command text. |
+| `openapi_download_requested` | The embedded API reference's schema download link was selected; no additional data or completion claim. |
 
 Search events are attributed to the page where search was used. Intermediate
 keystrokes, empty queries, pending requests and search failures are not counted.
@@ -151,6 +153,20 @@ The collector, Umami registration and scoped 90-day retention are operated by
 the sibling **Citadel.Web** repository's `scripts/analytics/add-docs.py`; its
 `docs/ANALYTICS.md` describes installation and rollback. Deploy that configuration
 before publishing this docs build through the existing release workflow.
+
+The shared Umami stack uses monthly salt rotation to estimate returning readers
+within each UTC calendar month. Docs and portal visitors remain separate. The
+Retention report covers consenting, unblocked readers; IP/browser changes and
+month boundaries break recognition. Existing installations need the explicit
+salt-setting rollout in `Citadel.Web/docs/ANALYTICS.md`; historical daily IDs are
+not retroactively joined.
+
+`Citadel.Web/scripts/analytics/configure-audience.py` creates private native Umami
+boards for the docs and portal. The docs board includes traffic, entry/exit pages,
+installation-copy intent, completed searches without results, and helpfulness by
+page. Its page tables count measured readers, while its event table counts
+interactions. Use the separate Retention report for return visits. Existing board
+customizations survive reruns.
 
 Browser regression checks intercept all collector requests against a local
 export and never submit production analytics:
