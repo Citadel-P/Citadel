@@ -414,8 +414,12 @@ python3 test/scripts/test-instance-upgrade-local.py --runtime-image YOUR_LOCAL_C
 ```
 
 Use a Core runtime image built from this checkout. The runner compiles two
-test-only Core executables with distinct versions and packages them using that
-runtime. Only the release discovery/trust dependency is replaced by a private
+test-only Core executables with distinct versions in the Dockerfile's pinned
+`rust-source` builder and packages them using that runtime. This avoids linking
+against the host's potentially newer glibc. Compilation is cached separately in
+each source checkout's `target/upgrade-fixture`; the packaged executable's version
+and test-only identity are checked offline before any installation starts.
+Only the release discovery/trust dependency is replaced by a private
 fixture. With `--source-tree`, both the source executable and its initial Compose
 file come from that checkout; the target comes from the current checkout. The
 real HTTP setup/login, review/approval, Docker inspection, detached

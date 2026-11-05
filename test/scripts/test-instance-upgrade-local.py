@@ -30,26 +30,47 @@ TARGET = "0.1.1-dev.9002"
 
 
 def build(base, version, directory, catalog, frontend=None, source_root=None):
-    """Only build the explicitly test-only executable, using existing Cargo cache."""
+    """Build the test-only executable with Core's runtime-compatible toolchain."""
     print(f"Building private lifecycle fixture {version}", flush=True)
     build_root = source_root or registration.ROOT
-    env = dict(os.environ, CITADEL_VERSION=version, CITADEL_INFORMATIONAL_VERSION=version,
-               SQLX_OFFLINE="true", CARGO_TARGET_DIR=str(build_root / "target"))
-    result = subprocess.run([
-        "cargo", "test", "--locked", "-p", "citadel-server", "--test",
-        "instance_upgrade_fixture", "--no-run", "--message-format=json",
-    ], cwd=build_root, env=env, capture_output=True, timeout=1800)
+    # Host runners may link against a newer glibc than Core's runtime provides.
+    # Match test-agent-compatibility.sh: compile in the pinned rust-source stage,
+    # with a separate target directory so host-built artifacts cannot leak in.
+    target = (build_root / "target/upgrade-fixture").resolve()
+    target.mkdir(parents=True, exist_ok=True)
+    builder = "citadel-upgrade-builder-" + uuid.uuid4().hex
+    try:
+        registration.run([
+            *registration.DOCKER, "build", "--builder", "default", "--file", str(build_root / "Dockerfile"),
+            "--target", "rust-source", "--tag", builder, str(build_root),
+        ], timeout=600)
+        result = subprocess.run([
+            *registration.DOCKER, "run", "--name", builder,
+            "--user", f"{os.getuid()}:{os.getgid()}",
+            "--mount", f"type=bind,src={target},dst=/source/target",
+            "--env", "CARGO_HOME=/source/target/.cargo",
+            "--env", "CARGO_PROFILE_TEST_DEBUG=0", "--env", "CARGO_PROFILE_DEV_DEBUG=0",
+            "--env", "CARGO_PROFILE_DEV_INCREMENTAL=false",
+            "--env", f"CITADEL_VERSION={version}", "--env", f"CITADEL_INFORMATIONAL_VERSION={version}",
+            *(["--env", "CARGO_BUILD_JOBS"] if "CARGO_BUILD_JOBS" in os.environ else []),
+            "--entrypoint", "cargo", builder,
+            "test", "--locked", "-p", "citadel-server", "--test", "instance_upgrade_fixture",
+            "--no-run", "--message-format=json", "--target-dir", "/source/target",
+        ], capture_output=True, timeout=1800)
+    finally:
+        registration.run([*registration.DOCKER, "rm", "-fv", builder], check=False)
+        registration.run([*registration.DOCKER, "image", "rm", builder], check=False)
     if result.returncode:
         log = Path(tempfile.mkdtemp(prefix="citadel-upgrade-build-failure-")) / "build.log"
         log.write_bytes(result.stdout + result.stderr)
         raise RuntimeError(f"Fixture compilation failed; see {log}")
-    require(result.returncode == 0, f"Fixture compilation failed; see {directory}")
     artifacts = [json.loads(line) for line in result.stdout.splitlines() if line.startswith(b"{")]
     executable = next(item["executable"] for item in artifacts
                       if item.get("reason") == "compiler-artifact"
                       and item["target"]["name"] == "instance_upgrade_fixture" and item.get("executable"))
     context = directory / version
     context.mkdir()
+    executable = target / Path(executable).relative_to("/source/target")
     shutil.copy2(executable, context / "citadel-server")
     if frontend:
         shutil.copytree(frontend, context / "wwwroot")
@@ -63,7 +84,16 @@ def build(base, version, directory, catalog, frontend=None, source_root=None):
         + ("COPY --chown=65532:0 wwwroot /app/wwwroot\nENV CITADEL_STATIC_ROOT=/app/wwwroot\n" if frontend else "") +
         "LABEL com.citadel.qualification-only=true\n")
     image = "citadel-upgrade-fixture:" + version + "-" + directory.name
-    registration.run([*registration.DOCKER, "build", "--builder", "default", "--tag", image, str(context)], timeout=300)
+    try:
+        registration.run([*registration.DOCKER, "build", "--builder", "default", "--tag", image, str(context)], timeout=300)
+        identity = json.loads(registration.run([
+            *registration.DOCKER, "run", "--rm", "--network=none", image, "version-json",
+        ]).stdout)
+        require(identity.get("qualificationBuild") is True and identity.get("version") == version,
+                "Packaged lifecycle fixture has incorrect build identity")
+    except BaseException:
+        registration.run([*registration.DOCKER, "image", "rm", image], check=False)
+        raise
     return image
 
 

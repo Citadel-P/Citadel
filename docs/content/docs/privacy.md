@@ -25,6 +25,11 @@ After consent, we also measure these limited interactions:
   This optional prompt appears only while analytics consent is active. It accepts
   one response per page until you reload; responses are sent on a best-effort
   basis and are not retried if collection fails.
+- Installation command copies: a successful copy from a marked installation or
+  quick-start example, with a fixed step label (download, start, or start with TLS).
+  We do not send the copied commands. A copy does not prove a successful installation.
+- API schema download requests: selecting **Download OpenAPI schema** in the API
+  reference. This records the request, not a completed download.
 
 We do not send search text, query strings, URL fragments, referring URLs,
 form values, account identifiers or the contents of your Citadel installation.
@@ -35,6 +40,13 @@ Umami processes connection information, including IP address and browser user
 agent, to derive visit and device/geographic statistics. Raw IP addresses are not
 stored in its analytics tables. Hosting and network providers still process
 network traffic; this is not a claim that the connection itself is anonymous.
+
+Visit identifiers let us estimate returning visits within the same UTC calendar
+month and change at the start of the next month. Changes to your network or browser
+can make you appear as a new visitor; people sharing a network and browser type can
+be grouped together. These estimates cover consenting, unblocked readers only.
+We do not store a visitor identifier in your browser or link documentation visits
+to visits on the main Citadel website.
 
 ## Your choice
 

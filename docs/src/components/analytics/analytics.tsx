@@ -45,12 +45,14 @@ export function Analytics({ routes, siteUrl, children }: {
     {children}
     {visible && <section ref={notice} tabIndex={-1} className="docs-analytics-notice" aria-label="Optional analytics">
       <div>
-        <strong>Help improve the docs</strong>
-        <p>Allow optional analytics for page views, search outcomes and page feedback? <Link href="/privacy">Privacy details</Link></p>
+        <strong>Help improve Citadel</strong>
+        <p>Allow cookie-free analytics to help us improve guides and search?</p>
+        <p className="docs-analytics-assurance">No advertising or session recording. <Link href="/privacy">Privacy details</Link></p>
+        {state.preview && <p className="docs-analytics-assurance">Local preview — no analytics are sent.</p>}
       </div>
       <div className="docs-analytics-actions">
         <button type="button" onClick={() => client.choose('declined')}>Decline</button>
-        <button type="button" onClick={() => client.choose('accepted')}>Accept</button>
+        <button type="button" className="docs-analytics-accept" onClick={() => client.choose('accepted')}>Accept</button>
         {state.editing && state.choice && <button type="button" onClick={() => client.edit(false)}>Close</button>}
       </div>
     </section>}
