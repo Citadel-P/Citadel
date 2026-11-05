@@ -1,4 +1,4 @@
-import type { PublicActivityEventInfo, ActivityView, PagedActivityView } from '@/api/generated/api.types';
+import type { ActivityView, PagedActivityView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
@@ -110,116 +110,13 @@ const columns = (
 
 function EventTypeCell({ activity }: { activity: ActivityView }) {
   const { open } = useTaskSheet('Activity');
-  const summary = getActivitySummary(activity.info);
 
   return (
     <button
       type="button"
       onClick={() => open({ kind: 'activity', payload: activity })}
       className="table-link block min-w-0 max-w-96 cursor-pointer overflow-hidden text-left">
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate">{formatActivityEvent(activity.eventType)}</span>
-        {summary && (
-          <span className="block truncate text-xs font-normal normal-case text-muted-foreground" title={summary}>
-            {summary}
-          </span>
-        )}
-      </span>
+      <span className="block truncate">{formatActivityEvent(activity.eventType)}</span>
     </button>
   );
-}
-
-function getActivitySummary(info: PublicActivityEventInfo | null | undefined): string | null {
-  if (!info?.$type) return null;
-
-  switch (info.$type) {
-    case 'UpdateScheduleFinished':
-      return info.message;
-    case 'AgentUpdateScheduleChanged':
-      return `Update schedule ${info.enabled ? 'enabled' : 'disabled'} · ${info.includeCore ? 'Core and ' : ''}${info.targetCount} Agents selected`;
-    case 'UpdateDiscovered':
-      return `Citadel ${info.version} is available`;
-    case 'UpdateChecksChanged':
-      return [
-        `Automatic update checks ${info.updateChecksEnabled ? 'enabled' : 'disabled'}`,
-        info.updateCheckIntervalHours ? `every ${info.updateCheckIntervalHours} hours` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-    case 'InstanceUpdateStarted':
-      return `Updating from ${info.sourceVersion} to ${info.targetVersion}`;
-    case 'InstanceUpdateCompleted':
-      return `Updated from ${info.sourceVersion} to ${info.targetVersion}`;
-    case 'InstanceUpdateFailed':
-    case 'InstanceUpdatePostponed':
-      return info.message;
-    case 'InstanceUpdateRecovered':
-      return `Recovered Citadel ${info.version}`;
-    case 'BackupRunQueued':
-    case 'BackupRunStarted':
-      return info.trigger;
-    case 'BackupRunCompleted':
-      return [formatActivityEvent(info.status), info.errorMessage].filter(Boolean).join(' - ');
-    case 'GitRepoWebhookReceived':
-    case 'StackWebhookReceived':
-    case 'BuildWebhookReceived':
-    case 'ScriptWebhookReceived':
-    case 'BackupPolicyWebhookReceived':
-      return [
-        info.status,
-        formatWebhookReason(info.reason),
-        info.dispatchedBranch ? `queued ${info.dispatchedBranch}` : info.branch ? `branch ${info.branch}` : null,
-        info.dispatchedCommitSha
-          ? shortCommit(info.dispatchedCommitSha)
-          : info.commitSha
-            ? shortCommit(info.commitSha)
-            : null,
-      ]
-        .filter(Boolean)
-        .join(' - ');
-    case 'SwarmServiceWebhookReceived':
-      return [info.status, formatWebhookReason(info.reason)].filter(Boolean).join(' - ');
-    case 'GitRepoPulled':
-    case 'GitRepoCloned':
-      return [info.result?.commitSha ? shortCommit(info.result.commitSha) : null, info.result?.message]
-        .filter(Boolean)
-        .join(' - ');
-    case 'DeploymentDuplicated':
-    case 'StackDuplicated':
-    case 'SwarmServiceDuplicated':
-      return `from ${info.source.resourceName}`;
-    case 'BuildAgentPoolCreated':
-    case 'BuildAgentPoolDeleted':
-      return `${info.pool.provider} - ${info.pool.region} - ${info.pool.instanceType}`;
-    case 'BuildAgentPoolUpdated':
-      return `${info.oldPool.provider} - ${info.oldPool.region} - ${info.oldPool.instanceType}`;
-    case 'BuildAgentPoolRenamed':
-      return `${info.oldName} -> ${info.newName}`;
-    case 'BuildAgentPoolConnected':
-    case 'BuildAgentPoolDisconnected':
-      return info.reason;
-    case 'BuildAgentPoolTested':
-      return [info.status, info.message].filter(Boolean).join(' - ');
-    default:
-      return null;
-  }
-}
-
-function formatWebhookReason(reason: string | null | undefined) {
-  switch (reason) {
-    case 'No new commit':
-      return 'already latest commit';
-    case 'No relevant path changes':
-      return 'no watched path changes';
-    case 'Branch mismatch':
-      return 'branch mismatch';
-    case 'Unsupported event type':
-      return 'unsupported event';
-    default:
-      return reason;
-  }
-}
-
-function shortCommit(commit: string) {
-  return commit.length > 12 ? commit.slice(0, 12) : commit;
 }
