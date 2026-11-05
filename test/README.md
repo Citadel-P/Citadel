@@ -24,8 +24,11 @@ from the current checkout; mock-executor tests do not substitute for this run.
 The acceptance test uses the complete Core and Agent images and calls Core's HTTP
 API for setup, Direct/Edge registration, stacks, inventory, reconnect, Core restart
 and revocation. It also exercises Core's three-node Swarm installer and worker
-routing through Direct and Edge managers, including outage recovery, repair,
-upgrade and removal. It needs Rust, creates its own database and Docker daemons,
+routing through Direct and Edge managers, including outage recovery, repair
+rollouts that preserve the approved image, central update discovery and removal.
+The same-version Core/Agent pair cannot approve an update; the test checks that
+the central review endpoint rejects it, including when an unpublished candidate's
+availability is unknown. It needs Rust, creates its own database and Docker daemons,
 and removes only its own containers, volumes and network.
 The current-pair run also exercises network explorer metadata over Direct and Edge:
 a two-network application, backend-only container, aliases, host/none/shared
