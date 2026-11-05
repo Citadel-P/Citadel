@@ -474,6 +474,8 @@ fn stat(s: citadel_platforms::RuntimeContainerStat) -> ContainerStatMessage {
         memory_limit: s.memory_limit,
         rx_bytes: s.rx_bytes,
         tx_bytes: s.tx_bytes,
+        block_read_bytes: s.block_read_bytes,
+        block_write_bytes: s.block_write_bytes,
     }
 }
 

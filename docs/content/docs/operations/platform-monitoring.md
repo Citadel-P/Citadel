@@ -40,6 +40,44 @@ averages without discarding samples when a Stats tab stays open. Saved history t
 in overlapping buckets; the bucket already in progress when the tab opens stays
 at its saved average until history is reloaded. Subsequent buckets update live.
 
+## Container network and disk I/O
+
+The container **Network Usage** chart has two views: **Accumulated** shows received
+and sent bytes recorded during the selected period; **Throughput** shows receive
+and send rates in bytes per second. The two header totals always cover the
+selected period, including when viewing throughput.
+
+**Disk I/O** shows block-device read and write throughput by default, with the same
+switch to accumulated bytes. This measures device I/O reported by Docker, rather
+than disk space used. Cached file reads may not generate device reads, and network
+filesystems may not appear in these counters.
+
+Rates divide recorded bytes by measured elapsed time in each chart bucket, so
+long and short intervals receive the correct weight. The first
+sample establishes a baseline, so at least two observations are needed. Counter
+resets are handled per container or Swarm Task. Missing readings and an unobserved
+reset can leave some traffic unrecorded.
+
+Hosts that do not report block I/O show an unavailable message. Older statistics
+remain unavailable for Disk I/O; new samples appear after Core and connected
+Agents have been updated. Individual containers, Deployments and Swarm Tasks and
+Services share these charts.
+
+### Diagnose a missed container reading
+
+A `Container statistics sample failed` warning identifies `docker_container_id`,
+`error_kind`, `retryable`, and the Docker error. Local Core sampling includes the
+Platform ID in its log span; Agent sampling reports the details in that Agent's
+logs. Successful container readings continue, and sampling tries again on the
+next cycle.
+
+A container that stops or disappears between discovery and sampling is logged as
+`Container statistics sample skipped` at debug level. To include these lifecycle
+races and cycle counts, use `RUST_LOG=info,citadel_docker=debug,citadel_server::workers::platforms=debug`
+and restart the process whose logs you are inspecting. Repeated timeout or daemon
+errors require investigating the Docker daemon and the identified container;
+a missed reading alone does not mean its workload failed.
+
 ## History across deployments
 
 Deployment statistics follow the Deployment ID across container replacements.

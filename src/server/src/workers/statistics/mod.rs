@@ -126,7 +126,11 @@ impl StatsIngress {
                         s.tx_bytes,
                     ]
                     .into_iter()
-                    .all(|v| v.is_finite() && v >= 0.0);
+                    .all(|v| v.is_finite() && v >= 0.0)
+                    && [s.block_read_bytes, s.block_write_bytes]
+                        .into_iter()
+                        .flatten()
+                        .all(|v| v.is_finite() && v >= 0.0);
                 if !valid {
                     RuntimeWork::StatsRejected.units(1);
                 }

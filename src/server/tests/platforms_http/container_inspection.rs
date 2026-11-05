@@ -794,6 +794,8 @@ async fn process_snapshots_authorize_share_reads_scope_nodes_and_clear_stopped_c
         cpu_usage: 0.,
         rx_bytes: 0.,
         tx_bytes: 0.,
+        block_read_bytes: None,
+        block_write_bytes: None,
         created: 1,
     }];
     hub.publish_scoped_container_stats(f.platform_id, Some("other-node"), &stats);

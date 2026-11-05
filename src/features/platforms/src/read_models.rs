@@ -86,6 +86,22 @@ pub struct ContainerStatSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_bytes_delta: Option<f64>,
     pub created: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_per_second: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

@@ -59,9 +59,7 @@ it('updates the saved frequency through the existing installation realtime notif
   expect(await screen.findByRole('combobox', { name: 'Frequency' })).toHaveTextContent('Every 6 hours');
   hours = 12;
   act(() => fake.emit('InstallationSettingsChanged'));
-  await waitFor(() =>
-    expect(screen.getByRole('combobox', { name: 'Frequency' })).toHaveTextContent('Every 12 hours'),
-  );
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Frequency' })).toHaveTextContent('Every 12 hours'));
   const expectedCheck = new Date(Date.parse(lastAttempt) + 12 * 3_600_000).toISOString();
   expect(screen.getByText('Next automatic check')).toBeVisible();
   const schedule = screen.getByTitle(expectedCheck);
@@ -159,13 +157,14 @@ it('receives scoped activity events without refreshing the history list', async 
       ...activity,
       id: 'unrelated',
       resourceId: 'another-instance',
+      eventType: 'InstanceUpdateFailed',
       info: { ...activity.info, version: '9.9.9' },
     });
     fake.emit('ActivityEventReceived', activity);
     fake.emit('ActivityEventReceived', activity);
   });
-  expect(await screen.findByText('Citadel 0.1.2 is available')).toBeVisible();
-  expect(screen.getAllByText('Citadel 0.1.2 is available')).toHaveLength(1);
-  expect(screen.queryByText('Citadel 9.9.9 is available')).not.toBeInTheDocument();
+  expect(await screen.findByText('Update Discovered')).toBeVisible();
+  expect(screen.getAllByText('Update Discovered')).toHaveLength(1);
+  expect(screen.queryByText('Instance Update Failed')).not.toBeInTheDocument();
   expect(historyRead).toHaveBeenCalledOnce();
 });

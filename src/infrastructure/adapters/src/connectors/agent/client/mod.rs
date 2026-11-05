@@ -107,6 +107,8 @@ pub(crate) fn map_container_stats(
             memory_limit: stat.memory_limit,
             rx_bytes: stat.rx_bytes,
             tx_bytes: stat.tx_bytes,
+            block_read_bytes: stat.block_read_bytes,
+            block_write_bytes: stat.block_write_bytes,
             created,
         })
         .collect()
@@ -2764,6 +2766,19 @@ mod tests {
             captured_at: Some(123),
         };
         assert_eq!(super::map_container_stats(wire.clone())[0].created, 123);
+        let absent = super::map_container_stats(wire.clone()).remove(0);
+        assert_eq!(
+            (absent.block_read_bytes, absent.block_write_bytes),
+            (None, None)
+        );
+        let message = wire.containers.get_mut("container").unwrap();
+        message.block_read_bytes = Some(125.);
+        message.block_write_bytes = Some(60.);
+        let measured = super::map_container_stats(wire.clone()).remove(0);
+        assert_eq!(
+            (measured.block_read_bytes, measured.block_write_bytes),
+            (Some(125.), Some(60.))
+        );
         wire.captured_at = None;
         assert!(super::map_container_stats(wire)[0].created > 123);
     }

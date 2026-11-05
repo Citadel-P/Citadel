@@ -230,3 +230,76 @@ async fn generated_request_timeout_is_classified_as_transport_timeout() {
     server.await.unwrap();
     std::fs::remove_file(path).unwrap();
 }
+
+#[tokio::test]
+async fn container_stat_sampling_preserves_errors_and_recovers_on_the_next_read() {
+    use citadel_platforms::RuntimeErrorKind;
+    use tokio_util::sync::CancellationToken;
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        for (expected, status, body) in [
+            (
+                "GET /version ",
+                "200 OK",
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
+            ),
+            (
+                "GET /v1.49/containers/fixture/stats?",
+                "503 Service Unavailable",
+                r#"{"message":"daemon temporarily unavailable"}"#,
+            ),
+            (
+                "GET /v1.49/containers/fixture/stats?",
+                "404 Not Found",
+                r#"{"message":"No such container"}"#,
+            ),
+            (
+                "GET /v1.49/containers/fixture/stats?",
+                "409 Conflict",
+                r#"{"message":"Container is not running"}"#,
+            ),
+            (
+                "GET /v1.49/containers/fixture/stats?",
+                "200 OK",
+                r#"{"memory_stats":{"usage":100,"limit":200}}"#,
+            ),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let (request, _) = read_terminal_request(&mut socket).await;
+            assert!(request.starts_with(expected), "{request}");
+            socket.write_all(format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+        }
+    });
+    let docker = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    let cancellation = CancellationToken::new();
+    for (kind, retryable, cause) in [
+        (
+            RuntimeErrorKind::Unavailable,
+            true,
+            "daemon temporarily unavailable",
+        ),
+        (RuntimeErrorKind::NotFound, false, "No such container"),
+        (
+            RuntimeErrorKind::Conflict,
+            false,
+            "Container is not running",
+        ),
+    ] {
+        let error = docker
+            .sample_container_stats("fixture", &cancellation)
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind, kind);
+        assert_eq!(error.retryable, retryable);
+        assert!(error.message.contains(cause), "{error}");
+    }
+    let sample = docker
+        .sample_container_stats("fixture", &cancellation)
+        .await
+        .unwrap();
+    assert_eq!(sample.docker_container_id, "fixture");
+    assert_eq!(sample.memory_active, 100.);
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}

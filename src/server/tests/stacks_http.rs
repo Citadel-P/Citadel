@@ -358,7 +358,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         .with_update_scanner(scanner.clone())
         .with_entitlements(Arc::new(drift::Entitlements(true))),
     );
-    let app = stacks_http::router(StacksHttpState {
+    let state = StacksHttpState {
         copy_eligibility: None,
         backup_coverage: None,
         platforms: Arc::new(citadel_platforms::PlatformReadService::new(Arc::new(
@@ -368,7 +368,11 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
         ))),
         identity,
         stacks: stacks.clone(),
-    });
+    };
+    // Generate OpenAPI outside the large scenario future's polling stack.
+    let app = tokio::task::spawn_blocking(move || stacks_http::router(state))
+        .await
+        .unwrap();
     assert_eq!(
         request(&app, Method::GET, "/api/v1/stacks", None, None)
             .await

@@ -182,7 +182,7 @@ impl NodeAgentSetupService {
         actor: ActorId,
         id: Uuid,
         kind: SetupKind,
-        mut options: SetupOptions,
+        options: SetupOptions,
         sender: mpsc::Sender<NodeAgentProgress>,
         cancel: CancellationToken,
     ) {
@@ -227,10 +227,10 @@ impl NodeAgentSetupService {
         (self.changed)(id);
         let result = tokio::select! {
             () = cancel.cancelled() => Err(fail("Node-agent setup canceled. Repair coverage can reconcile partial state.")),
-            result = tokio::time::timeout(options.policy.setup_timeout, async {
-                options.image = image::selected(kind, &options.image, claim.approved_image.as_deref())?;
-                self.execute(&claim, &options, &sender, &cancel).await
-            }) => {
+            result = tokio::time::timeout(
+                options.policy.setup_timeout,
+                self.execute(&claim, kind, options, &sender, &cancel),
+            ) => {
                 result.unwrap_or_else(|_| Err(fail("Node-agent setup timed out. Repair coverage after checking missing nodes.")))
             }
         };
@@ -270,7 +270,8 @@ impl NodeAgentSetupService {
     async fn execute(
         &self,
         claim: &NodeAgentRemovalClaim,
-        options: &SetupOptions,
+        kind: SetupKind,
+        mut options: SetupOptions,
         sender: &mpsc::Sender<NodeAgentProgress>,
         cancel: &CancellationToken,
     ) -> Result<(), RuntimeCapabilityError> {
@@ -315,6 +316,9 @@ impl NodeAgentSetupService {
             return Err(fail(
                 "The node-agent Service has conflicting ownership labels.",
             ));
+        }
+        if !eligible.is_empty() {
+            options.image = image::selected(kind, &options.image, claim.approved_image.as_deref())?;
         }
         let configs = swarm.configs.clone();
         let secrets = swarm.secrets.clone();
@@ -378,7 +382,7 @@ impl NodeAgentSetupService {
         }
         let spec = system_spec(
             claim,
-            options,
+            &options,
             pinned,
             secret,
             bootstrap.secret_name,

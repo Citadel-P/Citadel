@@ -4,6 +4,8 @@ use sha2::{Digest, Sha256};
 fn protocol_sources_preserve_the_accepted_wire_contract() {
     // Central Agent updates add commands 6–8 and new RPC/messages. Existing
     // field numbers, command discriminants and authenticated envelopes are unchanged.
+    // Container block I/O counters add optional fields 7–8 without changing existing statistics.
+    // Agent update settlement adds source identity fields and runtime image evidence.
     let sources = [
         (
             "script_service.proto",
@@ -18,12 +20,12 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "1724f857da584bad61bd67048aeb56606c3d72c7ce4e3e29d4b947ec3a34072c",
+            "ab8345474b2a45449f801e0f21774e8890b1177a19889fd8d1c2c8a3461781d3",
         ),
         (
             "platform_service.proto",
             include_str!("../proto/platform_service.proto"),
-            "3768a366363cbb76104e49b69ca254604ffaa64826eb4ce19ef16edc10124c87",
+            "858945bbd433fbdc45ec43f01dcd678f0ed8e3c3c7f3fa5206bb4afa313ed35d",
         ),
         (
             "container_service.proto",
@@ -228,6 +230,62 @@ fn container_mount_inventory_uses_additive_fields_and_preserves_unknown_state() 
     let round_trip = ContainerMessage::decode(observed.encode_to_vec().as_slice()).unwrap();
     assert!(round_trip.mounts_observed);
     assert_eq!(round_trip.mounts.len(), 1);
+}
+
+#[test]
+fn agent_update_settlement_uses_additive_identity_fields() {
+    use citadel_contracts::citadel::platforms::v1::{AgentUpdateDrainRequest, AgentUpdateInfo};
+    use prost::Message;
+
+    let drain = AgentUpdateDrainRequest::decode(&[][..]).unwrap();
+    assert!(drain.source_container_id.is_empty());
+    assert!(drain.source_image.is_empty());
+    assert!(
+        AgentUpdateInfo::decode(&[][..])
+            .unwrap()
+            .runtime_image
+            .is_empty()
+    );
+    let drain = AgentUpdateDrainRequest {
+        source_container_id: "s".into(),
+        source_image: "i".into(),
+        ..Default::default()
+    };
+    assert_eq!(drain.encode_to_vec(), [0x1a, 1, b's', 0x22, 1, b'i']); // fields 3–4
+    let info = AgentUpdateInfo {
+        runtime_image: "r".into(),
+        ..Default::default()
+    };
+    assert_eq!(info.encode_to_vec(), [0x3a, 1, b'r']); // field 7
+}
+
+#[test]
+fn container_block_io_counters_are_optional_additive_wire_fields() {
+    use citadel_contracts::citadel::shared_models::v1::ContainerStatMessage;
+    use prost::Message;
+
+    let absent = ContainerStatMessage::decode(&[][..]).unwrap();
+    assert!(absent.block_read_bytes.is_none());
+    assert!(absent.block_write_bytes.is_none());
+
+    let counters = ContainerStatMessage {
+        block_read_bytes: Some(0.0),
+        block_write_bytes: Some(0.0),
+        ..Default::default()
+    };
+    // Fields 7 and 8 are DoubleValue messages, preserving observed zero vs absence.
+    assert_eq!(counters.encode_to_vec(), [0x3a, 0, 0x42, 0]);
+    let sample = ContainerStatMessage {
+        rx_bytes: 123.0,
+        tx_bytes: 456.0,
+        block_read_bytes: Some(789.0),
+        block_write_bytes: Some(1011.0),
+        ..Default::default()
+    };
+    assert_eq!(
+        ContainerStatMessage::decode(sample.encode_to_vec().as_slice()).unwrap(),
+        sample
+    );
 }
 
 #[test]

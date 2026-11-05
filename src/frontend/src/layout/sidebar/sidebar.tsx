@@ -71,17 +71,15 @@ export const Sidebar = () => {
           <div className="flex min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
             {update ? (
               <Tooltip>
-                <UpdateDetails update={update}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={`Citadel ${update.version} available`}
-                      className="flex min-w-0 items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
-                      <span className="max-w-[16ch] truncate">v {version}</span>
-                      <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                    </button>
-                  </TooltipTrigger>
-                </UpdateDetails>
+                <TooltipTrigger asChild>
+                  <Link
+                    to="/updates"
+                    aria-label={`Citadel ${update.version} available`}
+                    className="flex min-w-0 items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+                    <span className="max-w-[16ch] truncate">v {version}</span>
+                    <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                  </Link>
+                </TooltipTrigger>
                 <TooltipContent>Citadel {update.version} available</TooltipContent>
               </Tooltip>
             ) : (

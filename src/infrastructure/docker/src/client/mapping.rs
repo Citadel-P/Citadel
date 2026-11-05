@@ -449,6 +449,7 @@ impl TryFrom<wire::ContainerStatsResponse> for ContainerStats {
         Ok(Self {
             name: v.name.flatten().unwrap_or_default(),
             id: v.id.flatten().unwrap_or_default(),
+            blkio_stats: v.blkio_stats.flatten().map(|stats| *stats),
             read: v.read.map(|d| d.to_rfc3339()).unwrap_or_default(),
             preread: v.preread.map(|d| d.to_rfc3339()).unwrap_or_default(),
             cpu_stats: v

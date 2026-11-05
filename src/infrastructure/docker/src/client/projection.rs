@@ -252,6 +252,8 @@ pub struct ContainerStats {
     pub memory_stats: MemoryStats,
     #[serde(default)]
     pub networks: HashMap<String, NetworkStats>,
+    #[serde(default)]
+    pub blkio_stats: Option<citadel_docker_api::models::ContainerBlkioStats>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

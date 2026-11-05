@@ -15,7 +15,8 @@ fn database_url() -> String {
 #[tokio::test]
 #[ignore = "requires a fresh disposable CITADEL_TEST_DATABASE_URL"]
 async fn instance_updates_upgrade_preserves_existing_settings_and_migration_history() {
-    let url = database_url();
+    let database = parity::Database::create().await;
+    let url = database.url.clone();
     let mut connection = PgConnection::connect(&url).await.unwrap();
     // Build the actual preceding catalog, never alter a current migration journal.
     sqlx::raw_sql(include_str!("../generated/0001_initial.sql"))
@@ -52,12 +53,15 @@ async fn instance_updates_upgrade_preserves_existing_settings_and_migration_hist
             .is_err()
     );
     assert_eq!(MigrationRunner::migrate(&url).await.unwrap().applied, 0);
+    connection.close().await.unwrap();
+    database.close().await;
 }
 
 #[tokio::test]
 #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
 async fn clean_install_restart_and_checksum_enforcement() {
-    let database_url = database_url();
+    let database = parity::Database::create().await;
+    let database_url = database.url.clone();
 
     let (left, right) = tokio::join!(
         MigrationRunner::migrate(&database_url),
@@ -150,4 +154,5 @@ async fn clean_install_restart_and_checksum_enforcement() {
         MigrationRunner::migrate(&database_url).await,
         Err(MigrationError::AppliedChecksum { .. })
     ));
+    database.close().await;
 }

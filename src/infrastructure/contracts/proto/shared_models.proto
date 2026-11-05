@@ -60,6 +60,8 @@ message ContainerStatMessage {
     double memoryLimit = 4;
     double rxBytes = 5;
     double txBytes = 6;
+    google.protobuf.DoubleValue blockReadBytes = 7;
+    google.protobuf.DoubleValue blockWriteBytes = 8;
 }
 
 message InspectContainerResponse {

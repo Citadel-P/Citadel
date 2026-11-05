@@ -113,7 +113,7 @@ WITH incoming AS (
         "dockerContainerId" text, "memoryActive" double precision,
         "memoryCache" double precision, "cpuUsage" double precision,
         "memoryLimit" double precision, "rxBytes" double precision,
-        "txBytes" double precision, created bigint)
+        "txBytes" double precision, "blockReadBytes" double precision, "blockWriteBytes" double precision, created bigint)
 ), eligible AS (
     SELECT incoming.*, container.id AS persisted_container_id
     FROM incoming
@@ -124,10 +124,10 @@ WITH incoming AS (
 ), inserted AS (
     INSERT INTO containerstats (
         id, containerid, memoryactive, memorycache, cpuusage,
-        memorylimit, rxbytes, txbytes, created)
+        memorylimit, rxbytes, txbytes, blockreadbytes, blockwritebytes, created)
     SELECT gen_random_uuid(), eligible.persisted_container_id, eligible."memoryActive",
            eligible."memoryCache", eligible."cpuUsage", eligible."memoryLimit",
-           eligible."rxBytes", eligible."txBytes", eligible.created
+           eligible."rxBytes", eligible."txBytes", eligible."blockReadBytes", eligible."blockWriteBytes", eligible.created
     FROM eligible
     ON CONFLICT (containerid, created) DO UPDATE SET
         memoryactive = EXCLUDED.memoryactive,
@@ -135,32 +135,33 @@ WITH incoming AS (
         cpuusage = EXCLUDED.cpuusage,
         memorylimit = EXCLUDED.memorylimit,
         rxbytes = EXCLUDED.rxbytes,
-        txbytes = EXCLUDED.txbytes
+        txbytes = EXCLUDED.txbytes,
+        blockreadbytes = EXCLUDED.blockreadbytes, blockwritebytes = EXCLUDED.blockwritebytes
     RETURNING 1
 ), persisted_workload AS (
- INSERT INTO workloadstats(id,platformid,deploymentid,stackid,servicename,replicakey,containerid,created,memoryactive,memorycache,cpuusage,memorylimit,rxbytes,txbytes)
+ INSERT INTO workloadstats(id,platformid,deploymentid,stackid,servicename,replicakey,containerid,created,memoryactive,memorycache,cpuusage,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes)
  SELECT gen_random_uuid(),c.platformid,c.deploymentid,c.stackid,
  CASE WHEN c.deploymentid IS NOT NULL THEN '' ELSE COALESCE(NULLIF(c.composeservicename,''),c.id::text) END,
  CASE WHEN c.deploymentid IS NOT NULL THEN 'deployment'
       WHEN c.composereplicanumber IS NOT NULL THEN 'replica:'||c.composereplicanumber
       ELSE 'instance:'||c.id::text END,
- c.id,s.created,s."memoryActive",s."memoryCache",s."cpuUsage",s."memoryLimit",s."rxBytes",s."txBytes"
+ c.id,s.created,s."memoryActive",s."memoryCache",s."cpuUsage",s."memoryLimit",s."rxBytes",s."txBytes",s."blockReadBytes",s."blockWriteBytes"
  FROM eligible s JOIN containers c ON c.id=s.persisted_container_id
  WHERE NOT c.isswarmtask AND (c.deploymentid IS NOT NULL OR c.stackid IS NOT NULL)
  ON CONFLICT(containerid,created) DO UPDATE SET
  memoryactive=EXCLUDED.memoryactive,memorycache=EXCLUDED.memorycache,cpuusage=EXCLUDED.cpuusage,
- memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes
+ memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes,blockreadbytes=EXCLUDED.blockreadbytes,blockwritebytes=EXCLUDED.blockwritebytes
 ), persisted_service AS (
     INSERT INTO swarmservicestats (
         id, platformid, dockerserviceid, dockertaskid, servicename,
         swarmserviceid, stackid, taskkey, created,
-        memoryactive, memorycache, cpuusage, memorylimit, rxbytes, txbytes)
+        memoryactive, memorycache, cpuusage, memorylimit, rxbytes, txbytes, blockreadbytes, blockwritebytes)
     SELECT gen_random_uuid(), $1, service.dockerserviceid, task.dockertaskid,
            service.name, service.swarmserviceid, service.stackid,
            CASE WHEN task.slot IS NOT NULL THEN 'slot:' || task.slot::text
                 ELSE 'node:' || task.dockernodeid END,
            sample.created, sample."memoryActive", sample."memoryCache",
-           sample."cpuUsage", sample."memoryLimit", sample."rxBytes", sample."txBytes"
+           sample."cpuUsage", sample."memoryLimit", sample."rxBytes", sample."txBytes", sample."blockReadBytes", sample."blockWriteBytes"
     FROM incoming sample
     JOIN platforms platform ON platform.id = $1
     JOIN swarmtaskprojections task
@@ -176,6 +177,7 @@ WITH incoming AS (
         memoryactive = EXCLUDED.memoryactive, memorycache = EXCLUDED.memorycache,
         cpuusage = EXCLUDED.cpuusage, memorylimit = EXCLUDED.memorylimit,
         rxbytes = EXCLUDED.rxbytes, txbytes = EXCLUDED.txbytes,
+        blockreadbytes = EXCLUDED.blockreadbytes, blockwritebytes = EXCLUDED.blockwritebytes,
         swarmserviceid = EXCLUDED.swarmserviceid, stackid = EXCLUDED.stackid
 ), platform_sample AS (
     SELECT COALESCE(SUM("memoryActive"), 0) AS memory_active,

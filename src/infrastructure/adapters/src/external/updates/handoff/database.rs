@@ -253,10 +253,10 @@ impl OwnedUpdateHelper {
         let mut target = None;
         for id in ids {
             let container = verification::container(docker, &id).await?;
-            if container["Config"]["Labels"]["com.docker.compose.service"] == "pg_db" {
-                if target.replace(container).is_some() {
-                    return Err(conflict());
-                }
+            if container["Config"]["Labels"]["com.docker.compose.service"] == "pg_db"
+                && target.replace(container).is_some()
+            {
+                return Err(conflict());
             }
         }
         let mut database = target.ok_or_else(conflict)?;
