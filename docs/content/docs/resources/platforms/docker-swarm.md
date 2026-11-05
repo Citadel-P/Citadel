@@ -105,7 +105,7 @@ managed Service. It mounts each Node's Docker socket read-write, which gives it
 daemon-level access. Installation, repair, upgrade, and removal are therefore
 explicit privileged actions and never happen when you only Test or Save a
 Platform. A single-Node Swarm is already covered by its manager and does not
-need a satellite Service.
+need a satellite Service or an approved satellite image to install or repair coverage.
 
 Do not reuse the regular Platform Agent or Edge Agent enrollment token on every
 Node. Citadel creates a separate, expiring, cluster-scoped bootstrap credential

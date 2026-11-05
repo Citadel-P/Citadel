@@ -91,6 +91,8 @@ the manager's existing service rollout replaces their tasks. Drain/resume is fen
 by operation identity, and cancellation before handoff reopens admission. Standalone
 self-replacement remains denied for the Swarm profile. Core verifies the new
 connection and expected version before marking a target successful.
+Manager-only Swarms need no node-Agent image or Service for coverage installation
+or repair. Repairing worker coverage still requires the previously approved image.
 Core also requires acknowledgement of Swarm admission resume for the saved node
 selection. A disconnected node or lost acknowledgement keeps the operation owned
 for retry after reconnect. Shutdown preserves dispatched attempts for verification;
