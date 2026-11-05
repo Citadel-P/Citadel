@@ -47,6 +47,7 @@ export function CoreStatusBadge({ status, failed = false }: { status?: UpdateSta
 
 export function AgentStatusSummary({ state, failed = false }: { state?: AgentUpdatesView; failed?: boolean }) {
   if (!state || failed) return <StateBadge value="Unknown" label={failed ? 'Status unavailable' : 'Loading status…'} />;
+  if (!state.targets.length) return <span className="text-sm text-muted-foreground">No Agents registered</span>;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm text-muted-foreground">{state.targets.length} registered</span>
@@ -77,17 +78,17 @@ export function DatabaseStatusBadge({ status }: { status?: UpdateStatusView }) {
         }
       />
     );
-  if (!status.databaseManaged) return <StateBadge value="Unknown" label="Manual updates" />;
+  if (!status.databaseManaged) return <StateBadge value="Unknown" label="In-app updates unavailable" />;
   if (status.databaseAvailable) return <StateBadge value="Warning" label="Update available" />;
   return <StateBadge value="Success" label="Up to date" />;
 }
 
 export function AgentSummaryBadge({ state, failed }: { state?: AgentUpdatesView; failed?: boolean }) {
   if (!state || failed) return <StateBadge value="Unknown" label="Status unavailable" />;
-  if (state.checkError) return <StateBadge value="Warning" label="Check failed" />;
   if (state.operation && !state.operation.finished)
     return <StateBadge value="Information" label="Update in progress" />;
   if (!state.targets.length) return <StateBadge value="Unknown" label="No Agents registered" />;
+  if (state.checkError) return <StateBadge value="Warning" label="Check failed" />;
   const attention = state.targets.filter((target) => target.status !== 'Current').length;
   return attention ? (
     <StateBadge value="Warning" label={`${attention} ${attention === 1 ? 'Agent needs' : 'Agents need'} attention`} />

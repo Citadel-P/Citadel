@@ -5,7 +5,7 @@ use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -30,6 +30,8 @@ struct Fixture {
     pause_probe: AtomicBool,
     probe_started: tokio::sync::Notify,
     continue_probe: tokio::sync::Notify,
+    release_checks: AtomicUsize,
+    availability_observations: Mutex<Vec<Vec<String>>>,
 }
 fn target(id: &str, version: &str) -> AgentUpdateTarget {
     AgentUpdateTarget {
@@ -52,6 +54,64 @@ fn actor() -> UpdateActor {
         actor_id: ActorId::new(Uuid::from_u128(2)),
     }
 }
+
+#[tokio::test]
+async fn no_agents_skips_release_verification_and_clears_irrelevant_errors() {
+    let fixture = Fixture::new();
+    fixture.targets.lock().unwrap().clear();
+    fixture.state.lock().unwrap().check_error = Some("Previous release check failed.".into());
+    let release = fixture.state.lock().unwrap().release.clone();
+    let service = fixture.service();
+    let token = CancellationToken::new();
+
+    let (state, targets) = service.status(&token).await.unwrap();
+    assert!(targets.is_empty());
+    assert!(state.check_error.is_none());
+    service.check(&token).await.unwrap();
+    assert_eq!(fixture.release_checks.load(Ordering::SeqCst), 0);
+    let state = fixture.state.lock().unwrap().clone();
+    assert!(state.check_error.is_none());
+    assert_eq!(state.release, release);
+    assert_eq!(
+        *fixture.availability_observations.lock().unwrap(),
+        vec![Vec::<String>::new()]
+    );
+
+    // Adding an Agent makes a real verification failure relevant again.
+    fixture
+        .targets
+        .lock()
+        .unwrap()
+        .push(target("new-agent", "0.1.1"));
+    fixture.state.lock().unwrap().release = None;
+    service.check(&token).await.unwrap();
+    assert_eq!(fixture.release_checks.load(Ordering::SeqCst), 1);
+    assert!(
+        service
+            .status(&token)
+            .await
+            .unwrap()
+            .0
+            .check_error
+            .is_some()
+    );
+    assert_eq!(fixture.availability_observations.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn empty_agent_inventory_can_resolve_alerts_for_the_previous_core_release() {
+    let fixture = Fixture::new();
+    fixture.targets.lock().unwrap().clear();
+    let mut service = fixture.service();
+    service.core_version = "0.1.3".into();
+    service.check(&CancellationToken::new()).await.unwrap();
+    assert_eq!(fixture.release_checks.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        *fixture.availability_observations.lock().unwrap(),
+        vec![Vec::<String>::new()]
+    );
+}
+
 impl Fixture {
     fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -87,6 +147,8 @@ impl Fixture {
             pause_probe: AtomicBool::new(false),
             probe_started: tokio::sync::Notify::new(),
             continue_probe: tokio::sync::Notify::new(),
+            release_checks: AtomicUsize::new(0),
+            availability_observations: Mutex::new(vec![]),
         })
     }
     fn service(self: &Arc<Self>) -> AgentUpdateService {
@@ -184,7 +246,15 @@ impl AgentUpdateRuntime for Fixture {
         _: &'a str,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<AgentUpdateRelease, UpdateError>> {
-        Box::pin(async { Ok(self.state.lock().unwrap().release.clone().unwrap()) })
+        Box::pin(async {
+            self.release_checks.fetch_add(1, Ordering::SeqCst);
+            self.state
+                .lock()
+                .unwrap()
+                .release
+                .clone()
+                .ok_or_else(|| UpdateError::Unavailable("Agent release is unavailable.".into()))
+        })
     }
     fn install<'a>(
         &'a self,
@@ -243,10 +313,16 @@ impl AgentUpdateRepository for Fixture {
     fn observe_agent_availability<'a>(
         &'a self,
         _: &'a AgentUpdateRelease,
-        _: &'a [AgentUpdateTarget],
+        targets: &'a [AgentUpdateTarget],
         _: chrono::DateTime<chrono::Utc>,
     ) -> BoxFuture<'a, Result<(), UpdateError>> {
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            self.availability_observations
+                .lock()
+                .unwrap()
+                .push(targets.iter().map(|target| target.id.clone()).collect());
+            Ok(())
+        })
     }
 
     fn operation(&self, id: Uuid) -> BoxFuture<'_, Result<AgentUpdateOperation, UpdateError>> {

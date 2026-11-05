@@ -26,6 +26,7 @@ class UpgradeFixture(registration.Fixture):
     state = "/opt/citadel-upgrade-state"
     project = "citadel_upgrade"
     extra_environment = ""
+    compose_file = registration.ROOT / "deploy/install/docker-compose.yml"
 
     def json_command(self, *args):
         return json.loads(self.docker(*args, timeout=600).stdout)
@@ -42,6 +43,18 @@ class UpgradeFixture(registration.Fixture):
             return None
         require(result.returncode == 0, f"Fixture HTTP request failed at {path}; response withheld")
         return json.loads(result.stdout)
+
+    def http_failure(self, path, data, token, expected_status=409):
+        import re
+        result = self.execute("wget", "-S", "-O-", "--timeout=30", "--tries=1",
+                              "--header=Content-Type: application/json",
+                              "--header=Authorization: Bearer " + token,
+                              "--post-data=" + json.dumps(data),
+                              "http://127.0.0.1:18000/api/v1/" + path,
+                              timeout=45, check=False)
+        statuses = re.findall(rb"HTTP/\S+\s+(\d{3})", result.stderr)
+        require(statuses and int(statuses[-1]) == expected_status,
+                f"Expected HTTP {expected_status} at {path}; response withheld")
 
     def login(self, password, *, optional=False):
         result = self.http("authentication/login", {
@@ -99,7 +112,7 @@ class UpgradeFixture(registration.Fixture):
         self.execute("mkdir", "-p", self.installation, self.state)
         self.execute("chmod", "700", self.installation, self.state)
         self.write(self.installation + "/docker-compose.yml",
-                   (registration.ROOT / "deploy/install/docker-compose.yml").read_text())
+                   self.compose_file.read_text())
         password, admin_password = secrets.token_hex(24), secrets.token_hex(24)
         env = f"CITADEL_IMAGE={self.core}\nPG_PASSWORD={password}\n" + self.extra_environment
         if browser_port:

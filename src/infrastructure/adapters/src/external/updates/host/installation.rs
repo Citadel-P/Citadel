@@ -56,6 +56,34 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
         })
     }
 
+    fn validate_database<'a>(
+        &'a self,
+        plan: &'a citadel_updates::UpdatePlan,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            let (response, image, architecture) = self
+                .client
+                .exchange(
+                    HostUpdateRequest::CheckDatabase(Box::new(plan.clone())),
+                    cancellation,
+                )
+                .await?;
+            if image != plan.source.image || architecture != plan.source.architecture {
+                return Err(super::super::docker::failed());
+            }
+            match response {
+                HostUpdateResponse::DatabaseChecked { plan_id, blocker } if plan_id == plan.id => {
+                    match blocker {
+                        Some(message) => Err(UpdateError::Conflict(message)),
+                        None => Ok(()),
+                    }
+                }
+                _ => Err(super::super::docker::failed()),
+            }
+        })
+    }
+
     fn recover_source<'a>(
         &'a self,
         operation: &'a UpdateOperation,

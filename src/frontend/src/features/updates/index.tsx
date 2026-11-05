@@ -42,6 +42,7 @@ function UpdateInfo() {
   const [open, setOpen] = useState(false);
   const cardId = useId();
   const status = data?.data;
+  const hasAgents = !!agents.data?.data.targets.length;
   return (
     <HoverCard open={open} onOpenChange={setOpen} openDelay={150} closeDelay={200}>
       <HoverCardTrigger asChild>
@@ -111,18 +112,25 @@ function UpdateInfo() {
             <DatabaseStatusBadge status={status} />
           </div>
           <p className="mt-2 font-mono text-muted-foreground">PostgreSQL {status?.databaseVersion ?? '—'}</p>
+          {status?.databaseVersion && !status.databaseManaged && status.operation?.component !== 'Database' && (
+            <p className="mt-2 text-muted-foreground">
+              In-app database updates require a registered, supported installation.
+            </p>
+          )}
         </div>
         <Collapsible className="border-t p-4 text-xs">
-          <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left">
+          <CollapsibleTrigger disabled={!hasAgents} className="group flex w-full items-center gap-2 text-left">
             <span className="mr-auto font-medium">Agents</span>
             <AgentSummaryBadge state={agents.data?.data} failed={agents.isError} />
-            <ChevronDown
-              aria-hidden="true"
-              className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
-            />
+            {hasAgents && (
+              <ChevronDown
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+              />
+            )}
           </CollapsibleTrigger>
           <CollapsibleContent>
-            {agents.data?.data.checkError && (
+            {hasAgents && agents.data?.data.checkError && (
               <p className="mt-2 text-muted-foreground">{agents.data.data.checkError}</p>
             )}
             {!!agents.data?.data.targets.length && (

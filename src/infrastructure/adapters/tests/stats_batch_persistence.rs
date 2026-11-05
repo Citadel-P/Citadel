@@ -267,3 +267,147 @@ async fn edge_node_samples_are_fenced_by_binding_session_and_never_write_manager
     );
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instances_separate() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_platforms::{ServiceStatIdentity, StatisticsReader, StatsWindow};
+    let pool = fixture().await;
+    let scope = platform(&pool).await;
+    let first = add_container(&pool, &scope, "network-first").await;
+    let second = add_container(&pool, &scope, "network-second").await;
+    let reader = PostgresStatisticsReader::new(pool.clone());
+    let deployment = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdbyactorid) VALUES($1,$2,$3,'{}','Stopped',$4)")
+        .bind(deployment).bind(deployment.to_string()).bind(scope.platform_id).bind(citadel_identity::SYSTEM_ACTOR_ID)
+        .execute(&pool).await.unwrap();
+    // A reset and recovery happen inside one 10-second bucket. The first
+    // lifetime reading and samples outside the requested range must not count.
+    for (id, samples) in [
+        (
+            first,
+            vec![
+                (80, 1., 1.),
+                (100, 1000., 2000.),
+                (102, 1100., 2040.),
+                (104, 5., 2060.),
+                (108, 25., 3.),
+                (120, 100., 30.),
+            ],
+        ),
+        (second, vec![(100, 5000., 10000.), (105, 5100., 10100.)]),
+    ] {
+        for (created, rx, tx) in samples {
+            sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,10,100,20,200,$4,$5)")
+                .bind(Uuid::now_v7()).bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO workloadstats(id,platformid,deploymentid,servicename,replicakey,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,'','deployment',$4,$5,10,100,20,200,$6,$7)")
+                .bind(Uuid::now_v7()).bind(scope.platform_id).bind(deployment).bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO swarmservicestats(id,platformid,dockerserviceid,dockertaskid,servicename,taskkey,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,'network-service',$3,'network-service','slot:1',$4,10,100,20,200,$5,$6)")
+                .bind(Uuid::now_v7()).bind(scope.platform_id).bind(id.to_string()).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
+        }
+    }
+    let window = StatsWindow::between(100, 110, 120).unwrap();
+    let history = reader
+        .containers(&[first, second], window, 120)
+        .await
+        .unwrap();
+    assert_eq!(history.len(), 2);
+    let a = history.iter().find(|s| s.container_id == first).unwrap();
+    assert_eq!(
+        (a.rx_bytes_delta, a.tx_bytes_delta),
+        (Some(125.), Some(63.))
+    );
+    assert_eq!(a.cpu_usage, 10.);
+    let b = history.iter().find(|s| s.container_id == second).unwrap();
+    assert_eq!(
+        (b.rx_bytes_delta, b.tx_bytes_delta),
+        (Some(100.), Some(100.))
+    );
+
+    // Different physical tasks in one logical slot must never share a baseline.
+    let service = reader
+        .service(
+            ServiceStatIdentity {
+                platform_id: scope.platform_id,
+                docker_service_id: "network-service",
+                managed_service_id: None,
+                stack_id: None,
+                service_name: "network-service",
+            },
+            window,
+            120,
+        )
+        .await
+        .unwrap();
+    assert_eq!(service.len(), 1);
+    assert_eq!(
+        (service[0].rx_bytes_delta, service[0].tx_bytes_delta),
+        (Some(225.), Some(163.))
+    );
+
+    let workload = reader
+        .workload_history(
+            citadel_platforms::StatisticsWorkload::Deployment,
+            deployment,
+            window,
+            120,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workload.len(), 1);
+    assert_eq!(
+        (
+            workload[0].stats[0].rx_bytes_delta,
+            workload[0].stats[0].tx_bytes_delta
+        ),
+        (Some(225.), Some(163.))
+    );
+
+    let short = reader
+        .containers(&[first], StatsWindow::between(104, 110, 120).unwrap(), 120)
+        .await
+        .unwrap();
+    assert_eq!(
+        (short[0].rx_bytes_delta, short[0].tx_bytes_delta),
+        (Some(20.), Some(3.))
+    );
+    let single = reader
+        .containers(&[first], StatsWindow::between(108, 110, 120).unwrap(), 120)
+        .await
+        .unwrap();
+    assert_eq!(
+        (single[0].rx_bytes_delta, single[0].tx_bytes_delta),
+        (None, None)
+    );
+    assert!(
+        reader
+            .containers(&[first], StatsWindow::between(90, 99, 120).unwrap(), 120)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    // Every supported relative window returns traffic, not the lifetime counter;
+    // a reset remains visible even at the coarsest resolution.
+    for minutes in StatsWindow::MINUTES {
+        let rows = reader
+            .containers(&[first], StatsWindow::minutes(minutes).unwrap(), 120)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows.iter().filter_map(|s| s.rx_bytes_delta).sum::<f64>(),
+            1199.
+        );
+    }
+    sqlx::query("DELETE FROM deployments WHERE id=$1")
+        .bind(deployment)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+}

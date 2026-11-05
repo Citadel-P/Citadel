@@ -119,7 +119,7 @@ export function DatabaseUpdateAvailability({ data }: { data?: UpdateStatusView }
       <p className="text-muted-foreground">
         {data?.databaseManaged
           ? 'PostgreSQL 18 minor updates require review and restart Core. The existing data directory is preserved.'
-          : 'Manage this database through its provider or Compose maintenance.'}{' '}
+          : 'In-app database updates require a registered, supported installation. This also applies when PostgreSQL runs alongside Core in Compose.'}{' '}
         <a
           className="underline"
           href="https://docs.citadelplane.com/operations/upgrade-and-rollback/#postgresql-engine-maintenance"

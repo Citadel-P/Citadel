@@ -101,6 +101,11 @@ bash ../tools/dev/dev.sh exec npm run dev -- --host 0.0.0.0 --port 5173 --strict
 To start only the development Compose services, use
 `bash src/tools/dev/dev.sh compose-up` from the repository root.
 
+This development Compose setup mounts a locally built Core executable and is not
+registered for in-app Core or PostgreSQL updates. Sharing a Compose project does
+not enable updater registration. To test replacement in the browser, use the
+[isolated updater fixture](../test/README.md#browser-and-full-lifecycle-postgresql-upgrades).
+
 ## Configuration and persistent data
 
 | File or location | Purpose |

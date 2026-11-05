@@ -5829,9 +5829,24 @@
             "format": "double",
             "type": "number"
           },
+          "rxBytesDelta": {
+            "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
+          },
+          "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -5876,9 +5891,24 @@
             "format": "double",
             "type": "number"
           },
+          "rxBytesDelta": {
+            "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
+          },
+          "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -10241,9 +10271,24 @@
                   "format": "double",
                   "type": "number"
                 },
+                "rxBytesDelta": {
+                  "description": "Bytes transferred between recorded samples in this history bucket.\nAbsent on raw runtime observations and when no baseline exists.",
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
                 "txBytes": {
                   "format": "double",
                   "type": "number"
+                },
+                "txBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
               "required": [

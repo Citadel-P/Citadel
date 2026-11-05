@@ -5,6 +5,7 @@ use super::super::{
 };
 use super::{
     ExecutionJournal, OwnedUpdateHelper,
+    database_eligibility::{check_database_source, env, facts},
     evidence::{HelperLaunchIntent, conflict},
     verification,
 };
@@ -29,7 +30,17 @@ impl DatabaseReplacement {
         docker: &LocalDocker<'_>,
         intent: &HelperLaunchIntent,
     ) -> Result<Self, UpdateError> {
-        source(docker, intent).await?;
+        check_database_source(
+            docker,
+            &intent.registration,
+            intent
+                .operation
+                .plan
+                .database
+                .as_ref()
+                .ok_or_else(conflict)?,
+        )
+        .await?;
         Ok(Self {
             infrastructure_sha256: infrastructure(docker, &intent.registration).await?,
             container_id: None,
@@ -94,7 +105,17 @@ impl OwnedUpdateHelper {
             home: home.path(),
             deadline: Instant::now() + Duration::from_secs(600),
         };
-        source(&docker, &self.intent).await?;
+        check_database_source(
+            &docker,
+            &self.intent.registration,
+            self.intent
+                .operation
+                .plan
+                .database
+                .as_ref()
+                .ok_or_else(conflict)?,
+        )
+        .await?;
         let plan = self
             .intent
             .operation
@@ -156,7 +177,17 @@ impl OwnedUpdateHelper {
         {
             return Err(conflict());
         }
-        let old = source(docker, &self.intent).await?;
+        let old = check_database_source(
+            docker,
+            &self.intent.registration,
+            self.intent
+                .operation
+                .plan
+                .database
+                .as_ref()
+                .ok_or_else(conflict)?,
+        )
+        .await?;
         // Replacement intent and checkpoint are already durable. Never replay any
         // mutation below after a timeout or process restart.
         docker
@@ -185,6 +216,20 @@ impl OwnedUpdateHelper {
             return Err(conflict());
         }
         if infrastructure(docker, reg).await? != receipt.infrastructure_sha256 {
+            return Err(conflict());
+        }
+        // Stopping PostgreSQL can take minutes. Revalidate the approved files
+        // at the mutation boundary, not only before waiting for shutdown.
+        self.state.verify_lock(&self.owner)?;
+        if reg.fingerprint(std::path::Path::new("/"))?
+            != execution
+                .replacement
+                .as_ref()
+                .ok_or_else(conflict)?
+                .configuration
+                .target_configuration_sha256
+            || ExecutionJournal::read_for(&self.state, &self.intent)? != *execution
+        {
             return Err(conflict());
         }
         compose(
@@ -257,63 +302,6 @@ impl OwnedUpdateHelper {
     }
 }
 
-async fn source(
-    docker: &LocalDocker<'_>,
-    intent: &HelperLaunchIntent,
-) -> Result<Value, UpdateError> {
-    let plan = intent
-        .operation
-        .plan
-        .database
-        .as_ref()
-        .ok_or_else(conflict)?;
-    super::super::compose::validate_database_update(plan)?;
-    let database =
-        verification::container(docker, &intent.registration.database_container_id).await?;
-    verification::database_running(&database)?;
-    let source_data = format!("/var/lib/postgresql/{}/docker", plan.source_version / 10000);
-    let value = facts(docker, &intent.registration.database_container_id).await?;
-    if value["version"] != plan.source_version
-        || value["recovery"] != false
-        || value["slots"] != 0
-        || value["replicas"] != 0
-        || value["subscriptions"] != 0
-        || value["tablespaces"] != 0
-        || value["data"] != source_data
-        || env(&database, "PGDATA")? != source_data
-    {
-        return Err(conflict());
-    }
-    // Only Alpine's packaged cluster (UID 70) is qualified by this executor.
-    docker
-        .run(&[
-            "exec",
-            &intent.registration.database_container_id,
-            "sh",
-            "-ec",
-            "test -f /etc/alpine-release; test \"$(stat -c %u \"$PGDATA\")\" = 70",
-        ])
-        .await?;
-    Ok(database)
-}
-async fn facts(docker: &LocalDocker<'_>, id: &str) -> Result<Value, UpdateError> {
-    let bytes = docker.run(&["exec", id, "sh", "-ec",
-        "exec psql -X -A -t -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -c \"SELECT json_build_object('version', current_setting('server_version_num')::int, 'data', current_setting('data_directory'), 'recovery', pg_is_in_recovery(), 'slots', (SELECT count(*) FROM pg_replication_slots), 'replicas', (SELECT count(*) FROM pg_stat_replication), 'subscriptions', (SELECT count(*) FROM pg_subscription), 'tablespaces', (SELECT count(*) FROM pg_tablespace WHERE spcname NOT IN ('pg_default', 'pg_global')))\""]).await?;
-    serde_json::from_slice(&bytes).map_err(|_| conflict())
-}
-fn env<'a>(container: &'a Value, key: &str) -> Result<&'a str, UpdateError> {
-    container["Config"]["Env"]
-        .as_array()
-        .ok_or_else(conflict)?
-        .iter()
-        .filter_map(Value::as_str)
-        .find_map(|v| {
-            v.split_once('=')
-                .filter(|(name, _)| *name == key)
-                .map(|(_, value)| value)
-        })
-        .ok_or_else(conflict)
-}
 fn hash(value: &Value) -> Result<String, UpdateError> {
     Ok(
         Sha256::digest(serde_json::to_vec(value).map_err(|_| conflict())?)

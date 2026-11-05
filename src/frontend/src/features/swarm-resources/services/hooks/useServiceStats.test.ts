@@ -44,3 +44,26 @@ describe('useServiceStatsStream', () => {
     });
   });
 });
+
+it('counts traffic per Agent container before summing, including separate arrivals and resets', () => {
+  useRealtimeGroupMock.mockReset();
+  const { result } = renderHook(() => useServiceStatsStream('platform-1', ['a', 'b'], 300));
+  const options = useRealtimeGroupMock.mock.calls[0][0];
+  let receive: (samples: unknown[]) => void = () => {};
+  options.setupEventListeners({
+    on: (_event: string, handler: typeof receive) => {
+      receive = handler;
+    },
+  });
+  act(() =>
+    receive([
+      { containerId: 'a', created: 301, rxBytes: 1000, txBytes: 2000 },
+      { containerId: 'b', created: 301, rxBytes: 3000, txBytes: 4000 },
+    ]),
+  );
+  act(() => receive([{ containerId: 'a', created: 311, rxBytes: 10, txBytes: 2005 }]));
+  act(() => receive([{ containerId: 'b', created: 311, rxBytes: 3100, txBytes: 4007 }]));
+  expect(result.current.stats[0]).toMatchObject({ rxBytesDelta: 110, txBytesDelta: 12 });
+  act(() => receive([{ containerId: 'b', created: 311, rxBytes: 3100, txBytes: 4007 }]));
+  expect(result.current.stats[0]).toMatchObject({ rxBytesDelta: 110, txBytesDelta: 12 });
+});

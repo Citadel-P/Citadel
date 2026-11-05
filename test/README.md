@@ -405,12 +405,17 @@ Run the updater lifecycle locally before publishing a release:
 
 ```bash
 python3 test/scripts/test-instance-upgrade-local.py --runtime-image YOUR_LOCAL_CORE_IMAGE
+# Verify source-helper / target acceptance across revisions using a separate checkout:
+# git worktree add --detach /tmp/citadel-update-source <source-commit>
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image YOUR_LOCAL_CORE_IMAGE --source-tree /tmp/citadel-update-source --scenario upgrade
 ```
 
 Use a Core runtime image built from this checkout. The runner compiles two
 test-only Core executables with distinct versions and packages them using that
 runtime. Only the release discovery/trust dependency is replaced by a private
-fixture; the real HTTP setup/login, review/approval, Docker inspection, detached
+fixture. With `--source-tree`, both the source executable and its initial Compose
+file come from that checkout; the target comes from the current checkout. The
+real HTTP setup/login, review/approval, Docker inspection, detached
 helper, checkpoint, replacement, target verification and PostgreSQL persistence run
 unchanged. The fixture registry is reachable only inside a disconnected disposable
 Docker daemon. No fixture credentials or journals are stored in the checkout.
@@ -1134,3 +1139,8 @@ replication setup fails preflight without stopping Core or PostgreSQL. PostgreSQ
 choose **Review and update → PostgreSQL → Update and restart**. Core remains the
 same version and existing Agent/production fixtures are untouched. Ctrl+C cleans up
 only this fixture. Private failure evidence is retained outside the repository.
+
+The `--database-source 18 --scenario database-preparation-failure` scenario
+creates a replication slot and verifies that review is rejected before ownership.
+It then reviews without the slot, recreates it, and verifies that approval also
+rejects the changed eligibility without stopping Core or PostgreSQL.

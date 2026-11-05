@@ -44,3 +44,8 @@ mod replacement_tests;
 mod target_tests;
 
 mod database;
+mod database_eligibility;
+pub(super) use database_eligibility::check_database_eligibility;
+
+#[cfg(test)]
+mod database_tests;

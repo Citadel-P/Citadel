@@ -79,6 +79,12 @@ pub struct ContainerStatSnapshot {
     pub memory_limit: f64,
     pub rx_bytes: f64,
     pub tx_bytes: f64,
+    /// Bytes transferred between recorded samples in this history bucket.
+    /// Absent on raw runtime observations and when no baseline exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rx_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_bytes_delta: Option<f64>,
     pub created: i64,
 }
 

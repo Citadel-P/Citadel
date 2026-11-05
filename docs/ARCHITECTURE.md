@@ -123,6 +123,9 @@ check and inventory refresh, and refresh again after a batch settles. Installati
 aliases are deduplicated; only names, versions, counts and opaque correlation hashes
 enter alert details. Offline/unknown previously advertised targets retain pending
 confirmation, while removed registrations and verified current versions can resolve.
+An empty Agent inventory skips release verification and suppresses irrelevant check
+errors. It still publishes an empty observation against the cached verified release
+so removing the last Agent can resolve its availability alert.
 The latest observation is stored alongside each existing update-check state and
 revalidated under a row lock during alert evaluation, fencing delayed queue entries.
 Same-release summary changes preserve the event and enqueue no delivery; new releases
@@ -647,7 +650,10 @@ An explicit database review uses the existing instance update service, review,
 claim, journal, checkpoint, Activity, and target-acceptance lifecycle. Its optional
 `UpdatePlan.database` pins the engine versions and official image digest while
 requiring identical source/target Core identities. Scheduled Core updates cannot
-implicitly upgrade the database. Approval rechecks the registered source.
+implicitly upgrade the database. Review and approval check replication, tablespaces,
+cluster layout/ownership, and the permitted Compose selectors before saving a review
+or claiming ownership. These read-only checks return a specific blocker and run
+again in the executor; status reads remain advisory.
 
 The detached executor uses the installation bridge for database operations so it
 survives replacing PostgreSQL. Core-only operations retain the exact PostgreSQL
@@ -658,8 +664,11 @@ replacement container/version, and binds its incarnation before target acceptanc
 Target startup distinguishes a database operation by its actual engine version;
 it still verifies the exact Core container, catalog, keys and committed receipt.
 No timeout replays replacement or silently restarts the source. Temporary Docker and inspection files
-use the detached helper's bounded `/tmp` mount, never the durable update-state
-directory, so failed preflight cannot leave scratch files blocking source recovery.
+use a bounded `/tmp` mount for database operations. Core operations preserve the
+source helper contract (`TMPDIR` points to the registered state directory, without
+a `/tmp` tmpfs), including target-side acceptance and helper commands. Database
+replacement rechecks the approved input fingerprint after shutdown and immediately
+before submitting Compose, so edits during shutdown cannot be applied silently.
 
 Citadel's minimum PostgreSQL version is 18. The current executor performs only
 qualified minor updates within 18, retaining the existing data directory. It rejects
@@ -982,6 +991,14 @@ resolution before rendering. Replica averages are summed after temporal
 aggregation. Historical buckets remain authoritative on overlap because history
 responses do not include the counts needed to combine partial averages. Current
 usage summaries read the latest observation separately from chart averages.
+Network history additionally returns `rxBytesDelta`/`txBytesDelta`: PostgreSQL
+calculates reset-aware differences between raw samples per physical Container or
+Swarm Task before summing traffic into buckets and across replicas. The first
+sample inside the requested range is a baseline; absent deltas mean insufficient
+data, not zero traffic. The shared container network panel accumulates these
+bucket totals for the selected window. Live observations calculate differences
+before bucketing as well; CPU and memory retain their existing averages. Missing
+observations can still hide traffic before an unobserved counter reset.
 
 ## Runtime routing and observations
 

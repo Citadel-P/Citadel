@@ -33,7 +33,7 @@ export function AgentUpdates({
   return (
     <div className="space-y-3">
       <AgentStatusSummary state={state} failed={failed} />
-      {state.checkError && <AlertMessage type="warning">{state.checkError}</AlertMessage>}
+      {!!state.targets.length && state.checkError && <AlertMessage type="warning">{state.checkError}</AlertMessage>}
       {state.targets.some((target) => target.status === 'Available') && (
         <>
           <span className="text-sm" id="manual-agent-selection">

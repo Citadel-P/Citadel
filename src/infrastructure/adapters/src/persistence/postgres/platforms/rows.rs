@@ -153,6 +153,8 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
                 memory_limit: row.try_get("stat_memorylimit").map_err(storage)?,
                 rx_bytes: row.try_get("stat_rxbytes").map_err(storage)?,
                 tx_bytes: row.try_get("stat_txbytes").map_err(storage)?,
+                rx_bytes_delta: None,
+                tx_bytes_delta: None,
                 created: row.try_get("stat_created").map_err(storage)?,
             })
         })

@@ -383,7 +383,7 @@ it('keeps current Agents visible and updates only the selected outdated Agent wh
   await user.click(screen.getByRole('button', { name: 'Update information' }));
   const info = await screen.findByRole('region', { name: 'Update information' });
   expect(info).toHaveTextContent('Citadel CoreUp to date');
-  expect(info).toHaveTextContent('DatabaseManual updates');
+  expect(info).toHaveTextContent('DatabaseIn-app updates unavailable');
   expect(within(info).getByText('PostgreSQL 18.6')).toBeVisible();
   expect(info).toHaveTextContent('1 Agent needs attention');
   expect(within(info).queryByText('Agent C')).not.toBeInTheDocument();
@@ -631,7 +631,7 @@ it('shows the live database version without claiming an engine update is availab
   );
   renderCitadel(<UpdatesPage />, { route: '/updates' });
   expect(await screen.findByText('PostgreSQL 17.11')).toBeVisible();
-  expect(screen.getByText('Manual updates')).toBeVisible();
+  expect(screen.getByText('In-app updates unavailable')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Review and update' })).toBeDisabled();
 });
 
@@ -647,5 +647,60 @@ it('keeps Core status usable when the database version cannot be read', async ()
   await user.click(screen.getByRole('button', { name: 'Update information' }));
   const card = await screen.findByRole('region', { name: 'Update information' });
   expect(within(card).getByText('Version unavailable')).toBeVisible();
-  expect(within(card).queryByText('Manual updates')).not.toBeInTheDocument();
+  expect(within(card).queryByText('In-app updates unavailable')).not.toBeInTheDocument();
 });
+
+it.each([false, true])(
+  'shows Agent release failures only for a registered inventory (hasAgents=%s)',
+  async (hasAgents) => {
+    const checkError = 'The Agent release matching Core could not be verified.';
+    const targets = hasAgents
+      ? [
+          {
+            id: 'A',
+            name: 'Agent A',
+            kind: 'Platform',
+            nodes: 1,
+            supported: true,
+            installedVersion: '0.1.0',
+            availableVersion: null,
+            status: 'Unknown',
+          },
+        ]
+      : [];
+    server.use(
+      http.get('http://localhost/api/v1/updates/agents', () =>
+        HttpResponse.json({
+          targets,
+          checkError,
+          schedule: { targets: [], enabled: false, cron: '0 3 * * *', timeZone: 'UTC' },
+        }),
+      ),
+    );
+    const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
+    if (hasAgents) {
+      expect(await screen.findByText(checkError)).toBeVisible();
+      expect(screen.getByText('Check failed')).toBeVisible();
+    } else {
+      expect(await screen.findByText('No Agents registered')).toBeVisible();
+      expect(screen.queryByText('0 registered')).not.toBeInTheDocument();
+      expect(screen.queryByText(checkError)).not.toBeInTheDocument();
+      expect(screen.queryByText('Check failed')).not.toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('button', { name: 'Update information' }));
+    const info = await screen.findByRole('region', { name: 'Update information' });
+    if (hasAgents) {
+      expect(within(info).getByText('Check failed')).toBeVisible();
+      await user.click(within(info).getByRole('button', { name: /Agents.*Check failed/ }));
+      expect(within(info).getByText(checkError)).toBeVisible();
+    } else {
+      expect(within(info).getByText('No Agents registered')).toBeVisible();
+      expect(within(info).queryByText(checkError)).not.toBeInTheDocument();
+      expect(within(info).queryByText('Check failed')).not.toBeInTheDocument();
+    }
+    expect(within(info).getByText('In-app updates unavailable')).toBeVisible();
+    expect(
+      within(info).getByText('In-app database updates require a registered, supported installation.'),
+    ).toBeVisible();
+  },
+);

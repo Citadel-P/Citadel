@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import io
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -128,6 +129,39 @@ class PublishedUpgradeTests(unittest.TestCase):
 
 
 class LocalUpgradeTests(unittest.TestCase):
+    def test_initial_installation_uses_the_source_compose_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = upgrade.UpgradeFixture('unused', Path(directory))
+            fixture.compose_file = Path(directory) / 'source-compose.yml'
+            fixture.compose_file.write_text('source installer')
+            with patch.object(fixture, 'execute'), patch.object(fixture, 'write') as write, \
+                    patch.object(fixture, 'compose'), patch.object(fixture, 'http'), \
+                    patch.object(fixture, 'register', return_value={}):
+                fixture.setup_installation()
+            write.assert_any_call(fixture.installation + '/docker-compose.yml', 'source installer')
+
+    def test_source_build_uses_selected_checkout_and_copies_its_executable(self):
+        spec = importlib.util.spec_from_file_location(
+            'local_upgrade', ROOT / 'test/scripts/test-instance-upgrade-local.py')
+        local = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(local)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'older-checkout'
+            binary = root / 'source-executable'
+            binary.write_bytes(b'source build')
+            artifact = dict(reason='compiler-artifact', target=dict(name='instance_upgrade_fixture'),
+                            executable=str(binary))
+            with patch.object(local.subprocess, 'run', return_value=subprocess.CompletedProcess(
+                    [], 0, json.dumps(artifact).encode(), b'')) as compile_binary, \
+                    patch.object(local.registration, 'run'):
+                local.build('runtime', local.SOURCE, root, 'a' * 64, source_root=source)
+            self.assertEqual(compile_binary.call_args.kwargs['cwd'], source)
+            self.assertEqual(compile_binary.call_args.kwargs['env']['CARGO_TARGET_DIR'], str(source / 'target'))
+            self.assertEqual((root / local.SOURCE / 'citadel-server').read_bytes(), b'source build')
+            descriptor = json.loads((root / local.SOURCE / 'upgrade-fixture.json').read_text())
+            self.assertEqual(descriptor['sources'][0]['catalogSha256'], 'a' * 64)
+
     def test_browser_publishes_only_loopback_ui_and_retains_its_own_network(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = upgrade.registration.Fixture('local-core', Path(directory))
@@ -205,7 +239,7 @@ class LocalUpgradeTests(unittest.TestCase):
                 patch.object(fixture, 'sql', return_value=b'ciphertext'),
                 patch.object(fixture, 'http', return_value=response),
                 patch.object(fixture, 'read', return_value='{}')):
-            with self.assertRaisesRegex(AssertionError, 'preflight unexpectedly allowed replacement'):
+            with patch.object(fixture, 'execute', return_value=subprocess.CompletedProcess([], 0, b'{}', b'  HTTP/1.1 200 OK\n')), self.assertRaisesRegex(AssertionError, 'Expected HTTP 409'):
                 fixture.run_database_transition(preparation_failure=True)
 
 

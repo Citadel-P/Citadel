@@ -14,6 +14,7 @@ pub(in crate::service) struct State {
     denied: bool,
     drift: bool,
     database_drift: bool,
+    database_blocked: bool,
     pub(in crate::service) agent_drift: bool,
     fail_ack: bool,
     helper_failed: bool,
@@ -223,6 +224,24 @@ impl UpdateRepository for Fixture {
     }
 }
 impl UpdateInstallationRuntime for Fixture {
+    fn validate_database<'a>(
+        &'a self,
+        _: &'a UpdatePlan,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            let mut state = self.state.lock().unwrap();
+            state.events.push("database-check");
+            if state.database_blocked {
+                Err(UpdateError::Conflict(
+                    "PostgreSQL replication slots must be removed before an in-app update.".into(),
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
+
     fn database_update<'a>(
         &'a self,
         _: &'a CancellationToken,
@@ -726,7 +745,10 @@ async fn database_review_reuses_the_claim_and_rechecks_engine_drift_before_launc
     let reviewed = review.await.unwrap();
     assert_eq!(reviewed.source, reviewed.target);
     assert_eq!(reviewed.database, fixture.plan.database);
-    assert_eq!(fixture.state.lock().unwrap().events, ["source", "review"]);
+    assert_eq!(
+        fixture.state.lock().unwrap().events,
+        ["source", "database-check", "review"]
+    );
     fixture.state.lock().unwrap().database_drift = true;
     let approval = service.approve(actor(), fixture.plan.id, Uuid::now_v7());
     tokio::pin!(approval);
@@ -747,4 +769,67 @@ async fn database_review_reuses_the_claim_and_rechecks_engine_drift_before_launc
     );
     assert!(state.operation.is_none());
     assert!(!state.events.contains(&"launch"));
+}
+
+#[tokio::test]
+async fn database_eligibility_blocks_review_and_approval_before_ownership() {
+    for blocked_at_review in [true, false] {
+        let mut fixture = Fixture::new();
+        fixture.plan.target = fixture.plan.source.clone();
+        fixture.plan.database = Some(DatabaseUpdatePlan {
+            source_version: 180001,
+            target_version: 180006,
+            target_image: format!("postgres@sha256:{}", "e".repeat(64)),
+        });
+        fixture.state.lock().unwrap().database_blocked = blocked_at_review;
+        let (service, mut queue) = fixture.service();
+        let review = service.review_database(actor());
+        tokio::pin!(review);
+        let command = tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut review => panic!() };
+        service
+            .execute(command, &CancellationToken::new())
+            .await
+            .unwrap();
+        if blocked_at_review {
+            assert!(
+                review
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("replication slots")
+            );
+            assert!(!fixture.state.lock().unwrap().events.contains(&"review"));
+        } else {
+            review.await.unwrap();
+            fixture.state.lock().unwrap().database_blocked = true;
+            let approval = service.approve(actor(), fixture.plan.id, Uuid::now_v7());
+            tokio::pin!(approval);
+            let command = tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut approval => panic!() };
+            service
+                .execute(command, &CancellationToken::new())
+                .await
+                .unwrap();
+            assert!(
+                approval
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("replication slots")
+            );
+            assert_eq!(
+                fixture
+                    .state
+                    .lock()
+                    .unwrap()
+                    .events
+                    .iter()
+                    .filter(|e| **e == "database-check")
+                    .count(),
+                2
+            );
+        }
+        let state = fixture.state.lock().unwrap();
+        assert!(state.operation.is_none());
+        assert!(!state.events.contains(&"launch"));
+    }
 }

@@ -2624,8 +2624,16 @@ export interface ContainerStatSnapshot {
   memoryLimit: number;
   /** @format double */
   rxBytes: number;
+  /**
+   * Bytes transferred between recorded samples in this history bucket.
+   * Absent on raw runtime observations and when no baseline exists.
+   * @format double
+   */
+  rxBytesDelta?: number | null;
   /** @format double */
   txBytes: number;
+  /** @format double */
+  txBytesDelta?: number | null;
 }
 
 export interface ContainerStatView {
@@ -2643,8 +2651,16 @@ export interface ContainerStatView {
   memoryLimit: number;
   /** @format double */
   rxBytes: number;
+  /**
+   * Bytes transferred between recorded samples in this history bucket.
+   * Absent on raw runtime observations and when no baseline exists.
+   * @format double
+   */
+  rxBytesDelta?: number | null;
   /** @format double */
   txBytes: number;
+  /** @format double */
+  txBytesDelta?: number | null;
 }
 
 export interface ContainerSummaryView {
@@ -3686,8 +3702,16 @@ export interface HistoryContainerStatSnapshot {
     memoryLimit: number;
     /** @format double */
     rxBytes: number;
+    /**
+     * Bytes transferred between recorded samples in this history bucket.
+     * Absent on raw runtime observations and when no baseline exists.
+     * @format double
+     */
+    rxBytesDelta?: number | null;
     /** @format double */
     txBytes: number;
+    /** @format double */
+    txBytesDelta?: number | null;
   }[];
 }
 

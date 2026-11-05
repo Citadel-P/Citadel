@@ -150,6 +150,7 @@ impl UpdateInstallService {
                 agent_requirements: source.agent_versions,
             };
             plan.validate(now)?;
+            self.runtime.validate_database(&plan, cancellation).await?;
             plan
         } else {
             self.prepare_scheduled(version, cancellation).await?
@@ -357,6 +358,9 @@ impl UpdateInstallService {
                 return Err(UpdateError::Conflict(
                     "PostgreSQL changed since review. Review again.".into(),
                 ));
+            }
+            if plan.database.is_some() {
+                self.runtime.validate_database(&plan, cancellation).await?;
             }
             if cancellation.is_cancelled() {
                 return Err(UpdateError::Cancelled);

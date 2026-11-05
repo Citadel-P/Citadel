@@ -70,3 +70,43 @@ describe('historical and live statistics buckets', () => {
     expect(appendLiveStatBucket(live, { created: 321, diskUsage: 40 }, 10, 3600).map((s) => s.diskUsage)).toEqual([40]);
   });
 });
+
+it('sums raw network increases before averaging and preserves resets within a bucket', () => {
+  const samples = [
+    { created: 301, rxBytes: 1000, txBytes: 2000 },
+    { created: 311, rxBytes: 1100, txBytes: 2040 },
+    { created: 321, rxBytes: 5, txBytes: 2060 },
+    { created: 331, rxBytes: 25, txBytes: 3 },
+  ];
+  const live = samples.reduce(
+    (buckets, sample) => appendLiveStatBucket(buckets, sample, 300, 3600),
+    [] as typeof samples,
+  );
+  expect(live).toHaveLength(1);
+  expect(live[0]).toMatchObject({ rxBytesDelta: 125, txBytesDelta: 63 });
+  expect(latestLiveStat(live)).toEqual(samples.at(-1));
+  const corrected = appendLiveStatBucket(live, { created: 331, rxBytes: 30, txBytes: 4 }, 300, 3600);
+  expect(corrected[0]).toMatchObject({ rxBytesDelta: 130, txBytesDelta: 64 });
+  const next = appendLiveStatBucket(corrected, { created: 601, rxBytes: 40, txBytes: 14 }, 300, 3600);
+  expect(next[1]).toMatchObject({ rxBytesDelta: 10, txBytesDelta: 10 });
+  const historical = [{ created: 301, rxBytes: 9, txBytes: 10, rxBytesDelta: 140, txBytesDelta: 70 }];
+  expect(
+    mergeStatsBuckets<(typeof samples)[number] & { rxBytesDelta?: number; txBytesDelta?: number }>(
+      historical,
+      next,
+      300,
+    ),
+  ).toMatchObject([
+    { rxBytesDelta: 140, txBytesDelta: 70 },
+    { rxBytesDelta: 10, txBytesDelta: 10 },
+  ]);
+});
+
+it('does not count a replacement container lifetime counter as live traffic', () => {
+  const first = appendLiveStatBucket([], { containerId: 'old', created: 10, rxBytes: 1000 }, 10, 900);
+  const replacement = appendLiveStatBucket(first, { containerId: 'new', created: 20, rxBytes: 9000 }, 10, 900);
+  expect(replacement[1]).toMatchObject({ rxBytesDelta: null });
+  expect(
+    appendLiveStatBucket(replacement, { containerId: 'new', created: 30, rxBytes: 9030 }, 10, 900)[2],
+  ).toMatchObject({ rxBytesDelta: 30 });
+});

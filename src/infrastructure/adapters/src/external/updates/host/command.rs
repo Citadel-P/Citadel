@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 pub enum HostUpdateRequest {
     Startup { state_directory: PathBuf },
     Check { state_directory: PathBuf },
+    CheckDatabase(Box<citadel_updates::UpdatePlan>),
     Launch(Box<UpdateOperation>),
     Finalize(Box<FinalizeUpdateRequest>),
     Completed(Box<UpdateOperation>),
@@ -35,6 +36,10 @@ pub enum HostUpdateRequest {
 pub enum HostUpdateResponse {
     Registered(Box<super::super::RegisteredComposeInstallation>),
     Checked(Box<CheckedUpdateInstallation>),
+    DatabaseChecked {
+        plan_id: uuid::Uuid,
+        blocker: Option<String>,
+    },
     Launched(Box<LaunchedUpdateHelper>),
     Finalized(Box<UpdateJournal>),
     FailedJournal(Box<UpdateJournal>),
@@ -48,6 +53,24 @@ pub async fn execute_host_update(
     cancellation: &CancellationToken,
 ) -> Result<HostUpdateResponse, UpdateError> {
     match request {
+        HostUpdateRequest::CheckDatabase(plan) => {
+            let blocker = match super::super::handoff::check_database_eligibility(
+                &plan,
+                process,
+                cancellation,
+            )
+            .await
+            {
+                Ok(()) => None,
+                // Only curated policy conflicts are returned; process output stays private.
+                Err(UpdateError::Conflict(message)) => Some(message),
+                Err(error) => return Err(error),
+            };
+            Ok(HostUpdateResponse::DatabaseChecked {
+                plan_id: plan.id,
+                blocker,
+            })
+        }
         HostUpdateRequest::RecoverSource(operation) => {
             super::super::handoff::recover_source(&operation, process, cancellation).await?;
             Ok(HostUpdateResponse::SourceRecovered(operation))

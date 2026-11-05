@@ -38,6 +38,12 @@ The bundled Alpine cluster must use `/var/lib/postgresql/18/docker`, owned by UI
 Other layouts and external databases require operator/provider maintenance. Database
 updates are explicitly approved; the Core/Agent schedule does not include them.
 
+Review checks the database layout, ownership, replication, tablespaces and Compose
+configuration before offering approval. Unsupported configurations show a blocker
+without stopping services. Citadel repeats these checks at approval and during
+preparation. Keep the Compose files and `.env` unchanged until the update finishes;
+an edit detected after shutdown stops replacement and requires recovery.
+
 If execution fails after shutdown, preserve the operation state, checkpoint and database. Do not click retry or restart a source against ambiguous data. Use explicit
 recovery below. The following commands are the operator-run alternative.
 
@@ -88,13 +94,16 @@ update-check setting changes.
 
 Available updates lists **Citadel Core**, **Database**, then **Agents**. Database currently
 offers a qualified PostgreSQL upgrade for registered supported installations.
-**Manual updates** indicates an external, unregistered or unsupported database; use
+**In-app updates unavailable** means the installation is not registered for supported
+database updates. This can also apply to a database bundled with Core in Compose; use
 the [Compose maintenance procedure](#postgresql-engine-maintenance) or your provider.
 
 Use **Settings → Updates → Config → Available updates**. Agent availability is
 independent of Core: a current Core can still have Agents that need updating.
 **Check now** also verifies the official Agent image matching the running Core
 version. It does not install anything.
+When no Agents are registered, the page and info card show **No Agents registered**
+and skip the Agent release check. A local Platform does not require an Agent.
 
 Choose **Review and update** in Available updates, then confirm the displayed
 Agent version transitions. You can narrow the selection with **Agents to update now**;

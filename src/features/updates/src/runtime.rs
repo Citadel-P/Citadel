@@ -35,6 +35,19 @@ pub trait UpdateInstallationRuntime: Send + Sync {
         Box::pin(async { Ok(None) })
     }
 
+    /// Read-only database-specific eligibility. Repeat before claiming ownership.
+    fn validate_database<'a>(
+        &'a self,
+        _plan: &'a crate::UpdatePlan,
+        _cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async {
+            Err(UpdateError::Unavailable(
+                "Database updates are not supported by this installation.".into(),
+            ))
+        })
+    }
+
     /// Fence the old executor, verify the unchanged source and archive its evidence.
     fn recover_source<'a>(
         &'a self,

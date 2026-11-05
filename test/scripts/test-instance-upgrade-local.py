@@ -29,15 +29,16 @@ SOURCE = "0.1.1-dev.9001"
 TARGET = "0.1.1-dev.9002"
 
 
-def build(base, version, directory, catalog, frontend=None):
+def build(base, version, directory, catalog, frontend=None, source_root=None):
     """Only build the explicitly test-only executable, using existing Cargo cache."""
     print(f"Building private lifecycle fixture {version}", flush=True)
+    build_root = source_root or registration.ROOT
     env = dict(os.environ, CITADEL_VERSION=version, CITADEL_INFORMATIONAL_VERSION=version,
-               SQLX_OFFLINE="true")
+               SQLX_OFFLINE="true", CARGO_TARGET_DIR=str(build_root / "target"))
     result = subprocess.run([
         "cargo", "test", "--locked", "-p", "citadel-server", "--test",
         "instance_upgrade_fixture", "--no-run", "--message-format=json",
-    ], cwd=registration.ROOT, env=env, capture_output=True, timeout=1800)
+    ], cwd=build_root, env=env, capture_output=True, timeout=1800)
     if result.returncode:
         log = Path(tempfile.mkdtemp(prefix="citadel-upgrade-build-failure-")) / "build.log"
         log.write_bytes(result.stdout + result.stderr)
@@ -93,6 +94,20 @@ class LocalUpgrade(upgrade.UpgradeFixture):
             self.sql(database, "SELECT pg_create_physical_replication_slot('citadel_preflight_fixture')")
         status = self.http("updates", token=token)
         require(status["databaseManaged"] and status["databaseAvailable"] == "18.6", "Qualified database update is not offered")
+        if preparation_failure:
+            self.http_failure("updates/review", {"database": True, "version": "18.6"}, token)
+            self.sql(database, "SELECT pg_drop_replication_slot('citadel_preflight_fixture')")
+            review = self.http("updates/review", {"database": True, "version": "18.6"}, token)
+            self.sql(database, "SELECT pg_create_physical_replication_slot('citadel_preflight_fixture')")
+            self.http_failure("updates/approve", {"reviewId": review["id"], "requestId": str(uuid.uuid4())}, token)
+            require(self.sql(database, "SELECT count(*) FROM instanceupdates") == b"0", "Blocked update claimed ownership")
+            require(self.http("updates", token=token).get("operation") is None, "Blocked update entered maintenance")
+            require(self.json_command("inspect", database)[0]["State"]["Running"], "Eligibility check stopped PostgreSQL")
+            require(self.json_command("inspect", core)[0]["State"]["Running"], "Eligibility check stopped Core")
+            require(json.loads(self.read(self.state + "/installation.json")) == registered, "Eligibility check changed registration")
+            require(self.sql(database, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid") == ciphertext, "Eligibility check changed data")
+            print("PASS: replication blocks review and approval before ownership or shutdown", flush=True)
+            return
         review = self.http("updates/review", {"database": True, "version": "18.6"}, token)
         require(review["component"] == "Database" and review["targetVersion"] == "18.6", "Incorrect database review")
         self.approval_attempted = True
@@ -102,22 +117,13 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         require(operation["component"] == "Database", "Database operation lost component identity")
         require(self.http("updates/approve", request, token)["id"] == operation_id, "Approval replay created another operation")
         print("Database update approved once; waiting for verified replacement", flush=True)
-        deadline = time.monotonic() + (300 if preparation_failure else 1200)
+        deadline = time.monotonic() + 1200
         while time.monotonic() < deadline:
-            if not preparation_failure:
-                self.check_exited_helpers(operation_id)
+            self.check_exited_helpers(operation_id)
             status = self.http("updates", token=token, optional=True)
             outcome = self.http("updates/operations/" + operation_id, token=token, optional=True)
             if outcome:
-                require(not preparation_failure or outcome["phase"] != "Succeeded", "Database preflight unexpectedly allowed replacement")
-                if preparation_failure and outcome["phase"] == "Failed" and status and status.get("operation") is None:
-                    require(self.json_command("inspect", database)[0]["State"]["Running"], "Preparation failure stopped PostgreSQL")
-                    require(self.json_command("inspect", core)[0]["State"]["Running"], "Preparation failure stopped Core")
-                    require(json.loads(self.read(self.state + "/installation.json")) == registered, "Preparation failure changed registration")
-                    require(self.sql(database, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid") == ciphertext, "Failure changed data")
-                    print("PASS: failed database preflight preserves Core, PostgreSQL, data and registration, and releases its claim", flush=True)
-                    return
-                require(outcome["phase"] not in ("Postponed", "RecoveryRequired") and (preparation_failure or outcome["phase"] != "Failed"), "Database updater reported failure")
+                require(outcome["phase"] not in ("Postponed", "RecoveryRequired", "Failed"), "Database updater reported failure")
             if status and outcome and outcome["phase"] == "Succeeded" and status.get("operation") is None:
                 break
             time.sleep(2)
@@ -358,15 +364,21 @@ def main():
     mode.add_argument("--scenario", choices=["all", "upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure", "database-preparation-failure"], default="all",
                         help="Run all lifecycle and interruption scenarios by default")
     parser.add_argument("--database-source", type=int, choices=[18], help="Exercise a PostgreSQL 18 minor upgrade, including in browser mode")
+    parser.add_argument("--source-tree", type=Path, help="Build the source/helper from a separate checkout; target uses this checkout")
     parser.add_argument("--port", type=int, default=18080, help="Localhost port for --browser (default: 18080)")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
+    source_root = args.source_tree.resolve() if args.source_tree else registration.ROOT
+    if not (source_root / "src/server/tests/instance_upgrade_fixture.rs").is_file():
+        parser.error("--source-tree must contain Citadel's instance upgrade fixture")
+    if args.source_tree and args.database_source:
+        parser.error("--source-tree tests Core transitions; omit --database-source")
     def interrupted(*_):
         raise KeyboardInterrupt()
     signal.signal(signal.SIGTERM, interrupted)
     import hashlib
-    catalog = hashlib.sha256((registration.ROOT / "src/infrastructure/database/generated/migrations.json").read_bytes()).hexdigest()
+    catalog = hashlib.sha256((source_root / "src/infrastructure/database/generated/migrations.json").read_bytes()).hexdigest()
     images = {}
     with tempfile.TemporaryDirectory(prefix="citadel-local-upgrade-") as temporary:
         directory = Path(temporary)
@@ -379,9 +391,11 @@ def main():
                     cwd=registration.ROOT, env=dict(os.environ, VITE_API_BASE_URL=""), check=True)
                 frontend = registration.ROOT / "src/frontend/dist"
             for version in [TARGET, SOURCE]:
-                images[version] = build(args.runtime_image, version, directory, catalog, frontend)
+                images[version] = build(args.runtime_image, version, directory, catalog, frontend,
+                                        source_root if version == SOURCE else registration.ROOT)
             if args.browser:
                 fixture = LocalUpgrade(images[SOURCE], directory)
+                fixture.compose_file = source_root / "deploy/install/docker-compose.yml"
                 fixture.database_source = args.database_source
                 fixture.start(registry=True, browser_port=args.port)
                 fixture.prepare_images(images[TARGET])
@@ -393,6 +407,7 @@ def main():
             for scenario in scenarios:
                 print(f"Running lifecycle scenario: {scenario}", flush=True)
                 fixture = LocalUpgrade(images[SOURCE], directory)
+                fixture.compose_file = source_root / "deploy/install/docker-compose.yml"
                 fixture.database_source = args.database_source
                 fixture.concurrent_requests = scenario == "concurrent-requests"
                 fixture.interrupt_cleanup = scenario == "cleanup-restart"

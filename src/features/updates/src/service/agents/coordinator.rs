@@ -48,6 +48,9 @@ impl AgentUpdateService {
         let mut state = self.repository.state().await?;
         state.release = state.release.filter(|r| r.version == self.core_version);
         let targets = self.targets(None, cancellation).await?;
+        if targets.is_empty() {
+            state.check_error = None;
+        }
         Ok((state, targets))
     }
     pub(super) async fn targets(
@@ -75,6 +78,22 @@ impl AgentUpdateService {
         Ok(unique.into_values().collect())
     }
     pub async fn check(&self, cancellation: &CancellationToken) -> Result<(), UpdateError> {
+        if cancellation.is_cancelled() {
+            return Err(UpdateError::Cancelled);
+        }
+        let observed_at = Utc::now();
+        let targets = self.targets(None, cancellation).await?;
+        if targets.is_empty() {
+            self.repository.save_release(None, None).await?;
+            self.notifier.changed();
+            // Retain verified release evidence so removed targets can resolve availability alerts.
+            if let Some(release) = self.repository.state().await?.release {
+                self.repository
+                    .observe_agent_availability(&release, &targets, observed_at)
+                    .await?;
+            }
+            return Ok(());
+        }
         let release = self.runtime.release(&self.core_version, cancellation).await;
         match release {
             Ok(release) if release.version == self.core_version => {

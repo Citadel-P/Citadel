@@ -111,12 +111,15 @@ fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateEr
             }
         ),
         "--read-only".into(),
-        "--tmpfs=/tmp:rw,noexec,nosuid,size=64m".into(),
         "--no-healthcheck".into(),
         "--user".into(),
         format!("{}:{}", reg.executor_uid, reg.executor_gid),
         "--env".into(),
-        "TMPDIR=/tmp".into(),
+        if intent.operation.plan.database.is_some() {
+            "TMPDIR=/tmp".into()
+        } else {
+            format!("TMPDIR={}", reg.state_directory.display())
+        },
         "--label".into(),
         format!("{}={}", verification::NONCE, intent.nonce),
         "--label".into(),
@@ -124,6 +127,9 @@ fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateEr
         "--entrypoint".into(),
         "/app/citadel-server".into(),
     ];
+    if intent.operation.plan.database.is_some() {
+        args.push("--tmpfs=/tmp:rw,noexec,nosuid,size=64m".into());
+    }
     for path in [&reg.directory, &reg.state_directory, &reg.docker_socket] {
         args.extend(["--mount".into(), bind_mount(path)?]);
     }
