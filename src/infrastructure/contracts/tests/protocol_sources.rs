@@ -5,6 +5,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
     // Central Agent updates add commands 6–8 and new RPC/messages. Existing
     // field numbers, command discriminants and authenticated envelopes are unchanged.
     // Container block I/O counters add optional fields 7–8 without changing existing statistics.
+    // Agent update settlement adds source identity fields and runtime image evidence.
     let sources = [
         (
             "script_service.proto",
@@ -24,7 +25,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "platform_service.proto",
             include_str!("../proto/platform_service.proto"),
-            "3768a366363cbb76104e49b69ca254604ffaa64826eb4ce19ef16edc10124c87",
+            "858945bbd433fbdc45ec43f01dcd678f0ed8e3c3c7f3fa5206bb4afa313ed35d",
         ),
         (
             "container_service.proto",
@@ -229,6 +230,33 @@ fn container_mount_inventory_uses_additive_fields_and_preserves_unknown_state() 
     let round_trip = ContainerMessage::decode(observed.encode_to_vec().as_slice()).unwrap();
     assert!(round_trip.mounts_observed);
     assert_eq!(round_trip.mounts.len(), 1);
+}
+
+#[test]
+fn agent_update_settlement_uses_additive_identity_fields() {
+    use citadel_contracts::citadel::platforms::v1::{AgentUpdateDrainRequest, AgentUpdateInfo};
+    use prost::Message;
+
+    let drain = AgentUpdateDrainRequest::decode(&[][..]).unwrap();
+    assert!(drain.source_container_id.is_empty());
+    assert!(drain.source_image.is_empty());
+    assert!(
+        AgentUpdateInfo::decode(&[][..])
+            .unwrap()
+            .runtime_image
+            .is_empty()
+    );
+    let drain = AgentUpdateDrainRequest {
+        source_container_id: "s".into(),
+        source_image: "i".into(),
+        ..Default::default()
+    };
+    assert_eq!(drain.encode_to_vec(), [0x1a, 1, b's', 0x22, 1, b'i']); // fields 3–4
+    let info = AgentUpdateInfo {
+        runtime_image: "r".into(),
+        ..Default::default()
+    };
+    assert_eq!(info.encode_to_vec(), [0x3a, 1, b'r']); // field 7
 }
 
 #[test]
