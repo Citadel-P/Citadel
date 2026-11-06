@@ -377,12 +377,16 @@ mod tests {
                 .iter()
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
-            ["0001", "0002"],
-            "instance updates must append to the published initial migration"
+            ["0001", "0002", "0003"],
+            "platform I/O must append to the published migrations"
         );
         assert_eq!(
             manifest["0001"].sha256,
             "42d6600f4892a48a87b6014097c1c461f5dca298974a64fdcd30388262301128"
+        );
+        assert_eq!(
+            manifest["0002"].sha256,
+            "e0bddb55964af30423b307933748923565fe1dc00bca790271264426e5d7e7de"
         );
         assert_eq!(manifest.len(), MIGRATIONS.len());
         assert_eq!(MIGRATIONS[0].id, "0001");
