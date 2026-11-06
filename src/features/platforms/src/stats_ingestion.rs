@@ -28,6 +28,7 @@ pub struct ContainerStatsSample {
 /// Host totals describe collection time, not the inventory at a later flush.
 #[derive(Clone, Debug, Serialize)]
 pub struct PlatformStatsSample {
+    pub container_io: Vec<crate::ContainerIoSnapshot>,
     #[serde(flatten)]
     pub scope: StatsScope,
     pub created: i64,

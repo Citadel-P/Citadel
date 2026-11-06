@@ -209,11 +209,49 @@ schema_model! {
 }
 
 schema_model! {
+    citadel_platforms::ContainerIoSnapshot =>
+    #[derive(serde::Serialize, utoipa::ToSchema)]
+    #[serde(rename_all = "camelCase")]
+    #[schema(as = ContainerIoSnapshot)]
+    pub struct ContainerIoSnapshotSchema {
+        pub container_id: String,
+        pub rx_bytes: f64,
+        pub tx_bytes: f64,
+        pub block_read_bytes: Option<f64>,
+        pub block_write_bytes: Option<f64>,
+    }
+}
+
+schema_model! {
     citadel_platforms::PlatformStatSnapshot =>
     #[derive(serde::Serialize, utoipa::ToSchema)]
     #[serde(rename_all = "camelCase")]
     #[schema(as = PlatformStatSnapshot)]
     pub struct PlatformStatSnapshotSchema {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[schema(value_type = Option<Vec<ContainerIoSnapshotSchema>>)]
+        pub container_io: Option<Vec<citadel_platforms::ContainerIoSnapshot>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub rx_bytes_delta: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub tx_bytes_delta: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub block_read_bytes: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub block_write_bytes: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub block_read_bytes_delta: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub block_write_bytes_delta: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub rx_bytes_per_second: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub tx_bytes_per_second: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub block_read_bytes_per_second: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub block_write_bytes_per_second: Option<f64>,
+
         pub created: i64,
         pub tx_bytes: f64,
         pub rx_bytes: f64,

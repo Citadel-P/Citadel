@@ -1614,7 +1614,7 @@ fn live_platform_stats(
         "platformId":platform,
         "stat": { "created":created, "cpuUsage":if context.cpu_count > 0 {cpu/context.cpu_count as f64} else {cpu},
             "memoryUsage":if mem_total > 0 {memory/mem_total as f64*100.0} else {0.0},
-            "rxBytes":sample["rxBytes"], "txBytes":sample["txBytes"],
+            "rxBytes":sample["rxBytes"], "txBytes":sample["txBytes"], "containerIo":sample["containerIo"],
             "diskUsedBytes":metadata["diskUsedBytes"], "diskTotalBytes":metadata["diskTotalBytes"], "diskUsage":metadata["diskUsage"],
         },
         "memTotal":mem_total,

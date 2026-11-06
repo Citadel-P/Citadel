@@ -2,4 +2,5 @@
 const MIGRATIONS: &[EmbeddedMigration] = &[
     EmbeddedMigration { id: "0001", name: "initial", file: "0001_initial.sql", sql: include_str!("0001_initial.sql"), transactional: true },
     EmbeddedMigration { id: "0002", name: "instance_updates", file: "0002_instance_updates.sql", sql: include_str!("0002_instance_updates.sql"), transactional: true },
+    EmbeddedMigration { id: "0003", name: "platform_io", file: "0003_platform_io.sql", sql: include_str!("0003_platform_io.sql"), transactional: true },
 ];

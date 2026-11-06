@@ -57,6 +57,30 @@ pub struct VolumeCapabilitiesView {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformStatView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Vec<crate::api::resources::schema_models::platforms::ContainerIoSnapshotSchema>>)]
+    pub container_io: Option<Vec<citadel_platforms::ContainerIoSnapshot>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rx_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_per_second: Option<f64>,
+
     pub created: i64,
     pub tx_bytes: f64,
     pub rx_bytes: f64,
@@ -73,6 +97,17 @@ pub struct PlatformStatView {
 impl From<citadel_platforms::PlatformStatSnapshot> for PlatformStatView {
     fn from(value: citadel_platforms::PlatformStatSnapshot) -> Self {
         Self {
+            container_io: value.container_io,
+            rx_bytes_delta: value.rx_bytes_delta,
+            tx_bytes_delta: value.tx_bytes_delta,
+            block_read_bytes: value.block_read_bytes,
+            block_write_bytes: value.block_write_bytes,
+            block_read_bytes_delta: value.block_read_bytes_delta,
+            block_write_bytes_delta: value.block_write_bytes_delta,
+            rx_bytes_per_second: value.rx_bytes_per_second,
+            tx_bytes_per_second: value.tx_bytes_per_second,
+            block_read_bytes_per_second: value.block_read_bytes_per_second,
+            block_write_bytes_per_second: value.block_write_bytes_per_second,
             created: value.created,
             tx_bytes: value.tx_bytes,
             rx_bytes: value.rx_bytes,

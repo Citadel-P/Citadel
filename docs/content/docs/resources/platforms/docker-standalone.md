@@ -43,3 +43,21 @@ when you want Citadel to manage an existing application's configuration.
 
 For metrics and connection failures, see [Platform monitoring](/operations/platform-monitoring)
 and [troubleshooting](/operations/troubleshooting).
+
+## Platform statistics
+
+The **Stats** tab shows container CPU and memory usage, Docker storage filesystem
+capacity, **Network Usage**, and **Disk I/O**. Network and disk I/O offer
+**Accumulated** bytes and **Throughput** in bytes per second. Their summary totals
+cover the selected period in either view.
+
+Traffic is calculated from changes in each container's counters before adding
+containers together. Restarting, replacing, or removing a container does not
+subtract already recorded traffic. These charts measure containers, not all
+network interfaces or all disk activity on the host. Disk I/O differs from
+**Disk Usage**, which measures filesystem capacity.
+
+At least two observations of a container are needed to measure traffic. Missing
+block-I/O counters remain unavailable. Older platform samples that do not contain
+individual container counters cannot supply these totals or rates; new samples
+populate the charts. Unobserved activity before a counter reset cannot be recovered.

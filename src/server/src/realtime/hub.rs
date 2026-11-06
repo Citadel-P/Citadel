@@ -365,7 +365,7 @@ impl RealtimeHub {
             json!({
                 "created":sample.created, "memoryActive":sample.memory_active,
                 "cpuUsage":sample.cpu_usage, "rxBytes":sample.rx_bytes,
-                "txBytes":sample.tx_bytes, "metadata":sample.metadata,
+                "txBytes":sample.tx_bytes, "metadata":sample.metadata, "containerIo":sample.container_io,
             })
         });
         self.publish(

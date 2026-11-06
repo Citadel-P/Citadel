@@ -53,6 +53,9 @@ async fn ingress_preserves_capture_timestamps_and_host_totals_without_database_w
         (10, 200.0, 4.0)
     );
     assert_eq!((second.created, second.memory_active), (11, 100.0));
+    assert_eq!(first.container_io.len(), 2);
+    assert_eq!(first.container_io[0], (&sample("a", 10)).into());
+    assert_eq!(second.container_io.len(), 1);
     assert!(pq.try_recv().is_err());
     assert_eq!(cq.len(), 3);
     assert_eq!(cq.try_recv().unwrap().sample.created, 10);
@@ -91,6 +94,7 @@ async fn nodes_never_create_manager_totals_and_empty_hosts_still_emit_platform_s
     );
     let empty = pq.try_recv().unwrap();
     assert_eq!(empty.memory_active, 0.0);
+    assert!(empty.container_io.is_empty());
     assert_eq!(empty.metadata, Some(metadata));
 }
 

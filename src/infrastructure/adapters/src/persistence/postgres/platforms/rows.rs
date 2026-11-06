@@ -7,11 +7,24 @@ pub(super) fn map_platform(row: PgRow) -> Result<PlatformDetails, AuthorizedRead
         .and_then(Value::as_str)
         .unwrap_or("Docker")
         .to_owned();
+    let container_io: Option<sqlx::types::Json<Vec<citadel_platforms::ContainerIoSnapshot>>> =
+        row.try_get("stat_containerio").map_err(storage)?;
     let stats = row
         .try_get::<Option<i64>, _>("stat_created")
         .map_err(storage)?
         .map(|created| {
             Ok(PlatformStatSnapshot {
+                container_io: container_io.map(|value| value.0),
+                rx_bytes_delta: None,
+                tx_bytes_delta: None,
+                block_read_bytes: None,
+                block_write_bytes: None,
+                block_read_bytes_delta: None,
+                block_write_bytes_delta: None,
+                rx_bytes_per_second: None,
+                tx_bytes_per_second: None,
+                block_read_bytes_per_second: None,
+                block_write_bytes_per_second: None,
                 created,
                 tx_bytes: row.try_get("stat_txbytes").map_err(storage)?,
                 rx_bytes: row.try_get("stat_rxbytes").map_err(storage)?,

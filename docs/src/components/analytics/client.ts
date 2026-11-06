@@ -35,7 +35,8 @@ export function createAnalytics(routes: Record<string, string>, siteUrl: string)
     return !state.preview && config !== null &&
       (consent?.choice === 'basic' || consent?.choice === 'accepted') && consent.expires > Date.now() &&
       navigator.doNotTrack !== '1' &&
-      (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl !== true;
+      (consent.choice === 'accepted' ||
+        (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl !== true);
   }
   function update() {
     state = { ...state, choice: consent?.choice ?? null, collecting: permitted() };

@@ -50,6 +50,7 @@ async fn add_container(pool: &PgPool, scope: &StatsScope, docker_id: &str) -> Uu
 }
 fn host(scope: &StatsScope, created: i64, count: i64) -> PlatformStatsSample {
     PlatformStatsSample {
+        container_io: Vec::new(),
         scope: scope.clone(),
         created,
         memory_active: 100.0,
@@ -509,6 +510,112 @@ async fn throughput_weights_elapsed_time_and_excludes_intervals_without_a_counte
     assert_eq!(rows[0].tx_bytes_per_second, Some(1000. / 21.));
     assert_eq!(rows[0].block_read_bytes_per_second, Some(10.));
     assert_eq!(rows[0].block_write_bytes_per_second, Some(10.));
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
+async fn platform_io_history_preserves_physical_baselines_and_survives_container_deletion() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_platforms::{ContainerIoSnapshot, StatisticsReader, StatsWindow};
+    let pool = fixture().await;
+    let scope = platform(&pool).await;
+    let inventory = add_container(&pool, &scope, "a").await;
+    let store = PostgresStatsBatchStore::new(pool.clone());
+    let io = |id: &str, value: f64, disk: Option<f64>| ContainerIoSnapshot {
+        container_id: id.into(),
+        rx_bytes: value,
+        tx_bytes: value,
+        block_read_bytes: disk,
+        block_write_bytes: disk,
+    };
+    // Within one 10-second bucket: A resets while B's growing counter hides the
+    // decrease in the host total. C starts with a high lifetime counter.
+    let mut samples = Vec::new();
+    for (created, counters) in [
+        (3001, vec![io("a", 1000., Some(100.)), io("b", 100., None)]),
+        (3003, vec![io("a", 20., Some(10.)), io("b", 2000., None)]),
+        (
+            3009,
+            vec![io("b", 2060., Some(500.)), io("c", 9000., Some(900.))],
+        ),
+        (
+            3011,
+            vec![io("b", 2080., Some(520.)), io("c", 9040., Some(940.))],
+        ),
+    ] {
+        let mut sample = host(&scope, created, 1);
+        sample.container_io = counters;
+        samples.push(sample);
+    }
+    store.persist_batch(&samples).await.unwrap();
+    store.persist_batch(&samples).await.unwrap(); // A retried sample must not count twice.
+    use citadel_platforms::PlatformReader;
+    let current = citadel_adapters::persistence::postgres::platforms::PostgresPlatformReader::new(
+        pool.clone(),
+    )
+    .get_platform(scope.platform_id)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        current.stats.as_ref().unwrap()[0].container_io.as_ref(),
+        Some(&samples[3].container_io)
+    );
+    let reader = PostgresStatisticsReader::new(pool.clone());
+    let window = StatsWindow::between(3000, 6600, 6600).unwrap(); // 10-second buckets
+    let stats = reader
+        .platform(scope.platform_id, window, 6600)
+        .await
+        .unwrap();
+    assert_eq!(stats.len(), 2);
+    assert_eq!(stats[0].rx_bytes_delta, Some(1980.)); // A:20 + B:1900+60; C baseline only
+    assert_eq!(stats[0].rx_bytes_per_second, Some(10. + 1960. / 8.));
+    assert_eq!(stats[0].block_read_bytes_delta, Some(10.));
+    assert_eq!(stats[0].block_read_bytes_per_second, Some(5.));
+    assert_eq!(stats[1].rx_bytes_delta, Some(60.));
+    assert_eq!(stats[1].rx_bytes_per_second, Some(30.));
+    assert_eq!(stats[1].block_read_bytes_delta, Some(60.));
+    assert_eq!(stats[1].block_read_bytes_per_second, Some(30.));
+    sqlx::query("DELETE FROM containers WHERE id=$1")
+        .bind(inventory)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        reader
+            .platform(scope.platform_id, window, 6600)
+            .await
+            .unwrap(),
+        stats
+    );
+    // A clipped range starts each physical container with a fresh baseline.
+    let clipped = reader
+        .platform(
+            scope.platform_id,
+            StatsWindow::between(3009, 6600, 6600).unwrap(),
+            6600,
+        )
+        .await
+        .unwrap();
+    assert_eq!(clipped[0].rx_bytes_delta, None);
+    assert_eq!(clipped[1].rx_bytes_delta, Some(60.));
+    // Reconfiguration still fences I/O writes together with the rest of telemetry.
+    let mut stale = host(&scope, 3012, 1);
+    stale.scope.address = Some("stale-address".into());
+    stale.container_io = vec![io("a", 99999., Some(99999.))];
+    assert_eq!(store.persist_batch(&[stale]).await.unwrap().stale, 1);
+    assert_eq!(
+        reader
+            .platform(scope.platform_id, window, 6600)
+            .await
+            .unwrap(),
+        stats
+    );
     sqlx::query("DELETE FROM platforms WHERE id=$1")
         .bind(scope.platform_id)
         .execute(&pool)

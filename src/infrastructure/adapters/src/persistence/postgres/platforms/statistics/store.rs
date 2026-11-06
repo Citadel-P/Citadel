@@ -184,19 +184,21 @@ WITH incoming AS (
            COALESCE(SUM("cpuUsage"), 0) AS cpu_usage,
            COALESCE(SUM("rxBytes"), 0) AS rx_bytes,
            COALESCE(SUM("txBytes"), 0) AS tx_bytes,
+           jsonb_agg(jsonb_build_object('containerId',"dockerContainerId",
+             'rxBytes',"rxBytes",'txBytes',"txBytes",'blockReadBytes',"blockReadBytes",'blockWriteBytes',"blockWriteBytes")) AS container_io,
            COALESCE(created, $7::bigint) AS created
     FROM eligible
     GROUP BY created
-    UNION ALL SELECT 0,0,0,0,$7::bigint WHERE $7::bigint IS NOT NULL AND NOT EXISTS(SELECT 1 FROM eligible)
+    UNION ALL SELECT 0,0,0,0,'[]'::jsonb,$7::bigint WHERE $7::bigint IS NOT NULL AND NOT EXISTS(SELECT 1 FROM eligible)
 ), persisted_platform AS (
     INSERT INTO platformstats (
-        id, platformid, memoryusage, cpuusage, rxbytes, txbytes, created, diskusedbytes, disktotalbytes, diskusage, alertpending)
+        id, platformid, memoryusage, cpuusage, rxbytes, txbytes, created, diskusedbytes, disktotalbytes, diskusage, alertpending, containerio)
     SELECT gen_random_uuid(), platform.id,
            CASE WHEN platform.memtotal > 0
                 THEN sample.memory_active / platform.memtotal * 100.0 ELSE 0 END,
            CASE WHEN platform.cpucount > 0
                 THEN sample.cpu_usage / platform.cpucount ELSE sample.cpu_usage END,
-           sample.rx_bytes, sample.tx_bytes, sample.created, $4, $5, $6, true
+           sample.rx_bytes, sample.tx_bytes, sample.created, $4, $5, $6, true, sample.container_io
     FROM platform_sample sample
     JOIN platforms platform ON platform.id = $1
     WHERE sample.created IS NOT NULL AND $3::text IS NULL
@@ -208,7 +210,7 @@ WITH incoming AS (
         diskusedbytes = EXCLUDED.diskusedbytes,
         disktotalbytes = EXCLUDED.disktotalbytes,
         diskusage = EXCLUDED.diskusage,
-        alertpending = true
+        alertpending = true, containerio = EXCLUDED.containerio
 )
 SELECT COUNT(*) FROM inserted
 "#,
