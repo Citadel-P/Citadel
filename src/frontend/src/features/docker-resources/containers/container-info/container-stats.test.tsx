@@ -3,7 +3,10 @@ import { ContainerStateStatus, type ContainerRuntimeView, type ContainerStatView
 import { useRead } from '@/lib/hooks';
 import { ContainerStats, ContainerStatsCharts, DeploymentStats } from './container-stats';
 
-vi.mock('@/lib/hooks', () => ({ useRead: vi.fn() }));
+vi.mock('@/lib/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hooks')>()),
+  useRead: vi.fn(),
+}));
 vi.mock('./stats/memory-usage', () => ({
   default: ({ stats }: { stats: ContainerStatView[] }) => <div data-testid="samples">{JSON.stringify(stats)}</div>,
 }));

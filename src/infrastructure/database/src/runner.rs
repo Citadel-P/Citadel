@@ -377,8 +377,8 @@ mod tests {
                 .iter()
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
-            ["0001", "0002", "0003"],
-            "platform I/O must append to the published migrations"
+            ["0001", "0002", "0003", "0004"],
+            "query indexes must append to the published migrations"
         );
         assert_eq!(
             manifest["0001"].sha256,
@@ -387,6 +387,10 @@ mod tests {
         assert_eq!(
             manifest["0002"].sha256,
             "e0bddb55964af30423b307933748923565fe1dc00bca790271264426e5d7e7de"
+        );
+        assert_eq!(
+            manifest["0003"].sha256,
+            "e8ad54b039c45d7c458297dc7f540287f0bc305536340eaecaffa9159e1eefdd"
         );
         assert_eq!(manifest.len(), MIGRATIONS.len());
         assert_eq!(MIGRATIONS[0].id, "0001");
