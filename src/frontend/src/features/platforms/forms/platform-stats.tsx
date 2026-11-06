@@ -63,10 +63,10 @@ import { useSwarmOverview } from '@/features/swarm/hooks/useSwarmOverview';
 
 type PlatformStatsDatum = Pick<PlatformStatView, (typeof platformIoFields)[number]> & {
   created: number;
-  cpuUsage: number;
-  memoryUsage: number;
-  rxBytes: number;
-  txBytes: number;
+  cpuUsage: number | null;
+  memoryUsage: number | null;
+  rxBytes: number | null;
+  txBytes: number | null;
   diskUsedBytes: number | null;
   diskTotalBytes: number | null;
   diskUsage: number | null;
@@ -91,6 +91,12 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
     : { ...platform, status: PlatformStatus.Online, stats: stats.length ? [stats[stats.length - 1]] : [] };
   return (
     <div className="flex flex-col gap-4">
+      {platform.type === PlatformType.DockerSwarm && (
+        <p className="text-sm text-muted-foreground">
+          Network and disk I/O include containers on the connected host and Swarm nodes reporting through node Agents.
+          Missing or disconnected node Agents leave gaps. CPU, memory, and disk capacity describe the connected host.
+        </p>
+      )}
       <StatsChartRange range={range} error={error}>
         {!isLoading && stats.length === 0 ? (
           <div className="rounded-md border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
@@ -288,7 +294,9 @@ const CpuUsageChart = ({
       ]}>
       <StatsSummaryItem
         label="Usage"
-        value={platform.status === PlatformStatus.Online && latest ? formatPercent(latest.cpuUsage) : '-'}
+        value={
+          platform.status === PlatformStatus.Online && latest?.cpuUsage != null ? formatPercent(latest.cpuUsage) : '-'
+        }
       />
     </StatsChartCard>
   );
@@ -335,12 +343,16 @@ const MemoryUsageChart = ({
       ]}>
       <StatsSummaryItem
         label="Usage"
-        value={platform.status === PlatformStatus.Online && latest ? formatPercent(latest.memoryUsage) : '-'}
+        value={
+          platform.status === PlatformStatus.Online && latest?.memoryUsage != null
+            ? formatPercent(latest.memoryUsage)
+            : '-'
+        }
       />
       <StatsSummaryItem
         label="Used"
         value={
-          platform.status === PlatformStatus.Online && latest && platform.memTotal > 0
+          platform.status === PlatformStatus.Online && latest?.memoryUsage != null && platform.memTotal > 0
             ? byteTransform((latest.memoryUsage / 100) * platform.memTotal, 2)
             : '-'
         }
@@ -610,24 +622,44 @@ const SystemMetric = ({
 );
 
 const useLiveStats = (platform: PlatformView, seconds: number, windowSeconds: number): PlatformStatsDatum[] => {
-  const latestStat = platform.status === PlatformStatus.Online ? platform.stats?.at(0) : undefined;
+  const latestStat = platform.stats?.at(0);
   const nextState = (previous?: { gauges: PlatformStatsDatum[]; io: PlatformIoSeries }) => {
-    const normalized = latestStat ? normalizePlatformStats([latestStat])[0] : undefined;
+    const normalized =
+      latestStat && (latestStat.cpuUsage != null || latestStat.memoryUsage != null)
+        ? normalizePlatformStats([latestStat])[0]
+        : undefined;
     const gauges = normalized
       ? appendLiveStatBucket(previous?.gauges ?? [], normalized, seconds, windowSeconds)
       : (previous?.gauges ?? []);
     const { series: io, buckets } = appendPlatformIo(previous?.io, latestStat, seconds, windowSeconds);
     const byBucket = new Map(buckets.map((point) => [Math.floor(point.created / seconds), point]));
+    const combined = new Map(gauges.map((point) => [Math.floor(point.created / seconds), point]));
+    for (const point of buckets) {
+      const bucket = Math.floor(point.created / seconds);
+      if (!combined.has(bucket))
+        combined.set(bucket, {
+          created: point.created,
+          cpuUsage: null,
+          memoryUsage: null,
+          rxBytes: null,
+          txBytes: null,
+          diskUsage: null,
+          diskUsedBytes: null,
+          diskTotalBytes: null,
+        });
+    }
     return {
       platformId: platform.id,
       latestStat,
       seconds,
       gauges,
       io,
-      stats: gauges.map((point) => {
-        const measured = byBucket.get(Math.floor(point.created / seconds));
-        return { ...point, ...Object.fromEntries(platformIoFields.map((key) => [key, measured?.[key] ?? null])) };
-      }),
+      stats: [...combined.values()]
+        .sort((a, b) => a.created - b.created)
+        .map((point) => {
+          const measured = byBucket.get(Math.floor(point.created / seconds));
+          return { ...point, ...Object.fromEntries(platformIoFields.map((key) => [key, measured?.[key] ?? null])) };
+        }),
     };
   };
   const [live, setLive] = useState(() => nextState());
@@ -674,10 +706,10 @@ export const normalizePlatformStats = (stats?: PlatformStatView[] | null): Platf
         rxBytesPerSecond: stat.rxBytesPerSecond ?? null,
         txBytesPerSecond: stat.txBytesPerSecond ?? null,
         created: Number(stat.created ?? 0),
-        cpuUsage: Number(stat.cpuUsage ?? 0),
-        memoryUsage: Number(stat.memoryUsage ?? 0),
-        rxBytes: Number(stat.rxBytes ?? 0),
-        txBytes: Number(stat.txBytes ?? 0),
+        cpuUsage: stat.cpuUsage == null ? null : Number(stat.cpuUsage),
+        memoryUsage: stat.memoryUsage == null ? null : Number(stat.memoryUsage),
+        rxBytes: stat.rxBytes == null ? null : Number(stat.rxBytes),
+        txBytes: stat.txBytes == null ? null : Number(stat.txBytes),
         diskUsedBytes: hasCompleteDiskSample ? diskUsedBytes : null,
         diskTotalBytes: hasCompleteDiskSample ? diskTotalBytes : null,
         diskUsage: hasCompleteDiskSample ? diskUsage : null,

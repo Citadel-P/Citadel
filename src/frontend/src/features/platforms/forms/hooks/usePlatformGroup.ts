@@ -1,3 +1,4 @@
+import { mergePlatformIoSample } from '../../platform-io';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -34,10 +35,14 @@ export const usePlatformGroup = (id: string) => {
       if (stats.platformId !== id) return;
 
       setPlatform((current) => {
-        if (!current) return current;
+        if (!current || current.id !== stats.platformId) return current;
 
         const next = { ...current };
-        next.stats = [stats.stat];
+        const previous = next.stats?.[0];
+        const merged = mergePlatformIoSample(previous, stats.stat, stats.ioOnly ? stats.ioNodeId : undefined);
+        if (merged === previous) return current;
+        next.stats = [merged];
+        if (stats.ioOnly) return next;
         next.networkCount = stats.networkCount;
         next.volumeCount = stats.volumeCount;
         next.imageCount = stats.imageCount;

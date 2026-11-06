@@ -1019,8 +1019,23 @@ live charts keep the same per-container baselines. Replacing or removing a
 container never subtracts its previously measured traffic from the period totals.
 The shared I/O panel is owned by `components/custom/stats-io-usage`, used by both
 platform and container charts. These are container traffic and block-I/O metrics,
-not host-interface or host-disk totals; Swarm worker-node samples do not enter the
-manager Platform totals. Old platform samples without physical counters remain
+not host-interface or host-disk totals. Swarm node captures are retained separately
+in `platformnodeiostats`, with the same bounded seven-day retention, independently
+of node bindings and container inventory. History partitions counters by source
+node and physical container before summing rates and deltas across the connected
+host and reporting node Agents. Samples from a node Agent on the connected host
+are excluded to prevent double counting. Existing Edge session, revocation and
+Platform scope locks fence writes. Node captures never update manager metadata,
+host gauges or host alerts. Live Platform updates use the existing authorized
+group with an I/O-only payload; node identity and capture times keep independent
+baselines, including when several nodes update between renders. Client capture
+timestamps are retained per source even for empty captures, so delayed observations
+cannot resurrect deleted containers or rewind host metadata. Empty node captures
+also advance I/O retention without refreshing the host gauges. History retains
+node-only buckets with null host gauges rather than fabricating zero CPU/memory.
+Missing Agents or observations leave gaps; no extrapolation or host-wide totals
+are inferred. CPU, memory and disk capacity still describe the connected host.
+Old platform samples without physical counters remain
 unknown for I/O, rather than inferring reset-safe deltas from aggregate counters.
 The additive migration preserves existing samples and applied migration checksums.
 

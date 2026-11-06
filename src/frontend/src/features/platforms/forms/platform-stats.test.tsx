@@ -95,6 +95,36 @@ describe('platform current statistics', () => {
     expect(samples.at(-1).cpuUsage).toBe(15);
   });
 
+  it('shows Swarm node-only I/O buckets without manufacturing host usage', () => {
+    vi.mocked(useRead).mockReturnValue({
+      data: {
+        data: {
+          stats: [
+            historical,
+            {
+              ...historical,
+              created: 110,
+              cpuUsage: null,
+              memoryUsage: null,
+              rxBytes: null,
+              txBytes: null,
+              rxBytesDelta: 80,
+              txBytesDelta: 40,
+              rxBytesPerSecond: 8,
+              txBytesPerSecond: 4,
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    } as ReturnType<typeof useRead>);
+    render(<PlatformStatsTab platform={{ ...platform, type: PlatformType.DockerSwarm, stats: [] }} />);
+    expect(screen.getByText(/Swarm nodes reporting through node Agents/)).toBeVisible();
+    const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
+    expect(samples.at(-1)).toMatchObject({ created: 110, cpuUsage: null, memoryUsage: null });
+    expect(screen.getByText('80 B')).toBeVisible();
+  });
+
   it('uses period totals and throughput for network and disk I/O instead of lifetime counters', () => {
     vi.mocked(useRead).mockReturnValue({
       data: {

@@ -110,20 +110,29 @@ export interface Cancellable {
   signal: AbortSignal;
 }
 
-export interface PlatformStatsBatchView {
-  platformId: string;
-  networkCount: number;
-  volumeCount: number;
-  containerCount: number;
-  containersRunning: number;
-  containersPaused: number;
-  containersStopped: number;
-  imageCount: number;
-  imageUsedBytes: number | null;
-  memTotal: number;
-  volumeUsedBytes: number | null;
-  stat: PlatformStatView;
-}
+export type PlatformStatsBatchView =
+  | {
+      ioOnly: true;
+      ioNodeId: string;
+      platformId: string;
+      stat: PlatformStatView;
+    }
+  | {
+      ioOnly?: false;
+      ioNodeId?: never;
+      platformId: string;
+      networkCount: number;
+      volumeCount: number;
+      containerCount: number;
+      containersRunning: number;
+      containersPaused: number;
+      containersStopped: number;
+      imageCount: number;
+      imageUsedBytes: number | null;
+      memTotal: number;
+      volumeUsedBytes: number | null;
+      stat: PlatformStatView;
+    };
 
 export interface DeleteDialogConfig<TItem, TRequest> {
   type: ResourceType;

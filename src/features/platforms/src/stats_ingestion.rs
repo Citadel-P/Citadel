@@ -25,7 +25,8 @@ pub struct ContainerStatsSample {
     pub sample: RuntimeContainerStat,
 }
 
-/// Host totals describe collection time, not the inventory at a later flush.
+/// Scoped captures describe collection time, not inventory at a later flush.
+/// Node captures persist I/O only; host captures also provide platform gauges.
 #[derive(Clone, Debug, Serialize)]
 pub struct PlatformStatsSample {
     pub container_io: Vec<crate::ContainerIoSnapshot>,

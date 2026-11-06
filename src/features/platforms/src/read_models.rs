@@ -26,6 +26,10 @@ pub struct EffectivePlatformPermission {
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerIoSnapshot {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<i64>,
     pub container_id: String,
     pub rx_bytes: f64,
     pub tx_bytes: f64,
@@ -36,6 +40,8 @@ pub struct ContainerIoSnapshot {
 impl From<&crate::RuntimeContainerStat> for ContainerIoSnapshot {
     fn from(stat: &crate::RuntimeContainerStat) -> Self {
         Self {
+            node_id: None,
+            created: None,
             container_id: stat.docker_container_id.clone(),
             rx_bytes: stat.rx_bytes,
             tx_bytes: stat.tx_bytes,
@@ -72,10 +78,10 @@ pub struct PlatformStatSnapshot {
     pub block_write_bytes_per_second: Option<f64>,
 
     pub created: i64,
-    pub tx_bytes: f64,
-    pub rx_bytes: f64,
-    pub cpu_usage: f64,
-    pub memory_usage: f64,
+    pub tx_bytes: Option<f64>,
+    pub rx_bytes: Option<f64>,
+    pub cpu_usage: Option<f64>,
+    pub memory_usage: Option<f64>,
 
     pub disk_used_bytes: Option<i64>,
 

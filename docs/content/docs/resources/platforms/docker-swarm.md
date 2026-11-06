@@ -327,8 +327,23 @@ Citadel does not currently provide:
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.
 
-The Platform **Stats** tab's network and disk-I/O charts measure containers on the
-connected manager host, using the same accumulated/throughput views as
-[standalone Platforms](/resources/platforms/docker-standalone#platform-statistics).
-They are not cluster-wide totals. Worker-node samples remain scoped to their
-own containers, Tasks and Services.
+## Platform statistics
+
+The **Stats** tab combines container network traffic and disk I/O from the connected
+host and Swarm nodes reporting through node Agents. Both charts offer accumulated
+bytes and throughput, like [standalone Platforms](/resources/platforms/docker-standalone#platform-statistics).
+Enable node Agents on every other node for cluster coverage. A node without a
+working Agent contributes no readings; totals reflect only observed activity.
+
+Traffic is calculated separately for each physical container before aggregation.
+Deleting a container, replacing a Task, or removing a node does not erase its
+recorded traffic. Replacement containers start a new baseline. The connected
+host is counted once, even if it also has a node Agent. Network traffic between
+containers can be measured at both endpoints; these are aggregate container
+counters, not the cluster's external bandwidth.
+
+CPU, memory and disk-capacity charts still describe the connected host. If its
+readings stop while nodes continue reporting, their I/O remains visible with gaps
+in the host charts. History follows the seven-day telemetry retention policy.
+Missing observations can hide traffic before a counter resets; Citadel does not
+estimate that missing traffic.

@@ -1,3 +1,4 @@
+import { mergePlatformIoSample } from '../platform-io';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { PlatformView } from '@/api/generated/api.types';
 import { RealtimeConnection } from '@/lib/realtime-connection';
@@ -106,7 +107,14 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
       const updatedPlatforms = [...current];
       const target = { ...updatedPlatforms[existingIndex] };
 
-      target.stats = [stats.stat];
+      const previous = target.stats?.[0];
+      const merged = mergePlatformIoSample(previous, stats.stat, stats.ioOnly ? stats.ioNodeId : undefined);
+      if (merged === previous) return current;
+      target.stats = [merged];
+      if (stats.ioOnly) {
+        updatedPlatforms[existingIndex] = target;
+        return updatedPlatforms;
+      }
       target.networkCount = stats.networkCount;
       target.volumeCount = stats.volumeCount;
       target.imageCount = stats.imageCount;

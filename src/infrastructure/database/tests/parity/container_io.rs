@@ -116,6 +116,15 @@ async fn platform_io_upgrade_preserves_existing_platform_history_and_applied_che
     .await
     .unwrap();
     assert_eq!(before, after);
+    let counters = serde_json::json!([{"containerId":"deleted","rxBytes":1000,"txBytes":2000}]);
+    sqlx::query("UPDATE platformstats SET containerio=$2 WHERE platformid=$1")
+        .bind(platform)
+        .bind(&counters)
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO platformnodeiostats(id,platformid,nodeid,created,containerio) VALUES($1,$2,'worker',100,$3)")
+        .bind(Uuid::now_v7()).bind(platform).bind(&counters).execute(&mut connection).await.unwrap();
     assert_eq!(
         MigrationRunner::migrate(&database.url)
             .await
@@ -123,6 +132,21 @@ async fn platform_io_upgrade_preserves_existing_platform_history_and_applied_che
             .applied,
         0
     );
+    let host: serde_json::Value =
+        sqlx::query_scalar("SELECT containerio FROM platformstats WHERE platformid=$1")
+            .bind(platform)
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    let node: serde_json::Value = sqlx::query_scalar(
+        "SELECT containerio FROM platformnodeiostats WHERE platformid=$1 AND nodeid='worker'",
+    )
+    .bind(platform)
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(host, counters);
+    assert_eq!(node, counters);
     connection.close().await.unwrap();
     database.close().await;
 }

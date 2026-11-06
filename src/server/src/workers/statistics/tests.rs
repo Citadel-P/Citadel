@@ -1,4 +1,7 @@
-use super::*;
+use super::{StatsIngress, writer};
+use citadel_platforms::{RuntimeContainerStat, RuntimePlatformStats, stats_ingestion::StatsScope};
+use citadel_runtime::runtime_metrics::RuntimeWork;
+use tokio_util::sync::CancellationToken;
 
 fn scope(node: Option<&str>) -> StatsScope {
     StatsScope {
@@ -62,7 +65,7 @@ async fn ingress_preserves_capture_timestamps_and_host_totals_without_database_w
 }
 
 #[tokio::test]
-async fn nodes_never_create_manager_totals_and_empty_hosts_still_emit_platform_samples() {
+async fn nodes_keep_scoped_captures_and_empty_hosts_still_emit_platform_samples() {
     let (containers, mut cq) = writer::channel(8, RuntimeWork::ContainerStatsIngress);
     let (platforms, mut pq) = writer::channel(8, RuntimeWork::PlatformStatsIngress);
     let ingress = StatsIngress {
@@ -76,7 +79,9 @@ async fn nodes_never_create_manager_totals_and_empty_hosts_still_emit_platform_s
             .submit(scope(Some("worker")), vec![sample("a", 10)], None, &cancel)
             .await
     );
-    assert!(pq.try_recv().is_err());
+    let node = pq.try_recv().unwrap();
+    assert_eq!(node.scope.node_id.as_deref(), Some("worker"));
+    assert_eq!(node.container_io.len(), 1);
     assert_eq!(
         cq.try_recv().unwrap().scope.node_id.as_deref(),
         Some("worker")

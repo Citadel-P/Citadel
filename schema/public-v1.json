@@ -5082,6 +5082,19 @@
           "containerId": {
             "type": "string"
           },
+          "created": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "nodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "rxBytes": {
             "format": "double",
             "type": "number"
@@ -9136,7 +9149,10 @@
                 },
                 "cpuUsage": {
                   "format": "double",
-                  "type": "number"
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "created": {
                   "format": "int64",
@@ -9165,11 +9181,17 @@
                 },
                 "memoryUsage": {
                   "format": "double",
-                  "type": "number"
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "rxBytes": {
                   "format": "double",
-                  "type": "number"
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "rxBytesDelta": {
                   "format": "double",
@@ -9187,7 +9209,10 @@
                 },
                 "txBytes": {
                   "format": "double",
-                  "type": "number"
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "txBytesDelta": {
                   "format": "double",
@@ -12296,7 +12321,10 @@
           },
           "cpuUsage": {
             "format": "double",
-            "type": "number"
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "created": {
             "format": "int64",
@@ -12325,11 +12353,17 @@
           },
           "memoryUsage": {
             "format": "double",
-            "type": "number"
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "rxBytes": {
             "format": "double",
-            "type": "number"
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "rxBytesDelta": {
             "format": "double",
@@ -12347,7 +12381,10 @@
           },
           "txBytes": {
             "format": "double",
-            "type": "number"
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "txBytesDelta": {
             "format": "double",
