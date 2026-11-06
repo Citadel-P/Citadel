@@ -9,7 +9,10 @@ in `ContainerStatMessage`. Both Direct and Edge map the same Docker block-device
 byte totals. Absent counters stay unknown, including on platforms that do not
 report block I/O; they are not interpreted as zero. Core calculates historical
 rates and period totals from captured samples, using each container's own baseline.
-No operations or Swarm-node permissions are added for these metrics.
+No operations or Swarm-node permissions are added for these metrics. Core also
+aggregates node-scoped container counters into Swarm Platform network and disk-I/O
+history. Node captures retain their authenticated scope and session fencing;
+they do not update the connected manager's CPU, memory, disk-capacity or metadata.
 
 ## Transports
 

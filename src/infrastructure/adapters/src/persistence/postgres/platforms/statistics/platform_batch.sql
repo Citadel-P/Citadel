@@ -11,6 +11,15 @@ WITH incoming AS (
         AND b.agentid=i.agent_id AND b.lastconnectedatutc=i.connected_at
         AND b.dockernodeid IS NOT DISTINCT FROM i.node_id AND b.resourcetype='Platform'
         AND b.revokedatutc IS NULL AND b.connectionstatus='Connected'))
+), node_latest AS (
+ SELECT DISTINCT ON(platform_id,node_id,created) * FROM valid
+ WHERE node_id IS NOT NULL AND node_id IS DISTINCT FROM descriptor->>'nodeID'
+ ORDER BY platform_id,node_id,created,ordinal DESC
+), node_written AS (
+ INSERT INTO platformnodeiostats(id,platformid,nodeid,created,containerio)
+ SELECT gen_random_uuid(),platform_id,node_id,created,container_io FROM node_latest
+ ON CONFLICT(platformid,nodeid,created) DO UPDATE SET containerio=EXCLUDED.containerio
+ WHERE platformnodeiostats.containerio IS DISTINCT FROM EXCLUDED.containerio
 ), latest AS (
  SELECT DISTINCT ON(platform_id,created) * FROM valid WHERE node_id IS NULL ORDER BY platform_id,created,ordinal DESC
 ), written AS (
@@ -23,4 +32,4 @@ WITH incoming AS (
  WHERE (platformstats.memoryusage,platformstats.cpuusage,platformstats.rxbytes,platformstats.txbytes,platformstats.diskusedbytes,platformstats.disktotalbytes,platformstats.diskusage,platformstats.containerio)
  IS DISTINCT FROM (EXCLUDED.memoryusage,EXCLUDED.cpuusage,EXCLUDED.rxbytes,EXCLUDED.txbytes,EXCLUDED.diskusedbytes,EXCLUDED.disktotalbytes,EXCLUDED.diskusage,EXCLUDED.containerio)
 )
-SELECT count(*)::bigint FROM valid WHERE node_id IS NULL
+SELECT count(*)::bigint FROM valid WHERE node_id IS NULL OR node_id IS DISTINCT FROM descriptor->>'nodeID'

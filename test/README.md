@@ -1174,3 +1174,15 @@ Container sampling error propagation and recovery are covered by
 `cargo test --locked -p citadel-docker --test docker_transport container_stat_sampling`.
 This reuses the Unix-socket transport fixture to verify typed failures retain
 Docker's error cause and a subsequent successful reading works normally.
+
+### Swarm Platform I/O
+
+`stats_batch_persistence::swarm_platform_io_aggregates_nodes_without_losing_history_or_overwriting_host_gauges`
+uses the disposable statistics database to verify node-scoped baselines, counter
+resets, task replacements, duplicate writes, manager double-count prevention,
+revoked/superseded Edge sessions, retained traffic after inventory deletion and
+node-only history buckets. Host gauges remain null when only nodes report.
+`maintenance::tests::stats_retention` covers the node-history retention index.
+Frontend `platform-io.test.ts` verifies equivalent live aggregation and simultaneous
+node updates; `platform-stats.test.tsx` covers chart scope and gaps. Realtime node
+updates retain the existing Platform group permission checks and host metadata.

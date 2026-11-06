@@ -7,6 +7,7 @@ import { FakeWebSocket } from '@/test/fakes/websocket';
 import { useVolumesGroup } from '@/features/docker-resources/volumes/hooks/useVolumesGroup';
 import { useNetworksGroup } from '@/features/docker-resources/networks/hooks/useNetworksGroup';
 import { useDeploymentGroup } from '@/features/deployments/form/hooks/useDeploymentGroup';
+import { usePlatformGroup } from '@/features/platforms/forms/hooks/usePlatformGroup';
 import { usePlatformsGroup } from '@/features/platforms/hooks/usePlatformsGroup';
 
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
@@ -185,6 +186,13 @@ it('delivers Platform statistics through the existing PlatformStatsUpdated handl
     imageCount: 3,
   });
   expect(await screen.findByText('cpu: 35')).toBeVisible();
+  deliver(socket, 'PlatformStatsUpdated', {
+    platformId: 'p1',
+    ioOnly: true,
+    ioNodeId: 'worker',
+    stat: { created: 100, cpuUsage: null, containerIo: [{ containerId: 'task', rxBytes: 10, txBytes: 20 }] },
+  });
+  expect(screen.getByText('cpu: 35')).toBeVisible();
   expect(read).toHaveBeenCalledTimes(1);
   rendered.unmount();
 });
@@ -309,3 +317,50 @@ it('refreshes Edge details on connection changes and reconnect without polling o
   expect(read).toHaveBeenCalledTimes(3);
   rendered.unmount();
 });
+
+it.each(['list', 'detail'] as const)(
+  'rejects stale Platform metadata with its counters in the %s hook',
+  async (view) => {
+    const platform = {
+      id: 'p1',
+      type: 'Docker',
+      memTotal: 1024,
+      stats: [{ created: 100, cpuUsage: 10, containerIo: [{ containerId: 'host', rxBytes: 100, txBytes: 100 }] }],
+      platformDescriptor: {},
+    };
+    server.use(
+      http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [platform], capabilities: {} })),
+      http.get('*/api/v1/platforms/p1', () => HttpResponse.json(platform)),
+    );
+    const Output = ({ value }: { value: typeof platform | undefined }) => (
+      <output>
+        cpu: {value?.stats?.[0]?.cpuUsage}, memory: {value?.memTotal}
+      </output>
+    );
+    function ListProbe() {
+      const { platformsMessage } = usePlatformsGroup({ useTagFilter: false });
+      return <Output value={platformsMessage?.[0] as typeof platform | undefined} />;
+    }
+    function DetailProbe() {
+      const { platform: current } = usePlatformGroup('p1');
+      return <Output value={current as typeof platform | undefined} />;
+    }
+    const socket = new FakeWebSocket();
+    const rendered = renderCitadel(view === 'list' ? <ListProbe /> : <DetailProbe />, {
+      groups: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
+    });
+    expect(await screen.findByText('cpu: 10, memory: 1024')).toBeVisible();
+    connect(socket);
+    await waitFor(() => expect(socket.send).toHaveBeenCalled());
+    deliver(socket, 'PlatformStatsUpdated', {
+      platformId: 'p1',
+      stat: { created: 90, cpuUsage: 99, containerIo: [{ containerId: 'host', rxBytes: 90, txBytes: 90 }] },
+      memTotal: 999,
+      networkCount: 1,
+      volumeCount: 2,
+      imageCount: 3,
+    });
+    expect(screen.getByText('cpu: 10, memory: 1024')).toBeVisible();
+    rendered.unmount();
+  },
+);

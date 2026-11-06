@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "d14acdb9f095f358facd1a53fac6277e4cf45b92d8e1c1f02c8cf881f30b07d8"
+    "sha256": "ff7f61edfd1a9ef1e9ad4c8d7a4a6ffb542f3da78ee12d2535dcddbc8f5cca05"
   },
   "migrations": [
     {
@@ -25,7 +25,7 @@
       "id": "0003",
       "name": "platform_io",
       "file": "0003_platform_io.sql",
-      "sha256": "55b9f7975e0023c9c16b8ececdd2a91150e9c4097b9f017db439b44eb5cab4b2",
+      "sha256": "e8ad54b039c45d7c458297dc7f540287f0bc305536340eaecaffa9159e1eefdd",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

@@ -248,7 +248,7 @@ async fn edge_node_samples_are_fenced_by_binding_session_and_never_write_manager
             .persist_batch(&[host(&node, 10, 1)])
             .await
             .unwrap()
-            .stale,
+            .persisted,
         1
     );
     let key: String = sqlx::query_scalar(
@@ -527,6 +527,8 @@ async fn platform_io_history_preserves_physical_baselines_and_survives_container
     let inventory = add_container(&pool, &scope, "a").await;
     let store = PostgresStatsBatchStore::new(pool.clone());
     let io = |id: &str, value: f64, disk: Option<f64>| ContainerIoSnapshot {
+        node_id: None,
+        created: None,
         container_id: id.into(),
         rx_bytes: value,
         tx_bytes: value,
@@ -621,4 +623,155 @@ async fn platform_io_history_preserves_physical_baselines_and_survives_container
         .execute(&pool)
         .await
         .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn swarm_platform_io_aggregates_nodes_without_losing_history_or_overwriting_host_gauges() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_platforms::{ContainerIoSnapshot, StatisticsReader, StatsWindow};
+    let pool = fixture().await;
+    let manager = platform(&pool).await;
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"manager\"}' WHERE id=$1")
+        .bind(manager.platform_id).execute(&pool).await.unwrap();
+    let connected: chrono::DateTime<chrono::Utc> = sqlx::query_scalar("SELECT now()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let mut nodes = Vec::new();
+    for id in ["worker-a", "worker-b", "manager"] {
+        let mut scope = manager.clone();
+        scope.node_id = Some(id.into());
+        scope.connector = "EdgeAgent".into();
+        scope.agent_id = Some(Uuid::now_v7());
+        scope.connected_at = Some(connected);
+        scope.address = None;
+        sqlx::query("INSERT INTO edgeagentbindings(id,agentfingerprint,agentid,agentpublickey,connectionstatus,platformid,resourceid,resourcetype,dockernodeid,lastconnectedatutc) VALUES($1,$2,$1,'fixture','Connected',$3,$3,'Platform',$4,$5)")
+            .bind(scope.agent_id).bind(scope.agent_id.unwrap().to_string()).bind(scope.platform_id)
+            .bind(id).bind(connected).execute(&pool).await.unwrap();
+        nodes.push(scope);
+    }
+    let inventory = add_container(&pool, &nodes[0], "same-id").await;
+    let capture = |scope: &StatsScope, created, id: &str, bytes, disk| {
+        let mut sample = host(scope, created, 999);
+        sample.metadata = None;
+        sample.container_io = vec![ContainerIoSnapshot {
+            node_id: None,
+            created: None,
+            container_id: id.into(),
+            rx_bytes: bytes,
+            tx_bytes: bytes,
+            block_read_bytes: disk,
+            block_write_bytes: disk,
+        }];
+        sample
+    };
+    let samples = vec![
+        capture(&manager, 3001, "same-id", 1000., Some(100.)),
+        capture(&manager, 3003, "same-id", 1020., Some(110.)),
+        capture(&nodes[0], 3001, "same-id", 100., None),
+        capture(&nodes[0], 3003, "same-id", 10., Some(10.)),
+        capture(&nodes[1], 3001, "same-id", 10000., Some(1000.)),
+        capture(&nodes[1], 3003, "same-id", 10040., Some(1020.)),
+        // Only worker samples in the next bucket. A replacement starts a new baseline.
+        capture(&nodes[0], 3011, "same-id", 30., Some(30.)),
+        capture(&nodes[1], 3011, "replacement", 9000., Some(900.)),
+        capture(&nodes[0], 3013, "same-id", 50., Some(50.)),
+        capture(&nodes[1], 3013, "replacement", 9020., Some(920.)),
+    ];
+    let store = PostgresStatsBatchStore::new(pool.clone());
+    assert_eq!(store.persist_batch(&samples).await.unwrap().persisted, 10);
+    assert_eq!(store.persist_batch(&samples).await.unwrap().persisted, 10);
+    assert_eq!(
+        store
+            .persist_batch(&[capture(&nodes[2], 3003, "same-id", 999999., Some(999999.))])
+            .await
+            .unwrap()
+            .stale,
+        1
+    );
+    let reader = PostgresStatisticsReader::new(pool.clone());
+    let window = StatsWindow::between(3000, 6600, 6600).unwrap();
+    let stats = reader
+        .platform(manager.platform_id, window, 6600)
+        .await
+        .unwrap();
+    assert_eq!(stats.len(), 2);
+    assert_eq!(stats[0].cpu_usage, Some(10.));
+    assert_eq!(stats[0].memory_usage, Some(10.));
+    assert_eq!(stats[0].rx_bytes_delta, Some(70.));
+    assert_eq!(stats[0].rx_bytes_per_second, Some(35.));
+    assert_eq!(stats[0].block_read_bytes_delta, Some(30.));
+    assert_eq!(stats[0].block_read_bytes_per_second, Some(15.));
+    assert_eq!(stats[1].cpu_usage, None);
+    assert_eq!(stats[1].memory_usage, None);
+    assert_eq!(stats[1].rx_bytes_delta, Some(60.));
+    assert_eq!(stats[1].rx_bytes_per_second, Some(14.));
+    assert_eq!(stats[1].block_read_bytes_delta, Some(60.));
+    assert_eq!(stats[1].block_read_bytes_per_second, Some(14.));
+    let host_rows: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM platformstats WHERE platformid=$1")
+            .bind(manager.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(host_rows, 2);
+    // Deleting inventory and revoking the node never delete its historical traffic.
+    sqlx::query("DELETE FROM containers WHERE id=$1")
+        .bind(inventory)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE edgeagentbindings SET revokedatutc=now() WHERE agentid=$1")
+        .bind(nodes[0].agent_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .persist_batch(&[capture(&nodes[0], 3015, "same-id", 90000., None)])
+            .await
+            .unwrap()
+            .stale,
+        1
+    );
+    sqlx::query("UPDATE edgeagentbindings SET lastconnectedatutc=lastconnectedatutc+interval '1 second' WHERE agentid=$1")
+        .bind(nodes[1].agent_id).execute(&pool).await.unwrap();
+    assert_eq!(
+        store
+            .persist_batch(&[capture(&nodes[1], 3015, "replacement", 90000., None)])
+            .await
+            .unwrap()
+            .stale,
+        1
+    );
+    assert_eq!(
+        reader
+            .platform(manager.platform_id, window, 6600)
+            .await
+            .unwrap(),
+        stats
+    );
+    let other = platform(&pool).await;
+    assert!(
+        reader
+            .platform(other.platform_id, window, 6600)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    sqlx::query("DELETE FROM platforms WHERE id IN ($1,$2)")
+        .bind(manager.platform_id)
+        .bind(other.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM platformnodeiostats WHERE platformid=$1")
+            .bind(manager.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining, 0);
+    pool.close().await;
 }

@@ -658,7 +658,7 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
         .await
         .unwrap();
     let current = &views[0].stats.as_ref().unwrap()[0];
-    assert_eq!(current.cpu_usage, 1.125);
+    assert_eq!(current.cpu_usage, Some(1.125));
     assert_eq!(current.disk_used_bytes, Some(90));
     assert_eq!(current.disk_total_bytes, Some(100));
     assert_eq!(current.disk_usage, Some(90.0));

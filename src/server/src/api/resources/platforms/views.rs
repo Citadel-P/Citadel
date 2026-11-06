@@ -82,10 +82,14 @@ pub struct PlatformStatView {
     pub block_write_bytes_per_second: Option<f64>,
 
     pub created: i64,
-    pub tx_bytes: f64,
-    pub rx_bytes: f64,
-    pub cpu_usage: f64,
-    pub memory_usage: f64,
+    #[schema(required = true)]
+    pub tx_bytes: Option<f64>,
+    #[schema(required = true)]
+    pub rx_bytes: Option<f64>,
+    #[schema(required = true)]
+    pub cpu_usage: Option<f64>,
+    #[schema(required = true)]
+    pub memory_usage: Option<f64>,
     #[schema(required = true)]
     pub disk_used_bytes: Option<i64>,
     #[schema(required = true)]

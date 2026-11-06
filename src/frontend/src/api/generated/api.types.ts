@@ -2565,6 +2565,9 @@ export interface ContainerIoSnapshot {
   /** @format double */
   blockWriteBytes?: number | null;
   containerId: string;
+  /** @format int64 */
+  created?: number | null;
+  nodeId?: string | null;
   /** @format double */
   rxBytes: number;
   /** @format double */
@@ -3791,7 +3794,7 @@ export interface HistoryPlatformStatSnapshot {
     blockWriteBytesPerSecond?: number | null;
     containerIo?: ContainerIoSnapshot[] | null;
     /** @format double */
-    cpuUsage: number;
+    cpuUsage: number | null;
     /** @format int64 */
     created: number;
     /** @format int64 */
@@ -3801,15 +3804,15 @@ export interface HistoryPlatformStatSnapshot {
     /** @format int64 */
     diskUsedBytes: number | null;
     /** @format double */
-    memoryUsage: number;
+    memoryUsage: number | null;
     /** @format double */
-    rxBytes: number;
+    rxBytes: number | null;
     /** @format double */
     rxBytesDelta?: number | null;
     /** @format double */
     rxBytesPerSecond?: number | null;
     /** @format double */
-    txBytes: number;
+    txBytes: number | null;
     /** @format double */
     txBytesDelta?: number | null;
     /** @format double */
@@ -4907,7 +4910,7 @@ export interface PlatformStatView {
   blockWriteBytesPerSecond?: number | null;
   containerIo?: ContainerIoSnapshot[] | null;
   /** @format double */
-  cpuUsage: number;
+  cpuUsage: number | null;
   /** @format int64 */
   created: number;
   /** @format int64 */
@@ -4917,15 +4920,15 @@ export interface PlatformStatView {
   /** @format int64 */
   diskUsedBytes: number | null;
   /** @format double */
-  memoryUsage: number;
+  memoryUsage: number | null;
   /** @format double */
-  rxBytes: number;
+  rxBytes: number | null;
   /** @format double */
   rxBytesDelta?: number | null;
   /** @format double */
   rxBytesPerSecond?: number | null;
   /** @format double */
-  txBytes: number;
+  txBytes: number | null;
   /** @format double */
   txBytesDelta?: number | null;
   /** @format double */
