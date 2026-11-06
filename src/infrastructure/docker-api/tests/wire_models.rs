@@ -180,3 +180,28 @@ fn containerd_image_store_accepts_null_graph_driver_data() {
     .unwrap();
     assert!(image.graph_driver.unwrap().data.is_none());
 }
+
+#[test]
+fn gateway_priority_remains_integer_in_inspection_and_create() {
+    for priority in [-1_i64, 0, 10] {
+        let endpoint = json!({"NetworkID": "network", "GwPriority": priority});
+        let inspected: ContainerInspectResponse = serde_json::from_value(json!({
+            "NetworkSettings": {"Networks": {"compose_default": endpoint.clone()}}
+        }))
+        .unwrap();
+        let inspection = serde_json::to_value(inspected).unwrap();
+        assert_eq!(
+            inspection["NetworkSettings"]["Networks"]["compose_default"]["GwPriority"].as_i64(),
+            Some(priority)
+        );
+        let request: ContainerCreateRequest = serde_json::from_value(json!({
+            "Image": "fixture", "NetworkingConfig": {"EndpointsConfig": {"network": endpoint}}
+        }))
+        .unwrap();
+        let encoded = serde_json::to_value(request).unwrap();
+        assert_eq!(
+            encoded["NetworkingConfig"]["EndpointsConfig"]["network"]["GwPriority"].as_i64(),
+            Some(priority)
+        );
+    }
+}

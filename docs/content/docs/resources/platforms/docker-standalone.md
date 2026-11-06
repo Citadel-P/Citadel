@@ -49,7 +49,9 @@ and [troubleshooting](/operations/troubleshooting).
 The **Stats** tab shows container CPU and memory usage, Docker storage filesystem
 capacity, **Network Usage**, and **Disk I/O**. Network and disk I/O offer
 **Accumulated** bytes and **Throughput** in bytes per second. Their summary totals
-cover the selected period in either view.
+cover the selected period in either view. Both default to **Accumulated** and
+remember your selection separately in your browser's localStorage, shared with
+container statistics.
 
 Traffic is calculated from changes in each container's counters before adding
 containers together. Restarting, replacing, or removing a container does not

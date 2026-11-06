@@ -3093,6 +3093,13 @@ async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
         .persist_pull(platform, Some(registry), &image)
         .await
         .unwrap();
+    let count_before: (i32, String) =
+        sqlx::query_as("SELECT imagecount,xmin::text FROM platforms WHERE id=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count_before.0, 1);
     let ids = vec![image.id.clone()];
     for cross_process in [false, true] {
         let claim = store
@@ -3126,6 +3133,16 @@ async fn image_deletion_fences_newer_pulls_and_cross_process_row_versions() {
         .await
         .unwrap();
         assert_eq!(row, (json!(["app:new"]), "Idle".into(), None));
+        let count_after: (i32, String) =
+            sqlx::query_as("SELECT imagecount,xmin::text FROM platforms WHERE id=$1")
+                .bind(platform)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            count_before, count_after,
+            "pulls and fenced deletions with unchanged inventory must not rewrite the Platform count"
+        );
     }
     // A fresh absence can still remove the row and repair the count.
     let claim = store

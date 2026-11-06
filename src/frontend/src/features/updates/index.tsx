@@ -114,7 +114,7 @@ function UpdateInfo() {
           <p className="mt-2 font-mono text-muted-foreground">PostgreSQL {status?.databaseVersion ?? '—'}</p>
           {status?.databaseVersion && !status.databaseManaged && status.operation?.component !== 'Database' && (
             <p className="mt-2 text-muted-foreground">
-              In-app database updates require a registered, supported installation.
+              {status.databaseUpdateReason ?? 'Could not verify database update eligibility.'}
             </p>
           )}
         </div>

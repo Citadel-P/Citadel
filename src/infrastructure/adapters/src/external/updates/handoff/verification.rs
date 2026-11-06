@@ -149,6 +149,7 @@ pub(super) async fn helper_container(
         &executor,
         &inputs,
         &intent.registration.state_directory,
+        &intent.registration.docker_socket,
         true,
     )?;
     // Docker copies the network donor's hostname on start. A created helper

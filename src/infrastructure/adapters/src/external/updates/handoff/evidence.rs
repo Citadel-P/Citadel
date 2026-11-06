@@ -58,7 +58,6 @@ impl HelperLaunchIntent {
             || reg.executor_gid != rustix::process::getegid().as_raw()
             || !is_sha256(&reg.core_container_id)
             || !is_sha256(&reg.database_container_id)
-            || reg.docker_socket != std::path::Path::new("/var/run/docker.sock")
             || state.read::<RegisteredComposeInstallation>("installation.json")? != *reg
         {
             return Err(conflict());

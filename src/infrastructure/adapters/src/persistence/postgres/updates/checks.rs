@@ -97,3 +97,13 @@ impl ReleaseCheckRepository for PostgresUpdateRepository {
         })
     }
 }
+
+/// The server endpoint of the actual connection, never a configured hostname or secret.
+pub(crate) async fn database_endpoint(pool: &PgPool) -> Result<Option<String>, UpdateError> {
+    let read =
+        sqlx::query_scalar::<_, Option<String>>("SELECT host(inet_server_addr())").fetch_one(pool);
+    tokio::time::timeout(std::time::Duration::from_secs(3), read)
+        .await
+        .map_err(|_| UpdateError::Unavailable("Database endpoint is unavailable.".into()))?
+        .map_err(storage)
+}

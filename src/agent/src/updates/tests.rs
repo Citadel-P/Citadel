@@ -116,3 +116,122 @@ fn standalone_settlement_requires_the_exact_exited_helper_and_replacement() {
     current["Id"] = json!("source");
     assert!(settled(&current, &helper, "source", "sha256:old", "op").is_err());
 }
+
+fn compose_source() -> Value {
+    let mut source = source();
+    source["HostConfig"]["NetworkMode"] = json!("portal-edge-demo_default");
+    source["Mounts"][0]["Source"] = json!("/run/user/1001/docker.sock");
+    source["NetworkSettings"] = json!({"Networks": {
+        "portal-edge-demo_default": {
+            "NetworkID": "a".repeat(64), "Aliases": ["edge-agent", "agent", "abcdef123456"],
+            "DNSNames": ["edge-agent", "abcdef123456"], "EndpointID": "old-endpoint",
+            "IPAddress": "172.20.0.2", "MacAddress": "02:42:ac:14:00:02",
+            "IPAMConfig": null, "GwPriority": 1
+        },
+        "monitoring": {"NetworkID": "b".repeat(64), "Aliases": ["monitor"], "IPAMConfig": null}
+    }});
+    source
+}
+
+#[test]
+fn rootless_helper_uses_only_the_sources_socket_and_preserves_hardening() {
+    let source = compose_source();
+    let helper = helper_config(&source, &image(), "op").unwrap();
+    assert_eq!(
+        helper["HostConfig"]["Binds"],
+        json!(["/run/user/1001/docker.sock:/var/run/docker.sock:rw"])
+    );
+    assert_eq!(helper["HostConfig"]["NetworkMode"], "none");
+    assert_eq!(helper["HostConfig"]["ReadonlyRootfs"], true);
+    assert_eq!(helper["HostConfig"]["CapDrop"], json!(["ALL"]));
+    assert_eq!(
+        helper["HostConfig"]["SecurityOpt"],
+        json!(["no-new-privileges"])
+    );
+    assert_eq!(
+        helper["Cmd"],
+        json!([
+            "replace-agent",
+            source["Id"],
+            source["Image"],
+            image(),
+            "op"
+        ])
+    );
+    assert!(helper.get("Env").is_none());
+    let next = replacement_config(&source, &image(), "op").unwrap();
+    assert_eq!(next["Env"], source["Config"]["Env"]);
+    assert_eq!(
+        next["HostConfig"]["Binds"][0],
+        "/run/user/1001/docker.sock:/var/run/docker.sock:rw,rprivate"
+    );
+    assert_eq!(next["HostConfig"]["Binds"][1], "agent-data:/app/data:rw");
+}
+
+#[test]
+fn compose_networks_pin_ids_keep_aliases_and_do_not_reuse_runtime_addresses() {
+    let source = compose_source();
+    let next = replacement_config(&source, &image(), "op").unwrap();
+    assert_eq!(next["HostConfig"]["NetworkMode"], "a".repeat(64));
+    let endpoints = next["NetworkingConfig"]["EndpointsConfig"]
+        .as_object()
+        .unwrap();
+    assert_eq!(endpoints.len(), 2);
+    assert_eq!(
+        endpoints[&"a".repeat(64)],
+        json!({
+            "NetworkID": "a".repeat(64), "Aliases": ["edge-agent", "agent"], "GwPriority": 1
+        })
+    );
+    assert_eq!(
+        endpoints[&"b".repeat(64)],
+        json!({"NetworkID": "b".repeat(64), "Aliases": ["monitor"]})
+    );
+    let mut by_id = source.clone();
+    by_id["HostConfig"]["NetworkMode"] = json!("a".repeat(64));
+    assert_eq!(replacement_config(&by_id, &image(), "op").unwrap(), next);
+}
+
+#[test]
+fn unsupported_socket_and_network_profiles_fail_before_helper_creation() {
+    for path in [
+        "/run/user/../docker.sock",
+        "/run/user//docker.sock",
+        "/run/user/1:2/docker.sock",
+        "/other.sock",
+    ] {
+        let mut source = compose_source();
+        source["Mounts"][0]["Source"] = json!(path);
+        assert!(helper_config(&source, &image(), "op").is_err(), "{path}");
+    }
+    for change in 0..9 {
+        let mut source = compose_source();
+        match change {
+            0 => source["Mounts"][0]["RW"] = json!(false),
+            1 => source["Config"]["Env"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!("DOCKER_HOST=tcp://remote:2375")),
+            2 => source["HostConfig"]["NetworkMode"] = json!("container:other"),
+            3 => source["HostConfig"]["NetworkMode"] = json!("missing-network"),
+            4 => {
+                source["NetworkSettings"]["Networks"]["portal-edge-demo_default"]["NetworkID"] =
+                    json!("")
+            }
+            5 => {
+                source["NetworkSettings"]["Networks"]["portal-edge-demo_default"]["IPAMConfig"] =
+                    json!({"IPv4Address":"172.20.0.2"})
+            }
+            6 => {
+                source["NetworkSettings"]["Networks"]["monitoring"]["Links"] =
+                    json!(["legacy:alias"])
+            }
+            7 => source["Config"]["MacAddress"] = json!("02:42:ac:14:00:02"),
+            _ => source["HostConfig"]["NetworkMode"] = json!("bridge"),
+        }
+        assert!(
+            helper_config(&source, &image(), "op").is_err(),
+            "change {change}"
+        );
+    }
+}

@@ -94,9 +94,16 @@ update-check setting changes.
 
 Available updates lists **Citadel Core**, **Database**, then **Agents**. Database currently
 offers a qualified PostgreSQL upgrade for registered supported installations.
-**In-app updates unavailable** means the installation is not registered for supported
-database updates. This can also apply to a database bundled with Core in Compose; use
-the [Compose maintenance procedure](#postgresql-engine-maintenance) or your provider.
+**In-app updates unavailable** means PostgreSQL is managed outside Citadel's Compose
+installation. A bundled database shows **Setup required** until the installation is
+registered and its update state directory is configured. **Update blocked** reports
+an eligibility or database-read problem; **Status unavailable** means Citadel could
+not verify the deployment. Rootless Docker is supported for bundled PostgreSQL and
+Core updates, with the same registration, review, checkpoint and recovery checks.
+External databases use their own deployment procedure or provider.
+Custom Compose service names do not make a bundled database external; registration
+still requires the supported installation layout. Unsupported PostgreSQL versions
+report an eligibility reason rather than a connection failure.
 
 Use **Settings → Updates → Config → Available updates**. Agent availability is
 independent of Core: a current Core can still have Agents that need updating.
@@ -129,14 +136,25 @@ Standalone updates also wait for the owned helper to finish successfully. An
 uncertain helper outcome remains recovery-required and blocks another Core or
 Agent update; a timeout does not release that ownership.
 
-Central replacement supports recognized standalone Docker Agents using the local
-Docker socket, standard bridge or host networking, and persistent identity storage
-for Edge mode. Edge key and identity files must be inside the persistent
-`/app/data` directory, including the generated Build Pool paths. Custom hostnames, shared container networking, remote Docker
-sockets and unsupported storage profiles require a manual update. An Agent that
+Central replacement supports recognized standalone Docker Agents using a writable
+local Docker socket at `/var/run/docker.sock` or `/run/user/<uid>/docker.sock` on
+the Docker host, mounted at `/var/run/docker.sock` inside the Agent. The helper
+uses that same socket, including on rootless Docker. Standard bridge or host
+networking and user-defined networks with dynamic addresses are supported.
+Custom network attachments retain their network IDs, aliases and gateway priorities;
+Docker assigns fresh endpoint addresses. Edge mode requires persistent identity
+storage. Edge key and identity files must be inside the persistent `/app/data`
+directory, including the generated Build Pool paths. Custom hostnames, shared
+container networking, fixed network addresses, legacy
+network links, remote Docker sockets and unsupported storage profiles require a
+manual update. Additional custom attachments on a default bridge/host profile
+also require a manual update. An Agent that
 does not implement the update protocol also requires a manual update first.
 These targets remain visible with an explanation. Use the generated installation
 command or your existing deployment manifest, preserving credentials and storage.
+For Compose-managed Agents, an in-app update replaces the running container; it
+does not edit the Compose files. Keep their image reference aligned with the
+installed release before the next Compose deployment.
 
 ### Scheduled updates — Team
 
@@ -181,7 +199,16 @@ operator recovery.
 
 A registered, supported Docker Compose installation can offer **Review and update**
 for an available release. This opens a review that verifies the installation and release before
-anything is approved. The target release must explicitly support your installed
+anything is approved. On rootless Docker, mount the host's
+`/run/user/<uid>/docker.sock` at `/var/run/docker.sock` inside Core and the registration
+container. Mount the daemon's data directory read-only at `/host` followed by its
+absolute host path (for example `/home/demo/.local/share/docker` at
+`/host/home/demo/.local/share/docker`). Keep the installer inputs and private update
+state outside that data directory, owned by the rootless daemon user. Run registration
+as `0:0` **inside a container on that daemon**; this maps to its unprivileged host user.
+Follow the [registration instructions](https://github.com/Citadel-P/Citadel/blob/main/docs/DEVELOPMENT.md)
+using the existing Compose project and ordered files. Enabling the setting alone does
+not create a registration. The target release must explicitly support your installed
 version, database catalog, architecture and connected Agent versions.
 
 Select **Update and restart** to approve the reviewed version. Citadel waits for

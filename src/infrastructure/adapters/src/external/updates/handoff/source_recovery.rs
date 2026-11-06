@@ -44,7 +44,6 @@ pub(in crate::external::updates) async fn recover_source(
     registration.validate()?;
     if registration.executor_uid != rustix::process::geteuid().as_raw()
         || registration.executor_gid != rustix::process::getegid().as_raw()
-        || registration.docker_socket != std::path::Path::new("/var/run/docker.sock")
         || registration.instance_id != operation.instance_id
         || registration.id != operation.plan.registration_id
         || registration.configuration_sha256 != operation.plan.configuration_sha256

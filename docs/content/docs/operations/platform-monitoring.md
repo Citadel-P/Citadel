@@ -47,8 +47,10 @@ and sent bytes recorded during the selected period; **Throughput** shows receive
 and send rates in bytes per second. The two header totals always cover the
 selected period, including when viewing throughput.
 
-**Disk I/O** shows block-device read and write throughput by default, with the same
-switch to accumulated bytes. This measures device I/O reported by Docker, rather
+**Disk I/O** offers the same views for block-device reads and writes. Both charts
+default to **Accumulated**. Each chart's view selection is saved separately in
+your browser's localStorage and shared across container and Platform statistics.
+This measures device I/O reported by Docker, rather
 than disk space used. Cached file reads may not generate device reads, and network
 filesystems may not appear in these counters.
 

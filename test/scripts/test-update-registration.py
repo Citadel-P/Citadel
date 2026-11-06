@@ -45,7 +45,9 @@ def require(condition, message):
 
 
 class Fixture:
-    def __init__(self, core, directory):
+    def __init__(self, core, directory, *, rootless=False):
+        self.rootless = rootless
+        self.socket = "/run/user/1000/docker.sock" if rootless else "/var/run/docker.sock"
         self.core = core
         self.directory = directory
         self.daemon = None
@@ -57,10 +59,10 @@ class Fixture:
 
     def execute(self, *args, **kwargs):
         interactive = ["--interactive"] if kwargs.get("stdin") is not None else []
-        return self.host("exec", *interactive, self.daemon, *args, **kwargs)
+        return self.host("exec", *interactive, *(["--user=0:0"] if self.rootless else []), self.daemon, *args, **kwargs)
 
     def docker(self, *args, **kwargs):
-        return self.execute("docker", "--host", "unix:///var/run/docker.sock", *args, **kwargs)
+        return self.execute("docker", "--host", "unix://" + self.socket, *args, **kwargs)
 
     def start(self, *, published=False, registry=False, browser_port=None):
         require(not (published and registry), "Fixture registry cannot be used for published releases")
@@ -73,23 +75,27 @@ class Fixture:
                     "Published acceptance requires an exact official Core digest")
         else:
             self.host("image", "inspect", self.core)
-        if self.host("image", "inspect", DIND, check=False).returncode:
-            self.host("pull", DIND, timeout=300)
+        dind = "docker@sha256:e3d0fa70055956693134873845b743bbe35b5199c68a52347032ae3e5dbac9a0" if self.rootless else DIND
+        if self.host("image", "inspect", dind, check=False).returncode:
+            self.host("pull", dind, timeout=300)
         self.network = self.host("network", "create", f"citadel-update-acceptance-{uuid.uuid4().hex}").stdout.decode().strip()
         self.daemon = self.host(
             "create", "--privileged", "--network", self.network,
             "--name", f"citadel-update-acceptance-{uuid.uuid4().hex}",
             *(["--publish", f"127.0.0.1:{browser_port}:18000"] if browser_port else []),
             *(["--add-host", "ghcr.io:127.0.0.1"] if registry else []),
-            "-e", "DOCKER_TLS_CERTDIR=", DIND,
+            "-e", "DOCKER_TLS_CERTDIR=", dind,
             *(["--insecure-registry=ghcr.io"] if registry else []),
-            "--host=unix:///var/run/docker.sock", "--tls=false",
+            "--host=unix://" + self.socket, "--tls=false",
         ).stdout.decode().strip()
         self.host("start", self.daemon)
         deadline = time.monotonic() + 90
         while self.docker("info", check=False).returncode:
             require(time.monotonic() < deadline, "Disposable Docker daemon did not become ready")
             time.sleep(1)
+        info = json.loads(self.docker("info", "--format", "{{json .}}").stdout)
+        require(("name=rootless" in info["SecurityOptions"]) == self.rootless, "Fixture daemon mode is incorrect")
+        self.docker_root = info["DockerRootDir"]
         # Docker save/load can discard RepoDigests. Pull the exact installer pin
         # inside the disposable daemon, then disconnect it before starting Core.
         self.docker("pull", POSTGRES, timeout=300)
@@ -110,7 +116,7 @@ class Fixture:
         # Stream into the daemon CLI: DinD's /tmp is private to its mount namespace.
         with archive.open("rb") as source:
             loaded = self.host("exec", "-i", self.daemon, "docker", "--host",
-                               "unix:///var/run/docker.sock", "image", "load",
+                               "unix://" + self.socket, "image", "load",
                                stdin=source, timeout=300, check=False)
         require(loaded.returncode == 0, "Fixture image import failed: " + loaded.stderr.decode(errors="replace"))
         archive.unlink()
@@ -130,7 +136,7 @@ class Fixture:
         local.write_bytes(data if isinstance(data, bytes) else data.encode())
         local.chmod(0o600)
         self.host("cp", str(local), f"{self.daemon}:{path}")
-        self.execute("chown", "0:0", path)
+        self.execute("chown", "1000:1000" if self.rootless else "0:0", path)
         self.execute("chmod", mode, path)
 
     def read(self, path):

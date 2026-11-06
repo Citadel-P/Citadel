@@ -32,6 +32,7 @@ pub struct ReleaseCheckService {
     notifier: Arc<dyn UpdateChangeNotifier>,
     agents: Option<crate::AgentUpdateService>,
     installer: Option<crate::UpdateInstallService>,
+    database: Option<Arc<dyn crate::DatabaseInstallationRuntime>>,
 }
 
 impl ReleaseCheckService {
@@ -49,6 +50,22 @@ impl ReleaseCheckService {
             notifier: Arc::new(NoopUpdateChangeNotifier),
             agents: None,
             installer: None,
+            database: None,
+        }
+    }
+
+    pub fn with_database(mut self, database: Arc<dyn crate::DatabaseInstallationRuntime>) -> Self {
+        self.database = Some(database);
+        self
+    }
+
+    pub async fn database_installation(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> crate::DatabaseInstallation {
+        match &self.database {
+            Some(runtime) => runtime.database_installation(cancellation).await,
+            None => crate::DatabaseInstallation::Unknown,
         }
     }
 

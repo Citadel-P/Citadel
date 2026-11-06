@@ -775,3 +775,94 @@ async fn swarm_platform_io_aggregates_nodes_without_losing_history_or_overwritin
     assert_eq!(remaining, 0);
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn platform_history_large_window_preserves_totals_and_restores_connection_settings() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_platforms::{StatisticsReader, StatsWindow};
+    let migration_pool = fixture().await;
+    migration_pool.close().await;
+    // Force reuse of the same connection, including after an aborted query.
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap())
+        .await
+        .unwrap();
+    sqlx::query("SET jit = on").execute(&pool).await.unwrap();
+    let scope = platform(&pool).await;
+    // Two days of 30-second captures, fifteen physical containers. This expands
+    // to 86,415 counter rows but only 577 chart buckets; don't assert wall time.
+    sqlx::query(r#"
+        INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,containerio)
+        SELECT gen_random_uuid(),$1,t,2,100,t*15,t*30,
+            (SELECT jsonb_agg(jsonb_build_object(
+                'containerId',md5(c::text),'rxBytes',t,'txBytes',t*2,
+                'blockReadBytes',t*3,'blockWriteBytes',t*4))
+             FROM generate_series(1,15) c)
+        FROM generate_series(0,172800,30) t
+    "#).bind(scope.platform_id).execute(&pool).await.unwrap();
+    let reader = PostgresStatisticsReader::new(pool.clone());
+    let window = StatsWindow::between(0, 172800, 172800).unwrap();
+    let stats = reader
+        .platform(scope.platform_id, window, 172800)
+        .await
+        .unwrap();
+    assert_eq!(stats.len(), 577);
+    assert_eq!(stats.first().unwrap().created, 0);
+    assert_eq!(stats.last().unwrap().created, 172800);
+    for (index, stat) in stats.iter().enumerate() {
+        let elapsed = if index == 0 {
+            270.
+        } else if index == 576 {
+            30.
+        } else {
+            300.
+        };
+        assert_eq!(stat.rx_bytes_delta, Some(elapsed * 15.));
+        assert_eq!(stat.tx_bytes_delta, Some(elapsed * 30.));
+        assert_eq!(stat.block_read_bytes_delta, Some(elapsed * 45.));
+        assert_eq!(stat.block_write_bytes_delta, Some(elapsed * 60.));
+        assert_eq!(stat.rx_bytes_per_second, Some(15.));
+        assert_eq!(stat.tx_bytes_per_second, Some(30.));
+        assert_eq!(stat.block_read_bytes_per_second, Some(45.));
+        assert_eq!(stat.block_write_bytes_per_second, Some(60.));
+        assert_eq!(stat.cpu_usage, Some(2.));
+        assert_eq!(stat.memory_usage, Some(100.));
+    }
+    let jit: String = sqlx::query_scalar("SHOW jit")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        jit, "on",
+        "history must not change the pooled connection's JIT setting"
+    );
+    // Invalid capture shape causes SQL execution to fail after SET LOCAL. The
+    // transaction must roll back and leave the connection usable and unchanged.
+    sqlx::query("UPDATE platformstats SET containerio='{}' WHERE platformid=$1 AND created=0")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        reader
+            .platform(scope.platform_id, window, 172800)
+            .await
+            .is_err()
+    );
+    let jit: String = sqlx::query_scalar("SHOW jit")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        jit, "on",
+        "failed history reads must restore the setting too"
+    );
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+}

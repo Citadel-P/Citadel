@@ -6,7 +6,7 @@ import { server } from '@/test/server';
 import { renderCitadel } from '@/test/render-citadel';
 import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
 import { RealtimeContext } from '@/lib/context/realtime-context';
-import type { UpdateStatusView } from '@/api/generated/api.types';
+import { DatabaseInstallationView, type UpdateStatusView } from '@/api/generated/api.types';
 import { UpdateProgress } from './installation';
 import { ReviewUpdates } from './review';
 
@@ -16,6 +16,8 @@ const status: UpdateStatusView = {
   databaseVersion: '18.6',
   databaseAvailable: null,
   databaseManaged: false,
+  databaseInstallation: DatabaseInstallationView.Unknown,
+  databaseUpdateReason: null,
   channel: 'stable',
   checksAllowed: true,
   checksEnabled: true,

@@ -164,7 +164,10 @@ reconnect and cannot start the next target or release the claim before cleanup.
 
 The supported standalone Docker executor drains affected Agent work and launches a
 separate container from the verified target image. It preserves configuration,
-identity mounts and host ports, retains previous containers for recovery, and
+identity mounts and host ports, carries the source's standard or rootless Unix
+socket into the helper, and pins custom network attachments by ID while retaining
+aliases and gateway priorities. Dynamic addresses are reassigned; fixed addresses
+and legacy links require manual handover. It retains previous containers for recovery and
 requires authenticated reconnect with the expected image/version and changed
 container identity. Managed Swarm services reuse NodeAgentSetupService with a
 bounded node-local drain; Repair uses the stored approved digest. Mixed or stale
@@ -562,6 +565,24 @@ adapter, and neither diagnostic initializes Core, runs migrations or creates an
 identity. Repeated observations and an input fingerprint reject concurrent drift.
 Containerized registration also checks its own Docker identity and exact host
 binds for read-only installer inputs, private update state and the socket.
+Rootless installations record `/run/user/<uid>/docker.sock` as the host socket;
+all executor containers map it to `/var/run/docker.sock`. Rootless Core mounts only
+the daemon's data root under its matching `/host` path. Observation binds this path
+to live `DockerRootDir` and verifies daemon mode without changing existing rootful
+registration fingerprints. Private input and journal ownership is checked inside
+the executor namespace; rootless container UID 0 maps to the daemon's host user.
+The Core volume `!override` Compose tag is permitted, with all other tags rejected
+and the final resolved mount profile still checked.
+
+Database update status distinguishes deployment topology from update eligibility.
+A bounded read-only runtime matches the actual PostgreSQL connection endpoint to
+Core's Compose database container and shared network, independently of service names.
+Ambiguous endpoint matches stay unknown; detection does not relax the supported
+registration profile. SQL stays in the PostgreSQL adapter.
+Missing Docker evidence stays unknown; an unregistered bundled database
+requests setup, while only an external database is labelled in-app unavailable.
+Registered status reads use the startup-verified installation, without launching
+helpers or acquiring update ownership.
 
 Registration retains the installation lock and atomically creates a private
 `installation.json` without replacing existing evidence. An identical retry
@@ -1017,6 +1038,12 @@ in `platformstats.containerio`, independently of inventory lifetime. Platform
 history derives reset-aware differences per container before bucket aggregation;
 live charts keep the same per-container baselines. Replacing or removing a
 container never subtracts its previously measured traffic from the period totals.
+The Platform history reader disables PostgreSQL JIT only within its read
+transaction: JSON expansion estimates can otherwise trigger compilation that
+costs more than the interactive query. Commit and rollback restore the pooled
+connection's setting. Gauge and I/O projections read the indexed history directly
+instead of materializing a shared JSON capture relation; Docker identities use
+byte ordering for the per-container windows.
 The shared I/O panel is owned by `components/custom/stats-io-usage`, used by both
 platform and container charts. These are container traffic and block-I/O metrics,
 not host-interface or host-disk totals. Swarm node captures are retained separately
@@ -1038,6 +1065,21 @@ are inferred. CPU, memory and disk capacity still describe the connected host.
 Old platform samples without physical counters remain
 unknown for I/O, rather than inferring reset-safe deltas from aggregate counters.
 The additive migration preserves existing samples and applied migration checksums.
+
+Statistics retention selects at most 5,000 expired rows per table through the
+timestamp index and locks them with `FOR UPDATE SKIP LOCKED`. The delete reuses
+their physical tuple locations (`ctid`) as a bounded array within that same statement.
+This feeds a tuple scan directly, avoiding ID or tuple joins that can instead scan
+the entire retained table. These statistics tables are
+not partitioned; tuple locations are never stored or reused between statements.
+The seven-day cutoff and protection for pending Platform alerts remain unchanged.
+Locked rows are left for a later maintenance pass. Health transitions, Activities,
+Script/Build history, refresh-token expiry and expired copy reviews use the same
+statement-local locked-tuple deletion pattern with their existing cutoffs and batch
+limits. Active/current runs, reserved or referenced builds and started copies stay
+protected. Expiry indexes match terminal run states and unstarted copy reviews;
+Activities also has a global `(createdat DESC, id DESC)` index for stable page ordering.
+Exact authorized Activity counts still inspect all matching rows.
 
 ## Runtime routing and observations
 

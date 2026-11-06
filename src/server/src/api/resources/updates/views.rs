@@ -13,6 +13,10 @@ pub struct UpdateStatusView {
     #[schema(required = true)]
     pub database_available: Option<String>,
     pub database_managed: bool,
+    /// Deployment topology is independent of installation registration.
+    pub database_installation: DatabaseInstallationView,
+    #[schema(required = true)]
+    pub database_update_reason: Option<String>,
     pub channel: String,
     pub checks_allowed: bool,
     pub checks_enabled: bool,
@@ -28,6 +32,23 @@ pub struct UpdateStatusView {
     pub installation_unavailable_reason: Option<String>,
     #[schema(required = true)]
     pub operation: Option<UpdateOperationView>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub enum DatabaseInstallationView {
+    Bundled,
+    External,
+    Unknown,
+}
+
+impl From<citadel_updates::DatabaseInstallation> for DatabaseInstallationView {
+    fn from(value: citadel_updates::DatabaseInstallation) -> Self {
+        match value {
+            citadel_updates::DatabaseInstallation::Bundled => Self::Bundled,
+            citadel_updates::DatabaseInstallation::External => Self::External,
+            citadel_updates::DatabaseInstallation::Unknown => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
@@ -47,6 +68,30 @@ impl From<citadel_updates::ReleaseNotice> for AvailableUpdate {
 }
 
 impl UpdateStatusView {
+    pub fn set_database_update(
+        &mut self,
+        result: Result<Option<citadel_updates::DatabaseUpdatePlan>, citadel_updates::UpdateError>,
+    ) {
+        use citadel_updates::UpdateError;
+        self.database_managed = false;
+        self.database_available = None;
+        self.database_update_reason = match result {
+            Ok(database) => {
+                self.database_managed = true;
+                self.database_available = database.map(|db| db.target_display());
+                None
+            }
+            Err(
+                UpdateError::Unavailable(reason)
+                | UpdateError::Conflict(reason)
+                | UpdateError::Validation(reason),
+            ) => Some(reason),
+            // Storage errors can contain private connection details. Other errors
+            // also must not be presented as proof the database is unreachable.
+            Err(_) => Some("Could not check database update eligibility. Try again.".into()),
+        };
+    }
+
     pub fn new(
         status: citadel_updates::ReleaseCheckStatus,
         instance_id: Uuid,
@@ -60,6 +105,8 @@ impl UpdateStatusView {
             database_version: None,
             database_available: None,
             database_managed: false,
+            database_installation: DatabaseInstallationView::Unknown,
+            database_update_reason: None,
             channel: status.channel.as_str().into(),
             checks_allowed,
             checks_enabled,
@@ -133,6 +180,71 @@ impl From<citadel_updates::UpdatePlan> for UpdateReviewView {
                 .map(|db| db.target_display())
                 .unwrap_or(plan.target.version),
             expires_at: plan.expires_at,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use citadel_updates::{
+        CheckState, DatabaseUpdatePlan, ReleaseChannel, ReleaseCheckStatus, UpdateError,
+    };
+
+    fn status() -> UpdateStatusView {
+        UpdateStatusView::new(
+            ReleaseCheckStatus {
+                installed_version: "0.1.3".into(),
+                channel: ReleaseChannel::Stable,
+                checks: CheckState::default(),
+            },
+            Uuid::new_v4(),
+            true,
+            true,
+        )
+    }
+
+    #[test]
+    fn database_eligibility_preserves_actionable_errors_and_clears_stale_targets() {
+        let mut view = status();
+        let reason = "PostgreSQL 17 is outside the supported update range.";
+        for error in [
+            UpdateError::Conflict(reason.into()),
+            UpdateError::Unavailable(reason.into()),
+            UpdateError::Validation(reason.into()),
+        ] {
+            view.set_database_update(Ok(Some(DatabaseUpdatePlan {
+                source_version: 180001,
+                target_version: 180006,
+                target_image: format!("postgres@sha256:{}", "a".repeat(64)),
+            })));
+            assert!(view.database_managed);
+            assert_eq!(view.database_available.as_deref(), Some("18.6"));
+            assert!(view.database_update_reason.is_none());
+
+            view.set_database_update(Err(error));
+            assert!(!view.database_managed);
+            assert!(view.database_available.is_none());
+            assert_eq!(view.database_update_reason.as_deref(), Some(reason));
+        }
+        view.set_database_update(Ok(None));
+        assert!(view.database_managed);
+        assert!(view.database_available.is_none());
+        assert!(view.database_update_reason.is_none());
+    }
+
+    #[test]
+    fn database_status_redacts_storage_errors_without_inventing_connectivity_failures() {
+        let mut view = status();
+        for error in [
+            UpdateError::Storage("private connection details".into()),
+            UpdateError::Cancelled,
+        ] {
+            view.set_database_update(Err(error));
+            assert_eq!(
+                view.database_update_reason.as_deref(),
+                Some("Could not check database update eligibility. Try again.")
+            );
         }
     }
 }

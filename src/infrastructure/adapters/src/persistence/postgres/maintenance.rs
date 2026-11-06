@@ -4,13 +4,40 @@ use sqlx::PgPool;
 // Keep the indexed bigint column uncast. EXTRACT returns numeric, which otherwise
 // makes PostgreSQL filter the retained history instead of using an index bound.
 // CEIL preserves `integer timestamp < fractional cutoff`, including whole seconds.
+// Reuse the locked tuple locations within this statement. Matching a batch by ID
+// can make the DELETE scan the entire retained table via a hash semi join.
+// An array InitPlan feeds the TID scan directly: even a ctid join can otherwise
+// become a hash join over every retained row when the estimated batch is large.
+// These are ordinary, non-partitioned tables; never persist ctids across statements.
+// See https://www.postgresql.org/docs/18/sql-delete.html for bounded DELETEs.
 const STATS_RETENTION_SQL: [&str; 5] = [
-    "DELETE FROM platformnodeiostats WHERE id IN(SELECT id FROM platformnodeiostats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
-    "DELETE FROM workloadstats WHERE id IN(SELECT id FROM workloadstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
-    "DELETE FROM containerstats WHERE id IN(SELECT id FROM containerstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
-    "DELETE FROM platformstats WHERE id IN(SELECT id FROM platformstats WHERE NOT alertpending AND created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
-    "DELETE FROM swarmservicestats WHERE id IN(SELECT id FROM swarmservicestats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED)",
+    "WITH expired AS MATERIALIZED (
+        SELECT ctid FROM platformnodeiostats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
+        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
+    ) DELETE FROM platformnodeiostats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
+    "WITH expired AS MATERIALIZED (
+        SELECT ctid FROM workloadstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
+        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
+    ) DELETE FROM workloadstats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
+    "WITH expired AS MATERIALIZED (
+        SELECT ctid FROM containerstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
+        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
+    ) DELETE FROM containerstats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
+    "WITH expired AS MATERIALIZED (
+        SELECT ctid FROM platformstats WHERE NOT alertpending AND created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
+        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
+    ) DELETE FROM platformstats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
+    "WITH expired AS MATERIALIZED (
+        SELECT ctid FROM swarmservicestats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
+        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
+    ) DELETE FROM swarmservicestats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
 ];
+
+const HEALTH_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM containerhealthtransitions WHERE recordedat < now() - interval '7 days' ORDER BY recordedat LIMIT 1000 FOR UPDATE SKIP LOCKED) DELETE FROM containerhealthtransitions target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
+const ACTIVITY_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM activityevents WHERE createdat<CURRENT_TIMESTAMP-INTERVAL '90 days' ORDER BY createdat LIMIT 5000 FOR UPDATE SKIP LOCKED) DELETE FROM activityevents target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
+const SCRIPT_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT r.ctid FROM scriptruns r WHERE finishedat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND status NOT IN('Queued','Running') AND NOT EXISTS(SELECT 1 FROM scripts a WHERE a.currentrunid=r.id) ORDER BY finishedat LIMIT 5000 FOR UPDATE OF r SKIP LOCKED) DELETE FROM scriptruns target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
+const TOKEN_EXPIRY_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP ORDER BY expiresat LIMIT 5000 FOR UPDATE SKIP LOCKED) DELETE FROM refreshtokens target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
+const BUILD_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT r.ctid FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=r.id) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000 FOR UPDATE OF r SKIP LOCKED) DELETE FROM buildruns target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
 
 pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> {
     let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Recovery.start();
@@ -94,20 +121,25 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
 pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result<u64, sqlx::Error> {
     let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Retention.start();
     // Retention must run even when every runtime is offline; it is not inventory work.
-    let mut deleted = sqlx::query("DELETE FROM containerhealthtransitions WHERE id IN (SELECT id FROM containerhealthtransitions WHERE recordedat < now() - interval '7 days' ORDER BY recordedat LIMIT 1000 FOR UPDATE SKIP LOCKED)")
-        .execute(pool).await?.rows_affected();
+    let mut deleted = sqlx::query(HEALTH_RETENTION_SQL)
+        .execute(pool)
+        .await?
+        .rows_affected();
     citadel_runtime::runtime_metrics::RuntimeWork::ContainerHealthRetention.units(deleted);
     // Bound each transaction. Repeated scheduled batches drain backlogs while keeping
     // locks short and retaining every active run and referenced build artifact.
-    for sql in STATS_RETENTION_SQL.into_iter().chain([
-        "DELETE FROM activityevents WHERE id IN(SELECT id FROM activityevents WHERE createdat<CURRENT_TIMESTAMP-INTERVAL '90 days' LIMIT 5000)",
-        "DELETE FROM scriptruns WHERE id IN(SELECT r.id FROM scriptruns r WHERE finishedat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND status NOT IN('Queued','Running') AND NOT EXISTS(SELECT 1 FROM scripts a WHERE a.currentrunid=r.id) LIMIT 5000)",
-    ]) {
+    for sql in STATS_RETENTION_SQL
+        .into_iter()
+        .chain([ACTIVITY_RETENTION_SQL, SCRIPT_RETENTION_SQL])
+    {
         deleted += sqlx::query(sql).execute(pool).await?.rows_affected();
     }
     if let Some(days) = build_retention_days.filter(|days| *days > 0) {
-        deleted += sqlx::query("DELETE FROM buildruns b WHERE b.id IN(SELECT r.id FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=r.id) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000)")
-            .bind(days).execute(pool).await?.rows_affected();
+        deleted += sqlx::query(BUILD_RETENTION_SQL)
+            .bind(days)
+            .execute(pool)
+            .await?
+            .rows_affected();
     }
     citadel_runtime::runtime_metrics::RuntimeWork::Retention.units(deleted);
     Ok(deleted)
@@ -116,8 +148,10 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
 /// evidence: only verified cleanup may release them, regardless of expiry.
 pub async fn expire_leases(pool: &PgPool) -> Result<(), sqlx::Error> {
     let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::LeaseExpiry.start();
-    let count = sqlx::query("DELETE FROM refreshtokens WHERE id IN(SELECT id FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP ORDER BY expiresat LIMIT 5000)")
-        .execute(pool).await?.rows_affected();
+    let count = sqlx::query(TOKEN_EXPIRY_SQL)
+        .execute(pool)
+        .await?
+        .rows_affected();
     citadel_runtime::runtime_metrics::RuntimeWork::LeaseExpiry.units(count);
     Ok(())
 }
@@ -220,6 +254,141 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+    async fn other_retention_preserves_protected_runs_and_bounds_deletes() {
+        let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
+        let mut conn = PgConnection::connect(&url).await.unwrap();
+        let mut tx = conn.begin().await.unwrap();
+        tx.execute(
+            "CREATE TEMP TABLE scripts(currentrunid uuid) ON COMMIT DROP;
+            CREATE TEMP TABLE buildprojects(currentrunid uuid) ON COMMIT DROP;
+            CREATE TEMP TABLE buildexecutorreservations(runid uuid) ON COMMIT DROP;
+            CREATE TEMP TABLE buildcompletionqueue(buildrunid uuid) ON COMMIT DROP;
+            CREATE TEMP TABLE deployments(spec jsonb) ON COMMIT DROP;
+            CREATE TEMP TABLE stackreleases(spec jsonb) ON COMMIT DROP;",
+        )
+        .await
+        .unwrap();
+        for (table, time, query, limit) in [
+            (
+                "containerhealthtransitions",
+                "recordedat",
+                super::HEALTH_RETENTION_SQL,
+                1000,
+            ),
+            (
+                "activityevents",
+                "createdat",
+                super::ACTIVITY_RETENTION_SQL,
+                5000,
+            ),
+            (
+                "scriptruns",
+                "finishedat",
+                super::SCRIPT_RETENTION_SQL,
+                5000,
+            ),
+            ("buildruns", "completedat", super::BUILD_RETENTION_SQL, 1000),
+            ("refreshtokens", "expiresat", super::TOKEN_EXPIRY_SQL, 5000),
+        ] {
+            tx.execute(sqlx::AssertSqlSafe(format!(
+                "CREATE TEMP TABLE {table}(id uuid PRIMARY KEY, {time} timestamptz NOT NULL, status text NOT NULL DEFAULT 'Succeeded') ON COMMIT DROP;
+                 CREATE INDEX ON {table}({time});
+                 INSERT INTO {table}(id,{time}) SELECT gen_random_uuid(),now()+interval '1 day' FROM generate_series(1,100000);
+                 INSERT INTO {table}(id,{time}) SELECT gen_random_uuid(),now()-interval '100 days' FROM generate_series(1,{limit}+1);
+                 ANALYZE {table}"
+            ))).await.unwrap();
+            let mut protected = 0;
+            if table == "scriptruns" || table == "buildruns" {
+                // Neither active states nor the current run may be pruned, even
+                // if a stale completion timestamp is present.
+                let states = if table == "scriptruns" {
+                    vec!["Queued", "Running"]
+                } else {
+                    vec!["Queued", "Preparing", "Running"]
+                };
+                for state in states {
+                    sqlx::query(sqlx::AssertSqlSafe(format!("INSERT INTO {table}(id,{time},status) VALUES(gen_random_uuid(),now()-interval '101 days',$1)")))
+                        .bind(state).execute(&mut *tx).await.unwrap();
+                    protected += 1;
+                }
+                let owner = if table == "scriptruns" {
+                    "scripts"
+                } else {
+                    "buildprojects"
+                };
+                tx.execute(sqlx::AssertSqlSafe(format!("WITH run AS (INSERT INTO {table}(id,{time}) VALUES(gen_random_uuid(),now()-interval '101 days') RETURNING id) INSERT INTO {owner}(currentrunid) SELECT id FROM run"))).await.unwrap();
+                protected += 1;
+            }
+            if table == "buildruns" {
+                for (owner, column) in [
+                    ("buildexecutorreservations", "runid"),
+                    ("buildcompletionqueue", "buildrunid"),
+                    ("deployments", "spec"),
+                    ("stackreleases", "spec"),
+                ] {
+                    let value = if column == "spec" {
+                        "jsonb_build_object('nested', jsonb_build_array(jsonb_build_object('buildRunId', id::text)))"
+                    } else {
+                        "id"
+                    };
+                    tx.execute(sqlx::AssertSqlSafe(format!("WITH run AS (INSERT INTO buildruns(id,completedat) VALUES(gen_random_uuid(),now()-interval '101 days') RETURNING id) INSERT INTO {owner}({column}) SELECT {value} FROM run"))).await.unwrap();
+                    protected += 1;
+                }
+            }
+            let explain = format!("EXPLAIN (ANALYZE, FORMAT JSON) {query}");
+            let statement =
+                sqlx::query_scalar::<_, serde_json::Value>(sqlx::AssertSqlSafe(explain.as_str()));
+            let statement = if table == "buildruns" {
+                statement.bind(90_i32)
+            } else {
+                statement
+            };
+            let plan = statement.fetch_one(&mut *tx).await.unwrap();
+            fn bounded_scans(plan: &serde_json::Value, table: &str, limit: i64) {
+                if plan["Relation Name"] == table {
+                    let visited = (plan["Actual Rows"].as_f64().unwrap_or(0.)
+                        + plan["Rows Removed by Filter"].as_f64().unwrap_or(0.))
+                        * plan["Actual Loops"].as_f64().unwrap_or(1.);
+                    assert!(
+                        visited <= (limit + 10) as f64,
+                        "{table}: unexpectedly scanned retained history: {plan}"
+                    );
+                }
+                if let Some(children) = plan["Plans"].as_array() {
+                    for child in children {
+                        bounded_scans(child, table, limit);
+                    }
+                }
+            }
+            bounded_scans(&plan[0]["Plan"], table, limit);
+            let remaining: i64 =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
+                    .fetch_one(&mut *tx)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                remaining,
+                100001 + protected,
+                "{table}: first batch must be bounded"
+            );
+            for expected in [1, 0] {
+                let statement = sqlx::query(query);
+                let statement = if table == "buildruns" {
+                    statement.bind(90_i32)
+                } else {
+                    statement
+                };
+                assert_eq!(
+                    statement.execute(&mut *tx).await.unwrap().rows_affected(),
+                    expected
+                );
+            }
+        }
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
     async fn stats_retention_uses_index_bounds_and_preserves_retention_policy() {
         let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
         let mut conn = PgConnection::connect(&url).await.unwrap();
@@ -318,5 +487,161 @@ mod tests {
             assert_eq!(remaining, if table == "platformstats" { 2 } else { 1 });
             tx.commit().await.unwrap();
         }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+    async fn stats_retention_large_history_does_not_scan_retained_rows() {
+        let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
+        let mut conn = PgConnection::connect(&url).await.unwrap();
+        let mut tx = conn.begin().await.unwrap();
+        tx.execute(
+            "CREATE TEMP TABLE workloadstats(id uuid PRIMARY KEY, created bigint NOT NULL, payload text NOT NULL) ON COMMIT DROP;
+             CREATE INDEX ON workloadstats(created);
+             INSERT INTO workloadstats SELECT gen_random_uuid(),ceil(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint-n,repeat('x',192) FROM generate_series(1,100000) n;
+             INSERT INTO workloadstats SELECT gen_random_uuid(),floor(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint-700000-n,repeat('x',192) FROM generate_series(1,1080) n;
+             ANALYZE workloadstats"
+        ).await.unwrap();
+        // Executed only on session-local fixtures. A bounded output alone does not
+        // prove bounded work: the old ID semi join scanned all retained rows.
+        let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "EXPLAIN (ANALYZE, FORMAT JSON) {}",
+            STATS_RETENTION_SQL[1]
+        )))
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        fn check_scans(node: &serde_json::Value) {
+            if node["Relation Name"] == "workloadstats" {
+                let examined = (node["Actual Rows"].as_f64().unwrap_or(0.)
+                    + node["Rows Removed by Filter"].as_f64().unwrap_or(0.))
+                    * node["Actual Loops"].as_f64().unwrap_or(0.);
+                assert!(
+                    examined <= 5000.,
+                    "small retention batch scanned retained history: {node}"
+                );
+            }
+            if let Some(children) = node["Plans"].as_array() {
+                for child in children {
+                    check_scans(child);
+                }
+            }
+        }
+        check_scans(&plan[0]["Plan"]);
+        let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM workloadstats")
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 100000);
+        tx.commit().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+    async fn stats_retention_skips_locked_rows_and_reselects_updated_tuples() {
+        let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
+        let mut cleaner = PgConnection::connect(&url).await.unwrap();
+        let mut locker = PgConnection::connect(&url).await.unwrap();
+        // Two sessions need shared tables; isolate them in a disposable namespace.
+        let schema = format!("retention_test_{}", uuid::Uuid::now_v7().simple());
+        cleaner
+            .execute(sqlx::AssertSqlSafe(format!(
+                "CREATE SCHEMA {schema}; SET search_path TO {schema}"
+            )))
+            .await
+            .unwrap();
+        locker
+            .execute(sqlx::AssertSqlSafe(format!("SET search_path TO {schema}")))
+            .await
+            .unwrap();
+        // If SKIP LOCKED regresses, fail rather than hanging behind our own lock.
+        cleaner
+            .execute("SET lock_timeout='1s'; SET statement_timeout='5s'")
+            .await
+            .unwrap();
+        for (table, sql) in [
+            "platformnodeiostats",
+            "workloadstats",
+            "containerstats",
+            "platformstats",
+            "swarmservicestats",
+        ]
+        .into_iter()
+        .zip(STATS_RETENTION_SQL)
+        {
+            cleaner.execute(sqlx::AssertSqlSafe(format!(
+                "CREATE TABLE {table}(id integer PRIMARY KEY, created bigint NOT NULL, alertpending boolean NOT NULL DEFAULT false);
+                 INSERT INTO {table}(id,created) VALUES (1,0),(2,0),(3,ceil(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint)"
+            ))).await.unwrap();
+            let old_location: String = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT ctid::text FROM {table} WHERE id=1"
+            )))
+            .fetch_one(&mut cleaner)
+            .await
+            .unwrap();
+            let mut held = locker.begin().await.unwrap();
+            let new_location: String = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "UPDATE {table} SET created=1 WHERE id=1 RETURNING ctid::text"
+            )))
+            .fetch_one(&mut *held)
+            .await
+            .unwrap();
+            assert_ne!(old_location, new_location);
+            assert_eq!(
+                sqlx::query(sql)
+                    .execute(&mut cleaner)
+                    .await
+                    .unwrap()
+                    .rows_affected(),
+                1,
+                "{table}: delete the unlocked expired row without waiting"
+            );
+            let remaining: Vec<i32> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT id FROM {table} ORDER BY id"
+            )))
+            .fetch_all(&mut cleaner)
+            .await
+            .unwrap();
+            assert_eq!(remaining, vec![1, 3]);
+            held.commit().await.unwrap();
+            // A rolled-back pass must not lose its target or leave a remembered ctid.
+            let mut rolled_back = cleaner.begin().await.unwrap();
+            assert_eq!(
+                sqlx::query(sql)
+                    .execute(&mut *rolled_back)
+                    .await
+                    .unwrap()
+                    .rows_affected(),
+                1
+            );
+            rolled_back.rollback().await.unwrap();
+            assert_eq!(
+                sqlx::query(sql)
+                    .execute(&mut cleaner)
+                    .await
+                    .unwrap()
+                    .rows_affected(),
+                1
+            );
+            assert_eq!(
+                sqlx::query(sql)
+                    .execute(&mut cleaner)
+                    .await
+                    .unwrap()
+                    .rows_affected(),
+                0
+            );
+            let remaining: Vec<i32> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT id FROM {table} ORDER BY id"
+            )))
+            .fetch_all(&mut cleaner)
+            .await
+            .unwrap();
+            assert_eq!(remaining, vec![3]);
+        }
+        cleaner
+            .execute(sqlx::AssertSqlSafe(format!("DROP SCHEMA {schema} CASCADE")))
+            .await
+            .unwrap();
     }
 }

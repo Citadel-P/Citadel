@@ -4,6 +4,8 @@ mod checkpoint;
 #[cfg(target_os = "linux")]
 mod docker;
 #[cfg(target_os = "linux")]
+mod layout;
+#[cfg(target_os = "linux")]
 pub use checkpoint::{
     CheckpointInstallerInput, PreparedUpdateCheckpoint, prepare_update_checkpoint,
     restore_update_checkpoint,
@@ -37,6 +39,11 @@ pub use journal::{InstallationLock, JournalDirectory};
 mod startup;
 #[cfg(target_os = "linux")]
 pub use startup::check_startup_registration;
+
+#[cfg(target_os = "linux")]
+mod database_status;
+#[cfg(target_os = "linux")]
+pub use database_status::DockerDatabaseInstallation;
 
 mod releases;
 pub use releases::GithubReleaseSource;

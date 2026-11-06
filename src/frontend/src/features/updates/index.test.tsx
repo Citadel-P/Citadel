@@ -38,6 +38,9 @@ const status = {
   databaseVersion: '18.6',
   databaseAvailable: null,
   databaseManaged: false,
+  databaseInstallation: 'External',
+  databaseUpdateReason:
+    'PostgreSQL is managed outside this Citadel Compose installation. Update it using its own deployment or provider.',
   channel: 'stable',
   checksAllowed: true,
   checksEnabled: true,
@@ -699,8 +702,31 @@ it.each([false, true])(
       expect(within(info).queryByText('Check failed')).not.toBeInTheDocument();
     }
     expect(within(info).getByText('In-app updates unavailable')).toBeVisible();
-    expect(
-      within(info).getByText('In-app database updates require a registered, supported installation.'),
-    ).toBeVisible();
+    expect(within(info).getByText(status.databaseUpdateReason)).toBeVisible();
+  },
+);
+
+it.each([
+  ['Bundled', 'Register this Compose installation to enable updates.', 'Setup required', 'Register the installation'],
+  ['Bundled', 'This PostgreSQL major version requires a manual migration.', 'Update blocked', null],
+  ['Unknown', 'Could not verify how PostgreSQL is deployed.', 'Status unavailable', 'Register the installation'],
+])(
+  'distinguishes %s database eligibility from externally managed databases',
+  async (databaseInstallation, databaseUpdateReason, badge, installationUnavailableReason) => {
+    server.use(
+      http.get('http://localhost/api/v1/updates', () =>
+        HttpResponse.json({
+          ...status,
+          available: null,
+          databaseInstallation,
+          databaseUpdateReason,
+          installationUnavailableReason,
+        }),
+      ),
+    );
+    renderCitadel(<UpdatesPage />, { route: '/updates/config' });
+    expect(await screen.findByText(databaseUpdateReason as string)).toBeVisible();
+    expect(screen.getByText(badge as string)).toBeVisible();
+    expect(screen.queryByText('In-app updates unavailable')).not.toBeInTheDocument();
   },
 );

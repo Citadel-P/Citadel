@@ -75,6 +75,10 @@ impl ProcessRunner for Runner {
                     let label = args[args.iter().position(|arg| *arg == "--label").unwrap()+1];
                     let nonce = label.strip_prefix("com.citadel.update-host=").unwrap();
                     let mounts: Vec<_> = [(self.fixture.inputs.directory.to_str().unwrap(), false), (self.fixture.state.to_str().unwrap(), true), ("/var/run/docker.sock", true)].into_iter().map(|(path,rw)| json!({"Type":"bind","Source":path,"Destination":path,"RW":rw})).chain([json!({"Type":"tmpfs","Destination":"/tmp","RW":true})]).collect();
+                    let socket = super::super::layout::container_socket(&self.fixture.runner.core).unwrap();
+                    assert!(args.contains(&format!("type=bind,\"source={socket}\",\"destination=/var/run/docker.sock\"").as_str()));
+                    let mut mounts = mounts;
+                    mounts[2]["Source"] = json!(socket);
                     let mut utility = json!({"Id":"e".repeat(64), "Name":format!("/{name}"), "Image":self.fixture.runner.core["Image"], "Path":"/app/citadel-server", "Args":["update-host"], "RestartCount":0,
                         "Config":{"Hostname":"e".repeat(12), "User":"0:0", "Labels":{"com.citadel.update-host":nonce}},
                         "HostConfig":{"NetworkMode":"none","ReadonlyRootfs":true,"Privileged":false,"RestartPolicy":{"Name":"no"}},
@@ -108,8 +112,12 @@ impl ProcessRunner for Runner {
 
 #[tokio::test]
 async fn utility_is_owned_isolated_and_cleaned_even_when_request_fails_or_cancels() {
-    for mode in ["normal", "failed", "cancel", "foreign"] {
-        let fixture = Fixture::new();
+    for mode in ["normal", "rootless", "failed", "cancel", "foreign"] {
+        let fixture = if mode == "rootless" {
+            Fixture::rootless()
+        } else {
+            Fixture::new()
+        };
         let registration = fixture.register().await.unwrap();
         let response =
             serde_json::to_value(HostUpdateResponse::Registered(Box::new(registration))).unwrap();
@@ -131,7 +139,11 @@ async fn utility_is_owned_isolated_and_cleaned_even_when_request_fails_or_cancel
                 &CORE[..12],
             )
             .await;
-        assert_eq!(result.is_ok(), mode == "normal", "{mode}");
+        assert_eq!(
+            result.is_ok(),
+            matches!(mode, "normal" | "rootless"),
+            "{mode}"
+        );
         if let Err(error) = result {
             assert!(!error.to_string().contains("private detail"));
         }

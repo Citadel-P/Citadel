@@ -71,6 +71,8 @@ class PublishedUpgradeTests(unittest.TestCase):
                     calls.append(args)
                     if args[:2] == ('image', 'save'):
                         Path(args[3]).write_bytes(b'fixture archive')
+                    if args[-3:] == ('info', '--format', '{{json .}}'):
+                        return subprocess.CompletedProcess([], 0, b'{"SecurityOptions":[],"DockerRootDir":"/var/lib/docker"}', b'')
                     return subprocess.CompletedProcess([], 0, b'fixture-id\n', b'')
                 with patch.object(fixture, 'host', side_effect=host):
                     fixture.start(published=published)
@@ -154,7 +156,8 @@ class LocalUpgradeTests(unittest.TestCase):
             fixture.compose_file = Path(directory) / 'source-compose.yml'
             fixture.compose_file.write_text('source installer')
             with patch.object(fixture, 'execute'), patch.object(fixture, 'write') as write, \
-                    patch.object(fixture, 'compose'), patch.object(fixture, 'http'), \
+                    patch.object(fixture, 'compose'), patch.object(fixture, 'http', return_value=dict(databaseInstallation='Bundled', databaseManaged=False, databaseUpdateReason='Register')), \
+                    patch.object(fixture, 'login', return_value='token'), \
                     patch.object(fixture, 'register', return_value={}):
                 fixture.setup_installation()
             write.assert_any_call(fixture.installation + '/docker-compose.yml', 'source installer')
@@ -194,6 +197,8 @@ class LocalUpgradeTests(unittest.TestCase):
                 calls.append(args)
                 if args[:2] == ('image', 'save'):
                     Path(args[3]).write_bytes(b'archive')
+                if args[-3:] == ('info', '--format', '{{json .}}'):
+                    return subprocess.CompletedProcess([], 0, b'{"SecurityOptions":[],"DockerRootDir":"/var/lib/docker"}', b'')
                 return subprocess.CompletedProcess([], 0, b'fixture-id\n', b'')
             with patch.object(fixture, 'host', side_effect=host):
                 fixture.start(registry=True, browser_port=18080)
@@ -253,7 +258,7 @@ class LocalUpgradeTests(unittest.TestCase):
         local = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(local)
         fixture = local.LocalUpgrade('unused', Path('/unused'))
-        response = dict(databaseManaged=True, databaseAvailable='18.6',
+        response = dict(databaseInstallation='Bundled', databaseManaged=True, databaseAvailable='18.6',
                         component='Database', targetVersion='18.6', id='operation',
                         phase='Succeeded', operation=None)
         with (patch.object(fixture, 'setup_installation', return_value=(

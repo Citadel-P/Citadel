@@ -44,7 +44,7 @@ pub struct EndpointSettings {
     pub global_ipv6_prefix_len: Option<i64>,
     /// This property determines which endpoint will provide the default gateway for a container. The endpoint with the highest priority will be used. If multiple endpoints have the same priority, endpoints are lexicographically sorted based on their network name, and the one that sorts first is picked.
     #[serde(rename = "GwPriority", skip_serializing_if = "Option::is_none")]
-    pub gw_priority: Option<f64>,
+    pub gw_priority: Option<i64>,
     #[serde(
         rename = "IPAMConfig",
         default,

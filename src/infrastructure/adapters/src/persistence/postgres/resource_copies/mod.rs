@@ -165,7 +165,7 @@ impl CopyRepository for PostgresCopyRepository {
         Box::pin(async move {
             // Expired reviews have no child restores and can be removed in
             // bounded batches. Started operation receipts remain durable.
-            sqlx::query("DELETE FROM resourcecopies WHERE id IN (SELECT id FROM resourcecopies WHERE status='Review' AND createdat<CURRENT_TIMESTAMP-INTERVAL '1 day' ORDER BY createdat LIMIT 100)").execute(&self.pool).await.map_err(storage_error)?;
+            sqlx::query("WITH expired AS MATERIALIZED (SELECT ctid FROM resourcecopies WHERE status='Review' AND createdat<CURRENT_TIMESTAMP-INTERVAL '1 day' ORDER BY createdat LIMIT 100 FOR UPDATE SKIP LOCKED) DELETE FROM resourcecopies target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))").execute(&self.pool).await.map_err(storage_error)?;
             let rows = sqlx::query_as::<_,(Uuid,Uuid)>("SELECT actorid,id FROM resourcecopies WHERE status IN ('Restoring','Cancelling','Cleaning') ORDER BY updatedat,id LIMIT 32").fetch_all(&self.pool).await.map_err(storage_error)?;
             Ok(rows
                 .into_iter()

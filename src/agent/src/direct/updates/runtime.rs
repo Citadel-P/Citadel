@@ -3,7 +3,6 @@ use citadel_contracts::citadel::platforms::v1::{
     AgentUpdateInfo, UpdateAgentRequest, UpdateAgentResponse,
 };
 use futures_util::StreamExt;
-use serde_json::json;
 use tonic::Status;
 
 impl Runtime {
@@ -203,14 +202,31 @@ impl Runtime {
                     return Err(Status::unavailable("Agent image pull failed"));
                 }
             }
+            // Reinspect after the pull: helper and replacement must use the same live source.
+            let source = self
+                .docker
+                .inspect_container_document(&info.container_id)
+                .await
+                .map_err(docker_error)?;
+            if source["Id"] != info.container_id || source["Image"] != info.source_image {
+                return Err(Status::failed_precondition("Agent source identity changed"));
+            }
+            let configuration = crate::updates::helper_config(
+                &source,
+                &request.target_image,
+                &request.operation_id,
+            )
+            .map_err(Status::failed_precondition)?;
             // Creation can also complete after a lost response. Retain admission before dispatch.
             drain.retain()?;
-            let helper=self.docker.create_container(&crate::updates::helper_name(&request.operation_id, &info.container_id),&json!({
-                "Image":request.target_image,"Entrypoint":["/app/citadel-agent"],
-                "Cmd":["replace-agent",info.container_id,info.source_image,request.target_image,request.operation_id],
-                "Labels":{"com.citadel.system":"true","com.citadel.system-role":"agent-updater","com.citadel.agent-update":request.operation_id},
-                "HostConfig":{"Binds":["/var/run/docker.sock:/var/run/docker.sock"],"NetworkMode":"none","ReadonlyRootfs":true,"CapDrop":["ALL"],"SecurityOpt":["no-new-privileges"],"RestartPolicy":{"Name":"no"}}
-            })).await.map_err(docker_error)?;
+            let helper = self
+                .docker
+                .create_container(
+                    &crate::updates::helper_name(&request.operation_id, &info.container_id),
+                    &configuration,
+                )
+                .await
+                .map_err(docker_error)?;
             drain.retain()?;
             // After creation, a lost start reply is ambiguous: keep admission closed for recovery.
             self.docker

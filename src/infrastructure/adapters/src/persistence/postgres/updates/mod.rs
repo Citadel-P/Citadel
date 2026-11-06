@@ -27,6 +27,7 @@ mod authorization;
 mod availability;
 mod checkpoint;
 mod checks;
+pub(crate) use checks::database_endpoint;
 mod credentials;
 pub(crate) use checkpoint::check_checkpoint_source;
 mod claims;

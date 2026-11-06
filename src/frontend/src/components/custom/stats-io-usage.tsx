@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import type { ContainerStatView } from '@/api/generated/api.types';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { byteTransform } from '@/lib/bytes.helper';
+import { useLocalStorage } from '@/lib/hooks';
 import { mergeStatsByCreated } from '@/lib/live-stats';
 import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
 import { filterStatsRange, statsAxis } from '@/lib/stats-range';
@@ -80,7 +81,8 @@ export type IoUsageProps = {
 export function IoUsage({ stats, isLoading, controls, kind }: IoUsageProps & { kind: keyof typeof series }) {
   const bounds = useStatsChartBounds();
   const id = useId().replaceAll(':', '');
-  const [mode, setMode] = useState<'accumulated' | 'throughput'>(kind === 'network' ? 'accumulated' : 'throughput');
+  const [storedMode, setMode] = useLocalStorage<'accumulated' | 'throughput'>(`stats-${kind}-view`, 'accumulated');
+  const mode = storedMode === 'throughput' ? 'throughput' : 'accumulated';
   const rate = mode === 'throughput';
   const fields = series[kind];
   const usage = useMemo(() => {

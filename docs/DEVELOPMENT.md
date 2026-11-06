@@ -217,7 +217,8 @@ Settings use a private `.env` containing unique `NAME=value` assignments without
 variable interpolation. Service `env_file` references must point to that same
 `.env` with `format: raw`. Includes, extends, builds, external configuration/secret
 files, YAML merge/tag extensions and unrecognized fields are rejected before
-Compose runs. External databases, remote Core Agents, additional services and
+Compose runs, except `!override` on `services.server.volumes`: the complete resolved
+mount list must still match the supported profile. External databases, remote Core Agents, additional services and
 storage-root overrides are not supported. It resolves captured bytes in a private
 temporary directory, rejects input changes during the check, and prints only
 the project, configuration fingerprint and desired image/volume/network names.
@@ -241,7 +242,12 @@ Supply the original ordered Edge overlay here too, when used. This Rust command
 is also included in the Core image; no host Python installation is required.
 For containerized execution, use Docker's default hostname and mount exactly the
 installer directory read-only, the private state directory read-write and
-`/var/run/docker.sock`, each at its original host path. Run as the intended updater
+the Docker socket. Installer and state mounts keep their original host paths; the
+socket is always mounted at `/var/run/docker.sock` inside the executor. For rootless
+Docker its host source is `/run/user/<uid>/docker.sock`. Core must use that same
+socket mapping and mount the daemon’s `DockerRootDir` read-only at `/host` plus its
+absolute path, instead of mounting the whole host root. Only these mounts and the
+Core data volume are supported. Run as the intended updater
 user with socket access and permission to read the protected installer files.
 Use `--entrypoint /app/citadel-server` to invoke the diagnostic directly: the normal
 Core entrypoint switches root to the Core service UID. Set `--user UID:GID` to the
@@ -261,7 +267,12 @@ conflicting registration, corrupt files and orphaned recovery evidence cause a
 refusal without overwriting state. It does not stop services, approve an update,
 establish source-to-target compatibility or enable automatic installation.
 
-For UI installation, use the root executor (`0:0`). First register the healthy
+For UI installation, use the root executor (`0:0`) **inside a container**. On
+rootless Docker this maps to the daemon’s unprivileged host user; installer inputs
+and state must be owned by that user on the host. Do not use its host UID as the
+container UID or chown the files to host root. The registered host socket source,
+daemon identity and data-root mount are rechecked before replacement and recovery.
+First register the healthy
 installation, then add `CITADEL_UPDATE_STATE_DIRECTORY=/opt/citadel-update-state`
 to its existing `.env` and recreate Core with the original Compose invocation.
 After Core is healthy, repeat `register-update-installation` with `--refresh` and

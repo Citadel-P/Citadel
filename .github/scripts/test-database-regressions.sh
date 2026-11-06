@@ -129,3 +129,15 @@ cancellation_test=persistence::postgres::identity::authorization_cache::tests::c
 run_cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --list | grep -F "$cancellation_test: test"
 run_cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --test-threads=1
 run_cargo test --locked -p citadel-database --test migrations -- --ignored --test-threads=1
+
+# Retention plans execute DELETE only against dedicated disposable fixtures.
+docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_stats_retention
+(
+  export CITADEL_STATISTICS_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_stats_retention"
+  run_cargo test --locked -p citadel-adapters --lib persistence::postgres::maintenance::tests:: -- --ignored --test-threads=1
+)
+docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_copy_expiry
+(
+  export CITADEL_STATISTICS_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_copy_expiry"
+  run_cargo test --locked -p citadel-adapters --test maintenance_retention -- --ignored --test-threads=1
+)

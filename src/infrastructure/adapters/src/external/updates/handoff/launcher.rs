@@ -91,7 +91,7 @@ pub async fn launch_update_helper(
     })
 }
 
-fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateError> {
+pub(super) fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateError> {
     let reg = &intent.registration;
     let mut args = vec![
         "container".into(),
@@ -124,9 +124,13 @@ fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateEr
         "--entrypoint".into(),
         "/app/citadel-server".into(),
     ];
-    for path in [&reg.directory, &reg.state_directory, &reg.docker_socket] {
-        args.extend(["--mount".into(), bind_mount(path)?]);
+    for path in [&reg.directory, &reg.state_directory] {
+        args.extend(["--mount".into(), bind_mount(path, path)?]);
     }
+    args.extend([
+        "--mount".into(),
+        bind_mount(&reg.docker_socket, Path::new(super::super::docker::SOCKET))?,
+    ]);
     args.extend([
         "--mount".into(),
         format!(
@@ -147,12 +151,13 @@ fn create_arguments(intent: &HelperLaunchIntent) -> Result<Vec<String>, UpdateEr
     Ok(args)
 }
 
-fn bind_mount(path: &Path) -> Result<String, UpdateError> {
+fn bind_mount(path: &Path, target: &Path) -> Result<String, UpdateError> {
     // Docker --mount parses CSV, not shell quoting. Quote entire fields and
     // escape embedded quotes so commas in legitimate host paths remain literal.
     let path = path.to_str().ok_or_else(conflict)?.replace('"', "\"\"");
+    let target = target.to_str().ok_or_else(conflict)?.replace('"', "\"\"");
     Ok(format!(
-        "type=bind,\"source={path}\",\"destination={path}\""
+        "type=bind,\"source={path}\",\"destination={target}\""
     ))
 }
 

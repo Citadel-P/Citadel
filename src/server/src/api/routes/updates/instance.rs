@@ -112,14 +112,24 @@ async fn respond(
             settings.update_checks_enabled,
         );
         view.database_version = state.checker.database_version().await;
+        let cancellation = CancellationToken::new();
+        let database = if state.installer.is_some() {
+            citadel_updates::DatabaseInstallation::Bundled
+        } else {
+            state.checker.database_installation(&cancellation).await
+        };
+        view.database_installation = database.into();
+        view.database_update_reason = Some(match database {
+            citadel_updates::DatabaseInstallation::Bundled => "Register this Compose installation and configure its update state directory to enable in-app database updates.",
+            citadel_updates::DatabaseInstallation::External => "PostgreSQL is managed outside this Citadel Compose installation. Update it using its own deployment or provider.",
+            citadel_updates::DatabaseInstallation::Unknown => "Could not verify how PostgreSQL is deployed. Check Core’s local Docker access and Compose configuration.",
+        }.into());
         if let Some(installer) = &state.installer {
             view.operation = installer.active().await?.map(Into::into);
-            if view.operation.is_none()
-                && let Ok(database) = installer.database_update(&CancellationToken::new()).await
-            {
-                view.database_managed = true;
-                view.database_available = database.map(|db| db.target_display());
-            }
+            // Registration is verified at startup; status does not claim ownership.
+            // An active Core operation must not make its bundled database look external.
+            view.database_installation = citadel_updates::DatabaseInstallation::Bundled.into();
+            view.set_database_update(installer.database_update(&cancellation).await);
             if state.identity.installation_policy().update_checks_allowed {
                 view.installation_unavailable_reason = None;
             }

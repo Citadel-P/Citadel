@@ -82,9 +82,9 @@ it('distinguishes unavailable deltas from a measured zero without falling back t
   expect(screen.getAllByText('0 B')).toHaveLength(2);
 });
 
-it('switches the same network chart to backend throughput while preserving period totals', () => {
+it('persists the network view across remounts while preserving period totals', () => {
   vi.mocked(useStatsChartBounds).mockReturnValue({ from: 10, to: 30 });
-  render(
+  const renderChart = () => (
     <NetworkUsage
       stats={[
         { ...sample(10), rxBytesPerSecond: null, txBytesPerSecond: null },
@@ -92,14 +92,22 @@ it('switches the same network chart to backend throughput while preserving perio
         { ...sample(30, 40, 20), rxBytesPerSecond: 4 * kib, txBytesPerSecond: 2 * kib },
       ]}
       isLoading={false}
-    />,
+    />
   );
+  const { unmount } = render(renderChart());
   expect(chart().at(-1)).toMatchObject({ rxBytes: 60 * kib, txBytes: 30 * kib });
   fireEvent.click(screen.getByRole('radio', { name: 'Throughput' }));
   expect(screen.getByRole('radio', { name: 'Throughput' })).toBeChecked();
   expect(chart().at(-1)).toMatchObject({ rxBytes: 4 * kib, txBytes: 2 * kib });
   expect(screen.getByText('60 kB')).toBeVisible();
   expect(screen.getByText('30 kB')).toBeVisible();
+  unmount();
+  const disk = render(<DiskUsage stats={[]} isLoading={false} />);
+  expect(screen.getByRole('radio', { name: 'Accumulated' })).toBeChecked();
+  disk.unmount();
+  render(renderChart());
+  expect(screen.getByRole('radio', { name: 'Throughput' })).toBeChecked();
+  expect(chart().at(-1)).toMatchObject({ rxBytes: 4 * kib, txBytes: 2 * kib });
   fireEvent.click(screen.getByRole('radio', { name: 'Accumulated' }));
   expect(chart().at(-1)).toMatchObject({ rxBytes: 60 * kib, txBytes: 30 * kib });
 });
@@ -117,11 +125,17 @@ it('shows disk read/write rates and period totals, with unavailable measurements
       blockWriteBytesPerSecond: 5 * kib,
     },
   ];
-  const { rerender } = render(<DiskUsage stats={stats} isLoading={false} />);
+  const { unmount } = render(<DiskUsage stats={stats} isLoading={false} />);
   expect(screen.getByText('Disk I/O')).toBeVisible();
   expect(screen.getByText('100 kB')).toBeVisible();
   expect(screen.getByText('50 kB')).toBeVisible();
+  expect(screen.getByRole('radio', { name: 'Accumulated' })).toBeChecked();
+  expect(chart().at(-1)).toMatchObject({ blockReadBytes: 100 * kib, blockWriteBytes: 50 * kib });
+  fireEvent.click(screen.getByRole('radio', { name: 'Throughput' }));
   expect(chart().at(-1)).toMatchObject({ blockReadBytes: 10 * kib, blockWriteBytes: 5 * kib });
+  unmount();
+  const { rerender } = render(<DiskUsage stats={stats} isLoading={false} />);
+  expect(screen.getByRole('radio', { name: 'Throughput' })).toBeChecked();
   fireEvent.click(screen.getByRole('radio', { name: 'Accumulated' }));
   expect(chart().at(-1)).toMatchObject({ blockReadBytes: 100 * kib, blockWriteBytes: 50 * kib });
   rerender(<DiskUsage stats={[sample(10)]} isLoading={false} />);
