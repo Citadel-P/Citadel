@@ -195,13 +195,46 @@ test('Off is remembered and can be changed', async (t) => {
   await page.getByRole('button', { name: 'Close', exact: true }).click();
 });
 
-for (const signal of ['dnt', 'gpc']) test(`${signal} blocks saved and new consent`, async (t) => {
-  const { page, sends } = await fixture(t, { saved: accepted(), signal });
+test('DNT blocks saved and new Full consent even with GPC', async (t) => {
+  const { page, context, sends } = await fixture(t, { saved: accepted(), signal: 'dnt' });
+  await context.addInitScript(() => Object.defineProperty(navigator, 'globalPrivacyControl', { value: true }));
   await open(page);
   await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
   await savePreference(page, 'Accept all');
   await settle(page);
   assert.equal(sends.length, 0);
+});
+
+for (const entry of ['notice', 'preferences']) test(`GPC allows explicit Full from ${entry} and stops on downgrade`, async (t) => {
+  const { page, sends } = await fixture(t, { signal: 'gpc' });
+  await open(page);
+  await page.getByRole('region', { name: 'Optional analytics' }).waitFor();
+  assert.equal(sends.length, 0);
+  assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
+  if (entry === 'notice') {
+    await page.getByRole('button', { name: 'Accept all', exact: true }).click();
+  } else {
+    await page.getByRole('button', { name: 'Reject non-essentials', exact: true }).click();
+    await settle(page);
+    assert.equal(sends.length, 0);
+    await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+    await savePreference(page, 'Full');
+  }
+  await until(() => sends.length === 1);
+  await page.getByRole('button', { name: 'Yes, this page was helpful', exact: true }).click();
+  await until(() => sends.length === 2);
+  assert.equal(sends[1].payload.payload.name, 'page_helpful');
+  await page.reload();
+  await until(() => sends.length === 3);
+  for (const choice of ['Basic', 'Off']) {
+    await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+    await savePreference(page, choice);
+    assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
+    await page.reload();
+    await page.getByRole('button', { name: 'Analytics preferences', exact: true }).waitFor();
+    await settle(page);
+    assert.equal(sends.length, 3);
+  }
 });
 
 test('expired or invalid consent cannot authorize collection', async (t) => {
@@ -510,7 +543,7 @@ for (const [name, options] of Object.entries({
   'no consent': {},
   declined: { saved: { choice: 'declined', expires: Date.now() + 60_000 } },
   dnt: { saved: accepted(), signal: 'dnt' },
-  gpc: { saved: accepted(), signal: 'gpc' },
+  'gpc with Basic': { saved: { choice: 'basic', expires: Date.now() + 60_000 }, signal: 'gpc' },
 })) test(`${name} blocks custom events while search still works`, async (t) => {
   const { page, sends } = await fixture(t, options);
   await open(page);

@@ -155,6 +155,7 @@ impl StatsIngress {
                     .entry(captured_at.unwrap_or(stat.created))
                     .or_insert_with(|| PlatformStatsSample {
                         scope: scope.clone(),
+                        container_io: Vec::new(),
                         created: captured_at.unwrap_or(stat.created),
                         memory_active: 0.0,
                         cpu_usage: 0.0,
@@ -162,6 +163,7 @@ impl StatsIngress {
                         tx_bytes: 0.0,
                         metadata: metadata.clone(),
                     });
+                sample.container_io.push(stat.into());
                 sample.memory_active += stat.memory_active;
                 sample.cpu_usage += stat.cpu_usage;
                 sample.rx_bytes += stat.rx_bytes;
@@ -173,6 +175,7 @@ impl StatsIngress {
                     created,
                     PlatformStatsSample {
                         scope: scope.clone(),
+                        container_io: Vec::new(),
                         created,
                         memory_active: 0.0,
                         cpu_usage: 0.0,

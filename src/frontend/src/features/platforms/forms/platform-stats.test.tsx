@@ -1,6 +1,6 @@
 import { createPlatform as platformDefaults } from '@/test/factories/resources';
 import { PlatformConnectorType, PlatformStatus, PlatformType, PlatformView } from '@/api/generated/api.types';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { useRead } from '@/lib/hooks';
 import {
@@ -93,6 +93,44 @@ describe('platform current statistics', () => {
     expect(screen.getByText('2.00%')).toBeVisible();
     const samples = JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-samples')!);
     expect(samples.at(-1).cpuUsage).toBe(15);
+  });
+
+  it('uses period totals and throughput for network and disk I/O instead of lifetime counters', () => {
+    vi.mocked(useRead).mockReturnValue({
+      data: {
+        data: {
+          stats: [
+            { ...historical, rxBytes: 9000000, rxBytesDelta: null, txBytesDelta: null },
+            {
+              ...historical,
+              created: 70,
+              rxBytes: 100,
+              rxBytesDelta: 40,
+              txBytesDelta: 20,
+              rxBytesPerSecond: 4,
+              txBytesPerSecond: 2,
+              blockReadBytes: 1000,
+              blockWriteBytes: 2000,
+              blockReadBytesDelta: 60,
+              blockWriteBytesDelta: 80,
+              blockReadBytesPerSecond: 6,
+              blockWriteBytesPerSecond: 8,
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    } as ReturnType<typeof useRead>);
+    render(<PlatformStatsTab platform={{ ...platform, stats: [] }} />);
+    const network = screen.getByText('Network Usage').closest('[data-slot="card"]')! as HTMLElement;
+    const disk = screen.getByText('Disk I/O').closest('[data-slot="card"]')! as HTMLElement;
+    expect(within(network).getByText('40 B')).toBeVisible();
+    expect(within(disk).getByText('60 B')).toBeVisible();
+    fireEvent.click(within(network).getByRole('radio', { name: 'Throughput' }));
+    const data = JSON.parse(within(network).getByTestId('chart').getAttribute('data-samples')!);
+    expect(data.find((point: { created: number }) => point.created === 70).rxBytes).toBe(4);
+    expect(within(disk).getByRole('radio', { name: 'Throughput' })).toBeChecked();
+    expect(within(network).getByText('40 B')).toBeVisible();
   });
 
   it('ignores current chart samples without a valid timestamp', () => {

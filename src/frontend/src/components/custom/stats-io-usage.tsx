@@ -59,7 +59,20 @@ const series = {
 } as const;
 
 export type IoUsageProps = {
-  stats: Omit<ContainerStatView, 'containerId'>[];
+  stats: Pick<
+    ContainerStatView,
+    | 'created'
+    | 'rxBytesDelta'
+    | 'txBytesDelta'
+    | 'rxBytesPerSecond'
+    | 'txBytesPerSecond'
+    | 'blockReadBytes'
+    | 'blockWriteBytes'
+    | 'blockReadBytesDelta'
+    | 'blockWriteBytesDelta'
+    | 'blockReadBytesPerSecond'
+    | 'blockWriteBytesPerSecond'
+  >[];
   isLoading: boolean;
   controls?: ReactNode;
 };

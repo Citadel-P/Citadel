@@ -2559,6 +2559,18 @@ export interface ContainerInspectionView {
   [key: string]: any;
 }
 
+export interface ContainerIoSnapshot {
+  /** @format double */
+  blockReadBytes?: number | null;
+  /** @format double */
+  blockWriteBytes?: number | null;
+  containerId: string;
+  /** @format double */
+  rxBytes: number;
+  /** @format double */
+  txBytes: number;
+}
+
 export interface ContainerNetworkingView {
   container: NetworkContainer;
   endpoints: NetworkEndpointView[];
@@ -3766,6 +3778,19 @@ export interface HistoryContainerStatSnapshot {
 export interface HistoryPlatformStatSnapshot {
   stats: {
     /** @format double */
+    blockReadBytes?: number | null;
+    /** @format double */
+    blockReadBytesDelta?: number | null;
+    /** @format double */
+    blockReadBytesPerSecond?: number | null;
+    /** @format double */
+    blockWriteBytes?: number | null;
+    /** @format double */
+    blockWriteBytesDelta?: number | null;
+    /** @format double */
+    blockWriteBytesPerSecond?: number | null;
+    containerIo?: ContainerIoSnapshot[] | null;
+    /** @format double */
     cpuUsage: number;
     /** @format int64 */
     created: number;
@@ -3780,7 +3805,15 @@ export interface HistoryPlatformStatSnapshot {
     /** @format double */
     rxBytes: number;
     /** @format double */
+    rxBytesDelta?: number | null;
+    /** @format double */
+    rxBytesPerSecond?: number | null;
+    /** @format double */
     txBytes: number;
+    /** @format double */
+    txBytesDelta?: number | null;
+    /** @format double */
+    txBytesPerSecond?: number | null;
   }[];
 }
 
@@ -4861,6 +4894,19 @@ export interface PlatformPatch {
 
 export interface PlatformStatView {
   /** @format double */
+  blockReadBytes?: number | null;
+  /** @format double */
+  blockReadBytesDelta?: number | null;
+  /** @format double */
+  blockReadBytesPerSecond?: number | null;
+  /** @format double */
+  blockWriteBytes?: number | null;
+  /** @format double */
+  blockWriteBytesDelta?: number | null;
+  /** @format double */
+  blockWriteBytesPerSecond?: number | null;
+  containerIo?: ContainerIoSnapshot[] | null;
+  /** @format double */
   cpuUsage: number;
   /** @format int64 */
   created: number;
@@ -4875,7 +4921,15 @@ export interface PlatformStatView {
   /** @format double */
   rxBytes: number;
   /** @format double */
+  rxBytesDelta?: number | null;
+  /** @format double */
+  rxBytesPerSecond?: number | null;
+  /** @format double */
   txBytes: number;
+  /** @format double */
+  txBytesDelta?: number | null;
+  /** @format double */
+  txBytesPerSecond?: number | null;
 }
 
 export interface PlatformView {

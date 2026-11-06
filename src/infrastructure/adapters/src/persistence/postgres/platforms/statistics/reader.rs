@@ -215,14 +215,37 @@ impl StatisticsReader for PostgresStatisticsReader {
         now: i64,
     ) -> BoxFuture<'_, Result<Vec<PlatformStatSnapshot>, RuntimeCapabilityError>> {
         async move {
-            let rows=sqlx::query(r#"SELECT MIN(created) AS created,AVG(cpuusage) AS cpuusage,AVG(memoryusage) AS memoryusage,
-                AVG(rxbytes) AS rxbytes,AVG(txbytes) AS txbytes,ROUND(AVG(diskusedbytes))::bigint AS diskusedbytes,
-                ROUND(AVG(disktotalbytes))::bigint AS disktotalbytes,AVG(diskusage) AS diskusage
-                FROM platformstats WHERE platformid=$1 AND created>=$2 AND created<=$4 GROUP BY (created/$3) ORDER BY MIN(created)"#)
-                .bind(id).bind(window.since(now)).bind(window.bucket_seconds()).bind(window.until(now)).fetch_all(&self.pool).await.map_err(storage)?;
+            let rows = sqlx::query(include_str!("platform_history.sql"))
+                .bind(id)
+                .bind(window.since(now))
+                .bind(window.bucket_seconds())
+                .bind(window.until(now))
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
             rows.into_iter()
                 .map(|row| {
                     Ok(PlatformStatSnapshot {
+                        container_io: None,
+                        rx_bytes_delta: row.try_get("rxbytesdelta").map_err(storage)?,
+                        tx_bytes_delta: row.try_get("txbytesdelta").map_err(storage)?,
+                        block_read_bytes: row.try_get("blockreadbytes").map_err(storage)?,
+                        block_write_bytes: row.try_get("blockwritebytes").map_err(storage)?,
+                        block_read_bytes_delta: row
+                            .try_get("blockreadbytesdelta")
+                            .map_err(storage)?,
+                        block_write_bytes_delta: row
+                            .try_get("blockwritebytesdelta")
+                            .map_err(storage)?,
+                        rx_bytes_per_second: row.try_get("rxbytespersecond").map_err(storage)?,
+                        tx_bytes_per_second: row.try_get("txbytespersecond").map_err(storage)?,
+                        block_read_bytes_per_second: row
+                            .try_get("blockreadbytespersecond")
+                            .map_err(storage)?,
+                        block_write_bytes_per_second: row
+                            .try_get("blockwritebytespersecond")
+                            .map_err(storage)?,
+
                         created: row.try_get("created").map_err(storage)?,
                         cpu_usage: row.try_get("cpuusage").map_err(storage)?,
                         memory_usage: row.try_get("memoryusage").map_err(storage)?,

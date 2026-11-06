@@ -326,3 +326,9 @@ Citadel does not currently provide:
   Image/Volume/local Network mutations;
 - live-follow Service or Task logs;
 - automatic failover between manager endpoints.
+
+The Platform **Stats** tab's network and disk-I/O charts measure containers on the
+connected manager host, using the same accumulated/throughput views as
+[standalone Platforms](/resources/platforms/docker-standalone#platform-statistics).
+They are not cluster-wide totals. Worker-node samples remain scoped to their
+own containers, Tasks and Services.

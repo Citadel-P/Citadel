@@ -432,6 +432,18 @@ async fn global_platform_updates_use_authorized_aggregates_and_stop_after_revoca
     let mut view = platform(platform_id);
     view.mem_total = 4096;
     view.stats = Some(vec![PlatformStatView {
+        container_io: None,
+        rx_bytes_delta: None,
+        tx_bytes_delta: None,
+        block_read_bytes: None,
+        block_write_bytes: None,
+        block_read_bytes_delta: None,
+        block_write_bytes_delta: None,
+        rx_bytes_per_second: None,
+        tx_bytes_per_second: None,
+        block_read_bytes_per_second: None,
+        block_write_bytes_per_second: None,
+
         created: 123,
         cpu_usage: 12.5,
         memory_usage: 25.0,

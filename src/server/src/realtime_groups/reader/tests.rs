@@ -261,11 +261,13 @@ fn platform_stats_use_current_samples_and_preserve_normalization() {
         descriptor: json!({"containerCount":6}),
     };
     let sample = json!({"created":42,"memoryActive":512.0,"cpuUsage":200.0,"rxBytes":100,"txBytes":200,
+        "containerIo":[{"containerId":"physical-container","rxBytes":100,"txBytes":200,"blockReadBytes":null,"blockWriteBytes":42}],
         "metadata":{"memTotal":2048,"containersRunning":3,"containerCount":6}});
     let value = live_platform_stats(Uuid::nil(), &context, &sample).unwrap();
     assert_eq!(value["stat"]["created"], 42);
     assert_eq!(value["stat"]["cpuUsage"], 50.0);
     assert_eq!(value["stat"]["memoryUsage"], 25.0);
+    assert_eq!(value["stat"]["containerIo"], sample["containerIo"]);
     assert_eq!(value["containersRunning"], 3);
     assert!(live_platform_stats(Uuid::nil(), &context, &Value::Null).is_none());
 }

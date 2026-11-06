@@ -39,7 +39,8 @@ SELECT p.*,
        stat.txbytes AS stat_txbytes,
        stat.diskusedbytes AS stat_diskusedbytes,
        stat.disktotalbytes AS stat_disktotalbytes,
-       stat.diskusage AS stat_diskusage
+       stat.diskusage AS stat_diskusage,
+       stat.containerio AS stat_containerio
 FROM platforms p
 LEFT JOIN LATERAL (
     SELECT COUNT(*) AS total,

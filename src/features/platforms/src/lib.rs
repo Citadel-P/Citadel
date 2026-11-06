@@ -44,10 +44,10 @@ pub use mutations::{
 };
 pub use read_models::{
     ContainerDeploymentSummary, ContainerDeploymentUpdateState, ContainerDetails,
-    ContainerIdentity, ContainerStatSnapshot, EffectivePlatformPermission, ImageDetails,
-    ImageIdentity, NetworkDetails, NodeResourceProjection, PlatformDetails, PlatformStatSnapshot,
-    PlatformTelemetryContext, SwarmConfigSummary, SwarmNetworkSummary, SwarmNodeSummary,
-    SwarmSecretSummary, SwarmServiceSummary, SwarmTaskSummary, VolumeDetails,
+    ContainerIdentity, ContainerIoSnapshot, ContainerStatSnapshot, EffectivePlatformPermission,
+    ImageDetails, ImageIdentity, NetworkDetails, NodeResourceProjection, PlatformDetails,
+    PlatformStatSnapshot, PlatformTelemetryContext, SwarmConfigSummary, SwarmNetworkSummary,
+    SwarmNodeSummary, SwarmSecretSummary, SwarmServiceSummary, SwarmTaskSummary, VolumeDetails,
     VolumeUsageDataSummary, WorkloadStatusCounts,
 };
 pub use registration::{

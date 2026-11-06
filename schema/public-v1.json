@@ -5063,6 +5063,41 @@
         ],
         "type": "object"
       },
+      "ContainerIoSnapshot": {
+        "properties": {
+          "blockReadBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "rxBytes": {
+            "format": "double",
+            "type": "number"
+          },
+          "txBytes": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "containerId",
+          "rxBytes",
+          "txBytes"
+        ],
+        "type": "object"
+      },
       "ContainerNetworkingView": {
         "properties": {
           "container": {
@@ -9048,6 +9083,57 @@
           "stats": {
             "items": {
               "properties": {
+                "blockReadBytes": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockReadBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockReadBytesPerSecond": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockWriteBytes": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockWriteBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blockWriteBytesPerSecond": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "containerIo": {
+                  "items": {
+                    "$ref": "#/components/schemas/ContainerIoSnapshot"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
                 "cpuUsage": {
                   "format": "double",
                   "type": "number"
@@ -9085,9 +9171,37 @@
                   "format": "double",
                   "type": "number"
                 },
+                "rxBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "rxBytesPerSecond": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
                 "txBytes": {
                   "format": "double",
                   "type": "number"
+                },
+                "txBytesDelta": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "txBytesPerSecond": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -12129,6 +12243,57 @@
       },
       "PlatformStatView": {
         "properties": {
+          "blockReadBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockReadBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockReadBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytes": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "blockWriteBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "containerIo": {
+            "items": {
+              "$ref": "#/components/schemas/ContainerIoSnapshot"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "cpuUsage": {
             "format": "double",
             "type": "number"
@@ -12166,9 +12331,37 @@
             "format": "double",
             "type": "number"
           },
+          "rxBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "rxBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "txBytes": {
             "format": "double",
             "type": "number"
+          },
+          "txBytesDelta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "txBytesPerSecond": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [

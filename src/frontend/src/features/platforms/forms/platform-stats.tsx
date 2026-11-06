@@ -11,7 +11,8 @@ import {
   PlatformView,
   SwarmOverviewView,
 } from '@/api/generated/api.types';
-import { NETWORK_CHART_COLORS } from '@/components/custom/chart-series-colors';
+import { IoUsage } from '@/components/custom/stats-io-usage';
+import { appendPlatformIo, platformIoFields, type PlatformIoSeries } from '../platform-io';
 import { StatsPanelHeader, StatsSummaryItem } from '@/components/custom/common';
 import {
   CHART_ACTIVE_DOT,
@@ -60,7 +61,7 @@ import {
 import { getBackupMetric, getBackupSourceStates } from '../platform-backups';
 import { useSwarmOverview } from '@/features/swarm/hooks/useSwarmOverview';
 
-type PlatformStatsDatum = {
+type PlatformStatsDatum = Pick<PlatformStatView, (typeof platformIoFields)[number]> & {
   created: number;
   cpuUsage: number;
   memoryUsage: number;
@@ -100,7 +101,8 @@ export const PlatformStatsTab = ({ platform }: { platform: PlatformView }) => {
             <CpuUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
             <MemoryUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
             <DiskUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
-            <NetworkUsageChart platform={chartPlatform} stats={stats} isLoading={isLoading} />
+            <IoUsage kind="network" stats={stats} isLoading={isLoading} />
+            <IoUsage kind="disk" stats={stats} isLoading={isLoading} />
           </>
         )}
       </StatsChartRange>
@@ -348,66 +350,6 @@ const MemoryUsageChart = ({
   );
 };
 
-const NetworkUsageChart = ({
-  platform,
-  stats,
-  isLoading,
-  controls,
-}: {
-  platform: PlatformView;
-  stats: PlatformStatsDatum[];
-  isLoading: boolean;
-  controls?: ReactNode;
-}) => {
-  // Summary values are current samples; chart history contains bucket averages.
-  const latest = platform.stats?.at(0);
-  const chartConfig = useMemo(
-    () =>
-      ({
-        rxBytes: {
-          label: 'Data received',
-          theme: NETWORK_CHART_COLORS.rxBytes,
-        },
-        txBytes: {
-          label: 'Data sent',
-          theme: NETWORK_CHART_COLORS.txBytes,
-        },
-      }) satisfies ChartConfig,
-    [],
-  );
-
-  return (
-    <StatsChartCard
-      title="Network Usage"
-      description="Showing total network usage over the selected period"
-      controls={controls}
-      chartConfig={chartConfig}
-      stats={stats}
-      isLoading={isLoading}
-      areas={[
-        {
-          key: 'rxBytes',
-          gradientId: 'fillPlatformRxBytes',
-          formatter: (value) => byteTransform(value, 2),
-        },
-        {
-          key: 'txBytes',
-          gradientId: 'fillPlatformTxBytes',
-          formatter: (value) => byteTransform(value, 2),
-        },
-      ]}>
-      <StatsSummaryItem
-        label="Received"
-        value={platform.status === PlatformStatus.Online && latest ? byteTransform(latest.rxBytes, 2) : '-'}
-      />
-      <StatsSummaryItem
-        label="Sent"
-        value={platform.status === PlatformStatus.Online && latest ? byteTransform(latest.txBytes, 2) : '-'}
-      />
-    </StatsChartCard>
-  );
-};
-
 export const DiskUsageChart = ({
   platform,
   stats,
@@ -517,7 +459,7 @@ const StatsChartCard = ({
       <AreaChart data={statsChartData(stats, bounds)} accessibilityLayer>
         {gradientDefs}
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
-        <YAxis {...statsValueAxis(areas[0]?.key === 'rxBytes' ? 'bytes' : 'percent')} />
+        <YAxis {...statsValueAxis('percent')} />
         <XAxis
           {...statsAxis(bounds)}
           dataKey="created"
@@ -669,24 +611,31 @@ const SystemMetric = ({
 
 const useLiveStats = (platform: PlatformView, seconds: number, windowSeconds: number): PlatformStatsDatum[] => {
   const latestStat = platform.status === PlatformStatus.Online ? platform.stats?.at(0) : undefined;
-  const normalized = latestStat ? normalizePlatformStats([latestStat])[0] : undefined;
-  const [live, setLive] = useState(() => ({
-    platformId: platform.id,
-    latestStat,
-    stats: normalized ? appendLiveStatBucket([], normalized, seconds, windowSeconds) : [],
-  }));
-
-  if (live.platformId !== platform.id || live.latestStat !== latestStat) {
-    const previousStats = live.platformId === platform.id ? live.stats : [];
-    const next = {
+  const nextState = (previous?: { gauges: PlatformStatsDatum[]; io: PlatformIoSeries }) => {
+    const normalized = latestStat ? normalizePlatformStats([latestStat])[0] : undefined;
+    const gauges = normalized
+      ? appendLiveStatBucket(previous?.gauges ?? [], normalized, seconds, windowSeconds)
+      : (previous?.gauges ?? []);
+    const { series: io, buckets } = appendPlatformIo(previous?.io, latestStat, seconds, windowSeconds);
+    const byBucket = new Map(buckets.map((point) => [Math.floor(point.created / seconds), point]));
+    return {
       platformId: platform.id,
       latestStat,
-      stats: normalized ? appendLiveStatBucket(previousStats, normalized, seconds, windowSeconds) : previousStats,
+      seconds,
+      gauges,
+      io,
+      stats: gauges.map((point) => {
+        const measured = byBucket.get(Math.floor(point.created / seconds));
+        return { ...point, ...Object.fromEntries(platformIoFields.map((key) => [key, measured?.[key] ?? null])) };
+      }),
     };
+  };
+  const [live, setLive] = useState(() => nextState());
+  if (live.platformId !== platform.id || live.latestStat !== latestStat || live.seconds !== seconds) {
+    const next = nextState(live.platformId === platform.id && live.seconds === seconds ? live : undefined);
     setLive(next);
     return next.stats;
   }
-
   return live.stats;
 };
 
@@ -718,6 +667,12 @@ export const normalizePlatformStats = (stats?: PlatformStatView[] | null): Platf
         diskUsedBytes <= diskTotalBytes;
 
       return {
+        ...Object.fromEntries(platformIoFields.map((key) => [key, stat[key] ?? null])),
+        // Explicit unknown deltas prevent deriving rates from aggregate lifetime counters.
+        rxBytesDelta: stat.rxBytesDelta ?? null,
+        txBytesDelta: stat.txBytesDelta ?? null,
+        rxBytesPerSecond: stat.rxBytesPerSecond ?? null,
+        txBytesPerSecond: stat.txBytesPerSecond ?? null,
         created: Number(stat.created ?? 0),
         cpuUsage: Number(stat.cpuUsage ?? 0),
         memoryUsage: Number(stat.memoryUsage ?? 0),

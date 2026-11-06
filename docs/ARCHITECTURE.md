@@ -1012,6 +1012,18 @@ I/O is unavailable when Docker omits the counters; old samples are not backfille
 with zeros. These additive protobuf fields use optional values on Direct and Edge
 transports. Existing generation/session fencing and seven-day retention apply.
 
+Platform samples retain the physical container I/O counters from each host capture
+in `platformstats.containerio`, independently of inventory lifetime. Platform
+history derives reset-aware differences per container before bucket aggregation;
+live charts keep the same per-container baselines. Replacing or removing a
+container never subtracts its previously measured traffic from the period totals.
+The shared I/O panel is owned by `components/custom/stats-io-usage`, used by both
+platform and container charts. These are container traffic and block-I/O metrics,
+not host-interface or host-disk totals; Swarm worker-node samples do not enter the
+manager Platform totals. Old platform samples without physical counters remain
+unknown for I/O, rather than inferring reset-safe deltas from aggregate counters.
+The additive migration preserves existing samples and applied migration checksums.
+
 ## Runtime routing and observations
 
 `PlatformRuntimeRouter` resolves persisted Platform identity or an exact Swarm

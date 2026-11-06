@@ -23,9 +23,54 @@ pub struct EffectivePlatformPermission {
     pub specific_mask: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerIoSnapshot {
+    pub container_id: String,
+    pub rx_bytes: f64,
+    pub tx_bytes: f64,
+    pub block_read_bytes: Option<f64>,
+    pub block_write_bytes: Option<f64>,
+}
+
+impl From<&crate::RuntimeContainerStat> for ContainerIoSnapshot {
+    fn from(stat: &crate::RuntimeContainerStat) -> Self {
+        Self {
+            container_id: stat.docker_container_id.clone(),
+            rx_bytes: stat.rx_bytes,
+            tx_bytes: stat.tx_bytes,
+            block_read_bytes: stat.block_read_bytes,
+            block_write_bytes: stat.block_write_bytes,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformStatSnapshot {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub container_io: Option<Vec<ContainerIoSnapshot>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rx_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_delta: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_read_bytes_per_second: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_write_bytes_per_second: Option<f64>,
+
     pub created: i64,
     pub tx_bytes: f64,
     pub rx_bytes: f64,
