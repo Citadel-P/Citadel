@@ -907,6 +907,25 @@ Cargo dependency advisories run independently in `.github/workflows/advisories.y
 on dependency pull requests and default-branch pushes. The pinned `cargo-audit`
 scans `Cargo.lock`; it does not scan OS packages, Docker/Compose, Restic, Deno or
 frontend assets. Any narrowly scoped exceptions live in `.cargo/audit.toml`.
+
+CI validation uses Ubuntu 24.04 explicitly, matching candidate builds. Rust
+workspace tests have a 20-minute command deadline; each database test invocation
+has a 10-minute deadline, including compilation. Tests are never retried by the
+wrapper. Failures retain the original exit code; timeouts return 124 (or 137 if
+forced termination is needed). The `rust-test-diagnostics-<attempt>` artifact keeps
+command output, exit codes and timings for seven days, including on failed runs.
+Database failures also capture connection wait/blocking state, without SQL text
+or application records, before removing the owned disposable PostgreSQL container.
+These diagnostics cannot survive an abrupt loss of the runner itself.
+
+The database suite lives in `.github/scripts/test-database-regressions.sh`; its
+selectors and fixture-specific databases are shared by CI and local reproduction:
+
+```bash
+RUNNER_TEMP=$(mktemp -d /tmp/citadel-ci-tests.XXXXXX) SQLX_OFFLINE=true bash .github/scripts/test-database-regressions.sh
+python3 -m unittest discover -s test/release -p test_ci_check.py -v
+```
+
 The Compose environment-isolation check runs explicitly in CI's **Rust unit and
 database tests** job, after workspace tests. It verifies both exact test selectors
 and runs the ignored wrapper with the pinned Docker CLI and Compose plugin from

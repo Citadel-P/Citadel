@@ -111,7 +111,7 @@ jobs:
     if: needs.version.outputs.completed != 'true'
     needs: version
     name: Rust lint and generated contracts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
       run:
@@ -188,7 +188,7 @@ jobs:
     if: needs.version.outputs.completed != 'true'
     needs: version
     name: Rust unit and database tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       SQLX_OFFLINE: "true"
@@ -229,7 +229,7 @@ jobs:
           cache-on-failure: true
 
       - name: Run Rust workspace tests
-        run: cargo test --locked --workspace
+        run: bash .github/scripts/run-ci-check.sh workspace 1200 cargo test --locked --workspace
 
       - name: Run real Compose environment isolation test
         run: |
@@ -257,113 +257,23 @@ jobs:
           cargo test --locked -p citadel-docker --lib "$compose_env_test" -- --ignored --exact
 
       - name: Run authorization and runtime database regressions
-        run: |
-          set -euo pipefail
-          container=citadel-authorization-postgres
-          trap 'docker rm -f -v "$container" >/dev/null' EXIT
-          docker run --detach --name "$container" \
-            --publish 127.0.0.1::5432 \
-            --env POSTGRES_USER=citadel_test \
-            --env POSTGRES_PASSWORD=citadel_test \
-            --env POSTGRES_DB=citadel_authorization \
-            postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5 \
-            -c shared_preload_libraries=pg_stat_statements
-          for _ in {1..60}; do
-            if docker exec "$container" pg_isready -h 127.0.0.1 -U citadel_test -d citadel_authorization; then
-              break
-            fi
-            sleep 1
-          done
-          docker exec "$container" psql -h 127.0.0.1 -U citadel_test -d citadel_authorization \
-            -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION pg_stat_statements'
-          port=$(docker port "$container" 5432/tcp | cut -d: -f2)
-          export CITADEL_WORKLOAD_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_authorization"
-          export CITADEL_IDENTITY_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
-          export CITADEL_PLATFORM_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
-          export CITADEL_EXECUTION_DATABASE_URL="$CITADEL_WORKLOAD_DATABASE_URL"
-          export CITADEL_REQUIRE_QUERY_COUNTS=1
-          # The migration checksum test intentionally corrupts its journal.
-          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_migrations
-          export CITADEL_TEST_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_migrations"
-          : "${CITADEL_IDENTITY_DATABASE_URL:?}" "${CITADEL_EXECUTION_DATABASE_URL:?}" "${CITADEL_TEST_DATABASE_URL:?}"
-          # Keep workspace feature resolution identical to the unit-test build.
-          cargo test --locked --workspace --test deployments_http \
-            deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle -- --ignored --exact --nocapture
-          stack_test=stack_endpoints_enforce_auth_and_persist_apply_release_and_delete
-          cargo test --locked --workspace --test stacks_http "$stack_test" -- --ignored --exact --list | grep -Fx "$stack_test: test"
-          cargo test --locked --workspace --test stacks_http "$stack_test" -- --ignored --exact --test-threads=1
-          cargo test --locked --workspace --test identity_authorization_differential -- --ignored --test-threads=1
-          cargo test --locked --workspace --test deployment_apply_persistence -- --ignored --test-threads=1
-          cargo test --locked --workspace --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
-          cargo test --locked --workspace --test platforms_http -- --ignored --test-threads=1
-          cargo test --locked --workspace --test edge_transport -- --ignored --test-threads=1
-          cargo test --locked --workspace --test backup_source_discovery -- --ignored --test-threads=1
-          cargo test --locked --workspace --test mfa_http --test oidc_http --test users_http --test teams_http --test roles_http -- --ignored --test-threads=1
-          # Copy catalog reads include all authorized workloads. Keep them separate
-          # from earlier inventory fixtures that intentionally seed partial rows.
-          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_copies
-          (
-            export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_resource_copies"
-            cargo test --locked --workspace --test execution_resources_http resource_copies -- --ignored --test-threads=1
-          )
-          # These ignored fixtures exercise real completion transactions and fault injection.
-          for selection in \
-            'build_execution build_runs_claim_once_persist_results_cancel_and_recover' \
-            'backup_execution backup_claims_are_repository_exclusive_and_late_results_do_not_overwrite_recovery' \
-            'alert_persistence durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure'; do
-            read -r target test_name <<< "$selection"
-            # Recovery and receipt consumption inspect shared queues; each fixture
-            # gets a fresh execution database, separate from authorization tests.
-            docker exec "$container" createdb -h 127.0.0.1 -U citadel_test "citadel_$target"
-            (
-              export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_$target"
-              cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
-              cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
-            )
-          done
-          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_alert_updates
-          (
-            export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_alert_updates"
-            for test_name in \
-              update_resolution::supersession::unchanged_update_rechecks_fence_delayed_targets_across_restart_without_extending_cooldown \
-              update_resolution::supersession::update_targets_supersede_atomically_after_cooldown_and_preserve_acknowledgments \
-              update_resolution::supersession::update_recheck_repairs_existing_open_targets_without_replacing_current_or_other_incidents \
-              update_resolution::supersession::update_supersession_rolls_back_with_delivery_failure_and_retries_durably; do
-              cargo test --locked --workspace --test alert_persistence "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
-            done
-            cargo test --locked --workspace --test alert_persistence update_resolution:: -- --ignored --test-threads=1
-          )
-          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_update_test_availability
-          (
-            export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_update_test_availability"
-            test_name=instance_updates::instance_availability_uses_seeded_community_rules_and_existing_outbox
-            cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
-            cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --test-threads=1
-          )
-          # Inventory changes other fixture connectors: isolate these library tests,
-          # and keep execution serial. This does not replace platforms_http above.
-          docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_runtime_platforms
-          (
-            export CITADEL_PLATFORM_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_runtime_platforms"
-            for test_name in \
-              workers::platforms::state_delta_tests::lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_container_scoped \
-              workers::platforms::state_delta_tests::local_and_direct_bursts_commit_once_and_publish_six_ids \
-              workers::platforms::inventory_tests::daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up; do
-              cargo test --locked --workspace --lib "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
-              cargo test --locked --workspace --lib "$test_name" -- --ignored --exact --test-threads=1
-            done
-          )
-          cancellation_test=persistence::postgres::identity::authorization_cache::tests::cancelled_commits_preserve_acl_fencing_and_session_notifications
-          cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --list | grep -F "$cancellation_test: test"
-          cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --test-threads=1
-          cargo test --locked -p citadel-database --test migrations -- --ignored --test-threads=1
+        run: bash .github/scripts/test-database-regressions.sh
+
+      - name: Retain Rust test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rust-test-diagnostics-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-tests/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Preserve the existing required-check name while covering both parallel jobs.
   rust-openapi:
     name: Rust validation
     if: always() && needs.version.result == 'success' && needs.version.outputs.completed != 'true'
     needs: [version, rust-checks, rust-tests]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require all Rust checks
@@ -376,7 +286,7 @@ jobs:
     if: needs.version.outputs.completed != 'true'
     needs: version
     name: Frontend unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     defaults:
