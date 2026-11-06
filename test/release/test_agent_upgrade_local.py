@@ -17,6 +17,24 @@ class AgentUpgradeTests(unittest.TestCase):
     def setUp(self):
         self.fixture = runner.AgentUpgrade("unused", Path("/unused"))
 
+    def test_nested_agents_keep_their_sockets_independent_of_the_core_daemon(self):
+        for rootless, core_socket in [
+            (False, "/var/run/docker.sock"),
+            (True, "/run/user/1000/docker.sock"),
+        ]:
+            for kind, agent_socket in [
+                ("direct", "/var/run/docker.sock"),
+                ("edge", "/run/user/1001/docker.sock"),
+            ]:
+                with self.subTest(rootless=rootless, kind=kind):
+                    fixture = runner.AgentUpgrade("unused", Path("/unused"), rootless=rootless)
+                    with patch.object(fixture, "execute", return_value=subprocess.CompletedProcess([], 0)) as execute:
+                        fixture.nested(kind, "info", timeout=10)
+                    execute.assert_called_once_with(
+                        "docker", "--host", "unix://" + core_socket,
+                        "exec", "fixture-" + kind + "-docker", "docker",
+                        "--host", "unix://" + agent_socket, "info", check=False, timeout=10)
+
     def test_browser_leaves_approval_to_user(self):
         with patch.object(self.fixture, "setup_agents", return_value=("admin-password", "token", [])) as setup, \
              patch.object(self.fixture, "http") as http, \

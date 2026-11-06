@@ -124,12 +124,12 @@ class AgentUpgrade(local.LocalUpgrade):
         self.core = self.publish_private("citadel-agent-fixture-core", "agents-core")
 
     @staticmethod
-    def socket(kind):
+    def agent_socket(kind):
         return "/run/user/1001/docker.sock" if kind == "edge" else "/var/run/docker.sock"
 
     def nested(self, kind, *args, **kwargs):
         return self.docker("exec", "fixture-" + kind + "-docker", "docker",
-                           "--host", "unix://" + self.socket(kind), *args, **kwargs)
+                           "--host", "unix://" + self.agent_socket(kind), *args, **kwargs)
 
     def wait_for(self, probe, message, seconds=180):
         deadline = time.monotonic() + seconds
@@ -156,8 +156,8 @@ class AgentUpgrade(local.LocalUpgrade):
             self.docker("run", "-d", "--privileged", "--name", f"fixture-{kind}-docker",
                         "--network", network, "--add-host", "ghcr.io:" + address["Gateway"],
                         "-e", "DOCKER_TLS_CERTDIR=", "--entrypoint", "sh", self.dind_image,
-                        "-c", f"mkdir -p {Path(self.socket(kind)).parent}; "
-                        f"exec dockerd-entrypoint.sh dockerd --host=unix://{self.socket(kind)} --insecure-registry=ghcr.io")
+                        "-c", f"mkdir -p {Path(self.agent_socket(kind)).parent}; "
+                        f"exec dockerd-entrypoint.sh dockerd --host=unix://{self.agent_socket(kind)} --insecure-registry=ghcr.io")
             self.wait_for(lambda: self.nested(kind, "info", check=False).returncode == 0,
                           kind + " Docker daemon did not start")
             if kind == "edge":
@@ -165,7 +165,7 @@ class AgentUpgrade(local.LocalUpgrade):
                         "Edge fixture unexpectedly exposes the standard Docker socket")
             self.nested(kind, "pull", self.agent_source, timeout=300)
             options = ["run", "-d", "--name", "citadel-agent", "--restart=unless-stopped",
-                       "-v", self.socket(kind) + ":/var/run/docker.sock",
+                       "-v", self.agent_socket(kind) + ":/var/run/docker.sock",
                        "-v", "agent-data:/app/data", "--health-interval=1s"]
             if kind == "direct":
                 agent_id = str(uuid.uuid4())
@@ -248,7 +248,7 @@ class AgentUpgrade(local.LocalUpgrade):
                 helpers = self.nested(kind, "ps", "-aq", "--filter", "label=com.citadel.system-role=agent-updater").stdout.decode().split()
                 require(len(helpers) == 1, "Expected one retained Edge update helper")
                 helper = json.loads(self.nested(kind, "inspect", helpers[0]).stdout)[0]
-                require(helper["Mounts"][0]["Source"] == self.socket(kind), "Helper selected the wrong Docker socket")
+                require(helper["Mounts"][0]["Source"] == self.agent_socket(kind), "Helper selected the wrong Docker socket")
                 require(helper["State"]["ExitCode"] == 0, "Edge helper did not finish successfully")
             retained = json.loads(self.nested(kind, "inspect", before["Id"]).stdout)[0]
             require(not retained["State"]["Running"], "Previous Agent is still running")
