@@ -67,16 +67,21 @@ describe('useNodesGroup', () => {
         releaseResponse = resolve;
       });
       let requestCount = 0;
+      let requestSignal: AbortSignal | null | undefined;
+      const node = createNode({ hostname: 'older-http-state' });
+      const payload = view === 'detail' ? node : { items: [node] };
+      const response = HttpResponse.json(payload);
+      const requestUrl = `http://localhost/api/v1/platforms/${platformId}/swarm/nodes${view === 'detail' ? '/node-1' : ''}`;
+      const fetch = globalThis.fetch;
+      // Control this transport directly: a pending MSW resolver can escape to
+      // localhost. Deliberately finish after abort to exercise stale-result fencing.
+      vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        if (input !== requestUrl) return fetch(input, init);
+        requestCount++;
+        requestSignal = init?.signal;
+        return responseGate.then(() => response);
+      });
       server.use(
-        http.get(
-          `http://localhost/api/v1/platforms/${platformId}/swarm/nodes${view === 'detail' ? '/node-1' : ''}`,
-          async () => {
-            requestCount++;
-            await responseGate;
-            const node = createNode({ hostname: 'older-http-state' });
-            return HttpResponse.json(view === 'detail' ? node : { items: [node] });
-          },
-        ),
         http.get(`http://localhost/api/v1/platforms/${platformId}/swarm/tasks`, () => HttpResponse.json({ items: [] })),
       );
 
@@ -93,12 +98,16 @@ describe('useNodesGroup', () => {
         fake.emit('SwarmInventoryUpdated', inventory([createNode({ hostname: 'newer-realtime-state' })]));
       });
       expect(await screen.findByText('newer-realtime-state:false')).toBeVisible();
+      expect(requestSignal?.aborted).toBe(true);
 
       await act(async () => {
         releaseResponse();
         await responseGate;
       });
 
+      // Wait for the generated client to parse the late response, not just for
+      // the gate to open, before checking that it cannot overwrite the snapshot.
+      await waitFor(() => expect(response).toHaveProperty('data', payload));
       await waitFor(() => expect(screen.getByText('newer-realtime-state:false')).toBeVisible());
       expect(screen.queryByText('older-http-state:false')).not.toBeInTheDocument();
       expect(requestCount).toBe(1);
