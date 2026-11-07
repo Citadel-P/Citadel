@@ -14,7 +14,10 @@ pub(in crate::external::updates) fn database_update(
     source_version: u32,
 ) -> Result<Option<DatabaseUpdatePlan>, UpdateError> {
     if source_version / 10000 != 18 {
-        return Err(unsupported());
+        return Err(UpdateError::Conflict(format!(
+            "In-app database updates support PostgreSQL 18 minor releases. PostgreSQL {} is outside the supported update range; use its manual upgrade procedure.",
+            source_version / 10000
+        )));
     }
     if source_version >= TARGET_VERSION {
         return Ok(None);
@@ -142,5 +145,16 @@ mod tests {
         assert!(database_update(170011).is_err());
         assert!(database_update(180006).unwrap().is_none());
         assert!(database_update(190000).is_err());
+    }
+
+    #[test]
+    fn unsupported_major_versions_report_the_eligibility_reason() {
+        for version in [170011, 190000] {
+            let Err(UpdateError::Conflict(reason)) = database_update(version) else {
+                panic!("An unsupported major version must report an eligibility conflict");
+            };
+            assert!(reason.contains("support PostgreSQL 18 minor releases"));
+            assert!(reason.contains(&format!("PostgreSQL {} is outside", version / 10000)));
+        }
     }
 }

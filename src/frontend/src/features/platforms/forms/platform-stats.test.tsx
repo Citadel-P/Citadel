@@ -16,7 +16,10 @@ vi.mock('@/features/swarm/hooks/useSwarmOverview', () => ({
   useSwarmOverview: () => ({ overview: undefined, isLoading: false, error: undefined }),
 }));
 
-vi.mock('@/lib/hooks', () => ({ useRead: vi.fn() }));
+vi.mock('@/lib/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hooks')>()),
+  useRead: vi.fn(),
+}));
 
 // Preserve the card and summary rendering without depending on SVG layout in jsdom.
 vi.mock('@/components/ui/chart', async (importOriginal) => ({
@@ -156,10 +159,16 @@ describe('platform current statistics', () => {
     const disk = screen.getByText('Disk I/O').closest('[data-slot="card"]')! as HTMLElement;
     expect(within(network).getByText('40 B')).toBeVisible();
     expect(within(disk).getByText('60 B')).toBeVisible();
+    expect(within(network).getByRole('radio', { name: 'Accumulated' })).toBeChecked();
+    expect(within(disk).getByRole('radio', { name: 'Accumulated' })).toBeChecked();
     fireEvent.click(within(network).getByRole('radio', { name: 'Throughput' }));
     const data = JSON.parse(within(network).getByTestId('chart').getAttribute('data-samples')!);
     expect(data.find((point: { created: number }) => point.created === 70).rxBytes).toBe(4);
+    expect(within(disk).getByRole('radio', { name: 'Accumulated' })).toBeChecked();
+    fireEvent.click(within(disk).getByRole('radio', { name: 'Throughput' }));
     expect(within(disk).getByRole('radio', { name: 'Throughput' })).toBeChecked();
+    const diskData = JSON.parse(within(disk).getByTestId('chart').getAttribute('data-samples')!);
+    expect(diskData.find((point: { created: number }) => point.created === 70).blockReadBytes).toBe(6);
     expect(within(network).getByText('40 B')).toBeVisible();
   });
 

@@ -1062,7 +1062,11 @@ Omit `--browser` for automated approval and verification of authenticated
 reconnection, target digest, changed container IDs, preserved identity mounts and
 ports, and retained source containers. It updates Direct first and verifies the
 unselected Edge container is unchanged, then updates Edge using the generated
-`edge-agent` label and mixed-case Edge mode. Both must settle their exited helper
+`edge-agent` label and mixed-case Edge mode. Edge's isolated daemon listens only
+at `/run/user/1001/docker.sock`; the Agent uses two custom networks with aliases.
+The runner verifies the helper uses that socket and replacement retains both
+network IDs and aliases. This exercises a rootless socket layout, not a genuinely
+unprivileged daemon or its host kernel configuration. Both must settle their exited helper
 before the operation finishes. This mode disconnects the outer test daemon
 from its network after loading prerequisites. Browser mode publishes only the UI
 on loopback and retains outbound connectivity. Neither mode exposes Docker or
@@ -1154,9 +1158,16 @@ Build the current Core image, then run the existing isolated updater fixture:
 
 ```bash
 python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18
+# Run the same replacement on a real rootless daemon in disposable DinD:
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18 --rootless
 # Retain a disposable installation for clicking through the real UI:
 python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18 --browser --port 18081
 ```
+
+The `--rootless` mode uses the pinned rootless Docker image, verifies its daemon
+mode, keeps installer/state ownership mapped to the daemon user, and checks the
+bundled database status before registration. It uses no host Docker socket inside
+the fixture. The same flag also supports Core update and recovery scenarios.
 
 The first command exercises PostgreSQL 18.1 → 18.6 replacement via the real
 review/approve APIs, duplicate approval, checkpoint, retained credentials/keys,
@@ -1185,6 +1196,14 @@ in the existing statistics transport tests.
 and exercise history for containers, workload replacements and Swarm Tasks,
 including resets, elapsed-time-weighted rates, irregular sample intervals, missing baselines, duplicate writes
 and both persistence paths. Run them serially with `--ignored --test-threads=1`.
+`platform_history_large_window_preserves_totals_and_restores_connection_settings`
+checks 86,415 physical counter observations over a two-day window, all 577 output
+buckets, and restoration of the pooled connection's JIT setting after both a
+successful read and a SQL failure. It asserts values, not a machine-dependent
+latency threshold. For performance investigation, use `EXPLAIN (ANALYZE, BUFFERS,
+SETTINGS)` on disposable data and compare JIT compilation and temporary I/O as
+well as total execution time; the Platform reader runs with transaction-local
+`jit=off`.
 The consolidated `0002_instance_updates.sql` migration adds nullable counters
 without filling historical samples with zero. The block-I/O migration test upgrades
 from `0001` and verifies that recorded statistics and its applied checksum survive.
@@ -1202,6 +1221,38 @@ resets, task replacements, duplicate writes, manager double-count prevention,
 revoked/superseded Edge sessions, retained traffic after inventory deletion and
 node-only history buckets. Host gauges remain null when only nodes report.
 `maintenance::tests::stats_retention` covers the node-history retention index.
+Run the full retention group against a disposable `CITADEL_STATISTICS_DATABASE_URL`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib maintenance::tests::stats_retention -- --ignored --test-threads=1
+```
+
+It checks the cutoff, indexed selection, 5,000-row limit, and pending-alert
+protection across all five statistics tables. A large-history fixture verifies
+the executed plan deletes a small expired batch without scanning retained rows.
+Two-session fixtures verify locked rows are skipped, updated tuple locations are
+selected on the next pass, and rolled-back deletions remain eligible. Timing is
+not asserted. Never use `EXPLAIN ANALYZE DELETE` against a live instance; live
+investigation should use non-executing `EXPLAIN` in a read-only transaction.
+
 Frontend `platform-io.test.ts` verifies equivalent live aggregation and simultaneous
 node updates; `platform-stats.test.tsx` covers chart scope and gaps. Realtime node
 updates retain the existing Platform group permission checks and host metadata.
+
+### Maintenance query plans and expiry
+
+Against a fresh disposable `CITADEL_STATISTICS_DATABASE_URL`, run:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib maintenance::tests:: -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test maintenance_retention -- --ignored --test-threads=1
+```
+
+The additional retention test uses large retained histories and checks executed
+scan row counts, batch limits, active/current runs, build reservations, completion
+queues and nested deployment/stack references. Copy expiry exercises the real
+repository with a concurrent locked review that becomes a started operation.
+The database `migrations` suite includes an upgrade from migration 0003 that
+preserves history/checksums and verifies indexed Activity ordering with timestamp
+ties. These are disposable-fixture tests; do not execute cleanup plans with
+`EXPLAIN ANALYZE` against deployed databases.

@@ -140,3 +140,11 @@ pub trait AgentUpdateRuntime: Send + Sync {
 pub trait AgentUpdateEntitlements: Send + Sync {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, UpdateError>>;
 }
+
+/// Bounded, read-only topology detection. Uncertain observations stay Unknown.
+pub trait DatabaseInstallationRuntime: Send + Sync {
+    fn database_installation<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, crate::DatabaseInstallation>;
+}

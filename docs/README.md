@@ -129,8 +129,8 @@ Full and **Off** choices. Basic is preselected when no choice is saved; collecti
 remains disabled until the visitor confirms. Changes apply on **Save preferences**;
 closing or pressing Escape discards unsaved changes and restores focus to the trigger.
 Docs preferences remain independent of the website, with 180-day expiry,
-cross-tab changes and DNT blocking both levels. GPC blocks Basic; an explicit
-Full choice takes precedence while valid, including after reload. Expiry disables collection.
+cross-tab changes and DNT blocking both levels. An explicit Basic or Full choice
+takes precedence over GPC while valid, including after reload. Off or expiry disables collection.
 Changing between basic and full cancels pending requests without recounting the
 current page; navigating away and back counts a new pageview.
 Requests omit credentials and referrers, time out after four

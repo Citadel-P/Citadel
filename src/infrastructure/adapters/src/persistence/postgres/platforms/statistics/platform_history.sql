@@ -1,5 +1,9 @@
-WITH history AS MATERIALIZED (
-    SELECT * FROM platformstats WHERE platformid=$1 AND created>=$2 AND created<=$4
+-- Let each consumer project its columns instead of spooling every JSON capture
+-- to a shared temporary relation just to read the small host gauges again.
+WITH history AS NOT MATERIALIZED (
+    SELECT created, cpuusage, memoryusage, rxbytes, txbytes,
+        diskusedbytes, disktotalbytes, diskusage, containerio
+    FROM platformstats WHERE platformid=$1 AND created>=$2 AND created<=$4
 ), gauges AS (
     SELECT created/$3 AS bucket, MIN(created) AS created, AVG(cpuusage) AS cpuusage,
         AVG(memoryusage) AS memoryusage, AVG(rxbytes) AS rxbytes, AVG(txbytes) AS txbytes,
@@ -7,12 +11,15 @@ WITH history AS MATERIALIZED (
         ROUND(AVG(disktotalbytes))::bigint AS disktotalbytes, AVG(diskusage) AS diskusage
     FROM history GROUP BY created/$3
 ), captures AS (
-    SELECT created, ''::text AS nodeid, containerio FROM history
+    SELECT created, ''::text COLLATE "C" AS nodeid, containerio FROM history
     UNION ALL
     SELECT created, nodeid, containerio FROM platformnodeiostats
     WHERE platformid=$1 AND created>=$2 AND created<=$4
 ), counters AS (
-    SELECT h.created, h.nodeid, c.* FROM captures h
+    -- Docker identities need byte ordering, not locale-aware text comparisons.
+    SELECT h.created, h.nodeid, c."containerId" COLLATE "C" AS "containerId",
+        c."rxBytes", c."txBytes", c."blockReadBytes", c."blockWriteBytes"
+    FROM captures h
     CROSS JOIN LATERAL jsonb_to_recordset(h.containerio) AS c(
         "containerId" text, "rxBytes" double precision, "txBytes" double precision,
         "blockReadBytes" double precision, "blockWriteBytes" double precision)

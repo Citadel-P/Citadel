@@ -7273,6 +7273,14 @@
         ],
         "type": "object"
       },
+      "DatabaseInstallationView": {
+        "enum": [
+          "Bundled",
+          "External",
+          "Unknown"
+        ],
+        "type": "string"
+      },
       "DayOfWeek": {
         "enum": [
           "Sunday",
@@ -28441,8 +28449,18 @@
               "null"
             ]
           },
+          "databaseInstallation": {
+            "$ref": "#/components/schemas/DatabaseInstallationView",
+            "description": "Deployment topology is independent of installation registration."
+          },
           "databaseManaged": {
             "type": "boolean"
+          },
+          "databaseUpdateReason": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "databaseVersion": {
             "description": "PostgreSQL server version; absence never means the engine is up to date.",
@@ -28495,6 +28513,8 @@
           "databaseVersion",
           "databaseAvailable",
           "databaseManaged",
+          "databaseInstallation",
+          "databaseUpdateReason",
           "channel",
           "checksAllowed",
           "checksEnabled",

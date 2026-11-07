@@ -1,4 +1,4 @@
-use super::super::docker::{LocalDocker, SOCKET, failed, refuse};
+use super::super::docker::{LocalDocker, failed, refuse};
 use super::super::registration::fingerprint_inputs;
 use super::super::{InstallerComposeInputs, RegisteredComposeInstallation};
 use super::executor::verify_executor;
@@ -39,7 +39,14 @@ pub(super) async fn inspect_installation(
         home: home.path(),
         deadline: Instant::now() + Duration::from_secs(120),
     };
-    verify_executor(&docker, inputs, &state_directory).await?;
+    let socket = super::super::layout::compose_socket(&config)?;
+    verify_executor(
+        &docker,
+        inputs,
+        &state_directory,
+        std::path::Path::new(socket),
+    )
+    .await?;
     let first = observe(&docker, inputs, &config, &checked, &state_directory).await?;
     let mut command = vec![
         "exec",
@@ -106,7 +113,7 @@ pub(super) async fn inspect_installation(
         project: inputs.project.clone(),
         compose_files: inputs.compose_files.clone(),
         environment_file: inputs.directory.join(".env"),
-        docker_socket: SOCKET.into(),
+        docker_socket: socket.into(),
         daemon_id: first.daemon,
         core_container_id: first.core,
         database_container_id: first.database,

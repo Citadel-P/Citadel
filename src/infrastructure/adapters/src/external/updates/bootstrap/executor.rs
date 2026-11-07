@@ -8,6 +8,7 @@ pub(super) async fn verify_executor(
     docker: &LocalDocker<'_>,
     inputs: &InstallerComposeInputs,
     state: &Path,
+    socket: &Path,
 ) -> Result<(), UpdateError> {
     if !Path::new("/.dockerenv").exists() {
         return Ok(());
@@ -21,7 +22,7 @@ pub(super) async fn verify_executor(
     }
     let raw = docker.json(&["container", "inspect", hostname]).await?;
     let executor = single(&raw)?;
-    validate_executor(executor, hostname, inputs, state)
+    validate_executor(executor, hostname, inputs, state, socket)
 }
 
 pub(in crate::external::updates) fn validate_executor(
@@ -29,6 +30,7 @@ pub(in crate::external::updates) fn validate_executor(
     hostname: &str,
     inputs: &InstallerComposeInputs,
     state: &Path,
+    socket: &Path,
 ) -> Result<(), UpdateError> {
     if executor["Id"]
         .as_str()
@@ -39,13 +41,14 @@ pub(in crate::external::updates) fn validate_executor(
             "Cannot establish updater executor identity on the local daemon.",
         ));
     }
-    validate_executor_mounts(executor, inputs, state, false)
+    validate_executor_mounts(executor, inputs, state, socket, false)
 }
 
 pub(in crate::external::updates) fn validate_executor_mounts(
     executor: &Value,
     inputs: &InstallerComposeInputs,
     state: &Path,
+    socket: &Path,
     writable_inputs: bool,
 ) -> Result<(), UpdateError> {
     let mounts = executor["Mounts"].as_array().ok_or_else(failed)?;
@@ -60,15 +63,20 @@ pub(in crate::external::updates) fn validate_executor_mounts(
             "Updater executor must mount only installer inputs, update state and the Docker socket.",
         ));
     }
-    for (path, writable) in [
-        (inputs.directory.as_path(), writable_inputs),
-        (state, true),
-        (Path::new(SOCKET), true),
+    super::super::layout::rootless_socket(socket)?;
+    for (path, target, writable) in [
+        (
+            inputs.directory.as_path(),
+            inputs.directory.as_path(),
+            writable_inputs,
+        ),
+        (state, state, true),
+        (socket, Path::new(SOCKET), true),
     ] {
         if !mounts.iter().any(|m| {
             m["Type"] == "bind"
                 && m["Source"].as_str() == path.to_str()
-                && m["Destination"].as_str() == path.to_str()
+                && m["Destination"].as_str() == target.to_str()
                 && m["RW"] == writable
         }) {
             return Err(refuse(

@@ -71,10 +71,10 @@ Your browser stores only your consent choice and its expiry for up to 180 days.
 The choice applies to this docs origin and synchronizes between its open tabs.
 An expired choice disables collection and prompts again.
 When browser storage is unavailable, the choice lasts only in the current page
-session. Global Privacy Control prevents Basic analytics; choosing **Accept all**
-or saving **Full** in preferences overrides that signal for this docs site while
-your choice remains valid, including after reload. Switching to Basic or Off, or
-letting Full expire, removes the override. Do Not Track prevents collection in
+session. Choosing **Reject non-essentials** or **Accept all**, or saving **Basic**
+or **Full** in preferences, takes precedence over Global Privacy Control for this
+docs site while your choice remains valid, including after reload. Selecting Off
+or letting your choice expire stops collection. Do Not Track prevents collection in
 both modes. Browser or extension request blocking can still prevent delivery.
 Blocking analytics does not prevent reading the docs.
 

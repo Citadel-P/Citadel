@@ -123,9 +123,13 @@ class AgentUpgrade(local.LocalUpgrade):
         self.docker("build", "--tag", "citadel-agent-fixture-core", "/opt/fixture-build", timeout=300)
         self.core = self.publish_private("citadel-agent-fixture-core", "agents-core")
 
+    @staticmethod
+    def agent_socket(kind):
+        return "/run/user/1001/docker.sock" if kind == "edge" else "/var/run/docker.sock"
+
     def nested(self, kind, *args, **kwargs):
         return self.docker("exec", "fixture-" + kind + "-docker", "docker",
-                           "--host", "unix:///var/run/docker.sock", *args, **kwargs)
+                           "--host", "unix://" + self.agent_socket(kind), *args, **kwargs)
 
     def wait_for(self, probe, message, seconds=180):
         deadline = time.monotonic() + seconds
@@ -146,17 +150,22 @@ class AgentUpgrade(local.LocalUpgrade):
         self.agent_before = {}
         for kind in ("direct", "edge"):
             print(f"Starting isolated {kind.title()} Agent", flush=True)
-            # Each Agent owns its own engine, including its standard local socket.
+            # Edge exercises the rootless socket layout with no standard socket fallback.
+            # This nested daemon still runs as root; it does not qualify rootless kernel setup.
             # No Docker socket or TCP endpoint is exposed on the physical host.
             self.docker("run", "-d", "--privileged", "--name", f"fixture-{kind}-docker",
                         "--network", network, "--add-host", "ghcr.io:" + address["Gateway"],
-                        "-e", "DOCKER_TLS_CERTDIR=", self.dind_image,
-                        "--host=unix:///var/run/docker.sock", "--insecure-registry=ghcr.io")
+                        "-e", "DOCKER_TLS_CERTDIR=", "--entrypoint", "sh", self.dind_image,
+                        "-c", f"mkdir -p {Path(self.agent_socket(kind)).parent}; "
+                        f"exec dockerd-entrypoint.sh dockerd --host=unix://{self.agent_socket(kind)} --insecure-registry=ghcr.io")
             self.wait_for(lambda: self.nested(kind, "info", check=False).returncode == 0,
                           kind + " Docker daemon did not start")
+            if kind == "edge":
+                require(self.docker("exec", "fixture-edge-docker", "test", "!", "-S", "/var/run/docker.sock", check=False).returncode == 0,
+                        "Edge fixture unexpectedly exposes the standard Docker socket")
             self.nested(kind, "pull", self.agent_source, timeout=300)
             options = ["run", "-d", "--name", "citadel-agent", "--restart=unless-stopped",
-                       "-v", "/var/run/docker.sock:/var/run/docker.sock",
+                       "-v", self.agent_socket(kind) + ":/var/run/docker.sock",
                        "-v", "agent-data:/app/data", "--health-interval=1s"]
             if kind == "direct":
                 agent_id = str(uuid.uuid4())
@@ -170,6 +179,9 @@ class AgentUpgrade(local.LocalUpgrade):
                     connectorType="Agent", address="http://fixture-direct-docker:9000",
                     agentId=agent_id, tagIds=[]), token)
             else:
+                self.nested(kind, "network", "create", "fixture-edge_default")
+                self.nested(kind, "network", "create", "fixture-monitoring")
+                options += ["--network", "fixture-edge_default", "--network-alias", "agent"]
                 platform = self.http("platforms", dict(name="fixture-edge-agent", type="Docker",
                     connectorType="EdgeAgent", tagIds=[]), token)
                 enrollment = self.http(f"platforms/{platform['id']}/edge/enrollments", {}, token)
@@ -180,6 +192,8 @@ class AgentUpgrade(local.LocalUpgrade):
                     "-e", "CITADEL_EDGE_ENROLLMENT_TOKEN=" + enrollment["token"], self.agent_source)
                 self.wait_for(lambda: self.http(f"platforms/{platform['id']}/edge/status",
                     token=token)["connectionStatus"] == "Connected", "Edge Agent did not connect")
+            if kind == "edge":
+                self.nested(kind, "network", "connect", "--gw-priority=1", "--alias", "monitor", "fixture-monitoring", "citadel-agent")
             self.agent_before[kind] = json.loads(self.nested(kind, "inspect", "citadel-agent").stdout)[0]
         self.http("updates/check", {}, token)
         targets = self.http("updates/agents", token=token)["targets"]
@@ -222,6 +236,20 @@ class AgentUpgrade(local.LocalUpgrade):
             require(mount_identity(after) == mount_identity(before), "Agent identity mounts changed")
             require(published_ports(after) == published_ports(before),
                     "Agent published ports changed")
+            if kind == "edge":
+                old_networks = before["NetworkSettings"]["Networks"]
+                new_networks = after["NetworkSettings"]["Networks"]
+                require(set(old_networks) == set(new_networks), "Agent network attachments changed")
+                for name, endpoint in old_networks.items():
+                    require(endpoint["NetworkID"] == new_networks[name]["NetworkID"], "Agent network identity changed")
+                    require(endpoint.get("GwPriority", 0) == new_networks[name].get("GwPriority", 0), "Agent gateway priority changed")
+                    aliases = set(endpoint.get("Aliases") or []) - {before["Id"], before["Id"][:12]}
+                    require(aliases <= set(new_networks[name].get("Aliases") or []), "Agent network aliases changed")
+                helpers = self.nested(kind, "ps", "-aq", "--filter", "label=com.citadel.system-role=agent-updater").stdout.decode().split()
+                require(len(helpers) == 1, "Expected one retained Edge update helper")
+                helper = json.loads(self.nested(kind, "inspect", helpers[0]).stdout)[0]
+                require(helper["Mounts"][0]["Source"] == self.agent_socket(kind), "Helper selected the wrong Docker socket")
+                require(helper["State"]["ExitCode"] == 0, "Edge helper did not finish successfully")
             retained = json.loads(self.nested(kind, "inspect", before["Id"]).stdout)[0]
             require(not retained["State"]["Running"], "Previous Agent is still running")
         print("Direct and Edge updates succeeded: authenticated reconnect, target digest, "

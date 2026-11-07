@@ -679,6 +679,12 @@ export enum DayOfWeek {
   Saturday = "Saturday",
 }
 
+export enum DatabaseInstallationView {
+  Bundled = "Bundled",
+  External = "External",
+  Unknown = "Unknown",
+}
+
 export enum CurrentProfileAuthenticationType {
   Local = "Local",
   Oidc = "Oidc",
@@ -8155,7 +8161,10 @@ export interface UpdateStatusView {
   checksAllowed: boolean;
   checksEnabled: boolean;
   databaseAvailable: string | null;
+  /** Deployment topology is independent of installation registration. */
+  databaseInstallation: DatabaseInstallationView;
   databaseManaged: boolean;
+  databaseUpdateReason: string | null;
   /** PostgreSQL server version; absence never means the engine is up to date. */
   databaseVersion: string | null;
   installationUnavailableReason: string | null;

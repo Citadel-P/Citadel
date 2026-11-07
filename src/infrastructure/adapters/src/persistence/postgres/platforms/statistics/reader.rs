@@ -215,14 +215,23 @@ impl StatisticsReader for PostgresStatisticsReader {
         now: i64,
     ) -> BoxFuture<'_, Result<Vec<PlatformStatSnapshot>, RuntimeCapabilityError>> {
         async move {
+            // JSON expansion overestimates row counts enough to trigger expensive
+            // JIT compilation on this interactive read. Keep the setting local:
+            // commit or SQLx's rollback-on-drop restores the pooled connection.
+            let mut transaction = self.pool.begin().await.map_err(storage)?;
+            sqlx::query("SET LOCAL jit = off")
+                .execute(&mut *transaction)
+                .await
+                .map_err(storage)?;
             let rows = sqlx::query(include_str!("platform_history.sql"))
                 .bind(id)
                 .bind(window.since(now))
                 .bind(window.bucket_seconds())
                 .bind(window.until(now))
-                .fetch_all(&self.pool)
+                .fetch_all(&mut *transaction)
                 .await
                 .map_err(storage)?;
+            transaction.commit().await.map_err(storage)?;
             rows.into_iter()
                 .map(|row| {
                     Ok(PlatformStatSnapshot {

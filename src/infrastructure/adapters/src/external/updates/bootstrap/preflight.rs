@@ -1,5 +1,5 @@
 //! Live preflight evidence; never approval to replace Core.
-use super::super::docker::{SOCKET, failed, refuse};
+use super::super::docker::{failed, refuse};
 use super::super::registration::fingerprint_inputs;
 use super::super::{InstallerComposeInputs, JournalDirectory, RegisteredComposeInstallation};
 use super::inspection::inspect_installation;
@@ -35,7 +35,6 @@ pub async fn check_registered_compose_installation(
     if registered.state_directory != state_directory
         || registered.executor_uid != rustix::process::geteuid().as_raw()
         || registered.executor_gid != rustix::process::getegid().as_raw()
-        || registered.docker_socket != Path::new(SOCKET)
     {
         return Err(refuse(
             "Registration does not match the state directory, executor or local Docker socket.",

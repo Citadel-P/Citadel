@@ -123,7 +123,7 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         if preparation_failure:
             self.sql(database, "SELECT pg_create_physical_replication_slot('citadel_preflight_fixture')")
         status = self.http("updates", token=token)
-        require(status["databaseManaged"] and status["databaseAvailable"] == "18.6", "Qualified database update is not offered")
+        require(status.get("databaseInstallation") == "Bundled" and status["databaseManaged"] and status["databaseAvailable"] == "18.6", "Qualified database update is not offered")
         if preparation_failure:
             self.http_failure("updates/review", {"database": True, "version": "18.6"}, token)
             self.sql(database, "SELECT pg_drop_replication_slot('citadel_preflight_fixture')")
@@ -337,7 +337,7 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         archive = self.directory / "target.tar"
         self.host("save", "--output", str(archive), image, timeout=300)
         with archive.open("rb") as stream:
-            self.execute("docker", "load", stdin=stream, timeout=300)
+            self.docker("load", stdin=stream, timeout=300)
         archive.unlink()
 
     def publish_private(self, image, tag, repository="ghcr.io/citadel-p/citadel"):
@@ -352,10 +352,10 @@ class LocalUpgrade(upgrade.UpgradeFixture):
     def prepare_images(self, target):
         if target != self.core:
             self.load(target)
-        self.docker("run", "-d", "--network=host", "-e", "REGISTRY_HTTP_ADDR=0.0.0.0:80",
-                    registration.REGISTRY)
+        registry_id = self.docker("run", "-d", "--network=host", "-e", "REGISTRY_HTTP_ADDR=0.0.0.0:80",
+                    registration.REGISTRY).stdout.decode().strip()
         deadline = time.monotonic() + 30
-        while self.execute("wget", "-qO-", "http://127.0.0.1/v2/", check=False).returncode:
+        while self.docker("exec", registry_id, "wget", "-qO-", "http://127.0.0.1/v2/", check=False).returncode:
             require(time.monotonic() < deadline, "Private registry did not become ready")
             time.sleep(1)
         target = self.publish_private(target, "target")
@@ -377,7 +377,7 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         source = self.json_command("run", "--rm", "--network=none", self.core, "upgrade-descriptor-json")
         architecture = self.json_command("image", "inspect", self.core)[0]["Architecture"]
         target = self.json_command(
-            "run", "--rm", "--mount", "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock",
+            "run", "--rm", "--mount", f"type=bind,src={self.socket},dst=/var/run/docker.sock",
             self.core, "inspect-update-release", "--version", target_version, "--architecture", architecture)
         upgrade.require_eligible(source, target, architecture)
         return source
@@ -393,6 +393,7 @@ def main():
     parser.add_argument("--database-source", type=int, choices=[18], help="Exercise a PostgreSQL 18 minor upgrade, including in browser mode")
     parser.add_argument("--source-tree", type=Path, help="Build the source/helper from a separate checkout; target uses this checkout")
     parser.add_argument("--port", type=int, default=18080, help="Localhost port for --browser (default: 18080)")
+    parser.add_argument("--rootless", action="store_true", help="Run the lifecycle on a real rootless Docker daemon inside the disposable fixture")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
@@ -421,7 +422,7 @@ def main():
                 images[version] = build(args.runtime_image, version, directory, catalog, frontend,
                                         source_root if version == SOURCE else registration.ROOT)
             if args.browser:
-                fixture = LocalUpgrade(images[SOURCE], directory)
+                fixture = LocalUpgrade(images[SOURCE], directory, rootless=args.rootless)
                 fixture.compose_file = source_root / "deploy/install/docker-compose.yml"
                 fixture.database_source = args.database_source
                 fixture.start(registry=True, browser_port=args.port)
@@ -433,7 +434,7 @@ def main():
                 scenarios = ["database", "database-preparation-failure"] if args.scenario == "all" else ["database-preparation-failure" if args.scenario == "database-preparation-failure" else "database"]
             for scenario in scenarios:
                 print(f"Running lifecycle scenario: {scenario}", flush=True)
-                fixture = LocalUpgrade(images[SOURCE], directory)
+                fixture = LocalUpgrade(images[SOURCE], directory, rootless=args.rootless)
                 fixture.compose_file = source_root / "deploy/install/docker-compose.yml"
                 fixture.database_source = args.database_source
                 fixture.concurrent_requests = scenario == "concurrent-requests"

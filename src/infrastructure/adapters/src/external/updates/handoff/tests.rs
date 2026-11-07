@@ -44,7 +44,9 @@ impl Runner {
         Self::fixture(false).await
     }
     async fn fixture(launch_fixture: bool) -> Arc<Self> {
-        let mut fixture = Fixture::new();
+        Self::with_fixture(launch_fixture, Fixture::new()).await
+    }
+    async fn with_fixture(launch_fixture: bool, mut fixture: Fixture) -> Arc<Self> {
         fixture.runner.core["State"]["StartedAt"] = json!("2026-11-03T00:00:00Z");
         fixture.runner.core["RestartCount"] = json!(0);
         let registration = fixture.register().await.unwrap();
@@ -138,7 +140,7 @@ impl Runner {
             "State": {"Running": true, "Paused": false, "Restarting": false, "Status": "running", "StartedAt": "2026-11-03T00:00:00Z"}, "RestartCount": 0,
             "HostConfig": {"RestartPolicy": {"Name": "no"}, "NetworkMode": format!("container:{}", reg.database_container_id), "Privileged": false, "ReadonlyRootfs": true, "AutoRemove": false, "Tmpfs": {"/tmp":"rw,noexec,nosuid,size=64m"}},
             "Path": "/app/citadel-server", "Args": ["run-update-helper", "--state-directory", reg.state_directory, "--operation-id", intent.operation.id.to_string(), "--fence", intent.operation.fence.to_string()],
-            "Mounts": [{"Type":"bind", "Source":reg.directory, "Destination":reg.directory, "RW":true}, {"Type":"bind", "Source":reg.state_directory, "Destination":reg.state_directory, "RW":true}, {"Type":"bind", "Source":SOCKET, "Destination":SOCKET, "RW":true}, {"Type":"volume","Name":reg.core_volume,"Destination":"/app/data","RW":false}]
+            "Mounts": [{"Type":"bind", "Source":reg.directory, "Destination":reg.directory, "RW":true}, {"Type":"bind", "Source":reg.state_directory, "Destination":reg.state_directory, "RW":true}, {"Type":"bind", "Source":reg.docker_socket, "Destination":SOCKET, "RW":true}, {"Type":"volume","Name":reg.core_volume,"Destination":"/app/data","RW":false}]
         })
     }
 }
@@ -1716,4 +1718,44 @@ async fn source_recovery_resumes_after_helper_removal_and_partial_archival() {
         );
         assert_eq!(base.stops.load(Ordering::SeqCst), 0);
     }
+}
+
+#[tokio::test]
+async fn rootless_helper_launch_retains_socket_and_fences_shutdown() {
+    let runner = Runner::with_fixture(true, Fixture::rootless()).await;
+    let launched = launch_update_helper(
+        &runner.state(),
+        &runner.intent.operation,
+        runner.as_ref(),
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        launched.intent.registration.docker_socket,
+        std::path::Path::new("/run/user/1004/docker.sock")
+    );
+    let helper = OwnedUpdateHelper::acknowledge(
+        runner.state(),
+        launched.intent.clone(),
+        &launched.container_id,
+        runner.as_ref(),
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        helper
+            .stop_source(
+                runner.as_ref(),
+                Duration::from_secs(1),
+                &CancellationToken::new()
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(runner.stops.load(Ordering::SeqCst), 0);
+    let args = super::launcher::create_arguments(&launched.intent).unwrap();
+    assert!(args.iter().any(|arg| arg
+        == "type=bind,\"source=/run/user/1004/docker.sock\",\"destination=/var/run/docker.sock\""));
 }

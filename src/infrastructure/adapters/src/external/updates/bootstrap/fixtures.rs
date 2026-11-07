@@ -114,6 +114,29 @@ impl Fixture {
             runner,
         }
     }
+    pub(in crate::external::updates) fn rootless() -> Self {
+        let mut fixture = Self::new();
+        fixture.runner.mode = "rootless";
+        let socket = "/run/user/1004/docker.sock";
+        let root = "/home/citadel-demo/.local/share/docker";
+        for mount in fixture.runner.config["services"]["server"]["volumes"]
+            .as_array_mut()
+            .unwrap()
+        {
+            if mount["target"] == SOCKET {
+                mount["source"] = json!(socket);
+            }
+            if mount["target"] == "/host" {
+                mount["source"] = json!(root);
+                mount["target"] = json!(format!("/host{root}"));
+            }
+        }
+        fixture.runner.core["Mounts"][1]["Source"] = json!(socket);
+        fixture.runner.core["Mounts"][2]["Source"] = json!(root);
+        fixture.runner.core["Mounts"][2]["Destination"] = json!(format!("/host{root}"));
+        fixture
+    }
+
     pub(in crate::external::updates) async fn register(
         &self,
     ) -> Result<RegisteredComposeInstallation, UpdateError> {
@@ -184,7 +207,7 @@ impl ProcessRunner for Runner {
                 ["compose", ..] => self.config.clone(),
                 ["info", ..] => {
                     let n = self.observations.fetch_add(1, Ordering::SeqCst);
-                    json!({"ID":if self.mode=="changed-daemon" && n%2==1 {"other"} else {"daemon"}, "OSType":"linux","DockerRootDir":"/var/lib/docker", "SecurityOptions": if self.mode=="rootless" {json!(["name=rootless"])} else {json!(["name=seccomp"])}})
+                    json!({"ID":if self.mode=="changed-daemon" && n%2==1 {"other"} else {"daemon"}, "OSType":"linux","DockerRootDir": if self.mode=="rootless" {"/home/citadel-demo/.local/share/docker"} else {"/var/lib/docker"}, "SecurityOptions": if self.mode=="rootless" {json!(["name=rootless"])} else {json!(["name=seccomp"])}})
                 }
                 ["container", "ls", ..] => {
                     let filter = args[5];
@@ -216,7 +239,7 @@ impl ProcessRunner for Runner {
                     json!([{"Id":format!("{hostname}{}","0".repeat(64-hostname.len())),"Config":{"Hostname":hostname},"Mounts":[
                     {"Type":"bind","Source":self.inputs_directory,"Destination":self.inputs_directory,"RW":false},
                     {"Type":"bind","Source":self.state,"Destination":self.state,"RW":true},
-                    {"Type":"bind","Source":SOCKET,"Destination":SOCKET,"RW":true}]}])
+                    {"Type":"bind","Source":self.core["Mounts"][1]["Source"],"Destination":SOCKET,"RW":true}]}])
                 }
                 ["volume", "inspect", name] => {
                     json!([{"Name":name,"Driver":"local","Scope":"local","Options":null,"Mountpoint":format!("/var/lib/docker/volumes/{name}/_data"), "CreatedAt":"2026-11-01T00:00:00Z", "Labels":{"com.citadel.system":"true","com.citadel.system-role":if name.ends_with("citadel_data") {"core"} else {"database"}}}])

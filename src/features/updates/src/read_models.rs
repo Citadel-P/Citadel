@@ -50,3 +50,11 @@ pub struct UpdateDatabaseState {
     pub catalog_sha256: String,
     pub database_bytes: u64,
 }
+
+/// How the connected PostgreSQL server is deployed; this is not update approval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatabaseInstallation {
+    Bundled,
+    External,
+    Unknown,
+}

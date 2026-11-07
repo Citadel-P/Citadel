@@ -153,5 +153,21 @@
     "path": "/definitions/DriverData/properties/Data/x-nullable",
     "value": true,
     "expected": false
+  },
+  {
+    "path": "/definitions/EndpointSettings/properties/GwPriority/type",
+    "expected": "number",
+    "value": "integer"
+  },
+  {
+    "path": "/definitions/EndpointSettings/properties/GwPriority/format",
+    "value": "int64"
+  },
+  {
+    "path": "/definitions/EndpointSettings/properties/GwPriority/example",
+    "expected": [
+      10
+    ],
+    "value": 10
   }
 ]

@@ -90,6 +90,7 @@ impl HostUpdateClient {
         if core["Config"]["Hostname"] != hostname || core["State"]["Running"] != true {
             return Err(failed());
         }
+        let socket = super::super::layout::container_socket(core)?;
         let directory = core["Config"]["Labels"]["com.docker.compose.project.working_dir"]
             .as_str()
             .map(PathBuf::from)
@@ -144,16 +145,25 @@ impl HostUpdateClient {
             "--tmpfs=/tmp:rw,noexec,nosuid,size=64m".into(),
             "--entrypoint=/app/citadel-server".into(),
         ];
-        for (path, readonly) in [
-            (directory.as_path(), true),
-            (self.state_directory.as_path(), false),
-            (std::path::Path::new("/var/run/docker.sock"), false),
+        for (path, target, readonly) in [
+            (directory.as_path(), directory.as_path(), true),
+            (
+                self.state_directory.as_path(),
+                self.state_directory.as_path(),
+                false,
+            ),
+            (
+                std::path::Path::new(socket),
+                std::path::Path::new(super::super::docker::SOCKET),
+                false,
+            ),
         ] {
             let path = path.to_str().ok_or_else(failed)?.replace('"', "\"\"");
+            let target = target.to_str().ok_or_else(failed)?.replace('"', "\"\"");
             args.extend([
                 "--mount".into(),
                 format!(
-                    "type=bind,\"source={path}\",\"destination={path}\"{}",
+                    "type=bind,\"source={path}\",\"destination={target}\"{}",
                     if readonly { ",readonly" } else { "" }
                 ),
             ]);
@@ -186,6 +196,7 @@ impl HostUpdateClient {
                     compose_files: vec![],
                 },
                 &self.state_directory,
+                std::path::Path::new(socket),
             )?;
             if actual["Id"] != executor
                 || actual["Name"] != format!("/{name}")

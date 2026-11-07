@@ -55,6 +55,7 @@ impl RegisteredComposeInstallation {
                 "Invalid installation registration.".into(),
             ));
         }
+        super::layout::rootless_socket(&self.docker_socket)?;
         for path in [&self.directory, &self.state_directory, &self.docker_socket] {
             validate_absolute(path)?;
         }

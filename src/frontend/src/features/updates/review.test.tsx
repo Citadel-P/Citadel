@@ -1,7 +1,12 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { toast } from 'sonner';
-import { AgentEligibilityView, type AgentUpdatesView, type UpdateStatusView } from '@/api/generated/api.types';
+import {
+  AgentEligibilityView,
+  DatabaseInstallationView,
+  type AgentUpdatesView,
+  type UpdateStatusView,
+} from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { ReviewUpdates } from './review';
@@ -12,6 +17,8 @@ const status: UpdateStatusView = {
   databaseVersion: '18.6',
   databaseAvailable: null,
   databaseManaged: false,
+  databaseInstallation: DatabaseInstallationView.Unknown,
+  databaseUpdateReason: null,
   channel: 'stable',
   checksAllowed: true,
   checksEnabled: true,

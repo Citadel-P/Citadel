@@ -123,8 +123,11 @@ pub(crate) async fn persist_delta(
             };
             changed |= sqlx::query("UPDATE containers c SET imageid=i.id FROM images i WHERE c.platformid=$1 AND i.platformid=c.platformid AND i.dockerimageid=c.dockerimageid AND c.imageid IS DISTINCT FROM i.id")
                 .bind(platform).execute(&mut **tx).await.map_err(storage)?.rows_affected()>0;
-            sqlx::query("UPDATE platforms SET imagecount=(SELECT count(*) FROM images WHERE platformid=$1) WHERE id=$1 AND imagecount IS DISTINCT FROM (SELECT count(*) FROM images WHERE platformid=$1)")
-                .bind(platform).execute(&mut **tx).await.map_err(storage)?;
+            sqlx::query(super::super::images::REFRESH_IMAGE_COUNT_SQL)
+                .bind(platform)
+                .execute(&mut **tx)
+                .await
+                .map_err(storage)?;
             Ok(changed)
         }
         // Standalone network/volume inventories are live, not durable sets. The
@@ -171,6 +174,13 @@ mod tests {
                     .unwrap()
                     .changed()
             );
+            let before: (i32, String) =
+                sqlx::query_as("SELECT imagecount,xmin::text FROM platforms WHERE id=$1")
+                    .bind(platform)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(before.0, if id == "first" { 1 } else { 2 });
             let stamp = SnapshotGeneration::capture(platform, None, ProjectionKind::Images).await;
             assert!(
                 !store
@@ -185,6 +195,16 @@ mod tests {
                     .await
                     .unwrap()
                     .changed()
+            );
+            let after: (i32, String) =
+                sqlx::query_as("SELECT imagecount,xmin::text FROM platforms WHERE id=$1")
+                    .bind(platform)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                before, after,
+                "replayed deltas must not rewrite the Platform count"
             );
         }
         let old = SnapshotGeneration::capture(platform, None, ProjectionKind::Images).await;
@@ -220,6 +240,12 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(ids, ["sibling"]);
+        let count: i32 = sqlx::query_scalar("SELECT imagecount FROM platforms WHERE id=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
         for node in ["a", "b"] {
             for id in ["one", "two"] {
                 let mut tx = pool.begin().await.unwrap();

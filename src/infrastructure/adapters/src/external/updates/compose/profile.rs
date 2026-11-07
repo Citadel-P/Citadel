@@ -35,10 +35,20 @@ fn invalid() -> UpdateError {
 }
 
 pub(super) fn validate_input(bytes: &[u8]) -> Result<(), UpdateError> {
-    // YAML Value rejects duplicate mapping keys; reject tags explicitly before
-    // allowing Compose to apply extensions such as !reset/!override.
+    // YAML Value rejects duplicate mapping keys. Only the Core volume override
+    // is allowed: its complete resolved mount profile is validated afterwards.
     // Never expose parser diagnostics: source lines can contain credentials.
-    let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_slice(bytes).map_err(|_| invalid())?;
+    let mut yaml: serde_yaml_ng::Value = serde_yaml_ng::from_slice(bytes).map_err(|_| invalid())?;
+    if let Some(volumes) = yaml
+        .get_mut("services")
+        .and_then(|s| s.get_mut("server"))
+        .and_then(|s| s.get_mut("volumes"))
+        && let serde_yaml_ng::Value::Tagged(tagged) = volumes
+        && tagged.tag == "!override"
+        && tagged.value.is_sequence()
+    {
+        *volumes = tagged.value.clone();
+    }
     if !untagged(&yaml) {
         return Err(invalid());
     }
@@ -144,17 +154,34 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
     {
         return Err(invalid());
     }
+    let socket = super::super::layout::compose_socket(config)?;
+    let rootless = super::super::layout::rootless_socket(std::path::Path::new(socket))?;
+    let host_source = if rootless {
+        core["volumes"]
+            .as_array()
+            .ok_or_else(invalid)?
+            .iter()
+            .find(|m| m["type"] == "bind" && m["source"] != socket)
+            .and_then(|m| m["source"].as_str())
+            .ok_or_else(invalid)?
+    } else {
+        "/"
+    };
+    super::super::files::validate_absolute(std::path::Path::new(host_source))?;
+    if rootless && host_source == "/" {
+        return Err(invalid());
+    }
+    let host_target = if rootless {
+        format!("/host{host_source}")
+    } else {
+        "/host".into()
+    };
     mounts(
         core,
         &[
             ("volume", "citadel_data", "/app/data", false),
-            (
-                "bind",
-                "/var/run/docker.sock",
-                "/var/run/docker.sock",
-                false,
-            ),
-            ("bind", "/", "/host", true),
+            ("bind", socket, "/var/run/docker.sock", false),
+            ("bind", host_source, &host_target, true),
         ],
     )?;
     mounts(

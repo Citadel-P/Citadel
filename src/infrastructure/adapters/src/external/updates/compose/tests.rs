@@ -568,3 +568,16 @@ async fn actual_compose_resolves_official_base_and_edge_without_a_daemon() {
         assert_eq!(checked.core_image, "ghcr.io/citadel-p/citadel:latest");
     }
 }
+
+#[test]
+fn core_volume_override_is_validated_without_allowing_other_yaml_extensions() {
+    super::profile::validate_input(b"services:\n  server:\n    volumes: !override [citadel_data:/app/data, /run/user/1004/docker.sock:/var/run/docker.sock, /home/demo/.local/share/docker:/host/home/demo/.local/share/docker:ro]").unwrap();
+    for input in [
+        "services:\n  server:\n    volumes: !reset []",
+        "services:\n  server: !override {image: test}",
+        "services:\n  pg_db:\n    volumes: !override []",
+        "services:\n  server:\n    volumes: !override [!reset test]",
+    ] {
+        assert!(super::profile::validate_input(input.as_bytes()).is_err());
+    }
+}

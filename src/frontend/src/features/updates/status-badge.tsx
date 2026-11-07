@@ -78,7 +78,18 @@ export function DatabaseStatusBadge({ status }: { status?: UpdateStatusView }) {
         }
       />
     );
-  if (!status.databaseManaged) return <StateBadge value="Unknown" label="In-app updates unavailable" />;
+  if (!status.databaseManaged) {
+    if (status.databaseInstallation === 'External')
+      return <StateBadge value="Unknown" label="In-app updates unavailable" />;
+    if (status.databaseInstallation === 'Bundled')
+      return (
+        <StateBadge
+          value="Warning"
+          label={status.installationUnavailableReason ? 'Setup required' : 'Update blocked'}
+        />
+      );
+    return <StateBadge value="Unknown" label="Status unavailable" />;
+  }
   if (status.databaseAvailable) return <StateBadge value="Warning" label="Update available" />;
   return <StateBadge value="Success" label="Up to date" />;
 }

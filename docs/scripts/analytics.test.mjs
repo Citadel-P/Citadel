@@ -205,20 +205,17 @@ test('DNT blocks saved and new Full consent even with GPC', async (t) => {
   assert.equal(sends.length, 0);
 });
 
-for (const entry of ['notice', 'preferences']) test(`GPC allows explicit Full from ${entry} and stops on downgrade`, async (t) => {
+for (const choice of ['Basic', 'Full']) for (const entry of ['notice', 'preferences']) test(`GPC allows explicit ${choice} from ${entry} until Off`, async (t) => {
   const { page, sends } = await fixture(t, { signal: 'gpc' });
   await open(page);
   await page.getByRole('region', { name: 'Optional analytics' }).waitFor();
   assert.equal(sends.length, 0);
   assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
   if (entry === 'notice') {
-    await page.getByRole('button', { name: 'Accept all', exact: true }).click();
+    await page.getByRole('button', { name: choice === 'Basic' ? 'Reject non-essentials' : 'Accept all', exact: true }).click();
   } else {
-    await page.getByRole('button', { name: 'Reject non-essentials', exact: true }).click();
-    await settle(page);
-    assert.equal(sends.length, 0);
-    await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-    await savePreference(page, 'Full');
+    await page.getByRole('button', { name: 'Manage preferences', exact: true }).click();
+    await savePreference(page, choice);
   }
   await until(() => sends.length === 1);
   await page.getByRole('button', { name: 'Yes, this page was helpful', exact: true }).click();
@@ -226,15 +223,21 @@ for (const entry of ['notice', 'preferences']) test(`GPC allows explicit Full fr
   assert.equal(sends[1].payload.payload.name, 'page_helpful');
   await page.reload();
   await until(() => sends.length === 3);
-  for (const choice of ['Basic', 'Off']) {
-    await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
-    await savePreference(page, choice);
-    assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
-    await page.reload();
-    await page.getByRole('button', { name: 'Analytics preferences', exact: true }).waitFor();
-    await settle(page);
-    assert.equal(sends.length, 3);
-  }
+  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+  await savePreference(page, 'Basic');
+  await page.getByRole('region', { name: 'Page feedback' }).waitFor();
+  await page.reload();
+  await until(() => sends.length === 4);
+  await page.getByRole('button', { name: 'Yes, this page was helpful', exact: true }).click();
+  await until(() => sends.length === 5);
+  assert.equal(sends[4].payload.payload.data, undefined);
+  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).click();
+  await savePreference(page, 'Off');
+  assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Analytics preferences', exact: true }).waitFor();
+  await settle(page);
+  assert.equal(sends.length, 5);
 });
 
 test('expired or invalid consent cannot authorize collection', async (t) => {
@@ -544,15 +547,21 @@ for (const [name, options] of Object.entries({
   declined: { saved: { choice: 'declined', expires: Date.now() + 60_000 } },
   dnt: { saved: accepted(), signal: 'dnt' },
   'gpc with Basic': { saved: { choice: 'basic', expires: Date.now() + 60_000 }, signal: 'gpc' },
-})) test(`${name} blocks custom events while search still works`, async (t) => {
+})) test(`${name} blocks search events while search still works`, async (t) => {
   const { page, sends } = await fixture(t, options);
   await open(page);
-  assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), 0);
+  assert.equal(await page.getByRole('region', { name: 'Page feedback' }).count(), name === 'gpc with Basic' ? 1 : 0);
   await searchFor(page, 'zzPrivateSearch_123459');
   await page.getByText('No results found', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Close Search', exact: true }).click();
   await settle(page);
   assert.deepEqual(customEvents(sends), []);
+  if (name === 'gpc with Basic') {
+    await page.getByRole('button', { name: 'Yes, this page was helpful', exact: true }).click();
+    await until(() => customEvents(sends).length === 1);
+    assert.equal(customEvents(sends)[0].name, 'page_helpful');
+    assert.equal(customEvents(sends)[0].data, undefined);
+  }
 });
 
 test('empty searches and failed search loads never become no-results events', async (t) => {

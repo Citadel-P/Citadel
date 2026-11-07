@@ -109,7 +109,14 @@ fn containerized_registration_requires_its_own_identity_and_exact_persistent_mou
         {"Type":"bind","Source":fixture.state,"Destination":fixture.state,"RW":true},
         {"Type":"bind","Source":SOCKET,"Destination":SOCKET,"RW":true}
     ]});
-    validate_executor(&executor, &CORE[..12], &fixture.inputs, &fixture.state).unwrap();
+    validate_executor(
+        &executor,
+        &CORE[..12],
+        &fixture.inputs,
+        &fixture.state,
+        std::path::Path::new("/var/run/docker.sock"),
+    )
+    .unwrap();
     for mutation in 0..6 {
         let mut changed = executor.clone();
         match mutation {
@@ -125,7 +132,16 @@ fn containerized_registration_requires_its_own_identity_and_exact_persistent_mou
                 .unwrap()
                 .push(json!({"Type":"bind","Source":"/","Destination":"/host","RW":true})),
         }
-        assert!(validate_executor(&changed, &CORE[..12], &fixture.inputs, &fixture.state).is_err());
+        assert!(
+            validate_executor(
+                &changed,
+                &CORE[..12],
+                &fixture.inputs,
+                &fixture.state,
+                std::path::Path::new("/var/run/docker.sock")
+            )
+            .is_err()
+        );
     }
 }
 
@@ -562,4 +578,24 @@ async fn explicit_refresh_updates_idle_input_fingerprint_but_preserves_identity_
         state.read::<serde_json::Value>("unresolved.json").unwrap(),
         json!({"preserve":true})
     );
+}
+
+#[tokio::test]
+async fn rootless_registration_and_preflight_bind_host_socket_and_storage() {
+    let mut fixture = Fixture::rootless();
+    let registration = fixture.register().await.unwrap();
+    assert_eq!(
+        registration.docker_socket,
+        std::path::Path::new("/run/user/1004/docker.sock")
+    );
+    assert_eq!(fixture.check().await.unwrap().registration, registration);
+    // A different mount, daemon mode or data directory invalidates the observation.
+    fixture.runner.core["Mounts"][1]["Source"] = json!("/run/user/1005/docker.sock");
+    assert!(fixture.check().await.is_err());
+    fixture.runner.core["Mounts"][1]["Source"] = json!("/run/user/1004/docker.sock");
+    fixture.runner.mode = "normal";
+    assert!(fixture.check().await.is_err());
+    fixture.runner.mode = "rootless";
+    fixture.runner.core["Mounts"][2]["Source"] = json!("/other/docker");
+    assert!(fixture.check().await.is_err());
 }

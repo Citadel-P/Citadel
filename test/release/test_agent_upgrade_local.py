@@ -17,6 +17,24 @@ class AgentUpgradeTests(unittest.TestCase):
     def setUp(self):
         self.fixture = runner.AgentUpgrade("unused", Path("/unused"))
 
+    def test_nested_agents_keep_their_sockets_independent_of_the_core_daemon(self):
+        for rootless, core_socket in [
+            (False, "/var/run/docker.sock"),
+            (True, "/run/user/1000/docker.sock"),
+        ]:
+            for kind, agent_socket in [
+                ("direct", "/var/run/docker.sock"),
+                ("edge", "/run/user/1001/docker.sock"),
+            ]:
+                with self.subTest(rootless=rootless, kind=kind):
+                    fixture = runner.AgentUpgrade("unused", Path("/unused"), rootless=rootless)
+                    with patch.object(fixture, "execute", return_value=subprocess.CompletedProcess([], 0)) as execute:
+                        fixture.nested(kind, "info", timeout=10)
+                    execute.assert_called_once_with(
+                        "docker", "--host", "unix://" + core_socket,
+                        "exec", "fixture-" + kind + "-docker", "docker",
+                        "--host", "unix://" + agent_socket, "info", check=False, timeout=10)
+
     def test_browser_leaves_approval_to_user(self):
         with patch.object(self.fixture, "setup_agents", return_value=("admin-password", "token", [])) as setup, \
              patch.object(self.fixture, "http") as http, \
@@ -75,10 +93,12 @@ class AgentUpgradeTests(unittest.TestCase):
 
     def test_success_requires_replacement_digest_and_preserved_storage(self):
         before = {"Id": "old", "Mounts": [{"Name": "identity"}], "HostConfig": {"PortBindings": {}},
-                  "State": {"Running": False}, "NetworkSettings": {"Ports": {}}}
+                  "State": {"Running": False}, "NetworkSettings": {"Ports": {}, "Networks": {
+                      "edge_default": {"NetworkID": "network-id", "Aliases": ["agent"]}}}}
         self.fixture.agent_before = {kind: before for kind in ("direct", "edge")}
         self.fixture.agent_target = "target-digest"
-        after = dict(before, Id="new", Config={"Image": "target-digest"})
+        after = dict(json.loads(json.dumps(before)), Id="new", Config={"Image": "target-digest"})
+        helper = {"Mounts": [{"Source": "/run/user/1001/docker.sock"}], "State": {"ExitCode": 0}}
         targets = [{"id": kind, "name": f"fixture-{kind}-agent", "status": "Current"} for kind in ("direct", "edge")]
         self.fixture.core_before = ("core", "started", 0)
         core = {"Id": "core", "State": {"StartedAt": "started"}, "RestartCount": 0}
@@ -94,6 +114,10 @@ class AgentUpgradeTests(unittest.TestCase):
         def nested(kind, *args, **kwargs):
             nonlocal edge_checks
             result = after
+            if args[0] == "ps":
+                return subprocess.CompletedProcess([], 0, b"helper\n", b"")
+            if args == ("inspect", "helper"):
+                result = helper
             if kind == "edge" and args == ("inspect", "citadel-agent"):
                 edge_checks += 1
                 if edge_checks % 2 == 1:
@@ -114,6 +138,22 @@ class AgentUpgradeTests(unittest.TestCase):
             after["Id"] = "new"
             after["Mounts"] = [{"Name": "different"}]
             with self.assertRaisesRegex(AssertionError, "identity mounts changed"):
+                self.fixture.run_agents()
+
+            after["Mounts"] = before["Mounts"]
+            for expected, networks in [
+                ("network attachments changed", {}),
+                ("network identity changed", {"edge_default": {"NetworkID": "other", "Aliases": ["agent"]}}),
+                ("network aliases changed", {"edge_default": {"NetworkID": "network-id", "Aliases": []}}),
+            ]:
+                edge_checks = 0
+                after["NetworkSettings"]["Networks"] = networks
+                with self.assertRaisesRegex(AssertionError, expected):
+                    self.fixture.run_agents()
+            edge_checks = 0
+            after["NetworkSettings"]["Networks"] = before["NetworkSettings"]["Networks"]
+            helper["Mounts"][0]["Source"] = "/var/run/docker.sock"
+            with self.assertRaisesRegex(AssertionError, "wrong Docker socket"):
                 self.fixture.run_agents()
 
     def test_port_checks_use_bound_endpoints_and_detect_changed_addresses_or_ports(self):

@@ -78,7 +78,7 @@ class UpgradeFixture(registration.Fixture):
             "--entrypoint=/app/citadel-server",
             "--mount", f"type=bind,src={self.installation},dst={self.installation},readonly",
             "--mount", f"type=bind,src={self.state},dst={self.state}",
-            "--mount", "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock",
+            "--mount", f"type=bind,src={self.socket},dst=/var/run/docker.sock",
             self.core, command, "--state-directory", self.state, *args)
 
     def register(self, refresh=False):
@@ -113,7 +113,7 @@ class UpgradeFixture(registration.Fixture):
                                      "--version", source["targetVersion"])
         require(verified["image"] == self.core, "Source digest differs from its signed release")
         target = self.json_command(
-            "run", "--rm", "--mount", "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock",
+            "run", "--rm", "--mount", f"type=bind,src={self.socket},dst=/var/run/docker.sock",
             self.core, "inspect-update-release", "--version", target_version,
             "--architecture", architecture)
         require_eligible(source, target, architecture)
@@ -122,8 +122,14 @@ class UpgradeFixture(registration.Fixture):
     def setup_installation(self, browser_port=None):
         self.execute("mkdir", "-p", self.installation, self.state)
         self.execute("chmod", "700", self.installation, self.state)
-        self.write(self.installation + "/docker-compose.yml",
-                   self.compose_file.read_text())
+        content = self.compose_file.read_text()
+        if self.rootless:
+            self.execute("chown", "1000:1000", self.installation, self.state)
+            content = content.replace("/var/run/docker.sock:/var/run/docker.sock", f"{self.socket}:/var/run/docker.sock")
+            content = content.replace("/:/host:ro", f"{self.docker_root}:/host{self.docker_root}:ro")
+            # Exercise the volume replacement tag used by rootless Compose overlays.
+            content = content.replace("    volumes:", "    volumes: !override", 1)
+        self.write(self.installation + "/docker-compose.yml", content)
         password, admin_password = secrets.token_hex(24), secrets.token_hex(24)
         env = f"CITADEL_IMAGE={self.core}\nPG_PASSWORD={password}\n" + self.extra_environment
         if browser_port:
@@ -133,6 +139,10 @@ class UpgradeFixture(registration.Fixture):
         self.compose("up", "-d", "--pull=never", "--wait", "--wait-timeout=180", timeout=210)
         self.http("setup/initialize", {"name": "upgrade", "email": "upgrade@example.test",
                                        "password": admin_password})
+        if self.rootless:
+            status = self.http("updates", token=self.login(admin_password))
+            require(status.get("databaseInstallation") == "Bundled" and not status["databaseManaged"]
+                    and status.get("databaseUpdateReason"), "Unregistered bundled database was misclassified")
         print("Setup complete; registering the installation", flush=True)
         self.register()
         self.write(self.installation + "/.env", env + f"CITADEL_UPDATE_STATE_DIRECTORY={self.state}\n")

@@ -58,14 +58,22 @@ pub(super) async fn observe_with_helper(
     let info = docker.json(&["info", "--format", "{{json .}}"]).await?;
     if info["OSType"] != "linux"
         || info["ID"].as_str().is_none_or(str::is_empty)
-        || info["SecurityOptions"].as_array().is_none_or(|options| {
-            options
-                .iter()
-                .any(|v| v.as_str().is_none_or(|v| v.contains("rootless")))
-        })
+        || info["SecurityOptions"]
+            .as_array()
+            .is_none_or(|options| options.iter().any(|v| v.as_str().is_none()))
     {
+        return Err(refuse("Registration requires a local Linux Docker daemon."));
+    }
+    let socket = super::super::layout::compose_socket(config)?;
+    let rootless = super::super::layout::rootless_socket(Path::new(socket))?;
+    let daemon_rootless = info["SecurityOptions"]
+        .as_array()
+        .ok_or_else(failed)?
+        .iter()
+        .any(|v| v.as_str() == Some("name=rootless"));
+    if rootless != daemon_rootless {
         return Err(refuse(
-            "Registration requires a rootful local Linux Docker daemon.",
+            "The registered Docker socket does not match the daemon rootless mode.",
         ));
     }
     let docker_root = info["DockerRootDir"].as_str().ok_or_else(failed)?;
@@ -118,12 +126,18 @@ pub(super) async fn observe_with_helper(
             },
         )?;
     }
+    let host_source = if rootless { docker_root } else { "/" };
+    let host_target = if rootless {
+        format!("/host{docker_root}")
+    } else {
+        "/host".into()
+    };
     validate_mounts(
         core,
         &[
             ("volume", &checked.core_volume, "/app/data", true),
-            ("bind", SOCKET, SOCKET, true),
-            ("bind", "/", "/host", false),
+            ("bind", socket, SOCKET, true),
+            ("bind", host_source, &host_target, false),
         ],
     )?;
     validate_mounts(

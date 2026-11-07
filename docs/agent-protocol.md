@@ -85,6 +85,15 @@ Edge preflight recognizes the generated `edge-agent` role, handles mode casing
 exactly as startup does, and requires effective key/identity files directly inside
 a persistent `/app/data` mount (including Edge Build Pool filenames). Unsupported
 paths and nested identity mounts require manual updates before any drain.
+Standalone socket validation accepts the standard host socket and canonical
+`/run/user/<uid>/docker.sock` rootless sockets, bound writable at the Agent's
+`/var/run/docker.sock`. The detached helper mounts the inspected source path, never
+falls back to another daemon's socket, and verifies the source container/image
+before replacement. Custom network endpoints are recreated by network ID with
+aliases and gateway priorities; observed addresses, endpoint IDs and generated DNS
+names are not copied. Fixed IPAM addresses and legacy links remain unsupported
+because the previous container is retained. The same path serves Direct and Edge;
+no wire-contract or Swarm self-replacement permission changes are involved.
 Data, build and script reconciliation remain admitted during drain so authenticated
 cleanup can release existing reservations. Their authority and generation checks
 still apply; new reservations and workload mutations remain blocked.

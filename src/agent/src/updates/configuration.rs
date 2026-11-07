@@ -31,10 +31,6 @@ pub(crate) fn replacement_config(
             .is_some()
         || source["State"]["Running"] != true
         || source["HostConfig"]["AutoRemove"] == true
-        || !matches!(
-            source["HostConfig"]["NetworkMode"].as_str(),
-            Some("default" | "bridge" | "host")
-        )
         || source["HostConfig"]["VolumesFrom"]
             .as_array()
             .is_some_and(|v| !v.is_empty())
@@ -55,14 +51,7 @@ pub(crate) fn replacement_config(
     let mounts = source["Mounts"]
         .as_array()
         .ok_or("Agent mounts are unavailable.")?;
-    if !mounts.iter().any(|m| {
-        m["Destination"] == "/var/run/docker.sock"
-            && m["Source"] == "/var/run/docker.sock"
-            && m["Type"] == "bind"
-            && m["RW"] == true
-    }) {
-        return Err("Manual update required: the standard local Docker socket mount is required.");
-    }
+    super::helper::socket_source(source)?;
     let env = config["Env"]
         .as_array()
         .ok_or("Agent environment is unavailable.")?;
@@ -178,5 +167,6 @@ pub(crate) fn replacement_config(
         .ok_or("Agent host configuration is missing.")?
         .remove("Mounts");
     result["HostConfig"] = host;
+    super::networking::preserve_networks(source, &mut result)?;
     Ok(result)
 }

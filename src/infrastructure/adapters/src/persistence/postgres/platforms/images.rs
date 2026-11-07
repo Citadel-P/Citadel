@@ -6,6 +6,14 @@ use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
+// Call inside the image mutation transaction, after locking the Platform row.
+// Aggregate once and avoid a new row version when only image metadata changed.
+pub(super) const REFRESH_IMAGE_COUNT_SQL: &str = "
+UPDATE platforms p SET imagecount=inventory.count
+FROM (SELECT count(*) AS count FROM images WHERE platformid=$1) inventory
+WHERE p.id=$1 AND p.imagecount IS DISTINCT FROM inventory.count
+";
+
 pub struct PostgresImageMutationStore(pub PgPool);
 impl ImageMutationStore for PostgresImageMutationStore {
     fn prepare_pull<'a>(
@@ -148,8 +156,11 @@ async fn complete_deletion(
     }
     sqlx::query("UPDATE images SET controlstate='Idle',controlstartedat=NULL,rowversion=rowversion+1 WHERE id=ANY($1) AND controlstartedat=$2")
         .bind(&claim.ids).bind(claim.started).execute(&mut *tx).await.map_err(storage)?;
-    sqlx::query("UPDATE platforms SET imagecount=(SELECT count(*) FROM images WHERE platformid=$1) WHERE id=$1")
-        .bind(platform_id).execute(&mut *tx).await.map_err(storage)?;
+    sqlx::query(REFRESH_IMAGE_COUNT_SQL)
+        .bind(platform_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
     tx.commit().await.map_err(storage)?;
     write.committed();
     Ok(())
@@ -269,7 +280,11 @@ pub async fn persist(
         .bind(platform).bind(&image.id).bind(&image.repo_tags).execute(&mut *tx).await.map_err(db)?;
     sqlx::query("INSERT INTO images(id,containers,createdat,dockerimageid,name,platformid,registryid,size,tags,controlstate) VALUES($1,$2,to_timestamp($3),$4,$5,$6,$7,$8,$9,'Idle') ON CONFLICT(dockerimageid,platformid) DO UPDATE SET containers=EXCLUDED.containers,name=EXCLUDED.name,registryid=EXCLUDED.registryid,size=EXCLUDED.size,tags=EXCLUDED.tags,updatedat=now(),rowversion=images.rowversion+1")
         .bind(Uuid::now_v7()).bind(i32::try_from(image.containers).unwrap_or(i32::MAX)).bind(image.created as f64).bind(&image.id).bind(image.repo_tags.first().unwrap_or(&image.id)).bind(platform).bind(registry).bind(image.size as f64).bind(serde_json::json!(image.repo_tags)).execute(&mut *tx).await.map_err(db)?;
-    sqlx::query("UPDATE platforms SET imagecount=(SELECT count(*) FROM images WHERE platformid=$1) WHERE id=$1").bind(platform).execute(&mut *tx).await.map_err(db)?;
+    sqlx::query(REFRESH_IMAGE_COUNT_SQL)
+        .bind(platform)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
     // Even a pull that keeps the same image ID supersedes cached comparisons.
     // Retain the attempt fence so a check started before this pull cannot restore
     // the old result. A null lastAttemptAt makes the background check due now.

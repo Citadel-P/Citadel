@@ -174,15 +174,18 @@ for (const choice of ['basic', 'accepted']) {
       navigator.globalPrivacyControl = true;
       navigator[signal] = signal === 'doNotTrack' ? '1' : true;
       client.choose(choice);
-      const allowed = choice === 'accepted' && signal === 'globalPrivacyControl';
+      const allowed = signal === 'globalPrivacyControl';
       assert.equal(client.snapshot().collecting, allowed);
       visit('/getting-started/install');
       client.installCommandCopied('/getting-started/install', 'start');
       client.searchCompleted(0);
       assert.equal(client.ratePage('/getting-started/install', true), allowed);
       assert.deepEqual(payloads().map((p) => p.name ?? p.url), allowed
-        ? ['/getting-started/install', 'install_command_copied', 'search_used', 'search_no_results', 'page_helpful']
+        ? (choice === 'basic'
+          ? ['/getting-started/install', 'install_command_copied', 'page_helpful']
+          : ['/getting-started/install', 'install_command_copied', 'search_used', 'search_no_results', 'page_helpful'])
         : []);
+      if (choice === 'basic') assert(payloads().every((p) => p.data === undefined));
     });
   }
 
@@ -202,7 +205,7 @@ for (const choice of ['basic', 'accepted']) {
   });
 }
 
-test('GPC override requires valid Full consent and ends on cross-tab downgrade or expiry', async (t) => {
+test('GPC permits Basic after a cross-tab downgrade and stops on Off or expiry', async (t) => {
   const { client, visit, sends, storage, listeners } = await production(t, { holdSends: true });
   navigator.globalPrivacyControl = true;
   visit('/');
@@ -216,24 +219,29 @@ test('GPC override requires valid Full consent and ends on cross-tab downgrade o
   assert.equal(client.snapshot().collecting, true);
   visit('/');
   assert.equal(sends().length, 1);
-  for (const choice of ['basic', 'declined']) {
-    change(choice);
-    assert.equal(client.snapshot().collecting, false);
-    assert(sends().every(([, init]) => init.signal.aborted));
-    visit('/reference/api');
-    client.openApiDownloaded();
-    assert.equal(sends().length, 1);
-  }
-  change('accepted');
+  change('basic');
+  assert.equal(client.snapshot().collecting, true);
+  assert(sends().every(([, init]) => init.signal.aborted));
+  visit('/reference/api');
+  client.openApiDownloaded();
+  client.searchCompleted(0);
+  assert.equal(sends().length, 3);
+  assert(sends().every(([, init]) => JSON.parse(init.body).payload.data === undefined));
+  change('declined');
+  assert.equal(client.snapshot().collecting, false);
+  assert(sends().every(([, init]) => init.signal.aborted));
   visit('/');
-  assert.equal(sends().length, 2);
+  assert.equal(sends().length, 3);
+  change('basic');
+  visit('/');
+  assert.equal(sends().length, 4);
   t.mock.method(Date, 'now', () => expires + 1);
   client.searchCompleted(0);
   assert.equal(client.snapshot().choice, null);
   assert.equal(client.snapshot().collecting, false);
   assert(sends().every(([, init]) => init.signal.aborted));
   visit('/reference/api');
-  assert.equal(sends().length, 2);
+  assert.equal(sends().length, 4);
 });
 
 test('mode and cross-tab changes cancel pending requests without duplicate navigation views', async (t) => {
