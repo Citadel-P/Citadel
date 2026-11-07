@@ -5,6 +5,7 @@ use uuid::Uuid;
 mod build_attempts;
 mod container_io;
 mod query_indexes;
+mod statistics_storage;
 
 // Dedicated child databases keep these destructive migration probes independent
 // of each other and of the existing checksum-tampering test.
@@ -691,7 +692,7 @@ async fn workload_history_survives_container_deletion_and_restart() {
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'fixture','Local',1,0,1000,'history',0,'{}','Online',0)").bind(platform).execute(&mut connection).await.unwrap();
     sqlx::query("INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status) VALUES($1,'00000000-0000-0000-0000-000000000001','history',$2,'{}','Stopped')").bind(deployment).bind(platform).execute(&mut connection).await.unwrap();
     sqlx::query("INSERT INTO containers(id,platformid,deploymentid,dockercontainerid,dockerimageid,name,created,updated,state,ports,composereplicanumber) VALUES($1,$2,$3,'old','image','old',0,0,'Running','[]','1')").bind(container).bind(platform).bind(deployment).execute(&mut connection).await.unwrap();
-    sqlx::query("INSERT INTO workloadstats(id,platformid,deploymentid,servicename,replicakey,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,'','deployment',$4,floor(extract(epoch FROM now()))::bigint,42,100,2,200,3,4)").bind(Uuid::now_v7()).bind(platform).bind(deployment).bind(container).execute(&mut connection).await.unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,ownerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT src,statistics_owner(src,'Workload',$2,NULL,NULL,NULL,'','deployment'),floor(extract(epoch FROM now()))::bigint,42,100,2,200,3,4 FROM (SELECT statistics_source($1,$3,NULL) AS src) s").bind(platform).bind(deployment).bind(container).execute(&mut connection).await.unwrap();
     sqlx::query("DELETE FROM containers WHERE id=$1")
         .bind(container)
         .execute(&mut connection)

@@ -10,27 +10,15 @@ use sqlx::PgPool;
 // become a hash join over every retained row when the estimated batch is large.
 // These are ordinary, non-partitioned tables; never persist ctids across statements.
 // See https://www.postgresql.org/docs/18/sql-delete.html for bounded DELETEs.
-const STATS_RETENTION_SQL: [&str; 5] = [
+const STATS_RETENTION_SQL: [&str; 2] = [
     "WITH expired AS MATERIALIZED (
         SELECT ctid FROM platformnodeiostats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
         ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
     ) DELETE FROM platformnodeiostats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
     "WITH expired AS MATERIALIZED (
-        SELECT ctid FROM workloadstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
-        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
-    ) DELETE FROM workloadstats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
-    "WITH expired AS MATERIALIZED (
-        SELECT ctid FROM containerstats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
-        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
-    ) DELETE FROM containerstats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
-    "WITH expired AS MATERIALIZED (
         SELECT ctid FROM platformstats WHERE NOT alertpending AND created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
         ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
     ) DELETE FROM platformstats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
-    "WITH expired AS MATERIALIZED (
-        SELECT ctid FROM swarmservicestats WHERE created<CEIL(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800)::bigint
-        ORDER BY created LIMIT 5000 FOR UPDATE SKIP LOCKED
-    ) DELETE FROM swarmservicestats target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))",
 ];
 
 const HEALTH_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM containerhealthtransitions WHERE recordedat < now() - interval '7 days' ORDER BY recordedat LIMIT 1000 FOR UPDATE SKIP LOCKED) DELETE FROM containerhealthtransitions target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
@@ -141,9 +129,16 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
             .await?
             .rows_affected();
     }
+    deleted += super::platforms::statistics::maintenance::retain(pool).await?;
     citadel_runtime::runtime_metrics::RuntimeWork::Retention.units(deleted);
     Ok(deleted)
 }
+/// Compaction runs independently of the slower retention sweep under the same lease.
+pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let progress = super::platforms::statistics::maintenance::compact(pool).await?;
+    Ok(progress + super::platforms::statistics::platform_maintenance::compact(pool).await?)
+}
+
 /// Refresh tokens have a separate expiry cadence. Backup leases are ownership
 /// evidence: only verified cleanup may release them, regardless of expiry.
 pub async fn expire_leases(pool: &PgPool) -> Result<(), sqlx::Error> {
@@ -200,6 +195,18 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
             expire_leases(&self.0)
                 .await
                 .map(|_| ())
+                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
+        })
+    }
+    fn compact(
+        &self,
+    ) -> futures_util::future::BoxFuture<
+        '_,
+        Result<u64, citadel_runtime::maintenance::MaintenanceError>,
+    > {
+        Box::pin(async move {
+            compact(&self.0)
+                .await
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })
     }
@@ -393,15 +400,9 @@ mod tests {
         let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
         let mut conn = PgConnection::connect(&url).await.unwrap();
         // Session-local tables: no application data, migrations, or persistent fixtures.
-        for (table, sql) in [
-            "platformnodeiostats",
-            "workloadstats",
-            "containerstats",
-            "platformstats",
-            "swarmservicestats",
-        ]
-        .into_iter()
-        .zip(STATS_RETENTION_SQL)
+        for (table, sql) in ["platformnodeiostats", "platformstats"]
+            .into_iter()
+            .zip(STATS_RETENTION_SQL)
         {
             let mut tx = conn.begin().await.unwrap();
             tx.execute(sqlx::AssertSqlSafe(format!(
@@ -496,23 +497,23 @@ mod tests {
         let mut conn = PgConnection::connect(&url).await.unwrap();
         let mut tx = conn.begin().await.unwrap();
         tx.execute(
-            "CREATE TEMP TABLE workloadstats(id uuid PRIMARY KEY, created bigint NOT NULL, payload text NOT NULL) ON COMMIT DROP;
-             CREATE INDEX ON workloadstats(created);
-             INSERT INTO workloadstats SELECT gen_random_uuid(),ceil(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint-n,repeat('x',192) FROM generate_series(1,100000) n;
-             INSERT INTO workloadstats SELECT gen_random_uuid(),floor(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint-700000-n,repeat('x',192) FROM generate_series(1,1080) n;
-             ANALYZE workloadstats"
+            "CREATE TEMP TABLE platformnodeiostats(id uuid PRIMARY KEY, created bigint NOT NULL, payload text NOT NULL) ON COMMIT DROP;
+             CREATE INDEX ON platformnodeiostats(created);
+             INSERT INTO platformnodeiostats SELECT gen_random_uuid(),ceil(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint-n,repeat('x',192) FROM generate_series(1,100000) n;
+             INSERT INTO platformnodeiostats SELECT gen_random_uuid(),floor(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint-700000-n,repeat('x',192) FROM generate_series(1,1080) n;
+             ANALYZE platformnodeiostats"
         ).await.unwrap();
         // Executed only on session-local fixtures. A bounded output alone does not
         // prove bounded work: the old ID semi join scanned all retained rows.
         let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "EXPLAIN (ANALYZE, FORMAT JSON) {}",
-            STATS_RETENTION_SQL[1]
+            STATS_RETENTION_SQL[0]
         )))
         .fetch_one(&mut *tx)
         .await
         .unwrap();
         fn check_scans(node: &serde_json::Value) {
-            if node["Relation Name"] == "workloadstats" {
+            if node["Relation Name"] == "platformnodeiostats" {
                 let examined = (node["Actual Rows"].as_f64().unwrap_or(0.)
                     + node["Rows Removed by Filter"].as_f64().unwrap_or(0.))
                     * node["Actual Loops"].as_f64().unwrap_or(0.);
@@ -528,7 +529,7 @@ mod tests {
             }
         }
         check_scans(&plan[0]["Plan"]);
-        let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM workloadstats")
+        let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM platformnodeiostats")
             .fetch_one(&mut *tx)
             .await
             .unwrap();
@@ -559,15 +560,9 @@ mod tests {
             .execute("SET lock_timeout='1s'; SET statement_timeout='5s'")
             .await
             .unwrap();
-        for (table, sql) in [
-            "platformnodeiostats",
-            "workloadstats",
-            "containerstats",
-            "platformstats",
-            "swarmservicestats",
-        ]
-        .into_iter()
-        .zip(STATS_RETENTION_SQL)
+        for (table, sql) in ["platformnodeiostats", "platformstats"]
+            .into_iter()
+            .zip(STATS_RETENTION_SQL)
         {
             cleaner.execute(sqlx::AssertSqlSafe(format!(
                 "CREATE TABLE {table}(id integer PRIMARY KEY, created bigint NOT NULL, alertpending boolean NOT NULL DEFAULT false);

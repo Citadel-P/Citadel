@@ -70,6 +70,81 @@ fn host(scope: &StatsScope, created: i64, count: i64) -> PlatformStatsSample {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn unchanged_retries_reuse_statistics_tuples_but_corrected_counters_are_persisted() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore;
+    use citadel_platforms::ContainerStatsStore;
+
+    let pool = fixture().await;
+    for batched in [false, true] {
+        let scope = platform(&pool).await;
+        let id = add_container(&pool, &scope, "retry").await;
+        let deployment = Uuid::now_v7();
+        sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdbyactorid) VALUES($1,'retry',$2,'{}','Stopped','00000000-0000-0000-0000-000000000001')")
+            .bind(deployment).bind(scope.platform_id).execute(&pool).await.unwrap();
+        sqlx::query("UPDATE containers SET deploymentid=$2 WHERE id=$1")
+            .bind(id)
+            .bind(deployment)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let direct = PostgresContainerStatsStore::new(pool.clone());
+        let batch = PostgresStatsBatchStore::new(pool.clone());
+        let mut sample = container(&scope, "retry", 10, 1.0);
+        let mut previous_tuples = Vec::<String>::new();
+        for attempt in 0..3 {
+            if attempt == 2 {
+                sample.sample.rx_bytes = 1234.0;
+                sample.sample.block_read_bytes = Some(4321.0);
+            }
+            let accepted = if batched {
+                batch
+                    .persist_batch(std::slice::from_ref(&sample))
+                    .await
+                    .unwrap()
+                    .persisted
+            } else {
+                direct
+                    .persist(scope.platform_id, std::slice::from_ref(&sample.sample))
+                    .await
+                    .unwrap()
+            };
+            assert_eq!(accepted, 1, "unchanged retries are still accepted");
+            let mut tuples = Vec::new();
+            for table in ["containerstats", "workloadstats"] {
+                let rows: Vec<(String, f64, Option<f64>)> =
+                    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+                        "SELECT s.ctid::text,h.rxbytes,h.blockreadbytes FROM {table} h JOIN statisticssources src USING(containerid) JOIN statisticssamples s ON s.sourceid=src.id AND s.created=h.created WHERE h.containerid=$1"
+                    )))
+                    .bind(id)
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap();
+                assert_eq!(rows.len(), 1);
+                assert_eq!(
+                    (rows[0].1, rows[0].2),
+                    (sample.sample.rx_bytes, sample.sample.block_read_bytes)
+                );
+                tuples.push(rows[0].0.clone());
+            }
+            if attempt == 1 {
+                assert_eq!(
+                    tuples, previous_tuples,
+                    "replaying an unchanged sample must not write new tuples"
+                );
+            } else if attempt == 2 {
+                assert!(
+                    tuples.iter().zip(&previous_tuples).all(|(a, b)| a != b),
+                    "corrected samples must update both histories"
+                );
+            }
+            previous_tuples = tuples;
+        }
+    }
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
 async fn cross_platform_batches_filter_stale_identity_and_deduplicate_retry_keys() {
     let pool = fixture().await;
     let a = platform(&pool).await;
@@ -100,7 +175,7 @@ async fn cross_platform_batches_filter_stale_identity_and_deduplicate_retry_keys
     let rows: Vec<(Uuid,f64)> = sqlx::query_as("SELECT containerid,cpuusage FROM containerstats WHERE containerid IN (SELECT id FROM containers WHERE platformid=ANY($1))")
         .bind(vec![a.platform_id,b.platform_id]).fetch_all(&pool).await.unwrap();
     assert_eq!(rows.len(), 2);
-    let transactions: i64 = sqlx::query_scalar("SELECT count(DISTINCT xmin::text) FROM containerstats WHERE containerid IN (SELECT id FROM containers WHERE platformid=ANY($1))")
+    let transactions: i64 = sqlx::query_scalar("SELECT count(DISTINCT s.xmin::text) FROM statisticssamples s JOIN statisticssources src ON src.id=s.sourceid WHERE src.platformid=ANY($1)")
         .bind(vec![a.platform_id,b.platform_id]).fetch_one(&pool).await.unwrap();
     assert_eq!(
         transactions, 1,
@@ -302,12 +377,12 @@ async fn network_history_counts_raw_increases_before_bucketing_and_keeps_instanc
         (second, vec![(100, 5000., 10000.), (105, 5100., 10100.)]),
     ] {
         for (created, rx, tx) in samples {
-            sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) VALUES($1,$2,$3,10,100,20,200,$4,$5,$4*2,$5*2)")
-                .bind(Uuid::now_v7()).bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
-            sqlx::query("INSERT INTO workloadstats(id,platformid,deploymentid,servicename,replicakey,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) VALUES($1,$2,$3,'','deployment',$4,$5,10,100,20,200,$6,$7,$6*2,$7*2)")
-                .bind(Uuid::now_v7()).bind(scope.platform_id).bind(deployment).bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
-            sqlx::query("INSERT INTO swarmservicestats(id,platformid,dockerserviceid,dockertaskid,servicename,taskkey,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) VALUES($1,$2,'network-service',$3,'network-service','slot:1',$4,10,100,20,200,$5,$6,$5*2,$6*2)")
-                .bind(Uuid::now_v7()).bind(scope.platform_id).bind(id.to_string()).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) SELECT statistics_source(platformid,id,NULL),$2,10,100,20,200,$3,$4,$3*2,$4*2 FROM containers WHERE id=$1")
+                .bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
+            sqlx::query("UPDATE statisticssamples SET ownerid=statistics_owner(sourceid,'Workload',$2,NULL,NULL,NULL,'','deployment'),rxbytes=$5,txbytes=$6 WHERE sourceid=statistics_source($1,$3,NULL) AND created=$4")
+                .bind(scope.platform_id).bind(deployment).bind(id).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO statisticssamples(sourceid,ownerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes) SELECT src,statistics_owner(src,'Service',NULL,NULL,NULL,'network-service','network-service','slot:1'),$3,10,100,20,200,$4,$5,$4*2,$5*2 FROM (SELECT statistics_source($1,NULL,$2) AS src) s")
+                .bind(scope.platform_id).bind(id.to_string()).bind(created as i64).bind(rx).bind(tx).execute(&pool).await.unwrap();
         }
     }
     let window = StatsWindow::between(100, 110, 120).unwrap();
@@ -866,3 +941,937 @@ async fn platform_history_large_window_preserves_totals_and_restores_connection_
         .unwrap();
     pool.close().await;
 }
+
+// Storage maintenance is global: these destructive probes get a child database
+// so they can never race the other batching tests, even with parallel test threads.
+async fn storage_fixture() -> (PgPool, String) {
+    let admin_url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
+    let admin = PgPool::connect(&admin_url).await.unwrap();
+    let name = format!("citadel_storage_{}", Uuid::now_v7().simple());
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {name}")))
+        .execute(&admin)
+        .await
+        .unwrap();
+    admin.close().await;
+    let mut url = url::Url::parse(&admin_url).unwrap();
+    url.set_path(&name);
+    citadel_database::MigrationRunner::migrate(url.as_str())
+        .await
+        .unwrap();
+    (PgPool::connect(url.as_str()).await.unwrap(), name)
+}
+async fn close_storage_fixture(pool: PgPool, name: String) {
+    pool.close().await;
+    let admin = PgPool::connect(&std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap())
+        .await
+        .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE {name} WITH (FORCE)"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
+    admin.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn shared_history_compacts_with_weighted_gauges_resets_and_immutable_ownership() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let id = add_container(&pool, &scope, "compact").await;
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    for dep in [a, b] {
+        sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdbyactorid) VALUES($1,$1::text,$2,'{}','Stopped','00000000-0000-0000-0000-000000000001')")
+            .bind(dep).bind(scope.platform_id).execute(&pool).await.unwrap();
+    }
+    let now = chrono::Utc::now().timestamp();
+    let start = (now - 2 * 86_400) / 300 * 300;
+    let store = PostgresStatsBatchStore::new(pool.clone());
+    for minute in 0..12_i64 {
+        sqlx::query("UPDATE containers SET deploymentid=$2 WHERE id=$1")
+            .bind(id)
+            .bind(if minute % 3 == 1 { b } else { a })
+            .execute(&pool)
+            .await
+            .unwrap();
+        let samples: Vec<_> = (0..6_i64)
+            .map(|n| {
+                let mut s = container(
+                    &scope,
+                    "compact",
+                    start + minute * 60 + n * 10,
+                    (minute * 6 + n) as f64,
+                );
+                s.sample.rx_bytes = [100., 110., 5., 15., 25., 35.][n as usize];
+                s.sample.tx_bytes = (minute * 6 + n) as f64 * 100.;
+                s.sample.block_read_bytes = if n == 2 {
+                    None
+                } else {
+                    Some(s.sample.rx_bytes * 2.)
+                };
+                s.sample.block_write_bytes = Some(s.sample.tx_bytes * 2.);
+                s
+            })
+            .collect();
+        assert_eq!(store.persist_batch(&samples).await.unwrap().persisted, 6);
+    }
+    // Keep the newest actual capture raw, including for an offline source.
+    store
+        .persist_batch(&[container(&scope, "compact", start + 720, 5.)])
+        .await
+        .unwrap();
+    let query = concat!(
+        "SELECT to_jsonb(result) FROM (",
+        include_str!("../src/persistence/postgres/platforms/statistics/container_history.sql"),
+        ") result"
+    );
+    let before: Vec<serde_json::Value> = sqlx::query_scalar(query)
+        .bind(vec![id])
+        .bind(start)
+        .bind(300_i64)
+        .bind(now)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let workload_query = concat!(
+        "SELECT to_jsonb(result) FROM (",
+        include_str!("../src/persistence/postgres/platforms/statistics/workload_history.sql"),
+        ") result"
+    );
+    let mut owners_before = Vec::new();
+    for dep in [a, b] {
+        let rows: Vec<serde_json::Value> = sqlx::query_scalar(workload_query)
+            .bind(dep)
+            .bind(true)
+            .bind(start)
+            .bind(now)
+            .bind(300_i64)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        owners_before.push(rows);
+    }
+    // Compaction is atomic if the maintenance future is cancelled/rolled back.
+    let source: i64 = sqlx::query_scalar("SELECT id FROM statisticssources WHERE containerid=$1")
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(scope.platform_id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let removed: i64 = sqlx::query_scalar(include_str!(
+        "../src/persistence/postgres/platforms/statistics/compact.sql"
+    ))
+    .bind(source)
+    .bind(start)
+    .bind(start + 720)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(removed, 72);
+    tx.rollback().await.unwrap();
+    let raw: i64 = sqlx::query_scalar("SELECT count(*) FROM statisticssamples WHERE sourceid=$1")
+        .bind(source)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(raw, 73);
+    for _ in 0..20 {
+        maintain_statistics(&pool).await.unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM statisticsrollups WHERE sourceid=$1")
+                .bind(source)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        if count == 12 {
+            break;
+        }
+    }
+    let counts:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM statisticssamples WHERE sourceid=$1),(SELECT count(*) FROM statisticsrollups WHERE sourceid=$1),(SELECT sum(samplecount)::bigint FROM statisticsobservations WHERE sourceid=$1)").bind(source).fetch_one(&pool).await.unwrap();
+    assert_eq!(counts, (1, 12, 73));
+    let after: Vec<serde_json::Value> = sqlx::query_scalar(query)
+        .bind(vec![id])
+        .bind(start)
+        .bind(300_i64)
+        .bind(now)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        before, after,
+        "weighted gauges and reset-aware rates/totals survive minute compaction"
+    );
+    for (dep, before) in [a, b].into_iter().zip(owners_before) {
+        let after: Vec<serde_json::Value> = sqlx::query_scalar(workload_query)
+            .bind(dep)
+            .bind(true)
+            .bind(start)
+            .bind(now)
+            .bind(300_i64)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            before, after,
+            "ownership is captured, never inferred from current inventory"
+        );
+    }
+    let peak: f64 =
+        sqlx::query_scalar("SELECT max(peaks[1]) FROM statisticsrollups WHERE sourceid=$1")
+            .bind(source)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(peak, 71.);
+    let late = store
+        .persist_batch(&[container(&scope, "compact", start + 10, 999.)])
+        .await
+        .unwrap();
+    assert_eq!((late.persisted, late.stale), (0, 1));
+    let unchanged: Vec<serde_json::Value> = sqlx::query_scalar(query)
+        .bind(vec![id])
+        .bind(start)
+        .bind(300_i64)
+        .bind(now)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(after, unchanged);
+    // A partial summary cannot claim traffic outside the requested boundaries.
+    let partial: Vec<serde_json::Value> = sqlx::query_scalar(query)
+        .bind(vec![id])
+        .bind(start + 1)
+        .bind(60_i64)
+        .bind(start + 119)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(partial.len(), 1);
+    assert_eq!(partial[0]["created"], start + 60);
+    sqlx::query("DELETE FROM containers WHERE id=$1")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let retained: i64 = sqlx::query_scalar(
+        "SELECT sum(samplecount)::bigint FROM workloadstats WHERE containerid=$1",
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        retained, 73,
+        "redeployment/deletion retains all workload observations"
+    );
+    sqlx::query("DELETE FROM deployments WHERE id=ANY($1)")
+        .bind(vec![a, b])
+        .execute(&pool)
+        .await
+        .unwrap();
+    let removed: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM workloadstats WHERE containerid=$1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        removed, 0,
+        "deleting the workloads removes their logical history"
+    );
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn partition_retention_drops_expired_days_and_bounds_default_partition_cleanup() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let id = add_container(&pool, &scope, "partition").await;
+    let source: i64 = sqlx::query_scalar("SELECT statistics_source($1,$2,NULL)")
+        .bind(scope.platform_id)
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let now = chrono::Utc::now().timestamp();
+    let old_day = now / 86400 - 9;
+    let default_day = old_day - 2;
+    sqlx::query("SELECT statistics_partition('statisticssamples',$1)")
+        .bind(old_day)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,1,1,1,1,1,1),($1,$3,2,2,2,2,2,2)")
+        .bind(source).bind(old_day*86400).bind(now).execute(&pool).await.unwrap();
+    let compacted_day = now / 86400 - 3;
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT $1,$2+n*10,1,1,1,1,n,n FROM generate_series(0,5) n")
+        .bind(source).bind(compacted_day*86400).execute(&pool).await.unwrap();
+    // No precreated partition for this day: ingest must remain possible even if
+    // maintenance is offline. Populated default ranges cannot be silently hidden.
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT $1,$2+n,1,1,1,1,1,1 FROM generate_series(1,5001) n")
+        .bind(source).bind(default_day*86400).execute(&pool).await.unwrap();
+    sqlx::query("SELECT statistics_partition('statisticssamples',$1)")
+        .bind(default_day)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let default_exists: bool = sqlx::query_scalar(
+        "SELECT to_regclass('public.statisticssamples_d'||$1::text) IS NOT NULL",
+    )
+    .bind(default_day.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!default_exists);
+    maintain_statistics(&pool).await.unwrap();
+    let dropped: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.statisticssamples_d'||$1::text) IS NULL")
+            .bind(old_day.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(dropped, "expired physical partition must release its files");
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM statisticssamples_default WHERE sourceid=$1")
+            .bind(source)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        remaining, 1,
+        "default cleanup stays bounded at 5000 rows per pass"
+    );
+    let fresh: f64 = sqlx::query_scalar(
+        "SELECT cpuusage FROM statisticssamples WHERE sourceid=$1 AND created=$2",
+    )
+    .bind(source)
+    .bind(now)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        fresh, 2.,
+        "same physical ctid in another partition must not be deleted"
+    );
+    maintain_statistics(&pool).await.unwrap();
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM statisticssamples WHERE sourceid=$1")
+            .bind(source)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining, 1);
+    let compacted_dropped: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.statisticssamples_d'||$1::text) IS NULL")
+            .bind(compacted_day.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        compacted_dropped,
+        "empty compacted days must release their old indexes too"
+    );
+    let observations: i64 = sqlx::query_scalar(
+        "SELECT sum(samplecount)::bigint FROM statisticsobservations WHERE sourceid=$1",
+    )
+    .bind(source)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        observations, 7,
+        "dropping empty raw partitions preserves summaries and the current capture"
+    );
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn sparse_history_and_ownership_segments_remain_separate_during_compaction() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let id = add_container(&pool, &scope, "segments").await;
+    let source: i64 = sqlx::query_scalar("SELECT statistics_source($1,$2,'segments-task')")
+        .bind(scope.platform_id)
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    // Service snapshots intentionally survive missing/deleted managed resources.
+    let a: i64 = sqlx::query_scalar(
+        "SELECT statistics_owner($1,'Service',NULL,$2,NULL,'svc','svc','slot:1')",
+    )
+    .bind(source)
+    .bind(Uuid::now_v7())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let b: i64 = sqlx::query_scalar(
+        "SELECT statistics_owner($1,'Service',NULL,NULL,NULL,'svc','svc','slot:2')",
+    )
+    .bind(source)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let start = (chrono::Utc::now().timestamp() - 2 * 86400) / 60 * 60;
+    sqlx::query("INSERT INTO statisticssamples(sourceid,ownerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT $1,CASE WHEN n BETWEEN 4 AND 7 THEN $3 ELSE $2 END,$4+n,n,1,1,1,n,n FROM generate_series(0,11) n")
+        .bind(source).bind(a).bind(b).bind(start).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,ownerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT $1,$2,$3+n*60,1,1,1,1,n,n FROM generate_series(1,3) n")
+        .bind(source).bind(a).bind(start).execute(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(scope.platform_id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let removed: i64 = sqlx::query_scalar(include_str!(
+        "../src/persistence/postgres/platforms/statistics/compact.sql"
+    ))
+    .bind(source)
+    .bind(start)
+    .bind(start + 180)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(removed, 12);
+    tx.commit().await.unwrap();
+    let summaries:Vec<(i64,i32,f64)>=sqlx::query_as("SELECT ownerid,samplecount,counterdeltas[1] FROM statisticsrollups WHERE sourceid=$1 ORDER BY created").bind(source).fetch_all(&pool).await.unwrap();
+    assert_eq!(
+        summaries,
+        vec![(a, 4, 3.), (b, 4, 3.), (a, 4, 3.)],
+        "A/B/A captures must not merge noncontiguous ownership"
+    );
+    let sparse: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM statisticssamples WHERE sourceid=$1")
+            .bind(source)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        sparse, 3,
+        "minute polling does not inflate sparse history with larger summaries"
+    );
+    // Source identity can be used by Swarm-only history without a container copy.
+    sqlx::query("UPDATE statisticssources SET dockertaskid='segments-task' WHERE id=$1")
+        .bind(source)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let service_rows: i64 = sqlx::query_scalar(
+        "SELECT sum(samplecount)::bigint FROM swarmservicestats WHERE platformid=$1",
+    )
+    .bind(scope.platform_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(service_rows, 15);
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    close_storage_fixture(pool, database).await;
+}
+
+async fn history_node(pool: &PgPool, manager: &StatsScope, node: &str) -> StatsScope {
+    let mut scope = manager.clone();
+    scope.node_id = Some(node.into());
+    scope.connector = "EdgeAgent".into();
+    scope.agent_id = Some(Uuid::now_v7());
+    scope.connected_at = Some(
+        sqlx::query_scalar("SELECT now()")
+            .fetch_one(pool)
+            .await
+            .unwrap(),
+    );
+    scope.address = None;
+    sqlx::query("INSERT INTO edgeagentbindings(id,agentfingerprint,agentid,agentpublickey,connectionstatus,platformid,resourceid,resourcetype,dockernodeid,lastconnectedatutc) VALUES($1,$2,$1,'fixture','Connected',$3,$3,'Platform',$4,$5)")
+        .bind(scope.agent_id).bind(scope.agent_id.unwrap().to_string()).bind(scope.platform_id)
+        .bind(node).bind(scope.connected_at).execute(pool).await.unwrap();
+    scope
+}
+
+async fn platform_history(
+    pool: &PgPool,
+    id: Uuid,
+    from: i64,
+    until: i64,
+    bucket: i64,
+) -> Vec<serde_json::Value> {
+    let query = format!(
+        "SELECT to_jsonb(h) FROM ({}) h",
+        include_str!("../src/persistence/postgres/platforms/statistics/platform_history.sql")
+    );
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL jit=off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let rows = sqlx::query_scalar(sqlx::AssertSqlSafe(query))
+        .bind(id)
+        .bind(from)
+        .bind(bucket)
+        .bind(until)
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    rows
+}
+
+fn assert_history_close(before: &[serde_json::Value], after: &[serde_json::Value]) {
+    assert_eq!(before.len(), after.len());
+    for (before, after) in before.iter().zip(after) {
+        assert_eq!(before["created"], after["created"]);
+        for (key, value) in before.as_object().unwrap() {
+            match (value.as_f64(), after[key].as_f64()) {
+                (Some(a), Some(b)) => assert!(
+                    (a - b).abs() <= a.abs().max(1.) * 1e-10,
+                    "{key}: {a} != {b}"
+                ),
+                _ => assert_eq!(value, &after[key], "{key}"),
+            }
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn platform_history_compacts_host_and_nodes_without_losing_resets_gaps_or_gauges() {
+    use citadel_platforms::ContainerIoSnapshot;
+    let (pool, database) = storage_fixture().await;
+    let manager = platform(&pool).await;
+    let node = history_node(&pool, &manager, "worker").await;
+    let start = (chrono::Utc::now().timestamp() - 2 * 86_400) / 300 * 300;
+    let store = PostgresStatsBatchStore::new(pool.clone());
+    let mut captures = Vec::new();
+    for scope in [&manager, &node] {
+        for minute in 0..12_i64 {
+            // A host gap must not erase the independent node-only bucket.
+            if scope.node_id.is_none() && (5..10).contains(&minute) {
+                continue;
+            }
+            for n in 0..6_i64 {
+                let mut sample = host(scope, start + minute * 60 + n * 10, 1);
+                sample.cpu_usage = (minute * 6 + n) as f64;
+                sample.memory_active = sample.cpu_usage * 10.;
+                sample.rx_bytes = sample.cpu_usage * 100.;
+                sample.tx_bytes = sample.cpu_usage * 200.;
+                if n == 2 {
+                    sample.metadata = None;
+                }
+                let factor = if scope.node_id.is_some() { 10. } else { 1. };
+                sample.container_io = vec![ContainerIoSnapshot {
+                    node_id: None,
+                    created: None,
+                    container_id: "same-id".into(),
+                    rx_bytes: [100., 110., 5., 15., 25., 35.][n as usize] * factor,
+                    tx_bytes: (minute * 6 + n) as f64 * factor,
+                    block_read_bytes: if n == 2 {
+                        None
+                    } else {
+                        Some((minute * 6 + n) as f64 * factor)
+                    },
+                    block_write_bytes: None,
+                }];
+                // Disappearance, replacement, and a lone observation inside a minute.
+                if minute < 4 && n != 3 {
+                    let mut second = sample.container_io[0].clone();
+                    second.container_id = "removed".into();
+                    sample.container_io.push(second);
+                } else if minute == 8 && n == 4 {
+                    let mut second = sample.container_io[0].clone();
+                    second.container_id = "one-sample".into();
+                    sample.container_io.push(second);
+                }
+                // Empty capture does not reset another container's baseline.
+                if minute == 3 && n == 2 {
+                    sample.container_io.clear();
+                }
+                captures.push(sample);
+            }
+        }
+        captures.push(host(scope, start + 720, 1)); // latest offline observation stays raw
+    }
+    assert_eq!(
+        store.persist_batch(&captures).await.unwrap().persisted,
+        captures.len()
+    );
+    sqlx::query("UPDATE platformstats SET alertpending=false WHERE platformid=$1")
+        .bind(manager.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let before = platform_history(&pool, manager.platform_id, start, start + 800, 300).await;
+    assert!(before[1]["cpuusage"].is_null());
+    assert!(before[1]["rxbytesdelta"].as_f64().unwrap() > 0.);
+    let minute_before = platform_history(&pool, manager.platform_id, start, start + 800, 60).await;
+    let source: i64 = sqlx::query_scalar(
+        "SELECT id FROM platformhistorysources WHERE platformid=$1 AND nodeid=''",
+    )
+    .bind(manager.platform_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(manager.platform_id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let removed: i64 = sqlx::query_scalar(include_str!(
+        "../src/persistence/postgres/platforms/statistics/platform_compact.sql"
+    ))
+    .bind(source)
+    .bind(start)
+    .bind(start + 720)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(removed, 36);
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        before,
+        platform_history(&pool, manager.platform_id, start, start + 800, 300).await
+    );
+    let watermark: i64 =
+        sqlx::query_scalar("SELECT compacteduntil FROM platformhistorysources WHERE id=$1")
+            .bind(source)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(watermark, 0);
+    for _ in 0..3 {
+        maintain_statistics(&pool).await.unwrap();
+    }
+    assert_history_close(
+        &before,
+        &platform_history(&pool, manager.platform_id, start, start + 800, 300).await,
+    );
+    assert_history_close(
+        &minute_before,
+        &platform_history(&pool, manager.platform_id, start, start + 800, 60).await,
+    );
+    let counts:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM platformstats),(SELECT count(*) FROM platformnodeiostats),(SELECT sum(samplecount)::bigint FROM platformgaugerollups)")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        counts,
+        (7, 13, 36),
+        "sparse container minutes stay wholly raw alongside dense summaries"
+    );
+    // Neither a valid host retry nor a valid Edge node retry may resurrect sealed raw data.
+    let retried = store
+        .persist_batch(&[captures[0].clone(), captures[43].clone()])
+        .await
+        .unwrap();
+    assert_eq!(retried.persisted, 0);
+    assert_eq!(retried.stale, 2);
+    // The legacy direct writer must respect the same watermark.
+    let _id = add_container(&pool, &manager, "same-id").await;
+    use citadel_platforms::ContainerStatsStore;
+    let direct=citadel_adapters::persistence::postgres::platforms::statistics::store::PostgresContainerStatsStore::new(pool.clone());
+    direct
+        .persist(
+            manager.platform_id,
+            &[container(&manager, "same-id", start, 1.).sample],
+        )
+        .await
+        .unwrap();
+    let raw: i64 = sqlx::query_scalar("SELECT count(*) FROM platformstats WHERE platformid=$1")
+        .bind(manager.platform_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(raw, 7);
+    // Removing inventory/bindings does not remove already captured platform traffic.
+    sqlx::query("DELETE FROM containers WHERE platformid=$1")
+        .bind(manager.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM edgeagentbindings WHERE platformid=$1")
+        .bind(manager.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_history_close(
+        &before,
+        &platform_history(&pool, manager.platform_id, start, start + 800, 300).await,
+    );
+    let partial = platform_history(&pool, manager.platform_id, start + 1, start + 49, 60).await;
+    assert!(
+        partial.is_empty(),
+        "partial historical minutes must not count outside-range traffic"
+    );
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(manager.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        direct
+            .persist_with_platform_stats(manager.platform_id, &[], None)
+            .await
+            .unwrap(),
+        0,
+        "a delayed empty capture after platform deletion stays a no-op"
+    );
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn platform_compaction_protects_pending_alert_revisions_and_sparse_latest_samples() {
+    let (pool, database) = storage_fixture().await;
+    let manager = platform(&pool).await;
+    let other = platform(&pool).await;
+    let start = (chrono::Utc::now().timestamp() - 2 * 86_400) / 60 * 60;
+    let store = PostgresStatsBatchStore::new(pool.clone());
+    for scope in [&manager, &other] {
+        let samples: Vec<_> = (0..18)
+            .map(|n| host(scope, start + n * 10, 1))
+            .chain([host(scope, start + 180, 1), host(scope, start + 240, 1)])
+            .collect();
+        store.persist_batch(&samples).await.unwrap();
+    }
+    sqlx::query("UPDATE platformstats SET alertpending=false WHERE platformid<>$1 OR created<>$2")
+        .bind(manager.platform_id)
+        .bind(start + 80)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let pending: (Uuid, String) =
+        sqlx::query_as("SELECT id,xmin::text FROM platformstats WHERE alertpending")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let latest: (Uuid, String) = sqlx::query_as(
+        "SELECT id,xmin::text FROM platformstats WHERE platformid=$1 ORDER BY created DESC LIMIT 1",
+    )
+    .bind(manager.platform_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    for _ in 0..4 {
+        maintain_statistics(&pool).await.unwrap();
+    }
+    let pending_after: (Uuid, String) =
+        sqlx::query_as("SELECT id,xmin::text FROM platformstats WHERE alertpending")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        pending, pending_after,
+        "pending claims must remain byte/revision identical"
+    );
+    let counts:Vec<(Uuid,i64)>=sqlx::query_as("SELECT src.platformid,count(*) FROM platformgaugerollups r JOIN platformhistorysources src ON src.id=r.sourceid GROUP BY src.platformid ORDER BY src.platformid")
+        .fetch_all(&pool).await.unwrap();
+    assert!(counts.contains(&(manager.platform_id, 1)));
+    assert!(
+        counts.contains(&(other.platform_id, 3)),
+        "a pending source cannot starve other platforms"
+    );
+    sqlx::query("UPDATE platformstats SET alertpending=false WHERE id=$1 AND xmin::text=$2")
+        .bind(pending.0)
+        .bind(&pending.1)
+        .execute(&pool)
+        .await
+        .unwrap();
+    maintain_statistics(&pool).await.unwrap();
+    let raw: Vec<i64> = sqlx::query_scalar(
+        "SELECT created FROM platformstats WHERE platformid=$1 ORDER BY created",
+    )
+    .bind(manager.platform_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        raw,
+        vec![start + 180, start + 240],
+        "sparse and latest offline samples stay raw"
+    );
+    let latest_after: (Uuid, String) = sqlx::query_as(
+        "SELECT id,xmin::text FROM platformstats WHERE platformid=$1 ORDER BY created DESC LIMIT 1",
+    )
+    .bind(manager.platform_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(latest, latest_after);
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn platform_summary_expiry_reclaims_partitions_and_bounds_default_cleanup() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let source: i64 = sqlx::query_scalar(
+        "INSERT INTO platformhistorysources(platformid,nodeid) VALUES($1,'') RETURNING id",
+    )
+    .bind(scope.platform_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let day = chrono::Utc::now().timestamp() / 86_400;
+    for parent in ["platformgaugerollups", "platformiorollups"] {
+        sqlx::query("SELECT statistics_partition($1,$2)")
+            .bind(parent)
+            .bind(day - 10)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    for (created, count) in [
+        ((day - 12) * 86_400, 5005_i64),
+        ((day - 10) * 86_400, 1),
+        (day * 86_400, 1),
+    ] {
+        sqlx::query("INSERT INTO platformgaugerollups(sourceid,created,lastcreated,samplecount,cpuusage,memoryusage,rxbytes,txbytes,diskcounts)
+            SELECT $1,$2+n,$2+n,4,1,2,3,4,ARRAY[0,0,0] FROM generate_series(0,$3-1) n")
+            .bind(source).bind(created).bind(count).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO platformiorollups(sourceid,containerid,created,lastcreated,firstcounters,lastcounters,counterdeltas,counterdurations,readcount,writecount)
+            SELECT $1,'removed',$2+n,$2+n,ARRAY[1,2,NULL,NULL]::double precision[],ARRAY[4,5,NULL,NULL]::double precision[],ARRAY[3,3,NULL,NULL]::double precision[],ARRAY[30,30,0,0]::bigint[],0,0 FROM generate_series(0,$3-1) n")
+            .bind(source).bind(created).bind(count).execute(&pool).await.unwrap();
+    }
+    PostgresStatsBatchStore::new(pool.clone())
+        .persist_batch(&[host(&scope, (day - 12) * 86_400, 1)])
+        .await
+        .unwrap();
+    let pending: (Uuid, String) =
+        sqlx::query_as("SELECT id,xmin::text FROM platformstats WHERE alertpending")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    maintain_statistics(&pool).await.unwrap();
+    for parent in ["platformgaugerollups", "platformiorollups"] {
+        let dropped: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NULL")
+            .bind(format!("{parent}_d{}", day - 10))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(dropped, "expired summary files must be released");
+        let left: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT count(*) FROM {parent}_default"
+        )))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(left, 5, "default cleanup must retain its 5000-row bound");
+        let recent: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT count(*) FROM {parent} WHERE created=$1"
+        )))
+        .bind(day * 86_400)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(recent, 1);
+    }
+    let after: (Uuid, String) =
+        sqlx::query_as("SELECT id,xmin::text FROM platformstats WHERE alertpending")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        pending, after,
+        "expiry never drops even an expired pending alert sample"
+    );
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn platform_compactor_rechecks_alert_state_after_waiting_for_a_capture() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let start = (chrono::Utc::now().timestamp() - 2 * 86_400) / 60 * 60;
+    let captures: Vec<_> = (0..7).map(|n| host(&scope, start + n * 10, 1)).collect();
+    PostgresStatsBatchStore::new(pool.clone())
+        .persist_batch(&captures)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE platformstats SET alertpending=false")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(scope.platform_id)
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *writer)
+        .await
+        .unwrap();
+    // This correction is invisible to the compactor's initial candidate snapshot.
+    sqlx::query(
+        "UPDATE platformstats SET cpuusage=99,alertpending=true WHERE platformid=$1 AND created=$2",
+    )
+    .bind(scope.platform_id)
+    .bind(start)
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+    let worker_pool = pool.clone();
+    let task = tokio::spawn(async move {
+        citadel_adapters::persistence::postgres::maintenance::compact(&worker_pool).await
+    });
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut blocked = false;
+    while tokio::time::Instant::now() < deadline && !task.is_finished() {
+        blocked=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)) AND query LIKE 'SELECT id FROM platforms%')")
+            .bind(pid).fetch_one(&pool).await.unwrap();
+        if blocked {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    writer.commit().await.unwrap();
+    let result = task.await.unwrap();
+    assert!(
+        blocked,
+        "the compactor must serialize with a concurrent capture"
+    );
+    result.unwrap();
+    let state:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM platformstats),(SELECT count(*) FROM platformgaugerollups),(SELECT compacteduntil FROM platformhistorysources LIMIT 1)")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        state,
+        (7, 0, 0),
+        "the fresh alert revision must prevent compaction"
+    );
+    sqlx::query("UPDATE platformstats SET alertpending=false")
+        .execute(&pool)
+        .await
+        .unwrap();
+    maintain_statistics(&pool).await.unwrap();
+    let raw: i64 = sqlx::query_scalar("SELECT count(*) FROM platformstats")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(raw, 1);
+    close_storage_fixture(pool, database).await;
+}
+
+async fn maintain_statistics(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let retained =
+        citadel_adapters::persistence::postgres::maintenance::cleanup(pool, None).await?;
+    Ok(retained + citadel_adapters::persistence::postgres::maintenance::compact(pool).await?)
+}
+
+#[path = "stats_batch_persistence/storage_review.rs"]
+mod storage_review;

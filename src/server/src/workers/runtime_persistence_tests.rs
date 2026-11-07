@@ -27,7 +27,7 @@ async fn stats_writes_cannot_delete_history_and_maintenance_keeps_pending_alerts
             .bind(Uuid::now_v7()).bind(id).bind(chrono::Utc::now().timestamp()-700_000-i64::from(pending)).bind(pending).execute(&pool).await.unwrap();
     }
     sqlx::raw_sql("CREATE FUNCTION reject_hot_retention() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'stats writes must not delete history'; END $$").execute(&pool).await.unwrap();
-    for table in ["containerstats", "platformstats", "swarmservicestats"] {
+    for table in ["statisticssamples", "platformstats", "statisticsrollups"] {
         sqlx::query(sqlx::AssertSqlSafe(format!("CREATE TRIGGER reject_hot_retention BEFORE DELETE ON {table} FOR EACH STATEMENT EXECUTE FUNCTION reject_hot_retention()"))).execute(&pool).await.unwrap();
     }
     let store = PostgresContainerStatsStore::new(pool.clone());
@@ -42,7 +42,7 @@ async fn stats_writes_cannot_delete_history_and_maintenance_keeps_pending_alerts
         )
         .await
         .unwrap();
-    for table in ["containerstats", "platformstats", "swarmservicestats"] {
+    for table in ["statisticssamples", "platformstats", "statisticsrollups"] {
         sqlx::query(sqlx::AssertSqlSafe(format!(
             "DROP TRIGGER reject_hot_retention ON {table}"
         )))
@@ -50,12 +50,12 @@ async fn stats_writes_cannot_delete_history_and_maintenance_keeps_pending_alerts
         .await
         .unwrap();
     }
-    assert_eq!(
-        citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-            .await
-            .unwrap(),
-        1
-    );
+    citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
+        .await
+        .unwrap();
+    let expired:i64=sqlx::query_scalar("SELECT count(*) FROM platformstats WHERE platformid=$1 AND created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 AND NOT alertpending")
+        .bind(id).fetch_one(&pool).await.unwrap();
+    assert_eq!(expired, 0);
     let old_pending: i64 = sqlx::query_scalar("SELECT count(*) FROM platformstats WHERE platformid=$1 AND created<EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)-604800 AND alertpending").bind(id).fetch_one(&pool).await.unwrap();
     assert_eq!(old_pending, 1);
     // Unchanged slow metadata must not rewrite the Platform tuple each sample.

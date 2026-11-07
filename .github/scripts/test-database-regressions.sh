@@ -130,6 +130,13 @@ run_cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --igno
 run_cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --test-threads=1
 run_cargo test --locked -p citadel-database --test migrations -- --ignored --test-threads=1
 
+# Statistics retries and history run on their own database, separate from retention.
+docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_stats_history
+(
+  export CITADEL_STATISTICS_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_stats_history"
+  run_cargo test --locked -p citadel-adapters --test stats_batch_persistence -- --ignored --test-threads=1
+)
+
 # Retention plans execute DELETE only against dedicated disposable fixtures.
 docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_stats_retention
 (

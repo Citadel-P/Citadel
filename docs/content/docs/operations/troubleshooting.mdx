@@ -20,6 +20,55 @@ docker compose logs --tail=100 server pg_db
 - If PostgreSQL cannot start, check `PG_PASSWORD` and persistent storage. Changing its initial password in `.env` does not reset an existing database password.
 - If an image download fails, check the image address, version, and registry access in `.env`.
 
+## PostgreSQL uses more disk space than expected
+
+The PostgreSQL volume includes every database in that PostgreSQL instance, their
+indexes, transaction logs (WAL), and space available for PostgreSQL to reuse.
+It is larger than the active Citadel database alone. An older database retained
+during a reinstall or recovery remains in the same volume until an administrator
+explicitly removes it. Check its recovery purpose and backup before removal;
+having no current connections alone does not prove it is disposable.
+
+Statistics retain seven days of history. Container and workload charts share
+measurements while keeping workload ownership separately, so redeploying or
+removing a container preserves its workload history without a second metric copy.
+
+You still choose the polling interval with `CITADEL_STATS_POLL_INTERVAL_SECONDS`
+in the Compose environment file. The newest 24 hours keep that sampling
+resolution. Background maintenance combines older container/workload/Swarm-task
+samples, platform host gauges, and node I/O into minute summaries, preserving
+weighted averages and reset-aware network/disk totals. Sparse minutes and the
+newest observation stay raw. Platform minutes also stay raw when per-container
+density or the estimated replacement size would make summarizing unhelpful; even
+10-second polling can remain raw when PostgreSQL compresses its JSONB very well.
+Charts for ranges starting more than 24 hours ago use at least minute resolution
+throughout, including a recent raw tail; recent short ranges retain finer detail.
+Older charts have minute resolution; a custom time range that cuts through a summary
+omits that partial minute instead of including traffic outside the range.
+Pending platform alerts remain raw until processed. Their source's compaction stops
+before the pending minute; other hosts/nodes can still compact. Raw host/node tables
+keep their existing layout and reuse freed space through vacuuming.
+
+Daily partitions release their files when the whole day expires; empty raw
+partitions are also removed after compaction. Partial-day and
+fallback-partition expiry still uses bounded deletes. Normal vacuuming makes
+that deleted space reusable, so the volume need not shrink immediately. WAL and
+other PostgreSQL databases are separate from this history optimization. See
+[PostgreSQL partition maintenance](https://www.postgresql.org/docs/18/ddl-partitioning.html#DDL-PARTITIONING-DECLARATIVE-MAINTENANCE)
+and [routine vacuuming](https://www.postgresql.org/docs/18/routine-vacuuming.html).
+
+The storage migration copies existing measurements into the shared tables before
+removing the old copies, so the upgrade needs temporary room for those tables and
+WAL. Older-history compaction then catches up on a separate 30-second cadence
+within the same maintenance job, bounded to five seconds and 128 passes per tick.
+It does not repeat the slower retention sweep for every source-hour;
+its savings are gradual rather than part of the startup migration. While platform
+history catches up, new summaries can temporarily increase allocated disk space:
+deleted raw pages become reusable, but are not forcibly returned to the filesystem.
+
+Compare database and table/index sizes before deciding whether storage is growing
+unexpectedly. Never delete files from the PostgreSQL volume to reclaim space.
+
 ## A Platform stays offline
 
 Check Docker is running on the target host. For a regular Agent, check its
