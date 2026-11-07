@@ -13,8 +13,8 @@ async fn history_endpoints_authorize_validate_windows_and_read_persisted_samples
             .unwrap();
     let now = chrono::Utc::now().timestamp();
     for hours in [1_i64, 25, 47, 71, 73] {
-        sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,10,20,2,100,3,4)")
-            .bind(Uuid::now_v7()).bind(container).bind(now-hours*3600).execute(&f.pool).await.unwrap();
+        sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT statistics_source(platformid,id,NULL),$2,10,20,2,100,3,4 FROM containers WHERE id=$1")
+            .bind(container).bind(now-hours*3600).execute(&f.pool).await.unwrap();
         sqlx::query("INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes) VALUES($1,$2,$3,10,20,3,4)")
             .bind(Uuid::now_v7()).bind(f.platform_id).bind(now-hours*3600).execute(&f.pool).await.unwrap();
     }
@@ -283,7 +283,7 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
         .unwrap();
     assert!(other.is_empty());
     let managed = Uuid::now_v7();
-    sqlx::query("UPDATE swarmservicestats SET swarmserviceid=$2 WHERE platformid=$1")
+    sqlx::query("UPDATE statisticsowners SET swarmserviceid=$2 WHERE kind='Service' AND sourceid IN(SELECT id FROM statisticssources WHERE platformid=$1)")
         .bind(f.platform_id)
         .bind(managed)
         .execute(&f.pool)
@@ -310,7 +310,7 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
     let stack = Uuid::now_v7();
     sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate) VALUES($1,$2,$3,'WebEditor','{}','{}')")
         .bind(stack).bind(format!("swarm-history-{stack}")).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
-    sqlx::query("UPDATE swarmservicestats SET swarmserviceid=NULL,stackid=$2 WHERE platformid=$1")
+    sqlx::query("UPDATE statisticsowners SET swarmserviceid=NULL,servicestackid=$2 WHERE kind='Service' AND sourceid IN(SELECT id FROM statisticssources WHERE platformid=$1)")
         .bind(f.platform_id)
         .bind(stack)
         .execute(&f.pool)
@@ -391,13 +391,13 @@ async fn service_stats_reports_missing_stale_and_fresh_node_coverage() {
     let body = json_body(send(&f, &path, Some(f.administrator.clone())).await).await;
     assert_eq!(body["observedContainerProjectionIds"], json!([container]));
     assert_eq!(body["complete"], false);
-    sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,10,20,2,100,3,4)").bind(Uuid::now_v7()).bind(container).bind(Utc::now().timestamp()).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT statistics_source(platformid,id,NULL),$2,10,20,2,100,3,4 FROM containers WHERE id=$1").bind(container).bind(Utc::now().timestamp()).execute(&f.pool).await.unwrap();
     let body = json_body(send(&f, &path, Some(f.administrator.clone())).await).await;
     assert_eq!(body["complete"], true);
     assert_eq!(body["observedTasks"], 1);
     assert_eq!(body["missingDockerNodeIds"], json!([]));
     assert!(body["newestSampleAt"].is_string());
-    sqlx::query("UPDATE containerstats SET created=created-60 WHERE containerid=$1")
+    sqlx::query("UPDATE statisticssamples SET created=created-60 WHERE sourceid IN(SELECT id FROM statisticssources WHERE containerid=$1)")
         .bind(container)
         .execute(&f.pool)
         .await
@@ -596,7 +596,7 @@ async fn task_history_checks_live_docker_identity_and_node_before_returning_samp
         .execute(&f.pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,10,20,2,100,3,4)").bind(Uuid::now_v7()).bind(container).bind(Utc::now().timestamp()-60).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT statistics_source(platformid,id,NULL),$2,10,20,2,100,3,4 FROM containers WHERE id=$1").bind(container).bind(Utc::now().timestamp()-60).execute(&f.pool).await.unwrap();
     let response = send(&f, &path, Some(f.administrator.clone())).await;
     let status = response.status();
     let body = json_body(response).await;
@@ -651,7 +651,7 @@ async fn history_buckets_samples_and_resolves_legacy_docker_ids_without_ambiguit
         .unwrap();
     let bucket = Utc::now().timestamp() / 60 * 60 - 120;
     for (offset, cpu) in [(1, 10.0), (10, 30.0)] {
-        sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) VALUES($1,$2,$3,$4,0,2,100,3,4)").bind(Uuid::now_v7()).bind(container).bind(bucket+offset).bind(cpu).execute(&f.pool).await.unwrap();
+        sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT statistics_source(platformid,id,NULL),$2,$3,0,2,100,3,4 FROM containers WHERE id=$1").bind(container).bind(bucket+offset).bind(cpu).execute(&f.pool).await.unwrap();
     }
     let path = format!("/api/v1/containers/{}/stats", &docker_id[..40]);
     let response = send(&f, &path, Some(f.administrator.clone())).await;
@@ -738,7 +738,7 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
     );
     let counts:(i64,i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM containerstats WHERE containerid=$1),(SELECT count(*) FROM platformstats WHERE platformid=$2),(SELECT count(*) FROM swarmservicestats WHERE platformid=$2),(SELECT count(*) FROM workloadstats WHERE platformid=$2)").bind(container).bind(f.platform_id).fetch_one(&f.pool).await.unwrap();
     assert_eq!(counts, (0, 0, 0, 0));
-    sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT gen_random_uuid(),$1,$2::bigint-series.value,1,1,0,1,0,0 FROM generate_series(1,5001) AS series(value)").bind(container).bind(now-8*24*3600).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT statistics_source(c.platformid,c.id,NULL),$2::bigint-series.value,1,1,0,1,0,0 FROM generate_series(1,5001) AS series(value) CROSS JOIN containers c WHERE c.id=$1").bind(container).bind(now-30*24*3600).execute(&f.pool).await.unwrap();
     writer
         .persist(f.platform_id, std::slice::from_ref(&sample))
         .await
@@ -895,7 +895,7 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
         .unwrap();
     observed.swarm.as_mut().unwrap().services[0].desired_task_count = 2;
     inventory.persist(&observed).await.unwrap();
-    sqlx::query("INSERT INTO containerstats(id,containerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT gen_random_uuid(),id,$2,1,1,0,1,0,0 FROM containers WHERE platformid=$1 AND dockernodeid IS NULL").bind(f.platform_id).bind(Utc::now().timestamp()).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT statistics_source(platformid,id,NULL),$2,1,1,0,1,0,0 FROM containers WHERE platformid=$1 AND dockernodeid IS NULL").bind(f.platform_id).bind(Utc::now().timestamp()).execute(&f.pool).await.unwrap();
     let body = json_body(send(&f, &service_path, Some(f.administrator.clone())).await).await;
     assert_eq!(body["complete"], false);
     assert_eq!(body["observedTasks"], 0);

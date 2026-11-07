@@ -623,6 +623,25 @@ These must point to disposable test databases. The PowerShell harnesses set them
 for their fixture processes. Recovery tests use separate source and target databases.
 Run ignored database tests serially (`--ignored --test-threads=1`).
 
+Statistics storage coverage includes the `migrations` test
+`compact_statistics_preserve_samples_uniqueness_and_migration_history`: it upgrades
+populated old tables, verifies removed-ID index savings, and then normalizes their
+measurements without changing owner snapshots or applied checksums. Conflicting
+copies must abort and roll back; corrected data can then upgrade. The
+`stats_batch_persistence` storage tests compare raw and compacted gauges, resets,
+nullable disk counters and ownership, exercise rollback and sealed-minute retries,
+and verify sparse minutes, partial-range boundaries, partition expiry and bounded
+default cleanup. They create isolated child databases because maintenance affects
+the whole database. Unchanged direct and buffered retries must preserve tuples and
+acceptance counts. Platform history tests compare raw and compacted host/node
+charts with resets, nullable counters, empty captures, removed containers and
+node-only buckets. They exercise pending-alert revision barriers, a concurrent
+capture that becomes pending while compaction waits for its lock, rollback,
+late Direct/Edge retries, sparse/latest offline observations, daily summary expiry
+and bounded default cleanup. The platform history migration test preserves raw
+rows and pending `xmin` claims while registering historical sources without live
+bindings. Run with disposable migration/statistics URLs only.
+
 The `platforms_http` suite requires `CREATE DATABASE` permission on
 `CITADEL_PLATFORM_DATABASE_URL`. Each test creates and removes its own database
 so administrator list and realtime reads cannot pick up another test's fixtures.
@@ -1228,7 +1247,8 @@ SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib maintenance::tes
 ```
 
 It checks the cutoff, indexed selection, 5,000-row limit, and pending-alert
-protection across all five statistics tables. A large-history fixture verifies
+protection for the remaining raw host/node history tables. Partitioned measurement
+retention has separate storage tests. A large-history fixture verifies
 the executed plan deletes a small expired batch without scanning retained rows.
 Two-session fixtures verify locked rows are skipped, updated tuple locations are
 selected on the next pass, and rolled-back deletions remain eligible. Timing is

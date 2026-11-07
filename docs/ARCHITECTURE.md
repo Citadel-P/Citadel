@@ -1001,19 +1001,45 @@ Listener reconnects and subscriber lag trigger a resync of both resource types.
 This bounded stream is for notifications; durable activities and alert work remain
 in PostgreSQL. Adding a subscriber does not require wiring callbacks into stores.
 
-Workload statistics snapshot ownership when samples are admitted. Deployment and
-standalone Stack samples are stored transactionally in `workloadstats`, independently
-of the container projection; Swarm keeps its existing `swarmservicestats` history.
+Statistics snapshot ownership when samples are admitted. `statisticssources`
+identifies a physical container/task; `statisticsowners` records the workload,
+service and replica/slot identity. `statisticssamples` stores each capture once.
+`containerstats`, `workloadstats` and `swarmservicestats` are read projections over
+shared captures, not separate metric copies. Container reads still require a live
+container projection; workload/task history outlives that projection. Deployment
+and standalone Stack owner records retain their deletion foreign keys; discovered
+Swarm Stack identity remains a historical snapshot even after its Stack is gone.
 Queries use the Deployment ID or Stack ID plus service and replica identity, never
-an unscoped container name. The same seven-day bounded retention applies to both.
-Raw container statistics remain tied to their individual container projection.
+an unscoped container name. The same seven-day bounded retention applies.
+
+The operator controls polling through `CITADEL_STATS_POLL_INTERVAL_SECONDS`;
+storage does not change that setting or the realtime capture cadence. The existing
+lease-owned maintenance worker compacts captures older than 24 hours into minute
+rows in `statisticsrollups`. Weighted sums/counts preserve gauge averages; first
+and last counters, internal reset-aware deltas and valid elapsed durations preserve
+network/disk totals and rates. CPU/memory maxima are retained internally. Readers
+combine internal deltas with the bridge between adjacent physical-source blocks.
+They never average averages without their original counts. Ownership changes
+split a minute into contiguous segments. Segments with fewer than four samples
+stay raw to avoid increasing storage for sparse polling. The newest source minute
+also stays raw, preserving current usage even for offline containers.
+
+Compaction takes the same Platform scope lock as captures, rereads after acquiring
+it, and moves at most one source-hour in a transaction. Its watermark fences late
+corrections to sealed minutes; cancelled/failed transactions leave raw history and
+the watermark intact. No additional task or lease is introduced. Historical reads
+include only complete summary blocks inside the requested interval: arbitrary
+second boundaries can omit less than one minute at either edge after compaction,
+rather than report traffic from outside the requested interval. Older short-range
+charts therefore have minute resolution, while the newest 24 hours stay raw.
+
 Frontend live statistics accumulate sums and counts at the selected history
 resolution before rendering. Replica averages are summed after temporal
 aggregation. Historical buckets remain authoritative on overlap because history
 responses do not include the counts needed to combine partial averages. Current
 usage summaries read the latest observation separately from chart averages.
 Network history additionally returns `rxBytesDelta`/`txBytesDelta`: PostgreSQL
-calculates reset-aware differences between raw samples per physical Container or
+calculates reset-aware differences per physical Container or
 Swarm Task before summing traffic into buckets and across replicas. The first
 sample inside the requested range is a baseline; absent deltas mean insufficient
 data, not zero traffic. The shared container network panel accumulates these
@@ -1066,13 +1092,44 @@ Old platform samples without physical counters remain
 unknown for I/O, rather than inferring reset-safe deltas from aggregate counters.
 The additive migration preserves existing samples and applied migration checksums.
 
-Statistics retention selects at most 5,000 expired rows per table through the
-timestamp index and locks them with `FOR UPDATE SKIP LOCKED`. The delete reuses
-their physical tuple locations (`ctid`) as a bounded array within that same statement.
-This feeds a tuple scan directly, avoiding ID or tuple joins that can instead scan
-the entire retained table. These statistics tables are
-not partitioned; tuple locations are never stored or reused between statements.
-The seven-day cutoff and protection for pending Platform alerts remain unchanged.
+Shared raw measurements and summaries use daily range partitions. Maintenance
+precreates the current and next two days, verifies catalog ownership/bounds before
+dropping fully expired partitions, also releases empty compacted raw days after
+rechecking under exclusive locks, and retains a default partition as an ingestion
+fallback. A populated default range is never detached or hidden to create a new
+partition. Boundary/default partitions delete at most 5,000 expired rows per
+physical child through the timestamp index and `FOR UPDATE SKIP LOCKED`.
+Statement-local `ctid` arrays target each child individually: tuple locations are
+not globally unique across partitions. Empty retired source/owner metadata is
+cleaned in bounded batches after its measurements expire.
+
+Platform history uses the same 24-hour raw window and seven-day retention.
+`platformhistorysources` identifies the connected host (empty node ID) or reporting
+node independently of bindings/inventory, and seals compacted ranges against late
+Direct/Edge captures. The same maintenance lease compacts at most one host/node-hour
+per pass, using the Platform scope lock and a fresh snapshot after acquiring it.
+`platformgaugerollups` preserves host gauge means with sample and nullable-disk
+counts; `platformiorollups` preserves each physical container's first/last observation
+times, counters, internal deltas and valid durations. Both use daily partitions and
+the existing bounded expiry path. Node summaries never fabricate host gauges.
+The reader combines raw and summarized history, retaining per-node/container
+baselines before summing rates. Empty captures and removed containers do not reset
+another source's counters. Minutes with fewer than four captures and the newest
+host/node minute remain raw; partial summary ranges have the same minute-resolution
+limitation as container history.
+
+Raw host/node tables remain in place: host UUIDs and pending-alert claims/revisions
+are not rewritten. Compaction stops before the earliest pending-alert minute, while
+other sources can continue. Processed raw rows are deleted atomically with summary
+insertion and watermark advancement; cancellation rolls all three back. Raw expiry
+uses the bounded indexed tuple-deletion pattern and still protects pending alerts,
+even beyond seven days. Vacuum reuses the deleted raw space; this extension does
+not perform a blocking raw-table rewrite or promise immediate filesystem shrinkage.
+
+Partition/compaction transactions use bounded
+lock and statement timeouts and roll back on cancellation. Parent partition locks
+are released before row cleanup/analysis; daily rotation also analyzes the
+partitioned parents because autovacuum handles their children.
 Locked rows are left for a later maintenance pass. Health transitions, Activities,
 Script/Build history, refresh-token expiry and expired copy reviews use the same
 statement-local locked-tuple deletion pattern with their existing cutoffs and batch
@@ -1080,6 +1137,17 @@ limits. Active/current runs, reserved or referenced builds and started copies st
 protected. Expiry indexes match terminal run states and unstarted copy reviews;
 Activities also has a global `(createdat DESC, id DESC)` index for stable page ordering.
 Exact authorized Activity counts still inspect all matching rows.
+
+Shared measurements use `(sourceid, created)` as their primary key; node I/O
+samples use `(platformid, nodeid, created)`. They do not maintain a second UUID
+index for unused sample IDs. The append-only migrations preserve measurements,
+owner snapshots and applied checksums. Normalization refuses conflicting copies
+instead of silently choosing a value. Unchanged retries do not rewrite tuples;
+corrections to unsealed captures still update under the same key. Physical history
+partitions, host/node history and health history become vacuum-eligible after
+1,000 plus 5% dead tuples, retaining PostgreSQL's configured vacuum cost limits.
+Daily expiry releases complete partition files; ordinary row deletion makes space
+reusable and does not guarantee immediate filesystem shrinkage.
 
 ## Runtime routing and observations
 

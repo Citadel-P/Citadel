@@ -985,6 +985,12 @@ impl PostgresEdgeStore {
         sample: Option<&citadel_platforms::RuntimePlatformStats>,
     ) -> Result<usize, EdgeStoreError> {
         let mut tx = self.pool.begin().await?;
+        // Use the same platform-before-session order as buffered statistics.
+        // Shared capture identities and compaction serialize on this scope lock.
+        sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+            .bind(session.target.platform_id)
+            .fetch_optional(&mut *tx)
+            .await?;
         let current: Option<Uuid> = sqlx::query_scalar("SELECT agentid FROM edgeagentbindings WHERE agentid=$1 AND platformid=$2 AND lastconnectedatutc=$3 AND revokedatutc IS NULL AND connectionstatus='Connected' AND resourcetype='Platform' AND dockernodeid IS NOT DISTINCT FROM $4 FOR SHARE")
             .bind(session.agent_id).bind(session.target.platform_id).bind(session.connected_at).bind(&session.target.node_id).fetch_optional(&mut *tx).await?;
         if session.is_closed() || current.is_none() {

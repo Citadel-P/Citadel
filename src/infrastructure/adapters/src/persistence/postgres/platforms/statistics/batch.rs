@@ -88,11 +88,14 @@ impl StatsBatchStore<ContainerStatsSample> for PostgresStatsBatchStore {
             let mut tx = self.pool.begin().await.map_err(storage)?;
             lock_scopes(&mut tx, &payload).await?;
             prune_closed(&mut payload, live.iter().map(|s| &s.scope));
-            let accepted: i64 = sqlx::query_scalar(include_str!("container_batch.sql"))
-                .bind(payload)
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(storage)?;
+            let accepted: i64 = sqlx::query_scalar(concat!(
+                include_str!("container_batch.sql"),
+                include_str!("capture.sql")
+            ))
+            .bind(payload)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             RuntimeWork::StatsCommit.units(1);
             RuntimeWork::StatsCommittedSamples.units(accepted as u64);

@@ -44,7 +44,8 @@ pub(crate) async fn run(
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
             let drain = async {
                 // Drain backlogs with short commits, at most 128 passes / ten seconds.
-                // One pass deletes at most 5,000 rows per historical table (1,000 builds).
+                // A pass bounds row deletes, expires complete statistics partitions,
+                // and compacts at most one container-source-hour and one host/node-hour.
                 for _ in 0..128 {
                     if store.cleanup(build_retention_days).await? == 0 {
                         break;
