@@ -3,7 +3,7 @@ import { statsBucketSeconds } from './stats-range';
 
 describe('historical and live statistics buckets', () => {
   it.each([3600, 21600, 86400, 172800, 604800])('uses the server resolution for a %s-second range', (duration) => {
-    const seconds = statsBucketSeconds({ from: 0, to: duration });
+    const seconds = statsBucketSeconds({ from: 0, to: duration }, duration);
     const samples = Array.from({ length: (2 * seconds) / 10 }, (_, index) => ({
       created: index * 10 + 1,
       cpuUsage: index === 0 ? 28 : 1,

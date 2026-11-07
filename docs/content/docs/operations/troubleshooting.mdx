@@ -37,8 +37,13 @@ You still choose the polling interval with `CITADEL_STATS_POLL_INTERVAL_SECONDS`
 in the Compose environment file. The newest 24 hours keep that sampling
 resolution. Background maintenance combines older container/workload/Swarm-task
 samples, platform host gauges, and node I/O into minute summaries, preserving
-weighted averages and reset-aware network/disk totals. Sparse minutes and the newest observation stay raw. Older
-charts have minute resolution; a custom time range that cuts through a summary
+weighted averages and reset-aware network/disk totals. Sparse minutes and the
+newest observation stay raw. Platform minutes also stay raw when per-container
+density or the estimated replacement size would make summarizing unhelpful; even
+10-second polling can remain raw when PostgreSQL compresses its JSONB very well.
+Charts for ranges starting more than 24 hours ago use at least minute resolution
+throughout, including a recent raw tail; recent short ranges retain finer detail.
+Older charts have minute resolution; a custom time range that cuts through a summary
 omits that partial minute instead of including traffic outside the range.
 Pending platform alerts remain raw until processed. Their source's compaction stops
 before the pending minute; other hosts/nodes can still compact. Raw host/node tables
@@ -54,7 +59,9 @@ and [routine vacuuming](https://www.postgresql.org/docs/18/routine-vacuuming.htm
 
 The storage migration copies existing measurements into the shared tables before
 removing the old copies, so the upgrade needs temporary room for those tables and
-WAL. Older-history compaction then catches up through scheduled maintenance;
+WAL. Older-history compaction then catches up on a separate 30-second cadence
+within the same maintenance job, bounded to five seconds and 128 passes per tick.
+It does not repeat the slower retention sweep for every source-hour;
 its savings are gradual rather than part of the startup migration. While platform
 history catches up, new summaries can temporarily increase allocated disk space:
 deleted raw pages become reusable, but are not forcibly returned to the filesystem.

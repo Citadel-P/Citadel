@@ -44,8 +44,8 @@ pub(crate) async fn run(
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
             let drain = async {
                 // Drain backlogs with short commits, at most 128 passes / ten seconds.
-                // A pass bounds row deletes, expires complete statistics partitions,
-                // and compacts at most one container-source-hour and one host/node-hour.
+                // A pass bounds row deletes and expires complete statistics partitions.
+                // Compaction has its own cadence; do not sweep retention per source-hour.
                 for _ in 0..128 {
                     if store.cleanup(build_retention_days).await? == 0 {
                         break;
@@ -63,6 +63,41 @@ pub(crate) async fn run(
             }
         }
     };
-    tokio::join!(recovery, expiry, retention);
+    let compaction = async {
+        let mut tick = super::schedule::interval("statistics-compaction", COMPACTION_INTERVAL);
+        loop {
+            tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
+            tokio::select! {
+                ()=token.cancelled()=>break,
+                result=tokio::time::timeout(COMPACTION_BUDGET,compact_batch(store.as_ref())) => match result {
+                    Ok(Ok(())) => {},
+                    Ok(Err(error)) => tracing::warn!(%error,"Statistics compaction failed"),
+                    Err(_) => tracing::debug!("Compaction budget exhausted; remaining history waits for the next pass"),
+                }
+            }
+        }
+    };
+    tokio::join!(recovery, expiry, retention, compaction);
     Ok(())
 }
+
+// At most 15,360 container source-hours/hour before the time bound. A 1,024-source
+// installation has capacity to catch up as well as process newly eligible hours.
+// Native database cost still determines the actual throughput; polling is unchanged.
+const COMPACTION_INTERVAL: Duration = Duration::from_secs(30);
+const COMPACTION_BUDGET: Duration = Duration::from_secs(5);
+const COMPACTION_PASSES: usize = 128;
+
+async fn compact_batch(store: &dyn MaintenanceStore) -> Result<(), MaintenanceError> {
+    for _ in 0..COMPACTION_PASSES {
+        if store.compact().await? == 0 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "maintenance_tests.rs"]
+mod tests;

@@ -281,3 +281,103 @@ async fn platform_history_upgrade_preserves_raw_samples_and_pending_alert_revisi
     connection.close().await.unwrap();
     database.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
+async fn physical_statistics_identity_upgrade_preserves_applied_history_and_alert_claims() {
+    let database = Database::create().await;
+    let mut connection = PgConnection::connect(&database.url).await.unwrap();
+    sqlx::raw_sql(concat!(
+        include_str!("../../generated/0001_initial.sql"),
+        "\n",
+        include_str!("../../generated/0002_instance_updates.sql"),
+        "\n",
+        include_str!("../../generated/0003_platform_io.sql"),
+        "\n",
+        include_str!("../../generated/0004_query_indexes.sql"),
+        "\n",
+        include_str!("../../generated/0005_statistics_storage.sql"),
+        "\n",
+        include_str!("../../generated/0006_shared_statistics.sql"),
+        "\n",
+        include_str!("../../generated/0007_platform_history.sql")
+    ))
+    .execute(&mut connection)
+    .await
+    .unwrap();
+    sqlx::raw_sql("CREATE TABLE citadel_schema_migrations (id text PRIMARY KEY,name text NOT NULL,checksum text NOT NULL,started_at timestamptz NOT NULL,completed_at timestamptz,failure text);
+        INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,volumecount,platformdescriptor,status)
+        VALUES('00000000-0000-0000-0000-000000000010','platform-history','platform-history','Local',2,0,1000,0,0,'{}','Online');
+        INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,alertpending,containerio)
+        VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000010',10,1,2,3,4,true,'[{\"containerId\":\"removed\",\"rxBytes\":3,\"txBytes\":4}]');
+        INSERT INTO platformnodeiostats(platformid,nodeid,created,containerio)
+        VALUES('00000000-0000-0000-0000-000000000010','gone-node',10,'[]');")
+        .execute(&mut connection).await.unwrap();
+    sqlx::raw_sql("INSERT INTO platformhistorysources(platformid,nodeid) VALUES('00000000-0000-0000-0000-000000000010',''),('00000000-0000-0000-0000-000000000010','gone-node');
+        UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"n\"}' WHERE id='00000000-0000-0000-0000-000000000010';
+        INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,state,created,updated,ports,issystem,dockernodeid)
+        VALUES('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000010','same-physical','image','node','Running',0,0,'{}',false,'n'),
+        ('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000010','same-physical','image','host','Running',0,0,'{}',false,NULL);
+        INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex)
+        VALUES('00000000-0000-0000-0000-000000000010','task','running','same-physical','n','service','image','task','n',now(),'[]','service',1,'running',1);")
+        .execute(&mut connection).await.unwrap();
+    let source:i64=sqlx::query_scalar("SELECT statistics_source('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000011','task')").fetch_one(&mut connection).await.unwrap();
+    let manifest: serde_json::Value =
+        serde_json::from_str(citadel_database::MIGRATION_MANIFEST_JSON).unwrap();
+    for migration in manifest["migrations"].as_array().unwrap().iter().take(7) {
+        sqlx::query("INSERT INTO citadel_schema_migrations VALUES($1,$2,$3,now(),now(),NULL)")
+            .bind(migration["id"].as_str().unwrap())
+            .bind(migration["name"].as_str().unwrap())
+            .bind(migration["sha256"].as_str().unwrap())
+            .execute(&mut connection)
+            .await
+            .unwrap();
+    }
+    let before: (serde_json::Value, String) =
+        sqlx::query_as("SELECT to_jsonb(s),s.xmin::text FROM platformstats s")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    MigrationRunner::migrate(&database.url).await.unwrap();
+    let after: (serde_json::Value, String) =
+        sqlx::query_as("SELECT to_jsonb(s),s.xmin::text FROM platformstats s")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(
+        before, after,
+        "migration cannot rewrite a pending alert claim"
+    );
+    let sources: Vec<(String, i64)> =
+        sqlx::query_as("SELECT nodeid,compacteduntil FROM platformhistorysources ORDER BY nodeid")
+            .fetch_all(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(sources, vec![(String::new(), 0), ("gone-node".into(), 0)]);
+    let node: serde_json::Value =
+        sqlx::query_scalar("SELECT containerio FROM platformnodeiostats WHERE nodeid='gone-node'")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(node, serde_json::json!([]));
+    let journal: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0007' ORDER BY id",
+    )
+    .fetch_all(&mut connection)
+    .await
+    .unwrap();
+    for ((id, checksum), entry) in journal
+        .iter()
+        .zip(manifest["migrations"].as_array().unwrap())
+    {
+        assert_eq!(id, entry["id"].as_str().unwrap());
+        assert_eq!(checksum, entry["sha256"].as_str().unwrap());
+    }
+    let attached:i64=sqlx::query_scalar("SELECT statistics_source('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000012','task')").fetch_one(&mut connection).await.unwrap();
+    assert_eq!(
+        source, attached,
+        "the upgrade reconciles verified live host/node projections without replacing the source"
+    );
+    connection.close().await.unwrap();
+    database.close().await;
+}

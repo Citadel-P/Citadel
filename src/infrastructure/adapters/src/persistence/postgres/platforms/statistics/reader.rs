@@ -142,7 +142,7 @@ impl StatisticsReader for PostgresStatisticsReader {
             }
             let rows = sqlx::query(include_str!("workload_history.sql"))
                 .bind(id).bind(deployment).bind(window.since(now)).bind(window.until(now))
-                .bind(window.bucket_seconds()).fetch_all(&self.pool).await.map_err(storage)?;
+                .bind(window.bucket_seconds_at(now)).fetch_all(&self.pool).await.map_err(storage)?;
             if rows.len() > 65_536 {
                 return Err(capacity("Workload history exceeds 65536 samples; choose a shorter range."));
             }
@@ -194,7 +194,7 @@ impl StatisticsReader for PostgresStatisticsReader {
             let rows = sqlx::query(include_str!("container_history.sql"))
                 .bind(ids)
                 .bind(window.since(now))
-                .bind(window.bucket_seconds())
+                .bind(window.bucket_seconds_at(now))
                 .bind(window.until(now))
                 .fetch_all(&self.pool)
                 .await
@@ -226,7 +226,7 @@ impl StatisticsReader for PostgresStatisticsReader {
             let rows = sqlx::query(include_str!("platform_history.sql"))
                 .bind(id)
                 .bind(window.since(now))
-                .bind(window.bucket_seconds())
+                .bind(window.bucket_seconds_at(now))
                 .bind(window.until(now))
                 .fetch_all(&mut *transaction)
                 .await
@@ -285,7 +285,7 @@ impl StatisticsReader for PostgresStatisticsReader {
                 .bind(id.stack_id)
                 .bind(id.service_name)
                 .bind(window.since(now))
-                .bind(window.bucket_seconds())
+                .bind(window.bucket_seconds_at(now))
                 .bind(window.until(now))
                 .fetch_all(&self.pool)
                 .await

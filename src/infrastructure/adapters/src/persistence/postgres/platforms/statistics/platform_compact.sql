@@ -4,15 +4,32 @@ WITH source AS (
  SELECT * FROM platformhistorysources WHERE id=$1
 ), captures AS MATERIALIZED (
  SELECT s.ctid AS tupleid,s.created,s.cpuusage,s.memoryusage,s.rxbytes,s.txbytes,
-     s.diskusedbytes,s.disktotalbytes,s.diskusage,s.containerio
+     s.diskusedbytes,s.disktotalbytes,s.diskusage,s.containerio,pg_column_size(s.containerio)::bigint+64 AS rawbytes
  FROM platformstats s JOIN source src ON src.platformid=s.platformid AND src.nodeid=''
  WHERE s.created>=$2 AND s.created<$3 AND NOT s.alertpending
  UNION ALL
- SELECT s.ctid,s.created,NULL,NULL,NULL,NULL,NULL,NULL,NULL,s.containerio
+ SELECT s.ctid,s.created,NULL,NULL,NULL,NULL,NULL,NULL,NULL,s.containerio,pg_column_size(s.containerio)::bigint+64
  FROM platformnodeiostats s JOIN source src ON src.platformid=s.platformid AND src.nodeid=s.nodeid AND src.nodeid<>''
  WHERE s.created>=$2 AND s.created<$3
+), physical_density AS (
+ -- Inspect only this bounded source-hour. pg_column_size is evaluated on the
+ -- stored JSONB above, before materialization/detoasting loses its compressed size.
+ SELECT h.created/60 AS minute,c."containerId",count(*) AS observations
+ FROM captures h CROSS JOIN LATERAL jsonb_to_recordset(h.containerio) AS c("containerId" text)
+ GROUP BY h.created/60,c."containerId"
+), replacement_cost AS (
+ SELECT minute,sum(observations) AS observations,count(*) AS containers,
+     sum(448+2*octet_length("containerId")) AS bytes
+ FROM physical_density GROUP BY minute
 ), minutes AS (
- SELECT created/60 AS minute FROM captures GROUP BY created/60 HAVING count(*)>=4
+ -- Keep the WHOLE minute raw unless the physical density and conservative
+ -- row/index allowance justify replacing even its compressed JSONB payload.
+ -- The watermark still seals rejected minutes, so maintenance cannot spin on them.
+ SELECT h.created/60 AS minute FROM captures h
+ LEFT JOIN replacement_cost c ON c.minute=h.created/60
+ GROUP BY h.created/60,c.observations,c.containers,c.bytes
+ HAVING count(*)>=5 AND COALESCE(c.observations>=5*c.containers,true)
+     AND sum(h.rawbytes)>COALESCE(c.bytes,0)+384
 ), selected AS MATERIALIZED (
  SELECT c.* FROM captures c JOIN minutes m ON m.minute=c.created/60
 ), gauges AS (

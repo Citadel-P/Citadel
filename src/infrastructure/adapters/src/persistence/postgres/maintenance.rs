@@ -130,11 +130,15 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
             .rows_affected();
     }
     deleted += super::platforms::statistics::maintenance::retain(pool).await?;
-    deleted += super::platforms::statistics::maintenance::compact(pool).await?;
-    deleted += super::platforms::statistics::platform_maintenance::compact(pool).await?;
     citadel_runtime::runtime_metrics::RuntimeWork::Retention.units(deleted);
     Ok(deleted)
 }
+/// Compaction runs independently of the slower retention sweep under the same lease.
+pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let progress = super::platforms::statistics::maintenance::compact(pool).await?;
+    Ok(progress + super::platforms::statistics::platform_maintenance::compact(pool).await?)
+}
+
 /// Refresh tokens have a separate expiry cadence. Backup leases are ownership
 /// evidence: only verified cleanup may release them, regardless of expiry.
 pub async fn expire_leases(pool: &PgPool) -> Result<(), sqlx::Error> {
@@ -191,6 +195,18 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
             expire_leases(&self.0)
                 .await
                 .map(|_| ())
+                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
+        })
+    }
+    fn compact(
+        &self,
+    ) -> futures_util::future::BoxFuture<
+        '_,
+        Result<u64, citadel_runtime::maintenance::MaintenanceError>,
+    > {
+        Box::pin(async move {
+            compact(&self.0)
+                .await
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })
     }

@@ -640,7 +640,19 @@ capture that becomes pending while compaction waits for its lock, rollback,
 late Direct/Edge retries, sparse/latest offline observations, daily summary expiry
 and bounded default cleanup. The platform history migration test preserves raw
 rows and pending `xmin` claims while registering historical sources without live
-bindings. Run with disposable migration/statistics URLs only.
+bindings. The `stats_batch_persistence::storage_review` module measures native
+heap/TOAST/index bytes without counting partition indexes twice for small dense
+10-second polling, 50-container dense 2-second polling, stable 10/15-second polling,
+and high container churn. It compares history before/after compaction, checks
+staggered replica/node timestamps over old and mixed windows, and exercises a
+persisted same-cluster manager handover with both inventory projections present.
+Its 1,024-source native probe reports elapsed throughput without a latency assertion.
+Run with disposable migration/statistics URLs only.
+
+`cargo test --locked -p citadel-server --lib workers::maintenance::tests` uses paused
+Tokio time to model 1,024 continuously sampled sources plus backfill, assert net
+backlog reduction independent of retention sweeps, and bound compaction passes,
+timeouts and cancellation. This validates scheduling capacity, not a hardware SLA.
 
 The `platforms_http` suite requires `CREATE DATABASE` permission on
 `CITADEL_PLATFORM_DATABASE_URL`. Each test creates and removes its own database

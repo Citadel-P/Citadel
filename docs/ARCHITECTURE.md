@@ -1010,7 +1010,14 @@ container projection; workload/task history outlives that projection. Deployment
 and standalone Stack owner records retain their deletion foreign keys; discovered
 Swarm Stack identity remains a historical snapshot even after its Stack is gone.
 Queries use the Deployment ID or Stack ID plus service and replica identity, never
-an unscoped container name. The same seven-day bounded retention applies.
+an unscoped container name. During a same-cluster manager handover, host and node
+inventory can contain different projection UUIDs for one Task. Source reassociation
+requires the persisted Task, both live projections' Docker container IDs, and
+Platform identity to agree. An explicit node ID must match the Task; a former host's
+nullable node is resolved through its already associated Task rather than the
+new manager's descriptor. A missing old projection can be
+rediscovered only against that Task's physical identity. Unrelated live projections
+cannot take over history. The same seven-day bounded retention applies.
 
 The operator controls polling through `CITADEL_STATS_POLL_INTERVAL_SECONDS`;
 storage does not change that setting or the realtime capture cadence. The existing
@@ -1024,14 +1031,30 @@ split a minute into contiguous segments. Segments with fewer than four samples
 stay raw to avoid increasing storage for sparse polling. The newest source minute
 also stays raw, preserving current usage even for offline containers.
 
+Compaction runs every 30 seconds within the existing lease-owned maintenance job,
+independently of the configured retention sweep. Each iteration permits at most
+128 passes within five seconds, with a cancellation branch; a pass commits at most
+one container-source-hour and one host/node-hour. Candidates are ordered by oldest
+unsealed observation and source ID so backfill progresses across sources. Retention
+is not repeated for each source-hour. The work budget permits up to 15,360 container
+source-hours per hour before SQL cost, versus 512 previously. Scheduler and native
+fixtures cover 1,024 sources plus backfill; actual throughput still depends on
+PostgreSQL resources and source density. Polling and retention durations are not
+changed to meet this budget.
+
 Compaction takes the same Platform scope lock as captures, rereads after acquiring
 it, and moves at most one source-hour in a transaction. Its watermark fences late
 corrections to sealed minutes; cancelled/failed transactions leave raw history and
 the watermark intact. No additional task or lease is introduced. Historical reads
 include only complete summary blocks inside the requested interval: arbitrary
 second boundaries can omit less than one minute at either edge after compaction,
-rather than report traffic from outside the requested interval. Older short-range
-charts therefore have minute resolution, while the newest 24 hours stay raw.
+rather than report traffic from outside the requested interval. Every response whose start precedes the 24-hour raw boundary uses at least
+60-second buckets for its entire range, including any raw tail. Recent ranges
+retain their 10/30-second detail. `StatsWindow::bucket_seconds_at` and the frontend
+range helper apply the same age rule to bucketing and chart gaps. This conservative
+rule also coarsens older sparse ranges that stayed raw; it needs no response
+contract change or extra scan to discover summaries. Older short-range charts
+therefore have minute resolution, while the newest 24 hours stay raw.
 
 Frontend live statistics accumulate sums and counts at the selected history
 resolution before rendering. Replica averages are summed after temporal
@@ -1114,8 +1137,15 @@ times, counters, internal deltas and valid durations. Both use daily partitions 
 the existing bounded expiry path. Node summaries never fabricate host gauges.
 The reader combines raw and summarized history, retaining per-node/container
 baselines before summing rates. Empty captures and removed containers do not reset
-another source's counters. Minutes with fewer than four captures and the newest
-host/node minute remain raw; partial summary ranges have the same minute-resolution
+another source's counters. Platform minutes require at least five captures, at
+least five observations per distinct physical container on average, and a conservative
+replacement-cost check. The check compares stored (possibly compressed/TOASTed)
+JSONB sizes plus a lower raw-row allowance with 448 bytes plus twice the ID's byte
+length per replacement I/O row and 384 bytes per minute for gauges/page overhead.
+It reads only the selected source-hour; it performs no table-size measurement in
+production. Whole unsuitable minutes remain raw, with no overlapping summaries,
+and their watermark still advances so they are considered only once. The newest
+host/node minute also remains raw; partial summary ranges have the same minute-resolution
 limitation as container history.
 
 Raw host/node tables remain in place: host UUIDs and pending-alert claims/revisions

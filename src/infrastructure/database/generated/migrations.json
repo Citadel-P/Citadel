@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "2fc2961d029474ad8d5726b8722e8a682a8ec60c9bd44ad14a5ff915a1629922"
+    "sha256": "66186adbc3ff9057a82fd97e2456e5d3cab3208d1720887d917e1de74d16bcb5"
   },
   "migrations": [
     {
@@ -58,6 +58,14 @@
       "name": "platform_history",
       "file": "0007_platform_history.sql",
       "sha256": "22ec741eff9bea70bfef6f8fc9a1e788e1c986a03860aadffd2610b372899eb0",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0008",
+      "name": "statistics_identity",
+      "file": "0008_statistics_identity.sql",
+      "sha256": "19c8bdbc5ce6ffc13b5c11b5d795cea3e825110cacdd56d2701ebdcbaaa468a3",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

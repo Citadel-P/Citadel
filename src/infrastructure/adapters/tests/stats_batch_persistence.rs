@@ -1083,9 +1083,7 @@ async fn shared_history_compacts_with_weighted_gauges_resets_and_immutable_owner
         .unwrap();
     assert_eq!(raw, 73);
     for _ in 0..20 {
-        citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-            .await
-            .unwrap();
+        maintain_statistics(&pool).await.unwrap();
         let count: i64 =
             sqlx::query_scalar("SELECT count(*) FROM statisticsrollups WHERE sourceid=$1")
                 .bind(source)
@@ -1233,9 +1231,7 @@ async fn partition_retention_drops_expired_days_and_bounds_default_partition_cle
     .await
     .unwrap();
     assert!(!default_exists);
-    citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-        .await
-        .unwrap();
+    maintain_statistics(&pool).await.unwrap();
     let dropped: bool =
         sqlx::query_scalar("SELECT to_regclass('public.statisticssamples_d'||$1::text) IS NULL")
             .bind(old_day.to_string())
@@ -1265,9 +1261,7 @@ async fn partition_retention_drops_expired_days_and_bounds_default_partition_cle
         fresh, 2.,
         "same physical ctid in another partition must not be deleted"
     );
-    citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-        .await
-        .unwrap();
+    maintain_statistics(&pool).await.unwrap();
     let remaining: i64 =
         sqlx::query_scalar("SELECT count(*) FROM statisticssamples WHERE sourceid=$1")
             .bind(source)
@@ -1547,7 +1541,7 @@ async fn platform_history_compacts_host_and_nodes_without_losing_resets_gaps_or_
     .fetch_one(&mut *tx)
     .await
     .unwrap();
-    assert_eq!(removed, 42);
+    assert_eq!(removed, 36);
     tx.rollback().await.unwrap();
     assert_eq!(
         before,
@@ -1561,9 +1555,7 @@ async fn platform_history_compacts_host_and_nodes_without_losing_resets_gaps_or_
             .unwrap();
     assert_eq!(watermark, 0);
     for _ in 0..3 {
-        citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-            .await
-            .unwrap();
+        maintain_statistics(&pool).await.unwrap();
     }
     assert_history_close(
         &before,
@@ -1575,7 +1567,11 @@ async fn platform_history_compacts_host_and_nodes_without_losing_resets_gaps_or_
     );
     let counts:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM platformstats),(SELECT count(*) FROM platformnodeiostats),(SELECT sum(samplecount)::bigint FROM platformgaugerollups)")
         .fetch_one(&pool).await.unwrap();
-    assert_eq!(counts, (1, 1, 42));
+    assert_eq!(
+        counts,
+        (7, 13, 36),
+        "sparse container minutes stay wholly raw alongside dense summaries"
+    );
     // Neither a valid host retry nor a valid Edge node retry may resurrect sealed raw data.
     let retried = store
         .persist_batch(&[captures[0].clone(), captures[43].clone()])
@@ -1599,7 +1595,7 @@ async fn platform_history_compacts_host_and_nodes_without_losing_resets_gaps_or_
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(raw, 1);
+    assert_eq!(raw, 7);
     // Removing inventory/bindings does not remove already captured platform traffic.
     sqlx::query("DELETE FROM containers WHERE platformid=$1")
         .bind(manager.platform_id)
@@ -1670,9 +1666,7 @@ async fn platform_compaction_protects_pending_alert_revisions_and_sparse_latest_
     .await
     .unwrap();
     for _ in 0..4 {
-        citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-            .await
-            .unwrap();
+        maintain_statistics(&pool).await.unwrap();
     }
     let pending_after: (Uuid, String) =
         sqlx::query_as("SELECT id,xmin::text FROM platformstats WHERE alertpending")
@@ -1696,9 +1690,7 @@ async fn platform_compaction_protects_pending_alert_revisions_and_sparse_latest_
         .execute(&pool)
         .await
         .unwrap();
-    citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-        .await
-        .unwrap();
+    maintain_statistics(&pool).await.unwrap();
     let raw: Vec<i64> = sqlx::query_scalar(
         "SELECT created FROM platformstats WHERE platformid=$1 ORDER BY created",
     )
@@ -1764,9 +1756,7 @@ async fn platform_summary_expiry_reclaims_partitions_and_bounds_default_cleanup(
             .fetch_one(&pool)
             .await
             .unwrap();
-    citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-        .await
-        .unwrap();
+    maintain_statistics(&pool).await.unwrap();
     for parent in ["platformgaugerollups", "platformiorollups"] {
         let dropped: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NULL")
             .bind(format!("{parent}_d{}", day - 10))
@@ -1838,7 +1828,7 @@ async fn platform_compactor_rechecks_alert_state_after_waiting_for_a_capture() {
     .unwrap();
     let worker_pool = pool.clone();
     let task = tokio::spawn(async move {
-        citadel_adapters::persistence::postgres::maintenance::cleanup(&worker_pool, None).await
+        citadel_adapters::persistence::postgres::maintenance::compact(&worker_pool).await
     });
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
     let mut blocked = false;
@@ -1868,9 +1858,7 @@ async fn platform_compactor_rechecks_alert_state_after_waiting_for_a_capture() {
         .execute(&pool)
         .await
         .unwrap();
-    citadel_adapters::persistence::postgres::maintenance::cleanup(&pool, None)
-        .await
-        .unwrap();
+    maintain_statistics(&pool).await.unwrap();
     let raw: i64 = sqlx::query_scalar("SELECT count(*) FROM platformstats")
         .fetch_one(&pool)
         .await
@@ -1878,3 +1866,12 @@ async fn platform_compactor_rechecks_alert_state_after_waiting_for_a_capture() {
     assert_eq!(raw, 1);
     close_storage_fixture(pool, database).await;
 }
+
+async fn maintain_statistics(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let retained =
+        citadel_adapters::persistence::postgres::maintenance::cleanup(pool, None).await?;
+    Ok(retained + citadel_adapters::persistence::postgres::maintenance::compact(pool).await?)
+}
+
+#[path = "stats_batch_persistence/storage_review.rs"]
+mod storage_review;
