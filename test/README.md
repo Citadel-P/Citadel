@@ -1293,11 +1293,13 @@ ties. These are disposable-fixture tests; do not execute cleanup plans with
 ### Instance settings
 
 `cargo test --locked -p citadel-instance` covers all promoted
-fields, partial patches, ranges, coupled effective values and explicit overrides.
+fields, partial patches, ranges, coupled effective values, explicit overrides,
+typed log-format JSON and deployment HTTPS prerequisites.
 The update checker tests also verify that first-run setup immediately wakes its
 Instance settings subscription, before the periodic repair poll.
 `cargo test --locked -p citadel-server --lib config::instance` checks deployment
-presence independently of parsed defaults. The existing configuration parser process
+presence independently of parsed defaults and lowered environment maxima combined
+with compatible saved defaults. The existing configuration parser process
 suite remains database-independent. Actual startup logging now resolves saved
 choices first, so its format/color test uses the disposable database too. Both it
 and the restart test run in the existing database-regression CI fixture.
@@ -1312,8 +1314,12 @@ CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLI
 ```
 
 The restart test starts isolated Core processes and verifies persisted choices,
-real logging, Script defaults and unchanged existing session expirations. Instance
-HTTP tests check atomic validation/auditing/notification, conflicting overrides,
+real logging, omitted Script timeouts persisted with the active default, early
+validation phase errors and unchanged existing session expirations. The backup
+dispatcher fixture checks that disabled workers retain queued work until a newly
+constructed enabled worker starts. Instance
+HTTP tests check atomic validation/auditing/notification, deployment HTTPS rejection
+without partial settings or success events, conflicting overrides,
 concurrent partial saves and enabled-human-administrator reauthorization. Migration
 tests retain the preceding checksums and saved installation choices. Frontend
 coverage lives in `features/instance/settings.test.tsx`, the sidebar tests and the

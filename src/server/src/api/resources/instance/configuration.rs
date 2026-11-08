@@ -27,7 +27,7 @@ pub struct InstanceConfigurationView {
     pub require_direct_agent_https: bool,
     pub agent_image_override: String,
     pub log_verbosity: String,
-    pub log_format: String,
+    pub log_format: LogFormatView,
 }
 impl From<citadel_instance::InstanceConfiguration> for InstanceConfigurationView {
     fn from(value: citadel_instance::InstanceConfiguration) -> Self {
@@ -58,7 +58,7 @@ impl From<citadel_instance::InstanceConfiguration> for InstanceConfigurationView
             require_direct_agent_https: value.require_direct_agent_https,
             agent_image_override: value.agent_image_override,
             log_verbosity: value.log_verbosity,
-            log_format: value.log_format,
+            log_format: value.log_format.into(),
         }
     }
 }
@@ -89,7 +89,7 @@ pub struct InstanceOverridesView {
     pub require_direct_agent_https: Option<bool>,
     pub agent_image_override: Option<String>,
     pub log_verbosity: Option<String>,
-    pub log_format: Option<String>,
+    pub log_format: Option<LogFormatView>,
 }
 impl From<citadel_instance::InstanceOverrides> for InstanceOverridesView {
     fn from(value: citadel_instance::InstanceOverrides) -> Self {
@@ -120,7 +120,7 @@ impl From<citadel_instance::InstanceOverrides> for InstanceOverridesView {
             require_direct_agent_https: value.require_direct_agent_https,
             agent_image_override: value.agent_image_override,
             log_verbosity: value.log_verbosity,
-            log_format: value.log_format,
+            log_format: value.log_format.map(Into::into),
         }
     }
 }
@@ -201,7 +201,7 @@ pub struct PatchInstanceConfigurationRequest {
     pub log_verbosity: citadel_primitives::PatchField<String>,
     #[serde(default)]
     #[schema(value_type = Option<String>, required = false)]
-    pub log_format: citadel_primitives::PatchField<String>,
+    pub log_format: citadel_primitives::PatchField<LogFormatView>,
 }
 impl From<PatchInstanceConfigurationRequest> for citadel_instance::PatchInstanceConfiguration {
     fn from(value: PatchInstanceConfigurationRequest) -> Self {
@@ -232,7 +232,31 @@ impl From<PatchInstanceConfigurationRequest> for citadel_instance::PatchInstance
             require_direct_agent_https: value.require_direct_agent_https,
             agent_image_override: value.agent_image_override,
             log_verbosity: value.log_verbosity,
-            log_format: value.log_format,
+            log_format: value.log_format.map(Into::into),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema)]
+pub enum LogFormatView {
+    Text,
+    Json,
+}
+
+impl From<citadel_instance::LogFormat> for LogFormatView {
+    fn from(value: citadel_instance::LogFormat) -> Self {
+        match value {
+            citadel_instance::LogFormat::Text => Self::Text,
+            citadel_instance::LogFormat::Json => Self::Json,
+        }
+    }
+}
+
+impl From<LogFormatView> for citadel_instance::LogFormat {
+    fn from(value: LogFormatView) -> Self {
+        match value {
+            LogFormatView::Text => Self::Text,
+            LogFormatView::Json => Self::Json,
         }
     }
 }

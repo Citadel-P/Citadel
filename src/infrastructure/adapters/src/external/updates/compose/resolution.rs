@@ -2,7 +2,6 @@
 use super::super::files::validate_absolute;
 use super::super::registration::{fingerprint_inputs, identifier, read_input};
 use citadel_execution::{ProcessError, ProcessLimits, ProcessRequest, ProcessRunner};
-use citadel_instance::environment;
 use citadel_updates::UpdateError;
 use serde::Serialize;
 use serde_json::Value;
@@ -210,20 +209,20 @@ impl InstallerComposeInputs {
         let core = &config["services"]["server"];
         let database = &config["services"]["pg_db"];
         let env = &core["environment"];
-        if env[environment::PG_HOST] != "pg_db"
-            || env[environment::PG_PORT] != "5432"
+        if env["PG_HOST"] != "pg_db"
+            || env["PG_PORT"] != "5432"
             || [
-                environment::CITADEL_DATABASE_URL,
-                environment::CITADEL_CORE_AGENT_ADDRESS,
-                environment::CITADEL_CORE_AGENT_PRIVATE_KEY_PATH,
+                "CITADEL_DATABASE_URL",
+                "CITADEL_CORE_AGENT_ADDRESS",
+                "CITADEL_CORE_AGENT_PRIVATE_KEY_PATH",
             ]
             .iter()
             .any(|key| env.get(*key).is_some())
             || env
-                .get(environment::CITADEL_DOCKER_SOCKET)
+                .get("CITADEL_DOCKER_SOCKET")
                 .is_some_and(|v| v != "/var/run/docker.sock")
             || env
-                .get(environment::CITADEL_DATA_ROOT)
+                .get("CITADEL_DATA_ROOT")
                 .is_some_and(|v| v != "/app/data")
         {
             return Err(unsupported(
@@ -231,9 +230,9 @@ impl InstallerComposeInputs {
             ));
         }
         for (key, pg_key) in [
-            (environment::PG_USER, "POSTGRES_USER"),
-            (environment::PG_PASSWORD, "POSTGRES_PASSWORD"),
-            (environment::PG_DATABASE, "POSTGRES_DB"),
+            ("PG_USER", "POSTGRES_USER"),
+            ("PG_PASSWORD", "POSTGRES_PASSWORD"),
+            ("PG_DATABASE", "POSTGRES_DB"),
         ] {
             if env[key].as_str().is_none_or(str::is_empty)
                 || env[key] != database["environment"][pg_key]

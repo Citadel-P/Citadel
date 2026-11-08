@@ -112,6 +112,8 @@ impl InstanceService {
         }
         self.validate_installation_choices(enabled, policy)?;
         patch.deployment_overrides = self.installation_policy.overrides.clone();
+        patch.deployment_core_agent_requires_http =
+            self.installation_policy.deployment_core_agent_requires_http;
         self.repository
             .patch_installation_settings(principal, &patch, self.clock.now())
             .await?;

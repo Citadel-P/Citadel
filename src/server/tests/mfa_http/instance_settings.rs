@@ -199,3 +199,99 @@ async fn instance_configuration_patches_are_atomic_audited_and_deployment_restri
     .unwrap();
     admin.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_IDENTITY_DATABASE_URL"]
+async fn deployment_http_agent_rejects_combined_settings_atomically() {
+    let base = std::env::var("CITADEL_IDENTITY_DATABASE_URL").unwrap();
+    let admin = PgPool::connect(&base).await.unwrap();
+    let name = format!("citadel_instance_https_{}", Uuid::now_v7().simple());
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {name}")))
+        .execute(&admin)
+        .await
+        .unwrap();
+    let mut url = url::Url::parse(&base).unwrap();
+    url.set_path(&name);
+    let fixture = fixture_at(MfaPolicy::Optional, url.as_str()).await;
+    sqlx::query("UPDATE instancesetupstates SET initializedat=now(), initialadministratoractorid=$1 WHERE id=1")
+        .bind(fixture.principal.actor_id.value()).execute(&fixture.pool).await.unwrap();
+    let restricted = instance(
+        &fixture.pool,
+        citadel_instance::InstallationPolicy {
+            deployment_core_agent_requires_http: true,
+            ..Default::default()
+        },
+    );
+    let notification = restricted.installation_changes();
+    let app = router_with_instance(
+        fixture.identity.clone(),
+        fixture.pool.clone(),
+        MfaPolicy::Optional,
+        restricted.clone(),
+    );
+    let before = restricted.installation_settings().await.unwrap();
+    let audits: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM activityevents WHERE eventtype='InstallationSettingsUpdated'",
+    )
+    .fetch_one(&fixture.pool)
+    .await
+    .unwrap();
+    let response = send_json(&app, Method::PATCH, "/api/v1/installation/settings",
+        json!({"configuration":{"requireDirectAgentHttps":true,"passwordMinimumLength":20},"mfaPolicy":"RequiredForAllUsers","updateCheckIntervalHours":24}),
+        Some(fixture.principal.clone()), None).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        json_body(response)
+            .await
+            .to_string()
+            .contains("CITADEL_CORE_AGENT_ADDRESS")
+    );
+    assert_eq!(restricted.installation_settings().await.unwrap(), before);
+    assert!(!notification.has_changed().unwrap());
+    let after_audits: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM activityevents WHERE eventtype='InstallationSettingsUpdated'",
+    )
+    .fetch_one(&fixture.pool)
+    .await
+    .unwrap();
+    assert_eq!(after_audits, audits);
+    // The hosting fact is not an HTTP setting and cannot be supplied by a client.
+    let forged = send_json(&app, Method::PATCH, "/api/v1/installation/settings",
+        json!({"deploymentCoreAgentRequiresHttp":false,"configuration":{"requireDirectAgentHttps":true}}),
+        Some(fixture.principal.clone()), None).await;
+    assert_eq!(forged.status(), StatusCode::BAD_REQUEST);
+    assert!(!notification.has_changed().unwrap());
+    // HTTPS/absent deployment connector uses the same false fact; normal HTTP
+    // Direct Agents are not inspected or mutated by this save.
+    let compatible = instance(&fixture.pool, Default::default());
+    let compatible_app = router_with_instance(
+        fixture.identity.clone(),
+        fixture.pool.clone(),
+        MfaPolicy::Optional,
+        compatible,
+    );
+    let response = send_json(
+        &compatible_app,
+        Method::PATCH,
+        "/api/v1/installation/settings",
+        json!({"configuration":{"requireDirectAgentHttps":true}}),
+        Some(fixture.principal.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_body(response).await;
+    assert_eq!(
+        body["effectiveConfiguration"]["requireDirectAgentHttps"],
+        true
+    );
+    assert!(!body.to_string().contains("deploymentCoreAgent"));
+    fixture.pool.close().await;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE {name} WITH (FORCE)"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
+    admin.close().await;
+}

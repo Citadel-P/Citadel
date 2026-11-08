@@ -54,7 +54,7 @@ pub struct PatchInstanceConfiguration {
     #[serde(default, skip_serializing_if = "PatchField::is_missing")]
     pub log_verbosity: PatchField<String>,
     #[serde(default, skip_serializing_if = "PatchField::is_missing")]
-    pub log_format: PatchField<String>,
+    pub log_format: PatchField<crate::LogFormat>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -65,6 +65,8 @@ pub struct PatchInstallationSettings {
     /// Trusted deployment context supplied by the use case, never deserialized.
     #[serde(skip)]
     pub deployment_overrides: InstanceOverrides,
+    #[serde(skip)]
+    pub deployment_core_agent_requires_http: bool,
     #[serde(default)]
     pub update_checks_enabled: citadel_primitives::PatchField<bool>,
     #[serde(default)]

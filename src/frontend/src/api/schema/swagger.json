@@ -11745,7 +11745,7 @@
             "type": "integer"
           },
           "logFormat": {
-            "type": "string"
+            "$ref": "#/components/schemas/LogFormatView"
           },
           "logVerbosity": {
             "type": "string"
@@ -11908,9 +11908,13 @@
             ]
           },
           "logFormat": {
-            "type": [
-              "string",
-              "null"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LogFormatView"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "logVerbosity": {
@@ -12400,6 +12404,13 @@
           }
         },
         "type": "object"
+      },
+      "LogFormatView": {
+        "enum": [
+          "Text",
+          "Json"
+        ],
+        "type": "string"
       },
       "LogSnapshot": {
         "properties": {

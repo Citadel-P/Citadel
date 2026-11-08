@@ -1,7 +1,6 @@
 use super::super::InstallerComposeInputs;
 use super::super::docker::{LocalDocker, SOCKET, failed, refuse, single};
 use super::super::files::validate_absolute;
-use citadel_instance::environment;
 use citadel_updates::{UpdateError, is_sha256};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -362,9 +361,9 @@ fn validate_service(
     }
     if role == "server" {
         for key in [
-            environment::CITADEL_DATABASE_URL,
-            environment::CITADEL_CORE_AGENT_ADDRESS,
-            environment::CITADEL_CORE_AGENT_PRIVATE_KEY_PATH,
+            "CITADEL_DATABASE_URL",
+            "CITADEL_CORE_AGENT_ADDRESS",
+            "CITADEL_CORE_AGENT_PRIVATE_KEY_PATH",
         ] {
             if environment.contains_key(key) {
                 return Err(refuse(
@@ -373,8 +372,8 @@ fn validate_service(
             }
         }
         for (key, value) in [
-            (environment::CITADEL_DATA_ROOT, "/app/data"),
-            (environment::CITADEL_DOCKER_SOCKET, SOCKET),
+            ("CITADEL_DATA_ROOT", "/app/data"),
+            ("CITADEL_DOCKER_SOCKET", SOCKET),
         ] {
             if environment.get(key).is_some_and(|actual| *actual != value) {
                 return Err(refuse(

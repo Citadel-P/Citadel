@@ -2,8 +2,8 @@
 use citadel_server::config::{LogFormat, environment, log_color_from_env, log_format_from_env};
 use tracing_subscriber::EnvFilter;
 
-pub(crate) fn init(verbosity: &str, format: &str) -> Result<(), Box<dyn std::error::Error>> {
-    install(EnvFilter::try_new(verbosity)?, format.parse()?)
+pub(crate) fn init(verbosity: &str, format: LogFormat) -> Result<(), Box<dyn std::error::Error>> {
+    install(EnvFilter::try_new(verbosity)?, format)
 }
 
 /// Maintenance and auxiliary commands cannot depend on the settings database.

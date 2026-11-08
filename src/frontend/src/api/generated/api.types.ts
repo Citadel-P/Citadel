@@ -522,6 +522,11 @@ export enum LoginNextStep {
   EnrollMfa = "EnrollMfa",
 }
 
+export enum LogFormatView {
+  Text = "Text",
+  Json = "Json",
+}
+
 export enum LicenseStatus {
   Community = "Community",
   Valid = "Valid",
@@ -4110,7 +4115,7 @@ export interface InstanceConfigurationView {
   buildRetentionDays: number;
   /** @min 0 */
   buildTrackingSlots: number;
-  logFormat: string;
+  logFormat: LogFormatView;
   logVerbosity: string;
   openapiEnabled: boolean;
   /**
@@ -4179,7 +4184,7 @@ export interface InstanceOverridesView {
   buildRetentionDays?: number | null;
   /** @min 0 */
   buildTrackingSlots?: number | null;
-  logFormat?: string | null;
+  logFormat?: LogFormatView | null;
   logVerbosity?: string | null;
   openapiEnabled?: boolean | null;
   /**

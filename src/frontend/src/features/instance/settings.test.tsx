@@ -1,6 +1,6 @@
 import { screen, waitFor, act } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { MfaPolicy, type InstallationSettingsView, type InstanceConfigurationView } from '@/api/generated/api.types';
+import { LogFormatView, MfaPolicy, type InstallationSettingsView, type InstanceConfigurationView } from '@/api/generated/api.types';
 import { server } from '@/test/server';
 import { renderCitadel } from '@/test/render-citadel';
 import { InstanceSettingsForm } from './settings';
@@ -33,7 +33,7 @@ const configuration: InstanceConfigurationView = {
   requireDirectAgentHttps: false,
   agentImageOverride: '',
   logVerbosity: 'info',
-  logFormat: 'Text',
+  logFormat: LogFormatView.Text,
 };
 const initial = (): InstallationSettingsView => ({
   configuration: { ...configuration },
@@ -130,6 +130,16 @@ it('validates ranges and coupled values before saving', async () => {
   expect(screen.getByText('Enter a whole number from 8 to 128.')).toBeVisible();
   expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeDisabled();
   expect(patch).not.toHaveBeenCalled();
+  await user.clear(minimum);
+  await user.type(minimum, '15');
+  const timeout = screen.getByRole('spinbutton', { name: 'Default script timeout (seconds)' });
+  await user.clear(timeout);
+  await user.type(timeout, '1801');
+  await user.tab();
+  expect(screen.getByText('Default timeout must not exceed the maximum.')).toBeVisible();
+  expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeDisabled();
+  expect(patch).not.toHaveBeenCalled();
+
 });
 
 it('receives authoritative settings query updates without replacing running choices with saved choices', async () => {

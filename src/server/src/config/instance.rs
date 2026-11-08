@@ -1,209 +1,134 @@
 //! Resolves non-secret installation choices before constructing startup-bound consumers.
 use super::environment;
-use super::{Config, ConfigError};
+use super::{Config, ConfigError, LogFormat};
 use citadel_instance::{InstanceConfiguration, InstanceOverrides};
 use std::time::Duration;
 
-impl InstanceEnvironment {
-    pub(super) fn read(
-        get: impl Fn(&str) -> Option<String>,
-    ) -> Result<InstanceOverrides, ConfigError> {
-        Ok(InstanceOverrides {
-            password_minimum_length: get(environment::CITADEL_PASSWORDS_MINIMUM_LENGTH)
-                .map(|v| v.parse::<u32>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_PASSWORDS_MINIMUM_LENGTH,
-                    message: error.to_string(),
-                })?,
-            browser_session_lifetime_days: get(
-                environment::CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS,
-            )
-            .map(|v| v.parse::<u32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS,
-                message: error.to_string(),
-            })?,
-            service_account_default_token_lifetime_days: get(
-                environment::CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS,
-            )
-            .map(|v| v.parse::<i32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS,
-                message: error.to_string(),
-            })?,
-            service_account_maximum_token_lifetime_days: get(
-                environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS,
-            )
-            .map(|v| v.parse::<i32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS,
-                message: error.to_string(),
-            })?,
-            service_account_maximum_active_tokens: get(
-                environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT,
-            )
-            .map(|v| v.parse::<i32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT,
-                message: error.to_string(),
-            })?,
-            access_token_lifetime_minutes: get(
-                environment::CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES,
-            )
-            .map(|v| v.parse::<u32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES,
-                message: error.to_string(),
-            })?,
-            statistics_collection_interval_seconds: get(
-                environment::CITADEL_STATS_POLL_INTERVAL_SECONDS,
-            )
-            .map(|v| v.parse::<u32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_STATS_POLL_INTERVAL_SECONDS,
-                message: error.to_string(),
-            })?,
-            statistics_write_interval_seconds: get(
-                environment::CITADEL_STATS_FLUSH_INTERVAL_SECONDS,
-            )
-            .map(|v| v.parse::<u32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_STATS_FLUSH_INTERVAL_SECONDS,
-                message: error.to_string(),
-            })?,
-            scripts_enabled: get(environment::CITADEL_SCRIPTS_ENABLED)
-                .map(|v| v.parse::<bool>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_SCRIPTS_ENABLED,
-                    message: error.to_string(),
-                })?,
-            scripts_maximum_parallel_runs: get(environment::CITADEL_SCRIPTS_MAX_PARALLEL_RUNS)
-                .map(|v| v.parse::<usize>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_SCRIPTS_MAX_PARALLEL_RUNS,
-                    message: error.to_string(),
-                })?,
-            scripts_maximum_remote_runs: get(environment::CITADEL_SCRIPTS_MAX_REMOTE_RUNS)
-                .map(|v| v.parse::<usize>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_SCRIPTS_MAX_REMOTE_RUNS,
-                    message: error.to_string(),
-                })?,
-            scripts_default_timeout_seconds: get(
-                environment::CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS,
-            )
-            .map(|v| v.parse::<u32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS,
-                message: error.to_string(),
-            })?,
-            scripts_maximum_timeout_seconds: get(environment::CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS)
-                .map(|v| v.parse::<u32>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS,
-                    message: error.to_string(),
-                })?,
-            build_preparation_slots: get(environment::CITADEL_BUILDS_PREPARATION_SLOTS)
-                .map(|v| v.parse::<usize>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_BUILDS_PREPARATION_SLOTS,
-                    message: error.to_string(),
-                })?,
-            build_tracking_slots: get(environment::CITADEL_BUILDS_TRACKING_SLOTS)
-                .map(|v| v.parse::<usize>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_BUILDS_TRACKING_SLOTS,
-                    message: error.to_string(),
-                })?,
-            build_cleanup_enabled: get(environment::CITADEL_BUILDS_RUN_CLEANUP_ENABLED)
-                .map(|v| v.parse::<bool>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_BUILDS_RUN_CLEANUP_ENABLED,
-                    message: error.to_string(),
-                })?,
-            build_retention_days: get(environment::CITADEL_BUILDS_RUN_RETENTION_DAYS)
-                .map(|v| v.parse::<i32>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_BUILDS_RUN_RETENTION_DAYS,
-                    message: error.to_string(),
-                })?,
-            backups_enabled: get(environment::CITADEL_BACKUPS_ENABLED)
-                .map(|v| v.parse::<bool>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_BACKUPS_ENABLED,
-                    message: error.to_string(),
-                })?,
-            backup_tracking_slots: get(environment::CITADEL_BACKUPS_TRACKING_SLOTS)
-                .map(|v| v.parse::<usize>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_BACKUPS_TRACKING_SLOTS,
-                    message: error.to_string(),
-                })?,
-            backup_default_timeout_seconds: get(
-                environment::CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS,
-            )
-            .map(|v| v.parse::<u32>())
-            .transpose()
-            .map_err(|error| ConfigError::Invalid {
-                name: environment::CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS,
-                message: error.to_string(),
-            })?,
-            openapi_enabled: get(environment::CITADEL_HTTP_OPENAPI_ENABLED)
-                .map(|v| v.parse::<bool>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_HTTP_OPENAPI_ENABLED,
-                    message: error.to_string(),
-                })?,
-            require_direct_agent_https: get(environment::CITADEL_CORE_AGENT_ALLOW_INSECURE)
-                .map(|v| v.parse::<bool>())
-                .transpose()
-                .map_err(|error| ConfigError::Invalid {
-                    name: environment::CITADEL_CORE_AGENT_ALLOW_INSECURE,
-                    message: error.to_string(),
-                })?
-                .map(|value| !value),
-            agent_image_override: get(environment::CITADEL_EDGE_AGENT_IMAGE),
-            log_verbosity: get(environment::RUST_LOG),
-            log_format: get(environment::CITADEL_LOG_FORMAT).map(|v| {
-                match v.trim().to_ascii_lowercase().as_str() {
-                    "text" => "Text".into(),
-                    "json" => "Json".into(),
-                    _ => v,
-                }
-            }),
-        })
-    }
+pub(super) fn read_overrides(
+    get: impl Fn(&str) -> Option<String>,
+) -> Result<InstanceOverrides, ConfigError> {
+    Ok(InstanceOverrides {
+        password_minimum_length: optional::<u32>(
+            &get,
+            environment::CITADEL_PASSWORDS_MINIMUM_LENGTH,
+        )?,
+        browser_session_lifetime_days: optional::<u32>(
+            &get,
+            environment::CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS,
+        )?,
+        service_account_default_token_lifetime_days: optional::<i32>(
+            &get,
+            environment::CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS,
+        )?,
+        service_account_maximum_token_lifetime_days: optional::<i32>(
+            &get,
+            environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS,
+        )?,
+        service_account_maximum_active_tokens: optional::<i32>(
+            &get,
+            environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT,
+        )?,
+        access_token_lifetime_minutes: optional::<u32>(
+            &get,
+            environment::CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES,
+        )?,
+        statistics_collection_interval_seconds: optional::<u32>(
+            &get,
+            environment::CITADEL_STATS_POLL_INTERVAL_SECONDS,
+        )?,
+        statistics_write_interval_seconds: optional::<u32>(
+            &get,
+            environment::CITADEL_STATS_FLUSH_INTERVAL_SECONDS,
+        )?,
+        scripts_enabled: optional::<bool>(&get, environment::CITADEL_SCRIPTS_ENABLED)?,
+        scripts_maximum_parallel_runs: optional::<usize>(
+            &get,
+            environment::CITADEL_SCRIPTS_MAX_PARALLEL_RUNS,
+        )?,
+        scripts_maximum_remote_runs: optional::<usize>(
+            &get,
+            environment::CITADEL_SCRIPTS_MAX_REMOTE_RUNS,
+        )?,
+        scripts_default_timeout_seconds: optional::<u32>(
+            &get,
+            environment::CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS,
+        )?,
+        scripts_maximum_timeout_seconds: optional::<u32>(
+            &get,
+            environment::CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS,
+        )?,
+        build_preparation_slots: optional::<usize>(
+            &get,
+            environment::CITADEL_BUILDS_PREPARATION_SLOTS,
+        )?,
+        build_tracking_slots: optional::<usize>(&get, environment::CITADEL_BUILDS_TRACKING_SLOTS)?,
+        build_cleanup_enabled: optional::<bool>(
+            &get,
+            environment::CITADEL_BUILDS_RUN_CLEANUP_ENABLED,
+        )?,
+        build_retention_days: optional::<i32>(
+            &get,
+            environment::CITADEL_BUILDS_RUN_RETENTION_DAYS,
+        )?,
+        backups_enabled: optional::<bool>(&get, environment::CITADEL_BACKUPS_ENABLED)?,
+        backup_tracking_slots: optional::<usize>(
+            &get,
+            environment::CITADEL_BACKUPS_TRACKING_SLOTS,
+        )?,
+        backup_default_timeout_seconds: optional::<u32>(
+            &get,
+            environment::CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS,
+        )?,
+        openapi_enabled: optional::<bool>(&get, environment::CITADEL_HTTP_OPENAPI_ENABLED)?,
+        require_direct_agent_https: optional::<bool>(
+            &get,
+            environment::CITADEL_CORE_AGENT_ALLOW_INSECURE,
+        )?
+        .map(|value| !value),
+        agent_image_override: get(environment::CITADEL_EDGE_AGENT_IMAGE),
+        log_verbosity: get(environment::RUST_LOG),
+        log_format: optional::<super::LogFormat>(&get, environment::CITADEL_LOG_FORMAT)?
+            .map(Into::into),
+    })
 }
 
-struct InstanceEnvironment;
+fn optional<T: std::str::FromStr>(
+    get: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+) -> Result<Option<T>, ConfigError>
+where
+    T::Err: std::fmt::Display,
+{
+    get(name)
+        .map(|value| {
+            value.parse().map_err(|error: T::Err| ConfigError::Invalid {
+                name,
+                message: error.to_string(),
+            })
+        })
+        .transpose()
+}
 
 impl Config {
+    /// Freshness follows the resolved collection cadence, with the existing floor.
+    pub fn statistics_sample_max_age(&self) -> Duration {
+        self.probe_interval
+            .saturating_mul(3)
+            .max(Duration::from_secs(30))
+    }
+
+    /// Only the deployment-configured Core connector can prevent Core construction.
+    pub fn deployment_core_agent_requires_http(&self) -> bool {
+        self.agent.as_ref().is_some_and(|agent| {
+            url::Url::parse(&agent.address).is_ok_and(|url| url.scheme() == "http")
+        })
+    }
+
     pub fn resolve_instance_configuration(
         &mut self,
         saved: &InstanceConfiguration,
     ) -> Result<(), ConfigError> {
-        let overrides = InstanceEnvironment::read(|name| std::env::var(name).ok())?;
-        self.apply_instance_configuration(saved, overrides)
+        self.apply_instance_configuration(saved, self.instance_overrides.clone())
     }
 
     fn apply_instance_configuration(
@@ -216,6 +141,12 @@ impl Config {
             name: "Instance settings",
             message: error.to_string(),
         })?;
+        effective
+            .validate_deployment(self.deployment_core_agent_requires_http())
+            .map_err(|error| ConfigError::Invalid {
+                name: "Instance settings",
+                message: error.to_string(),
+            })?;
         let c = &effective;
         self.identity.password_policy = citadel_identity::PasswordPolicy::new(
             c.password_minimum_length as usize,
@@ -272,12 +203,29 @@ impl Config {
     }
 }
 
+impl From<citadel_instance::LogFormat> for LogFormat {
+    fn from(value: citadel_instance::LogFormat) -> Self {
+        match value {
+            citadel_instance::LogFormat::Text => Self::Text,
+            citadel_instance::LogFormat::Json => Self::Json,
+        }
+    }
+}
+impl From<LogFormat> for citadel_instance::LogFormat {
+    fn from(value: LogFormat) -> Self {
+        match value {
+            LogFormat::Text => Self::Text,
+            LogFormat::Json => Self::Json,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn explicit_presence_is_separate_from_defaults_for_every_promoted_field() {
-        let absent = InstanceEnvironment::read(|_| None).unwrap();
+        let absent = read_overrides(|_| None).unwrap();
         assert_eq!(absent, InstanceOverrides::default());
         let defaults = InstanceConfiguration::default();
         assert_eq!(defaults.effective(&absent), defaults);
@@ -382,8 +330,7 @@ mod tests {
         ];
         for (environment, field, value) in cases {
             let overrides =
-                InstanceEnvironment::read(|name| (name == environment).then(|| value.into()))
-                    .unwrap();
+                read_overrides(|name| (name == environment).then(|| value.into())).unwrap();
             let values = serde_json::to_value(&overrides).unwrap();
             assert!(
                 !values[field].is_null(),
@@ -402,9 +349,103 @@ mod tests {
             assert_eq!(effective[field], values[field]);
         }
     }
+    #[tokio::test(start_paused = true)]
+    async fn resolved_collection_cadence_reaches_consumers() {
+        // Isolate actual environment parsing in a child test process; no mutation
+        // of this test runner's process-global environment or running services.
+        if std::env::var("CITADEL_TEST_CADENCE_CHILD").as_deref() != Ok("1") {
+            let root =
+                std::env::temp_dir().join(format!("citadel-cadence-{}", uuid::Uuid::now_v7()));
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "config::instance::tests::resolved_collection_cadence_reaches_consumers",
+                    "--nocapture",
+                ])
+                .env_clear()
+                .env("CITADEL_TEST_CADENCE_CHILD", "1")
+                .env("CITADEL_DATA_ROOT", &root)
+                .env(
+                    "CITADEL_DATABASE_URL",
+                    "postgres://unused:unused@localhost/unused",
+                )
+                .env("CITADEL_TRANSPORT_MODE", "Disabled")
+                .env("CITADEL_PUBLIC_URL", "http://localhost:8000")
+                .output()
+                .unwrap();
+            let _ = std::fs::remove_dir_all(root);
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let mut config = Config::from_env_for_startup().unwrap();
+        let mut saved = InstanceConfiguration {
+            statistics_collection_interval_seconds: 17,
+            ..Default::default()
+        };
+        config.resolve_instance_configuration(&saved).unwrap();
+        let now = tokio::time::Instant::now();
+        let mut samples = crate::workers::schedule::interval("local-stats", config.probe_interval);
+        let first = samples.tick().await;
+        assert!(first >= now + Duration::from_secs(17));
+        assert!(first < now + Duration::from_secs(18));
+        assert_eq!(samples.tick().await - first, Duration::from_secs(17));
+        assert_eq!(config.statistics_sample_max_age(), Duration::from_secs(51));
+        saved.statistics_collection_interval_seconds = 2;
+        config.resolve_instance_configuration(&saved).unwrap();
+        assert_eq!(config.statistics_sample_max_age(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn lower_environment_maxima_are_validated_after_saved_defaults_are_merged() {
+        let overrides = read_overrides(|name| match name {
+            "CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS" => Some("60".into()),
+            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS" => Some("20".into()),
+            _ => None,
+        })
+        .unwrap();
+        assert!(
+            InstanceConfiguration::default()
+                .effective(&overrides)
+                .validate()
+                .is_err()
+        );
+        let saved = InstanceConfiguration {
+            scripts_default_timeout_seconds: 23,
+            service_account_default_token_lifetime_days: 10,
+            ..Default::default()
+        };
+        let effective = saved.effective(&overrides);
+        effective.validate().unwrap();
+        assert_eq!(effective.scripts_default_timeout_seconds, 23);
+        assert_eq!(effective.service_account_default_token_lifetime_days, 10);
+        assert!(
+            InstanceConfiguration {
+                scripts_default_timeout_seconds: 61,
+                ..saved.clone()
+            }
+            .effective(&overrides)
+            .validate()
+            .is_err()
+        );
+        assert!(
+            InstanceConfiguration {
+                service_account_default_token_lifetime_days: 21,
+                ..saved
+            }
+            .effective(&overrides)
+            .validate()
+            .is_err()
+        );
+    }
+
     #[test]
     fn deployment_module_filters_are_preserved() {
-        let overrides = InstanceEnvironment::read(|name| {
+        let overrides = read_overrides(|name| {
             (name == "RUST_LOG").then(|| "info,sqlx=warn,citadel_server=debug".into())
         })
         .unwrap();

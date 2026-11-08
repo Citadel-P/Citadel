@@ -10,7 +10,6 @@ use citadel_docker::client::DockerClient;
 use citadel_platforms::AuthorizedPlatformReader;
 use citadel_platforms::{ContainerInventoryPort, PlatformInfoPort, PlatformStatsPort};
 use citadel_primitives::ActorId;
-use citadel_server::config::environment;
 use citadel_server::config::{Config, DatabaseConfig};
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
@@ -251,18 +250,18 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Err(_) => Err("Recovery-key configuration is not valid UTF-8."),
                 }
             };
-            if std::env::var_os(environment::CITADEL_CORE_AGENT_PRIVATE_KEY_PATH).is_some()
-                || std::env::var_os(environment::CITADEL_CORE_AGENT_ADDRESS).is_some()
+            if std::env::var_os("CITADEL_CORE_AGENT_PRIVATE_KEY_PATH").is_some()
+                || std::env::var_os("CITADEL_CORE_AGENT_ADDRESS").is_some()
             {
                 return Err(
                     "Remote Core Agent keys are outside the updater installation profile.".into(),
                 );
             }
-            let root = std::env::var_os(environment::CITADEL_DATA_ROOT)
+            let root = std::env::var_os("CITADEL_DATA_ROOT")
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|| "/app/data".into());
-            let jwt = configured(environment::CITADEL_JWT_KEY)?;
-            let encryption = configured(environment::CITADEL_SECRETS_ENCRYPTION_KEY)?;
+            let jwt = configured("CITADEL_JWT_KEY")?;
+            let encryption = configured("CITADEL_SECRETS_ENCRYPTION_KEY")?;
             let keys = citadel_adapters::external::updates::check_recovery_keys(
                 &root,
                 jwt.as_ref().map(|value| value.as_str()),
@@ -461,15 +460,14 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let url = match url {
                 Some(url) => url,
                 None => {
-                    let port: u16 = std::env::var(environment::CITADEL_HTTP_LISTEN_PORT)
+                    let port: u16 = std::env::var("CITADEL_HTTP_LISTEN_PORT")
                         .unwrap_or_else(|_| "8000".into())
                         .parse()?;
-                    let direct = std::env::var(environment::CITADEL_TRANSPORT_MODE)
+                    let direct = std::env::var("CITADEL_TRANSPORT_MODE")
                         .is_ok_and(|mode| mode.trim().eq_ignore_ascii_case("Direct"));
                     if direct {
-                        let certificate = std::fs::read(std::env::var(
-                            environment::CITADEL_TLS_CERTIFICATE_PATH,
-                        )?)?;
+                        let certificate =
+                            std::fs::read(std::env::var("CITADEL_TLS_CERTIFICATE_PATH")?)?;
                         // Local liveness probe: trust only Core's configured certificate chain.
                         // Its public DNS name need not include the loopback IP.
                         client = client
@@ -505,7 +503,7 @@ async fn restore_system(
         &CitadelSystemRestoreOptions {
             bundle,
             database_url: database.database_url,
-            pg_restore: std::env::var_os(environment::CITADEL_PG_RESTORE_PATH)
+            pg_restore: std::env::var_os("CITADEL_PG_RESTORE_PATH")
                 .unwrap_or_else(|| "pg_restore".into()),
             maximum_output: 1024 * 1024,
             secret_encryption_key: Some(zeroize::Zeroizing::new(encryption_key.expose().to_vec())),

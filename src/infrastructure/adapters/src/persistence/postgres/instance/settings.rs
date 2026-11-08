@@ -67,6 +67,9 @@ SELECT EXISTS (
             ));
         }
     };
+    configuration
+        .effective(&patch.deployment_overrides)
+        .validate_deployment(patch.deployment_core_agent_requires_http)?;
     let next = InstallationSettings {
         configuration,
         initialized: true,

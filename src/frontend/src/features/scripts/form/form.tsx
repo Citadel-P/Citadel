@@ -412,7 +412,7 @@ export function ScriptForm({
               defineField({
                 key: 'timeoutSeconds',
                 label: 'Timeout',
-                required: true,
+                required: mode === 'edit',
                 description: 'Maximum run duration in seconds.',
                 validate: (value) => {
                   if (value == null && mode === 'add') return null; // Omitted API timeout uses the active server default.

@@ -80,7 +80,9 @@ Script execution defaults to enabled, with **4 concurrent local runs**, **16 rem
 runs tracked by Core**, a **300-second default timeout** and **1,800-second maximum**.
 Local capacity and remote tracking are distinct; Agent execution capacities still
 apply. The active default populates new Script forms and backend requests that
-omit a timeout. Changing defaults never rewrites saved Scripts. Restarting Core
+omit a timeout. If application information is unavailable, a new form can submit
+without a timeout and the server applies its active default. Refreshing that
+information preserves an explicitly edited timeout. Changing defaults never rewrites saved Scripts. Restarting Core
 uses the existing durable recovery and cancellation behavior.
 
 ## Builds
@@ -110,7 +112,11 @@ choices.
   `CITADEL_CORE_AGENT_ALLOW_INSECURE`. Enabling it rejects connections to existing
   HTTP Direct Agents after restart without changing saved addresses. Certificate
   verification remains enabled. It does not configure browser TLS or the inbound
-  Edge listener.
+  Edge listener. If the deployment sets `CITADEL_CORE_AGENT_ADDRESS` to an HTTP
+  address, configure that address for HTTPS before enabling this policy. Citadel
+  rejects the incompatible settings save atomically to prevent a startup failure.
+  An absent deployment address or an HTTPS address permits the change; ordinary
+  database-backed HTTP Direct Agents do not block Core startup.
 - **Agent image override:** empty means automatic version-matched resolution,
   including deployment image repository/tag options. A saved override reaches
   Direct/Edge/Swarm setup and existing helper-image consumers after restart.

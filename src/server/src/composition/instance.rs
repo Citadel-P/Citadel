@@ -16,6 +16,7 @@ pub(super) fn build(config: &Config, pool: &PgPool) -> Arc<InstanceService> {
             overrides: config.instance_overrides.clone(),
             update_checks_allowed: config.updates_enabled,
             minimum_mfa_policy: config.identity.mfa.policy,
+            deployment_core_agent_requires_http: config.deployment_core_agent_requires_http(),
         }),
     )
 }

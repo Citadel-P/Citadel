@@ -58,6 +58,10 @@ patch validation, deployment policy and change notifications;
 Adapters merge partial choices against the locked singleton, recheck the current
 enabled human administrator, validate effective coupled fields against explicit
 deployment overrides, and record old/new settings in the same transaction.
+Server supplies a trusted boolean indicating whether the deployment Core Agent
+connector requires HTTP. The same locked mutation rejects an effective HTTPS-only
+policy in that case, before any settings or success audit are written. No Agent
+inventory is scanned and no deployment address is exposed by the settings API.
 Notifications follow commit. The administrator Instance page reuses resource
 registration, FormShell, installation-settings mutations and existing realtime
 invalidation/reconnect handling. Configuration and Administration are sidebar
@@ -82,12 +86,17 @@ the active timeout defaults from authenticated application information.
 
 The executable `app` module coordinates admission, serving and shutdown. `startup`
 owns the migration/settings-resolution sequence; `config/instance` maps deployment
-overrides and resolved choices into Server runtime options. Core deployment variable
-names are defined once in `citadel-instance::environment`, re-exported through Server
-`config::environment`, and shared with Instance override validation. Environment access,
-parsing and defaults remain in Server; the names module contains no runtime logic.
-`logging` installs the
-subscriber from the selected verbosity and format, without depending on the Instance
+overrides and resolved choices into Server runtime options. Only promoted override names live in
+`citadel-instance::environment`; database, bootstrap, path and listener identifiers
+remain with their hosting/recovery consumers. Server parses explicit promoted
+overrides once, preserving absence, before admission; after migrations it merges
+saved choices and validates the effective values before constructing consumers.
+The initial admission configuration uses typed built-in defaults for these consumers,
+which are not started until resolution succeeds. There is no coupled-value clamping.
+Instance persists log format as a `Text`/`Json` enum, mapped explicitly at HTTP and
+logging boundaries; deployment verbosity remains a string to preserve module filters.
+Early failures return bounded phase context even before a subscriber exists.
+`logging` installs the subscriber from the selected verbosity and format, without depending on the Instance
 feature or persistence. Both CLI commands and maintenance mode use its environment
 entry point.
 

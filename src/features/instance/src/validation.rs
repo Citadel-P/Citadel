@@ -73,98 +73,123 @@ impl InstanceConfiguration {
                 .log_verbosity
                 .clone()
                 .unwrap_or_else(|| self.log_verbosity.clone()),
-            log_format: overrides
-                .log_format
-                .clone()
-                .unwrap_or_else(|| self.log_format.clone()),
+            log_format: overrides.log_format.unwrap_or(self.log_format),
         }
+    }
+
+    /// Check only the deployment Core connector. Database-backed Agent inventory
+    /// is deliberately outside this setting validation.
+    pub fn validate_deployment(&self, core_agent_requires_http: bool) -> Result<(), InstanceError> {
+        if self.require_direct_agent_https && core_agent_requires_http {
+            return Err(InstanceError::Validation(
+                "Configure CITADEL_CORE_AGENT_ADDRESS to use HTTPS before requiring HTTPS for Direct Agents.".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub fn validate(&self) -> Result<(), InstanceError> {
         if !(8..=128).contains(&self.password_minimum_length) {
-            return Err(InstanceError::Validation(
-                "passwordMinimumLength must be between 8 and 128.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "passwordMinimumLength must be between 8 and 128. ({})",
+                environment::CITADEL_PASSWORDS_MINIMUM_LENGTH
+            )));
         }
         if !(1..=365000).contains(&self.browser_session_lifetime_days) {
-            return Err(InstanceError::Validation(
-                "browserSessionLifetimeDays must be between 1 and 365000.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "browserSessionLifetimeDays must be between 1 and 365000. ({})",
+                environment::CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS
+            )));
         }
         if !(1..=365000).contains(&self.service_account_default_token_lifetime_days) {
-            return Err(InstanceError::Validation(
-                "serviceAccountDefaultTokenLifetimeDays must be between 1 and 365000.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "serviceAccountDefaultTokenLifetimeDays must be between 1 and 365000. ({})",
+                environment::CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS
+            )));
         }
         if !(1..=365000).contains(&self.service_account_maximum_token_lifetime_days) {
-            return Err(InstanceError::Validation(
-                "serviceAccountMaximumTokenLifetimeDays must be between 1 and 365000.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "serviceAccountMaximumTokenLifetimeDays must be between 1 and 365000. ({})",
+                environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS
+            )));
         }
         if !(1..=2147483647).contains(&self.service_account_maximum_active_tokens) {
-            return Err(InstanceError::Validation(
-                "serviceAccountMaximumActiveTokens must be between 1 and 2147483647.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "serviceAccountMaximumActiveTokens must be between 1 and 2147483647. ({})",
+                environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT
+            )));
         }
         if !(1..=2147483647).contains(&self.access_token_lifetime_minutes) {
-            return Err(InstanceError::Validation(
-                "accessTokenLifetimeMinutes must be between 1 and 2147483647.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "accessTokenLifetimeMinutes must be between 1 and 2147483647. ({})",
+                environment::CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES
+            )));
         }
         if !(1..=2147483647).contains(&self.statistics_collection_interval_seconds) {
-            return Err(InstanceError::Validation(
-                "statisticsCollectionIntervalSeconds must be between 1 and 2147483647.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "statisticsCollectionIntervalSeconds must be between 1 and 2147483647. ({})",
+                environment::CITADEL_STATS_POLL_INTERVAL_SECONDS
+            )));
         }
         if !(1..=2147483647).contains(&self.statistics_write_interval_seconds) {
-            return Err(InstanceError::Validation(
-                "statisticsWriteIntervalSeconds must be between 1 and 2147483647.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "statisticsWriteIntervalSeconds must be between 1 and 2147483647. ({})",
+                environment::CITADEL_STATS_FLUSH_INTERVAL_SECONDS
+            )));
         }
         if !(1..=64).contains(&self.scripts_maximum_parallel_runs) {
-            return Err(InstanceError::Validation(
-                "scriptsMaximumParallelRuns must be between 1 and 64.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "scriptsMaximumParallelRuns must be between 1 and 64. ({})",
+                environment::CITADEL_SCRIPTS_MAX_PARALLEL_RUNS
+            )));
         }
         if !(1..=256).contains(&self.scripts_maximum_remote_runs) {
-            return Err(InstanceError::Validation(
-                "scriptsMaximumRemoteRuns must be between 1 and 256.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "scriptsMaximumRemoteRuns must be between 1 and 256. ({})",
+                environment::CITADEL_SCRIPTS_MAX_REMOTE_RUNS
+            )));
         }
         if !(1..=86400).contains(&self.scripts_default_timeout_seconds) {
-            return Err(InstanceError::Validation(
-                "scriptsDefaultTimeoutSeconds must be between 1 and 86400.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "scriptsDefaultTimeoutSeconds must be between 1 and 86400. ({})",
+                environment::CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS
+            )));
         }
         if !(1..=86400).contains(&self.scripts_maximum_timeout_seconds) {
-            return Err(InstanceError::Validation(
-                "scriptsMaximumTimeoutSeconds must be between 1 and 86400.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "scriptsMaximumTimeoutSeconds must be between 1 and 86400. ({})",
+                environment::CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS
+            )));
         }
         if !(1..=16).contains(&self.build_preparation_slots) {
-            return Err(InstanceError::Validation(
-                "buildPreparationSlots must be between 1 and 16.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "buildPreparationSlots must be between 1 and 16. ({})",
+                environment::CITADEL_BUILDS_PREPARATION_SLOTS
+            )));
         }
         if !(1..=128).contains(&self.build_tracking_slots) {
-            return Err(InstanceError::Validation(
-                "buildTrackingSlots must be between 1 and 128.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "buildTrackingSlots must be between 1 and 128. ({})",
+                environment::CITADEL_BUILDS_TRACKING_SLOTS
+            )));
         }
         if !(1..=2147483647).contains(&self.build_retention_days) {
-            return Err(InstanceError::Validation(
-                "buildRetentionDays must be between 1 and 2147483647.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "buildRetentionDays must be between 1 and 2147483647. ({})",
+                environment::CITADEL_BUILDS_RUN_RETENTION_DAYS
+            )));
         }
         if !(1..=128).contains(&self.backup_tracking_slots) {
-            return Err(InstanceError::Validation(
-                "backupTrackingSlots must be between 1 and 128.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "backupTrackingSlots must be between 1 and 128. ({})",
+                environment::CITADEL_BACKUPS_TRACKING_SLOTS
+            )));
         }
         if !(5..=86400).contains(&self.backup_default_timeout_seconds) {
-            return Err(InstanceError::Validation(
-                "backupDefaultTimeoutSeconds must be between 5 and 86400.".into(),
-            ));
+            return Err(InstanceError::Validation(format!(
+                "backupDefaultTimeoutSeconds must be between 5 and 86400. ({})",
+                environment::CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS
+            )));
         }
         if self.service_account_default_token_lifetime_days
             > self.service_account_maximum_token_lifetime_days
@@ -176,11 +201,6 @@ impl InstanceConfiguration {
         if self.scripts_default_timeout_seconds > self.scripts_maximum_timeout_seconds {
             return Err(InstanceError::Validation(
                 "Default script timeout cannot exceed its maximum.".into(),
-            ));
-        }
-        if !matches!(self.log_format.as_str(), "Text" | "Json") {
-            return Err(InstanceError::Validation(
-                "Log format must be Text or Json.".into(),
             ));
         }
         // Deployment RUST_LOG can contain module filters. The HTTP patch only accepts levels.

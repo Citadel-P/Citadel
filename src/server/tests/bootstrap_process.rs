@@ -100,6 +100,17 @@ impl Fixture {
         realtime: bool,
         minimum: Option<usize>,
     ) -> Server {
+        self.start_with_overrides(bootstrap, partial, realtime, minimum, &[])
+    }
+
+    fn start_with_overrides(
+        &self,
+        bootstrap: bool,
+        partial: bool,
+        realtime: bool,
+        minimum: Option<usize>,
+        overrides: &[(&str, &str)],
+    ) -> Server {
         // Bind ephemeral test ports, never use the running development server.
         let http = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let edge = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -170,6 +181,7 @@ impl Fixture {
                     );
             }
         }
+        command.envs(overrides.iter().copied());
         drop((http, edge));
         let mut child = command.spawn().unwrap();
         let stdout = child.stdout.take().unwrap();

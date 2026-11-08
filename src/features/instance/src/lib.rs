@@ -11,7 +11,7 @@ mod validation;
 pub use commands::{PatchInstallationSettings, PatchInstanceConfiguration};
 pub use error::InstanceError;
 pub use model::{
-    InstallationPolicy, InstallationSettings, InstanceConfiguration, InstanceOverrides,
+    InstallationPolicy, InstallationSettings, InstanceConfiguration, InstanceOverrides, LogFormat,
 };
 pub use repository::InstanceRepository;
 pub use service::InstanceService;

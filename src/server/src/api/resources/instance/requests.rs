@@ -24,6 +24,7 @@ impl From<PatchInstallationSettingsRequest> for citadel_instance::PatchInstallat
         Self {
             configuration: value.configuration.map(Into::into),
             deployment_overrides: Default::default(),
+            deployment_core_agent_requires_http: false,
             update_checks_enabled: value.update_checks_enabled,
             update_check_interval_hours: value.update_check_interval_hours,
             mfa_policy: value.mfa_policy,

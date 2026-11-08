@@ -1,5 +1,4 @@
 //! Detached update executable ownership; never constructs normal Core services.
-use citadel_server::config::environment;
 use std::{io::Read, path::PathBuf, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -18,7 +17,7 @@ pub async fn restore_checkpoint(
     let options = CitadelSystemRestoreOptions {
         bundle: receipt.bundle,
         database_url: database.database_url,
-        pg_restore: std::env::var_os(environment::CITADEL_PG_RESTORE_PATH)
+        pg_restore: std::env::var_os("CITADEL_PG_RESTORE_PATH")
             .unwrap_or_else(|| "pg_restore".into()),
         maximum_output: 1024 * 1024,
         secret_encryption_key: Some(zeroize::Zeroizing::new(key.expose().to_vec())),

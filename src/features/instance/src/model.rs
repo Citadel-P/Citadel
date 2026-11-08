@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+/// Persisted log format; JSON names are part of the stored configuration contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum LogFormat {
+    #[default]
+    Text,
+    Json,
+}
+
 /// Non-secret, typed installation choices. Consumers apply these at Core startup.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
@@ -28,7 +36,7 @@ pub struct InstanceConfiguration {
     pub require_direct_agent_https: bool,
     pub agent_image_override: String,
     pub log_verbosity: String,
-    pub log_format: String,
+    pub log_format: LogFormat,
 }
 
 impl Default for InstanceConfiguration {
@@ -58,7 +66,7 @@ impl Default for InstanceConfiguration {
             require_direct_agent_https: false,
             agent_image_override: String::new(),
             log_verbosity: "info".into(),
-            log_format: "Text".into(),
+            log_format: LogFormat::Text,
         }
     }
 }
@@ -91,7 +99,7 @@ pub struct InstanceOverrides {
     pub require_direct_agent_https: Option<bool>,
     pub agent_image_override: Option<String>,
     pub log_verbosity: Option<String>,
-    pub log_format: Option<String>,
+    pub log_format: Option<LogFormat>,
 }
 
 /// Stored once for the installation, independently of personal preferences.
@@ -111,6 +119,8 @@ pub struct InstallationPolicy {
     pub overrides: InstanceOverrides,
     pub update_checks_allowed: bool,
     pub minimum_mfa_policy: citadel_identity::MfaPolicy,
+    /// Trusted hosting fact; never exposed as a setting or accepted from an HTTP client.
+    pub deployment_core_agent_requires_http: bool,
 }
 
 impl Default for InstallationPolicy {
@@ -120,6 +130,7 @@ impl Default for InstallationPolicy {
             overrides: Default::default(),
             update_checks_allowed: true,
             minimum_mfa_policy: citadel_identity::MfaPolicy::Optional,
+            deployment_core_agent_requires_http: false,
         }
     }
 }

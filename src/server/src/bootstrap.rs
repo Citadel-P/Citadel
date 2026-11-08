@@ -1,6 +1,5 @@
 //! Startup-only secret-file bootstrap. Reuses the interactive setup transaction;
 //! it neither issues a browser session nor reopens a completed installation.
-use crate::config::environment;
 use std::path::Path;
 
 use citadel_identity::{IdentityError, IdentityService};
@@ -16,9 +15,9 @@ pub async fn initialize_from_environment(identity: &IdentityService) -> Result<(
         return Ok(());
     }
     let settings = [
-        environment::CITADEL_BOOTSTRAP_ADMIN_NAME,
-        environment::CITADEL_BOOTSTRAP_ADMIN_EMAIL,
-        environment::CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE,
+        "CITADEL_BOOTSTRAP_ADMIN_NAME",
+        "CITADEL_BOOTSTRAP_ADMIN_EMAIL",
+        "CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE",
     ];
     let values = settings.map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()));
     if values.iter().all(Option::is_none) {

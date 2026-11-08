@@ -605,3 +605,82 @@ fn non_utf8_paths_survive_unrelated_cors_enumeration() {
     );
     assert!(!root.exists());
 }
+
+#[test]
+fn deployment_http_agent_cannot_construct_https_only_connector() {
+    use citadel_adapters::connectors::agent::client::{AgentClient, AgentRequestSigner};
+    let saved = citadel_instance::InstanceConfiguration {
+        require_direct_agent_https: true,
+        ..Default::default()
+    };
+    saved.validate().unwrap();
+    let client = AgentClient::lazy(
+        "http://deployment-agent.test:9000",
+        AgentRequestSigner::from_bytes(&[17; 32]),
+        std::time::Duration::from_secs(30),
+        !saved.require_direct_agent_https,
+    );
+    assert!(
+        client.is_err(),
+        "HTTP deployment agent must never bypass HTTPS enforcement"
+    );
+}
+
+#[test]
+fn https_policy_rejects_only_an_http_deployment_core_connector() {
+    let root = std::env::temp_dir().join(format!("citadel-https-config-{}", uuid::Uuid::now_v7()));
+    for (address, accepted) in [
+        ("http://agent.test:9000", false),
+        ("https://agent.test:9000", true),
+    ] {
+        let key = root.join("signing-key");
+        let output = run(
+            &root,
+            &[
+                ("CITADEL_CORE_AGENT_ADDRESS", address),
+                ("CITADEL_CORE_AGENT_TIMEOUT_SECONDS", "30"),
+                ("CITADEL_CORE_AGENT_PRIVATE_KEY_PATH", key.to_str().unwrap()),
+                ("CITADEL_CORE_AGENT_ALLOW_INSECURE", "false"),
+            ],
+            &["print-effective-config"],
+        );
+        assert_eq!(
+            output.status.success(),
+            accepted,
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if !accepted {
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("CITADEL_CORE_AGENT_ADDRESS to use HTTPS")
+            );
+        }
+    }
+    assert!(
+        run(
+            &root,
+            &[("CITADEL_CORE_AGENT_ALLOW_INSECURE", "false")],
+            &["print-effective-config"]
+        )
+        .status
+        .success()
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn early_admission_failure_identifies_the_phase_without_configuration_secrets() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    let root = std::env::temp_dir().join(format!("citadel-admission-{}", uuid::Uuid::now_v7()));
+    let database = format!("postgres://user:private-test-password@127.0.0.1:{port}/unused");
+    let result = run(&root, &[("CITADEL_DATABASE_URL", &database)], &["serve"]);
+    assert!(!result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("background-job admission"), "{stderr}");
+    assert!(!stderr.contains("private-test-password"));
+    assert!(!stderr.contains(&database));
+    std::fs::remove_dir_all(root).unwrap();
+}

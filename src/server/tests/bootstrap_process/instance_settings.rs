@@ -83,7 +83,16 @@ async fn saved_instance_choices_apply_after_restart_to_real_consumers() {
             .lines()
             .any(|line| serde_json::from_str::<Value>(line).is_ok())
     );
-    let mut restarted = fixture.start_with_instance_environment(false, false, false, None);
+    let mut restarted = fixture.start_with_overrides(
+        false,
+        false,
+        false,
+        None,
+        &[
+            ("CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS", "60"),
+            ("CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS", "20"),
+        ],
+    );
     assert_eq!(
         fixture.ready(&mut restarted).await["passwordMinimumLength"],
         40
@@ -169,6 +178,29 @@ async fn saved_instance_choices_apply_after_restart_to_real_consumers() {
         400,
         "new passwords obey the active saved minimum"
     );
+    let created = fixture.client.post(format!("{}/api/v1/scripts", restarted.url))
+        .bearer_auth(access).json(&json!({"name":"active-timeout-default","code":"console.log('ok');","enabled":false,"scheduleEnabled":false,"alertOnFailure":false}))
+        .send().await.unwrap();
+    assert!(
+        created.status().is_success(),
+        "{}",
+        created.text().await.unwrap()
+    );
+    let created: Value = created.json().await.unwrap();
+    assert_eq!(created["timeoutSeconds"], 23);
+    let stored_timeout: i32 = sqlx::query_scalar("SELECT timeoutseconds FROM scripts WHERE id=$1")
+        .bind(Uuid::parse_str(created["id"].as_str().unwrap()).unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        stored_timeout, 23,
+        "omission uses the active saved default, even below 300 seconds"
+    );
+    let invalid = fixture.client.post(format!("{}/api/v1/scripts", restarted.url))
+        .bearer_auth(access).json(&json!({"name":"invalid-timeout","code":"console.log('ok');","enabled":false,"scheduleEnabled":false,"alertOnFailure":false,"timeoutSeconds":61}))
+        .send().await.unwrap();
+    assert_eq!(invalid.status(), 400);
     let logs = restarted.stop().await;
     let effective = logs
         .lines()
@@ -217,6 +249,29 @@ async fn saved_instance_choices_apply_after_restart_to_real_consumers() {
         effective["execution"]["backups"]["defaultTimeoutSeconds"],
         29
     );
+    let mut invalid = fixture.start_with_overrides(
+        false,
+        false,
+        false,
+        None,
+        &[("CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS", "1")],
+    );
+    let status = tokio::time::timeout(Duration::from_secs(30), invalid.child.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!status.success());
+    let errors = invalid.errors.await.unwrap();
+    let _ = invalid.output.await.unwrap();
+    assert!(
+        errors.contains("effective Instance configuration validation"),
+        "{errors}"
+    );
+    assert!(
+        errors.contains("Default script timeout cannot exceed"),
+        "{errors}"
+    );
+    assert!(!errors.contains("bootstrap-test-jwt-key"));
     pool.close().await;
     fixture.close().await;
 }

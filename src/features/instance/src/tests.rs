@@ -81,7 +81,6 @@ fn deployment_override_conflicts_and_invalid_inputs_do_not_mutate_saved_choices(
         r#"{"buildTrackingSlots":129}"#,
         r#"{"backupTrackingSlots":129}"#,
         r#"{"backupDefaultTimeoutSeconds":4}"#,
-        r#"{"logFormat":"xml"}"#,
         r#"{"logVerbosity":"sqlx=trace"}"#,
         r#"{"agentImageOverride":"invalid image"}"#,
     ] {
@@ -122,4 +121,35 @@ fn every_promoted_field_round_trips_and_can_be_partially_patched() {
             next
         );
     }
+}
+
+#[test]
+fn log_format_keeps_stored_json_values_and_rejects_unknown_formats() {
+    for (json, expected) in [("\"Text\"", LogFormat::Text), ("\"Json\"", LogFormat::Json)] {
+        assert_eq!(serde_json::from_str::<LogFormat>(json).unwrap(), expected);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), json);
+    }
+    assert_eq!(
+        serde_json::from_str::<InstanceConfiguration>("{}")
+            .unwrap()
+            .log_format,
+        LogFormat::Text
+    );
+    assert!(serde_json::from_str::<PatchInstanceConfiguration>(r#"{"logFormat":"xml"}"#).is_err());
+}
+
+#[test]
+fn https_policy_checks_the_effective_configuration_and_only_the_deployment_connector() {
+    let saved = InstanceConfiguration::default();
+    let patch: PatchInstanceConfiguration =
+        serde_json::from_str(r#"{"requireDirectAgentHttps":true}"#).unwrap();
+    let next = patch.apply(&saved, &InstanceOverrides::default()).unwrap();
+    assert!(next.validate_deployment(true).is_err());
+    assert!(next.validate_deployment(false).is_ok());
+    assert!(saved.validate_deployment(true).is_ok());
+    let overrides = InstanceOverrides {
+        require_direct_agent_https: Some(false),
+        ..Default::default()
+    };
+    assert!(next.effective(&overrides).validate_deployment(true).is_ok());
 }

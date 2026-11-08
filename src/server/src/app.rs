@@ -14,10 +14,13 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    let mut job_lease = startup::acquire_job_lease(&config).await?;
+    let mut job_lease = startup::acquire_job_lease(&config)
+        .await
+        .map_err(|error| startup::phase_error("background-job admission", error))?;
     let mut recovered_update = false;
-    if let Err(error) =
-        startup::while_owned(&mut job_lease, startup::check_updates(&config)).await?
+    if let Err(error) = startup::while_owned(&mut job_lease, startup::check_updates(&config))
+        .await
+        .map_err(|error| startup::phase_error("update admission lease", error))?
     {
         #[cfg(not(target_os = "linux"))]
         let (recovered, acceptance_failure) = (false, None::<String>);
@@ -30,9 +33,10 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
             );
             tokio::pin!(acceptance);
             let result = tokio::select! {
-                result = &mut acceptance => result?,
+                result = &mut acceptance => result.map_err(|error| startup::phase_error("update recovery lease", error))?,
                 () = shutdown_signal(cancellation.clone()) => {
-                    acceptance.await??;
+                    acceptance.await.map_err(|error| startup::phase_error("update recovery lease", error))?
+                        .map_err(|error| startup::phase_error("update recovery cancellation", error))?;
                     return Ok(());
                 }
             };
@@ -49,7 +53,10 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
             tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
             return serve_maintenance(&config, job_lease).await;
         }
-        startup::while_owned(&mut job_lease, startup::check_updates(&config)).await??;
+        startup::while_owned(&mut job_lease, startup::check_updates(&config))
+            .await
+            .map_err(|error| startup::phase_error("recovered update admission lease", error))?
+            .map_err(|error| startup::phase_error("recovered update admission", error))?;
         recovered_update = true;
     }
     startup::configure(&mut config, &mut job_lease).await?;
