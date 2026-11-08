@@ -1553,6 +1553,7 @@ export interface ApplicationInfoView {
   informationalVersion: string;
   name: string;
   realtimeTransport: string;
+  scriptExecution?: ScriptExecutionDefaults | null;
   version: string;
 }
 
@@ -4069,12 +4070,155 @@ export interface InstallLicenseRequest {
 }
 
 export interface InstallationSettingsView {
+  configuration: InstanceConfigurationView;
+  deploymentOverrides: InstanceOverridesView;
+  effectiveConfiguration: InstanceConfigurationView;
   mfaPolicy: MfaPolicy;
   minimumMfaPolicy: MfaPolicy;
+  restartRequired: boolean;
+  runningConfiguration: InstanceConfigurationView;
   /** @format int32 */
   updateCheckIntervalHours: number;
   updateChecksAllowed: boolean;
   updateChecksEnabled: boolean;
+}
+
+export interface InstanceConfigurationView {
+  /**
+   * @format int32
+   * @min 0
+   */
+  accessTokenLifetimeMinutes: number;
+  agentImageOverride: string;
+  /**
+   * @format int32
+   * @min 0
+   */
+  backupDefaultTimeoutSeconds: number;
+  /** @min 0 */
+  backupTrackingSlots: number;
+  backupsEnabled: boolean;
+  /**
+   * @format int32
+   * @min 0
+   */
+  browserSessionLifetimeDays: number;
+  buildCleanupEnabled: boolean;
+  /** @min 0 */
+  buildPreparationSlots: number;
+  /** @format int32 */
+  buildRetentionDays: number;
+  /** @min 0 */
+  buildTrackingSlots: number;
+  logFormat: string;
+  logVerbosity: string;
+  openapiEnabled: boolean;
+  /**
+   * @format int32
+   * @min 0
+   */
+  passwordMinimumLength: number;
+  requireDirectAgentHttps: boolean;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsDefaultTimeoutSeconds: number;
+  scriptsEnabled: boolean;
+  /** @min 0 */
+  scriptsMaximumParallelRuns: number;
+  /** @min 0 */
+  scriptsMaximumRemoteRuns: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsMaximumTimeoutSeconds: number;
+  /** @format int32 */
+  serviceAccountDefaultTokenLifetimeDays: number;
+  /** @format int32 */
+  serviceAccountMaximumActiveTokens: number;
+  /** @format int32 */
+  serviceAccountMaximumTokenLifetimeDays: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsCollectionIntervalSeconds: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsWriteIntervalSeconds: number;
+}
+
+export interface InstanceOverridesView {
+  /**
+   * @format int32
+   * @min 0
+   */
+  accessTokenLifetimeMinutes?: number | null;
+  agentImageOverride?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  backupDefaultTimeoutSeconds?: number | null;
+  /** @min 0 */
+  backupTrackingSlots?: number | null;
+  backupsEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  browserSessionLifetimeDays?: number | null;
+  buildCleanupEnabled?: boolean | null;
+  /** @min 0 */
+  buildPreparationSlots?: number | null;
+  /** @format int32 */
+  buildRetentionDays?: number | null;
+  /** @min 0 */
+  buildTrackingSlots?: number | null;
+  logFormat?: string | null;
+  logVerbosity?: string | null;
+  openapiEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  passwordMinimumLength?: number | null;
+  requireDirectAgentHttps?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsDefaultTimeoutSeconds?: number | null;
+  scriptsEnabled?: boolean | null;
+  /** @min 0 */
+  scriptsMaximumParallelRuns?: number | null;
+  /** @min 0 */
+  scriptsMaximumRemoteRuns?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsMaximumTimeoutSeconds?: number | null;
+  /** @format int32 */
+  serviceAccountDefaultTokenLifetimeDays?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumActiveTokens?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumTokenLifetimeDays?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsCollectionIntervalSeconds?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsWriteIntervalSeconds?: number | null;
 }
 
 export interface InternalSecretInput {
@@ -4720,6 +4864,7 @@ export interface PatchDeploymentMetadataInput {
 }
 
 export interface PatchInstallationSettingsRequest {
+  configuration?: PatchInstanceConfigurationRequest | null;
   mfaPolicy?: MfaPolicy | null;
   /**
    * Automatic release-check interval. Supported values: 6, 12, 24 hours.
@@ -4727,6 +4872,75 @@ export interface PatchInstallationSettingsRequest {
    */
   updateCheckIntervalHours?: number | null;
   updateChecksEnabled?: boolean | null;
+}
+
+export interface PatchInstanceConfigurationRequest {
+  /**
+   * @format int32
+   * @min 0
+   */
+  accessTokenLifetimeMinutes?: number | null;
+  agentImageOverride?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  backupDefaultTimeoutSeconds?: number | null;
+  /** @min 0 */
+  backupTrackingSlots?: number | null;
+  backupsEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  browserSessionLifetimeDays?: number | null;
+  buildCleanupEnabled?: boolean | null;
+  /** @min 0 */
+  buildPreparationSlots?: number | null;
+  /** @format int32 */
+  buildRetentionDays?: number | null;
+  /** @min 0 */
+  buildTrackingSlots?: number | null;
+  logFormat?: string | null;
+  logVerbosity?: string | null;
+  openapiEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  passwordMinimumLength?: number | null;
+  requireDirectAgentHttps?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsDefaultTimeoutSeconds?: number | null;
+  scriptsEnabled?: boolean | null;
+  /** @min 0 */
+  scriptsMaximumParallelRuns?: number | null;
+  /** @min 0 */
+  scriptsMaximumRemoteRuns?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsMaximumTimeoutSeconds?: number | null;
+  /** @format int32 */
+  serviceAccountDefaultTokenLifetimeDays?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumActiveTokens?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumTokenLifetimeDays?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsCollectionIntervalSeconds?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsWriteIntervalSeconds?: number | null;
 }
 
 export interface PatchOidcProviderMetadataRequest {
@@ -5141,7 +5355,9 @@ export type PublicActivityEventInfo =
     }
   | {
       $type: "InstallationSettingsUpdated";
+      configuration?: any;
       mfaPolicy: string;
+      previousConfiguration?: any;
       previousMfaPolicy: string;
       previousUpdateChecksEnabled: boolean;
       updateChecksEnabled: boolean;
@@ -6548,6 +6764,13 @@ export interface ScriptActivitySnapshot {
 export interface ScriptDuplicateDraftView {
   draft: ScriptInput;
   sourceName: string;
+}
+
+export interface ScriptExecutionDefaults {
+  /** @format int32 */
+  defaultTimeoutSeconds: number;
+  /** @format int32 */
+  maximumTimeoutSeconds: number;
 }
 
 export type ScriptExecutorSchema =

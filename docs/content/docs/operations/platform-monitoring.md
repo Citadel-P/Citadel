@@ -111,7 +111,7 @@ readings do not replace a complete saved total.
    then review the alert's [resolution state](/resources/alert-rules#respond-to-an-alert).
 
 Assign notification channels to the built-in capacity rules under
-**Settings → Alert Rules** to receive future alerts. Custom thresholds and
+**Configuration → Alert Rules** to receive future alerts. Custom thresholds and
 required-match counts require **Advanced Alerting**.
 
 ## Container memory

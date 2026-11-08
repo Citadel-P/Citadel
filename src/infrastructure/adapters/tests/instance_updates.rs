@@ -4,14 +4,13 @@ use citadel_activities::{
 };
 use citadel_adapters::persistence::postgres::updates::check_startup_updates;
 use citadel_adapters::persistence::postgres::{
-    activities::store::PostgresActivityStore,
-    identity::authentication::store::PostgresIdentityStore, updates::PostgresUpdateRepository,
+    activities::store::PostgresActivityStore, updates::PostgresUpdateRepository,
 };
 use citadel_database::MigrationRunner;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityStore, MfaPolicy,
-    PatchInstallationSettings, SYSTEM_ACTOR_ID,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, MfaPolicy, SYSTEM_ACTOR_ID,
 };
+use citadel_instance::{InstanceRepository, PatchInstallationSettings};
 use citadel_primitives::{ActorId, PatchField};
 use citadel_updates::*;
 use sqlx::postgres::PgPoolOptions;
@@ -352,7 +351,10 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         .is_err()
     );
 
-    let identity = PostgresIdentityStore::new(pool.clone());
+    let instance_settings =
+        citadel_adapters::persistence::postgres::instance::PostgresInstanceRepository::new(
+            pool.clone(),
+        );
     check_startup_updates(&pool, Some(instance)).await.unwrap();
     let principal = ActorPrincipal {
         subject_id: actor.subject_id,
@@ -366,19 +368,20 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         update_checks_enabled: PatchField::Value(false),
         update_check_interval_hours: PatchField::Value(12),
         mfa_policy: PatchField::Value(MfaPolicy::RequiredForAdministrators),
+        ..Default::default()
     };
-    identity
+    instance_settings
         .patch_installation_settings(&principal, &patch, Utc::now())
         .await
         .unwrap();
-    identity
+    instance_settings
         .patch_installation_settings(&principal, &patch, Utc::now())
         .await
         .unwrap();
     assert_eq!(count(&pool, "UpdateChecksChanged").await, 1);
     assert_eq!(count(&pool, "InstallationSettingsUpdated").await, 1);
     assert_eq!(
-        identity
+        instance_settings
             .installation_settings()
             .await
             .unwrap()
@@ -390,7 +393,7 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         ..Default::default()
     };
     for _ in 0..2 {
-        identity
+        instance_settings
             .patch_installation_settings(&principal, &frequency, Utc::now())
             .await
             .unwrap();
@@ -405,7 +408,7 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         1,
         "frequency must not create MFA history"
     );
-    let settings = identity.installation_settings().await.unwrap();
+    let settings = instance_settings.installation_settings().await.unwrap();
     assert_eq!(settings.update_check_interval_hours, 24);
     assert!(
         !settings.update_checks_enabled,

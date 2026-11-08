@@ -2,6 +2,7 @@
 use super::super::{JournalDirectory, PreparedUpdateCheckpoint, recovery_keys::read_key};
 use super::evidence::conflict;
 use base64::{Engine, engine::general_purpose::STANDARD};
+use citadel_instance::environment;
 use citadel_updates::UpdateError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -49,7 +50,7 @@ impl TargetRecoveryKeys {
             || external.iter().any(|name| {
                 !matches!(
                     name.as_str(),
-                    "CITADEL_JWT_KEY" | "CITADEL_SECRETS_ENCRYPTION_KEY"
+                    environment::CITADEL_JWT_KEY | environment::CITADEL_SECRETS_ENCRYPTION_KEY
                 )
             })
             || external
@@ -78,8 +79,11 @@ impl TargetRecoveryKeys {
             Ok(Some(expected.clone()))
         };
         Ok(Self {
-            jwt: key("jwtsecret", "CITADEL_JWT_KEY")?,
-            encryption: key("secret-encryption-key", "CITADEL_SECRETS_ENCRYPTION_KEY")?,
+            jwt: key("jwtsecret", environment::CITADEL_JWT_KEY)?,
+            encryption: key(
+                "secret-encryption-key",
+                environment::CITADEL_SECRETS_ENCRYPTION_KEY,
+            )?,
             agent_signing: key("agent/signing-key", "")?.ok_or_else(conflict)?,
         })
     }

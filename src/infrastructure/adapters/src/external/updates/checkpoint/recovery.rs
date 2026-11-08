@@ -10,6 +10,7 @@ use crate::{
         updates::{finish_checkpoint_restore, require_empty_restore_database},
     },
 };
+use citadel_instance::environment;
 use citadel_updates::{UpdateError, UpdateOperation, UpdatePhase};
 use std::path::Path;
 use tokio_util::sync::CancellationToken;
@@ -56,7 +57,7 @@ pub async fn restore_update_checkpoint(
     if !receipt
         .required_external_configuration
         .iter()
-        .any(|name| name == "CITADEL_SECRETS_ENCRYPTION_KEY")
+        .any(|name| name == environment::CITADEL_SECRETS_ENCRYPTION_KEY)
     {
         use base64::Engine;
         let encoded = super::super::recovery_keys::read_key(

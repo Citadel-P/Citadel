@@ -4,6 +4,7 @@ use super::recovery::{DatabaseManifest, RecoveryManifest};
 use crate::persistence::postgres::backups::instance_identity::{existing_instance_id, instance_id};
 use citadel_backups::{BackupError, CitadelSystemBackupBuilder};
 use citadel_execution::{OutputLimitPolicy, ProcessLimits, ProcessRequest};
+use citadel_instance::environment;
 use citadel_processes::run;
 use futures_util::future::BoxFuture;
 use sqlx::PgPool;
@@ -192,7 +193,10 @@ impl PgDumpSystemBackupBuilder {
             Some(assets) => copy_recovery_assets(assets, directory, &mut checksums).await?,
             None => (
                 vec![],
-                vec!["CITADEL_JWT_KEY", "CITADEL_SECRETS_ENCRYPTION_KEY"],
+                vec![
+                    environment::CITADEL_JWT_KEY,
+                    environment::CITADEL_SECRETS_ENCRYPTION_KEY,
+                ],
             ),
         };
         let manifest = RecoveryManifest {
@@ -233,10 +237,14 @@ pub(super) async fn copy_recovery_assets(
     let mut files = Vec::new();
     let mut external = Vec::new();
     for (name, setting, configured) in [
-        ("jwtsecret", "CITADEL_JWT_KEY", assets.jwt_key_is_external),
+        (
+            "jwtsecret",
+            environment::CITADEL_JWT_KEY,
+            assets.jwt_key_is_external,
+        ),
         (
             "secret-encryption-key",
-            "CITADEL_SECRETS_ENCRYPTION_KEY",
+            environment::CITADEL_SECRETS_ENCRYPTION_KEY,
             assets.encryption_key_is_external,
         ),
         ("agent/signing-key", "", false),

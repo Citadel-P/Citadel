@@ -13108,9 +13108,11 @@
                 ],
                 "type": "string"
               },
+              "configuration": {},
               "mfaPolicy": {
                 "type": "string"
               },
+              "previousConfiguration": {},
               "previousMfaPolicy": {
                 "type": "string"
               },

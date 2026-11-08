@@ -42,6 +42,7 @@ citadel-deployments = { path = "../features/deployments" }
 citadel-swarm-services = { path = "../features/swarm-services" }
 citadel-stacks = { path = "../features/stacks" }
 citadel-identity = { path = "../features/identity" }
+citadel-instance = { path = "../features/instance" }
 citadel-platforms = { path = "../features/platforms" }
 clap.workspace = true
 futures-util.workspace = true

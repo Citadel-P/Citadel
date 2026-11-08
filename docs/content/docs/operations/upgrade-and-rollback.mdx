@@ -71,7 +71,7 @@ image with the existing data directory.
 ## Release notifications
 
 [Update checks](/getting-started/configuration#allow-update-checks) are enabled
-by default, every six hours. In **Settings → Updates → Config**, administrators
+by default, every six hours. In **Administration → Updates → Config**, administrators
 can choose **Every 6 hours**, **Every 12 hours**, or **Daily**, then select **Save**.
 The saved frequency applies without restarting Core. The next check is based on
 the last completed attempt, including manual checks and failed release requests;
@@ -105,7 +105,7 @@ Custom Compose service names do not make a bundled database external; registrati
 still requires the supported installation layout. Unsupported PostgreSQL versions
 report an eligibility reason rather than a connection failure.
 
-Use **Settings → Updates → Config → Available updates**. Agent availability is
+Use **Administration → Updates → Config → Available updates**. Agent availability is
 independent of Core: a current Core can still have Agents that need updating.
 **Check now** also verifies the official Agent image matching the running Core
 version. It does not install anything.
@@ -332,7 +332,7 @@ with a committed successful update can finish verified cleanup after a restart.
 4. Check important application endpoints and inspect recent **Activities** and
    **Alerts** for new failures. Review scheduled jobs as they resume.
 
-Update Agents to the matching current build from **Settings → Updates** when
+Update Agents to the matching current build from **Administration → Updates** when
 eligible, or use the generated installation commands for manual replacement. Check each connection after replacement; keep Agent image references
 with the corresponding Core version. Retain the pre-upgrade backup until the
 installation and its normal operations have been verified.

@@ -81,7 +81,7 @@ If you cannot access your authenticator app, select the recovery-code option on 
 
 MFA is optional by default and can be enabled later from **Profile → Security**.
 An administrator can choose an installation-wide policy during first-run setup or
-in **Profile → Instance settings**: Optional, Required for administrators, or
+in **Administration → Instance**: Optional, Required for administrators, or
 Required for everyone. Changes apply to subsequent local-password sign-ins;
 existing browser sessions are not revoked by changing the policy.
 

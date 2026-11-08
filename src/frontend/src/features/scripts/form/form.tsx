@@ -60,7 +60,7 @@ const result = await citadel.deployments.listDeployments();
 console.log("Deployments:", result?.deployments?.length ?? 0);
 `;
 
-const emptyScript = (): ScriptFormValue => ({
+const emptyScript = (timeoutSeconds?: number): ScriptFormValue => ({
   name: '',
   description: '',
   code: DEFAULT_CODE,
@@ -70,7 +70,7 @@ const emptyScript = (): ScriptFormValue => ({
   scheduleCron: '',
   scheduleTimeZone: 'UTC',
   webhook: { enabled: false },
-  timeoutSeconds: 300,
+  timeoutSeconds,
   alertOnFailure: false,
   runAsActorId: '',
   executor: { kind: 'Core' },
@@ -126,7 +126,12 @@ export function ScriptForm({
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
 
-  const original = useMemo(() => toFormValue(resource), [resource]);
+  const execution = useRead('getApplicationInfo');
+  const defaults = execution.data?.data.scriptExecution;
+  const original = useMemo(
+    () => toFormValue(resource, defaults?.defaultTimeoutSeconds),
+    [resource, defaults?.defaultTimeoutSeconds],
+  );
   const current = useMemo(() => ({ ...original, ...update }), [original, update]);
   const currentScheduleEnabled = update.scheduleEnabled ?? original.scheduleEnabled;
   const testDisabledReason =
@@ -410,15 +415,18 @@ export function ScriptForm({
                 required: true,
                 description: 'Maximum run duration in seconds.',
                 validate: (value) => {
+                  if (value == null && mode === 'add') return null; // Omitted API timeout uses the active server default.
                   const n = Number(value);
-                  if (!Number.isFinite(n) || n < 1) return 'Timeout must be at least 1 second';
+                  if (!Number.isInteger(n) || n < 1) return 'Timeout must be at least 1 second';
+                  if (defaults && n > defaults.maximumTimeoutSeconds)
+                    return `Timeout must not exceed ${defaults.maximumTimeoutSeconds} seconds`;
                   return null;
                 },
                 render: (value, set) => (
                   <FieldInput
                     type="number"
-                    value={value ?? 300}
-                    placeholder="300"
+                    value={value ?? defaults?.defaultTimeoutSeconds}
+                    placeholder={defaults ? String(defaults.defaultTimeoutSeconds) : 'Server default'}
                     disabled={disabled}
                     onChange={(timeoutSeconds) => set({ timeoutSeconds })}
                   />
@@ -525,6 +533,7 @@ export function ScriptForm({
     [
       automatedOperationsEnabled,
       currentScheduleEnabled,
+      defaults,
       duplicateFrom,
       disabled,
       handleTestDraft,
@@ -581,8 +590,8 @@ function TestDraftButton({ disabledReason, onClick }: { disabledReason?: string;
   );
 }
 
-function toFormValue(script?: AuthorizedScript): ScriptFormValue {
-  if (!script) return emptyScript();
+function toFormValue(script?: AuthorizedScript, defaultTimeoutSeconds?: number): ScriptFormValue {
+  if (!script) return emptyScript(defaultTimeoutSeconds);
 
   return {
     id: script.id,
@@ -616,7 +625,7 @@ function toCreateInput(value: ScriptFormValue): ScriptInput {
     scheduleTimeZone:
       value.scheduleEnabled || value.duplicateSourceId ? value.scheduleTimeZone?.trim() || 'UTC' : 'UTC',
     webhook: value.duplicateSourceId ? null : normalizeWebhook(value.webhook),
-    timeoutSeconds: Number(value.timeoutSeconds) || 300,
+    timeoutSeconds: value.timeoutSeconds == null ? undefined : Number(value.timeoutSeconds),
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,
     executor: value.executor ?? { kind: 'Core' },
@@ -631,7 +640,7 @@ function toUpdateInput(value: ScriptFormValue, update: Partial<ScriptFormValue>)
     enabled: value.enabled,
     scheduleEnabled: value.scheduleEnabled,
     scheduleTimeZone: value.scheduleTimeZone?.trim() || 'UTC',
-    timeoutSeconds: Number(value.timeoutSeconds) || 300,
+    timeoutSeconds: Number(value.timeoutSeconds),
     alertOnFailure: value.alertOnFailure,
     runAsActorId: value.runAsActorId?.trim() || null,
     executor: value.executor ?? { kind: 'Core' },

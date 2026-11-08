@@ -537,9 +537,8 @@ impl MfaService {
     async fn effective_policy(&self) -> Result<MfaPolicy, IdentityError> {
         Ok(self
             .identity
-            .installation_settings()
+            .mfa_policy()
             .await?
-            .mfa_policy
             .at_least(self.configuration.policy))
     }
 

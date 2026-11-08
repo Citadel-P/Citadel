@@ -4,7 +4,7 @@ import { MfaPolicy } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { createQueryClient } from '@/query-client-wrapper';
-import { InstallationSettingsControls as MfaSettingsControls } from './installation-settings';
+import { MfaPolicyControl as MfaSettingsControls } from '../instance/mfa-policy';
 import { UpdateCheckSettings } from '../updates/config';
 import { useRead } from '@/lib/hooks';
 

@@ -4,6 +4,7 @@ use super::super::{InstallerComposeInputs, RegisteredComposeInstallation};
 use super::executor::verify_executor;
 use super::observation::observe;
 use citadel_execution::ProcessRunner;
+use citadel_instance::environment;
 use citadel_updates::{INSTALLER_FORMAT, UpdateError};
 use std::{
     fs,
@@ -136,8 +137,11 @@ fn check_key_sources(
 ) -> Result<(), UpdateError> {
     use super::super::RecoveryKeySource;
     for (setting, source) in [
-        ("CITADEL_JWT_KEY", keys.jwt),
-        ("CITADEL_SECRETS_ENCRYPTION_KEY", keys.secrets_encryption),
+        (environment::CITADEL_JWT_KEY, keys.jwt),
+        (
+            environment::CITADEL_SECRETS_ENCRYPTION_KEY,
+            keys.secrets_encryption,
+        ),
     ] {
         let external = config["services"]["server"]["environment"][setting]
             .as_str()

@@ -7,6 +7,7 @@ import { SidebarMenu } from './sidebar-menu';
 
 const mocks = vi.hoisted(() => ({
   administrator: true,
+  configuration: false,
   platforms: [] as { id: string; name: string; type: string }[],
 }));
 vi.mock('@/lib/context/app-context', () => ({
@@ -14,7 +15,18 @@ vi.mock('@/lib/context/app-context', () => ({
 }));
 vi.mock('@/lib/hooks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/hooks')>()),
-  useRead: () => ({ data: { data: { authorization: { isAdministrator: mocks.administrator } } } }),
+  useRead: () => ({
+    data: {
+      data: {
+        authorization: {
+          isAdministrator: mocks.administrator,
+          alertRules: { canRead: mocks.configuration },
+          bindings: { canRead: mocks.configuration },
+          tags: { canRead: mocks.configuration },
+        },
+      },
+    },
+  }),
 }));
 
 function Harness() {
@@ -31,6 +43,7 @@ function Harness() {
 beforeEach(() => {
   localStorage.clear();
   mocks.administrator = true;
+  mocks.configuration = false;
   mocks.platforms = [
     { id: 'one', name: 'Production', type: PlatformType.Docker },
     { id: 'two', name: 'Staging', type: PlatformType.DockerSwarm },
@@ -90,11 +103,11 @@ it('restores the platform and expansion preference after a reload', () => {
   expect(screen.queryByRole('link', { name: 'Containers' })).not.toBeInTheDocument();
 });
 
-it('opens the active settings group on navigation and retains access filtering', async () => {
+it('opens the active administration group on navigation and retains access filtering', async () => {
   const { user } = renderCitadel(<Harness />, { route: '/deployments' });
-  expect(screen.getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByRole('button', { name: 'Administration' })).toHaveAttribute('aria-expanded', 'false');
   await user.click(screen.getByRole('link', { name: 'Open license page' }));
-  const settings = screen.getByRole('button', { name: 'Settings' });
+  const settings = screen.getByRole('button', { name: 'Administration' });
   expect(settings).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByRole('link', { name: 'License' })).toHaveAttribute('aria-current', 'page');
   await user.click(settings);
@@ -105,7 +118,27 @@ it('does not expose administrator links or removed platforms', () => {
   mocks.administrator = false;
   mocks.platforms = [];
   renderCitadel(<Harness />, { route: '/platforms/one/containers' });
-  expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Administration' })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Containers' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Select platform' })).toBeVisible();
+});
+
+it('shows Configuration independently of Administration for permitted non-administrators', async () => {
+  mocks.administrator = false;
+  mocks.configuration = true;
+  const { user } = renderCitadel(<Harness />, { route: '/tags' });
+  const configuration = screen.getByRole('button', { name: 'Configuration' });
+  expect(configuration).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('link', { name: 'Tags' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('link', { name: 'Bindings' })).toHaveAttribute('href', '/bindings');
+  expect(screen.queryByRole('button', { name: 'Administration' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Instance' })).not.toBeInTheDocument();
+  await user.click(configuration);
+  expect(configuration).toHaveAttribute('aria-expanded', 'false');
+});
+it('opens Instance inside Administration and hides empty Configuration', () => {
+  renderCitadel(<Harness />, { route: '/instance' });
+  expect(screen.getByRole('button', { name: 'Administration' })).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('link', { name: 'Instance' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.queryByRole('button', { name: 'Configuration' })).not.toBeInTheDocument();
 });

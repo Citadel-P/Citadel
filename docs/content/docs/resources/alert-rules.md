@@ -14,7 +14,7 @@ Notifications are delivered through notification channels. The Citadel server im
 
 ## Receive your first notification
 
-1. Open **Settings → Alert Rules**.
+1. Open **Configuration → Alert Rules**.
 2. Add a **Notification Channel** for your preferred destination.
 3. Use **Send Test Notification**, confirm it arrives, then **Save** the channel.
 4. Assign the channel to a suitable built-in rule, such as **Platform Unreachable**,
@@ -93,7 +93,7 @@ Use a separate webhook or bot token for Citadel when the destination service sup
 
 ## Notification Channels
 
-1. Open **Settings → Alert Rules** and select **Add Channel** in the
+1. Open **Configuration → Alert Rules** and select **Add Channel** in the
    **Notification Channels** section.
 2. Enter a descriptive **Name**, such as `Operations email`.
 3. Select the **Type** and enter the **Channel URL** using the matching setup below.
@@ -374,7 +374,7 @@ These are the channel URL patterns supported by the Alert Rules page:
 
 Community administrators can configure a rule installed by Citadel:
 
-1. Open `Settings -> Alert Rules`.
+1. Open `Configuration -> Alert Rules`.
 2. Select a seeded system rule.
 3. Enable or disable the rule.
 4. Select one or more notification channels.
@@ -393,7 +393,7 @@ Creating a custom alert rule requires Team's `Advanced Alerting` capability.
 Select:
 
 ```text
-Settings -> Alert Rules -> Add Rule
+Configuration -> Alert Rules -> Add Rule
 ```
 
 Set:
@@ -607,8 +607,8 @@ sending in-app and external notifications.
 Community and Team include two enabled **Info** rules:
 
 - **Core Update Available** appears after a successful release check verifies a newer release and confirms it is eligible for this installation. A release listing alone does not trigger it. Installations requiring a manual update are excluded.
-- **Agent Updates Available** combines eligible registered Agent installations into one alert. Multiple resource connections to the same installation count once. It lists Agent names and versions and links to **Settings → Updates**.
+- **Agent Updates Available** combines eligible registered Agent installations into one alert. Multiple resource connections to the same installation count once. It lists Agent names and versions and links to **Administration → Updates**.
 
 Repeated checks for the same release do not send another notification. Agent summaries refresh as installations are updated; a newer target release supersedes the previous alert. Core alerts resolve when the advertised release is installed, and Agent alerts resolve when no registered installation still needs that update. Failed checks, failed updates, and unavailable version observations do not establish that an update was installed. Previously advertised Agents awaiting confirmation keep the alert open without counting as newly available updates.
 
-These rules create in-app alerts without a notification channel. To receive external notifications, explicitly assign an existing channel in **Settings → Alert Rules**. Community supports channel assignment for these built-in rules; no Updates-page setting is needed.
+These rules create in-app alerts without a notification channel. To receive external notifications, explicitly assign an existing channel in **Configuration → Alert Rules**. Community supports channel assignment for these built-in rules; no Updates-page setting is needed.

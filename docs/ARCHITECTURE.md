@@ -51,14 +51,54 @@ Pools use the same Agent executable; Swarm-node Agents use a restricted profile.
 Crate-specific tests stay beside their crates. Cargo's workspace and toolchain
 files remain at the repository root.
 
+## Instance configuration
+
+The `citadel-instance` feature owns typed, non-secret installation settings,
+patch validation, deployment policy and change notifications;
+Adapters merge partial choices against the locked singleton, recheck the current
+enabled human administrator, validate effective coupled fields against explicit
+deployment overrides, and record old/new settings in the same transaction.
+Notifications follow commit. The administrator Instance page reuses resource
+registration, FormShell, installation-settings mutations and existing realtime
+invalidation/reconnect handling. Configuration and Administration are sidebar
+groups with permission-filtered children; personal security remains in Profile.
+The crate follows the existing `model`, `commands`, `validation`, `repository`,
+`error` and `service` roles. Instance uses Identity principals, MFA vocabulary and
+its clock port; Identity has no Instance dependency. Authentication retains only
+first-run setup choices/restrictions and a narrow persisted MFA-policy read.
+Server composition joins Instance changes with first-run setup notifications for
+the update checker, preserving immediate scheduling without an ownership cycle.
+
+MFA retains its live minimum-policy behavior. The other 25 controls require Core
+restart. Server resolves saved configuration after migration/recovery admission
+and before constructing Identity, execution and monitoring consumers, logger and
+OpenAPI routes. Explicit environment presence takes precedence over stored choices,
+then built-in defaults. Saved, effective and running values are separate public
+projections; no secret or complete startup Config is exposed. Logging for other CLI
+commands uses deployment settings without requiring a settings database. Execution
+permit pools and claimed work keep their existing ownership/recovery behavior;
+there is no hot-reload or automatic restart controller. Script creation reads only
+the active timeout defaults from authenticated application information.
+
+The executable `app` module coordinates admission, serving and shutdown. `startup`
+owns the migration/settings-resolution sequence; `config/instance` maps deployment
+overrides and resolved choices into Server runtime options. Core deployment variable
+names are defined once in `citadel-instance::environment`, re-exported through Server
+`config::environment`, and shared with Instance override validation. Environment access,
+parsing and defaults remain in Server; the names module contains no runtime logic.
+`logging` installs the
+subscriber from the selected verbosity and format, without depending on the Instance
+feature or persistence. Both CLI commands and maintenance mode use its environment
+entry point.
+
 ## Instance update work in progress
 
 The Updates feature owns the release-check service, policy validation, release
 selection, compatibility descriptors, reviewed plans and operation/journal invariants.
 Its release-source interface is implemented by the bounded GitHub HTTP adapter;
 Server owns scheduling, composition and HTTP presentation. Adapters own release HTTP access, private
-filesystem journals and transactional PostgreSQL state. Identity remains the
-owner of the installation-wide check setting; its write transaction emits the
+filesystem journals and transactional PostgreSQL state. Instance owns the
+installation-wide check setting; its write transaction emits the
 Updates activity and a separate MFA activity when both settings change.
 
 The running application currently exposes persistent release checks and the

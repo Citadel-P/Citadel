@@ -144,8 +144,8 @@ bash src/tools/dev/dev.sh exec cargo run --locked -p citadel-server -- print-eff
 ```
 
 This command reports deployment configuration. Administrators manage the persisted
-update-check choice in **Settings → Updates → Config** and the MFA policy in
-**Profile → Instance settings**.
+update-check choice in **Administration → Updates → Config** and the MFA policy in
+**Administration → Instance**.
 
 For updater development, `citadel-server verify-update-release --version VERSION`
 checks a completed official release manifest and its exact Core image signature.

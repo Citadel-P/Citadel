@@ -180,9 +180,13 @@ fn configured_limits_reach_startup_and_generated_keys_survive_restarts() {
 }
 
 #[tokio::test]
+#[ignore = "requires disposable CITADEL_TEST_DATABASE_URL; logging resolves saved settings after migrations"]
 async fn log_format_and_color_are_independent_and_piped_output_defaults_to_text() {
     use std::{process::Stdio, time::Duration};
     use tokio::io::{AsyncBufReadExt, BufReader};
+    let admin_url =
+        std::env::var("CITADEL_TEST_DATABASE_URL").expect("disposable PostgreSQL fixture required");
+    let admin = sqlx::PgPool::connect(&admin_url).await.unwrap();
 
     for (format, color) in [
         (None, None),
@@ -192,14 +196,21 @@ async fn log_format_and_color_are_independent_and_piped_output_defaults_to_text(
         (Some("json"), Some("true")),
     ] {
         let root = std::env::temp_dir().join(format!("citadel-logging-{}", uuid::Uuid::now_v7()));
+        let database_name = format!("citadel_logger_{}", uuid::Uuid::now_v7().simple());
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "CREATE DATABASE {database_name}"
+        )))
+        .execute(&admin)
+        .await
+        .unwrap();
+        let mut database_url = url::Url::parse(&admin_url).unwrap();
+        database_url.set_path(&database_name);
         let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_citadel-server"));
         command
             .env_clear()
-            // Startup logs precede the connection attempt; never use a real database.
-            .env(
-                "CITADEL_DATABASE_URL",
-                "postgres://user:secret@127.0.0.1:1/citadel",
-            )
+            // Saved format is resolved before the actual logger is initialized.
+            .env("CITADEL_DATABASE_URL", database_url.as_str())
+            .env("CITADEL_DOCKER_SOCKET", root.join("absent-docker.sock"))
             .env("CITADEL_TRANSPORT_MODE", "Disabled")
             .env("CITADEL_PUBLIC_URL", "http://localhost:8000")
             .env("CITADEL_DATA_ROOT", &root)
@@ -242,10 +253,17 @@ async fn log_format_and_color_are_independent_and_piped_output_defaults_to_text(
             assert!(!line.contains("citadel_server::"));
         }
         assert!(!line.contains("effective_configuration"));
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DROP DATABASE {database_name} WITH (FORCE)"
+        )))
+        .execute(&admin)
+        .await
+        .unwrap();
         if root.exists() {
             std::fs::remove_dir_all(root).unwrap();
         }
     }
+    admin.close().await;
 }
 
 #[test]

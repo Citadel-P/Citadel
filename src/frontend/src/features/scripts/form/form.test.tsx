@@ -288,3 +288,16 @@ it('keeps copied scripts inactive and reviews the edited name before saving', as
   );
   expect(Object.keys(localStorage).some((key) => key.includes(script.id))).toBe(false);
 });
+
+it('uses the active server default for new Scripts and preserves saved Script timeouts', async () => {
+  mocks.read.mockImplementation((name: string) =>
+    name === 'getApplicationInfo'
+      ? { data: { data: { scriptExecution: { defaultTimeoutSeconds: 45, maximumTimeoutSeconds: 90 } } } }
+      : undefined,
+  );
+  const added = renderCitadel(<ScriptForm mode="add" />);
+  expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(45);
+  added.unmount();
+  renderCitadel(<ScriptForm mode="edit" resource={script} />);
+  expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(300);
+});

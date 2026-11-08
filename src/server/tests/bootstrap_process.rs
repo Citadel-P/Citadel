@@ -17,6 +17,9 @@ const PASSWORD: &str = "citadel-bootstrap-parity-passphrase";
 #[path = "bootstrap_process/setup.rs"]
 mod setup;
 
+#[path = "bootstrap_process/instance_settings.rs"]
+mod instance_settings;
+
 #[cfg(unix)]
 #[path = "bootstrap_process/lifecycle.rs"]
 mod lifecycle;
@@ -87,6 +90,16 @@ impl Fixture {
         realtime: bool,
         minimum: usize,
     ) -> Server {
+        self.start_with_instance_environment(bootstrap, partial, realtime, Some(minimum))
+    }
+
+    fn start_with_instance_environment(
+        &self,
+        bootstrap: bool,
+        partial: bool,
+        realtime: bool,
+        minimum: Option<usize>,
+    ) -> Server {
         // Bind ephemeral test ports, never use the running development server.
         let http = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let edge = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -107,7 +120,10 @@ impl Fixture {
             // A slow fresh-install migration can log the entire schema and fill
             // the bounded capture before Core's lifecycle records arrive.
             .env("RUST_LOG", "info,sqlx::query=error")
-            .env("CITADEL_PASSWORDS_MINIMUM_LENGTH", minimum.to_string())
+            .env(
+                "CITADEL_PASSWORDS_MINIMUM_LENGTH",
+                minimum.unwrap_or(15).to_string(),
+            )
             .env("CITADEL_REALTIME_ENABLED", realtime.to_string())
             .env("CITADEL_HTTP_LISTEN_PORT", http_port.to_string())
             .env("CITADEL_EDGE_GRPC_LISTEN_PORT", edge_port.to_string())
@@ -129,6 +145,17 @@ impl Fixture {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        if minimum.is_none() {
+            command.env("CITADEL_JWT_ISSUER", "http://instance-settings.test");
+            for name in [
+                "CITADEL_PASSWORDS_MINIMUM_LENGTH",
+                "CITADEL_HTTP_OPENAPI_ENABLED",
+                "CITADEL_LOG_FORMAT",
+                "RUST_LOG",
+            ] {
+                command.env_remove(name);
+            }
+        }
         if let Some(path) = &self.update_state {
             command.env("CITADEL_UPDATE_STATE_DIRECTORY", path);
         }

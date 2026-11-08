@@ -47,6 +47,7 @@ export const DockerIcon = createLucideIcon('DockerIcon', [
 
 export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ className?: string }>> = {
   ['Updates']: RefreshCw,
+  ['Instance']: Server,
   ['Deployment']: Rocket,
   ['SwarmService']: Boxes,
   ['Registry']: Cable,

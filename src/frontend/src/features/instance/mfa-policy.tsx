@@ -6,7 +6,7 @@ import { useRead } from '@/lib/hooks';
 import { mfaPolicyDescription, mfaPolicyOptions } from '@/lib/mfa-policy';
 import { useUpdateInstallationSettings } from '@/hooks/use-installation-settings';
 
-export function InstallationSettingsControls() {
+export function MfaPolicyControl() {
   const id = useId();
   const query = useRead('getInstallationSettings');
   const settings = query.data?.data;

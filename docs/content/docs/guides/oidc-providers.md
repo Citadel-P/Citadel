@@ -21,7 +21,7 @@ Local Citadel login remains available, including the local admin account.
 OIDC connects Citadel to your identity provider. Your organization's sign-in
 administrator should supply the client settings and configure the callback.
 
-1. Open **Settings → OIDC Providers** and add a provider.
+1. Open **Administration → OIDC Providers** and add a provider.
 2. Enter the issuer URL and client settings supplied by the sign-in administrator.
 3. Register the callback URL shown by Citadel with that provider.
 4. Test discovery, save the settings, and test sign-in with an approved account.
@@ -73,7 +73,7 @@ Citadel does not store provider access tokens or provider refresh tokens.
 Open:
 
 ```text
-Settings -> OIDC Providers
+Administration -> OIDC Providers
 ```
 
 Create a provider with:
@@ -253,11 +253,11 @@ Citadel manages role and team membership after OIDC sign-in.
 Admins manage access in:
 
 ```text
-Settings -> Access
+Administration -> Access
 ```
 
 OIDC claims can restrict sign-in, but they do not automatically map users to
-Citadel Roles or Teams. Manage those assignments from **Settings → Access**.
+Citadel Roles or Teams. Manage those assignments from **Administration → Access**.
 
 ## Disable A Provider
 
@@ -336,7 +336,7 @@ OIDC login does not grant full access by itself.
 Assign access in:
 
 ```text
-Settings -> Access
+Administration -> Access
 ```
 
 Add the user to teams or assign roles/resource access directly.

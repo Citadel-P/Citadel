@@ -1288,3 +1288,33 @@ The database `migrations` suite includes an upgrade from migration 0003 that
 preserves history/checksums and verifies indexed Activity ordering with timestamp
 ties. These are disposable-fixture tests; do not execute cleanup plans with
 `EXPLAIN ANALYZE` against deployed databases.
+
+
+### Instance settings
+
+`cargo test --locked -p citadel-instance` covers all promoted
+fields, partial patches, ranges, coupled effective values and explicit overrides.
+The update checker tests also verify that first-run setup immediately wakes its
+Instance settings subscription, before the periodic repair poll.
+`cargo test --locked -p citadel-server --lib config::instance` checks deployment
+presence independently of parsed defaults. The existing configuration parser process
+suite remains database-independent. Actual startup logging now resolves saved
+choices first, so its format/color test uses the disposable database too. Both it
+and the restart test run in the existing database-regression CI fixture.
+
+With a fresh disposable PostgreSQL instance and CREATE DATABASE permission:
+
+```bash
+CITADEL_IDENTITY_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test mfa_http -- --ignored --test-threads=1
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test bootstrap_process instance_settings -- --ignored --test-threads=1
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test configuration log_format_and_color -- --ignored --test-threads=1
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-database --test migrations instance_settings -- --ignored --test-threads=1
+```
+
+The restart test starts isolated Core processes and verifies persisted choices,
+real logging, Script defaults and unchanged existing session expirations. Instance
+HTTP tests check atomic validation/auditing/notification, conflicting overrides,
+concurrent partial saves and enabled-human-administrator reauthorization. Migration
+tests retain the preceding checksums and saved installation choices. Frontend
+coverage lives in `features/instance/settings.test.tsx`, the sidebar tests and the
+existing installation-settings mutation and Script form suites.

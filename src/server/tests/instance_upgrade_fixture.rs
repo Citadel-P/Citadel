@@ -15,6 +15,9 @@ mod cli_updates;
 #[path = "../src/composition/mod.rs"]
 mod composition;
 #[cfg(target_os = "linux")]
+#[path = "../src/logging.rs"]
+mod logging;
+#[cfg(target_os = "linux")]
 #[path = "../src/router.rs"]
 mod router;
 #[cfg(target_os = "linux")]

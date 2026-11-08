@@ -90,6 +90,18 @@ pub enum ActivityEventInfo {
     },
 
     InstallationSettingsUpdated {
+        #[serde(
+            rename = "PreviousConfiguration",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        previous_configuration: Option<serde_json::Value>,
+        #[serde(
+            rename = "Configuration",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        configuration: Option<serde_json::Value>,
         #[serde(rename = "PreviousUpdateChecksEnabled")]
         previous_update_checks_enabled: bool,
         #[serde(rename = "UpdateChecksEnabled")]

@@ -1615,6 +1615,16 @@
           "realtimeTransport": {
             "type": "string"
           },
+          "scriptExecution": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScriptExecutionDefaults"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "version": {
             "type": "string"
           }
@@ -11645,11 +11655,26 @@
       },
       "InstallationSettingsView": {
         "properties": {
+          "configuration": {
+            "$ref": "#/components/schemas/InstanceConfigurationView"
+          },
+          "deploymentOverrides": {
+            "$ref": "#/components/schemas/InstanceOverridesView"
+          },
+          "effectiveConfiguration": {
+            "$ref": "#/components/schemas/InstanceConfigurationView"
+          },
           "mfaPolicy": {
             "$ref": "#/components/schemas/MfaPolicy"
           },
           "minimumMfaPolicy": {
             "$ref": "#/components/schemas/MfaPolicy"
+          },
+          "restartRequired": {
+            "type": "boolean"
+          },
+          "runningConfiguration": {
+            "$ref": "#/components/schemas/InstanceConfigurationView"
           },
           "updateCheckIntervalHours": {
             "format": "int32",
@@ -11663,12 +11688,331 @@
           }
         },
         "required": [
+          "configuration",
+          "effectiveConfiguration",
+          "runningConfiguration",
+          "deploymentOverrides",
+          "restartRequired",
           "updateChecksEnabled",
           "updateCheckIntervalHours",
           "updateChecksAllowed",
           "mfaPolicy",
           "minimumMfaPolicy"
         ],
+        "type": "object"
+      },
+      "InstanceConfigurationView": {
+        "additionalProperties": false,
+        "properties": {
+          "accessTokenLifetimeMinutes": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "agentImageOverride": {
+            "type": "string"
+          },
+          "backupDefaultTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "backupTrackingSlots": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "backupsEnabled": {
+            "type": "boolean"
+          },
+          "browserSessionLifetimeDays": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "buildCleanupEnabled": {
+            "type": "boolean"
+          },
+          "buildPreparationSlots": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "buildRetentionDays": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "buildTrackingSlots": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "logFormat": {
+            "type": "string"
+          },
+          "logVerbosity": {
+            "type": "string"
+          },
+          "openapiEnabled": {
+            "type": "boolean"
+          },
+          "passwordMinimumLength": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "requireDirectAgentHttps": {
+            "type": "boolean"
+          },
+          "scriptsDefaultTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scriptsEnabled": {
+            "type": "boolean"
+          },
+          "scriptsMaximumParallelRuns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scriptsMaximumRemoteRuns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scriptsMaximumTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "serviceAccountDefaultTokenLifetimeDays": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "serviceAccountMaximumActiveTokens": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "serviceAccountMaximumTokenLifetimeDays": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "statisticsCollectionIntervalSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "statisticsWriteIntervalSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "passwordMinimumLength",
+          "browserSessionLifetimeDays",
+          "serviceAccountDefaultTokenLifetimeDays",
+          "serviceAccountMaximumTokenLifetimeDays",
+          "serviceAccountMaximumActiveTokens",
+          "accessTokenLifetimeMinutes",
+          "statisticsCollectionIntervalSeconds",
+          "statisticsWriteIntervalSeconds",
+          "scriptsEnabled",
+          "scriptsMaximumParallelRuns",
+          "scriptsMaximumRemoteRuns",
+          "scriptsDefaultTimeoutSeconds",
+          "scriptsMaximumTimeoutSeconds",
+          "buildPreparationSlots",
+          "buildTrackingSlots",
+          "buildCleanupEnabled",
+          "buildRetentionDays",
+          "backupsEnabled",
+          "backupTrackingSlots",
+          "backupDefaultTimeoutSeconds",
+          "openapiEnabled",
+          "requireDirectAgentHttps",
+          "agentImageOverride",
+          "logVerbosity",
+          "logFormat"
+        ],
+        "type": "object"
+      },
+      "InstanceOverridesView": {
+        "additionalProperties": false,
+        "properties": {
+          "accessTokenLifetimeMinutes": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "agentImageOverride": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backupDefaultTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "backupTrackingSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "backupsEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "browserSessionLifetimeDays": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "buildCleanupEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "buildPreparationSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "buildRetentionDays": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "buildTrackingSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "logFormat": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logVerbosity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "openapiEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "passwordMinimumLength": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "requireDirectAgentHttps": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "scriptsDefaultTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scriptsEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "scriptsMaximumParallelRuns": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scriptsMaximumRemoteRuns": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scriptsMaximumTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "serviceAccountDefaultTokenLifetimeDays": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "serviceAccountMaximumActiveTokens": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "serviceAccountMaximumTokenLifetimeDays": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "statisticsCollectionIntervalSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "statisticsWriteIntervalSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "InternalSecretInput": {
@@ -14291,6 +14635,16 @@
       "PatchInstallationSettingsRequest": {
         "additionalProperties": false,
         "properties": {
+          "configuration": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PatchInstanceConfigurationRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "mfaPolicy": {
             "oneOf": [
               {
@@ -14312,6 +14666,187 @@
           "updateChecksEnabled": {
             "type": [
               "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PatchInstanceConfigurationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accessTokenLifetimeMinutes": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "agentImageOverride": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backupDefaultTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "backupTrackingSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "backupsEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "browserSessionLifetimeDays": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "buildCleanupEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "buildPreparationSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "buildRetentionDays": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "buildTrackingSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "logFormat": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logVerbosity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "openapiEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "passwordMinimumLength": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "requireDirectAgentHttps": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "scriptsDefaultTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scriptsEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "scriptsMaximumParallelRuns": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scriptsMaximumRemoteRuns": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scriptsMaximumTimeoutSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "serviceAccountDefaultTokenLifetimeDays": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "serviceAccountMaximumActiveTokens": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "serviceAccountMaximumTokenLifetimeDays": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "statisticsCollectionIntervalSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "statisticsWriteIntervalSeconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
               "null"
             ]
           }
@@ -16025,9 +16560,11 @@
                 ],
                 "type": "string"
               },
+              "configuration": {},
               "mfaPolicy": {
                 "type": "string"
               },
+              "previousConfiguration": {},
               "previousMfaPolicy": {
                 "type": "string"
               },
@@ -21823,6 +22360,23 @@
         "required": [
           "sourceName",
           "draft"
+        ],
+        "type": "object"
+      },
+      "ScriptExecutionDefaults": {
+        "properties": {
+          "defaultTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "maximumTimeoutSeconds": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "defaultTimeoutSeconds",
+          "maximumTimeoutSeconds"
         ],
         "type": "object"
       },

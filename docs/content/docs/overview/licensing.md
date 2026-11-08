@@ -296,7 +296,7 @@ unavailable.
 An administrator can open:
 
 ```text
-Settings > License
+Administration > License
 ```
 
 The page shows:
@@ -321,7 +321,7 @@ An offline license is bound to one Citadel instance.
 
 To request one:
 
-1. Open `Settings > License`.
+1. Open `Administration > License`.
 2. Find the `License Request` section.
 3. Copy the request data.
 4. Send it to the Citadel license issuer through the agreed support or sales
@@ -342,7 +342,7 @@ identifiers, resource inventory, or resource counts.
 
 To install a license:
 
-1. Open `Settings > License`.
+1. Open `Administration > License`.
 2. Paste the complete signed license value into `Install License`.
 3. Select `Install`.
 4. Confirm that the expected edition, customer, dates, and capabilities appear.
@@ -523,6 +523,6 @@ token is unrevoked and either unexpired or non-expiring.
 
 Citadel intentionally returns the same Unauthorized response for invalid and
 license-suspended machine credentials. An administrator can see the exact
-license state from **Settings > License** and inspect retained accounts under
-**Settings > Access > Service Accounts**.
+license state from **Administration > License** and inspect retained accounts under
+**Administration > Access > Service Accounts**.
 

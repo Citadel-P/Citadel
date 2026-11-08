@@ -15,6 +15,7 @@ fn features_use_resource_roles_without_domain_application_layers() {
     let crates = crates();
     for feature in [
         "identity",
+        "instance",
         "deployments",
         "stacks",
         "swarm-services",
@@ -229,6 +230,12 @@ fn architectural_groups_enforce_inward_dependencies() {
             // Small infrastructure utilities must not grow dependencies on business
             // features or adapters. Process execution implements its one feature port.
             let package_name = package["name"].as_str().unwrap();
+            if package_name == "citadel-identity" {
+                assert_ne!(
+                    name, "citadel-instance",
+                    "Identity must consume narrow security policy without depending on Instance configuration"
+                );
+            }
             let foundational = [
                 "citadel-runtime",
                 "citadel-contracts",

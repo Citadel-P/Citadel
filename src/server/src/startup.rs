@@ -80,14 +80,39 @@ pub async fn check_updates(config: &Config) -> Result<(), citadel_updates::Updat
     }
 }
 
-/// Migrate before constructing services that depend on the database schema.
-pub async fn migrate(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    let migration = MigrationRunner::migrate(&config.database_url).await?;
+/// Called only after update admission. Resolve saved settings before constructing
+/// startup-bound consumers, and install the logger before reporting startup evidence.
+pub async fn configure(
+    config: &mut Config,
+    lease: &mut CoreJobLease,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let migration = while_owned(lease, MigrationRunner::migrate(&config.database_url)).await??;
+    let saved = while_owned(
+        lease,
+        crate::composition::load_instance_configuration(config),
+    )
+    .await??;
+    config.resolve_instance_configuration(&saved)?;
+    crate::logging::init(
+        &config.instance_configuration.log_verbosity,
+        &config.instance_configuration.log_format,
+    )?;
+    let effective = config.effective()?;
+    tracing::info!("Starting Citadel Core");
     tracing::info!(
         applied = migration.applied,
         already_applied = migration.already_applied,
         "database migrations completed"
     );
+    tracing::debug!(
+        effective_configuration = %serde_json::to_string(&effective)?,
+        "Effective configuration"
+    );
+    if config.transport.mode == citadel_server::config::TransportMode::Disabled {
+        tracing::warn!(
+            "Citadel transport security is disabled; API and Agent traffic is not encrypted"
+        );
+    }
     Ok(())
 }
 

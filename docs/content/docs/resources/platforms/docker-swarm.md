@@ -111,7 +111,7 @@ Do not reuse the regular Platform Agent or Edge Agent enrollment token on every
 Node. Citadel creates a separate, expiring, cluster-scoped bootstrap credential
 for satellite enrollment. Use **Repair** in **Cluster node coverage** when a new eligible Node
 joins after that enrollment window expires. **Repair** preserves the approved image.
-Upgrade the managed node-agent service from **Settings → Updates**; removal remains
+Upgrade the managed node-agent service from **Administration → Updates**; removal remains
 an explicit Platform action. Requests and final outcomes appear in the Platform's
 activity history; bootstrap credentials are never included there.
 
@@ -276,7 +276,7 @@ after reviewing every consumer.
 - Platform Read plus Logs: retrieve Service and Task logs from Platform inventory.
 - Platform Read plus Terminal: open a terminal for a running Task on a covered Node.
 - Platform Execute plus Manage Node Agents: install, repair, or remove node agents.
-- Administrator: review and approve Agent upgrades from **Settings → Updates**.
+- Administrator: review and approve Agent upgrades from **Administration → Updates**.
 - Platform Write: register or edit the connection, change Node availability and labels, and manage Secrets and Configs.
 - Platform Execute: delete eligible overlay Networks.
 

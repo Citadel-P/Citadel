@@ -1,4 +1,7 @@
+pub use citadel_instance::environment;
+
 pub mod execution;
+mod instance;
 mod keys;
 
 use std::env;
@@ -51,6 +54,8 @@ pub enum ConfigError {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub instance_configuration: citadel_instance::InstanceConfiguration,
+    pub instance_overrides: citadel_instance::InstanceOverrides,
     pub updates_enabled: bool,
     pub update_state_directory: Option<PathBuf>,
     pub execution: execution::ExecutionConfig,
@@ -267,42 +272,54 @@ pub struct EffectiveConfig {
 
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
-        let port = parse_env("CITADEL_HTTP_LISTEN_PORT", DEFAULT_API_PORT)?;
+        Self::read(true)
+    }
+
+    /// Migration/recovery admission precedes loading saved settings. Coupled promoted
+    /// fields are validated after the database choices have been merged.
+    pub fn from_env_for_startup() -> Result<Self, ConfigError> {
+        Self::read(false)
+    }
+
+    fn read(validate: bool) -> Result<Self, ConfigError> {
+        let port = parse_env(environment::CITADEL_HTTP_LISTEN_PORT, DEFAULT_API_PORT)?;
         let transport = transport_config(port)?;
         let listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let (database_url, database_source) = database_url()?;
         let database_max_connections = parse_env(
-            "CITADEL_DATABASE_MAX_CONNECTIONS",
+            environment::CITADEL_DATABASE_MAX_CONNECTIONS,
             DEFAULT_DATABASE_MAX_CONNECTIONS,
         )?;
         if database_max_connections == 0 {
             return Err(ConfigError::Invalid {
-                name: "CITADEL_DATABASE_MAX_CONNECTIONS",
+                name: environment::CITADEL_DATABASE_MAX_CONNECTIONS,
                 message: "must be greater than zero".to_owned(),
             });
         }
-        let event_queue_capacity =
-            parse_env("CITADEL_EVENT_QUEUE_CAPACITY", DEFAULT_EVENT_QUEUE_CAPACITY)?;
+        let event_queue_capacity = parse_env(
+            environment::CITADEL_EVENT_QUEUE_CAPACITY,
+            DEFAULT_EVENT_QUEUE_CAPACITY,
+        )?;
         if event_queue_capacity == 0 {
             return Err(ConfigError::Invalid {
-                name: "CITADEL_EVENT_QUEUE_CAPACITY",
+                name: environment::CITADEL_EVENT_QUEUE_CAPACITY,
                 message: "must be greater than zero".to_owned(),
             });
         }
         let docker_request_timeout_seconds = nonzero_seconds(
-            "CITADEL_DOCKER_TIMEOUT_SECONDS",
+            environment::CITADEL_DOCKER_TIMEOUT_SECONDS,
             DEFAULT_DOCKER_REQUEST_TIMEOUT_SECONDS,
         )?;
         let probe_interval_seconds = nonzero_seconds(
-            "CITADEL_STATS_POLL_INTERVAL_SECONDS",
+            environment::CITADEL_STATS_POLL_INTERVAL_SECONDS,
             DEFAULT_MONITORING_INTERVAL_SECONDS,
         )?;
         let reconciliation_interval_seconds = nonzero_seconds(
-            "CITADEL_SWARM_RECONCILIATION_INTERVAL_SECONDS",
+            environment::CITADEL_SWARM_RECONCILIATION_INTERVAL_SECONDS,
             DEFAULT_RECONCILIATION_INTERVAL_SECONDS,
         )?;
         let shutdown_timeout_seconds = nonzero_seconds(
-            "CITADEL_SHUTDOWN_TIMEOUT_SECONDS",
+            environment::CITADEL_SHUTDOWN_TIMEOUT_SECONDS,
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
         )?;
         let execution = execution::ExecutionConfig::from_env(port)?;
@@ -313,16 +330,18 @@ impl Config {
             .clone();
         let agent = agent_config(execution.edge_agent.allow_insecure)?;
         let realtime = realtime_config()?;
-        let identity = identity_config(&transport)?;
+        let identity = identity_config_for_startup(&transport, validate)?;
 
-        Ok(Self {
+        let mut config = Self {
+            instance_configuration: Default::default(),
+            instance_overrides: Default::default(),
             updates_enabled: release_checks_allowed_from_env()?,
             update_state_directory: update_state_directory_from_env()?,
             execution,
             listen_address,
             database_url,
             database_max_connections,
-            docker_socket: env::var_os("CITADEL_DOCKER_SOCKET")
+            docker_socket: env::var_os(environment::CITADEL_DOCKER_SOCKET)
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("/var/run/docker.sock")),
             docker_request_timeout: Duration::from_secs(docker_request_timeout_seconds),
@@ -334,51 +353,75 @@ impl Config {
             realtime,
             transport,
             identity,
-            scripts: script_options()?,
+            scripts: script_options(validate)?,
             node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy {
                 removal_grace: Duration::from_secs(
-                    positive_usize("CITADEL_EDGE_AGENT_NODE_AGENT_REMOVAL_GRACE_MINUTES", 10)?
-                        as u64
+                    positive_usize(
+                        environment::CITADEL_EDGE_AGENT_NODE_AGENT_REMOVAL_GRACE_MINUTES,
+                        10,
+                    )? as u64
                         * 60,
                 ),
                 supported_architectures,
             },
             retention_interval: Duration::from_secs(nonzero_seconds(
-                "CITADEL_RETENTION_INTERVAL_SECONDS",
+                environment::CITADEL_RETENTION_INTERVAL_SECONDS,
                 900,
             )?),
             stats_flush_interval: Duration::from_secs(positive_usize(
-                "CITADEL_STATS_FLUSH_INTERVAL_SECONDS",
+                environment::CITADEL_STATS_FLUSH_INTERVAL_SECONDS,
                 60,
             )? as u64),
-            stats_batch_size: positive_usize("CITADEL_STATS_BATCH_SIZE", 500)?,
-            build_preparation_slots: bounded_slots("CITADEL_BUILDS_PREPARATION_SLOTS", 2, 16)?,
-            build_tracking_slots: bounded_slots("CITADEL_BUILDS_TRACKING_SLOTS", 16, 128)?,
-            build_retention_days: if parse_env("CITADEL_BUILDS_RUN_CLEANUP_ENABLED", true)? {
+            stats_batch_size: positive_usize(environment::CITADEL_STATS_BATCH_SIZE, 500)?,
+            build_preparation_slots: bounded_slots(
+                environment::CITADEL_BUILDS_PREPARATION_SLOTS,
+                2,
+                16,
+            )?,
+            build_tracking_slots: bounded_slots(
+                environment::CITADEL_BUILDS_TRACKING_SLOTS,
+                16,
+                128,
+            )?,
+            build_retention_days: if parse_env(
+                environment::CITADEL_BUILDS_RUN_CLEANUP_ENABLED,
+                true,
+            )? {
                 Some(
-                    i32::try_from(positive_usize("CITADEL_BUILDS_RUN_RETENTION_DAYS", 90)?)
-                        .map_err(|_| ConfigError::Invalid {
-                            name: "CITADEL_BUILDS_RUN_RETENTION_DAYS",
-                            message: "must fit a positive 32-bit integer".into(),
-                        })?,
+                    i32::try_from(positive_usize(
+                        environment::CITADEL_BUILDS_RUN_RETENTION_DAYS,
+                        90,
+                    )?)
+                    .map_err(|_| ConfigError::Invalid {
+                        name: environment::CITADEL_BUILDS_RUN_RETENTION_DAYS,
+                        message: "must fit a positive 32-bit integer".into(),
+                    })?,
                 )
             } else {
                 None
             },
             backup_workers: BackupWorkerConfig {
-                enabled: parse_env("CITADEL_BACKUPS_ENABLED", true)?,
-                tracking_slots: bounded_slots("CITADEL_BACKUPS_TRACKING_SLOTS", 16, 128)?,
+                enabled: parse_env(environment::CITADEL_BACKUPS_ENABLED, true)?,
+                tracking_slots: bounded_slots(
+                    environment::CITADEL_BACKUPS_TRACKING_SLOTS,
+                    16,
+                    128,
+                )?,
                 poll_interval: Duration::from_secs(positive_usize(
-                    "CITADEL_BACKUPS_POLL_INTERVAL_SECONDS",
+                    environment::CITADEL_BACKUPS_POLL_INTERVAL_SECONDS,
                     2,
                 )? as u64),
                 schedule_interval: Duration::from_secs(positive_usize(
-                    "CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS",
+                    environment::CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS,
                     30,
                 )? as u64),
             },
             database_source,
-        })
+        };
+        if validate {
+            config.resolve_instance_configuration(&Default::default())?;
+        }
+        Ok(config)
     }
 
     pub fn effective(&self) -> Result<EffectiveConfig, ConfigError> {
@@ -396,6 +439,16 @@ impl Config {
                 .as_secs(),
             execution: serde_json::json!({
                 "agentImage": self.execution.edge_agent.image,
+                "agentAllowInsecure": self.execution.edge_agent.allow_insecure,
+                "scripts": {
+                    "enabled": self.scripts.enabled,
+                    "maximumParallelRuns": self.scripts.max_parallel_runs,
+                    "maximumRemoteRuns": self.scripts.max_remote_runs,
+                    "defaultTimeoutSeconds": self.scripts.default_timeout_seconds,
+                    "maximumTimeoutSeconds": self.scripts.max_timeout_seconds,
+                },
+                "buildPreparationSlots": self.build_preparation_slots,
+                "buildTrackingSlots": self.build_tracking_slots,
                 "agentCaConfigured": self.execution.edge_agent.ca_certificate.is_some(),
                 "nodeAgent": {
                     "bootstrapSeconds": self.execution.edge_agent.setup_policy.bootstrap_lifetime.as_secs(),
@@ -407,6 +460,7 @@ impl Config {
                 },
                 "backups": {
                     "enabled": self.backup_workers.enabled,
+                    "trackingSlots": self.backup_workers.tracking_slots,
                     "workingDirectory": self.execution.backups.settings.working_directory,
                     "coreDataPath": self.execution.backups.core_data_path,
                     "allowedCorePaths": self.execution.backups.settings.allowed_core_paths,
@@ -509,32 +563,44 @@ impl DatabaseConfig {
 }
 
 fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
-    let mode = parse_transport_mode(env::var("CITADEL_TRANSPORT_MODE").ok().as_deref())?;
-    let edge_grpc_port = parse_env("CITADEL_EDGE_GRPC_LISTEN_PORT", DEFAULT_EDGE_GRPC_PORT)?;
+    let mode = parse_transport_mode(
+        env::var(environment::CITADEL_TRANSPORT_MODE)
+            .ok()
+            .as_deref(),
+    )?;
+    let edge_grpc_port = parse_env(
+        environment::CITADEL_EDGE_GRPC_LISTEN_PORT,
+        DEFAULT_EDGE_GRPC_PORT,
+    )?;
     if api_port == edge_grpc_port {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_EDGE_GRPC_LISTEN_PORT",
+            name: environment::CITADEL_EDGE_GRPC_LISTEN_PORT,
             message: "must differ from CITADEL_HTTP_LISTEN_PORT".to_owned(),
         });
     }
 
     let public_url = parse_origin(
-        "CITADEL_PUBLIC_URL",
-        env::var("CITADEL_PUBLIC_URL").ok(),
+        environment::CITADEL_PUBLIC_URL,
+        env::var(environment::CITADEL_PUBLIC_URL).ok(),
         mode,
         format!("http://localhost:{api_port}"),
     )?;
     let edge_agent_public_url = parse_origin(
-        "CITADEL_EDGE_PUBLIC_GRPC_URL",
-        env::var("CITADEL_EDGE_PUBLIC_GRPC_URL").ok(),
+        environment::CITADEL_EDGE_PUBLIC_GRPC_URL,
+        env::var(environment::CITADEL_EDGE_PUBLIC_GRPC_URL).ok(),
         mode,
         format!("http://localhost:{edge_grpc_port}"),
     )?;
-    let allowed_hosts = split_values(env::var("CITADEL_HTTP_ALLOWED_HOSTS").ok().as_deref(), ';')?;
+    let allowed_hosts = split_values(
+        env::var(environment::CITADEL_HTTP_ALLOWED_HOSTS)
+            .ok()
+            .as_deref(),
+        ';',
+    )?;
     if mode != TransportMode::Disabled {
         if allowed_hosts.is_empty() || allowed_hosts.iter().any(|host| host == "*") {
             return Err(ConfigError::Invalid {
-                name: "CITADEL_HTTP_ALLOWED_HOSTS",
+                name: environment::CITADEL_HTTP_ALLOWED_HOSTS,
                 message: "must explicitly include the configured public hosts".to_owned(),
             });
         }
@@ -547,7 +613,7 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
                 .any(|allowed| allowed.eq_ignore_ascii_case(host))
             {
                 return Err(ConfigError::Invalid {
-                    name: "CITADEL_HTTP_ALLOWED_HOSTS",
+                    name: environment::CITADEL_HTTP_ALLOWED_HOSTS,
                     message: format!("does not include configured public host '{host}'"),
                 });
             }
@@ -555,7 +621,9 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
     }
 
     let known_proxies = split_values(
-        env::var("CITADEL_HTTP_TRUSTED_PROXIES").ok().as_deref(),
+        env::var(environment::CITADEL_HTTP_TRUSTED_PROXIES)
+            .ok()
+            .as_deref(),
         ',',
     )?
     .into_iter()
@@ -563,13 +631,13 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         value
             .parse()
             .map_err(|error: std::net::AddrParseError| ConfigError::Invalid {
-                name: "CITADEL_HTTP_TRUSTED_PROXIES",
+                name: environment::CITADEL_HTTP_TRUSTED_PROXIES,
                 message: error.to_string(),
             })
     })
     .collect::<Result<Vec<_>, _>>()?;
     let known_networks = split_values(
-        env::var("CITADEL_HTTP_TRUSTED_PROXY_NETWORKS")
+        env::var(environment::CITADEL_HTTP_TRUSTED_PROXY_NETWORKS)
             .ok()
             .as_deref(),
         ',',
@@ -579,15 +647,16 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         value
             .parse::<IpNet>()
             .map_err(|error| ConfigError::Invalid {
-                name: "CITADEL_HTTP_TRUSTED_PROXY_NETWORKS",
+                name: environment::CITADEL_HTTP_TRUSTED_PROXY_NETWORKS,
                 message: error.to_string(),
             })
     })
     .collect::<Result<Vec<_>, _>>()?;
     let forwarded_configured = !known_proxies.is_empty() || !known_networks.is_empty();
-    let certificate_path = env::var_os("CITADEL_TLS_CERTIFICATE_PATH").map(PathBuf::from);
+    let certificate_path =
+        env::var_os(environment::CITADEL_TLS_CERTIFICATE_PATH).map(PathBuf::from);
     let certificate_private_key_path =
-        env::var_os("CITADEL_TLS_PRIVATE_KEY_PATH").map(PathBuf::from);
+        env::var_os(environment::CITADEL_TLS_PRIVATE_KEY_PATH).map(PathBuf::from);
     let certificate_configured =
         certificate_path.is_some() || certificate_private_key_path.is_some();
 
@@ -640,10 +709,16 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         _ => {}
     }
 
-    let forward_limit = parse_env("CITADEL_HTTP_FORWARDED_LIMIT", DEFAULT_FORWARD_LIMIT)?;
-    let body_limit_bytes = parse_env("CITADEL_HTTP_BODY_LIMIT_BYTES", DEFAULT_BODY_LIMIT_BYTES)?;
+    let forward_limit = parse_env(
+        environment::CITADEL_HTTP_FORWARDED_LIMIT,
+        DEFAULT_FORWARD_LIMIT,
+    )?;
+    let body_limit_bytes = parse_env(
+        environment::CITADEL_HTTP_BODY_LIMIT_BYTES,
+        DEFAULT_BODY_LIMIT_BYTES,
+    )?;
     let requests_per_minute = parse_env(
-        "CITADEL_HTTP_REQUESTS_PER_MINUTE",
+        environment::CITADEL_HTTP_REQUESTS_PER_MINUTE,
         DEFAULT_REQUESTS_PER_MINUTE,
     )?;
     if forward_limit == 0 || body_limit_bytes == 0 || requests_per_minute == 0 {
@@ -654,15 +729,15 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
     }
     if requests_per_minute > u64::from(u32::MAX) {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_HTTP_REQUESTS_PER_MINUTE",
+            name: environment::CITADEL_HTTP_REQUESTS_PER_MINUTE,
             message: format!("must not exceed {}", u32::MAX),
         });
     }
 
-    let cors_origins = indexed_env("CITADEL_HTTP_CORS_ORIGIN_")?;
+    let cors_origins = indexed_env(environment::CITADEL_HTTP_CORS_ORIGIN_PREFIX)?;
     for origin in &cors_origins {
         parse_origin(
-            "CITADEL_HTTP_CORS_ORIGIN_N",
+            environment::CITADEL_HTTP_CORS_ORIGIN_N,
             Some(origin.clone()),
             mode,
             String::new(),
@@ -683,8 +758,8 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         cors_origins,
         body_limit_bytes,
         requests_per_minute,
-        openapi_enabled: parse_env("CITADEL_HTTP_OPENAPI_ENABLED", false)?,
-        static_root: env::var_os("CITADEL_STATIC_ROOT").map(PathBuf::from),
+        openapi_enabled: parse_env(environment::CITADEL_HTTP_OPENAPI_ENABLED, false)?,
+        static_root: env::var_os(environment::CITADEL_STATIC_ROOT).map(PathBuf::from),
     })
 }
 
@@ -696,36 +771,39 @@ fn parse_transport_mode(value: Option<&str>) -> Result<TransportMode, ConfigErro
         Some(value) if value.eq_ignore_ascii_case("direct") => Ok(TransportMode::Direct),
         Some(value) if value.eq_ignore_ascii_case("disabled") => Ok(TransportMode::Disabled),
         _ => Err(ConfigError::Invalid {
-            name: "CITADEL_TRANSPORT_MODE",
+            name: environment::CITADEL_TRANSPORT_MODE,
             message: "must be ReverseProxy, Direct, or Disabled".to_owned(),
         }),
     }
 }
 
-fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, ConfigError> {
+fn identity_config_for_startup(
+    transport: &TransportConfig,
+    validate: bool,
+) -> Result<IdentityConfig, ConfigError> {
     let (jwt_key, secret_encryption_key) = identity_keys_from_env()?;
-    identity_config_with_keys(transport, jwt_key, secret_encryption_key)
+    identity_config_with_keys_validation(transport, jwt_key, secret_encryption_key, validate)
 }
 
 /// Load explicit keys or persist generated defaults for normal startup.
 pub fn identity_keys_from_env() -> Result<(SecretBytes, SecretBytes), ConfigError> {
-    let root = env::var_os("CITADEL_DATA_ROOT")
+    let root = env::var_os(environment::CITADEL_DATA_ROOT)
         .map(PathBuf::from)
         .unwrap_or_else(|| "/app/data".into());
-    let jwt_key = match env::var("CITADEL_JWT_KEY")
+    let jwt_key = match env::var(environment::CITADEL_JWT_KEY)
         .ok()
         .filter(|v| !v.trim().is_empty())
     {
         Some(value) => Zeroizing::new(value),
-        None => keys::load_or_create(&root, "jwtsecret", "CITADEL_JWT_KEY")?,
+        None => keys::load_or_create(&root, "jwtsecret", environment::CITADEL_JWT_KEY)?,
     };
     if jwt_key.len() < 32 {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_JWT_KEY",
+            name: environment::CITADEL_JWT_KEY,
             message: "must contain at least 32 bytes".to_owned(),
         });
     }
-    let encrypted_secrets_key = match env::var("CITADEL_SECRETS_ENCRYPTION_KEY")
+    let encrypted_secrets_key = match env::var(environment::CITADEL_SECRETS_ENCRYPTION_KEY)
         .ok()
         .filter(|v| !v.trim().is_empty())
     {
@@ -733,7 +811,7 @@ pub fn identity_keys_from_env() -> Result<(SecretBytes, SecretBytes), ConfigErro
         None => keys::load_or_create(
             &root,
             "secret-encryption-key",
-            "CITADEL_SECRETS_ENCRYPTION_KEY",
+            environment::CITADEL_SECRETS_ENCRYPTION_KEY,
         )?,
     };
     Ok((
@@ -744,13 +822,13 @@ pub fn identity_keys_from_env() -> Result<(SecretBytes, SecretBytes), ConfigErro
 
 /// Offline recovery must never generate a replacement for the original encryption key.
 pub fn recovery_encryption_key_from_env() -> Result<SecretBytes, ConfigError> {
-    let root = env::var_os("CITADEL_DATA_ROOT")
+    let root = env::var_os(environment::CITADEL_DATA_ROOT)
         .map(PathBuf::from)
         .unwrap_or_else(|| "/app/data".into());
-    let encoded = match env::var("CITADEL_SECRETS_ENCRYPTION_KEY").ok().filter(|v| !v.trim().is_empty()) {
+    let encoded = match env::var(environment::CITADEL_SECRETS_ENCRYPTION_KEY).ok().filter(|v| !v.trim().is_empty()) {
         Some(value) => Zeroizing::new(value),
         None => Zeroizing::new(std::fs::read_to_string(root.join("secret-encryption-key"))
-            .map_err(|_| ConfigError::Invalid { name: "CITADEL_SECRETS_ENCRYPTION_KEY", message: "restore requires the original key: configure it explicitly or restore secret-encryption-key into CITADEL_DATA_ROOT".into() })?),
+            .map_err(|_| ConfigError::Invalid { name: environment::CITADEL_SECRETS_ENCRYPTION_KEY, message: "restore requires the original key: configure it explicitly or restore secret-encryption-key into CITADEL_DATA_ROOT".into() })?),
     };
     decode_encryption_key(&encoded)
 }
@@ -761,32 +839,33 @@ fn decode_encryption_key(encoded: &str) -> Result<SecretBytes, ConfigError> {
             STANDARD
                 .decode(encoded.trim())
                 .map_err(|_| ConfigError::Invalid {
-                    name: "CITADEL_SECRETS_ENCRYPTION_KEY",
+                    name: environment::CITADEL_SECRETS_ENCRYPTION_KEY,
                     message: "must be a base64-encoded 32-byte key".into(),
                 })?,
         );
     if bytes.len() != 32 {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_SECRETS_ENCRYPTION_KEY",
+            name: environment::CITADEL_SECRETS_ENCRYPTION_KEY,
             message: "must decode to exactly 32 bytes".into(),
         });
     }
     Ok(SecretBytes(bytes))
 }
 
-fn identity_config_with_keys(
+fn identity_config_with_keys_validation(
     transport: &TransportConfig,
     jwt_key: SecretBytes,
     secret_encryption_key: SecretBytes,
+    validate: bool,
 ) -> Result<IdentityConfig, ConfigError> {
-    let issuer = env::var("CITADEL_JWT_ISSUER").unwrap_or_else(|_| {
+    let issuer = env::var(environment::CITADEL_JWT_ISSUER).unwrap_or_else(|_| {
         transport
             .public_url
             .as_str()
             .trim_end_matches('/')
             .to_owned()
     });
-    let audience = env::var("CITADEL_JWT_AUDIENCE").unwrap_or_else(|_| issuer.clone());
+    let audience = env::var(environment::CITADEL_JWT_AUDIENCE).unwrap_or_else(|_| issuer.clone());
     if issuer.trim().is_empty() || audience.trim().is_empty() {
         return Err(ConfigError::Invalid {
             name: "CITADEL_JWT_ISSUER/CITADEL_JWT_AUDIENCE",
@@ -794,35 +873,36 @@ fn identity_config_with_keys(
         });
     }
     let access_token_minutes = nonzero_seconds(
-        "CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES",
+        environment::CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES,
         DEFAULT_ACCESS_TOKEN_MINUTES,
     )?;
     let refresh_token_days = nonzero_seconds(
-        "CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS",
+        environment::CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS,
         DEFAULT_REFRESH_TOKEN_DAYS,
     )?;
     let service_account_last_used_capacity = parse_env(
-        "CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY",
+        environment::CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY,
         DEFAULT_SERVICE_ACCOUNT_LAST_USED_CAPACITY,
     )?;
     if service_account_last_used_capacity == 0 {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY",
+            name: environment::CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY,
             message: "must be greater than zero".to_owned(),
         });
     }
     let password_policy = citadel_identity::PasswordPolicy::new(parse_env(
-        "CITADEL_PASSWORDS_MINIMUM_LENGTH",
+        environment::CITADEL_PASSWORDS_MINIMUM_LENGTH,
         citadel_identity::MINIMUM_PASSWORD_CHARACTERS,
     )?)
     .map_err(|error| ConfigError::Invalid {
-        name: "CITADEL_PASSWORDS_MINIMUM_LENGTH",
+        name: environment::CITADEL_PASSWORDS_MINIMUM_LENGTH,
         message: error.to_string(),
     })?;
     let mfa = mfa_config()?;
     Ok(IdentityConfig {
-        jwt_key_is_external: env::var("CITADEL_JWT_KEY").is_ok_and(|v| !v.trim().is_empty()),
-        encryption_key_is_external: env::var("CITADEL_SECRETS_ENCRYPTION_KEY")
+        jwt_key_is_external: env::var(environment::CITADEL_JWT_KEY)
+            .is_ok_and(|v| !v.trim().is_empty()),
+        encryption_key_is_external: env::var(environment::CITADEL_SECRETS_ENCRYPTION_KEY)
             .is_ok_and(|v| !v.trim().is_empty()),
         jwt_key,
         secret_encryption_key,
@@ -830,25 +910,25 @@ fn identity_config_with_keys(
         audience,
         access_token_lifetime: Duration::from_secs(access_token_minutes.checked_mul(60).ok_or(
             ConfigError::Invalid {
-                name: "CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES",
+                name: environment::CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES,
                 message: "is too large".to_owned(),
             },
         )?),
         refresh_token_lifetime: Duration::from_secs(refresh_token_days.checked_mul(86_400).ok_or(
             ConfigError::Invalid {
-                name: "CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS",
+                name: environment::CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS,
                 message: "is too large".to_owned(),
             },
         )?),
-        service_account_limits: service_account_limits()?,
+        service_account_limits: service_account_limits(validate)?,
         service_account_last_used_interval: Duration::from_secs(
             nonzero_seconds(
-                "CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES",
+                environment::CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES,
                 5,
             )?
             .checked_mul(60)
             .ok_or(ConfigError::Invalid {
-                name: "CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES",
+                name: environment::CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES,
                 message: "is too large".into(),
             })?,
         ),
@@ -859,7 +939,8 @@ fn identity_config_with_keys(
 }
 
 fn mfa_config() -> Result<MfaConfig, ConfigError> {
-    let policy_value = env::var("CITADEL_MFA_POLICY").unwrap_or_else(|_| "Optional".to_owned());
+    let policy_value =
+        env::var(environment::CITADEL_MFA_POLICY).unwrap_or_else(|_| "Optional".to_owned());
     let policy = MfaPolicy::ALL
         .iter()
         .copied()
@@ -869,35 +950,35 @@ fn mfa_config() -> Result<MfaConfig, ConfigError> {
                 .eq_ignore_ascii_case(policy_value.trim())
         })
         .ok_or_else(|| ConfigError::Invalid {
-            name: "CITADEL_MFA_POLICY",
+            name: environment::CITADEL_MFA_POLICY,
             message: "must be Optional, RequiredForAdministrators, or RequiredForAllUsers"
                 .to_owned(),
         })?;
     let challenge_minutes = nonzero_seconds(
-        "CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES",
+        environment::CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES,
         DEFAULT_MFA_CHALLENGE_MINUTES,
     )?;
     let setup_minutes = nonzero_seconds(
-        "CITADEL_MFA_SETUP_LIFETIME_MINUTES",
+        environment::CITADEL_MFA_SETUP_LIFETIME_MINUTES,
         DEFAULT_MFA_SETUP_MINUTES,
     )?;
     let maximum_failed_attempts = parse_env(
-        "CITADEL_MFA_MAX_FAILED_ATTEMPTS",
+        environment::CITADEL_MFA_MAX_FAILED_ATTEMPTS,
         DEFAULT_MFA_MAXIMUM_FAILED_ATTEMPTS,
     )?;
     if maximum_failed_attempts <= 0 {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_MFA_MAX_FAILED_ATTEMPTS",
+            name: environment::CITADEL_MFA_MAX_FAILED_ATTEMPTS,
             message: "must be greater than zero".to_owned(),
         });
     }
     let recovery_code_count = parse_env(
-        "CITADEL_MFA_RECOVERY_CODE_COUNT",
+        environment::CITADEL_MFA_RECOVERY_CODE_COUNT,
         DEFAULT_MFA_RECOVERY_CODE_COUNT,
     )?;
     if recovery_code_count == 0 || recovery_code_count > 100 {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_MFA_RECOVERY_CODE_COUNT",
+            name: environment::CITADEL_MFA_RECOVERY_CODE_COUNT,
             message: "must be between 1 and 100".to_owned(),
         });
     }
@@ -905,13 +986,13 @@ fn mfa_config() -> Result<MfaConfig, ConfigError> {
         policy,
         challenge_lifetime: Duration::from_secs(challenge_minutes.checked_mul(60).ok_or(
             ConfigError::Invalid {
-                name: "CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES",
+                name: environment::CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES,
                 message: "is too large".to_owned(),
             },
         )?),
         setup_lifetime: Duration::from_secs(setup_minutes.checked_mul(60).ok_or(
             ConfigError::Invalid {
-                name: "CITADEL_MFA_SETUP_LIFETIME_MINUTES",
+                name: environment::CITADEL_MFA_SETUP_LIFETIME_MINUTES,
                 message: "is too large".to_owned(),
             },
         )?),
@@ -992,7 +1073,7 @@ fn indexed_env(prefix: &str) -> Result<Vec<String>, ConfigError> {
             continue;
         };
         let value = value.into_string().map_err(|_| ConfigError::Invalid {
-            name: "CITADEL_HTTP_CORS_ORIGIN_N",
+            name: environment::CITADEL_HTTP_CORS_ORIGIN_N,
             message: "origins must be valid UTF-8".to_owned(),
         })?;
         entries.push((index, value));
@@ -1000,7 +1081,7 @@ fn indexed_env(prefix: &str) -> Result<Vec<String>, ConfigError> {
     entries.sort_by_key(|(index, _)| *index);
     if entries.iter().any(|(_, value)| value.trim().is_empty()) {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_HTTP_CORS_ORIGIN_N",
+            name: environment::CITADEL_HTTP_CORS_ORIGIN_N,
             message: "origins cannot be empty".to_owned(),
         });
     }
@@ -1008,19 +1089,19 @@ fn indexed_env(prefix: &str) -> Result<Vec<String>, ConfigError> {
 }
 
 fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
-    if !parse_env("CITADEL_REALTIME_ENABLED", true)? {
+    if !parse_env(environment::CITADEL_REALTIME_ENABLED, true)? {
         return Ok(None);
     }
     let queue_capacity = parse_env(
-        "CITADEL_REALTIME_QUEUE_CAPACITY",
+        environment::CITADEL_REALTIME_QUEUE_CAPACITY,
         DEFAULT_REALTIME_QUEUE_CAPACITY,
     )?;
     let snapshot_limit = parse_env(
-        "CITADEL_REALTIME_SNAPSHOT_LIMIT",
+        environment::CITADEL_REALTIME_SNAPSHOT_LIMIT,
         DEFAULT_REALTIME_SNAPSHOT_LIMIT,
     )?;
     let max_connections = parse_env(
-        "CITADEL_REALTIME_MAX_CONNECTIONS",
+        environment::CITADEL_REALTIME_MAX_CONNECTIONS,
         DEFAULT_REALTIME_MAX_CONNECTIONS,
     )?;
     if queue_capacity == 0 || snapshot_limit == 0 || max_connections == 0 {
@@ -1033,15 +1114,15 @@ fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
         queue_capacity,
         max_connections,
         subscribe_timeout: Duration::from_secs(nonzero_seconds(
-            "CITADEL_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS",
+            environment::CITADEL_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS,
             DEFAULT_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS,
         )?),
         send_timeout: Duration::from_secs(nonzero_seconds(
-            "CITADEL_REALTIME_SEND_TIMEOUT_SECONDS",
+            environment::CITADEL_REALTIME_SEND_TIMEOUT_SECONDS,
             DEFAULT_REALTIME_SEND_TIMEOUT_SECONDS,
         )?),
         authorization_recheck_interval: Duration::from_secs(nonzero_seconds(
-            "CITADEL_REALTIME_AUTH_RECHECK_SECONDS",
+            environment::CITADEL_REALTIME_AUTH_RECHECK_SECONDS,
             DEFAULT_REALTIME_AUTH_RECHECK_SECONDS,
         )?),
         snapshot_limit,
@@ -1049,12 +1130,13 @@ fn realtime_config() -> Result<Option<RealtimeConfig>, ConfigError> {
 }
 
 fn agent_config(allow_insecure: bool) -> Result<Option<AgentConfig>, ConfigError> {
-    let address = env::var("CITADEL_CORE_AGENT_ADDRESS").ok();
-    let private_key_path = env::var_os("CITADEL_CORE_AGENT_PRIVATE_KEY_PATH");
+    let address = env::var(environment::CITADEL_CORE_AGENT_ADDRESS).ok();
+    let private_key_path = env::var_os(environment::CITADEL_CORE_AGENT_PRIVATE_KEY_PATH);
     match (address, private_key_path) {
         (None, None) => Ok(None),
         (Some(address), Some(private_key_path)) if !address.trim().is_empty() => {
-            let timeout = required_nonzero_seconds("CITADEL_CORE_AGENT_TIMEOUT_SECONDS")?;
+            let timeout =
+                required_nonzero_seconds(environment::CITADEL_CORE_AGENT_TIMEOUT_SECONDS)?;
             Ok(Some(AgentConfig {
                 address,
                 private_key_path: PathBuf::from(private_key_path),
@@ -1072,15 +1154,15 @@ fn agent_config(allow_insecure: bool) -> Result<Option<AgentConfig>, ConfigError
 }
 
 fn database_url() -> Result<(String, &'static str), ConfigError> {
-    if let Ok(value) = env::var("CITADEL_DATABASE_URL") {
+    if let Ok(value) = env::var(environment::CITADEL_DATABASE_URL) {
         validate_database_url(&value)?;
-        return Ok((value, "CITADEL_DATABASE_URL"));
+        return Ok((value, environment::CITADEL_DATABASE_URL));
     }
-    let user = env::var("PG_USER").map_err(|_| ConfigError::MissingDatabase)?;
-    let password = env::var("PG_PASSWORD").map_err(|_| ConfigError::MissingDatabase)?;
-    let database = env::var("PG_DATABASE").map_err(|_| ConfigError::MissingDatabase)?;
-    let host = env::var("PG_HOST").unwrap_or_else(|_| "pg_db".to_owned());
-    let port = parse_env("PG_PORT", 5432_u16)?;
+    let user = env::var(environment::PG_USER).map_err(|_| ConfigError::MissingDatabase)?;
+    let password = env::var(environment::PG_PASSWORD).map_err(|_| ConfigError::MissingDatabase)?;
+    let database = env::var(environment::PG_DATABASE).map_err(|_| ConfigError::MissingDatabase)?;
+    let host = env::var(environment::PG_HOST).unwrap_or_else(|_| "pg_db".to_owned());
+    let port = parse_env(environment::PG_PORT, 5432_u16)?;
     Ok((
         build_database_url(&host, port, &database, &user, &password)?,
         "PG_*",
@@ -1118,45 +1200,47 @@ fn build_database_url(
 
 fn validate_database_url(value: &str) -> Result<(), ConfigError> {
     let url = Url::parse(value).map_err(|error| ConfigError::Invalid {
-        name: "CITADEL_DATABASE_URL",
+        name: environment::CITADEL_DATABASE_URL,
         message: error.to_string(),
     })?;
     if !matches!(url.scheme(), "postgres" | "postgresql") {
         return Err(ConfigError::Invalid {
-            name: "CITADEL_DATABASE_URL",
+            name: environment::CITADEL_DATABASE_URL,
             message: "scheme must be postgres or postgresql".to_owned(),
         });
     }
     Ok(())
 }
 
-fn service_account_limits() -> Result<citadel_identity::ServiceAccountLimitsDetails, ConfigError> {
+fn service_account_limits(
+    validate: bool,
+) -> Result<citadel_identity::ServiceAccountLimitsDetails, ConfigError> {
     let limits = citadel_identity::ServiceAccountLimitsDetails {
         default_token_lifetime_days: parse_env(
-            "CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS",
+            environment::CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS,
             90,
         )?,
         maximum_token_lifetime_days: parse_env(
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS",
+            environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS,
             365,
         )?,
         maximum_active_tokens_per_account: parse_env(
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT",
+            environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT,
             10,
         )?,
     };
     for (name, valid) in [
         (
-            "CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS",
+            environment::CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS,
             limits.default_token_lifetime_days > 0,
         ),
         (
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS",
-            limits.maximum_token_lifetime_days >= limits.default_token_lifetime_days
+            environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS,
+            (!validate || limits.maximum_token_lifetime_days >= limits.default_token_lifetime_days)
                 && limits.maximum_token_lifetime_days <= 365_000,
         ),
         (
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT",
+            environment::CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT,
             limits.maximum_active_tokens_per_account > 0,
         ),
     ] {
@@ -1167,23 +1251,41 @@ fn service_account_limits() -> Result<citadel_identity::ServiceAccountLimitsDeta
     Ok(limits)
 }
 
-fn script_options() -> Result<citadel_scripts::ScriptOptions, ConfigError> {
+fn script_options(validate: bool) -> Result<citadel_scripts::ScriptOptions, ConfigError> {
     let options = citadel_scripts::ScriptOptions {
-        enabled: parse_env("CITADEL_SCRIPTS_ENABLED", true)?,
-        max_parallel_runs: parse_env("CITADEL_SCRIPTS_MAX_PARALLEL_RUNS", 4)?,
-        max_remote_runs: parse_env("CITADEL_SCRIPTS_MAX_REMOTE_RUNS", 16)?,
-        default_timeout_seconds: parse_env("CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS", 300)?,
-        max_timeout_seconds: parse_env("CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS", 1800)?,
-        poll_interval: Duration::from_secs(parse_env("CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS", 2)?),
+        enabled: parse_env(environment::CITADEL_SCRIPTS_ENABLED, true)?,
+        max_parallel_runs: parse_env(environment::CITADEL_SCRIPTS_MAX_PARALLEL_RUNS, 4)?,
+        max_remote_runs: parse_env(environment::CITADEL_SCRIPTS_MAX_REMOTE_RUNS, 16)?,
+        default_timeout_seconds: parse_env(
+            environment::CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS,
+            300,
+        )?,
+        max_timeout_seconds: parse_env(environment::CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS, 1800)?,
+        poll_interval: Duration::from_secs(parse_env(
+            environment::CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS,
+            2,
+        )?),
         schedule_poll_interval: Duration::from_secs(parse_env(
-            "CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS",
+            environment::CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS,
             30,
         )?),
     };
-    options.validate().map_err(|error| ConfigError::Invalid {
-        name: "Scripts",
-        message: error.to_string(),
-    })?;
+    let validation_options = if validate {
+        options
+    } else {
+        citadel_scripts::ScriptOptions {
+            default_timeout_seconds: options
+                .default_timeout_seconds
+                .min(options.max_timeout_seconds),
+            ..options
+        }
+    };
+    validation_options
+        .validate()
+        .map_err(|error| ConfigError::Invalid {
+            name: "Scripts",
+            message: error.to_string(),
+        })?;
     Ok(options)
 }
 
@@ -1249,11 +1351,11 @@ impl std::str::FromStr for LogFormat {
 }
 
 pub fn release_checks_allowed_from_env() -> Result<bool, ConfigError> {
-    parse_env("CITADEL_UPDATE_CHECKS_ENABLED", true)
+    parse_env(environment::CITADEL_UPDATE_CHECKS_ENABLED, true)
 }
 
 fn update_state_directory_from_env() -> Result<Option<PathBuf>, ConfigError> {
-    let name = "CITADEL_UPDATE_STATE_DIRECTORY";
+    let name = environment::CITADEL_UPDATE_STATE_DIRECTORY;
     let Some(value) = env::var_os(name) else {
         return Ok(None);
     };
@@ -1273,13 +1375,16 @@ fn update_state_directory_from_env() -> Result<Option<PathBuf>, ConfigError> {
 }
 
 pub fn log_format_from_env() -> Result<LogFormat, ConfigError> {
-    parse_env("CITADEL_LOG_FORMAT", LogFormat::default())
+    parse_env(environment::CITADEL_LOG_FORMAT, LogFormat::default())
 }
 
 /// Color is independent of format and defaults to interactive terminals only.
 pub fn log_color_from_env() -> Result<bool, ConfigError> {
     use std::io::IsTerminal;
-    parse_env("CITADEL_LOG_COLOR_ENABLED", std::io::stdout().is_terminal())
+    parse_env(
+        environment::CITADEL_LOG_COLOR_ENABLED,
+        std::io::stdout().is_terminal(),
+    )
 }
 
 #[cfg(test)]

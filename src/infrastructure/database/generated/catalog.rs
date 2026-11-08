@@ -8,4 +8,5 @@ const MIGRATIONS: &[EmbeddedMigration] = &[
     EmbeddedMigration { id: "0006", name: "shared_statistics", file: "0006_shared_statistics.sql", sql: include_str!("0006_shared_statistics.sql"), transactional: true },
     EmbeddedMigration { id: "0007", name: "platform_history", file: "0007_platform_history.sql", sql: include_str!("0007_platform_history.sql"), transactional: true },
     EmbeddedMigration { id: "0008", name: "statistics_identity", file: "0008_statistics_identity.sql", sql: include_str!("0008_statistics_identity.sql"), transactional: true },
+    EmbeddedMigration { id: "0009", name: "instance_settings", file: "0009_instance_settings.sql", sql: include_str!("0009_instance_settings.sql"), transactional: true },
 ];

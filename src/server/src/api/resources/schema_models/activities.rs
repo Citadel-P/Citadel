@@ -114,6 +114,18 @@ pub enum ActivityEventInfoSchema {
     },
 
     InstallationSettingsUpdated {
+        #[serde(
+            rename = "PreviousConfiguration",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        previous_configuration: Option<serde_json::Value>,
+        #[serde(
+            rename = "Configuration",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        configuration: Option<serde_json::Value>,
         #[serde(rename = "PreviousUpdateChecksEnabled")]
         previous_update_checks_enabled: bool,
         #[serde(rename = "UpdateChecksEnabled")]
@@ -1216,11 +1228,15 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
                 version,
             },
             citadel_activities::ActivityEventInfo::InstallationSettingsUpdated {
+                previous_configuration,
+                configuration,
                 previous_update_checks_enabled,
                 update_checks_enabled,
                 previous_mfa_policy,
                 mfa_policy,
             } => Self::InstallationSettingsUpdated {
+                previous_configuration,
+                configuration,
                 previous_update_checks_enabled,
                 update_checks_enabled,
                 previous_mfa_policy,

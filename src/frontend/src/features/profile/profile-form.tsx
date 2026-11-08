@@ -1,6 +1,5 @@
 import { PasswordFeedback } from '@/components/custom/password-feedback';
 import { Timestamp } from '@/components/custom/timestamp';
-import { InstallationSettingsControls } from './installation-settings';
 import { useSetupContext } from '@/features/setup/setup-context';
 import {
   CurrentProfileView,
@@ -57,7 +56,6 @@ type ProfileFormValue = {
   passwordCommands: string;
   mfaCommands: string;
   sessionCommands: string;
-  installationCommands: string;
 };
 
 type ConfirmSessionAction = { type: 'session'; session: UserSessionSummaryView } | { type: 'other-sessions' };
@@ -87,7 +85,6 @@ export function ProfileForm({
       passwordCommands: '',
       mfaCommands: '',
       sessionCommands: '',
-      installationCommands: '',
     }),
     [preferences, profile],
   );
@@ -254,37 +251,10 @@ export function ProfileForm({
               }),
             ],
           }),
-          ...(profile.authorization.isAdministrator
-            ? [
-                defineGroupField<ProfileFormValue>({
-                  id: 'installation',
-                  label: 'Instance',
-                  title: (
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span>Instance settings</span> <Badge variant="outline">Admins only</Badge>
-                    </span>
-                  ),
-                  description: 'Manage update checks and security policies for all users.',
-                  items: [
-                    defineField({
-                      key: 'installationCommands',
-                      label: '',
-                      ignoreFormDisabled: true,
-                      render: () => <InstallationSettingsControls />,
-                    }),
-                  ],
-                }),
-              ]
-            : []),
         ],
       }),
     }),
-    [
-      formatDate,
-      profile.authentication.canUseLocalPasswordMfa,
-      profile.authentication.canChangePassword,
-      profile.authorization.isAdministrator,
-    ],
+    [formatDate, profile.authentication.canUseLocalPasswordMfa, profile.authentication.canChangePassword],
   );
 
   return (

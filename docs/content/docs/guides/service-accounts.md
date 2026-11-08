@@ -43,7 +43,7 @@ for enabled accounts.
 Open:
 
 ```text
-Settings > Access > Service Accounts
+Administration > Access > Service Accounts
 ```
 
 The table shows each account's status, direct roles, Team memberships, active

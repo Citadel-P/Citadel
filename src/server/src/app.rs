@@ -2,63 +2,27 @@
 use crate::{
     cli,
     composition::{ServerComponents, background},
-    router as api, startup,
+    logging, router as api, startup,
 };
 use axum::Router;
-use citadel_server::{
-    config::{Config, LogFormat},
-    transport,
-};
+use citadel_server::{config::Config, transport};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing_subscriber::EnvFilter;
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    init_tracing()?;
     cli::run().await
 }
 
-fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let format = citadel_server::config::log_format_from_env()?;
-    let color = citadel_server::config::log_color_from_env()?;
-    if format == LogFormat::Text {
-        tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .with_ansi(color)
-            .with_target(false)
-            .init();
-    } else {
-        tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .json()
-            .with_ansi(false)
-            .with_current_span(false)
-            .init();
-    }
-    Ok(())
-}
-
-pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    let effective = config.effective()?;
-    tracing::info!("Starting Citadel Core");
-    tracing::debug!(
-        effective_configuration = %serde_json::to_string(&effective)?,
-        "Effective configuration"
-    );
-    if config.transport.mode == citadel_server::config::TransportMode::Disabled {
-        tracing::warn!(
-            "Citadel transport security is disabled; API and Agent traffic is not encrypted"
-        );
-    }
+pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let mut job_lease = startup::acquire_job_lease(&config).await?;
+    let mut recovered_update = false;
     if let Err(error) =
         startup::while_owned(&mut job_lease, startup::check_updates(&config)).await?
     {
         #[cfg(not(target_os = "linux"))]
-        let recovered = false;
+        let (recovered, acceptance_failure) = (false, None::<String>);
         #[cfg(target_os = "linux")]
-        let recovered = {
+        let (recovered, acceptance_failure) = {
             let cancellation = CancellationToken::new();
             let acceptance = startup::while_owned(
                 &mut job_lease,
@@ -73,25 +37,26 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             match result {
-                Ok(()) => {
-                    tracing::info!(
-                        "Update target verified, host reconciled and maintenance released."
-                    );
-                    true
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "Update target acceptance did not authorize admission");
-                    false
-                }
+                Ok(()) => (true, None),
+                Err(error) => (false, Some(error.to_string())),
             }
         };
         if !recovered {
+            logging::init_from_environment()?;
+            if let Some(error) = acceptance_failure {
+                tracing::warn!(%error, "Update target acceptance did not authorize admission");
+            }
             tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
             return serve_maintenance(&config, job_lease).await;
         }
         startup::while_owned(&mut job_lease, startup::check_updates(&config)).await??;
+        recovered_update = true;
     }
-    startup::while_owned(&mut job_lease, startup::migrate(&config)).await??;
+    startup::configure(&mut config, &mut job_lease).await?;
+    if recovered_update {
+        tracing::info!("Update target verified, host reconciled and maintenance released.");
+    }
+
     let (state, background_services) =
         startup::while_owned(&mut job_lease, ServerComponents::build(&config)).await??;
     let cancellation = state.cancellation.clone();

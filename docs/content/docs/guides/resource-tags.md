@@ -40,7 +40,7 @@ Assigning tags requires Write permission on the resource being tagged.
 
 ## Create A Tag
 
-Open **Settings → Tags**.
+Open **Configuration → Tags**.
 
 Create a tag with:
 
@@ -130,7 +130,7 @@ Resource detail pages show tags near the resource title or metadata area.
 
 ## Delete A Tag
 
-Users with Write permission on a tag can delete it from **Settings → Tags**.
+Users with Write permission on a tag can delete it from **Configuration → Tags**.
 
 Deleting a tag removes it from every resource that uses it. The resources themselves are not deleted or changed otherwise.
 

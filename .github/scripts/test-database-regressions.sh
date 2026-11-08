@@ -71,6 +71,9 @@ run_cargo test --locked --workspace --test platforms_http -- --ignored --test-th
 run_cargo test --locked --workspace --test edge_transport -- --ignored --test-threads=1
 run_cargo test --locked --workspace --test backup_source_discovery -- --ignored --test-threads=1
 run_cargo test --locked --workspace --test mfa_http --test oidc_http --test users_http --test teams_http --test roles_http -- --ignored --test-threads=1
+# Startup-bound Instance choices and actual logger initialization need the owned database.
+run_cargo test --locked --workspace --test bootstrap_process instance_settings:: -- --ignored --test-threads=1
+run_cargo test --locked --workspace --test configuration log_format_and_color_are_independent_and_piped_output_defaults_to_text -- --ignored --exact --test-threads=1
 # Copy catalog reads include all authorized workloads. Keep them separate
 # from earlier inventory fixtures that intentionally seed partial rows.
 docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_copies

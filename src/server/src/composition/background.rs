@@ -75,7 +75,8 @@ pub async fn spawn_all(
         "update-checker",
         citadel_server::workers::updates::run(
             state.updates.clone(),
-            state.identity.clone(),
+            state.instance.clone(),
+            state.identity.setup_changes(),
             cancellation.child_token(),
         ),
     );

@@ -6,6 +6,7 @@ use super::super::{
 use super::{OwnedUpdateHelper, evidence::conflict, runtime::private_home, verification};
 use crate::external::backups::system_recovery::{PgDumpSystemBackupBuilder, RecoveryAssets};
 use citadel_execution::ProcessRunner;
+use citadel_instance::environment;
 use citadel_updates::{UpdateError, UpdatePhase};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -168,8 +169,8 @@ impl OwnedUpdateHelper {
         let external = |name: &str| env[name].as_str().filter(|s| !s.trim().is_empty());
         let root = Path::new("/app/data");
         check_packaged_recovery_keys(
-            external("CITADEL_JWT_KEY"),
-            external("CITADEL_SECRETS_ENCRYPTION_KEY"),
+            external(environment::CITADEL_JWT_KEY),
+            external(environment::CITADEL_SECRETS_ENCRYPTION_KEY),
         )?;
         // The helper shares only the already-verified PostgreSQL network namespace.
         // Never reuse a host supplied in .env or expose a new database port.
@@ -179,17 +180,26 @@ impl OwnedUpdateHelper {
             "postgres://127.0.0.1:5432/"
         })
         .map_err(|_| conflict())?;
-        url.set_username(env["PG_USER"].as_str().ok_or_else(conflict)?)
+        url.set_username(env[environment::PG_USER].as_str().ok_or_else(conflict)?)
             .map_err(|_| conflict())?;
-        url.set_password(Some(env["PG_PASSWORD"].as_str().ok_or_else(conflict)?))
-            .map_err(|_| conflict())?;
-        url.set_path(env["PG_DATABASE"].as_str().ok_or_else(conflict)?);
+        url.set_password(Some(
+            env[environment::PG_PASSWORD]
+                .as_str()
+                .ok_or_else(conflict)?,
+        ))
+        .map_err(|_| conflict())?;
+        url.set_path(
+            env[environment::PG_DATABASE]
+                .as_str()
+                .ok_or_else(conflict)?,
+        );
         Ok(CheckpointSource {
             database_url: url.to_string(),
             assets: RecoveryAssets {
                 core_data_path: root.into(),
-                jwt_key_is_external: external("CITADEL_JWT_KEY").is_some(),
-                encryption_key_is_external: external("CITADEL_SECRETS_ENCRYPTION_KEY").is_some(),
+                jwt_key_is_external: external(environment::CITADEL_JWT_KEY).is_some(),
+                encryption_key_is_external: external(environment::CITADEL_SECRETS_ENCRYPTION_KEY)
+                    .is_some(),
             },
         })
     }

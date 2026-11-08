@@ -34,7 +34,7 @@ automatically. It is Optional by default. Administrators can require MFA for
 administrators or all local-password users, subject to the minimum set by server
 configuration. Users can enable MFA in **Profile → Security**.
 
-Open **Settings → Updates → Config** for **Available updates**, **Scheduled updates**,
+Open **Administration → Updates → Config** for **Available updates**, **Scheduled updates**,
 and **Release checks** in one settings form. Available updates shows the installed
 Core version and Agent status independently. **Check now** discovers releases without
 installing them. Manual review and approval never change scheduled membership or

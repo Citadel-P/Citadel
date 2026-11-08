@@ -36,3 +36,5 @@ pub mod schema_models;
 pub mod resource_copies;
 
 pub mod updates;
+
+pub mod instance;

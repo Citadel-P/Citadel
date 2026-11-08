@@ -124,8 +124,7 @@ const MenuItems: IMenuItem[] = [
       },
       {
         icon: <Settings className="w-4 h-4" />,
-        label: 'Settings',
-        route: '/settings',
+        label: 'Configuration',
         children: [
           {
             icon: renderIcon(CitadelIcons.AlertRule),
@@ -145,16 +144,19 @@ const MenuItems: IMenuItem[] = [
             route: '/tags',
             access: 'tags',
           },
+        ],
+      },
+      {
+        icon: renderIcon(CitadelIcons.Access),
+        label: 'Administration',
+        access: 'administrator',
+        children: [
+          { icon: renderIcon(CitadelIcons.Instance), label: 'Instance', route: '/instance', access: 'administrator' },
+          { icon: renderIcon(CitadelIcons.Access), label: 'Access', route: '/access', access: 'administrator' },
           {
             icon: renderIcon(CitadelIcons.OidcProvider),
             label: 'OIDC Providers',
             route: '/oidc-providers',
-            access: 'administrator',
-          },
-          {
-            icon: renderIcon(CitadelIcons.Access),
-            label: 'Access',
-            route: '/access',
             access: 'administrator',
           },
           {

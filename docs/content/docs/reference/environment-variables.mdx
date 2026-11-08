@@ -15,6 +15,17 @@ The sections below cover **Core and its Compose deployment**, followed by
 configuration. Set each variable on the process or container it belongs to;
 Core's `.env` does not configure remote Agents.
 
+## Instance controls and deployment overrides
+
+Administrators can manage the 26 controls described in [Instance settings](/operations/instance-settings).
+MFA applies on save; the other controls apply at the next Core start. An explicitly
+supplied environment value overrides the saved choice even when it equals the
+default. The page shows deployment-managed fields and pending restarts. Remove the
+override from every deployment environment source and restart/recreate Core to
+manage that field through the UI. Existing overrides are not removed automatically.
+`CITADEL_MFA_POLICY` remains a minimum; release-check deployment restrictions remain
+in Updates. `RUST_LOG` module filters remain deployment managed.
+
 ## Installation and transport
 
 | Setting | Required when | Purpose |
@@ -64,7 +75,7 @@ restart alone does not load a changed Compose environment.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit release checks controlled by setup or Settings → Updates; false prohibits automatic and manual checks. The saved frequency is 6, 12 or 24 hours (default: 6); no automatic installation |
+| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit release checks controlled by setup or Administration → Updates; false prohibits automatic and manual checks. The saved frequency is 6, 12 or 24 hours (default: 6); no automatic installation |
 | `CITADEL_UPDATE_STATE_DIRECTORY` | Unset | Absolute host path to an existing private updater registration. UI installation uses a root-owned registration and a bounded utility container to access host state; Core does not mount it directly. Invalid or unresolved state keeps Core in maintenance. Registration is an explicit operator step; updates still require a qualified release and approval |
 
 No Citadel telemetry or instance data is sent. GitHub receives normal connection

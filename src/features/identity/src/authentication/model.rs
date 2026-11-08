@@ -54,23 +54,21 @@ pub struct RefreshTokenClaims {
     pub expires_at: DateTime<Utc>,
 }
 
-/// Stored once for the installation, independently of personal preferences.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InstallationSettings {
-    pub initialized: bool,
+/// Choices written atomically with initial administrator creation.
+#[derive(Debug, Clone, Copy)]
+pub struct SetupChoices {
     pub update_checks_enabled: bool,
     pub update_check_interval_hours: i32,
     pub mfa_policy: crate::MfaPolicy,
 }
 
-/// Deployment restrictions remain authoritative over database choices.
+/// Deployment restrictions relevant to first-run authentication setup.
 #[derive(Debug, Clone, Copy)]
-pub struct InstallationPolicy {
+pub struct SetupPolicy {
     pub update_checks_allowed: bool,
     pub minimum_mfa_policy: crate::MfaPolicy,
 }
-
-impl Default for InstallationPolicy {
+impl Default for SetupPolicy {
     fn default() -> Self {
         Self {
             update_checks_allowed: true,
