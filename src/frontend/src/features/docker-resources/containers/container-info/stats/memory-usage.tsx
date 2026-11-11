@@ -147,7 +147,7 @@ const MemoryUsageHeader = ({ container, controls }: MemoryUsageHeaderProps) => {
   return (
     <StatsPanelHeader
       title="Memory Usage"
-      description="Memory usage excluding file cache over the selected period. Cache is shown separately."
+      description="Memory working set excluding inactive file cache over the selected period. Inactive file cache is shown separately."
       controls={controls}>
       {renderStat('Usage', container?.containerStat?.memoryActive)}
       {renderStat('Cache', container?.containerStat?.memoryCache)}

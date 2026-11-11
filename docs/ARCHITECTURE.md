@@ -62,10 +62,26 @@ Server supplies a trusted boolean indicating whether the deployment Core Agent
 connector requires HTTP. The same locked mutation rejects an effective HTTPS-only
 policy in that case, before any settings or success audit are written. No Agent
 inventory is scanned and no deployment address is exposed by the settings API.
+Instance configuration and MFA changes write one `InstanceConfigurationUpdated`
+activity against the installation UUID, with the
+administrator actor and non-secret before/after values. Settings and activities
+commit atomically; no-op saves emit no activity. Instance activities are
+administrator-only. Older `InstallationSettingsUpdated` User records remain readable.
+Core restart uses a persisted singleton claim and an `InstanceRestarted` activity.
+The claim is serialized with update admission by the existing identity mutation
+lock. Hosting polls the claim with bounded cadence, drains existing owned work,
+closes the database and releases the job lease before Linux re-exec. New startup
+acknowledges the activity only after both listeners bind. A boot UUID fences
+replayed requests; browser disconnects cannot cancel persisted admission. Pending
+restart activities are retained until acknowledgement. No Docker permissions or
+container restart-policy assumptions are required.
+Restart admission does not broadcast a settings-change invalidation while Core
+is shutting down; the existing realtime reconnect reconciles settings, restart
+status and activity history after startup.
 Notifications follow commit. The administrator Instance page reuses resource
 registration, FormShell, installation-settings mutations and existing realtime
-invalidation/reconnect handling. Configuration and Administration are sidebar
-groups with permission-filtered children; personal security remains in Profile.
+invalidation/reconnect handling. Configuration and Administration are bottom
+sidebar popup menus with permission-filtered destinations; personal security remains in Profile.
 The crate follows the existing `model`, `commands`, `validation`, `repository`,
 `error` and `service` roles. Instance uses Identity principals, MFA vocabulary and
 its clock port; Identity has no Instance dependency. Authentication retains only
@@ -108,7 +124,7 @@ Its release-source interface is implemented by the bounded GitHub HTTP adapter;
 Server owns scheduling, composition and HTTP presentation. Adapters own release HTTP access, private
 filesystem journals and transactional PostgreSQL state. Instance owns the
 installation-wide check setting; its write transaction emits the
-Updates activity and a separate MFA activity when both settings change.
+Updates activity and an Instance configuration activity when MFA or other Instance settings also change.
 
 The running application currently exposes persistent release checks and the
 administrator-only Config/Activities page. The page uses the shared resource registry,
@@ -1305,11 +1321,19 @@ Semantic health colors keep their meaning regardless of the selected accent.
 The shared top loading bar aggregates active React Query reads and mutations.
 It shows even fast requests for a minimum duration and waits for a quiet period before completing;
 individual responses and retry attempts do not restart the animation.
+Completed cycles remount the animation component before queued work starts,
+so delayed animation ticks cannot leave a visible bar after requests settle.
 
 Realtime snapshots or scoped invalidation events own synchronization after changes
 and on reconnect. Avoid parallel polling or mutation-triggered refresh-all flows.
 Authoritative mutation responses may update query caches while disconnected; cancel
 stale reads before applying them. Explicit error retries remain available.
+Public startup status uses the shared query cache and refreshes on realtime connection
+and reconnection, so password guidance follows the policy enforced by the running Core.
+Background refresh failures preserve the established startup gate and last known policy.
+Service-account token limits also refresh on connection and reconnection, so open
+forms use the limits enforced after a Core restart; inactive reads are invalidated
+and refreshed when next used.
 
 Frontend API modules and UI primitives must not import resource screens or the
 application router. Features may consume shared resource page templates and their

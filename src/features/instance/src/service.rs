@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 pub struct InstanceService {
     repository: Arc<dyn InstanceRepository>,
+    restart: Option<Arc<crate::InstanceRestartService>>,
     clock: Arc<dyn Clock>,
     installation_policy: InstallationPolicy,
     installation_changes: tokio::sync::watch::Sender<()>,
@@ -17,6 +18,7 @@ impl InstanceService {
     pub fn new(repository: Arc<dyn InstanceRepository>, clock: Arc<dyn Clock>) -> Self {
         Self {
             repository,
+            restart: None,
             clock,
             installation_policy: Default::default(),
             installation_changes: tokio::sync::watch::channel(()).0,
@@ -27,6 +29,15 @@ impl InstanceService {
     pub fn with_installation_policy(mut self, policy: InstallationPolicy) -> Self {
         self.installation_policy = policy;
         self
+    }
+
+    pub fn with_restart(mut self, restart: Arc<crate::InstanceRestartService>) -> Self {
+        self.restart = Some(restart);
+        self
+    }
+
+    pub fn restart(&self) -> Option<&Arc<crate::InstanceRestartService>> {
+        self.restart.as_ref()
     }
 
     pub fn installation_policy(&self) -> InstallationPolicy {

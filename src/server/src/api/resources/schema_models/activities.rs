@@ -113,6 +113,22 @@ pub enum ActivityEventInfoSchema {
         version: String,
     },
 
+    InstanceConfigurationUpdated {
+        #[serde(rename = "PreviousConfiguration")]
+        previous_configuration: serde_json::Value,
+        #[serde(rename = "Configuration")]
+        configuration: serde_json::Value,
+        #[serde(rename = "PreviousMfaPolicy")]
+        previous_mfa_policy: String,
+        #[serde(rename = "MfaPolicy")]
+        mfa_policy: String,
+    },
+    InstanceRestarted {
+        #[serde(rename = "Phase")]
+        phase: String,
+        #[serde(rename = "CompletedAt", skip_serializing_if = "Option::is_none")]
+        completed_at: Option<DateTime<Utc>>,
+    },
     InstallationSettingsUpdated {
         #[serde(
             rename = "PreviousConfiguration",
@@ -1227,6 +1243,24 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
                 recovery_id,
                 version,
             },
+            citadel_activities::ActivityEventInfo::InstanceConfigurationUpdated {
+                previous_configuration,
+                configuration,
+                previous_mfa_policy,
+                mfa_policy,
+            } => Self::InstanceConfigurationUpdated {
+                previous_configuration,
+                configuration,
+                previous_mfa_policy,
+                mfa_policy,
+            },
+            citadel_activities::ActivityEventInfo::InstanceRestarted {
+                phase,
+                completed_at,
+            } => Self::InstanceRestarted {
+                phase,
+                completed_at,
+            },
             citadel_activities::ActivityEventInfo::InstallationSettingsUpdated {
                 previous_configuration,
                 configuration,
@@ -1967,6 +2001,7 @@ enum_schema!(
         Role,
         License,
         Updates,
+        Instance,
         Build,
         BuildAgentPool,
         Volume,
@@ -2049,6 +2084,8 @@ enum_schema!(
         StackGitAutoDeployFailed,
         StackImported,
         StackWebhookReceived,
+        InstanceConfigurationUpdated,
+        InstanceRestarted,
         InstallationSettingsUpdated,
         UpdateDiscovered,
         UpdateChecksChanged,

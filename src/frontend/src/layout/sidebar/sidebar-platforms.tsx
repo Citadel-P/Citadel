@@ -43,8 +43,8 @@ export function SidebarPlatforms() {
   }, [routePlatform, setLastPlatformId]);
 
   return (
-    <SidebarGroup className="mb-1">
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+    <SidebarGroup className="py-1">
+      <SidebarGroupLabel className="h-6 text-[11px] font-medium text-muted-foreground">Platform</SidebarGroupLabel>
       <SidebarMenu>
         <SidebarMenuItem>
           <DropdownMenu>

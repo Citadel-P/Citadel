@@ -354,6 +354,15 @@ type ActivityInfoRendererMap = {
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
+  InstanceConfigurationUpdated: (info) => (
+    <MonacoDiff
+      original={{ configuration: info.previousConfiguration, mfaPolicy: info.previousMfaPolicy }}
+      modified={{ configuration: info.configuration, mfaPolicy: info.mfaPolicy }}
+      format="yaml"
+      title="Configuration changes"
+    />
+  ),
+  InstanceRestarted: (info) => <InstanceRestartDetails info={info} />,
   UpdateChecksChanged: (info) => (
     <MonacoDiff
       original={{ updateChecksEnabled: info.previousUpdateChecksEnabled }}
@@ -1131,6 +1140,27 @@ function SourceMetaItem({
 function shortCommit(commit: string | null | undefined) {
   if (!commit) return '-';
   return commit.length > 12 ? commit.slice(0, 12) : commit;
+}
+
+function InstanceRestartDetails({ info }: { info: InfoOf<'InstanceRestarted'> }) {
+  const formatDateTime = useProfileDateTimeFormatter();
+  return (
+    <p className="text-sm text-muted-foreground">
+      {info.phase === 'Completed' ? (
+        <>
+          Core restarted successfully.
+          {info.completedAt && (
+            <>
+              {' '}
+              Completed <Timestamp value={info.completedAt} formatDateTime={formatDateTime} />.
+            </>
+          )}
+        </>
+      ) : (
+        'Core restart requested. Waiting for startup to complete.'
+      )}
+    </p>
+  );
 }
 
 function ActivityInfo({ activity }: { activity: ActivityView }) {

@@ -615,6 +615,13 @@ migrations. The initial migration includes workload
 statistics, alert observation ordering, secret-use grants, and build, backup,
 restore and script execution ownership/capacity changes.
 
+Migration `0004_query_indexes.sql` consolidates the former `0004`–`0010` SQL in
+its original order, including statistics storage and Instance settings/restart.
+It upgrades the unchanged `0001`–`0003` catalog. Databases that already recorded
+any migration from the former `0004`–`0010` sequence cannot use this consolidated
+catalog directly; their checksums/history remain protected by the migration
+runner. Any data-preserving conversion is a separate operator task.
+
 This consolidated baseline requires a fresh database. It cannot upgrade a database
 that recorded an earlier baseline checksum or the former `0002`–`0011` sequence.
 Recreating a database is a separate, explicit operator action; development tasks

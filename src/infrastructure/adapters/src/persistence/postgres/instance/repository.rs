@@ -34,3 +34,7 @@ impl InstanceRepository for PostgresInstanceRepository {
         Box::pin(super::settings::patch(self, principal, patch, now))
     }
 }
+
+pub(super) fn storage(error: impl std::fmt::Display) -> InstanceError {
+    InstanceError::Storage(error.to_string())
+}

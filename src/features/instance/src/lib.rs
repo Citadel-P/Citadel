@@ -5,6 +5,7 @@ pub mod environment;
 mod error;
 mod model;
 mod repository;
+mod restart;
 mod service;
 mod validation;
 
@@ -13,7 +14,8 @@ pub use error::InstanceError;
 pub use model::{
     InstallationPolicy, InstallationSettings, InstanceConfiguration, InstanceOverrides, LogFormat,
 };
-pub use repository::InstanceRepository;
+pub use repository::{InstanceRepository, InstanceRestartRepository};
+pub use restart::{InstanceRestartService, RestartStatus};
 pub use service::InstanceService;
 
 #[cfg(test)]

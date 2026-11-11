@@ -9,6 +9,8 @@ import {
   FieldSwitch,
   FormShell,
 } from '@/components/custom/form-builder';
+import { MoveUpRight } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -35,16 +37,30 @@ export function InstanceSettingsForm() {
           defineGroupField<InstanceFormValue>({
             id: section.label.toLowerCase(),
             label: section.label,
+            description: section.description,
             items: [
               ...(section.label === 'Security'
                 ? [
                     defineField<InstanceFormValue>({
                       key: 'mfaPolicy',
                       label: 'MFA requirement',
-                      labelSuffix: <Badge variant="outline">Saves on selection</Badge>,
-                      description: `Applies at the next local-password sign-in; existing sessions stay signed in. OIDC MFA belongs to the provider. Agents and service accounts are excluded. Relaxing the policy keeps enrolled authenticators. Deployment minimum (CITADEL_MFA_POLICY): ${settings?.minimumMfaPolicy ?? MfaPolicy.Optional}.`,
-                      ignoreFormDisabled: true,
-                      render: () => <MfaPolicyControl />,
+                      description: (
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <p>
+                            Require MFA for local-password sign-in. Existing sessions are unaffected.{' '}
+                            <EnvironmentReference variable="CITADEL_MFA_POLICY" />
+                          </p>
+                          <p>Deployment minimum: {settings?.minimumMfaPolicy ?? MfaPolicy.Optional}.</p>
+                        </div>
+                      ),
+                      render: (value, set) => (
+                        <MfaPolicyControl
+                          value={value}
+                          minimum={settings?.minimumMfaPolicy ?? MfaPolicy.Optional}
+                          disabled={save.isPending}
+                          onChange={(mfaPolicy) => set({ mfaPolicy })}
+                        />
+                      ),
                     }),
                   ]
                 : []),
@@ -61,19 +77,21 @@ export function InstanceSettingsForm() {
                   key: field.key,
                   label: field.label,
                   labelSuffix: (
-                    <span className="flex gap-2">
-                      {field.advanced && <Badge variant="outline">Advanced</Badge>}
+                    <span className="flex flex-wrap gap-2">
+                      {managed && <Badge variant="outline">Managed by environment</Badge>}
                       {pending && <Badge variant="outline">Restart pending</Badge>}
                     </span>
                   ),
                   description: (
-                    <div className="space-y-1">
-                      <p>{field.description}</p>
-                      <p>Applies after a Core restart.</p>
+                    <div className="space-y-1 text-sm text-muted-foreground">
+                      <p>
+                        {field.description} <EnvironmentReference variable={field.environment} />
+                      </p>
                       {managed && (
                         <p>
-                          Deployment managed by <code>{field.environment}</code>: {String(deploymentValue)}. Remove the
-                          override and restart Core to manage this here.
+                          Environment value: {String(deploymentValue)}. Remove{' '}
+                          <code className="break-all">{field.environment}</code> from Core’s environment to edit here.
+                          Recreate the Core container, or restart Core for a non-container installation.
                         </p>
                       )}
                       {(pending || managed) && (
@@ -110,7 +128,19 @@ export function InstanceSettingsForm() {
                   },
                   render: (value, set) => {
                     const change = (value: unknown) => set({ [field.key]: value } as Partial<InstanceFormValue>);
-                    const disabled = save.isPending || managed;
+                    if (managed)
+                      return (
+                        <output aria-label={field.label} className="block max-w-100 break-words text-sm font-medium">
+                          {typeof effective === 'boolean'
+                            ? effective
+                              ? 'Enabled'
+                              : 'Disabled'
+                            : effective === ''
+                              ? 'Automatic'
+                              : String(effective)}
+                        </output>
+                      );
+                    const disabled = save.isPending;
                     if (typeof value === 'boolean')
                       return (
                         <FieldSwitch
@@ -124,14 +154,11 @@ export function InstanceSettingsForm() {
                     if (field.choices)
                       return (
                         <Select value={String(value)} disabled={disabled} onValueChange={change}>
-                          <SelectTrigger aria-label={field.label}>
+                          <SelectTrigger className="w-full max-w-100" aria-label={field.label}>
                             <SelectValue placeholder={String(value)} />
                           </SelectTrigger>
                           <SelectContent>
-                            {(managed && !field.choices.includes(String(value))
-                              ? [String(value), ...field.choices]
-                              : field.choices
-                            ).map((choice) => (
+                            {field.choices.map((choice) => (
                               <SelectItem key={choice} value={choice}>
                                 {choice}
                               </SelectItem>
@@ -142,6 +169,7 @@ export function InstanceSettingsForm() {
                     return (
                       <FieldInput
                         id={field.key}
+                        className="w-full max-w-100"
                         value={value}
                         disabled={disabled}
                         type={field.minimum === undefined ? 'text' : 'number'}
@@ -179,20 +207,6 @@ export function InstanceSettingsForm() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        MFA applies on save. All other settings are saved for the next Core start. Saving does not restart Core or
-        Agents.
-      </p>
-      {settings.restartRequired && (
-        <p role="status" className="text-sm font-medium">
-          Restart required: saved settings differ from the values currently in use.
-        </p>
-      )}
-      {save.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          Could not save instance settings. {save.error.message}
-        </p>
-      )}
       <FormShell
         schema={schema}
         original={original}
@@ -211,5 +225,26 @@ export function InstanceSettingsForm() {
         }}
       />
     </div>
+  );
+}
+
+function EnvironmentReference({ variable }: { variable: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={`https://docs.citadelplane.com/reference/environment-variables/#${variable.toLowerCase().replaceAll('_', '-')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Environment variable ${variable}: open documentation`}
+          className="inline-flex size-4 align-text-bottom items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <MoveUpRight className="size-3" aria-hidden="true" />
+        </a>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[min(24rem,calc(100vw-2rem))] space-y-1">
+        <code className="break-all">{variable}</code>
+        <p>Open environment variable reference</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

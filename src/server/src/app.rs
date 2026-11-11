@@ -67,6 +67,7 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
     let (state, background_services) =
         startup::while_owned(&mut job_lease, ServerComponents::build(&config)).await??;
     let cancellation = state.cancellation.clone();
+    let restart = state.restart.clone();
     // Also cancel owned work if initialization fails before normal shutdown is
     // installed (for example, lease loss while registering background workers).
     let _cancel_on_exit = cancellation.clone().drop_guard();
@@ -104,17 +105,21 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
         edge_app,
         cancellation.clone(),
         config.shutdown_timeout,
+        restart.clone(),
     );
     tokio::pin!(server);
     let exit = tokio::select! {
         server_result = &mut server => ServerExit::Server(server_result),
         task_result = supervisor.wait_for_exit() => ServerExit::Task(task_result),
+        result = restart.wait_for_request() => ServerExit::Restart(result),
     };
     let shutdown_deadline = tokio::time::Instant::now() + config.shutdown_timeout;
     cancellation.cancel();
-    if matches!(exit, ServerExit::Task(_)) {
-        let _ = tokio::time::timeout_at(shutdown_deadline, &mut server).await;
-    }
+    let server_shutdown = if matches!(exit, ServerExit::Task(_) | ServerExit::Restart(_)) {
+        Some(tokio::time::timeout_at(shutdown_deadline, &mut server).await)
+    } else {
+        None
+    };
     let supervisor_result = supervisor
         .shutdown(shutdown_deadline.saturating_duration_since(tokio::time::Instant::now()))
         .await;
@@ -124,11 +129,22 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
     let _retained_job_lease = lease_retained.await.ok();
     let pool_close_result = tokio::time::timeout(config.shutdown_timeout, pool.close()).await;
 
+    let restarting = matches!(exit, ServerExit::Restart(Ok(())));
     match exit {
         ServerExit::Server(result) => result?,
         ServerExit::Task(result) => result?,
+        ServerExit::Restart(ref result) => {
+            if let Err(error) = result {
+                return Err(error.to_string().into());
+            }
+        }
     }
     supervisor_result?;
+    if restarting {
+        server_shutdown
+            .expect("restart drains the listeners")
+            .map_err(|_| "Core listener shutdown exceeded the restart budget")??;
+    }
     if dynamic_result.is_err() {
         return Err(
             "Dynamic task cleanup exceeded the shutdown budget; durable claims remain recoverable"
@@ -138,10 +154,15 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
     if pool_close_result.is_err() {
         return Err("PostgreSQL pool close exceeded the shutdown timeout".into());
     }
+    drop(_retained_job_lease);
+    if restarting {
+        crate::restart::relaunch()?;
+    }
     Ok(())
 }
 
 enum ServerExit {
+    Restart(std::io::Result<()>),
     Server(std::io::Result<()>),
     Task(Result<(), citadel_runtime::SupervisedTaskError>),
 }
@@ -160,6 +181,7 @@ async fn serve_maintenance(
         edge,
         cancellation.clone(),
         config.shutdown_timeout,
+        crate::restart::RestartControl::default(),
     );
     // Both futures are owned here. Maintenance starts no normal background jobs,
     // but losing the single-Core lease still terminates the listeners.
@@ -187,23 +209,29 @@ async fn run_server(
     edge_app: Router,
     cancellation: CancellationToken,
     shutdown_timeout: Duration,
+    restart: crate::restart::RestartControl,
 ) -> std::io::Result<()> {
+    let http_handle = axum_server::Handle::new();
+    let edge_handle = axum_server::Handle::new();
     let http = async {
         tokio::try_join!(
-            transport::serve(
+            transport::serve_with_handle(
                 address,
                 &transport_config,
                 app,
                 cancellation.clone(),
-                shutdown_timeout
+                shutdown_timeout,
+                http_handle.clone()
             ),
-            transport::serve(
+            transport::serve_with_handle(
                 std::net::SocketAddr::new(address.ip(), transport_config.edge_grpc_port),
                 &transport_config,
                 edge_app,
                 cancellation.clone(),
-                shutdown_timeout
+                shutdown_timeout,
+                edge_handle.clone()
             ),
+            restart.acknowledge(http_handle.clone(), edge_handle.clone()),
         )
         .map(|_| ())
     };

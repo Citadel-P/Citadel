@@ -4,6 +4,7 @@ mod cli;
 mod cli_updates;
 mod composition;
 mod logging;
+mod restart;
 mod router;
 mod startup;
 

@@ -22,7 +22,7 @@ const STATS_RETENTION_SQL: [&str; 2] = [
 ];
 
 const HEALTH_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM containerhealthtransitions WHERE recordedat < now() - interval '7 days' ORDER BY recordedat LIMIT 1000 FOR UPDATE SKIP LOCKED) DELETE FROM containerhealthtransitions target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
-const ACTIVITY_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM activityevents WHERE createdat<CURRENT_TIMESTAMP-INTERVAL '90 days' ORDER BY createdat LIMIT 5000 FOR UPDATE SKIP LOCKED) DELETE FROM activityevents target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
+const ACTIVITY_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM activityevents WHERE createdat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND NOT EXISTS(SELECT 1 FROM instancerestarts r WHERE r.activityid=activityevents.id) ORDER BY createdat LIMIT 5000 FOR UPDATE SKIP LOCKED) DELETE FROM activityevents target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
 const SCRIPT_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT r.ctid FROM scriptruns r WHERE finishedat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND status NOT IN('Queued','Running') AND NOT EXISTS(SELECT 1 FROM scripts a WHERE a.currentrunid=r.id) ORDER BY finishedat LIMIT 5000 FOR UPDATE OF r SKIP LOCKED) DELETE FROM scriptruns target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
 const TOKEN_EXPIRY_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP ORDER BY expiresat LIMIT 5000 FOR UPDATE SKIP LOCKED) DELETE FROM refreshtokens target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
 const BUILD_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT r.ctid FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=r.id) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000 FOR UPDATE OF r SKIP LOCKED) DELETE FROM buildruns target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
@@ -266,7 +266,8 @@ mod tests {
         let mut conn = PgConnection::connect(&url).await.unwrap();
         let mut tx = conn.begin().await.unwrap();
         tx.execute(
-            "CREATE TEMP TABLE scripts(currentrunid uuid) ON COMMIT DROP;
+            "CREATE TEMP TABLE instancerestarts(activityid uuid) ON COMMIT DROP;
+            CREATE TEMP TABLE scripts(currentrunid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildprojects(currentrunid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildexecutorreservations(runid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildcompletionqueue(buildrunid uuid) ON COMMIT DROP;
@@ -305,6 +306,10 @@ mod tests {
                  ANALYZE {table}"
             ))).await.unwrap();
             let mut protected = 0;
+            if table == "activityevents" {
+                tx.execute("WITH pending AS (INSERT INTO activityevents(id,createdat) VALUES(gen_random_uuid(),now()-interval '101 days') RETURNING id) INSERT INTO instancerestarts(activityid) SELECT id FROM pending").await.unwrap();
+                protected += 1;
+            }
             if table == "scriptruns" || table == "buildruns" {
                 // Neither active states nor the current run may be pruned, even
                 // if a stale completion timestamp is present.

@@ -22,7 +22,7 @@ const sample = {
   txBytes: 0,
 };
 
-it('shows the same non-cache usage in the stats tab and Memory column without subtracting cache again', () => {
+it('shows the same working-set usage in the stats tab and Memory column without subtracting cache again', () => {
   render(
     <>
       <MemoryUsageCell state={ContainerStateStatus.Running} stats={sample} />
@@ -37,8 +37,8 @@ it('shows the same non-cache usage in the stats tab and Memory column without su
   expect(screen.getByText('94 MB / 1 GB')).toBeVisible();
   expect(screen.getByText('94 MB')).toBeVisible();
   expect(screen.getByText('167 MB')).toBeVisible();
-  expect(screen.getByTitle('Memory usage excluding file cache / memory limit')).toBeVisible();
-  expect(screen.getByText(/Memory usage excluding file cache over the selected period/)).toBeVisible();
+  expect(screen.getByTitle('Memory working set excluding inactive file cache / memory limit')).toBeVisible();
+  expect(screen.getByText(/Memory working set excluding inactive file cache over the selected period/)).toBeVisible();
 });
 
 it('does not show a stopped container’s last usage as current memory', () => {

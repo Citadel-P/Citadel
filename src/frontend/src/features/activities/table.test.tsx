@@ -17,6 +17,36 @@ vi.mock('@/lib/use-profile-date-time', () => ({
 }));
 
 describe('ActivitiesTable', () => {
+  it('links Instance events to settings and opens their before/after details', async () => {
+    const user = userEvent.setup();
+    const activity = {
+      id: 'instance-activity',
+      resourceId: 'instance-id',
+      resourceType: 'Instance',
+      resourceName: 'Instance',
+      eventType: 'InstanceConfigurationUpdated',
+      status: 'Success',
+      createdAt: '2026-11-11T10:00:00Z',
+      actorName: 'Admin',
+      actorType: 'User',
+      info: {
+        $type: 'InstanceConfigurationUpdated',
+        previousConfiguration: { passwordMinimumLength: 12 },
+        configuration: { passwordMinimumLength: 20 },
+      },
+    } as ActivityView;
+    renderCitadel(
+      <ActivitiesTable
+        pagedResult={{ items: [activity], totalCount: 1, page: 1, pageSize: 20 }}
+        isLoading={false}
+        displayTarget
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Instance' })).toHaveAttribute('href', '/instance');
+    await user.click(screen.getByRole('button', { name: 'Instance Configuration Updated' }));
+    expect(mocks.open).toHaveBeenCalledWith({ kind: 'activity', payload: activity });
+  });
+
   it('links and sorts targets by resource name instead of platform name', async () => {
     const user = userEvent.setup();
     const items = [

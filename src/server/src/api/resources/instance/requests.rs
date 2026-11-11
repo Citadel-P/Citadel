@@ -31,3 +31,9 @@ impl From<PatchInstallationSettingsRequest> for citadel_instance::PatchInstallat
         }
     }
 }
+
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RestartInstanceRequest {
+    pub boot_id: uuid::Uuid,
+}

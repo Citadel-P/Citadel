@@ -3,20 +3,50 @@ title: Instance settings
 description: Administrator controls for security, monitoring, execution and Core startup defaults.
 ---
 
-Open **System → Administration → Instance** to configure this installation. Only
+Open **Administration → Instance** from the bottom of the sidebar to configure this installation. Only
 an enabled human administrator can read or change these settings. Saves are
 validated together, persisted in PostgreSQL and recorded in Activities. Other
 connected administrator browsers receive the existing settings invalidation.
 
-The sidebar separates **Configuration** (Alert Rules, Bindings and Tags, according
-to your permissions) from **Administration** (Instance, Access, OIDC Providers,
-Updates and License). Update checks and update schedules remain in **Updates**.
+Use **Config** to edit settings and **Activities** to review saved changes from
+all administrators. Configuration and MFA-policy changes use `InstanceConfigurationUpdated`,
+showing who saved them, when, and the previous and new values. Select an activity
+to compare the previous and new configuration, including MFA policy, in a diff.
+Unsaved edits and saves without changes are not logged.
+Earlier installation-setting records remain available under User in the global
+Activities page; new records appear under Instance. Update-check changes remain
+in Updates history.
+
+The sidebar groups daily work under **Infrastructure**, **Orchestration**,
+**Automation**, **Builds**, **Providers**, and **System**. The platform browser opens one platform's resources; it does not
+filter the other pages. Its **All platforms** entry returns to the platform list.
+At the bottom, **Configuration** (Alert Rules, Bindings and Tags, according to
+your permissions) and **Administration** (Instance, Access, OIDC Providers,
+Updates and License) open popup menus. Update checks and update schedules remain in **Updates**.
 Personal password changes, authenticator enrollment, recovery codes and sessions
 remain in **Profile**.
 
+## Restart Core
+
+Use **Restart Core** beside the page title to apply saved settings. Confirm the
+restart after saving your changes. Core gracefully stops its workers and restarts
+its executable; managed containers and PostgreSQL keep running. The browser
+reconnects automatically. This is supported on Linux, including native and
+rootless container installations; it does not recreate the container or reload a
+changed Compose environment file.
+
+`InstanceRestarted` records the administrator's request as pending and becomes
+successful after the next Core startup opens both listeners. Its details show a
+compact status message, with the completion time when available. Duplicate requests
+for the same running Core do not add events. Restart is blocked while an update
+or update recovery owns the installation. If shutdown or startup fails, the
+activity remains pending; inspect the Core logs and recover from the host.
+
 ## When changes apply
 
-**MFA requirement saves on selection** and applies immediately, at the next local-password sign-in. Existing
+**MFA requirement uses the same Save and Reset actions as other settings.**
+Changing the dropdown only edits the draft. Save applies the requirement immediately
+for the next local-password sign-in; Reset discards the unsaved choice. Existing
 sessions remain signed in. OIDC MFA belongs to the identity provider; Agents and
 service accounts do not enter interactive MFA. Relaxing the requirement does not
 disable an enrolled authenticator. `CITADEL_MFA_POLICY` sets a minimum requirement
@@ -32,14 +62,17 @@ restart procedure; do not remove application or PostgreSQL volumes.
 
 For ordinary settings, an explicitly supplied environment variable takes
 precedence over the saved administrator choice; the built-in default is used
-when no choice exists. Deployment-managed controls show the variable name and
-value, and conflicting API changes are rejected. An environment variable whose
+when no choice exists. Deployment-managed settings show a **Managed by environment** badge and a
+read-only effective value instead of an editable control. The description names
+the variable and explains how to make the setting editable. Conflicting API
+changes are rejected. An environment variable whose
 value equals the built-in default is still an explicit override.
 
 To let the UI manage a setting, remove its assignment from the deployment's
 environment, including Compose `environment`, `env_file` and hosting environment
-settings, then recreate/restart Core. Do not merely edit `.env` if Compose still
-injects the value. Existing operator overrides remain authoritative. New example
+settings. For Compose installations, recreate the Core container; a restart alone
+keeps its existing environment. For a non-container installation, restart Core
+with the override removed. Do not merely edit `.env` if Compose still injects the value. Existing operator overrides remain authoritative. New example
 files comment out these optional overrides. `RUST_LOG` module filters are
 preserved as deployment-managed values. Release deployment may deliberately pin
 `CITADEL_EDGE_AGENT_IMAGE` to a verified digest.

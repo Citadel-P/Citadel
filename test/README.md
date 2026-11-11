@@ -625,8 +625,9 @@ Run ignored database tests serially (`--ignored --test-threads=1`).
 
 Statistics storage coverage includes the `migrations` test
 `compact_statistics_preserve_samples_uniqueness_and_migration_history`: it upgrades
-populated old tables, verifies removed-ID index savings, and then normalizes their
-measurements without changing owner snapshots or applied checksums. Conflicting
+populated tables from migration 0003 through the consolidated 0004, verifies
+redundant UUID indexes are removed, and normalizes measurements without changing
+owner snapshots or the applied 0001–0003 checksums. Conflicting
 copies must abort and roll back; corrected data can then upgrade. The
 `stats_batch_persistence` storage tests compare raw and compacted gauges, resets,
 nullable disk counters and ownership, exercise rollback and sealed-minute retries,

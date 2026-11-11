@@ -6,19 +6,23 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 pub(super) fn build(config: &Config, pool: &PgPool) -> Arc<InstanceService> {
-    Arc::new(
-        InstanceService::new(
-            Arc::new(PostgresInstanceRepository::new(pool.clone())),
-            Arc::new(SystemClock),
-        )
-        .with_installation_policy(InstallationPolicy {
-            running: config.instance_configuration.clone(),
-            overrides: config.instance_overrides.clone(),
-            update_checks_allowed: config.updates_enabled,
-            minimum_mfa_policy: config.identity.mfa.policy,
-            deployment_core_agent_requires_http: config.deployment_core_agent_requires_http(),
-        }),
+    let service = InstanceService::new(
+        Arc::new(PostgresInstanceRepository::new(pool.clone())),
+        Arc::new(SystemClock),
     )
+    .with_installation_policy(InstallationPolicy {
+        running: config.instance_configuration.clone(),
+        overrides: config.instance_overrides.clone(),
+        update_checks_allowed: config.updates_enabled,
+        minimum_mfa_policy: config.identity.mfa.policy,
+        deployment_core_agent_requires_http: config.deployment_core_agent_requires_http(),
+    });
+    #[cfg(target_os = "linux")]
+    let service = service.with_restart(Arc::new(citadel_instance::InstanceRestartService::new(
+        Arc::new(PostgresInstanceRepository::new(pool.clone())),
+        Arc::new(SystemClock),
+    )));
+    Arc::new(service)
 }
 
 /// Read only after migration/recovery admission, before constructing startup-bound consumers.

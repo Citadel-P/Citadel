@@ -275,3 +275,126 @@ async fn saved_instance_choices_apply_after_restart_to_real_consumers() {
     pool.close().await;
     fixture.close().await;
 }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_TEST_DATABASE_URL; re-executes an isolated Core process"]
+async fn administrator_can_restart_core_to_apply_saved_configuration() {
+    let fixture = Fixture::new().await;
+    let mut server = fixture.start_with_instance_environment(false, false, true, None);
+    fixture.ready(&mut server).await;
+    let initialized = setup::initialize(&fixture, &server, "restart-owner").await;
+    assert_eq!(initialized.status(), 200);
+    let token = initialized.json::<Value>().await.unwrap()["accessToken"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let url = format!("{}/api/v1/instance/restart", server.url);
+    assert_eq!(
+        fixture
+            .client
+            .post(&url)
+            .json(&json!({"bootId":Uuid::now_v7()}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let status: Value = fixture
+        .client
+        .get(&url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(status["available"], true);
+    let changed = fixture
+        .client
+        .patch(format!("{}/api/v1/installation/settings", server.url))
+        .bearer_auth(&token)
+        .json(&json!({"configuration":{"passwordMinimumLength":24, "logFormat":"Json"}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(changed.status(), 200);
+    let old_pid = server.child.id();
+    let requested = fixture
+        .client
+        .post(&url)
+        .bearer_auth(&token)
+        .json(&json!({"bootId":status["bootId"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        requested.status(),
+        202,
+        "{}",
+        requested.text().await.unwrap()
+    );
+    tokio::time::timeout(Duration::from_secs(45), async {
+        loop {
+            assert!(
+                server.child.try_wait().unwrap().is_none(),
+                "Core must re-exec without exiting"
+            );
+            if let Ok(response) = fixture.client.get(&url).bearer_auth(&token).send().await {
+                if let Ok(next) = response.json::<Value>().await {
+                    if next["available"] == true && next["bootId"] != status["bootId"] {
+                        break;
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+    })
+    .await
+    .expect("Core did not finish the requested restart");
+    assert_eq!(
+        server.child.id(),
+        old_pid,
+        "Linux exec preserves the supervised PID"
+    );
+    let active: Value = fixture
+        .client
+        .get(format!("{}/api/v1/installation/settings", server.url))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(active["restartRequired"], false);
+    assert_eq!(active["runningConfiguration"]["passwordMinimumLength"], 24);
+    assert_eq!(active["runningConfiguration"]["logFormat"], "Json");
+    assert_eq!(
+        fixture
+            .client
+            .post(&url)
+            .bearer_auth(&token)
+            .json(&json!({"bootId":status["bootId"]}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let pool = PgPool::connect(&fixture.database_url).await.unwrap();
+    let audits: Vec<(String, Value)> = sqlx::query_as(
+        "SELECT status,info::jsonb FROM activityevents WHERE eventtype='InstanceRestarted'",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audits.len(), 1);
+    assert_eq!(audits[0].0, "Success");
+    assert_eq!(audits[0].1["Phase"], "Completed");
+    server.stop().await;
+    pool.close().await;
+    fixture.close().await;
+}

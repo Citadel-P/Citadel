@@ -3066,3 +3066,10 @@ $$;
 
 -- Typed non-secret instance choices; absence of a property uses its built-in default.
 ALTER TABLE instancesetupstates ADD COLUMN instanceconfiguration jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(instanceconfiguration) = 'object');
+
+-- One durable restart claim; retain its audit record until a subsequent Core startup acknowledges it.
+CREATE TABLE instancerestarts (
+    id integer PRIMARY KEY CHECK (id=1),
+    bootid uuid NOT NULL,
+    activityid uuid NOT NULL REFERENCES activityevents(id) ON DELETE RESTRICT
+);

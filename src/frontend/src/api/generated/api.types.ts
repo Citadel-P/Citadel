@@ -1038,6 +1038,7 @@ export enum ActivityResourceType {
   Role = "Role",
   License = "License",
   Updates = "Updates",
+  Instance = "Instance",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
@@ -1115,6 +1116,8 @@ export enum ActivityEventType {
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
   StackImported = "StackImported",
   StackWebhookReceived = "StackWebhookReceived",
+  InstanceConfigurationUpdated = "InstanceConfigurationUpdated",
+  InstanceRestarted = "InstanceRestarted",
   InstallationSettingsUpdated = "InstallationSettingsUpdated",
   UpdateDiscovered = "UpdateDiscovered",
   UpdateChecksChanged = "UpdateChecksChanged",
@@ -4226,6 +4229,13 @@ export interface InstanceOverridesView {
   statisticsWriteIntervalSeconds?: number | null;
 }
 
+export interface InstanceRestartView {
+  available: boolean;
+  /** @format uuid */
+  bootId?: string | null;
+  pending: boolean;
+}
+
 export interface InternalSecretInput {
   name: string;
   value: string;
@@ -5357,6 +5367,19 @@ export type PublicActivityEventInfo =
       /** @format uuid */
       recoveryId: string;
       version: string;
+    }
+  | {
+      $type: "InstanceConfigurationUpdated";
+      configuration: any;
+      mfaPolicy: string;
+      previousConfiguration: any;
+      previousMfaPolicy: string;
+    }
+  | {
+      $type: "InstanceRestarted";
+      /** @format date-time */
+      completedAt?: string | null;
+      phase: string;
     }
   | {
       $type: "InstallationSettingsUpdated";
@@ -6621,6 +6644,11 @@ export interface ResourceSpec {
 
 export interface ResourceTagsResponse {
   tags: ResourcesTagsTagSummary[];
+}
+
+export interface RestartInstanceRequest {
+  /** @format uuid */
+  bootId: string;
 }
 
 export interface RestoreInput {
@@ -14179,6 +14207,60 @@ export class Api<
         secure: true,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetInstanceRestart
+     * @summary Get Core restart availability (administrator)
+     * @request GET:/api/v1/instance/restart
+     * @secure
+     * @response `200` `InstanceRestartView`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceRestart: (params: RequestParams = {}) =>
+      this.request<InstanceRestartView, ProblemDetails>({
+        path: `/api/v1/instance/restart`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name RestartInstance
+     * @summary Restart Core to apply saved configuration (administrator)
+     * @request POST:/api/v1/instance/restart
+     * @secure
+     * @response `202` `void` Restart accepted
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    restartInstance: (
+      data: RestartInstanceRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/instance/restart`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

@@ -60,7 +60,9 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
         // Cancellation takes effect synchronously. Removing the cache also prevents
         // late responses from repopulating entries observed by the next account.
         void queryClient.cancelQueries();
-        queryClient.clear();
+        // Public startup policy is independent of the signed-in account.
+        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'getSetupStatus' });
+        queryClient.getMutationCache().clear();
       }
       apiClient.setSecurityData(token);
       if (token) {

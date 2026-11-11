@@ -71,9 +71,33 @@ async fn instance_configuration_patches_are_atomic_audited_and_deployment_restri
     assert_eq!(saved["restartRequired"], true);
     assert!(notification.has_changed().unwrap());
     notification.borrow_and_update();
-    let audit: Value = sqlx::query_scalar("SELECT info::jsonb FROM activityevents WHERE eventtype='InstallationSettingsUpdated' ORDER BY createdat DESC LIMIT 1").fetch_one(&fixture.pool).await.unwrap();
+    let audit: Value = sqlx::query_scalar("SELECT info::jsonb FROM activityevents WHERE eventtype='InstanceConfigurationUpdated' ORDER BY createdat DESC LIMIT 1").fetch_one(&fixture.pool).await.unwrap();
     assert_eq!(audit["PreviousConfiguration"], previous);
     assert_eq!(audit["Configuration"], configuration);
+    // Failed audit persistence must roll back the setting and publish no change.
+    sqlx::query("ALTER TABLE activityevents ADD CONSTRAINT reject_test_instance_activity CHECK (eventtype <> 'InstanceConfigurationUpdated') NOT VALID")
+        .execute(&fixture.pool).await.unwrap();
+    let rejected = send_json(
+        &fixture.app,
+        Method::PATCH,
+        path,
+        json!({"configuration":{"passwordMinimumLength":30}}),
+        Some(fixture.principal.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(rejected.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(!notification.has_changed().unwrap());
+    let unchanged = fixture.instance.installation_settings().await.unwrap();
+    assert_eq!(
+        serde_json::to_value(unchanged.configuration).unwrap(),
+        configuration
+    );
+    sqlx::query("ALTER TABLE activityevents DROP CONSTRAINT reject_test_instance_activity")
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+
     for invalid in [
         json!({"configuration":null}),
         json!({"configuration":{}}),
@@ -231,7 +255,7 @@ async fn deployment_http_agent_rejects_combined_settings_atomically() {
     );
     let before = restricted.installation_settings().await.unwrap();
     let audits: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM activityevents WHERE eventtype='InstallationSettingsUpdated'",
+        "SELECT count(*) FROM activityevents WHERE resourcetype IN ('Instance','Updates')",
     )
     .fetch_one(&fixture.pool)
     .await
@@ -249,7 +273,7 @@ async fn deployment_http_agent_rejects_combined_settings_atomically() {
     assert_eq!(restricted.installation_settings().await.unwrap(), before);
     assert!(!notification.has_changed().unwrap());
     let after_audits: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM activityevents WHERE eventtype='InstallationSettingsUpdated'",
+        "SELECT count(*) FROM activityevents WHERE resourcetype IN ('Instance','Updates')",
     )
     .fetch_one(&fixture.pool)
     .await

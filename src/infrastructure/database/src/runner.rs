@@ -377,10 +377,8 @@ mod tests {
                 .iter()
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
-            [
-                "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"
-            ],
-            "statistics storage must append to the published migrations"
+            ["0001", "0002", "0003", "0004"],
+            "the consolidated migration follows the unchanged released catalog"
         );
         assert_eq!(
             manifest["0001"].sha256,
@@ -393,10 +391,6 @@ mod tests {
         assert_eq!(
             manifest["0003"].sha256,
             "e8ad54b039c45d7c458297dc7f540287f0bc305536340eaecaffa9159e1eefdd"
-        );
-        assert_eq!(
-            manifest["0004"].sha256,
-            "cef2e8bcec2443f623102fda30f9b99b13b7052cf8c2ac6534967b01f22ea3f8"
         );
         assert_eq!(manifest.len(), MIGRATIONS.len());
         assert_eq!(MIGRATIONS[0].id, "0001");

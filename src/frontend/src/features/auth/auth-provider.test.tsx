@@ -204,6 +204,8 @@ describe('AuthProvider', () => {
     const { user, queryClient } = renderAuthProvider();
     await screen.findByText('authenticated');
     queryClient.setQueryData(['private'], 'old account');
+    const publicStatus = { data: { requiresSetup: false, passwordMinimumLength: 10, passwordMaximumLength: 128 } };
+    queryClient.setQueryData(['getSetupStatus', {}], publicStatus);
     await user.click(screen.getByRole('button', { name: 'renew token' }));
     expect(queryClient.getQueryData(['private'])).toBe('old account');
     let resolve!: (value: string) => void;
@@ -221,6 +223,7 @@ describe('AuthProvider', () => {
     await pending;
     expect(queryClient.getQueryData(['private'])).toBeUndefined();
     expect(queryClient.getQueryData(['pending-private'])).toBeUndefined();
+    expect(queryClient.getQueryData(['getSetupStatus', {}])).toEqual(publicStatus);
   });
 
   it('does not restore authentication from a refresh completed after logout', async () => {

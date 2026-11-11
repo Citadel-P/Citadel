@@ -36,3 +36,11 @@ impl InstallationSettingsView {
         }
     }
 }
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceRestartView {
+    pub available: bool,
+    pub pending: bool,
+    pub boot_id: Option<uuid::Uuid>,
+}

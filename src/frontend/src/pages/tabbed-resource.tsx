@@ -94,6 +94,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab, showTaskSheet = 
           addDisabled={addDisabled}
           addButtonTitle={header.addButtonTitle}
           Extra={header.Extra}
+          Actions={header.Actions}
           onSearch={setSearch}
           onAdd={() => navigate('./add')}
         />

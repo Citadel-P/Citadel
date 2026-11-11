@@ -988,7 +988,7 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     .await;
     assert_eq!(revoked.status(), StatusCode::FORBIDDEN);
     let audit: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT eventtype, count(*) FROM activityevents WHERE eventtype IN ('InstallationSettingsUpdated','UpdateChecksChanged') GROUP BY eventtype ORDER BY eventtype",
+        "SELECT eventtype, count(*) FROM activityevents WHERE eventtype IN ('InstanceConfigurationUpdated','UpdateChecksChanged') GROUP BY eventtype ORDER BY eventtype",
     )
     .fetch_all(&fixture.pool)
     .await
@@ -996,7 +996,7 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     assert_eq!(
         audit,
         vec![
-            ("InstallationSettingsUpdated".into(), 2),
+            ("InstanceConfigurationUpdated".into(), 2),
             ("UpdateChecksChanged".into(), 2),
         ],
         "MFA edits and update-check edits have separate histories; rejected requests must not add events"

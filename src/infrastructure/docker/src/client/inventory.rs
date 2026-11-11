@@ -274,19 +274,23 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
         .usage
         .or(value.memory_stats.privateworkingset)
         .unwrap_or_default();
-    // Report non-overlapping usage/cache components. Docker CLI's working set
-    // subtracts only inactive file pages, so it still overlaps with full cache.
-    // Prefer the hierarchical cgroup v1 cache counter to match total usage;
-    // cgroup v2 exposes the corresponding counter as `file`.
+    // Match Docker's working set: subtract inactive file cache only. Keep
+    // that same excluded amount as Cache so the two components do not overlap.
+    // Ignore inconsistent counters, following Docker's v1 then v2 fallback.
     let memory_cache = value
         .memory_stats
         .stats
-        .get("total_cache")
-        .or_else(|| value.memory_stats.stats.get("cache"))
-        .or_else(|| value.memory_stats.stats.get("file"))
+        .get("total_inactive_file")
+        .filter(|&&cache| cache < usage)
+        .or_else(|| {
+            value
+                .memory_stats
+                .stats
+                .get("inactive_file")
+                .filter(|&&cache| cache < usage)
+        })
         .copied()
-        .unwrap_or_default()
-        .min(usage);
+        .unwrap_or_default();
     let cpu_delta = value
         .cpu_stats
         .cpu_usage
@@ -764,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_container_stats_with_full_file_cache_excluded_from_usage() {
+    fn maps_container_stats_with_only_inactive_file_cache_excluded_from_usage() {
         let value = ContainerStats {
             cpu_stats: super::super::projection::CpuStats {
                 cpu_usage: super::super::projection::CpuUsage {
@@ -804,8 +808,8 @@ mod tests {
         };
 
         let stat = map_container_stat("container-1", value);
-        assert_eq!(stat.memory_active, 700.0);
-        assert_eq!(stat.memory_cache, 300.0);
+        assert_eq!(stat.memory_active, 750.0);
+        assert_eq!(stat.memory_cache, 250.0);
         assert_eq!(stat.memory_active + stat.memory_cache, 1_000.0);
         assert_eq!(stat.cpu_usage, 40.0);
         assert_eq!(stat.rx_bytes, 10.0);
@@ -814,26 +818,43 @@ mod tests {
     #[test]
     fn memory_breakdown_handles_cgroup_versions_missing_and_inconsistent_counters() {
         for (counters, expected_usage, expected_cache) in [
-            // Inactive cache is part of full cache, never an extra subtraction.
-            (vec![("file", 900), ("inactive_file", 800)], 100.0, 900.0),
-            // cgroup v1 hierarchical usage needs hierarchical cache as well.
+            // Active file cache remains in the working set.
+            (vec![("file", 900), ("inactive_file", 800)], 200.0, 800.0),
             (
                 vec![
                     ("total_cache", 400),
                     ("cache", 300),
                     ("total_inactive_file", 200),
                 ],
-                600.0,
-                400.0,
+                800.0,
+                200.0,
             ),
-            (vec![("cache", 300)], 700.0, 300.0),
-            // An explicitly reported zero takes precedence over other counters.
-            (vec![("total_cache", 0), ("cache", 300)], 1_000.0, 0.0),
-            // Without full cache data, retain usage rather than guessing a total.
-            (vec![("inactive_file", 250)], 1_000.0, 0.0),
+            // Full cache is not a substitute for missing inactive cache.
+            (vec![("cache", 300)], 1_000.0, 0.0),
+            (vec![("file", 900)], 1_000.0, 0.0),
+            (vec![("total_cache", 400)], 1_000.0, 0.0),
+            // Explicit v1 zero takes precedence over v2.
+            (
+                vec![("total_inactive_file", 0), ("inactive_file", 300)],
+                1_000.0,
+                0.0,
+            ),
+            (
+                vec![("total_inactive_file", 200), ("inactive_file", 300)],
+                800.0,
+                200.0,
+            ),
+            (vec![("inactive_file", 250)], 750.0, 250.0),
             (vec![], 1_000.0, 0.0),
-            (vec![("file", 1_500)], 0.0, 1_000.0),
-            (vec![("file", 1_000)], 0.0, 1_000.0),
+            // Docker ignores equal/oversized counters instead of reporting zero usage.
+            (vec![("inactive_file", 1_500)], 1_000.0, 0.0),
+            (vec![("inactive_file", 1_000)], 1_000.0, 0.0),
+            (vec![("total_inactive_file", 1_500)], 1_000.0, 0.0),
+            (
+                vec![("total_inactive_file", 1_000), ("inactive_file", 250)],
+                750.0,
+                250.0,
+            ),
         ] {
             let mut value = ContainerStats::default();
             value.memory_stats.usage = Some(1_000);

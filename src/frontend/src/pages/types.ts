@@ -197,6 +197,8 @@ interface ResourceInfoHookResult<T> extends ResourceReadState {
 }
 
 interface HeaderOptions {
+  /** Custom actions beside the page title. */
+  Actions?: React.FC;
   /** Presentation of the page header only. */
   variant?: 'plain' | 'card';
   /** Resource metadata rendered below the title and description. */

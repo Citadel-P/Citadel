@@ -1,4 +1,4 @@
-import { KeyRound, Network, Settings } from 'lucide-react';
+import { KeyRound, Network, Settings, MonitorCog } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg?react';
 import { CitadelIcons } from '@/lib/icons';
@@ -30,148 +30,95 @@ const renderIcon = (Icon?: React.ComponentType<{ className?: string }>, classNam
 const MenuItems: IMenuItem[] = [
   {
     group: 'Infrastructure',
-    separator: false,
     items: [
-      {
-        icon: renderIcon(CitadelIcons.Platform),
-        label: 'Platforms',
-        route: '/',
-      },
-      {
-        icon: renderIcon(CitadelIcons.BackupPolicy),
-        label: 'Backups',
-        route: '/backup-policies',
-      },
+      { icon: renderIcon(CitadelIcons.Platform), label: 'Platforms', route: '/' },
+      { icon: renderIcon(CitadelIcons.BackupPolicy), label: 'Backups', route: '/backup-policies' },
     ],
   },
   {
     group: 'Orchestration',
-    separator: false,
     items: [
-      {
-        icon: renderIcon(CitadelIcons.Deployment),
-        label: 'Deployments',
-        route: '/deployments',
-      },
-      {
-        icon: renderIcon(CitadelIcons.Stack),
-        label: 'Stacks',
-        route: '/stacks',
-      },
-      {
-        icon: renderIcon(CitadelIcons.SwarmService),
-        label: 'Swarm Services',
-        route: '/swarm-services',
-      },
+      { icon: renderIcon(CitadelIcons.Deployment), label: 'Deployments', route: '/deployments' },
+      { icon: renderIcon(CitadelIcons.Stack), label: 'Stacks', route: '/stacks' },
+      { icon: renderIcon(CitadelIcons.SwarmService), label: 'Swarm Services', route: '/swarm-services' },
     ],
   },
   {
     group: 'Automation',
-    separator: false,
-    items: [
-      {
-        icon: renderIcon(CitadelIcons.Script),
-        label: 'Scripts',
-        route: '/scripts',
-      },
-    ],
+    items: [{ icon: renderIcon(CitadelIcons.Script), label: 'Scripts', route: '/scripts' }],
   },
   {
     group: 'Builds',
-    separator: false,
     items: [
-      {
-        icon: renderIcon(CitadelIcons.Build),
-        label: 'Build Projects',
-        route: '/builds',
-      },
-      {
-        icon: renderIcon(CitadelIcons.BuildAgentPool),
-        label: 'Build Pools',
-        route: '/build-pools',
-      },
+      { icon: renderIcon(CitadelIcons.Build), label: 'Build Projects', route: '/builds' },
+      { icon: renderIcon(CitadelIcons.BuildAgentPool), label: 'Build Pools', route: '/build-pools' },
     ],
   },
   {
     group: 'Providers',
-    separator: false,
     items: [
+      { icon: renderIcon(CitadelIcons.Registry), label: 'Registries', route: '/registries' },
+      { icon: renderIcon(CitadelIcons.GitRepository), label: 'Repositories', route: '/git-repos' },
+    ],
+  },
+  {
+    group: 'Monitoring',
+    items: [
+      { icon: renderIcon(CitadelIcons.Alert), label: 'Alerts', route: '/alerts' },
+      { icon: renderIcon(CitadelIcons.Activity), label: 'Activities', route: '/activities' },
+    ],
+  },
+];
+
+export const UtilityItems: ISubMenuItem[] = [
+  {
+    icon: <Settings className="w-4 h-4" />,
+    label: 'Configuration',
+    children: [
       {
-        icon: renderIcon(CitadelIcons.Registry),
-        label: 'Registries',
-        route: '/registries',
+        icon: renderIcon(CitadelIcons.AlertRule),
+        label: 'Alert Rules',
+        route: '/alert-rules',
+        access: 'alertRules',
       },
       {
-        icon: renderIcon(CitadelIcons.GitRepository),
-        label: 'Repositories',
-        route: '/git-repos',
+        icon: renderIcon(CitadelIcons.Binding),
+        label: 'Bindings',
+        route: '/bindings',
+        access: 'bindings',
+      },
+      {
+        icon: renderIcon(CitadelIcons.Tag),
+        label: 'Tags',
+        route: '/tags',
+        access: 'tags',
       },
     ],
   },
   {
-    group: 'System',
-    separator: false,
-    items: [
+    icon: renderIcon(MonitorCog),
+    label: 'Administration',
+    access: 'administrator',
+    children: [
+      { icon: renderIcon(CitadelIcons.Instance), label: 'Instance', route: '/instance', access: 'administrator' },
+      { icon: renderIcon(CitadelIcons.Access), label: 'Access', route: '/access', access: 'administrator' },
       {
-        icon: renderIcon(CitadelIcons.Alert),
-        label: 'Alerts',
-        route: '/alerts',
-      },
-      {
-        icon: renderIcon(CitadelIcons.Activity),
-        label: 'Activities',
-        route: '/activities',
-      },
-      {
-        icon: <Settings className="w-4 h-4" />,
-        label: 'Configuration',
-        children: [
-          {
-            icon: renderIcon(CitadelIcons.AlertRule),
-            label: 'Alert Rules',
-            route: '/alert-rules',
-            access: 'alertRules',
-          },
-          {
-            icon: renderIcon(CitadelIcons.Binding),
-            label: 'Bindings',
-            route: '/bindings',
-            access: 'bindings',
-          },
-          {
-            icon: renderIcon(CitadelIcons.Tag),
-            label: 'Tags',
-            route: '/tags',
-            access: 'tags',
-          },
-        ],
-      },
-      {
-        icon: renderIcon(CitadelIcons.Access),
-        label: 'Administration',
+        icon: renderIcon(CitadelIcons.OidcProvider),
+        label: 'OIDC Providers',
+        route: '/oidc-providers',
         access: 'administrator',
-        children: [
-          { icon: renderIcon(CitadelIcons.Instance), label: 'Instance', route: '/instance', access: 'administrator' },
-          { icon: renderIcon(CitadelIcons.Access), label: 'Access', route: '/access', access: 'administrator' },
-          {
-            icon: renderIcon(CitadelIcons.OidcProvider),
-            label: 'OIDC Providers',
-            route: '/oidc-providers',
-            access: 'administrator',
-          },
-          {
-            icon: renderIcon(CitadelIcons.Updates),
-            label: 'Updates',
-            route: '/updates',
-            access: 'administrator',
-          },
-          {
-            icon: <KeyRound className="w-3.5 h-3.5" />,
-            label: 'License',
-            route: '/license',
-            access: 'administrator',
-          },
-        ],
+      },
+      {
+        icon: renderIcon(CitadelIcons.Updates),
+        label: 'Updates',
+        route: '/updates',
+        access: 'administrator',
+      },
+      {
+        icon: <KeyRound className="w-3.5 h-3.5" />,
+        label: 'License',
+        route: '/license',
+        access: 'administrator',
       },
     ],
   },

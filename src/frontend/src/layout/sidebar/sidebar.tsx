@@ -3,6 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Info } from 'lucide-react';
 import LogoIcon from '@/assets/logo.svg?react';
 import { SidebarMenu } from './sidebar-menu';
+import { SidebarUtilities } from './sidebar-utilities';
 import { Link } from 'react-router';
 import { useRead } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
@@ -13,6 +14,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  SidebarSeparator,
   SidebarMenuButton,
   useSidebar,
 } from '@/components/ui/sidebar';
@@ -46,7 +48,10 @@ export const Sidebar = () => {
         <SidebarMenu />
       </SidebarContent>
 
-      <SidebarFooter className="h-[var(--layout-footer-height)] shrink-0 justify-center border-t border-sidebar-border">
+      <SidebarUtilities />
+
+      <SidebarSeparator />
+      <SidebarFooter className="h-10 shrink-0 justify-center py-1">
         {sidebarMinimized && update ? (
           <UpdateDetails update={update}>
             <SidebarMenuButton
@@ -68,7 +73,7 @@ export const Sidebar = () => {
             </a>
           </SidebarMenuButton>
         ) : (
-          <div className="flex min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
+          <div className="flex min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground">
             {update ? (
               <Tooltip>
                 <TooltipTrigger asChild>

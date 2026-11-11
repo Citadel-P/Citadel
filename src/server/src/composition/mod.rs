@@ -64,6 +64,7 @@ pub(super) struct RuntimeContext {
 }
 
 pub struct ServerComponents {
+    pub restart: crate::restart::RestartControl,
     pub admission: citadel_runtime::admission::AdmissionGate,
     pub database_health: Arc<dyn citadel_runtime::database_health::DatabaseHealth>,
     pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
@@ -133,6 +134,7 @@ impl ServerComponents {
     ) -> Result<(Self, background::BackgroundServices), Box<dyn std::error::Error>> {
         let pool = connect_database(config).await?;
         let instance = instance::build(config, &pool);
+        let restart = crate::restart::RestartControl::new(instance.restart().cloned());
         let database_health = Arc::new(postgres_runtime::PostgresDatabaseHealth(pool.clone()));
         let git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence> =
             Arc::new(PostgresGitRepositoryPersistence::new(pool.clone()));
@@ -365,6 +367,7 @@ impl ServerComponents {
                 backup_coverage,
                 edge_service,
                 instance,
+                restart,
                 updates: checker,
                 agent_updates,
                 update_installation,

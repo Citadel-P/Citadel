@@ -1463,6 +1463,7 @@ impl ApplicationGroupReader {
                 | A::OidcProvider
                 | A::License
                 | A::Updates
+                | A::Instance
         ) {
             if !p.is_administrator() {
                 return Err(RealtimeReadError::Authorization);

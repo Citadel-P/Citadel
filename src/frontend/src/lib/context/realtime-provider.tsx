@@ -27,12 +27,16 @@ type CancellationRef = { current: boolean };
 // Details with full realtime snapshots refresh when their groups rejoin.
 // Refetching them here can request a resource just deleted by the user.
 const liveBackedQueryKeys = new Set([
+  'getSetupStatus',
+  'getServiceAccountLimits',
   'getApplicationInfo',
   'getInstanceUpdates',
   'getAgentUpdates',
   'getAgentUpdateOperation',
   'getInstanceUpdateOperation',
   'getInstallationSettings',
+  'getInstanceRestart',
+  'getActivity',
   'getProfileMfaStatus',
   'getBackupRepository',
   'getBuildRun',
@@ -158,7 +162,9 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       });
 
       conn.on('InstallationSettingsChanged', () => {
+        void queryClient.invalidateQueries({ queryKey: ['listActivities'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstallationSettings'] });
+        void queryClient.invalidateQueries({ queryKey: ['getInstanceRestart'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
         void queryClient.invalidateQueries({ queryKey: ['getAgentUpdates'] });
         void queryClient.invalidateQueries({ queryKey: ['getAgentUpdateOperation'] });
@@ -278,12 +284,16 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
             // Cover changes between the initial HTTP read and the live subscription.
             await Promise.all(
               [
+                'getSetupStatus',
+                'getServiceAccountLimits',
                 'getApplicationInfo',
                 'getInstanceUpdates',
                 'getAgentUpdates',
                 'getAgentUpdateOperation',
                 'getInstanceUpdateOperation',
                 'getInstallationSettings',
+                'getInstanceRestart',
+                'listActivities',
                 'getProfileMfaStatus',
               ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
             );

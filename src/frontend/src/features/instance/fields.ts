@@ -8,11 +8,11 @@ export type InstanceField = {
   minimum?: number;
   maximum?: number;
   choices?: string[];
-  advanced?: boolean;
 };
-export const instanceSections: { label: string; fields: InstanceField[] }[] = [
+export const instanceSections: { label: string; description: string; fields: InstanceField[] }[] = [
   {
     label: 'Security',
+    description: 'Sign-in policies, session duration and service-account access.',
     fields: [
       {
         key: 'passwordMinimumLength',
@@ -20,8 +20,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_PASSWORDS_MINIMUM_LENGTH',
         minimum: 8,
         maximum: 128,
-        description:
-          'Applies to new and changed passwords, including administrator changes. Existing passwords still work; common-password checks remain enabled.',
+        description: 'Minimum length for new or changed passwords. Existing passwords are unaffected.',
       },
       {
         key: 'browserSessionLifetimeDays',
@@ -29,8 +28,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS',
         minimum: 1,
         maximum: 365000,
-        description:
-          'Absolute lifetime for new sessions after restart, not an idle timeout. Existing session expirations stay unchanged.',
+        description: 'Absolute lifetime of new browser sessions, not an idle timeout.',
       },
       {
         key: 'serviceAccountDefaultTokenLifetimeDays',
@@ -38,7 +36,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS',
         minimum: 1,
         maximum: 365000,
-        description: 'Default for subsequently created tokens. Must not exceed the maximum.',
+        description: 'Default expiry for new tokens. Must not exceed the maximum.',
       },
       {
         key: 'serviceAccountMaximumTokenLifetimeDays',
@@ -46,8 +44,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS',
         minimum: 1,
         maximum: 365000,
-        description:
-          'Applies to new expiring tokens. Existing tokens are not shortened or revoked. The explicit non-expiring option and its entitlements remain unchanged.',
+        description: 'Expiry limit for new expiring tokens. Existing tokens are unchanged.',
       },
       {
         key: 'serviceAccountMaximumActiveTokens',
@@ -55,7 +52,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT',
         minimum: 1,
         maximum: 2147483647,
-        description: 'Checked when creating tokens. Reducing this limit does not revoke existing tokens.',
+        description: 'Limit checked when creating tokens. Existing tokens are not revoked.',
       },
       {
         key: 'accessTokenLifetimeMinutes',
@@ -63,13 +60,13 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES',
         minimum: 1,
         maximum: 2147483647,
-        advanced: true,
-        description: 'After restart, applies to subsequently issued access tokens, including refreshes.',
+        description: 'Lifetime of newly issued and refreshed access tokens.',
       },
     ],
   },
   {
     label: 'Monitoring',
+    description: 'Balance statistics detail with collection and storage load.',
     fields: [
       {
         key: 'statisticsCollectionIntervalSeconds',
@@ -77,8 +74,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_STATS_POLL_INTERVAL_SECONDS',
         minimum: 1,
         maximum: 2147483647,
-        description:
-          'Applies to Local, Direct and Edge monitoring. Shorter intervals increase detail and collection/storage load. History retention and compaction stay unchanged.',
+        description: 'Time between samples across all platforms. Shorter intervals increase load.',
       },
       {
         key: 'statisticsWriteIntervalSeconds',
@@ -86,21 +82,19 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_STATS_FLUSH_INTERVAL_SECONDS',
         minimum: 1,
         maximum: 2147483647,
-        advanced: true,
-        description:
-          'Controls buffering for both statistics writers; a full batch flushes earlier. Longer buffering delays committed data and alert processing. It does not reduce sample count or downsample history.',
+        description: 'Maximum buffering time before writing samples. Longer intervals delay alerts.',
       },
     ],
   },
   {
     label: 'Scripts',
+    description: 'Execution capacity and timeout defaults for scripts.',
     fields: [
       {
         key: 'scriptsEnabled',
         label: 'Allow script execution',
         environment: 'CITADEL_SCRIPTS_ENABLED',
-        description:
-          'Controls Script execution on Core and remote Agents. Existing running work keeps its established lifecycle.',
+        description: 'Allow scripts on Core and Agents. Running work is unaffected.',
       },
       {
         key: 'scriptsMaximumParallelRuns',
@@ -108,7 +102,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_SCRIPTS_MAX_PARALLEL_RUNS',
         minimum: 1,
         maximum: 64,
-        description: 'Core execution capacity; independent of remote Agent capacities.',
+        description: 'Local execution limit, independent of Agent capacity.',
       },
       {
         key: 'scriptsMaximumRemoteRuns',
@@ -116,7 +110,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_SCRIPTS_MAX_REMOTE_RUNS',
         minimum: 1,
         maximum: 256,
-        description: 'Core tracking limit. Each Agent still limits its own execution capacity.',
+        description: 'Remote runs Core can track. Agents enforce their own execution limits.',
       },
       {
         key: 'scriptsDefaultTimeoutSeconds',
@@ -124,8 +118,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS',
         minimum: 1,
         maximum: 86400,
-        description:
-          'Default for new Scripts and API requests omitting a timeout. Saved Scripts are not rewritten. Must not exceed the maximum.',
+        description: 'Default for new scripts. Must not exceed the maximum.',
       },
       {
         key: 'scriptsMaximumTimeoutSeconds',
@@ -133,12 +126,13 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS',
         minimum: 1,
         maximum: 86400,
-        description: 'Maximum accepted timeout for subsequent Script configuration and execution.',
+        description: 'Longest allowed timeout for script configuration and execution.',
       },
     ],
   },
   {
     label: 'Builds',
+    description: 'Build preparation, tracking capacity and history retention.',
     fields: [
       {
         key: 'buildPreparationSlots',
@@ -146,7 +140,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_BUILDS_PREPARATION_SLOTS',
         minimum: 1,
         maximum: 16,
-        description: 'Concurrent Core Git and context preparation work.',
+        description: 'Concurrent Git checkout and build-context preparation tasks.',
       },
       {
         key: 'buildTrackingSlots',
@@ -154,14 +148,13 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_BUILDS_TRACKING_SLOTS',
         minimum: 1,
         maximum: 128,
-        description: 'Core tracking capacity does not override Build Pool or Agent execution capacity.',
+        description: 'Builds Core can track. Build Pools and Agents keep their own limits.',
       },
       {
         key: 'buildCleanupEnabled',
         label: 'Automatically clean up completed build history',
         environment: 'CITADEL_BUILDS_RUN_CLEANUP_ENABLED',
-        description:
-          'Protects active, current, reserved, completion-pending, deployment-referenced and release-referenced runs.',
+        description: 'Remove eligible completed runs. Active and referenced runs are protected.',
       },
       {
         key: 'buildRetentionDays',
@@ -169,20 +162,19 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_BUILDS_RUN_RETENTION_DAYS',
         minimum: 1,
         maximum: 2147483647,
-        description:
-          'Retained while cleanup is disabled. Reducing this period makes more eligible completed history subject to deletion after restart.',
+        description: 'Age at which completed runs become eligible for cleanup, when enabled.',
       },
     ],
   },
   {
     label: 'Backups',
+    description: 'Worker availability, operation capacity and timeouts.',
     fields: [
       {
         key: 'backupsEnabled',
         label: 'Enable backup and restore workers',
         environment: 'CITADEL_BACKUPS_ENABLED',
-        description:
-          'Stops scheduled enqueueing and backup/restore dispatch when disabled. Manual requests may remain queued until workers are enabled and Core restarted. This is not a switch for every repository operation.',
+        description: 'Enable scheduling and dispatch. When disabled, manual requests may remain queued.',
       },
       {
         key: 'backupTrackingSlots',
@@ -190,7 +182,7 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_BACKUPS_TRACKING_SLOTS',
         minimum: 1,
         maximum: 128,
-        description: 'Combined tracking capacity for these operations.',
+        description: 'Shared tracking limit for backup, restore and repository operations.',
       },
       {
         key: 'backupDefaultTimeoutSeconds',
@@ -198,46 +190,45 @@ export const instanceSections: { label: string; fields: InstanceField[] }[] = [
         environment: 'CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS',
         minimum: 5,
         maximum: 86400,
-        description: 'Backup Policies retain their own backup timeout and snapshot retention.',
+        description: 'Timeout for restore and repository work. Backup Policies set their own backup timeout.',
       },
     ],
   },
   {
-    label: 'Advanced',
+    label: 'Runtime',
+    description: 'API documentation, Agent connections and Core logging.',
     fields: [
       {
         key: 'openapiEnabled',
         label: 'Serve Swagger UI and OpenAPI documents',
         environment: 'CITADEL_HTTP_OPENAPI_ENABLED',
-        description: 'Controls documentation routes. The application REST API remains available.',
+        description: 'Expose API documentation. The REST API stays available.',
       },
       {
         key: 'requireDirectAgentHttps',
         label: 'Require HTTPS for Direct Agents',
         environment: 'CITADEL_CORE_AGENT_ALLOW_INSECURE',
-        description:
-          'Inverse of the deployment allow-insecure flag. After restart, connections to existing HTTP Direct Agents are rejected; saved addresses are preserved. Certificate verification remains enabled. Does not configure browser TLS or the inbound Edge listener.',
+        description: 'Reject HTTP Direct Agent connections. Inverse of the allow-insecure environment flag.',
       },
       {
         key: 'agentImageOverride',
         label: 'Agent image override',
         environment: 'CITADEL_EDGE_AGENT_IMAGE',
-        description:
-          'Leave empty for automatic version-matched resolution, including deployment image repository/tag options. Used by Direct/Edge/Swarm setup and helper-image consumers after restart. Does not upgrade running Agents.',
+        description: 'Leave empty to match Core automatically. Does not upgrade running Agents.',
       },
       {
         key: 'logVerbosity',
         label: 'Log verbosity',
         environment: 'RUST_LOG',
         choices: ['off', 'error', 'warn', 'info', 'debug', 'trace'],
-        description: 'Deployment module filters are preserved and managed through RUST_LOG.',
+        description: 'Core logging detail. Deployment module filters remain managed externally.',
       },
       {
         key: 'logFormat',
         label: 'Log output format',
         environment: 'CITADEL_LOG_FORMAT',
         choices: ['Text', 'Json'],
-        description: 'Controls the actual Core logger after restart. Terminal color remains deployment configuration.',
+        description: 'Choose plain text or structured JSON for Core logs.',
       },
     ],
   },

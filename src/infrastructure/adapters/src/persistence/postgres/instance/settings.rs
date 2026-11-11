@@ -1,10 +1,9 @@
-use super::repository::PostgresInstanceRepository;
+use super::repository::{PostgresInstanceRepository, storage};
 use crate::persistence::postgres::activities::store::{insert_activity, invalid_activity};
-use crate::persistence::postgres::identity::users::repository::lock_identity_mutations;
 use chrono::{DateTime, Utc};
 use citadel_activities::{ActivityEvent, ActivityEventInfo};
+use citadel_identity::ActorPrincipal;
 use citadel_identity::MfaPolicy;
-use citadel_identity::{ADMIN_ROLE_ID, ActorPrincipal};
 use citadel_instance::{InstallationSettings, InstanceError, PatchInstallationSettings};
 use citadel_primitives::PatchField;
 use sqlx::{PgPool, Row};
@@ -23,32 +22,15 @@ pub(super) async fn patch(
 ) -> Result<InstallationSettings, InstanceError> {
     let _fence = store.authorization.read_fence().await;
     let mut tx = store.pool.begin().await.map_err(storage)?;
-    lock_identity_mutations(&mut tx).await.map_err(storage)?;
-    // Recheck the current enabled human administrator inside the write transaction.
-    let authorized = sqlx::query_scalar::<_, bool>(
-        r#"
-SELECT EXISTS (
- SELECT 1 FROM users u JOIN actors a ON a.id = u.actorid
- WHERE u.id = $1 AND a.id = $2 AND a.isenabled AND a.type = 'User'
- AND EXISTS (
-   SELECT 1 FROM actorroles ar JOIN roles r ON r.id = ar.roleid
-   WHERE r.id = $3 AND (ar.actorid = a.id OR EXISTS (
-     SELECT 1 FROM actorteammemberships m JOIN teams t ON t.id = m.teamid
-     JOIN actors ta ON ta.id = t.actorid
-     WHERE m.memberactorid = a.id AND t.actorid = ar.actorid AND ta.isenabled
-   ))
- )
-)
-"#,
-    )
-    .bind(principal.subject_id)
-    .bind(principal.actor_id.value())
-    .bind(ADMIN_ROLE_ID)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(storage)?;
-    if !authorized {
-        return Err(InstanceError::Forbidden);
+    super::authorization::authorize(&mut tx, principal).await?;
+    if sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM instancerestarts)")
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(storage)?
+    {
+        return Err(InstanceError::Conflict(
+            "Core is restarting. Wait for it to reconnect before changing settings.".into(),
+        ));
     }
     let row = sqlx::query("SELECT initializedat IS NOT NULL AS initialized, updatechecksenabled, updatecheckintervalhours, mfapolicy, instanceconfiguration FROM instancesetupstates WHERE id = 1 FOR UPDATE")
         .fetch_one(&mut *tx).await.map_err(storage)?;
@@ -97,14 +79,13 @@ SELECT EXISTS (
         sqlx::query("UPDATE instancesetupstates SET updatechecksenabled=$1, mfapolicy=$2, updatedat=$3, updatecheckintervalhours=$4, instanceconfiguration=instanceconfiguration || $5 WHERE id=1")
             .bind(next.update_checks_enabled).bind(next.mfa_policy.as_database_str()).bind(now).bind(next.update_check_interval_hours).bind(sqlx::types::Json(configuration_patch))
             .execute(&mut *tx).await.map_err(storage)?;
+        let instance =
+            crate::persistence::postgres::licensing::store::get_or_create_identity(&mut tx, now)
+                .await
+                .map_err(|error| InstanceError::Storage(error.to_string()))?;
         if next.update_checks_enabled != old.update_checks_enabled
             || next.update_check_interval_hours != old.update_check_interval_hours
         {
-            let instance = crate::persistence::postgres::licensing::store::get_or_create_identity(
-                &mut tx, now,
-            )
-            .await
-            .map_err(|error| InstanceError::Storage(error.to_string()))?;
             let event = ActivityEvent::new_updates_event(
                 instance.instance_id,
                 principal.actor_id,
@@ -120,27 +101,18 @@ SELECT EXISTS (
             .map_err(|error| storage(invalid_activity(error)))?;
             insert_activity(&mut tx, &event).await.map_err(storage)?;
         }
-        if next.mfa_policy != old.mfa_policy || next.configuration != old.configuration {
-            let event = ActivityEvent::new_user_event(
-                principal.subject_id,
-                principal.name.clone(),
+        if next.configuration != old.configuration || next.mfa_policy != old.mfa_policy {
+            let event = ActivityEvent::new_instance_event(
+                instance.instance_id,
                 principal.actor_id,
-                ActivityEventInfo::InstallationSettingsUpdated {
-                    // Preserve historical decoding without describing the separate
-                    // Updates property twice in a combined settings mutation.
-                    previous_update_checks_enabled: next.update_checks_enabled,
-                    update_checks_enabled: next.update_checks_enabled,
+                ActivityEventInfo::InstanceConfigurationUpdated {
+                    previous_configuration: serde_json::to_value(&old.configuration)
+                        .map_err(storage)?,
+                    configuration: serde_json::to_value(&next.configuration).map_err(storage)?,
                     previous_mfa_policy: old.mfa_policy.as_database_str().into(),
                     mfa_policy: next.mfa_policy.as_database_str().into(),
-                    previous_configuration: Some(
-                        serde_json::to_value(&old.configuration)
-                            .map_err(|error| InstanceError::Storage(error.to_string()))?,
-                    ),
-                    configuration: Some(
-                        serde_json::to_value(&next.configuration)
-                            .map_err(|error| InstanceError::Storage(error.to_string()))?,
-                    ),
                 },
+                citadel_activities::ActivityStatus::Success,
                 now,
             )
             .map_err(|error| storage(invalid_activity(error)))?;
@@ -166,8 +138,4 @@ fn map(row: &sqlx::postgres::PgRow) -> Result<InstallationSettings, InstanceErro
         mfa_policy: MfaPolicy::from_database_str(&policy)
             .ok_or_else(|| InstanceError::Storage("Invalid installation MFA policy.".into()))?,
     })
-}
-
-fn storage(error: impl std::fmt::Display) -> InstanceError {
-    InstanceError::Storage(error.to_string())
 }

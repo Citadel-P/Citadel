@@ -289,7 +289,7 @@ pub(super) async fn busy(
     tx: &mut Transaction<'_, Postgres>,
     owner: Option<Uuid>,
 ) -> Result<bool, UpdateError> {
-    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM instanceupdates WHERE ownsinstallation) OR EXISTS(SELECT 1 FROM updatescheduleruns WHERE NOT finished AND ($1::uuid IS NULL OR id<>$1))").bind(owner).fetch_one(&mut **tx).await.map_err(storage)
+    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM instanceupdates WHERE ownsinstallation) OR EXISTS(SELECT 1 FROM updatescheduleruns WHERE NOT finished AND ($1::uuid IS NULL OR id<>$1)) OR EXISTS(SELECT 1 FROM instancerestarts)").bind(owner).fetch_one(&mut **tx).await.map_err(storage)
 }
 pub(super) async fn claim(
     tx: &mut Transaction<'_, Postgres>,

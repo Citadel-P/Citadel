@@ -10,17 +10,7 @@ async fn instance_settings_upgrade_preserves_setup_choices_and_applied_history()
         "\n",
         include_str!("../../generated/0002_instance_updates.sql"),
         "\n",
-        include_str!("../../generated/0003_platform_io.sql"),
-        "\n",
-        include_str!("../../generated/0004_query_indexes.sql"),
-        "\n",
-        include_str!("../../generated/0005_statistics_storage.sql"),
-        "\n",
-        include_str!("../../generated/0006_shared_statistics.sql"),
-        "\n",
-        include_str!("../../generated/0007_platform_history.sql"),
-        "\n",
-        include_str!("../../generated/0008_statistics_identity.sql")
+        include_str!("../../generated/0003_platform_io.sql")
     ))
     .execute(&mut connection)
     .await
@@ -29,7 +19,7 @@ async fn instance_settings_upgrade_preserves_setup_choices_and_applied_history()
         UPDATE instancesetupstates SET updatechecksenabled=false,updatecheckintervalhours=24,mfapolicy='RequiredForAdministrators';").execute(&mut connection).await.unwrap();
     let manifest: serde_json::Value =
         serde_json::from_str(citadel_database::MIGRATION_MANIFEST_JSON).unwrap();
-    for migration in manifest["migrations"].as_array().unwrap().iter().take(8) {
+    for migration in manifest["migrations"].as_array().unwrap().iter().take(3) {
         sqlx::query("INSERT INTO citadel_schema_migrations VALUES($1,$2,$3,now(),now(),NULL)")
             .bind(migration["id"].as_str().unwrap())
             .bind(migration["name"].as_str().unwrap())
@@ -45,7 +35,7 @@ async fn instance_settings_upgrade_preserves_setup_choices_and_applied_history()
             .unwrap();
     let result = MigrationRunner::migrate(&database.url).await.unwrap();
     assert_eq!(result.applied, 1);
-    assert_eq!(result.already_applied, 8);
+    assert_eq!(result.already_applied, 3);
     let settings: (bool,i32,String,serde_json::Value) = sqlx::query_as("SELECT updatechecksenabled,updatecheckintervalhours,mfapolicy,instanceconfiguration FROM instancesetupstates WHERE id=1").fetch_one(&mut connection).await.unwrap();
     assert_eq!(
         settings,
@@ -57,7 +47,7 @@ async fn instance_settings_upgrade_preserves_setup_choices_and_applied_history()
         )
     );
     let retained: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0008' ORDER BY id",
+        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0003' ORDER BY id",
     )
     .fetch_all(&mut connection)
     .await

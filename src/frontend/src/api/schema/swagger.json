@@ -116,6 +116,8 @@
           "StackGitAutoDeployFailed",
           "StackImported",
           "StackWebhookReceived",
+          "InstanceConfigurationUpdated",
+          "InstanceRestarted",
           "InstallationSettingsUpdated",
           "UpdateDiscovered",
           "UpdateChecksChanged",
@@ -222,6 +224,7 @@
           "Role",
           "License",
           "Updates",
+          "Instance",
           "Build",
           "BuildAgentPool",
           "Volume",
@@ -12019,6 +12022,28 @@
         },
         "type": "object"
       },
+      "InstanceRestartView": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "bootId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "pending"
+        ],
+        "type": "object"
+      },
       "InternalSecretInput": {
         "properties": {
           "name": {
@@ -16559,6 +16584,57 @@
               "operationId",
               "recoveryId",
               "version",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceConfigurationUpdated"
+                ],
+                "type": "string"
+              },
+              "configuration": {},
+              "mfaPolicy": {
+                "type": "string"
+              },
+              "previousConfiguration": {},
+              "previousMfaPolicy": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "previousConfiguration",
+              "configuration",
+              "previousMfaPolicy",
+              "mfaPolicy",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceRestarted"
+                ],
+                "type": "string"
+              },
+              "completedAt": {
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "phase": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "phase",
               "$type"
             ],
             "type": "object"
@@ -21859,6 +21935,19 @@
           "Any"
         ],
         "type": "string"
+      },
+      "RestartInstanceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "bootId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bootId"
+        ],
+        "type": "object"
       },
       "RestoreInput": {
         "properties": {
@@ -51067,6 +51156,182 @@
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/instance/restart": {
+      "get": {
+        "operationId": "getInstanceRestart",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceRestartView"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Core restart availability (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false
+      },
+      "post": {
+        "operationId": "restartInstance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestartInstanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Restart accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Restart Core to apply saved configuration (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false
       }
     },
     "/api/v1/license": {

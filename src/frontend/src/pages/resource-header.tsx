@@ -21,6 +21,7 @@ type ResourceHeaderProps = {
   addDisabled?: boolean;
   addButtonTitle?: string;
   Extra?: React.FC;
+  Actions?: React.FC;
   onSearch: (query: string) => void;
   onAdd: () => void;
 };
@@ -39,6 +40,7 @@ export const ResourceHeader = ({
   addDisabled,
   addButtonTitle,
   Extra,
+  Actions,
   onSearch,
   onAdd,
 }: ResourceHeaderProps) => {
@@ -52,10 +54,15 @@ export const ResourceHeader = ({
           description={subtitle}
           icon={Icon && <Icon className="size-5" />}
           actions={
-            showAdd && (
-              <Button type="button" onClick={onAdd} disabled={addDisabled}>
-                <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
-              </Button>
+            (showAdd || Actions) && (
+              <>
+                {showAdd && (
+                  <Button type="button" onClick={onAdd} disabled={addDisabled}>
+                    <Plus className="h-3 w-3" /> {addButtonTitle ?? `Add ${type}`}
+                  </Button>
+                )}
+                {Actions && <Actions />}
+              </>
             )
           }
         />

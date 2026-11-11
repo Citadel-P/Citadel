@@ -89,6 +89,22 @@ pub enum ActivityEventInfo {
         version: String,
     },
 
+    InstanceConfigurationUpdated {
+        #[serde(rename = "PreviousConfiguration")]
+        previous_configuration: serde_json::Value,
+        #[serde(rename = "Configuration")]
+        configuration: serde_json::Value,
+        #[serde(rename = "PreviousMfaPolicy")]
+        previous_mfa_policy: String,
+        #[serde(rename = "MfaPolicy")]
+        mfa_policy: String,
+    },
+    InstanceRestarted {
+        #[serde(rename = "Phase")]
+        phase: String,
+        #[serde(rename = "CompletedAt", skip_serializing_if = "Option::is_none")]
+        completed_at: Option<DateTime<Utc>>,
+    },
     InstallationSettingsUpdated {
         #[serde(
             rename = "PreviousConfiguration",
@@ -1422,6 +1438,10 @@ impl ActivityEventInfo {
             Self::RegistryUpdated { .. } => ActivityEventType::RegistryUpdated,
             Self::RegistryRenamed { .. } => ActivityEventType::RegistryRenamed,
             Self::AlertRuleRenamed { .. } => ActivityEventType::AlertRuleRenamed,
+            Self::InstanceConfigurationUpdated { .. } => {
+                ActivityEventType::InstanceConfigurationUpdated
+            }
+            Self::InstanceRestarted { .. } => ActivityEventType::InstanceRestarted,
             Self::InstallationSettingsUpdated { .. } => {
                 ActivityEventType::InstallationSettingsUpdated
             }

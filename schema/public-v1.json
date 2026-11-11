@@ -105,6 +105,8 @@
           "StackGitAutoDeployFailed",
           "StackImported",
           "StackWebhookReceived",
+          "InstanceConfigurationUpdated",
+          "InstanceRestarted",
           "InstallationSettingsUpdated",
           "UpdateDiscovered",
           "UpdateChecksChanged",
@@ -211,6 +213,7 @@
           "Role",
           "License",
           "Updates",
+          "Instance",
           "Build",
           "BuildAgentPool",
           "Volume",
@@ -13096,6 +13099,57 @@
               "operationId",
               "recoveryId",
               "version",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceConfigurationUpdated"
+                ],
+                "type": "string"
+              },
+              "configuration": {},
+              "mfaPolicy": {
+                "type": "string"
+              },
+              "previousConfiguration": {},
+              "previousMfaPolicy": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "previousConfiguration",
+              "configuration",
+              "previousMfaPolicy",
+              "mfaPolicy",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceRestarted"
+                ],
+                "type": "string"
+              },
+              "completedAt": {
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "phase": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "phase",
               "$type"
             ],
             "type": "object"
