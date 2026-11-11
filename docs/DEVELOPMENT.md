@@ -144,8 +144,8 @@ bash src/tools/dev/dev.sh exec cargo run --locked -p citadel-server -- print-eff
 ```
 
 This command reports deployment configuration. Administrators manage the persisted
-update-check choice in **Settings → Updates → Config** and the MFA policy in
-**Profile → Instance settings**.
+update-check choice in **Administration → Updates → Config** and the MFA policy in
+**Administration → Instance**.
 
 For updater development, `citadel-server verify-update-release --version VERSION`
 checks a completed official release manifest and its exact Core image signature.
@@ -614,6 +614,13 @@ The migration catalog starts with `0001_initial.sql` and appends numbered upgrad
 migrations. The initial migration includes workload
 statistics, alert observation ordering, secret-use grants, and build, backup,
 restore and script execution ownership/capacity changes.
+
+Migration `0004_query_indexes.sql` consolidates the former `0004`–`0010` SQL in
+its original order, including statistics storage and Instance settings/restart.
+It upgrades the unchanged `0001`–`0003` catalog. Databases that already recorded
+any migration from the former `0004`–`0010` sequence cannot use this consolidated
+catalog directly; their checksums/history remain protected by the migration
+runner. Any data-preserving conversion is a separate operator task.
 
 This consolidated baseline requires a fresh database. It cannot upgrade a database
 that recorded an earlier baseline checksum or the former `0002`–`0011` sequence.

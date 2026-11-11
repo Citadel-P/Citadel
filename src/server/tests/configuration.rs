@@ -180,9 +180,13 @@ fn configured_limits_reach_startup_and_generated_keys_survive_restarts() {
 }
 
 #[tokio::test]
+#[ignore = "requires disposable CITADEL_TEST_DATABASE_URL; logging resolves saved settings after migrations"]
 async fn log_format_and_color_are_independent_and_piped_output_defaults_to_text() {
     use std::{process::Stdio, time::Duration};
     use tokio::io::{AsyncBufReadExt, BufReader};
+    let admin_url =
+        std::env::var("CITADEL_TEST_DATABASE_URL").expect("disposable PostgreSQL fixture required");
+    let admin = sqlx::PgPool::connect(&admin_url).await.unwrap();
 
     for (format, color) in [
         (None, None),
@@ -192,14 +196,21 @@ async fn log_format_and_color_are_independent_and_piped_output_defaults_to_text(
         (Some("json"), Some("true")),
     ] {
         let root = std::env::temp_dir().join(format!("citadel-logging-{}", uuid::Uuid::now_v7()));
+        let database_name = format!("citadel_logger_{}", uuid::Uuid::now_v7().simple());
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "CREATE DATABASE {database_name}"
+        )))
+        .execute(&admin)
+        .await
+        .unwrap();
+        let mut database_url = url::Url::parse(&admin_url).unwrap();
+        database_url.set_path(&database_name);
         let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_citadel-server"));
         command
             .env_clear()
-            // Startup logs precede the connection attempt; never use a real database.
-            .env(
-                "CITADEL_DATABASE_URL",
-                "postgres://user:secret@127.0.0.1:1/citadel",
-            )
+            // Saved format is resolved before the actual logger is initialized.
+            .env("CITADEL_DATABASE_URL", database_url.as_str())
+            .env("CITADEL_DOCKER_SOCKET", root.join("absent-docker.sock"))
             .env("CITADEL_TRANSPORT_MODE", "Disabled")
             .env("CITADEL_PUBLIC_URL", "http://localhost:8000")
             .env("CITADEL_DATA_ROOT", &root)
@@ -242,10 +253,17 @@ async fn log_format_and_color_are_independent_and_piped_output_defaults_to_text(
             assert!(!line.contains("citadel_server::"));
         }
         assert!(!line.contains("effective_configuration"));
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DROP DATABASE {database_name} WITH (FORCE)"
+        )))
+        .execute(&admin)
+        .await
+        .unwrap();
         if root.exists() {
             std::fs::remove_dir_all(root).unwrap();
         }
     }
+    admin.close().await;
 }
 
 #[test]
@@ -586,4 +604,83 @@ fn non_utf8_paths_survive_unrelated_cors_enumeration() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(!root.exists());
+}
+
+#[test]
+fn deployment_http_agent_cannot_construct_https_only_connector() {
+    use citadel_adapters::connectors::agent::client::{AgentClient, AgentRequestSigner};
+    let saved = citadel_instance::InstanceConfiguration {
+        require_direct_agent_https: true,
+        ..Default::default()
+    };
+    saved.validate().unwrap();
+    let client = AgentClient::lazy(
+        "http://deployment-agent.test:9000",
+        AgentRequestSigner::from_bytes(&[17; 32]),
+        std::time::Duration::from_secs(30),
+        !saved.require_direct_agent_https,
+    );
+    assert!(
+        client.is_err(),
+        "HTTP deployment agent must never bypass HTTPS enforcement"
+    );
+}
+
+#[test]
+fn https_policy_rejects_only_an_http_deployment_core_connector() {
+    let root = std::env::temp_dir().join(format!("citadel-https-config-{}", uuid::Uuid::now_v7()));
+    for (address, accepted) in [
+        ("http://agent.test:9000", false),
+        ("https://agent.test:9000", true),
+    ] {
+        let key = root.join("signing-key");
+        let output = run(
+            &root,
+            &[
+                ("CITADEL_CORE_AGENT_ADDRESS", address),
+                ("CITADEL_CORE_AGENT_TIMEOUT_SECONDS", "30"),
+                ("CITADEL_CORE_AGENT_PRIVATE_KEY_PATH", key.to_str().unwrap()),
+                ("CITADEL_CORE_AGENT_ALLOW_INSECURE", "false"),
+            ],
+            &["print-effective-config"],
+        );
+        assert_eq!(
+            output.status.success(),
+            accepted,
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if !accepted {
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("CITADEL_CORE_AGENT_ADDRESS to use HTTPS")
+            );
+        }
+    }
+    assert!(
+        run(
+            &root,
+            &[("CITADEL_CORE_AGENT_ALLOW_INSECURE", "false")],
+            &["print-effective-config"]
+        )
+        .status
+        .success()
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn early_admission_failure_identifies_the_phase_without_configuration_secrets() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    let root = std::env::temp_dir().join(format!("citadel-admission-{}", uuid::Uuid::now_v7()));
+    let database = format!("postgres://user:private-test-password@127.0.0.1:{port}/unused");
+    let result = run(&root, &[("CITADEL_DATABASE_URL", &database)], &["serve"]);
+    assert!(!result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("background-job admission"), "{stderr}");
+    assert!(!stderr.contains("private-test-password"));
+    assert!(!stderr.contains(&database));
+    std::fs::remove_dir_all(root).unwrap();
 }

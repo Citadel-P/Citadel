@@ -266,7 +266,13 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function SidebarSeparator({ className, ...props }: React.ComponentProps<typeof Separator>) {
-  return <Separator data-slot="sidebar-separator" className={cn('mx-2 w-auto', className)} {...props} />;
+  return (
+    <Separator
+      data-slot="sidebar-separator"
+      className={cn('mx-3 data-[orientation=horizontal]:w-auto', className)}
+      {...props}
+    />
+  );
 }
 
 function SidebarContent({ className, ...props }: React.ComponentProps<'div'>) {

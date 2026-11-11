@@ -8,13 +8,12 @@ pub use actors::{
 pub mod authentication;
 pub use authentication::{
     AccessTokenClaims, AuthenticatedBearer, Clock, CredentialWork, EntitlementService,
-    IdentityService, IdentityStore, InitializeCitadel, InstallationPolicy, InstallationSettings,
-    Login, LoginNextStep, LoginOutcome, MAXIMUM_PASSWORD_CHARACTERS, MAXIMUM_SESSIONS_PER_USER,
-    MINIMUM_PASSWORD_CHARACTERS, NewSession, PasswordHasher, PasswordPolicy,
-    PatchInstallationSettings, PreparedSession, RefreshTokenClaims, ServiceAccountTokenCodec,
-    SessionMetadata, SessionTokenCodec, SessionTokens, SetupInitializationMode, SetupStatus,
-    SystemClock, UserAuthentication, UserSessionRecord, token_digest, validate_email,
-    validate_name,
+    IdentityService, IdentityStore, InitializeCitadel, Login, LoginNextStep, LoginOutcome,
+    MAXIMUM_PASSWORD_CHARACTERS, MAXIMUM_SESSIONS_PER_USER, MINIMUM_PASSWORD_CHARACTERS,
+    NewSession, PasswordHasher, PasswordPolicy, PreparedSession, RefreshTokenClaims,
+    ServiceAccountTokenCodec, SessionMetadata, SessionTokenCodec, SessionTokens, SetupChoices,
+    SetupInitializationMode, SetupPolicy, SetupStatus, SystemClock, UserAuthentication,
+    UserSessionRecord, token_digest, validate_email, validate_name,
 };
 pub mod mfa;
 pub use mfa::{

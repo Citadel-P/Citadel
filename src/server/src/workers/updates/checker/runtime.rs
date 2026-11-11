@@ -1,5 +1,5 @@
 //! Supervised scheduling for the Updates feature service.
-use citadel_identity::IdentityService;
+use citadel_instance::InstanceService;
 use citadel_updates::{ReleaseCheckPolicy, ReleaseCheckService, UpdateError};
 use std::{sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
@@ -32,14 +32,15 @@ pub(super) fn remaining_delay(
 
 pub async fn run(
     service: ReleaseCheckService,
-    identity: Arc<IdentityService>,
+    instance: Arc<InstanceService>,
+    setup_changes: tokio::sync::watch::Receiver<()>,
     cancellation: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
     let (enabled, receiver) = tokio::sync::watch::channel(CheckSchedule::default());
     // Join both owned futures: policy shutdown must not drop a check that has
     // already begun persistence. No detached tasks are created.
     let (_, result) = tokio::join!(
-        watch_policy(identity, enabled, cancellation.clone()),
+        watch_policy(instance, setup_changes, enabled, cancellation.clone()),
         run_enabled(service, receiver, cancellation),
     );
     result
@@ -164,11 +165,12 @@ pub(super) async fn run_enabled(
 }
 
 async fn watch_policy(
-    identity: Arc<citadel_identity::IdentityService>,
+    instance: Arc<InstanceService>,
+    mut setup_changes: tokio::sync::watch::Receiver<()>,
     enabled: tokio::sync::watch::Sender<CheckSchedule>,
     cancellation: CancellationToken,
 ) {
-    let mut changes = identity.installation_changes();
+    let mut changes = instance.installation_changes();
     let mut poll = tokio::time::interval(Duration::from_secs(30));
     poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     poll.reset();
@@ -176,7 +178,7 @@ async fn watch_policy(
         let settings = tokio::select! {
             biased;
             () = cancellation.cancelled() => return,
-            result = identity.installation_settings() => result,
+            result = instance.installation_settings() => result,
         };
         let next = match settings {
             Ok(settings) => CheckSchedule {
@@ -198,6 +200,7 @@ async fn watch_policy(
         tokio::select! {
             biased;
             () = cancellation.cancelled() => return,
+            result = setup_changes.changed() => { if result.is_err() { return; } },
             result = changes.changed() => if result.is_err() { return; },
             _ = poll.tick() => {},
         }

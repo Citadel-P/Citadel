@@ -68,3 +68,19 @@ it('keeps Updates administrator-only and includes all singleton update event typ
     ]),
   );
 });
+
+it('keeps Instance administrator-only and separate from Updates', () => {
+  expect(getActivityResourceOptions(false)).not.toContainEqual(
+    expect.objectContaining({ value: ActivityResourceType.Instance }),
+  );
+  expect(getActivityResourceOptions(true)).toContainEqual(
+    expect.objectContaining({ value: ActivityResourceType.Instance }),
+  );
+  expect(getActivityEventOptions(ActivityResourceType.Instance)).toEqual([
+    ActivityEventType.InstanceConfigurationUpdated,
+    ActivityEventType.InstanceRestarted,
+  ]);
+  expect(getActivityEventOptions(ActivityResourceType.Updates)).not.toContain(
+    ActivityEventType.InstanceConfigurationUpdated,
+  );
+});

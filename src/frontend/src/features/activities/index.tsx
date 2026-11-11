@@ -1,4 +1,4 @@
-import { Activity, MoveUpRight, SquareStack, RefreshCw } from 'lucide-react';
+import { Activity, MoveUpRight, SquareStack, RefreshCw, ServerCog } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
@@ -25,6 +25,7 @@ const activityResourceIcons = {
   [ActivityResourceType.Role]: CitadelIcons.Role,
   [ActivityResourceType.License]: CitadelIcons.License,
   [ActivityResourceType.Updates]: RefreshCw,
+  [ActivityResourceType.Instance]: ServerCog,
   [ActivityResourceType.Volume]: CitadelIcons.Volume,
   [ActivityResourceType.Build]: CitadelIcons.Build,
   [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
@@ -47,6 +48,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.Role]: 'Role',
   [ActivityResourceType.License]: 'License',
   [ActivityResourceType.Updates]: 'Update',
+  [ActivityResourceType.Instance]: 'Instance',
   [ActivityResourceType.Volume]: 'Volume',
   [ActivityResourceType.Build]: 'Build',
   [ActivityResourceType.BuildAgentPool]: 'BuildAgentPool',
@@ -75,6 +77,7 @@ const activityLookupTargets = {
   [ActivityResourceType.Role]: LookupResourceType.Role,
   [ActivityResourceType.License]: LookupResourceType.License,
   [ActivityResourceType.Updates]: undefined,
+  [ActivityResourceType.Instance]: undefined,
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
   [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
@@ -90,6 +93,7 @@ const administratorActivityResourceTypes = new Set<ActivityResourceType>([
   ActivityResourceType.Role,
   ActivityResourceType.License,
   ActivityResourceType.Updates,
+  ActivityResourceType.Instance,
   ActivityResourceType.ServiceAccount,
 ]);
 
@@ -142,7 +146,8 @@ export function getActivityEventOptions(resourceType: ActivityFiltersState['reso
             (e.startsWith(eventPrefix) ||
               (resourceType === ActivityResourceType.Updates &&
                 (e.startsWith('InstanceUpdate') || e.startsWith('AgentUpdate')))) &&
-            (resourceType !== ActivityResourceType.Build || !e.startsWith('BuildAgentPool')),
+            (resourceType !== ActivityResourceType.Build || !e.startsWith('BuildAgentPool')) &&
+            (resourceType !== ActivityResourceType.Instance || !e.startsWith('InstanceUpdate')),
         );
   return events.flatMap<string | { value: string; label: string }>((event) =>
     event === ActivityEventType.BackupRunCompleted
@@ -195,17 +200,19 @@ function SearchSection() {
         allIcon={SquareStack}
         className={filterFieldClassName}
       />
-      {query.resourceType !== 'All' && query.resourceType !== ActivityResourceType.Updates && (
-        <ResourceSelectorField
-          targetType={activityLookupTargets[query.resourceType]}
-          onSelect={handleResourceChange as any}
-          selected={query.resourceId}
-          placeholder={
-            query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType
-          }
-          className={filterFieldClassName}
-        />
-      )}
+      {query.resourceType !== 'All' &&
+        query.resourceType !== ActivityResourceType.Updates &&
+        query.resourceType !== ActivityResourceType.Instance && (
+          <ResourceSelectorField
+            targetType={activityLookupTargets[query.resourceType]}
+            onSelect={handleResourceChange as any}
+            selected={query.resourceId}
+            placeholder={
+              query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType
+            }
+            className={filterFieldClassName}
+          />
+        )}
       <SelectField
         value={query.eventType}
         options={eventOptions}

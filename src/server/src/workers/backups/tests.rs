@@ -129,6 +129,37 @@ async fn dispatcher_bounds_claims_and_drains_controllers_on_shutdown() {
         )
         .with_tracking_slots(2),
     );
+    let disabled_shutdown = CancellationToken::new();
+    let (wake, receiver) = tokio::sync::watch::channel(());
+    let disabled = tokio::spawn(backup_runs(
+        citadel_runtime::admission::AdmissionGate::default(),
+        disabled_shutdown.clone(),
+        service.clone(),
+        crate::config::BackupWorkerConfig {
+            enabled: false,
+            tracking_slots: 2,
+            poll_interval: Duration::from_millis(1),
+            schedule_interval: Duration::from_secs(30),
+        },
+        receiver,
+    ));
+    wake.send_replace(());
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(authorization.entered.load(Ordering::SeqCst), 0);
+    let queued: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM backupruns WHERE id=ANY($1) AND status='Queued'")
+            .bind(&runs)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(queued, runs.len() as i64);
+    disabled_shutdown.cancel();
+    tokio::time::timeout(Duration::from_secs(5), disabled)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    // A newly constructed worker applies enablement; queue notifications do not hot-reload it.
     let admission = citadel_runtime::admission::AdmissionGate::default();
     let fence = Uuid::now_v7();
     admission.close(fence).unwrap();

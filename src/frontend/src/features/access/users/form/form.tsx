@@ -237,7 +237,7 @@ export const UserForm = ({
                   return null;
                 },
                 render: (value, set) => (
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-w-100">
                     <FieldInput
                       type="password"
                       value={value ?? ''}

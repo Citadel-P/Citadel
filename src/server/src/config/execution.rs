@@ -58,12 +58,19 @@ pub struct ExecutionConfig {
 }
 
 impl ExecutionConfig {
-    pub(super) fn from_env(http_port: u16) -> Result<Self, ConfigError> {
-        Self::read(|key| std::env::var_os(key), http_port)
+    pub(super) fn from_env(
+        http_port: u16,
+        instance: &citadel_instance::InstanceConfiguration,
+    ) -> Result<Self, ConfigError> {
+        Self::read(|key| std::env::var_os(key), http_port, instance)
     }
 
     // An injected source keeps configuration tests independent of process-global env.
-    fn read(get: impl Fn(&str) -> Option<OsString>, http_port: u16) -> Result<Self, ConfigError> {
+    fn read(
+        get: impl Fn(&str) -> Option<OsString>,
+        http_port: u16,
+        instance: &citadel_instance::InstanceConfiguration,
+    ) -> Result<Self, ConfigError> {
         let string = |key: &str| get(key).and_then(|value| value.into_string().ok());
         let data_root =
             PathBuf::from(get("CITADEL_DATA_ROOT").unwrap_or_else(|| "/app/data".into()));
@@ -88,7 +95,8 @@ impl ExecutionConfig {
         let architectures: Vec<_> = (0..32)
             .filter_map(|i| {
                 string(&format!(
-                    "CITADEL_EDGE_AGENT_SUPPORTED_NODE_ARCHITECTURE_{i}"
+                    "{}{i}",
+                    "CITADEL_EDGE_AGENT_SUPPORTED_NODE_ARCHITECTURE_"
                 ))
             })
             .collect();
@@ -130,8 +138,8 @@ impl ExecutionConfig {
                 pids: bounded("CITADEL_EDGE_AGENT_NODE_AGENT_PIDS_LIMIT", 256, 64, 4096)?,
             },
         };
-        let image = if let Some(image) = string("CITADEL_EDGE_AGENT_IMAGE") {
-            image
+        let image = if !instance.agent_image_override.is_empty() {
+            instance.agent_image_override.clone()
         } else {
             let repository = string("CITADEL_EDGE_AGENT_IMAGE_REPOSITORY")
                 .filter(|s| !s.trim().is_empty())
@@ -141,11 +149,7 @@ impl ExecutionConfig {
                 .unwrap_or_else(|| env!("CITADEL_BUILD_VERSION").into());
             format!("{}:{}", repository.trim(), image_tag(&version))
         };
-        let allow_insecure = string("CITADEL_CORE_AGENT_ALLOW_INSECURE")
-            .map(|value| value.parse::<bool>())
-            .transpose()
-            .map_err(|error| invalid("CITADEL_CORE_AGENT_ALLOW_INSECURE", error))?
-            .unwrap_or(true);
+        let allow_insecure = !instance.require_direct_agent_https;
         let absolute = |name, default| {
             std::path::absolute(get(name).map(PathBuf::from).unwrap_or(default))
                 .map_err(|error| invalid(name, error))
@@ -155,7 +159,7 @@ impl ExecutionConfig {
             .transpose()?;
         let allowed_core_paths: Vec<_> = (0..128)
             .filter_map(|i| {
-                get(&format!("CITADEL_BACKUPS_ALLOWED_CORE_PATH_{i}")).map(PathBuf::from)
+                get(&format!("{}{i}", "CITADEL_BACKUPS_ALLOWED_CORE_PATH_")).map(PathBuf::from)
             })
             .collect();
         if allowed_core_paths.iter().any(|p: &PathBuf| {
@@ -177,12 +181,9 @@ impl ExecutionConfig {
                 } else {
                     allowed_core_paths
                 },
-                default_timeout: std::time::Duration::from_secs(bounded(
-                    "CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS",
-                    120,
-                    5,
-                    86400,
-                )? as u64),
+                default_timeout: std::time::Duration::from_secs(u64::from(
+                    instance.backup_default_timeout_seconds,
+                )),
                 maximum_log_line_bytes: bounded(
                     "CITADEL_BACKUPS_MAX_LOG_LINE_BYTES",
                     8192,
@@ -331,6 +332,14 @@ mod tests {
                     .map(|(_, value)| (*value).into())
             },
             8000,
+            &citadel_instance::InstanceConfiguration::default().effective(
+                &super::super::instance::read_overrides(|key| {
+                    values
+                        .iter()
+                        .find(|(name, _)| *name == key)
+                        .map(|(_, value)| (*value).to_owned())
+                })?,
+            ),
         )
     }
 
@@ -430,6 +439,7 @@ mod tests {
                     .then(|| path.clone().into_os_string())
             },
             8000,
+            &Default::default(),
         )
         .unwrap();
         std::fs::remove_file(&path).unwrap();

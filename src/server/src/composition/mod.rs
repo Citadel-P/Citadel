@@ -6,6 +6,8 @@ mod builds;
 mod catalog;
 mod connectors;
 mod identity;
+mod instance;
+pub(crate) use instance::load_instance_configuration;
 mod licensing;
 mod platforms;
 mod scripts;
@@ -62,6 +64,7 @@ pub(super) struct RuntimeContext {
 }
 
 pub struct ServerComponents {
+    pub restart: crate::restart::RestartControl,
     pub admission: citadel_runtime::admission::AdmissionGate,
     pub database_health: Arc<dyn citadel_runtime::database_health::DatabaseHealth>,
     pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
@@ -78,6 +81,7 @@ pub struct ServerComponents {
     pub metrics: Arc<Metrics>,
     pub realtime_hub: Option<RealtimeHub>,
     pub identity: Arc<IdentityService>,
+    pub instance: Arc<citadel_instance::InstanceService>,
     pub licenses: Arc<LicenseService>,
     pub entitlements: Arc<PostgresLicenseEntitlementService>,
     pub mfa: Arc<MfaService>,
@@ -129,6 +133,8 @@ impl ServerComponents {
         config: &Config,
     ) -> Result<(Self, background::BackgroundServices), Box<dyn std::error::Error>> {
         let pool = connect_database(config).await?;
+        let instance = instance::build(config, &pool);
+        let restart = crate::restart::RestartControl::new(instance.restart().cloned());
         let database_health = Arc::new(postgres_runtime::PostgresDatabaseHealth(pool.clone()));
         let git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence> =
             Arc::new(PostgresGitRepositoryPersistence::new(pool.clone()));
@@ -360,6 +366,8 @@ impl ServerComponents {
                 git_repositories,
                 backup_coverage,
                 edge_service,
+                instance,
+                restart,
                 updates: checker,
                 agent_updates,
                 update_installation,

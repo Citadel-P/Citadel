@@ -61,7 +61,7 @@ TLS, and Edge overlays used by your installation, then reload the setup page.
 
 Two-factor authentication is optional by default. It can be enabled later from
 **Profile → Security**. Administrators can change the installation-wide policy
-in **Profile → Instance settings**; changes save automatically.
+in **Administration → Instance**; MFA changes save when selected.
 
 To enforce a minimum policy through deployment configuration, set:
 

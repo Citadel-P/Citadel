@@ -1,6 +1,10 @@
 use super::*;
 
-async fn initialize(fixture: &Fixture, server: &Server, name: &str) -> reqwest::Response {
+pub(super) async fn initialize(
+    fixture: &Fixture,
+    server: &Server,
+    name: &str,
+) -> reqwest::Response {
     fixture
         .client
         .post(format!("{}/api/v1/setup/initialize", server.url))

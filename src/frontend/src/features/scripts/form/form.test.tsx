@@ -1,10 +1,10 @@
 import { AuthorizedScript, ResourceControlState } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { ScriptForm } from './form';
 
-const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), mutate: vi.fn(), read: vi.fn(), paid: false }));
+const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), create: vi.fn(), mutate: vi.fn(), read: vi.fn(), paid: false }));
 
 vi.mock('@/features/license/use-license-entitlements', () => ({
   useLicenseEntitlements: () => ({
@@ -15,10 +15,10 @@ vi.mock('@/features/license/use-license-entitlements', () => ({
 vi.mock('@/lib/hooks', () => ({
   useRead: (...args: unknown[]) => mocks.read(...args) ?? { data: undefined, isFetching: false },
   useMutate: () => ({ mutateAsync: mocks.mutate }),
-  useSaveResource: () => ({
-    save: mocks.save,
-    isPending: false,
-  }),
+  useSaveResource: (options: { onCreate: (payload: unknown) => unknown }) => {
+    mocks.create.mockImplementation(options.onCreate);
+    return { save: mocks.save, isPending: false };
+  },
 }));
 
 vi.mock('@/lib/atoms', () => ({
@@ -287,4 +287,73 @@ it('keeps copied scripts inactive and reviews the edited name before saving', as
     }),
   );
   expect(Object.keys(localStorage).some((key) => key.includes(script.id))).toBe(false);
+});
+
+it('uses the active server default for new Scripts and preserves saved Script timeouts', async () => {
+  mocks.read.mockImplementation((name: string) =>
+    name === 'getApplicationInfo'
+      ? { data: { data: { scriptExecution: { defaultTimeoutSeconds: 45, maximumTimeoutSeconds: 90 } } } }
+      : undefined,
+  );
+  const added = renderCitadel(<ScriptForm mode="add" />);
+  expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(45);
+  added.unmount();
+  renderCitadel(<ScriptForm mode="edit" resource={script} />);
+  expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(300);
+});
+
+
+describe('Script timeout defaults', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mocks.read.mockReset();
+    mocks.save.mockReset();
+    mocks.mutate.mockReset();
+  });
+
+  it.each(['pending', 'failed'])('submits without a timeout when application information is %s', async (state) => {
+    mocks.read.mockReturnValue({ data: undefined, isFetching: state === 'pending', isError: state === 'failed' });
+    const { user } = renderCitadel(<ScriptForm mode="add" />);
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Server default script');
+    fireEvent.change(screen.getByRole('textbox', { name: 'script.mts' }), { target: { value: 'console.log("ok");' } });
+    expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(null);
+    const save = screen.getAllByRole('button', { name: 'Save' })[0];
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
+    expect(mocks.save).toHaveBeenCalled();
+    expect(mocks.save.mock.calls[0][0].timeoutSeconds).toBeUndefined();
+    await mocks.create(mocks.save.mock.calls[0][0]);
+    expect(mocks.mutate).toHaveBeenCalled();
+    const request = JSON.parse(JSON.stringify(mocks.mutate.mock.calls[0][0]));
+    expect(request.data).not.toHaveProperty('timeoutSeconds');
+  });
+
+  it.each(['0', '-1', '1.5', '61'])('rejects an explicit invalid timeout %s', async (value) => {
+    mocks.read.mockImplementation((name: string) => name === 'getApplicationInfo'
+      ? { data: { data: { scriptExecution: { defaultTimeoutSeconds: 23, maximumTimeoutSeconds: 60 } } } }
+      : undefined);
+    const { user } = renderCitadel(<ScriptForm mode="add" />);
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Invalid timeout');
+    fireEvent.change(screen.getByRole('textbox', { name: 'script.mts' }), { target: { value: 'console.log("ok");' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Timeout' }), { target: { value } });
+    await user.tab();
+    expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeDisabled();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it('loads late defaults without replacing an explicitly edited timeout on refresh', () => {
+    let defaults: { defaultTimeoutSeconds: number; maximumTimeoutSeconds: number } | undefined;
+    mocks.read.mockImplementation((name: string) => name === 'getApplicationInfo'
+      ? { data: defaults ? { data: { scriptExecution: defaults } } : undefined }
+      : undefined);
+    const view = renderCitadel(<ScriptForm mode="add" />);
+    expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(null);
+    defaults = { defaultTimeoutSeconds: 23, maximumTimeoutSeconds: 60 };
+    view.rerender(<ScriptForm mode="add" />);
+    expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(23);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Timeout' }), { target: { value: '35' } });
+    defaults = { defaultTimeoutSeconds: 24, maximumTimeoutSeconds: 60 };
+    view.rerender(<ScriptForm mode="add" />);
+    expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(35);
+  });
 });

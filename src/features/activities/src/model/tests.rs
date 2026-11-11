@@ -531,3 +531,46 @@ fn appearance_changes_are_allowed_in_preference_activity() {
     ];
     assert!(ActivityEventInfo::user_preferences_updated(changes).is_ok());
 }
+
+#[test]
+fn instance_activities_preserve_target_actor_and_before_after_values() {
+    let instance = Uuid::now_v7();
+    let actor = ActorId::new(Uuid::now_v7());
+    for info in [
+        ActivityEventInfo::InstanceConfigurationUpdated {
+            previous_configuration: serde_json::json!({"passwordMinimumLength":12}),
+            configuration: serde_json::json!({"passwordMinimumLength":20}),
+            previous_mfa_policy: "Optional".into(),
+            mfa_policy: "RequiredForAdministrators".into(),
+        },
+        ActivityEventInfo::InstanceRestarted {
+            phase: "Completed".into(),
+            completed_at: Some(Utc::now()),
+        },
+    ] {
+        let wire = serde_json::to_value(&info).unwrap();
+        assert_eq!(wire["$type"], info.event_type().as_database_str());
+        assert_eq!(
+            ActivityEventType::from_database_str(wire["$type"].as_str().unwrap()),
+            Some(info.event_type())
+        );
+        let event = ActivityEvent::new_instance_event(
+            instance,
+            actor,
+            info.clone(),
+            ActivityStatus::Success,
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(event.resource_type(), ActivityResourceType::Instance);
+        assert_eq!(event.resource_id(), instance);
+        assert_eq!(event.created_by_actor_id(), actor);
+        assert_eq!(event.status(), ActivityStatus::Success);
+        assert!(
+            ActivityEvent::new_user_event(instance, "Admin".into(), actor, info, Utc::now())
+                .is_err()
+        );
+    }
+    let legacy = ActivityEventType::from_database_str("InstallationSettingsUpdated").unwrap();
+    assert_eq!(legacy.resource_type(), ActivityResourceType::User);
+}

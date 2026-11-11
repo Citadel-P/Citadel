@@ -10,20 +10,14 @@ pub trait IdentityStore: Send + Sync {
 
     fn setup_required(&self) -> BoxFuture<'_, Result<bool, IdentityError>>;
 
-    fn installation_settings(&self) -> BoxFuture<'_, Result<InstallationSettings, IdentityError>>;
-
-    fn patch_installation_settings<'a>(
-        &'a self,
-        principal: &'a ActorPrincipal,
-        patch: &'a PatchInstallationSettings,
-        now: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<InstallationSettings, IdentityError>>;
+    /// Authentication reads only its live MFA policy, never execution configuration.
+    fn mfa_policy(&self) -> BoxFuture<'_, Result<crate::MfaPolicy, IdentityError>>;
 
     fn initialize_administrator<'a>(
         &'a self,
         administrator: &'a User,
         mode: crate::SetupInitializationMode,
-        settings: InstallationSettings,
+        settings: SetupChoices,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>>;
 
     fn find_user_for_login<'a>(

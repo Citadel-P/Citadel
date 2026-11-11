@@ -345,16 +345,19 @@ async fn application_info_only_exposes_updates_to_administrators() {
             credential_id: None,
             roles,
         };
-        let response = crate::application_info_http::router(checker.clone())
-            .layer(axum::Extension(principal))
-            .oneshot(
-                axum::http::Request::builder()
-                    .uri("/api/v1/application/info")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = crate::application_info_http::router(
+            checker.clone(),
+            citadel_scripts::ScriptOptions::default(),
+        )
+        .layer(axum::Extension(principal))
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/api/v1/application/info")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = axum::body::to_bytes(response.into_body(), 4096)
             .await
@@ -362,4 +365,75 @@ async fn application_info_only_exposes_updates_to_administrators() {
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json.get("availableUpdate").is_some(), expected);
     }
+}
+
+struct InstanceSettingsStore {
+    settings: Mutex<citadel_instance::InstallationSettings>,
+    loaded: Notify,
+}
+
+impl citadel_instance::InstanceRepository for InstanceSettingsStore {
+    fn installation_settings(
+        &self,
+    ) -> BoxFuture<
+        '_,
+        Result<citadel_instance::InstallationSettings, citadel_instance::InstanceError>,
+    > {
+        Box::pin(async {
+            let settings = self.settings.lock().unwrap().clone();
+            self.loaded.notify_one();
+            Ok(settings)
+        })
+    }
+
+    fn patch_installation_settings<'a>(
+        &'a self,
+        _: &'a citadel_identity::ActorPrincipal,
+        _: &'a citadel_instance::PatchInstallationSettings,
+        _: chrono::DateTime<chrono::Utc>,
+    ) -> BoxFuture<
+        'a,
+        Result<citadel_instance::InstallationSettings, citadel_instance::InstanceError>,
+    > {
+        unreachable!("this fixture changes settings through first-run setup")
+    }
+}
+
+#[tokio::test]
+async fn first_run_setup_wakes_instance_policy_without_waiting_for_polling() {
+    let (service, _, checks, _) = fixture();
+    let settings = Arc::new(InstanceSettingsStore {
+        settings: Mutex::new(citadel_instance::InstallationSettings {
+            initialized: false,
+            configuration: Default::default(),
+            update_checks_enabled: true,
+            update_check_interval_hours: 6,
+            mfa_policy: Default::default(),
+        }),
+        loaded: Notify::new(),
+    });
+    let instance = Arc::new(citadel_instance::InstanceService::new(
+        settings.clone(),
+        Arc::new(citadel_identity::SystemClock),
+    ));
+    let (setup, setup_changes) = tokio::sync::watch::channel(());
+    let cancellation = CancellationToken::new();
+    let task = tokio::spawn(super::runtime::run(
+        service,
+        instance,
+        setup_changes,
+        cancellation.clone(),
+    ));
+    tokio::time::timeout(Duration::from_secs(2), settings.loaded.notified())
+        .await
+        .expect("worker must read the initial uninitialized settings");
+    assert_eq!(checks.writes.load(Ordering::SeqCst), 0);
+    settings.settings.lock().unwrap().initialized = true;
+    setup.send_replace(());
+    // This is deliberately shorter than the 30-second repair poll.
+    let committed = tokio::time::timeout(Duration::from_secs(2), checks.committed.notified()).await;
+    cancellation.cancel();
+    task.await.unwrap().unwrap();
+    committed.expect("first-run setup must immediately wake the update checker");
+    assert_eq!(checks.writes.load(Ordering::SeqCst), 1);
 }

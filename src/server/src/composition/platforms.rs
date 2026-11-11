@@ -171,10 +171,7 @@ pub(super) fn build(
             ),
         ),
         realtime: realtime_hub.clone(),
-        stats_sample_max_age: config
-            .probe_interval
-            .saturating_mul(3)
-            .max(std::time::Duration::from_secs(30)),
+        stats_sample_max_age: config.statistics_sample_max_age(),
     };
     PlatformComponents {
         platform_state,

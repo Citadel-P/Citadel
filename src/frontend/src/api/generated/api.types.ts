@@ -522,6 +522,11 @@ export enum LoginNextStep {
   EnrollMfa = "EnrollMfa",
 }
 
+export enum LogFormatView {
+  Text = "Text",
+  Json = "Json",
+}
+
 export enum LicenseStatus {
   Community = "Community",
   Valid = "Valid",
@@ -1033,6 +1038,7 @@ export enum ActivityResourceType {
   Role = "Role",
   License = "License",
   Updates = "Updates",
+  Instance = "Instance",
   Build = "Build",
   BuildAgentPool = "BuildAgentPool",
   Volume = "Volume",
@@ -1110,6 +1116,8 @@ export enum ActivityEventType {
   StackGitAutoDeployFailed = "StackGitAutoDeployFailed",
   StackImported = "StackImported",
   StackWebhookReceived = "StackWebhookReceived",
+  InstanceConfigurationUpdated = "InstanceConfigurationUpdated",
+  InstanceRestarted = "InstanceRestarted",
   InstallationSettingsUpdated = "InstallationSettingsUpdated",
   UpdateDiscovered = "UpdateDiscovered",
   UpdateChecksChanged = "UpdateChecksChanged",
@@ -1553,6 +1561,7 @@ export interface ApplicationInfoView {
   informationalVersion: string;
   name: string;
   realtimeTransport: string;
+  scriptExecution?: ScriptExecutionDefaults | null;
   version: string;
 }
 
@@ -4069,12 +4078,162 @@ export interface InstallLicenseRequest {
 }
 
 export interface InstallationSettingsView {
+  configuration: InstanceConfigurationView;
+  deploymentOverrides: InstanceOverridesView;
+  effectiveConfiguration: InstanceConfigurationView;
   mfaPolicy: MfaPolicy;
   minimumMfaPolicy: MfaPolicy;
+  restartRequired: boolean;
+  runningConfiguration: InstanceConfigurationView;
   /** @format int32 */
   updateCheckIntervalHours: number;
   updateChecksAllowed: boolean;
   updateChecksEnabled: boolean;
+}
+
+export interface InstanceConfigurationView {
+  /**
+   * @format int32
+   * @min 0
+   */
+  accessTokenLifetimeMinutes: number;
+  agentImageOverride: string;
+  /**
+   * @format int32
+   * @min 0
+   */
+  backupDefaultTimeoutSeconds: number;
+  /** @min 0 */
+  backupTrackingSlots: number;
+  backupsEnabled: boolean;
+  /**
+   * @format int32
+   * @min 0
+   */
+  browserSessionLifetimeDays: number;
+  buildCleanupEnabled: boolean;
+  /** @min 0 */
+  buildPreparationSlots: number;
+  /** @format int32 */
+  buildRetentionDays: number;
+  /** @min 0 */
+  buildTrackingSlots: number;
+  logFormat: LogFormatView;
+  logVerbosity: string;
+  openapiEnabled: boolean;
+  /**
+   * @format int32
+   * @min 0
+   */
+  passwordMinimumLength: number;
+  requireDirectAgentHttps: boolean;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsDefaultTimeoutSeconds: number;
+  scriptsEnabled: boolean;
+  /** @min 0 */
+  scriptsMaximumParallelRuns: number;
+  /** @min 0 */
+  scriptsMaximumRemoteRuns: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsMaximumTimeoutSeconds: number;
+  /** @format int32 */
+  serviceAccountDefaultTokenLifetimeDays: number;
+  /** @format int32 */
+  serviceAccountMaximumActiveTokens: number;
+  /** @format int32 */
+  serviceAccountMaximumTokenLifetimeDays: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsCollectionIntervalSeconds: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsWriteIntervalSeconds: number;
+}
+
+export interface InstanceOverridesView {
+  /**
+   * @format int32
+   * @min 0
+   */
+  accessTokenLifetimeMinutes?: number | null;
+  agentImageOverride?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  backupDefaultTimeoutSeconds?: number | null;
+  /** @min 0 */
+  backupTrackingSlots?: number | null;
+  backupsEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  browserSessionLifetimeDays?: number | null;
+  buildCleanupEnabled?: boolean | null;
+  /** @min 0 */
+  buildPreparationSlots?: number | null;
+  /** @format int32 */
+  buildRetentionDays?: number | null;
+  /** @min 0 */
+  buildTrackingSlots?: number | null;
+  logFormat?: LogFormatView | null;
+  logVerbosity?: string | null;
+  openapiEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  passwordMinimumLength?: number | null;
+  requireDirectAgentHttps?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsDefaultTimeoutSeconds?: number | null;
+  scriptsEnabled?: boolean | null;
+  /** @min 0 */
+  scriptsMaximumParallelRuns?: number | null;
+  /** @min 0 */
+  scriptsMaximumRemoteRuns?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsMaximumTimeoutSeconds?: number | null;
+  /** @format int32 */
+  serviceAccountDefaultTokenLifetimeDays?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumActiveTokens?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumTokenLifetimeDays?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsCollectionIntervalSeconds?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsWriteIntervalSeconds?: number | null;
+}
+
+export interface InstanceRestartView {
+  available: boolean;
+  /** @format uuid */
+  bootId?: string | null;
+  pending: boolean;
 }
 
 export interface InternalSecretInput {
@@ -4720,6 +4879,7 @@ export interface PatchDeploymentMetadataInput {
 }
 
 export interface PatchInstallationSettingsRequest {
+  configuration?: PatchInstanceConfigurationRequest | null;
   mfaPolicy?: MfaPolicy | null;
   /**
    * Automatic release-check interval. Supported values: 6, 12, 24 hours.
@@ -4727,6 +4887,75 @@ export interface PatchInstallationSettingsRequest {
    */
   updateCheckIntervalHours?: number | null;
   updateChecksEnabled?: boolean | null;
+}
+
+export interface PatchInstanceConfigurationRequest {
+  /**
+   * @format int32
+   * @min 0
+   */
+  accessTokenLifetimeMinutes?: number | null;
+  agentImageOverride?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  backupDefaultTimeoutSeconds?: number | null;
+  /** @min 0 */
+  backupTrackingSlots?: number | null;
+  backupsEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  browserSessionLifetimeDays?: number | null;
+  buildCleanupEnabled?: boolean | null;
+  /** @min 0 */
+  buildPreparationSlots?: number | null;
+  /** @format int32 */
+  buildRetentionDays?: number | null;
+  /** @min 0 */
+  buildTrackingSlots?: number | null;
+  logFormat?: string | null;
+  logVerbosity?: string | null;
+  openapiEnabled?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  passwordMinimumLength?: number | null;
+  requireDirectAgentHttps?: boolean | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsDefaultTimeoutSeconds?: number | null;
+  scriptsEnabled?: boolean | null;
+  /** @min 0 */
+  scriptsMaximumParallelRuns?: number | null;
+  /** @min 0 */
+  scriptsMaximumRemoteRuns?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  scriptsMaximumTimeoutSeconds?: number | null;
+  /** @format int32 */
+  serviceAccountDefaultTokenLifetimeDays?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumActiveTokens?: number | null;
+  /** @format int32 */
+  serviceAccountMaximumTokenLifetimeDays?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsCollectionIntervalSeconds?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  statisticsWriteIntervalSeconds?: number | null;
 }
 
 export interface PatchOidcProviderMetadataRequest {
@@ -5140,8 +5369,23 @@ export type PublicActivityEventInfo =
       version: string;
     }
   | {
-      $type: "InstallationSettingsUpdated";
+      $type: "InstanceConfigurationUpdated";
+      configuration: any;
       mfaPolicy: string;
+      previousConfiguration: any;
+      previousMfaPolicy: string;
+    }
+  | {
+      $type: "InstanceRestarted";
+      /** @format date-time */
+      completedAt?: string | null;
+      phase: string;
+    }
+  | {
+      $type: "InstallationSettingsUpdated";
+      configuration?: any;
+      mfaPolicy: string;
+      previousConfiguration?: any;
       previousMfaPolicy: string;
       previousUpdateChecksEnabled: boolean;
       updateChecksEnabled: boolean;
@@ -6402,6 +6646,11 @@ export interface ResourceTagsResponse {
   tags: ResourcesTagsTagSummary[];
 }
 
+export interface RestartInstanceRequest {
+  /** @format uuid */
+  bootId: string;
+}
+
 export interface RestoreInput {
   overwriteExisting: boolean;
   /** @format uuid */
@@ -6548,6 +6797,13 @@ export interface ScriptActivitySnapshot {
 export interface ScriptDuplicateDraftView {
   draft: ScriptInput;
   sourceName: string;
+}
+
+export interface ScriptExecutionDefaults {
+  /** @format int32 */
+  defaultTimeoutSeconds: number;
+  /** @format int32 */
+  maximumTimeoutSeconds: number;
 }
 
 export type ScriptExecutorSchema =
@@ -13951,6 +14207,60 @@ export class Api<
         secure: true,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetInstanceRestart
+     * @summary Get Core restart availability (administrator)
+     * @request GET:/api/v1/instance/restart
+     * @secure
+     * @response `200` `InstanceRestartView`
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceRestart: (params: RequestParams = {}) =>
+      this.request<InstanceRestartView, ProblemDetails>({
+        path: `/api/v1/instance/restart`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name RestartInstance
+     * @summary Restart Core to apply saved configuration (administrator)
+     * @request POST:/api/v1/instance/restart
+     * @secure
+     * @response `202` `void` Restart accepted
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    restartInstance: (
+      data: RestartInstanceRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/instance/restart`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

@@ -46,7 +46,12 @@ vi.mock('@/lib/hooks', () => ({
 }));
 
 vi.mock('@/lib/monaco', () => ({
-  MonacoDiff: () => <div data-testid="monaco-diff" />,
+  MonacoDiff: ({ original, modified }: { original: unknown; modified: unknown }) => (
+    <div data-testid="monaco-diff">
+      <pre data-testid="diff-original">{JSON.stringify(original)}</pre>
+      <pre data-testid="diff-modified">{JSON.stringify(modified)}</pre>
+    </div>
+  ),
   MonacoEditor: ({ title, value }: { title: string; value: string }) => (
     <div data-testid="monaco-editor">
       <h3>{title}</h3>
@@ -230,5 +235,55 @@ describe('Failed stack activity context', () => {
     renderCitadel(<TaskSheet type="Activity" />);
     expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
     expect(screen.getByText('Stack deployment failed.')).toBeVisible();
+  });
+
+  it.each([false, true])('shows configuration and MFA before/after values (MFA-only: %s)', (mfaOnly) => {
+    const previousConfiguration = { passwordMinimumLength: 12 };
+    const configuration = { passwordMinimumLength: mfaOnly ? 12 : 20 };
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'Instance',
+      eventType: 'InstanceConfigurationUpdated',
+      status: 'Success',
+      info: {
+        $type: 'InstanceConfigurationUpdated',
+        previousConfiguration,
+        configuration,
+        previousMfaPolicy: 'Optional',
+        mfaPolicy: 'RequiredForAllUsers',
+      },
+    } as ActivityView;
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(JSON.parse(screen.getByTestId('diff-original').textContent!)).toEqual({
+      configuration: previousConfiguration,
+      mfaPolicy: 'Optional',
+    });
+    expect(JSON.parse(screen.getByTestId('diff-modified').textContent!)).toEqual({
+      configuration,
+      mfaPolicy: 'RequiredForAllUsers',
+    });
+    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['Requested', null, 'Core restart requested. Waiting for startup to complete.'],
+    ['Completed', '2026-11-11T17:18:11.94325+00:00', 'Core restarted successfully.'],
+    ['Completed', null, 'Core restarted successfully.'],
+  ])('shows compact restart details for %s (%s)', (phase, completedAt, message) => {
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'Instance',
+      eventType: 'InstanceRestarted',
+      status: phase === 'Completed' ? 'Success' : 'Information',
+      info: { $type: 'InstanceRestarted', phase, completedAt },
+    } as ActivityView;
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.getByText(message, { exact: false })).toBeVisible();
+    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('monaco-diff')).not.toBeInTheDocument();
+    if (completedAt) {
+      const time = screen.getByText(message, { exact: false }).querySelector('time');
+      expect(time).toHaveAttribute('datetime', new Date(completedAt).toISOString());
+    }
   });
 });

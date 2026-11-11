@@ -67,6 +67,7 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
           addDisabled={!capabilities?.canWrite}
           addButtonTitle={headerCfg.addButtonTitle}
           Extra={headerCfg.Extra}
+          Actions={headerCfg.Actions}
           onSearch={setSearch}
           onAdd={() => (AddDialog ? setAddDialogOpen(true) : navigate(headerCfg.addButtonUrl ?? './add'))}
         />

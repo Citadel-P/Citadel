@@ -30,8 +30,8 @@ DOCKER_HOST=unix://${CITADEL_DOCKER_SOCKET:-/var/run/docker.sock}
 CITADEL_DATA_ROOT=${CITADEL_DATA_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/citadel-wsl}
 SQLX_OFFLINE=true
 RUST_BACKTRACE=1
-RUST_LOG=info
-CITADEL_LOG_FORMAT=text
+# RUST_LOG=info
+# CITADEL_LOG_FORMAT=text
 VITE_API_BASE_URL=http://localhost:8000
 EOF
 )

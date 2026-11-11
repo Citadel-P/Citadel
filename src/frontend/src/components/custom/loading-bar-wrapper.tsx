@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import LoadingBar, { LoadingBarRef } from 'react-top-loading-bar';
 
 const IDLE_DELAY_MS = 150;
@@ -8,6 +8,8 @@ const MIN_VISIBLE_MS = 400;
 const LoadingBarWrapper = () => {
   const ref = useRef<LoadingBarRef>(null);
   const onFinished = useRef(() => {});
+  const onReset = useRef(() => {});
+  const [cycle, setCycle] = useState(0);
   const client = useQueryClient();
 
   useEffect(() => {
@@ -52,6 +54,12 @@ const LoadingBarWrapper = () => {
     };
 
     onFinished.current = () => {
+      // A continuous tick can repaint the library's bar after completion when
+      // React batches delayed timers. Discard that animation instance, and keep
+      // the finishing phase until the replacement has committed its ref.
+      setCycle((value) => value + 1);
+    };
+    onReset.current = () => {
       phase = 'idle';
       sync();
     };
@@ -65,11 +73,17 @@ const LoadingBarWrapper = () => {
       unsubscribeMutations();
       clearTimer();
       onFinished.current = () => {};
+      onReset.current = () => {};
     };
   }, [client]);
 
+  useEffect(() => {
+    onReset.current();
+  }, [cycle]);
+
   return (
     <LoadingBar
+      key={cycle}
       color="var(--primary)"
       ref={ref}
       shadow={true}

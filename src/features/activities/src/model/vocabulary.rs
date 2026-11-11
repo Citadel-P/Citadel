@@ -52,6 +52,7 @@ database_string_enum! {
         Role,
         License,
         Updates,
+        Instance,
         Build,
         BuildAgentPool,
         Volume,
@@ -143,6 +144,8 @@ database_string_enum! {
         StackGitAutoDeployFailed,
         StackImported,
         StackWebhookReceived,
+        InstanceConfigurationUpdated,
+        InstanceRestarted,
         InstallationSettingsUpdated,
         InitialAdministratorCreated,
         UserProfileUpdated,
@@ -296,6 +299,9 @@ impl ActivityEventType {
             | Self::StackGitAutoDeployFailed
             | Self::StackImported
             | Self::StackWebhookReceived => ActivityResourceType::Stack,
+            Self::InstanceConfigurationUpdated | Self::InstanceRestarted => {
+                ActivityResourceType::Instance
+            }
             Self::InstallationSettingsUpdated
             | Self::InitialAdministratorCreated
             | Self::UserProfileUpdated

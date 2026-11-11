@@ -16,6 +16,7 @@ import {
   Rocket,
   Rss,
   Server,
+  ServerCog,
   Shield,
   Tag as TagIcon,
   TriangleAlert,
@@ -47,6 +48,7 @@ export const DockerIcon = createLucideIcon('DockerIcon', [
 
 export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ className?: string }>> = {
   ['Updates']: RefreshCw,
+  ['Instance']: ServerCog,
   ['Deployment']: Rocket,
   ['SwarmService']: Boxes,
   ['Registry']: Cable,

@@ -92,7 +92,7 @@ ports (`8000` and `8001`) differ from the default host ports (`18000` and `18001
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `CITADEL_PASSWORDS_MINIMUM_LENGTH` | `15` | Minimum length for new or changed passwords; accepts 8–128 characters, with a fixed maximum password length of 128 |
-| `CITADEL_MFA_POLICY` | `Optional` | Minimum MFA policy; administrators can choose a stronger policy in Profile → Instance settings |
+| `CITADEL_MFA_POLICY` | `Optional` | Minimum MFA policy; administrators can choose a stronger policy in Administration → Instance |
 | `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit the saved installation setting to enable release checks; false forces checks off |
 | `CITADEL_HTTP_OPENAPI_ENABLED` | `false` | Show API reference pages on your installation |
 | `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Collect metrics every 10 seconds |
@@ -114,7 +114,7 @@ Unattended administrator setup is explained in
 ## Allow update checks
 
 Update checks are **on by default**. Choose **Check for Citadel updates** during
-first-run setup or change it in **Settings → Updates → Config** as an
+first-run setup or change it in **Administration → Updates → Config** as an
 administrator and select **Save**. This choice applies to the whole installation
 and takes effect without restarting Core.
 
@@ -126,14 +126,14 @@ CITADEL_UPDATE_CHECKS_ENABLED=false
 ```
 
 After setup completes, Core checks Citadel's public GitHub release information
-when automatic checks are enabled. In **Settings → Updates → Config**, choose
+when automatic checks are enabled. In **Administration → Updates → Config**, choose
 **Every 6 hours** (the default), **Every 12 hours**, or **Daily**, then select **Save**.
 The frequency is saved for the installation and takes effect without restarting
 Core. The next check is based on the last completed attempt, including manual
 checks; restarting Core preserves the schedule. Administrators see a small dot beside the sidebar version and a
 notice on Home when a newer release in the installed channel is available.
 Stable installations track stable releases; development versions (`-dev.N`)
-track development releases. Both notifications open **Settings → Updates**, where
+track development releases. Both notifications open **Administration → Updates**, where
 you can read release notes, see the last successful check, and open the
 [upgrade guide](/operations/upgrade-and-rollback).
 Checks do not install updates. With `CITADEL_UPDATE_CHECKS_ENABLED=false`, the UI

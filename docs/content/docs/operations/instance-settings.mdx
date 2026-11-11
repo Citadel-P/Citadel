@@ -1,0 +1,160 @@
+---
+title: Instance settings
+description: Administrator controls for security, monitoring, execution and Core startup defaults.
+---
+
+Open **Administration → Instance** from the bottom of the sidebar to configure this installation. Only
+an enabled human administrator can read or change these settings. Saves are
+validated together, persisted in PostgreSQL and recorded in Activities. Other
+connected administrator browsers receive the existing settings invalidation.
+
+Use **Config** to edit settings and **Activities** to review saved changes from
+all administrators. Configuration and MFA-policy changes use `InstanceConfigurationUpdated`,
+showing who saved them, when, and the previous and new values. Select an activity
+to compare the previous and new configuration, including MFA policy, in a diff.
+Unsaved edits and saves without changes are not logged.
+Earlier installation-setting records remain available under User in the global
+Activities page; new records appear under Instance. Update-check changes remain
+in Updates history.
+
+The sidebar groups daily work under **Infrastructure**, **Orchestration**,
+**Automation**, **Builds**, **Providers**, and **System**. The platform browser opens one platform's resources; it does not
+filter the other pages. Its **All platforms** entry returns to the platform list.
+At the bottom, **Configuration** (Alert Rules, Bindings and Tags, according to
+your permissions) and **Administration** (Instance, Access, OIDC Providers,
+Updates and License) open popup menus. Update checks and update schedules remain in **Updates**.
+Personal password changes, authenticator enrollment, recovery codes and sessions
+remain in **Profile**.
+
+## Restart Core
+
+Use **Restart Core** beside the page title to apply saved settings. Confirm the
+restart after saving your changes. Core gracefully stops its workers and restarts
+its executable; managed containers and PostgreSQL keep running. The browser
+reconnects automatically. This is supported on Linux, including native and
+rootless container installations; it does not recreate the container or reload a
+changed Compose environment file.
+
+`InstanceRestarted` records the administrator's request as pending and becomes
+successful after the next Core startup opens both listeners. Its details show a
+compact status message, with the completion time when available. Duplicate requests
+for the same running Core do not add events. Restart is blocked while an update
+or update recovery owns the installation. If shutdown or startup fails, the
+activity remains pending; inspect the Core logs and recover from the host.
+
+## When changes apply
+
+**MFA requirement uses the same Save and Reset actions as other settings.**
+Changing the dropdown only edits the draft. Save applies the requirement immediately
+for the next local-password sign-in; Reset discards the unsaved choice. Existing
+sessions remain signed in. OIDC MFA belongs to the identity provider; Agents and
+service accounts do not enter interactive MFA. Relaxing the requirement does not
+disable an enrolled authenticator. `CITADEL_MFA_POLICY` sets a minimum requirement
+that the UI can strengthen.
+
+**Every other Instance control requires a Core restart.** Save does not restart
+Core or Agents. The page distinguishes saved choices, effective choices after
+deployment overrides, and values currently in use. A pending-restart indication
+remains until Core starts with the effective choices. Use your normal installation
+restart procedure; do not remove application or PostgreSQL volumes.
+
+## Deployment overrides
+
+For ordinary settings, an explicitly supplied environment variable takes
+precedence over the saved administrator choice; the built-in default is used
+when no choice exists. Deployment-managed settings show a **Managed by environment** badge and a
+read-only effective value instead of an editable control. The description names
+the variable and explains how to make the setting editable. Conflicting API
+changes are rejected. An environment variable whose
+value equals the built-in default is still an explicit override.
+
+To let the UI manage a setting, remove its assignment from the deployment's
+environment, including Compose `environment`, `env_file` and hosting environment
+settings. For Compose installations, recreate the Core container; a restart alone
+keeps its existing environment. For a non-container installation, restart Core
+with the override removed. Do not merely edit `.env` if Compose still injects the value. Existing operator overrides remain authoritative. New example
+files comment out these optional overrides. `RUST_LOG` module filters are
+preserved as deployment-managed values. Release deployment may deliberately pin
+`CITADEL_EDGE_AGENT_IMAGE` to a verified digest.
+
+Database connection details, ports, public URLs, keys, bootstrap credentials,
+mounts, Agent host capacities, certificate/known-host paths and terminal log color
+remain deployment configuration.
+
+## Security
+
+- **Minimum password length:** 15 characters by default; accepts 8–128. Applies to
+  setup and new/changed passwords, including administrator and self-service
+  changes. Existing passwords continue to authenticate. Common-password checks
+  remain enabled.
+- **Browser session lifetime:** 30 days by default, an absolute lifetime for new
+  sessions after restart, not an idle timeout. Existing expirations are preserved.
+- **Service-account tokens:** default 90 days, maximum expiring lifetime 365 days,
+  maximum 10 active tokens per account. Limits apply to subsequent token creation;
+  lowering them does not revoke or shorten existing credentials. The explicit
+  non-expiring option and existing entitlements remain unchanged.
+- **Access-token lifetime (advanced):** 15 minutes by default. After restart it
+  applies to subsequently issued tokens, including tokens issued by refresh.
+
+## Monitoring
+
+Collection defaults to **10 seconds** across Local, Direct and Edge monitoring.
+Shorter intervals provide more detail and increase collection/storage load. The
+stale-sample threshold follows this cadence.
+
+The advanced write interval defaults to **60 seconds** for both statistics
+writers. A full batch can flush earlier. A longer interval delays committed
+samples and their alert evaluation; it does not reduce sample count or downsample
+history. Existing raw/summary retention, resolution and compaction are unchanged.
+
+## Scripts
+
+Script execution defaults to enabled, with **4 concurrent local runs**, **16 remote
+runs tracked by Core**, a **300-second default timeout** and **1,800-second maximum**.
+Local capacity and remote tracking are distinct; Agent execution capacities still
+apply. The active default populates new Script forms and backend requests that
+omit a timeout. If application information is unavailable, a new form can submit
+without a timeout and the server applies its active default. Refreshing that
+information preserves an explicitly edited timeout. Changing defaults never rewrites saved Scripts. Restarting Core
+uses the existing durable recovery and cancellation behavior.
+
+## Builds
+
+Defaults are **2 concurrent preparations**, **16 tracked builds**, cleanup enabled
+and **90 days** of completed history. Preparation covers Core Git/context work;
+tracking does not override Build Pool or Agent execution capacity. Retention days
+remain saved when cleanup is disabled. Reducing retention makes more eligible
+completed history subject to deletion. Active, current, reserved,
+completion-pending, deployment-referenced and release-referenced runs remain
+protected.
+
+## Backups
+
+Workers default to enabled with **16 combined tracking slots** and a **120-second
+repository-operation/restore timeout**. Disabling workers stops scheduled
+enqueueing and backup/restore dispatch. Manual requests can remain queued until
+workers are enabled and Core restarted. It is not a switch for every repository
+operation. Backup Policies retain their own backup timeout and snapshot-retention
+choices.
+
+## Advanced
+
+- **Swagger/OpenAPI exposure** defaults off. It controls documentation routes,
+  not the application REST API.
+- **Require HTTPS for Direct Agents** defaults off and is the inverse of
+  `CITADEL_CORE_AGENT_ALLOW_INSECURE`. Enabling it rejects connections to existing
+  HTTP Direct Agents after restart without changing saved addresses. Certificate
+  verification remains enabled. It does not configure browser TLS or the inbound
+  Edge listener. If the deployment sets `CITADEL_CORE_AGENT_ADDRESS` to an HTTP
+  address, configure that address for HTTPS before enabling this policy. Citadel
+  rejects the incompatible settings save atomically to prevent a startup failure.
+  An absent deployment address or an HTTPS address permits the change; ordinary
+  database-backed HTTP Direct Agents do not block Core startup.
+- **Agent image override:** empty means automatic version-matched resolution,
+  including deployment image repository/tag options. A saved override reaches
+  Direct/Edge/Swarm setup and existing helper-image consumers after restart.
+  Saving does not upgrade running Agents; use their explicit update workflow.
+- **Log verbosity:** Info by default; Off, Error, Warn, Debug and Trace are also
+  available. Deployment-defined `RUST_LOG` filters take precedence.
+- **Log output format:** Text by default, or JSON. The choice configures the actual
+  logger at the next Core start.

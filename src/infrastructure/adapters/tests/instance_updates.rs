@@ -4,14 +4,13 @@ use citadel_activities::{
 };
 use citadel_adapters::persistence::postgres::updates::check_startup_updates;
 use citadel_adapters::persistence::postgres::{
-    activities::store::PostgresActivityStore,
-    identity::authentication::store::PostgresIdentityStore, updates::PostgresUpdateRepository,
+    activities::store::PostgresActivityStore, updates::PostgresUpdateRepository,
 };
 use citadel_database::MigrationRunner;
 use citadel_identity::{
-    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, IdentityStore, MfaPolicy,
-    PatchInstallationSettings, SYSTEM_ACTOR_ID,
+    ADMIN_ROLE_ID, ActorPrincipal, AuthenticatedPrincipalType, MfaPolicy, SYSTEM_ACTOR_ID,
 };
+use citadel_instance::{InstanceRepository, PatchInstallationSettings};
 use citadel_primitives::{ActorId, PatchField};
 use citadel_updates::*;
 use sqlx::postgres::PgPoolOptions;
@@ -352,7 +351,10 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         .is_err()
     );
 
-    let identity = PostgresIdentityStore::new(pool.clone());
+    let instance_settings =
+        citadel_adapters::persistence::postgres::instance::PostgresInstanceRepository::new(
+            pool.clone(),
+        );
     check_startup_updates(&pool, Some(instance)).await.unwrap();
     let principal = ActorPrincipal {
         subject_id: actor.subject_id,
@@ -366,19 +368,24 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         update_checks_enabled: PatchField::Value(false),
         update_check_interval_hours: PatchField::Value(12),
         mfa_policy: PatchField::Value(MfaPolicy::RequiredForAdministrators),
+        configuration: PatchField::Value(
+            serde_json::from_value(serde_json::json!({"passwordMinimumLength":20})).unwrap(),
+        ),
+        ..Default::default()
     };
-    identity
+    instance_settings
         .patch_installation_settings(&principal, &patch, Utc::now())
         .await
         .unwrap();
-    identity
+    instance_settings
         .patch_installation_settings(&principal, &patch, Utc::now())
         .await
         .unwrap();
     assert_eq!(count(&pool, "UpdateChecksChanged").await, 1);
-    assert_eq!(count(&pool, "InstallationSettingsUpdated").await, 1);
+    assert_eq!(count(&pool, "InstanceConfigurationUpdated").await, 1);
+    assert_eq!(count(&pool, "InstallationSettingsUpdated").await, 0);
     assert_eq!(
-        identity
+        instance_settings
             .installation_settings()
             .await
             .unwrap()
@@ -390,7 +397,7 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         ..Default::default()
     };
     for _ in 0..2 {
-        identity
+        instance_settings
             .patch_installation_settings(&principal, &frequency, Utc::now())
             .await
             .unwrap();
@@ -401,11 +408,11 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         "frequency-only edits must record one activity"
     );
     assert_eq!(
-        count(&pool, "InstallationSettingsUpdated").await,
+        count(&pool, "InstanceConfigurationUpdated").await,
         1,
         "frequency must not create MFA history"
     );
-    let settings = identity.installation_settings().await.unwrap();
+    let settings = instance_settings.installation_settings().await.unwrap();
     assert_eq!(settings.update_check_interval_hours, 24);
     assert!(
         !settings.update_checks_enabled,
@@ -415,15 +422,13 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         .fetch_one(&pool).await.unwrap();
     assert_eq!(info["PreviousUpdateCheckIntervalHours"], 12);
     let info: serde_json::Value = sqlx::query_scalar(
-        "SELECT info::jsonb FROM activityevents WHERE eventtype='InstallationSettingsUpdated'",
+        "SELECT info::jsonb FROM activityevents WHERE eventtype='InstanceConfigurationUpdated'",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        info["PreviousUpdateChecksEnabled"],
-        info["UpdateChecksEnabled"]
-    );
+    assert_eq!(info["PreviousMfaPolicy"], "Optional");
+    assert_eq!(info["MfaPolicy"], "RequiredForAdministrators");
     let store = PostgresActivityStore::new(pool.clone());
     let scope = ActivityFilter {
         resource_type: Some(ActivityResourceType::Updates),
@@ -455,6 +460,51 @@ async fn update_state_activities_and_receipts_commit_atomically() {
         ..denied
     };
     assert!(store.get_authorized(&allowed, id).await.unwrap().is_some());
+    let instance_scope = ActivityFilter {
+        resource_type: Some(ActivityResourceType::Instance),
+        resource_id: Some(instance),
+        ..Default::default()
+    }
+    .validated()
+    .unwrap();
+    assert_eq!(
+        store
+            .list_authorized(&denied, instance_scope)
+            .await
+            .unwrap()
+            .total_count,
+        0
+    );
+    let activities = store
+        .list_authorized(&allowed, instance_scope)
+        .await
+        .unwrap();
+    assert_eq!(activities.total_count, 1);
+    let instance_events: Vec<(Uuid, Uuid, Uuid)> = sqlx::query_as(
+        "SELECT id, resourceid, createdbyactorid FROM activityevents WHERE resourcetype='Instance'",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    for (activity_id, resource_id, actor_id) in instance_events {
+        assert_eq!(resource_id, instance);
+        assert_eq!(actor_id, actor.actor_id.value());
+        assert!(
+            store
+                .get_authorized(&denied, activity_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            store
+                .get_authorized(&allowed, activity_id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
+
     let attributed: Uuid =
         sqlx::query_scalar("SELECT createdbyactorid FROM activityevents WHERE id=$1")
             .bind(id)
@@ -462,6 +512,72 @@ async fn update_state_activities_and_receipts_commit_atomically() {
             .await
             .unwrap();
     assert_eq!(attributed, actor.actor_id.value());
+
+    // Restart uses the same installation identity and transactional update exclusion.
+    let restart = citadel_instance::InstanceRestartService::new(
+        std::sync::Arc::new(instance_settings.clone()),
+        std::sync::Arc::new(citadel_identity::SystemClock),
+    );
+    let boot = restart.status(&principal).await.unwrap().boot_id;
+    assert!(
+        restart.request(&principal, boot).await.is_err(),
+        "startup must acknowledge before admitting restart"
+    );
+    restart.complete_startup().await.unwrap();
+    assert!(restart.request(&principal, Uuid::now_v7()).await.is_err());
+    let mut denied_principal = principal.clone();
+    denied_principal.roles.clear();
+    assert!(restart.request(&denied_principal, boot).await.is_err());
+    sqlx::query("ALTER TABLE activityevents ADD CONSTRAINT reject_restart_test CHECK(eventtype <> 'InstanceRestarted') NOT VALID").execute(&pool).await.unwrap();
+    assert!(restart.request(&principal, boot).await.is_err());
+    assert!(
+        !restart.pending().await.unwrap(),
+        "audit failure must roll back restart admission"
+    );
+    sqlx::query("ALTER TABLE activityevents DROP CONSTRAINT reject_restart_test")
+        .execute(&pool)
+        .await
+        .unwrap();
+    restart.request(&principal, boot).await.unwrap();
+    restart.request(&principal, boot).await.unwrap();
+    assert_eq!(count(&pool, "InstanceRestarted").await, 1);
+    assert!(restart.pending().await.unwrap());
+    assert!(
+        instance_settings
+            .patch_installation_settings(&principal, &patch, Utc::now())
+            .await
+            .is_err(),
+        "settings must remain fixed during restart"
+    );
+    assert!(
+        repo.claim(actor, &plan, Uuid::now_v7(), Utc::now())
+            .await
+            .is_err(),
+        "restart must exclude updates"
+    );
+    restart.complete_startup().await.unwrap();
+    assert!(
+        restart.pending().await.unwrap(),
+        "the requesting boot cannot acknowledge its own restart"
+    );
+    let next_boot = citadel_instance::InstanceRestartService::new(
+        std::sync::Arc::new(instance_settings.clone()),
+        std::sync::Arc::new(citadel_identity::SystemClock),
+    );
+    next_boot.complete_startup().await.unwrap();
+    assert!(!restart.pending().await.unwrap());
+    assert!(
+        next_boot.request(&principal, boot).await.is_err(),
+        "replaying an old browser request must not restart the new boot"
+    );
+    let (status, info): (String, serde_json::Value) = sqlx::query_as(
+        "SELECT status, info::jsonb FROM activityevents WHERE eventtype='InstanceRestarted'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(status, "Success");
+    assert_eq!(info["Phase"], "Completed");
 
     let mut previous_stopped = None;
     for phase in [UpdatePhase::Postponed, UpdatePhase::Failed] {

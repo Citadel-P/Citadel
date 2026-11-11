@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 8,
+  "schemaVersion": 4,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "66186adbc3ff9057a82fd97e2456e5d3cab3208d1720887d917e1de74d16bcb5"
+    "sha256": "9ec41bcb4d4ce1448e883e1f19918a04f5bbeed743eb9fc2853287a0e99c7942"
   },
   "migrations": [
     {
@@ -33,39 +33,7 @@
       "id": "0004",
       "name": "query_indexes",
       "file": "0004_query_indexes.sql",
-      "sha256": "cef2e8bcec2443f623102fda30f9b99b13b7052cf8c2ac6534967b01f22ea3f8",
-      "transactional": true,
-      "generatedBy": "citadel-xtask-v1"
-    },
-    {
-      "id": "0005",
-      "name": "statistics_storage",
-      "file": "0005_statistics_storage.sql",
-      "sha256": "3940a9d43a77aa2d7318b0eca7e34fdfc6c23adbeb93ee3e50bb48baacde3cf1",
-      "transactional": true,
-      "generatedBy": "citadel-xtask-v1"
-    },
-    {
-      "id": "0006",
-      "name": "shared_statistics",
-      "file": "0006_shared_statistics.sql",
-      "sha256": "fc65287d8c1c1a1d5773f8c8dc1e6650ca1be2191fd3fb767e1e15df4203c099",
-      "transactional": true,
-      "generatedBy": "citadel-xtask-v1"
-    },
-    {
-      "id": "0007",
-      "name": "platform_history",
-      "file": "0007_platform_history.sql",
-      "sha256": "22ec741eff9bea70bfef6f8fc9a1e788e1c986a03860aadffd2610b372899eb0",
-      "transactional": true,
-      "generatedBy": "citadel-xtask-v1"
-    },
-    {
-      "id": "0008",
-      "name": "statistics_identity",
-      "file": "0008_statistics_identity.sql",
-      "sha256": "19c8bdbc5ce6ffc13b5c11b5d795cea3e825110cacdd56d2701ebdcbaaa468a3",
+      "sha256": "2f1970bbe326ad5723f27b52ad1cb93629738982f7dea8a70c0d6d12d634b332",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

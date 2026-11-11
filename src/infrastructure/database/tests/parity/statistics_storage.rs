@@ -10,9 +10,7 @@ async fn compact_statistics_preserve_samples_uniqueness_and_migration_history() 
         "\n",
         include_str!("../../generated/0002_instance_updates.sql"),
         "\n",
-        include_str!("../../generated/0003_platform_io.sql"),
-        "\n",
-        include_str!("../../generated/0004_query_indexes.sql")
+        include_str!("../../generated/0003_platform_io.sql")
     ))
     .execute(&mut connection)
     .await
@@ -21,7 +19,7 @@ async fn compact_statistics_preserve_samples_uniqueness_and_migration_history() 
         .execute(&mut connection).await.unwrap();
     let manifest: serde_json::Value =
         serde_json::from_str(citadel_database::MIGRATION_MANIFEST_JSON).unwrap();
-    for migration in manifest["migrations"].as_array().unwrap().iter().take(4) {
+    for migration in manifest["migrations"].as_array().unwrap().iter().take(3) {
         sqlx::query("INSERT INTO citadel_schema_migrations VALUES($1,$2,$3,now(),now(),NULL)")
             .bind(migration["id"].as_str().unwrap())
             .bind(migration["name"].as_str().unwrap())
@@ -65,77 +63,25 @@ async fn compact_statistics_preserve_samples_uniqueness_and_migration_history() 
         .unwrap();
         samples.push(rows);
     }
-    let sizes_sql = "SELECT sum(pg_indexes_size(oid))::bigint FROM pg_class WHERE relname IN ('containerstats','workloadstats','swarmservicestats','platformnodeiostats') AND relnamespace='public'::regnamespace";
-    let before_bytes: i64 = sqlx::query_scalar(sizes_sql)
-        .fetch_one(&mut connection)
-        .await
-        .unwrap();
     let before_journal: Vec<(String, String)> =
         sqlx::query_as("SELECT id,checksum FROM citadel_schema_migrations ORDER BY id")
             .fetch_all(&mut connection)
             .await
             .unwrap();
-    sqlx::raw_sql(include_str!("../../generated/0005_statistics_storage.sql"))
-        .execute(&mut connection)
-        .await
-        .unwrap();
-    let migration = &manifest["migrations"][4];
-    sqlx::query("INSERT INTO citadel_schema_migrations VALUES($1,$2,$3,now(),now(),NULL)")
-        .bind(migration["id"].as_str().unwrap())
-        .bind(migration["name"].as_str().unwrap())
-        .bind(migration["sha256"].as_str().unwrap())
-        .execute(&mut connection)
-        .await
-        .unwrap();
-    let after_journal: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0004' ORDER BY id",
-    )
-    .fetch_all(&mut connection)
-    .await
-    .unwrap();
-    assert_eq!(before_journal, after_journal);
-    for (table, before) in tables.into_iter().zip(&samples) {
-        let after: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-            "SELECT jsonb_agg(to_jsonb(s) ORDER BY created) FROM {table} s"
-        )))
-        .fetch_one(&mut connection)
-        .await
-        .unwrap();
-        assert_eq!(
-            *before, after,
-            "{table} measurements and ownership must survive"
-        );
-        let error = sqlx::query(sqlx::AssertSqlSafe(format!(
-            "INSERT INTO {table} SELECT * FROM {table} LIMIT 1"
-        )))
-        .execute(&mut connection)
-        .await
-        .unwrap_err();
-        assert_eq!(
-            error.as_database_error().unwrap().code().as_deref(),
-            Some("23505"),
-            "{table} still rejects duplicate samples"
-        );
-    }
-    let after_bytes: i64 = sqlx::query_scalar(sizes_sql)
-        .fetch_one(&mut connection)
-        .await
-        .unwrap();
-    assert!(
-        after_bytes < before_bytes,
-        "redundant indexes must actually release storage: {before_bytes} -> {after_bytes}"
-    );
-    let tuned: i64 = sqlx::query_scalar("SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('containerstats','workloadstats','swarmservicestats','platformnodeiostats','platformstats','containerhealthtransitions') AND reloptions @> ARRAY['autovacuum_vacuum_scale_factor=0.05','autovacuum_vacuum_threshold=1000']")
-        .fetch_one(&mut connection).await.unwrap();
-    assert_eq!(tuned, 6);
     // Refuse divergent duplicates rather than silently choosing one history.
     sqlx::query("UPDATE containerstats SET rxbytes=rxbytes+1 WHERE created=1")
         .execute(&mut connection)
         .await
         .unwrap();
     assert!(MigrationRunner::migrate(&database.url).await.is_err());
-    let original:bool=sqlx::query_scalar("SELECT to_regclass('public.statisticssamples') IS NULL AND EXISTS(SELECT 1 FROM containerstats WHERE created=1 AND rxbytes=11)")
-        .fetch_one(&mut connection).await.unwrap();
+    let original: bool = sqlx::query_scalar(
+        "SELECT to_regclass('public.statisticssamples') IS NULL
+        AND to_regclass('public.ix_activityevents_createdat_id') IS NULL
+        AND EXISTS(SELECT 1 FROM containerstats WHERE id IS NOT NULL AND created=1 AND rxbytes=11)",
+    )
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
     assert!(
         original,
         "failed normalization must roll back schema and preserve original captures"
@@ -145,9 +91,41 @@ async fn compact_statistics_preserve_samples_uniqueness_and_migration_history() 
         .await
         .unwrap();
     let result = MigrationRunner::migrate(&database.url).await.unwrap();
+    assert_eq!((result.applied, result.already_applied), (1, 3));
+    let after_journal: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0003' ORDER BY id",
+    )
+    .fetch_all(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(before_journal, after_journal);
+    // The consolidated migration removes redundant UUID indexes while moving
+    // all metrics into the shared sample store.
+    let old_indexes: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM pg_indexes WHERE schemaname='public'
+        AND indexname IN ('pk_containerstats','pk_swarmservicestats','workloadstats_pkey')",
+    )
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(old_indexes, 0);
+    let tuned: i64 = sqlx::query_scalar("SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace
+        AND relname IN ('statisticssamples_default','statisticsrollups_default','platformnodeiostats','platformstats','containerhealthtransitions')
+        AND reloptions @> ARRAY['autovacuum_vacuum_scale_factor=0.05','autovacuum_vacuum_threshold=1000']")
+        .fetch_one(&mut connection).await.unwrap();
+    assert_eq!(tuned, 5);
+    let duplicate_node =
+        sqlx::query("INSERT INTO platformnodeiostats SELECT * FROM platformnodeiostats LIMIT 1")
+            .execute(&mut connection)
+            .await
+            .unwrap_err();
     assert_eq!(
-        (result.applied, result.already_applied),
-        (super::super::migration_count() - 5, 5)
+        duplicate_node
+            .as_database_error()
+            .unwrap()
+            .code()
+            .as_deref(),
+        Some("23505")
     );
     for (table, before) in tables.into_iter().zip(samples) {
         let after:serde_json::Value=sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
@@ -208,13 +186,7 @@ async fn platform_history_upgrade_preserves_raw_samples_and_pending_alert_revisi
         "\n",
         include_str!("../../generated/0002_instance_updates.sql"),
         "\n",
-        include_str!("../../generated/0003_platform_io.sql"),
-        "\n",
-        include_str!("../../generated/0004_query_indexes.sql"),
-        "\n",
-        include_str!("../../generated/0005_statistics_storage.sql"),
-        "\n",
-        include_str!("../../generated/0006_shared_statistics.sql")
+        include_str!("../../generated/0003_platform_io.sql")
     ))
     .execute(&mut connection)
     .await
@@ -224,12 +196,12 @@ async fn platform_history_upgrade_preserves_raw_samples_and_pending_alert_revisi
         VALUES('00000000-0000-0000-0000-000000000010','platform-history','platform-history','Local',2,0,1000,0,0,'{}','Online');
         INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,alertpending,containerio)
         VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000010',10,1,2,3,4,true,'[{\"containerId\":\"removed\",\"rxBytes\":3,\"txBytes\":4}]');
-        INSERT INTO platformnodeiostats(platformid,nodeid,created,containerio)
-        VALUES('00000000-0000-0000-0000-000000000010','gone-node',10,'[]');")
+        INSERT INTO platformnodeiostats(id,platformid,nodeid,created,containerio)
+        VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000010','gone-node',10,'[]');")
         .execute(&mut connection).await.unwrap();
     let manifest: serde_json::Value =
         serde_json::from_str(citadel_database::MIGRATION_MANIFEST_JSON).unwrap();
-    for migration in manifest["migrations"].as_array().unwrap().iter().take(6) {
+    for migration in manifest["migrations"].as_array().unwrap().iter().take(3) {
         sqlx::query("INSERT INTO citadel_schema_migrations VALUES($1,$2,$3,now(),now(),NULL)")
             .bind(migration["id"].as_str().unwrap())
             .bind(migration["name"].as_str().unwrap())
@@ -266,7 +238,7 @@ async fn platform_history_upgrade_preserves_raw_samples_and_pending_alert_revisi
             .unwrap();
     assert_eq!(node, serde_json::json!([]));
     let journal: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0006' ORDER BY id",
+        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0003' ORDER BY id",
     )
     .fetch_all(&mut connection)
     .await
@@ -292,15 +264,7 @@ async fn physical_statistics_identity_upgrade_preserves_applied_history_and_aler
         "\n",
         include_str!("../../generated/0002_instance_updates.sql"),
         "\n",
-        include_str!("../../generated/0003_platform_io.sql"),
-        "\n",
-        include_str!("../../generated/0004_query_indexes.sql"),
-        "\n",
-        include_str!("../../generated/0005_statistics_storage.sql"),
-        "\n",
-        include_str!("../../generated/0006_shared_statistics.sql"),
-        "\n",
-        include_str!("../../generated/0007_platform_history.sql")
+        include_str!("../../generated/0003_platform_io.sql")
     ))
     .execute(&mut connection)
     .await
@@ -310,21 +274,21 @@ async fn physical_statistics_identity_upgrade_preserves_applied_history_and_aler
         VALUES('00000000-0000-0000-0000-000000000010','platform-history','platform-history','Local',2,0,1000,0,0,'{}','Online');
         INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,alertpending,containerio)
         VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000010',10,1,2,3,4,true,'[{\"containerId\":\"removed\",\"rxBytes\":3,\"txBytes\":4}]');
-        INSERT INTO platformnodeiostats(platformid,nodeid,created,containerio)
-        VALUES('00000000-0000-0000-0000-000000000010','gone-node',10,'[]');")
+        INSERT INTO platformnodeiostats(id,platformid,nodeid,created,containerio)
+        VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000010','gone-node',10,'[]');")
         .execute(&mut connection).await.unwrap();
-    sqlx::raw_sql("INSERT INTO platformhistorysources(platformid,nodeid) VALUES('00000000-0000-0000-0000-000000000010',''),('00000000-0000-0000-0000-000000000010','gone-node');
-        UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"n\"}' WHERE id='00000000-0000-0000-0000-000000000010';
+    sqlx::raw_sql("UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\",\"nodeID\":\"n\"}' WHERE id='00000000-0000-0000-0000-000000000010';
         INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,state,created,updated,ports,issystem,dockernodeid)
-        VALUES('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000010','same-physical','image','node','Running',0,0,'{}',false,'n'),
-        ('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000010','same-physical','image','host','Running',0,0,'{}',false,NULL);
+        VALUES('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000010','same-physical','image','node','Running',0,0,'{}',false,'n');
         INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex)
         VALUES('00000000-0000-0000-0000-000000000010','task','running','same-physical','n','service','image','task','n',now(),'[]','service',1,'running',1);")
         .execute(&mut connection).await.unwrap();
-    let source:i64=sqlx::query_scalar("SELECT statistics_source('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000011','task')").fetch_one(&mut connection).await.unwrap();
+    sqlx::raw_sql("INSERT INTO swarmservicestats(id,platformid,dockerserviceid,dockertaskid,servicename,taskkey,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes)
+        VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000010','service','task','service','slot:1',10,1,2,3,4,5,6);")
+        .execute(&mut connection).await.unwrap();
     let manifest: serde_json::Value =
         serde_json::from_str(citadel_database::MIGRATION_MANIFEST_JSON).unwrap();
-    for migration in manifest["migrations"].as_array().unwrap().iter().take(7) {
+    for migration in manifest["migrations"].as_array().unwrap().iter().take(3) {
         sqlx::query("INSERT INTO citadel_schema_migrations VALUES($1,$2,$3,now(),now(),NULL)")
             .bind(migration["id"].as_str().unwrap())
             .bind(migration["name"].as_str().unwrap())
@@ -361,7 +325,7 @@ async fn physical_statistics_identity_upgrade_preserves_applied_history_and_aler
             .unwrap();
     assert_eq!(node, serde_json::json!([]));
     let journal: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0007' ORDER BY id",
+        "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0003' ORDER BY id",
     )
     .fetch_all(&mut connection)
     .await
@@ -373,6 +337,12 @@ async fn physical_statistics_identity_upgrade_preserves_applied_history_and_aler
         assert_eq!(id, entry["id"].as_str().unwrap());
         assert_eq!(checksum, entry["sha256"].as_str().unwrap());
     }
+    // A later host observation must reuse the source backfilled from the node.
+    sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,state,created,updated,ports,issystem,dockernodeid)
+        VALUES('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000010','same-physical','image','host','Running',0,0,'{}',false,NULL)")
+        .execute(&mut connection).await.unwrap();
+    let source: i64 = sqlx::query_scalar("SELECT id FROM statisticssources WHERE dockertaskid='task' AND containerid='00000000-0000-0000-0000-000000000011'")
+        .fetch_one(&mut connection).await.unwrap();
     let attached:i64=sqlx::query_scalar("SELECT statistics_source('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000012','task')").fetch_one(&mut connection).await.unwrap();
     assert_eq!(
         source, attached,

@@ -25,14 +25,27 @@ pub struct ApplicationInfoView {
     pub name: &'static str,
     pub version: &'static str,
     pub informational_version: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub script_execution: Option<ScriptExecutionDefaults>,
     pub realtime_transport: &'static str,
 }
 
-pub fn router(updates: citadel_updates::ReleaseCheckService) -> Router {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptExecutionDefaults {
+    pub default_timeout_seconds: i32,
+    pub maximum_timeout_seconds: i32,
+}
+
+pub fn router(
+    updates: citadel_updates::ReleaseCheckService,
+    scripts: citadel_scripts::ScriptOptions,
+) -> Router {
     documented_routes()
         .split_for_parts()
         .0
         .layer(Extension(updates))
+        .layer(Extension(scripts))
 }
 
 #[utoipa::path(
@@ -51,12 +64,17 @@ pub fn router(updates: citadel_updates::ReleaseCheckService) -> Router {
 async fn get_application_info(
     principal: Option<Extension<ActorPrincipal>>,
     Extension(updates): Extension<citadel_updates::ReleaseCheckService>,
+    Extension(scripts): Extension<citadel_scripts::ScriptOptions>,
     headers: HeaderMap,
 ) -> Response {
     let Some(Extension(principal)) = principal else {
         return error_response(IdentityError::Unauthenticated, &headers);
     };
     let mut info = application_info();
+    info.script_execution = Some(ScriptExecutionDefaults {
+        default_timeout_seconds: scripts.default_timeout_seconds,
+        maximum_timeout_seconds: scripts.max_timeout_seconds,
+    });
     if principal.is_administrator() {
         info.available_update = updates.available().map(Into::into);
     }
@@ -67,6 +85,7 @@ async fn get_application_info(
 pub const fn application_info() -> ApplicationInfoView {
     ApplicationInfoView {
         available_update: None,
+        script_execution: None,
         name: NAME,
         version: VERSION,
         informational_version: INFORMATIONAL_VERSION,

@@ -16,7 +16,7 @@ use axum::{
     http::HeaderMap,
     response::{IntoResponse, Response},
 };
-use citadel_identity::{ActorPrincipal, IdentityService};
+use citadel_identity::ActorPrincipal;
 use citadel_licensing::LicenseService;
 use citadel_updates::{CheckState, ReleaseCheckPolicy, ReleaseCheckService};
 use std::sync::Arc;
@@ -24,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct UpdateHttpState {
-    pub identity: Arc<IdentityService>,
+    pub instance: Arc<citadel_instance::InstanceService>,
     pub checker: ReleaseCheckService,
     pub installer: Option<citadel_updates::UpdateInstallService>,
     pub agents: Option<citadel_updates::AgentUpdateService>,
@@ -75,7 +75,7 @@ async fn check(
         Ok(value) => value,
         Err(error) => return error_response(error, &headers),
     };
-    let settings = match state.identity.get_installation_settings(&principal).await {
+    let settings = match state.instance.get_installation_settings(&principal).await {
         Ok(settings) => settings,
         Err(error) => return error_response(error, &headers),
     };
@@ -84,7 +84,7 @@ async fn check(
         .check_now(
             ReleaseCheckPolicy {
                 initialized: settings.initialized,
-                checks_allowed: state.identity.installation_policy().update_checks_allowed,
+                checks_allowed: state.instance.installation_policy().update_checks_allowed,
             },
             &CancellationToken::new(),
         )
@@ -103,12 +103,12 @@ async fn respond(
     checks: CheckState,
 ) -> Response {
     let result = async {
-        let settings = state.identity.get_installation_settings(principal).await?;
+        let settings = state.instance.get_installation_settings(principal).await?;
         let request = state.licenses.request().await?;
         let mut view = UpdateStatusView::new(
             state.checker.describe(checks),
             request.instance_id,
-            state.identity.installation_policy().update_checks_allowed,
+            state.instance.installation_policy().update_checks_allowed,
             settings.update_checks_enabled,
         );
         view.database_version = state.checker.database_version().await;
@@ -130,7 +130,7 @@ async fn respond(
             // An active Core operation must not make its bundled database look external.
             view.database_installation = citadel_updates::DatabaseInstallation::Bundled.into();
             view.set_database_update(installer.database_update(&cancellation).await);
-            if state.identity.installation_policy().update_checks_allowed {
+            if state.instance.installation_policy().update_checks_allowed {
                 view.installation_unavailable_reason = None;
             }
         }
@@ -160,7 +160,7 @@ impl From<citadel_updates::UpdateError> for ApiError {
 fn installation(
     state: &UpdateHttpState,
 ) -> Result<&citadel_updates::UpdateInstallService, ApiError> {
-    if !state.identity.installation_policy().update_checks_allowed {
+    if !state.instance.installation_policy().update_checks_allowed {
         return Err(ApiError::Forbidden);
     }
     state.installer.as_ref().ok_or_else(|| {

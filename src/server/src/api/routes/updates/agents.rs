@@ -72,7 +72,7 @@ async fn review(
     response(
         async {
             let actor = actor(require_human_administrator(principal)?);
-            if !state.identity.installation_policy().update_checks_allowed {
+            if !state.instance.installation_policy().update_checks_allowed {
                 return Err(ApiError::Forbidden);
             }
             service(&state)?
@@ -98,7 +98,7 @@ async fn approve(
     response(
         async {
             let actor = actor(require_human_administrator(principal)?);
-            if !state.identity.installation_policy().update_checks_allowed {
+            if !state.instance.installation_policy().update_checks_allowed {
                 return Err(ApiError::Forbidden);
             }
             service(&state)?

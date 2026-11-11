@@ -1,10 +1,11 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MfaPolicy } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { createQueryClient } from '@/query-client-wrapper';
-import { InstallationSettingsControls as MfaSettingsControls } from './installation-settings';
+import { InstanceSettingsForm } from '../instance/settings';
+import { instanceSettings } from '@/test/factories/instance';
 import { UpdateCheckSettings } from '../updates/config';
 import { useRead } from '@/lib/hooks';
 
@@ -14,20 +15,18 @@ vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () 
 function InstallationSettingsControls() {
   return (
     <>
-      <MfaSettingsControls />
-      <UpdateCheckSettings />
+      <section aria-label="Updates">
+        <UpdateCheckSettings />
+      </section>
+      <section aria-label="Instance">
+        <InstanceSettingsForm />
+      </section>
     </>
   );
 }
 
 const url = 'http://localhost/api/v1/installation/settings';
-const defaults = {
-  updateChecksEnabled: true,
-  updateChecksAllowed: true,
-  updateCheckIntervalHours: 6,
-  mfaPolicy: MfaPolicy.Optional,
-  minimumMfaPolicy: MfaPolicy.Optional,
-};
+const defaults = instanceSettings();
 
 beforeEach(() => {
   server.use(
@@ -71,6 +70,11 @@ it('keeps MFA available during an update-check save and queues overlapping saves
     expect(policy).toBeEnabled();
     await user.click(policy);
     await user.click(screen.getByRole('option', { name: 'Required for administrators' }));
+    expect(policy).toBeEnabled();
+    expect(save).toHaveBeenCalledOnce();
+    await user.click(
+      within(screen.getByRole('region', { name: 'Instance' })).getAllByRole('button', { name: 'Save' })[0],
+    );
     expect(policy).toBeDisabled();
     expect(save).toHaveBeenCalledOnce();
   } finally {
@@ -112,6 +116,10 @@ it('saves installation choices separately and clears the cached update notice wh
   await user.click(screen.getByRole('combobox', { name: 'Two-factor authentication policy' }));
   await user.click(screen.getByRole('option', { name: 'Required for administrators' }));
   await screen.findByText(/Administrators using a local password/);
+  await user.click(
+    within(screen.getByRole('region', { name: 'Instance' })).getAllByRole('button', { name: 'Save' })[0],
+  );
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Two-factor authentication policy' })).toBeEnabled());
   expect(save).toHaveBeenLastCalledWith({ mfaPolicy: MfaPolicy.RequiredForAdministrators });
   expect(updateSwitch).not.toBeChecked();
 });
@@ -329,6 +337,10 @@ it('identifies the failed setting when another setting saves successfully', asyn
   await user.click(screen.getByRole('combobox', { name: 'Two-factor authentication policy' }));
   await user.click(screen.getByRole('option', { name: 'Required for administrators' }));
   await screen.findByText(/Administrators using a local password/);
+  await user.click(
+    within(screen.getByRole('region', { name: 'Instance' })).getAllByRole('button', { name: 'Save' })[0],
+  );
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Two-factor authentication policy' })).toBeEnabled());
   expect(screen.getByText(/Update-check setting could not be saved/)).toBeVisible();
   expect(screen.queryByText('MFA policy could not be saved. Try again.')).not.toBeInTheDocument();
   rejectUpdateChecks = false;

@@ -15,6 +15,17 @@ The sections below cover **Core and its Compose deployment**, followed by
 configuration. Set each variable on the process or container it belongs to;
 Core's `.env` does not configure remote Agents.
 
+## Instance controls and deployment overrides
+
+Administrators can manage the 26 controls described in [Instance settings](/operations/instance-settings).
+MFA applies on save; the other controls apply at the next Core start. An explicitly
+supplied environment value overrides the saved choice even when it equals the
+default. The page shows deployment-managed fields and pending restarts. Remove the
+override from every deployment environment source and restart/recreate Core to
+manage that field through the UI. Existing overrides are not removed automatically.
+`CITADEL_MFA_POLICY` remains a minimum; release-check deployment restrictions remain
+in Updates. `RUST_LOG` module filters remain deployment managed.
+
 ## Installation and transport
 
 | Setting | Required when | Purpose |
@@ -38,9 +49,9 @@ Core's `.env` does not configure remote Agents.
 | `CITADEL_JWT_ISSUER`, `CITADEL_JWT_AUDIENCE` | Optional override | Token validation identities; otherwise derived from the public URL |
 | `CITADEL_JWT_KEY` | Optional | Explicit signing key; otherwise persisted in `citadel_data` |
 | `CITADEL_SECRETS_ENCRYPTION_KEY` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
-| `CITADEL_MFA_POLICY` | Optional | Minimum installation MFA policy: `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers`; the UI can strengthen it |
-| `CITADEL_PASSWORDS_MINIMUM_LENGTH` | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
-| `CITADEL_HTTP_OPENAPI_ENABLED` | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
+| <code id="citadel-mfa-policy" className="scroll-mt-24">CITADEL_MFA_POLICY</code> | Optional | Minimum installation MFA policy: `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers`; the UI can strengthen it |
+| <code id="citadel-passwords-minimum-length" className="scroll-mt-24">CITADEL_PASSWORDS_MINIMUM_LENGTH</code> | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
+| <code id="citadel-http-openapi-enabled" className="scroll-mt-24">CITADEL_HTTP_OPENAPI_ENABLED</code> | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
 For explicit [PostgreSQL maintenance](/operations/upgrade-and-rollback#postgresql-engine-maintenance),
 `PG_IMAGE` selects an official PostgreSQL image digest and `PG_DATA` selects its data
@@ -64,7 +75,7 @@ restart alone does not load a changed Compose environment.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit release checks controlled by setup or Settings → Updates; false prohibits automatic and manual checks. The saved frequency is 6, 12 or 24 hours (default: 6); no automatic installation |
+| `CITADEL_UPDATE_CHECKS_ENABLED` | `true` | Permit release checks controlled by setup or Administration → Updates; false prohibits automatic and manual checks. The saved frequency is 6, 12 or 24 hours (default: 6); no automatic installation |
 | `CITADEL_UPDATE_STATE_DIRECTORY` | Unset | Absolute host path to an existing private updater registration. UI installation uses a root-owned registration and a bounded utility container to access host state; Core does not mount it directly. Invalid or unresolved state keeps Core in maintenance. Registration is an explicit operator step; updates still require a qualified release and approval |
 
 No Citadel telemetry or instance data is sent. GitHub receives normal connection
@@ -99,13 +110,14 @@ project does not isolate an external database configured by an override.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `CITADEL_STATS_POLL_INTERVAL_SECONDS` | `10` | Platform metric collection interval, in seconds |
-| `CITADEL_STATS_FLUSH_INTERVAL_SECONDS` | `60` | Metric persistence interval, in seconds |
-| `CITADEL_SCRIPTS_ENABLED` | `true` | Enables Script execution |
-| `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Script runs executing locally on Core; remote runs have a separate limit, see [script execution capacity](#script-execution-capacity) |
-| `CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS` | `300` | Default script timeout |
-| `CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS` | `1800` | Maximum script timeout |
-| `CITADEL_LOG_FORMAT` | `Text` | Core log format: `Text` or `Json` |
+| <code id="citadel-stats-poll-interval-seconds" className="scroll-mt-24">CITADEL_STATS_POLL_INTERVAL_SECONDS</code> | `10` | Platform metric collection interval, in seconds |
+| <code id="citadel-stats-flush-interval-seconds" className="scroll-mt-24">CITADEL_STATS_FLUSH_INTERVAL_SECONDS</code> | `60` | Metric persistence interval, in seconds |
+| <code id="citadel-scripts-enabled" className="scroll-mt-24">CITADEL_SCRIPTS_ENABLED</code> | `true` | Enables Script execution |
+| <code id="citadel-scripts-max-parallel-runs" className="scroll-mt-24">CITADEL_SCRIPTS_MAX_PARALLEL_RUNS</code> | `4` | Script runs executing locally on Core; remote runs have a separate limit, see [script execution capacity](#script-execution-capacity) |
+| <code id="citadel-scripts-default-timeout-seconds" className="scroll-mt-24">CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS</code> | `300` | Default script timeout |
+| <code id="citadel-scripts-max-timeout-seconds" className="scroll-mt-24">CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS</code> | `1800` | Maximum script timeout |
+| <code id="rust-log" className="scroll-mt-24">RUST_LOG</code> | `info` | Core log verbosity; accepts levels such as `debug` and module filters such as `info,sqlx=warn` |
+| <code id="citadel-log-format" className="scroll-mt-24">CITADEL_LOG_FORMAT</code> | `Text` | Core log format: `Text` or `Json` |
 
 These settings do not override resource permissions, enabled states, or license
 requirements. Resource schedules are configured on the resource itself.
@@ -122,9 +134,9 @@ Scripts run on Core or an Agent according to their Run on setting.
 
 | Setting | Default | What it limits |
 | --- | --- | --- |
-| `CITADEL_BUILDS_PREPARATION_SLOTS` | `2` | Git preparation and outbound build contexts on Core; accepts 1–16 |
-| `CITADEL_BUILDS_TRACKING_SLOTS` | `16` | Active build controllers, including retained completion results; accepts 1–128 |
-| `CITADEL_BACKUPS_TRACKING_SLOTS` | `16` | Active backup, restore and repository operation controllers combined; accepts 1–128 |
+| <code id="citadel-builds-preparation-slots" className="scroll-mt-24">CITADEL_BUILDS_PREPARATION_SLOTS</code> | `2` | Git preparation and outbound build contexts on Core; accepts 1–16 |
+| <code id="citadel-builds-tracking-slots" className="scroll-mt-24">CITADEL_BUILDS_TRACKING_SLOTS</code> | `16` | Active build controllers, including retained completion results; accepts 1–128 |
+| <code id="citadel-backups-tracking-slots" className="scroll-mt-24">CITADEL_BACKUPS_TRACKING_SLOTS</code> | `16` | Active backup, restore and repository operation controllers combined; accepts 1–128 |
 | `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Core Deno runs, including manual runs and tests; accepts 1–64 |
 | `CITADEL_AGENT_BUILD_SLOTS` | `2` | Complete builds on an Agent, including registry pushes and cleanup; accepts 1–64 |
 | `CITADEL_AGENT_DATA_SLOTS` | `2` | Backup items, restores and repository maintenance on an Agent; accepts 1–64 |
@@ -219,12 +231,12 @@ container. The launcher derives this source from its native `CITADEL_DOCKER_SOCK
 
 | Setting | Default / units |
 | --- | --- |
-| `CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES` | `15` minutes |
-| `CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS` | `30` days |
+| <code id="citadel-jwt-access-token-lifetime-minutes" className="scroll-mt-24">CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES</code> | `15` minutes |
+| <code id="citadel-jwt-refresh-token-lifetime-days" className="scroll-mt-24">CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS</code> | `30` days |
 | `CITADEL_MFA_CHALLENGE_LIFETIME_MINUTES` / `CITADEL_MFA_SETUP_LIFETIME_MINUTES` | `5` / `10` minutes |
 | `CITADEL_MFA_MAX_FAILED_ATTEMPTS` / `CITADEL_MFA_RECOVERY_CODE_COUNT` | `5` / `10` |
-| `CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS` / `CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS` | `90` / `365` days |
-| `CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT` | `10` |
+| <code id="citadel-service-accounts-default-token-lifetime-days" className="scroll-mt-24">CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS</code> / <code id="citadel-service-accounts-maximum-token-lifetime-days" className="scroll-mt-24">CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS</code> | `90` / `365` days |
+| <code id="citadel-service-accounts-maximum-active-tokens-per-account" className="scroll-mt-24">CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT</code> | `10` |
 | `CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES` | `5` minutes |
 | `CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY` | `10000` |
 | `CITADEL_BOOTSTRAP_ADMIN_NAME` / `CITADEL_BOOTSTRAP_ADMIN_EMAIL` / `CITADEL_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Optional unattended setup; resolved only when setup is required |
@@ -248,12 +260,12 @@ generates replacement keys.
 | `CITADEL_SCRIPTS_MAX_LOG_BYTES` | `1048576` bytes, clamped to 1024–16777216 |
 | `CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS` / `CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
 | `CITADEL_BUILDS_PREPARATION_SLOTS` / `CITADEL_BUILDS_TRACKING_SLOTS` | `2` / `16`; [build concurrency](#concurrency-limits) |
-| `CITADEL_BUILDS_RUN_CLEANUP_ENABLED` / `CITADEL_BUILDS_RUN_RETENTION_DAYS` | `true` / `90` days; disabling cleanup disables retention |
-| `CITADEL_BACKUPS_ENABLED` / `CITADEL_BACKUPS_TRACKING_SLOTS` | `true` / `16`; backup, restore, and repository operation tracking combined, see [concurrency limits](#concurrency-limits) |
+| <code id="citadel-builds-run-cleanup-enabled" className="scroll-mt-24">CITADEL_BUILDS_RUN_CLEANUP_ENABLED</code> / <code id="citadel-builds-run-retention-days" className="scroll-mt-24">CITADEL_BUILDS_RUN_RETENTION_DAYS</code> | `true` / `90` days; disabling cleanup disables retention |
+| <code id="citadel-backups-enabled" className="scroll-mt-24">CITADEL_BACKUPS_ENABLED</code> / `CITADEL_BACKUPS_TRACKING_SLOTS` | `true` / `16`; backup, restore, and repository operation tracking combined, see [concurrency limits](#concurrency-limits) |
 | `CITADEL_BACKUPS_POLL_INTERVAL_SECONDS` / `CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
 | `CITADEL_BACKUPS_WORKING_DIRECTORY` / `CITADEL_BACKUPS_CORE_DATA_PATH` | `<data root>/backups/work` / `<data root>` |
 | `CITADEL_BACKUPS_ALLOWED_CORE_PATH_<n>` | `<data root>/backups/repositories`; indices 0–127, numeric order, sparse indices allowed; paths retain spaces and commas |
-| `CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS` | `120` seconds |
+| <code id="citadel-backups-default-timeout-seconds" className="scroll-mt-24">CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS</code> | `120` seconds |
 | `CITADEL_BACKUPS_MAX_LOG_BYTES` / `CITADEL_BACKUPS_MAX_LOG_LINE_BYTES` | `1048576` / `8192` bytes |
 | `CITADEL_BACKUPS_REPOSITORY_LEASE_SECONDS` / `CITADEL_BACKUPS_SOURCE_LEASE_SECONDS` | `300` / `300` seconds; minimum `90` each, renewed every `30` seconds |
 | `CITADEL_RESTIC_IMAGE` | `restic/restic:0.18.1` |
@@ -265,10 +277,10 @@ generates replacement keys.
 | --- | --- |
 | `CITADEL_CORE_AGENT_ADDRESS` / `CITADEL_CORE_AGENT_PRIVATE_KEY_PATH` | Optional pair; configure both together |
 | `CITADEL_CORE_AGENT_TIMEOUT_SECONDS` | Required positive seconds when that pair is set |
-| `CITADEL_CORE_AGENT_ALLOW_INSECURE` | `true`; set `false` to require HTTPS |
+| <code id="citadel-core-agent-allow-insecure" className="scroll-mt-24">CITADEL_CORE_AGENT_ALLOW_INSECURE</code> | `true`; set `false` to require HTTPS |
 | `CITADEL_CORE_AGENT_CA_CERTIFICATE_PATH` | Optional PEM trust bundle for Direct Agents |
 | `CITADEL_NODE_AGENT_CA_CERTIFICATE_PATH` | Optional Core CA distributed to Swarm node agents |
-| `CITADEL_EDGE_AGENT_IMAGE` | Optional full image override |
+| <code id="citadel-edge-agent-image" className="scroll-mt-24">CITADEL_EDGE_AGENT_IMAGE</code> | Optional full image override |
 | `CITADEL_EDGE_AGENT_IMAGE_REPOSITORY` / `CITADEL_EDGE_AGENT_IMAGE_TAG` | `ghcr.io/citadel-p/citadel.agent` / current build version; used without the full-image override |
 | `CITADEL_EDGE_AGENT_SUPPORTED_NODE_ARCHITECTURE_<n>` | `amd64`, `arm64`; indices 0–31, numeric order, sparse indices allowed; blank/unknown values rejected |
 | `CITADEL_EDGE_AGENT_NODE_AGENT_BOOTSTRAP_MINUTES` / `CITADEL_EDGE_AGENT_NODE_AGENT_SETUP_MINUTES` | `10` / `5` minutes |
@@ -328,7 +340,7 @@ supplies Swarm node bootstrap and identity variables automatically.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CITADEL_SCRIPTS_MAX_PARALLEL_RUNS` | `4` | Deno processes running locally on Core. |
-| `CITADEL_SCRIPTS_MAX_REMOTE_RUNS` | `16` | Remote script runs Core tracks concurrently (1–256); no local Deno process is created for them. |
+| <code id="citadel-scripts-max-remote-runs" className="scroll-mt-24">CITADEL_SCRIPTS_MAX_REMOTE_RUNS</code> | `16` | Remote script runs Core tracks concurrently (1–256); no local Deno process is created for them. |
 | `CITADEL_AGENT_SCRIPT_SLOTS` | `4` | Concurrent Deno scripts on each Agent (1–64), also bounded by `CITADEL_AGENT_HEAVY_SLOTS`. |
 
 All triggers enter the durable queue. A busy host defers work; the Core local

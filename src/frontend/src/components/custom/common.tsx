@@ -57,6 +57,7 @@ import {
   RefreshCwOff,
   Rocket,
   Server,
+  ServerCog,
   ServerPlus,
   Settings,
   Shield,
@@ -837,7 +838,7 @@ export const MemoryUsageCell = ({
     return <div className={cn('text-muted-foreground', className)}>0B / 0B</div>;
   }
   return (
-    <span className={cn('text-[13px]', className)} title="Memory usage excluding file cache / memory limit">
+    <span className={cn('text-[13px]', className)} title="Memory working set excluding inactive file cache / memory limit">
       {byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}
     </span>
   );
@@ -917,6 +918,7 @@ export const TargetCell = ({
     [ActivityResourceType.User]: { Icon: User, path: `/access/users/edit/${resourceId}` },
     [ActivityResourceType.Team]: { Icon: Users, path: `/access/teams/edit/${resourceId}` },
     [ActivityResourceType.Updates]: { Icon: Server, path: '/updates' },
+    [ActivityResourceType.Instance]: { Icon: ServerCog, path: '/instance' },
     [ActivityResourceType.Role]: { Icon: Shield, path: '/access/roles' },
     [ActivityResourceType.ServiceAccount]: {
       Icon: Bot,

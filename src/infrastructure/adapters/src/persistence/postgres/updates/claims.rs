@@ -61,7 +61,7 @@ impl PostgresUpdateRepository {
             return Err(UpdateError::Conflict("The reviewed update changed.".into()));
         }
         if sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM instanceupdates WHERE instanceid=$1 AND ownsinstallation) OR EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM updatescheduleruns WHERE NOT finished)",
+            "SELECT EXISTS(SELECT 1 FROM instanceupdates WHERE instanceid=$1 AND ownsinstallation) OR EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM updatescheduleruns WHERE NOT finished) OR EXISTS(SELECT 1 FROM instancerestarts)",
         )
         .bind(instance)
         .fetch_one(&mut *tx)

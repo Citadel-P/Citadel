@@ -2,63 +2,30 @@
 use crate::{
     cli,
     composition::{ServerComponents, background},
-    router as api, startup,
+    logging, router as api, startup,
 };
 use axum::Router;
-use citadel_server::{
-    config::{Config, LogFormat},
-    transport,
-};
+use citadel_server::{config::Config, transport};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing_subscriber::EnvFilter;
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    init_tracing()?;
     cli::run().await
 }
 
-fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let format = citadel_server::config::log_format_from_env()?;
-    let color = citadel_server::config::log_color_from_env()?;
-    if format == LogFormat::Text {
-        tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .with_ansi(color)
-            .with_target(false)
-            .init();
-    } else {
-        tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .json()
-            .with_ansi(false)
-            .with_current_span(false)
-            .init();
-    }
-    Ok(())
-}
-
-pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    let effective = config.effective()?;
-    tracing::info!("Starting Citadel Core");
-    tracing::debug!(
-        effective_configuration = %serde_json::to_string(&effective)?,
-        "Effective configuration"
-    );
-    if config.transport.mode == citadel_server::config::TransportMode::Disabled {
-        tracing::warn!(
-            "Citadel transport security is disabled; API and Agent traffic is not encrypted"
-        );
-    }
-    let mut job_lease = startup::acquire_job_lease(&config).await?;
-    if let Err(error) =
-        startup::while_owned(&mut job_lease, startup::check_updates(&config)).await?
+pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>> {
+    let mut job_lease = startup::acquire_job_lease(&config)
+        .await
+        .map_err(|error| startup::phase_error("background-job admission", error))?;
+    let mut recovered_update = false;
+    if let Err(error) = startup::while_owned(&mut job_lease, startup::check_updates(&config))
+        .await
+        .map_err(|error| startup::phase_error("update admission lease", error))?
     {
         #[cfg(not(target_os = "linux"))]
-        let recovered = false;
+        let (recovered, acceptance_failure) = (false, None::<String>);
         #[cfg(target_os = "linux")]
-        let recovered = {
+        let (recovered, acceptance_failure) = {
             let cancellation = CancellationToken::new();
             let acceptance = startup::while_owned(
                 &mut job_lease,
@@ -66,35 +33,41 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             );
             tokio::pin!(acceptance);
             let result = tokio::select! {
-                result = &mut acceptance => result?,
+                result = &mut acceptance => result.map_err(|error| startup::phase_error("update recovery lease", error))?,
                 () = shutdown_signal(cancellation.clone()) => {
-                    acceptance.await??;
+                    acceptance.await.map_err(|error| startup::phase_error("update recovery lease", error))?
+                        .map_err(|error| startup::phase_error("update recovery cancellation", error))?;
                     return Ok(());
                 }
             };
             match result {
-                Ok(()) => {
-                    tracing::info!(
-                        "Update target verified, host reconciled and maintenance released."
-                    );
-                    true
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "Update target acceptance did not authorize admission");
-                    false
-                }
+                Ok(()) => (true, None),
+                Err(error) => (false, Some(error.to_string())),
             }
         };
         if !recovered {
+            logging::init_from_environment()?;
+            if let Some(error) = acceptance_failure {
+                tracing::warn!(%error, "Update target acceptance did not authorize admission");
+            }
             tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
             return serve_maintenance(&config, job_lease).await;
         }
-        startup::while_owned(&mut job_lease, startup::check_updates(&config)).await??;
+        startup::while_owned(&mut job_lease, startup::check_updates(&config))
+            .await
+            .map_err(|error| startup::phase_error("recovered update admission lease", error))?
+            .map_err(|error| startup::phase_error("recovered update admission", error))?;
+        recovered_update = true;
     }
-    startup::while_owned(&mut job_lease, startup::migrate(&config)).await??;
+    startup::configure(&mut config, &mut job_lease).await?;
+    if recovered_update {
+        tracing::info!("Update target verified, host reconciled and maintenance released.");
+    }
+
     let (state, background_services) =
         startup::while_owned(&mut job_lease, ServerComponents::build(&config)).await??;
     let cancellation = state.cancellation.clone();
+    let restart = state.restart.clone();
     // Also cancel owned work if initialization fails before normal shutdown is
     // installed (for example, lease loss while registering background workers).
     let _cancel_on_exit = cancellation.clone().drop_guard();
@@ -132,17 +105,21 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
         edge_app,
         cancellation.clone(),
         config.shutdown_timeout,
+        restart.clone(),
     );
     tokio::pin!(server);
     let exit = tokio::select! {
         server_result = &mut server => ServerExit::Server(server_result),
         task_result = supervisor.wait_for_exit() => ServerExit::Task(task_result),
+        result = restart.wait_for_request() => ServerExit::Restart(result),
     };
     let shutdown_deadline = tokio::time::Instant::now() + config.shutdown_timeout;
     cancellation.cancel();
-    if matches!(exit, ServerExit::Task(_)) {
-        let _ = tokio::time::timeout_at(shutdown_deadline, &mut server).await;
-    }
+    let server_shutdown = if matches!(exit, ServerExit::Task(_) | ServerExit::Restart(_)) {
+        Some(tokio::time::timeout_at(shutdown_deadline, &mut server).await)
+    } else {
+        None
+    };
     let supervisor_result = supervisor
         .shutdown(shutdown_deadline.saturating_duration_since(tokio::time::Instant::now()))
         .await;
@@ -152,11 +129,22 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let _retained_job_lease = lease_retained.await.ok();
     let pool_close_result = tokio::time::timeout(config.shutdown_timeout, pool.close()).await;
 
+    let restarting = matches!(exit, ServerExit::Restart(Ok(())));
     match exit {
         ServerExit::Server(result) => result?,
         ServerExit::Task(result) => result?,
+        ServerExit::Restart(ref result) => {
+            if let Err(error) = result {
+                return Err(error.to_string().into());
+            }
+        }
     }
     supervisor_result?;
+    if restarting {
+        server_shutdown
+            .expect("restart drains the listeners")
+            .map_err(|_| "Core listener shutdown exceeded the restart budget")??;
+    }
     if dynamic_result.is_err() {
         return Err(
             "Dynamic task cleanup exceeded the shutdown budget; durable claims remain recoverable"
@@ -166,10 +154,15 @@ pub async fn serve(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     if pool_close_result.is_err() {
         return Err("PostgreSQL pool close exceeded the shutdown timeout".into());
     }
+    drop(_retained_job_lease);
+    if restarting {
+        crate::restart::relaunch()?;
+    }
     Ok(())
 }
 
 enum ServerExit {
+    Restart(std::io::Result<()>),
     Server(std::io::Result<()>),
     Task(Result<(), citadel_runtime::SupervisedTaskError>),
 }
@@ -188,6 +181,7 @@ async fn serve_maintenance(
         edge,
         cancellation.clone(),
         config.shutdown_timeout,
+        crate::restart::RestartControl::default(),
     );
     // Both futures are owned here. Maintenance starts no normal background jobs,
     // but losing the single-Core lease still terminates the listeners.
@@ -215,23 +209,29 @@ async fn run_server(
     edge_app: Router,
     cancellation: CancellationToken,
     shutdown_timeout: Duration,
+    restart: crate::restart::RestartControl,
 ) -> std::io::Result<()> {
+    let http_handle = axum_server::Handle::new();
+    let edge_handle = axum_server::Handle::new();
     let http = async {
         tokio::try_join!(
-            transport::serve(
+            transport::serve_with_handle(
                 address,
                 &transport_config,
                 app,
                 cancellation.clone(),
-                shutdown_timeout
+                shutdown_timeout,
+                http_handle.clone()
             ),
-            transport::serve(
+            transport::serve_with_handle(
                 std::net::SocketAddr::new(address.ip(), transport_config.edge_grpc_port),
                 &transport_config,
                 edge_app,
                 cancellation.clone(),
-                shutdown_timeout
+                shutdown_timeout,
+                edge_handle.clone()
             ),
+            restart.acknowledge(http_handle.clone(), edge_handle.clone()),
         )
         .map(|_| ())
     };

@@ -5,6 +5,7 @@ import { UpdateCheckSettings } from './config';
 import { UpdateProgress } from './installation';
 import { AgentStatusBadge, AgentSummaryBadge, CoreStatusBadge, DatabaseStatusBadge } from './status-badge';
 import { Timestamp } from '@/components/custom/timestamp';
+import { BackToTop } from '@/components/custom/back-to-top';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -160,7 +161,12 @@ function UpdateInfo() {
 
 function UpdateStatus() {
   const { data } = useRead('getInstanceUpdates');
-  return data ? <UpdateProgress status={data.data} /> : null;
+  return (
+    <>
+      <BackToTop />
+      {data && <UpdateProgress status={data.data} />}
+    </>
+  );
 }
 
 function InstanceActivities() {

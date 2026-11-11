@@ -51,15 +51,80 @@ Pools use the same Agent executable; Swarm-node Agents use a restricted profile.
 Crate-specific tests stay beside their crates. Cargo's workspace and toolchain
 files remain at the repository root.
 
+## Instance configuration
+
+The `citadel-instance` feature owns typed, non-secret installation settings,
+patch validation, deployment policy and change notifications;
+Adapters merge partial choices against the locked singleton, recheck the current
+enabled human administrator, validate effective coupled fields against explicit
+deployment overrides, and record old/new settings in the same transaction.
+Server supplies a trusted boolean indicating whether the deployment Core Agent
+connector requires HTTP. The same locked mutation rejects an effective HTTPS-only
+policy in that case, before any settings or success audit are written. No Agent
+inventory is scanned and no deployment address is exposed by the settings API.
+Instance configuration and MFA changes write one `InstanceConfigurationUpdated`
+activity against the installation UUID, with the
+administrator actor and non-secret before/after values. Settings and activities
+commit atomically; no-op saves emit no activity. Instance activities are
+administrator-only. Older `InstallationSettingsUpdated` User records remain readable.
+Core restart uses a persisted singleton claim and an `InstanceRestarted` activity.
+The claim is serialized with update admission by the existing identity mutation
+lock. Hosting polls the claim with bounded cadence, drains existing owned work,
+closes the database and releases the job lease before Linux re-exec. New startup
+acknowledges the activity only after both listeners bind. A boot UUID fences
+replayed requests; browser disconnects cannot cancel persisted admission. Pending
+restart activities are retained until acknowledgement. No Docker permissions or
+container restart-policy assumptions are required.
+Restart admission does not broadcast a settings-change invalidation while Core
+is shutting down; the existing realtime reconnect reconciles settings, restart
+status and activity history after startup.
+Notifications follow commit. The administrator Instance page reuses resource
+registration, FormShell, installation-settings mutations and existing realtime
+invalidation/reconnect handling. Configuration and Administration are bottom
+sidebar popup menus with permission-filtered destinations; personal security remains in Profile.
+The crate follows the existing `model`, `commands`, `validation`, `repository`,
+`error` and `service` roles. Instance uses Identity principals, MFA vocabulary and
+its clock port; Identity has no Instance dependency. Authentication retains only
+first-run setup choices/restrictions and a narrow persisted MFA-policy read.
+Server composition joins Instance changes with first-run setup notifications for
+the update checker, preserving immediate scheduling without an ownership cycle.
+
+MFA retains its live minimum-policy behavior. The other 25 controls require Core
+restart. Server resolves saved configuration after migration/recovery admission
+and before constructing Identity, execution and monitoring consumers, logger and
+OpenAPI routes. Explicit environment presence takes precedence over stored choices,
+then built-in defaults. Saved, effective and running values are separate public
+projections; no secret or complete startup Config is exposed. Logging for other CLI
+commands uses deployment settings without requiring a settings database. Execution
+permit pools and claimed work keep their existing ownership/recovery behavior;
+there is no hot-reload or automatic restart controller. Script creation reads only
+the active timeout defaults from authenticated application information.
+
+The executable `app` module coordinates admission, serving and shutdown. `startup`
+owns the migration/settings-resolution sequence; `config/instance` maps deployment
+overrides and resolved choices into Server runtime options. Only promoted override names live in
+`citadel-instance::environment`; database, bootstrap, path and listener identifiers
+remain with their hosting/recovery consumers. Server parses explicit promoted
+overrides once, preserving absence, before admission; after migrations it merges
+saved choices and validates the effective values before constructing consumers.
+The initial admission configuration uses typed built-in defaults for these consumers,
+which are not started until resolution succeeds. There is no coupled-value clamping.
+Instance persists log format as a `Text`/`Json` enum, mapped explicitly at HTTP and
+logging boundaries; deployment verbosity remains a string to preserve module filters.
+Early failures return bounded phase context even before a subscriber exists.
+`logging` installs the subscriber from the selected verbosity and format, without depending on the Instance
+feature or persistence. Both CLI commands and maintenance mode use its environment
+entry point.
+
 ## Instance update work in progress
 
 The Updates feature owns the release-check service, policy validation, release
 selection, compatibility descriptors, reviewed plans and operation/journal invariants.
 Its release-source interface is implemented by the bounded GitHub HTTP adapter;
 Server owns scheduling, composition and HTTP presentation. Adapters own release HTTP access, private
-filesystem journals and transactional PostgreSQL state. Identity remains the
-owner of the installation-wide check setting; its write transaction emits the
-Updates activity and a separate MFA activity when both settings change.
+filesystem journals and transactional PostgreSQL state. Instance owns the
+installation-wide check setting; its write transaction emits the
+Updates activity and an Instance configuration activity when MFA or other Instance settings also change.
 
 The running application currently exposes persistent release checks and the
 administrator-only Config/Activities page. The page uses the shared resource registry,
@@ -1256,11 +1321,19 @@ Semantic health colors keep their meaning regardless of the selected accent.
 The shared top loading bar aggregates active React Query reads and mutations.
 It shows even fast requests for a minimum duration and waits for a quiet period before completing;
 individual responses and retry attempts do not restart the animation.
+Completed cycles remount the animation component before queued work starts,
+so delayed animation ticks cannot leave a visible bar after requests settle.
 
 Realtime snapshots or scoped invalidation events own synchronization after changes
 and on reconnect. Avoid parallel polling or mutation-triggered refresh-all flows.
 Authoritative mutation responses may update query caches while disconnected; cancel
 stale reads before applying them. Explicit error retries remain available.
+Public startup status uses the shared query cache and refreshes on realtime connection
+and reconnection, so password guidance follows the policy enforced by the running Core.
+Background refresh failures preserve the established startup gate and last known policy.
+Service-account token limits also refresh on connection and reconnection, so open
+forms use the limits enforced after a Core restart; inactive reads are invalidated
+and refreshed when next used.
 
 Frontend API modules and UI primitives must not import resource screens or the
 application router. Features may consume shared resource page templates and their

@@ -27,6 +27,7 @@ fn features_keep_http_presentation_and_docker_protocols_out() {
     for feature in [
         "platforms",
         "identity",
+        "instance",
         "tags",
         "registries",
         "bindings",
@@ -300,6 +301,19 @@ fn every_feature_keeps_external_io_and_transport_implementations_out() {
             ],
         );
     }
+}
+
+#[test]
+fn application_lifecycle_does_not_implement_logging_or_instance_policy() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    assert_no_dependencies(
+        &root.join("app.rs"),
+        &["tracing_subscriber", "citadel_instance"],
+    );
+    assert_no_dependencies(
+        &root.join("logging.rs"),
+        &["citadel_instance", "citadel_adapters", "sqlx"],
+    );
 }
 
 #[test]

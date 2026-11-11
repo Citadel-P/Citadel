@@ -625,8 +625,9 @@ Run ignored database tests serially (`--ignored --test-threads=1`).
 
 Statistics storage coverage includes the `migrations` test
 `compact_statistics_preserve_samples_uniqueness_and_migration_history`: it upgrades
-populated old tables, verifies removed-ID index savings, and then normalizes their
-measurements without changing owner snapshots or applied checksums. Conflicting
+populated tables from migration 0003 through the consolidated 0004, verifies
+redundant UUID indexes are removed, and normalizes measurements without changing
+owner snapshots or the applied 0001–0003 checksums. Conflicting
 copies must abort and roll back; corrected data can then upgrade. The
 `stats_batch_persistence` storage tests compare raw and compacted gauges, resets,
 nullable disk counters and ownership, exercise rollback and sealed-minute retries,
@@ -1288,3 +1289,39 @@ The database `migrations` suite includes an upgrade from migration 0003 that
 preserves history/checksums and verifies indexed Activity ordering with timestamp
 ties. These are disposable-fixture tests; do not execute cleanup plans with
 `EXPLAIN ANALYZE` against deployed databases.
+
+
+### Instance settings
+
+`cargo test --locked -p citadel-instance` covers all promoted
+fields, partial patches, ranges, coupled effective values, explicit overrides,
+typed log-format JSON and deployment HTTPS prerequisites.
+The update checker tests also verify that first-run setup immediately wakes its
+Instance settings subscription, before the periodic repair poll.
+`cargo test --locked -p citadel-server --lib config::instance` checks deployment
+presence independently of parsed defaults and lowered environment maxima combined
+with compatible saved defaults. The existing configuration parser process
+suite remains database-independent. Actual startup logging now resolves saved
+choices first, so its format/color test uses the disposable database too. Both it
+and the restart test run in the existing database-regression CI fixture.
+
+With a fresh disposable PostgreSQL instance and CREATE DATABASE permission:
+
+```bash
+CITADEL_IDENTITY_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test mfa_http -- --ignored --test-threads=1
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test bootstrap_process instance_settings -- --ignored --test-threads=1
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-server --test configuration log_format_and_color -- --ignored --test-threads=1
+CITADEL_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/postgres SQLX_OFFLINE=true cargo test --locked -p citadel-database --test migrations instance_settings -- --ignored --test-threads=1
+```
+
+The restart test starts isolated Core processes and verifies persisted choices,
+real logging, omitted Script timeouts persisted with the active default, early
+validation phase errors and unchanged existing session expirations. The backup
+dispatcher fixture checks that disabled workers retain queued work until a newly
+constructed enabled worker starts. Instance
+HTTP tests check atomic validation/auditing/notification, deployment HTTPS rejection
+without partial settings or success events, conflicting overrides,
+concurrent partial saves and enabled-human-administrator reauthorization. Migration
+tests retain the preceding checksums and saved installation choices. Frontend
+coverage lives in `features/instance/settings.test.tsx`, the sidebar tests and the
+existing installation-settings mutation and Script form suites.

@@ -111,22 +111,28 @@ readings do not replace a complete saved total.
    then review the alert's [resolution state](/resources/alert-rules#respond-to-an-alert).
 
 Assign notification channels to the built-in capacity rules under
-**Settings → Alert Rules** to receive future alerts. Custom thresholds and
+**Configuration → Alert Rules** to receive future alerts. Custom thresholds and
 required-match counts require **Advanced Alerting**.
 
 ## Container memory
 
-The Containers table's **Memory** column shows usage excluding reported file
-cache, followed by the memory limit. Container and Stack Stats show that same
-**Usage** value and **Cache** separately:
+The Containers table's **Memory** column shows Docker's working-set usage,
+followed by the memory limit. Container and Stack Stats show that same **Usage**
+value and the excluded inactive file **Cache** separately:
 
 ```text
-Usage = raw container memory − reported file cache
-Cache = reported file cache
+Usage = raw container memory − inactive file cache
+Cache = inactive file cache
 ```
 
-Usage may be lower than Linux `docker stats`, which excludes only inactive file
-cache. If Docker does not report cache, no cache is subtracted.
+This follows [Docker's memory calculation](https://docs.docker.com/reference/cli/docker/container/stats/):
+`total_inactive_file` on cgroup v1 and `inactive_file` on cgroup v2. Active file
+cache stays in Usage. Missing or inconsistent inactive-cache counters are not
+subtracted. Windows containers use the private working set when Linux usage is
+absent. Sampling times can cause small differences from Docker's live display.
+
+Existing history retains its original readings; only new samples use this
+calculation after Core and Agents are updated. No historical data is rewritten.
 
 ## Disk Usage
 

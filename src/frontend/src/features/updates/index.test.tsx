@@ -730,3 +730,19 @@ it.each([
     expect(screen.queryByText('In-app updates unavailable')).not.toBeInTheDocument();
   },
 );
+
+it('shows Back to top on the Updates page when the main container is scrolled', async () => {
+  const { fireEvent } = await import('@testing-library/react');
+  renderCitadel(
+    <div id="main-scroll-container">
+      <UpdatesPage />
+    </div>,
+    { route: '/updates' },
+  );
+  await screen.findByRole('button', { name: 'Check now' });
+  const container = document.getElementById('main-scroll-container')!;
+  container.scrollTo = vi.fn();
+  fireEvent.scroll(container, { target: { scrollTop: 500 } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Back to top' }));
+  expect(container.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+});

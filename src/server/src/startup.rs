@@ -80,14 +80,52 @@ pub async fn check_updates(config: &Config) -> Result<(), citadel_updates::Updat
     }
 }
 
-/// Migrate before constructing services that depend on the database schema.
-pub async fn migrate(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    let migration = MigrationRunner::migrate(&config.database_url).await?;
+/// Called only after update admission. Resolve saved settings before constructing
+/// startup-bound consumers, and install the logger before reporting startup evidence.
+pub async fn configure(
+    config: &mut Config,
+    lease: &mut CoreJobLease,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let migration = while_owned(lease, MigrationRunner::migrate(&config.database_url))
+        .await
+        .map_err(|error| phase_error("database migration lease", error))?
+        .map_err(|error| phase_error("database migrations", error))?;
+    let saved = while_owned(
+        lease,
+        crate::composition::load_instance_configuration(config),
+    )
+    .await
+    .map_err(|error| phase_error("Instance settings load lease", error))?
+    .map_err(|error| phase_error("loading saved Instance settings", error))?;
+    config
+        .resolve_instance_configuration(&saved)
+        .map_err(|error| phase_error("effective Instance configuration validation", error))?;
+    crate::logging::init(
+        &config.instance_configuration.log_verbosity,
+        config.instance_configuration.log_format.into(),
+    )
+    .map_err(|_| {
+        phase_error(
+            "logging configuration",
+            "check the log verbosity, format and color settings",
+        )
+    })?;
+    let effective = config.effective()?;
+    tracing::info!("Starting Citadel Core");
     tracing::info!(
         applied = migration.applied,
         already_applied = migration.already_applied,
         "database migrations completed"
     );
+    tracing::debug!(
+        effective_configuration = %serde_json::to_string(&effective)?,
+        "Effective configuration"
+    );
+    if config.transport.mode == citadel_server::config::TransportMode::Disabled {
+        tracing::warn!(
+            "Citadel transport security is disabled; API and Agent traffic is not encrypted"
+        );
+    }
     Ok(())
 }
 
@@ -141,4 +179,14 @@ pub async fn watch_job_lease(
     token: tokio_util::sync::CancellationToken,
 ) -> Result<CoreJobLease, sqlx::Error> {
     lease.watch(token).await
+}
+
+/// Early startup has no subscriber yet. Preserve bounded phase context in the
+/// returned error, without dumping Config, environment values or recovery state.
+pub(crate) fn phase_error(
+    phase: &'static str,
+    error: impl std::fmt::Display,
+) -> Box<dyn std::error::Error> {
+    let detail: String = error.to_string().chars().take(2048).collect();
+    std::io::Error::other(format!("Core startup failed during {phase}: {detail}")).into()
 }

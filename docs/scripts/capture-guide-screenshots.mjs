@@ -399,8 +399,9 @@ routes["/activities"] = {
 };
 routes[`/activities/${failedActivity.id}`] = failedActivity;
 const readmeMode = process.argv.includes("readme");
+const portalMode = process.argv.includes("portal");
 const { prepareReadme, captureReadme, mockScreenshotRealtime } = await import("./readme-screenshots.mjs");
-const readmeData = readmeMode
+const readmeData = readmeMode || portalMode
   ? prepareReadme({
       routes, lookups, fixture, id, caps,
       version, capturedAt,
@@ -413,7 +414,7 @@ const browser = await chromium.launch();
 const context = await browser.newContext({
   viewport: { width: MIN_SCREENSHOT_WIDTH, height: 2000 },
   // Narrow guide dialogs need 4x density to retain detail at >= 1660px wide.
-  deviceScaleFactor: readmeMode ? 1 : 4,
+  deviceScaleFactor: readmeMode || portalMode ? 1 : 4,
   colorScheme: "light",
   reducedMotion: "reduce",
   timezoneId: "UTC",
@@ -486,6 +487,12 @@ async function capture(name, start, end = start) {
   }
 }
 try {
+  if (portalMode) {
+    const { prepareFeatures } = await import("./feature-screenshots.mjs");
+    prepareFeatures({ routes, fixture, id, caps, capturedAt, snapshots, data: readmeData });
+    const { capturePortal } = await import("./portal-screenshots.mjs");
+    await capturePortal({ page, origin, expect, data: readmeData });
+  }
   if (readmeMode)
     await captureReadme({ page, context, origin, root, expect, data: readmeData });
   for (const [name, path] of [

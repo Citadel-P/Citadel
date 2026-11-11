@@ -64,6 +64,7 @@ pub fn router(
         metrics,
         realtime_hub,
         identity,
+        instance,
         licenses,
         entitlements,
         mfa,
@@ -126,14 +127,17 @@ pub fn router(
     }))
     .merge(citadel_server::api::routes::updates::router(
         citadel_server::api::routes::updates::UpdateHttpState {
-            identity: identity.clone(),
+            instance: instance.clone(),
             licenses: licenses.clone(),
             checker: updates.clone(),
             installer: update_installation,
             agents: Some(agent_updates),
         },
     ))
-    .merge(application_info_http::router(updates))
+    .merge(citadel_server::api::routes::instance::router(
+        citadel_server::api::routes::instance::InstanceHttpState { instance },
+    ))
+    .merge(application_info_http::router(updates, scripts.options()))
     .merge(citadel_server::api::routes::search::router(search))
     .merge(citadel_server::api::routes::actors::router(actors))
     .merge(license_http::router(license_http::LicenseHttpState {

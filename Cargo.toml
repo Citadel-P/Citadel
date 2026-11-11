@@ -15,6 +15,7 @@ members = [
     "src/features/execution",
     "src/features/git",
     "src/features/identity",
+    "src/features/instance",
     "src/features/licensing",
     "src/features/platforms",
     "src/features/primitives",

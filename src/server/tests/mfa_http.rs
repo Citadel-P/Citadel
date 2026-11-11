@@ -80,6 +80,7 @@ struct Fixture {
     app: Router,
     pool: PgPool,
     identity: Arc<IdentityService>,
+    instance: Arc<citadel_instance::InstanceService>,
     principal: ActorPrincipal,
     _guard: OwnedMutexGuard<()>,
 }
@@ -435,28 +436,26 @@ async fn fixture_at(policy: MfaPolicy, database_url: &str) -> Fixture {
     let passwords = Arc::new(Argon2PasswordHasher::default());
     let principal = seed_administrator(&pool, passwords.as_ref()).await;
     let identity = identity(&pool, passwords);
-    let app = router(identity.clone(), pool.clone(), policy);
+    let instance = instance(&pool, Default::default());
+    let app = router_with_instance(identity.clone(), pool.clone(), policy, instance.clone());
     Fixture {
         app,
         pool,
         identity,
+        instance,
         principal,
         _guard: guard,
     }
 }
 
 fn identity(pool: &PgPool, passwords: Arc<Argon2PasswordHasher>) -> Arc<IdentityService> {
-    identity_with_policy(
-        pool,
-        passwords,
-        citadel_identity::InstallationPolicy::default(),
-    )
+    identity_with_policy(pool, passwords, citadel_identity::SetupPolicy::default())
 }
 
 fn identity_with_policy(
     pool: &PgPool,
     passwords: Arc<Argon2PasswordHasher>,
-    policy: citadel_identity::InstallationPolicy,
+    policy: citadel_identity::SetupPolicy,
 ) -> Arc<IdentityService> {
     Arc::new(
         IdentityService::new(
@@ -477,11 +476,46 @@ fn identity_with_policy(
             Duration::minutes(15),
             Duration::days(30),
         )
+        .with_setup_policy(policy),
+    )
+}
+
+fn instance(
+    pool: &PgPool,
+    policy: citadel_instance::InstallationPolicy,
+) -> Arc<citadel_instance::InstanceService> {
+    Arc::new(
+        citadel_instance::InstanceService::new(
+            Arc::new(
+                citadel_adapters::persistence::postgres::instance::PostgresInstanceRepository::new(
+                    pool.clone(),
+                ),
+            ),
+            Arc::new(SystemClock),
+        )
         .with_installation_policy(policy),
     )
 }
 
 fn router(identity: Arc<IdentityService>, pool: PgPool, policy: MfaPolicy) -> Router {
+    let setup = identity.setup_policy();
+    let instance = instance(
+        &pool,
+        citadel_instance::InstallationPolicy {
+            update_checks_allowed: setup.update_checks_allowed,
+            minimum_mfa_policy: setup.minimum_mfa_policy,
+            ..Default::default()
+        },
+    );
+    router_with_instance(identity, pool, policy, instance)
+}
+
+fn router_with_instance(
+    identity: Arc<IdentityService>,
+    pool: PgPool,
+    policy: MfaPolicy,
+    instance: Arc<citadel_instance::InstanceService>,
+) -> Router {
     let key = [8_u8; 32];
     let mfa = Arc::new(MfaService::new(
         Arc::new(PostgresMfaStore::new(pool)),
@@ -504,6 +538,9 @@ fn router(identity: Arc<IdentityService>, pool: PgPool, policy: MfaPolicy) -> Ro
         readiness: Arc::new(Readiness::default()),
         secure_cookies: false,
     })
+    .merge(citadel_server::api::routes::instance::router(
+        citadel_server::api::routes::instance::InstanceHttpState { instance },
+    ))
 }
 
 async fn seed_administrator(pool: &PgPool, passwords: &dyn PasswordHasher) -> ActorPrincipal {
@@ -677,7 +714,7 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     let forced = identity_with_policy(
         &fixture.pool,
         Arc::new(Argon2PasswordHasher::default()),
-        citadel_identity::InstallationPolicy {
+        citadel_identity::SetupPolicy {
             update_checks_allowed: false,
             minimum_mfa_policy: MfaPolicy::RequiredForAllUsers,
         },
@@ -762,7 +799,7 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     assert_eq!(repeated.status(), StatusCode::CONFLICT);
     assert!(
         !fixture
-            .identity
+            .instance
             .installation_settings()
             .await
             .unwrap()
@@ -844,14 +881,14 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     // Independent administrator patches must preserve each other's field.
     assert_eq!(
         fixture
-            .identity
+            .instance
             .installation_settings()
             .await
             .unwrap()
             .update_check_interval_hours,
         6
     );
-    let mut changes = fixture.identity.installation_changes();
+    let mut changes = fixture.instance.installation_changes();
     let (updates, mfa, frequency) = tokio::join!(
         send_json(
             &fixture.app,
@@ -884,17 +921,17 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     assert_eq!(json_body(frequency).await["updateCheckIntervalHours"], 24);
     assert!(changes.has_changed().unwrap());
     changes.borrow_and_update();
-    let persisted = fixture.identity.installation_settings().await.unwrap();
+    let persisted = fixture.instance.installation_settings().await.unwrap();
     assert!(persisted.update_checks_enabled);
     assert_eq!(persisted.update_check_interval_hours, 24);
     assert_eq!(persisted.mfa_policy, MfaPolicy::RequiredForAllUsers);
-    let restarted = identity(&fixture.pool, Arc::new(Argon2PasswordHasher::default()));
+    let restarted = instance(&fixture.pool, Default::default());
     assert_eq!(restarted.installation_settings().await.unwrap(), persisted);
 
     let restricted = identity_with_policy(
         &fixture.pool,
         Arc::new(Argon2PasswordHasher::default()),
-        citadel_identity::InstallationPolicy {
+        citadel_identity::SetupPolicy {
             update_checks_allowed: false,
             minimum_mfa_policy: MfaPolicy::RequiredForAllUsers,
         },
@@ -951,7 +988,7 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     .await;
     assert_eq!(revoked.status(), StatusCode::FORBIDDEN);
     let audit: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT eventtype, count(*) FROM activityevents WHERE eventtype IN ('InstallationSettingsUpdated','UpdateChecksChanged') GROUP BY eventtype ORDER BY eventtype",
+        "SELECT eventtype, count(*) FROM activityevents WHERE eventtype IN ('InstanceConfigurationUpdated','UpdateChecksChanged') GROUP BY eventtype ORDER BY eventtype",
     )
     .fetch_all(&fixture.pool)
     .await
@@ -959,7 +996,7 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     assert_eq!(
         audit,
         vec![
-            ("InstallationSettingsUpdated".into(), 2),
+            ("InstanceConfigurationUpdated".into(), 2),
             ("UpdateChecksChanged".into(), 2),
         ],
         "MFA edits and update-check edits have separate histories; rejected requests must not add events"
@@ -974,3 +1011,6 @@ async fn installation_choices_are_atomic_admin_only_persistent_and_enforce_mfa()
     .unwrap();
     admin.close().await;
 }
+
+#[path = "mfa_http/instance_settings.rs"]
+mod instance_settings;

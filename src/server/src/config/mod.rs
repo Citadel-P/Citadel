@@ -1,4 +1,7 @@
+pub use citadel_instance::environment;
+
 pub mod execution;
+mod instance;
 mod keys;
 
 use std::env;
@@ -31,8 +34,6 @@ const DEFAULT_EDGE_GRPC_PORT: u16 = 8001;
 const DEFAULT_FORWARD_LIMIT: usize = 1;
 const DEFAULT_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 const DEFAULT_REQUESTS_PER_MINUTE: u64 = 600;
-const DEFAULT_ACCESS_TOKEN_MINUTES: u64 = 15;
-const DEFAULT_REFRESH_TOKEN_DAYS: u64 = 30;
 const DEFAULT_SERVICE_ACCOUNT_LAST_USED_CAPACITY: usize = 10_000;
 const DEFAULT_MFA_CHALLENGE_MINUTES: u64 = 5;
 const DEFAULT_MFA_SETUP_MINUTES: u64 = 10;
@@ -51,6 +52,8 @@ pub enum ConfigError {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub instance_configuration: citadel_instance::InstanceConfiguration,
+    pub instance_overrides: citadel_instance::InstanceOverrides,
     pub updates_enabled: bool,
     pub update_state_directory: Option<PathBuf>,
     pub execution: execution::ExecutionConfig,
@@ -85,17 +88,6 @@ pub struct BackupWorkerConfig {
     pub tracking_slots: usize,
     pub poll_interval: Duration,
     pub schedule_interval: Duration,
-}
-
-fn bounded_slots(name: &'static str, default: usize, maximum: usize) -> Result<usize, ConfigError> {
-    let value = positive_usize(name, default)?;
-    if value > maximum {
-        return Err(ConfigError::Invalid {
-            name,
-            message: format!("must not exceed {maximum}"),
-        });
-    }
-    Ok(value)
 }
 
 fn positive_usize(name: &'static str, default: usize) -> Result<usize, ConfigError> {
@@ -267,8 +259,18 @@ pub struct EffectiveConfig {
 
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
+        let mut config = Self::from_env_for_startup()?;
+        config.resolve_instance_configuration(&Default::default())?;
+        Ok(config)
+    }
+
+    /// Migration/recovery admission precedes loading saved settings. Coupled promoted
+    /// fields are validated after the database choices have been merged.
+    pub fn from_env_for_startup() -> Result<Self, ConfigError> {
+        let defaults = citadel_instance::InstanceConfiguration::default();
+        let overrides = instance::read_overrides(|name| env::var(name).ok())?;
         let port = parse_env("CITADEL_HTTP_LISTEN_PORT", DEFAULT_API_PORT)?;
-        let transport = transport_config(port)?;
+        let transport = transport_config(port, &defaults)?;
         let listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let (database_url, database_source) = database_url()?;
         let database_max_connections = parse_env(
@@ -293,10 +295,6 @@ impl Config {
             "CITADEL_DOCKER_TIMEOUT_SECONDS",
             DEFAULT_DOCKER_REQUEST_TIMEOUT_SECONDS,
         )?;
-        let probe_interval_seconds = nonzero_seconds(
-            "CITADEL_STATS_POLL_INTERVAL_SECONDS",
-            DEFAULT_MONITORING_INTERVAL_SECONDS,
-        )?;
         let reconciliation_interval_seconds = nonzero_seconds(
             "CITADEL_SWARM_RECONCILIATION_INTERVAL_SECONDS",
             DEFAULT_RECONCILIATION_INTERVAL_SECONDS,
@@ -305,7 +303,7 @@ impl Config {
             "CITADEL_SHUTDOWN_TIMEOUT_SECONDS",
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
         )?;
-        let execution = execution::ExecutionConfig::from_env(port)?;
+        let execution = execution::ExecutionConfig::from_env(port, &defaults)?;
         let supported_architectures = execution
             .edge_agent
             .setup_policy
@@ -313,9 +311,11 @@ impl Config {
             .clone();
         let agent = agent_config(execution.edge_agent.allow_insecure)?;
         let realtime = realtime_config()?;
-        let identity = identity_config(&transport)?;
+        let identity = identity_config_for_startup(&transport, &defaults)?;
 
-        Ok(Self {
+        let config = Self {
+            instance_configuration: defaults.clone(),
+            instance_overrides: overrides,
             updates_enabled: release_checks_allowed_from_env()?,
             update_state_directory: update_state_directory_from_env()?,
             execution,
@@ -326,7 +326,9 @@ impl Config {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("/var/run/docker.sock")),
             docker_request_timeout: Duration::from_secs(docker_request_timeout_seconds),
-            probe_interval: Duration::from_secs(probe_interval_seconds),
+            probe_interval: Duration::from_secs(u64::from(
+                defaults.statistics_collection_interval_seconds,
+            )),
             reconciliation_interval: Duration::from_secs(reconciliation_interval_seconds),
             event_queue_capacity,
             shutdown_timeout: Duration::from_secs(shutdown_timeout_seconds),
@@ -334,7 +336,7 @@ impl Config {
             realtime,
             transport,
             identity,
-            scripts: script_options()?,
+            scripts: script_options(&defaults)?,
             node_agent_policy: citadel_platforms::node_agents::NodeAgentReconciliationPolicy {
                 removal_grace: Duration::from_secs(
                     positive_usize("CITADEL_EDGE_AGENT_NODE_AGENT_REMOVAL_GRACE_MINUTES", 10)?
@@ -347,27 +349,18 @@ impl Config {
                 "CITADEL_RETENTION_INTERVAL_SECONDS",
                 900,
             )?),
-            stats_flush_interval: Duration::from_secs(positive_usize(
-                "CITADEL_STATS_FLUSH_INTERVAL_SECONDS",
-                60,
-            )? as u64),
+            stats_flush_interval: Duration::from_secs(u64::from(
+                defaults.statistics_write_interval_seconds,
+            )),
             stats_batch_size: positive_usize("CITADEL_STATS_BATCH_SIZE", 500)?,
-            build_preparation_slots: bounded_slots("CITADEL_BUILDS_PREPARATION_SLOTS", 2, 16)?,
-            build_tracking_slots: bounded_slots("CITADEL_BUILDS_TRACKING_SLOTS", 16, 128)?,
-            build_retention_days: if parse_env("CITADEL_BUILDS_RUN_CLEANUP_ENABLED", true)? {
-                Some(
-                    i32::try_from(positive_usize("CITADEL_BUILDS_RUN_RETENTION_DAYS", 90)?)
-                        .map_err(|_| ConfigError::Invalid {
-                            name: "CITADEL_BUILDS_RUN_RETENTION_DAYS",
-                            message: "must fit a positive 32-bit integer".into(),
-                        })?,
-                )
-            } else {
-                None
-            },
+            build_preparation_slots: defaults.build_preparation_slots,
+            build_tracking_slots: defaults.build_tracking_slots,
+            build_retention_days: defaults
+                .build_cleanup_enabled
+                .then_some(defaults.build_retention_days),
             backup_workers: BackupWorkerConfig {
-                enabled: parse_env("CITADEL_BACKUPS_ENABLED", true)?,
-                tracking_slots: bounded_slots("CITADEL_BACKUPS_TRACKING_SLOTS", 16, 128)?,
+                enabled: defaults.backups_enabled,
+                tracking_slots: defaults.backup_tracking_slots,
                 poll_interval: Duration::from_secs(positive_usize(
                     "CITADEL_BACKUPS_POLL_INTERVAL_SECONDS",
                     2,
@@ -378,7 +371,8 @@ impl Config {
                 )? as u64),
             },
             database_source,
-        })
+        };
+        Ok(config)
     }
 
     pub fn effective(&self) -> Result<EffectiveConfig, ConfigError> {
@@ -396,6 +390,16 @@ impl Config {
                 .as_secs(),
             execution: serde_json::json!({
                 "agentImage": self.execution.edge_agent.image,
+                "agentAllowInsecure": self.execution.edge_agent.allow_insecure,
+                "scripts": {
+                    "enabled": self.scripts.enabled,
+                    "maximumParallelRuns": self.scripts.max_parallel_runs,
+                    "maximumRemoteRuns": self.scripts.max_remote_runs,
+                    "defaultTimeoutSeconds": self.scripts.default_timeout_seconds,
+                    "maximumTimeoutSeconds": self.scripts.max_timeout_seconds,
+                },
+                "buildPreparationSlots": self.build_preparation_slots,
+                "buildTrackingSlots": self.build_tracking_slots,
                 "agentCaConfigured": self.execution.edge_agent.ca_certificate.is_some(),
                 "nodeAgent": {
                     "bootstrapSeconds": self.execution.edge_agent.setup_policy.bootstrap_lifetime.as_secs(),
@@ -407,6 +411,7 @@ impl Config {
                 },
                 "backups": {
                     "enabled": self.backup_workers.enabled,
+                    "trackingSlots": self.backup_workers.tracking_slots,
                     "workingDirectory": self.execution.backups.settings.working_directory,
                     "coreDataPath": self.execution.backups.core_data_path,
                     "allowedCorePaths": self.execution.backups.settings.allowed_core_paths,
@@ -508,7 +513,10 @@ impl DatabaseConfig {
     }
 }
 
-fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
+fn transport_config(
+    api_port: u16,
+    defaults: &citadel_instance::InstanceConfiguration,
+) -> Result<TransportConfig, ConfigError> {
     let mode = parse_transport_mode(env::var("CITADEL_TRANSPORT_MODE").ok().as_deref())?;
     let edge_grpc_port = parse_env("CITADEL_EDGE_GRPC_LISTEN_PORT", DEFAULT_EDGE_GRPC_PORT)?;
     if api_port == edge_grpc_port {
@@ -683,7 +691,7 @@ fn transport_config(api_port: u16) -> Result<TransportConfig, ConfigError> {
         cors_origins,
         body_limit_bytes,
         requests_per_minute,
-        openapi_enabled: parse_env("CITADEL_HTTP_OPENAPI_ENABLED", false)?,
+        openapi_enabled: defaults.openapi_enabled,
         static_root: env::var_os("CITADEL_STATIC_ROOT").map(PathBuf::from),
     })
 }
@@ -702,9 +710,12 @@ fn parse_transport_mode(value: Option<&str>) -> Result<TransportMode, ConfigErro
     }
 }
 
-fn identity_config(transport: &TransportConfig) -> Result<IdentityConfig, ConfigError> {
+fn identity_config_for_startup(
+    transport: &TransportConfig,
+    defaults: &citadel_instance::InstanceConfiguration,
+) -> Result<IdentityConfig, ConfigError> {
     let (jwt_key, secret_encryption_key) = identity_keys_from_env()?;
-    identity_config_with_keys(transport, jwt_key, secret_encryption_key)
+    identity_config_with_keys(transport, jwt_key, secret_encryption_key, defaults)
 }
 
 /// Load explicit keys or persist generated defaults for normal startup.
@@ -778,6 +789,7 @@ fn identity_config_with_keys(
     transport: &TransportConfig,
     jwt_key: SecretBytes,
     secret_encryption_key: SecretBytes,
+    defaults: &citadel_instance::InstanceConfiguration,
 ) -> Result<IdentityConfig, ConfigError> {
     let issuer = env::var("CITADEL_JWT_ISSUER").unwrap_or_else(|_| {
         transport
@@ -793,14 +805,6 @@ fn identity_config_with_keys(
             message: "must not be empty".to_owned(),
         });
     }
-    let access_token_minutes = nonzero_seconds(
-        "CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES",
-        DEFAULT_ACCESS_TOKEN_MINUTES,
-    )?;
-    let refresh_token_days = nonzero_seconds(
-        "CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS",
-        DEFAULT_REFRESH_TOKEN_DAYS,
-    )?;
     let service_account_last_used_capacity = parse_env(
         "CITADEL_SERVICE_ACCOUNTS_LAST_USED_TRACKING_CAPACITY",
         DEFAULT_SERVICE_ACCOUNT_LAST_USED_CAPACITY,
@@ -811,12 +815,11 @@ fn identity_config_with_keys(
             message: "must be greater than zero".to_owned(),
         });
     }
-    let password_policy = citadel_identity::PasswordPolicy::new(parse_env(
-        "CITADEL_PASSWORDS_MINIMUM_LENGTH",
-        citadel_identity::MINIMUM_PASSWORD_CHARACTERS,
-    )?)
+    let password_policy = citadel_identity::PasswordPolicy::new(
+        defaults.password_minimum_length as usize,
+    )
     .map_err(|error| ConfigError::Invalid {
-        name: "CITADEL_PASSWORDS_MINIMUM_LENGTH",
+        name: environment::CITADEL_PASSWORDS_MINIMUM_LENGTH,
         message: error.to_string(),
     })?;
     let mfa = mfa_config()?;
@@ -828,19 +831,23 @@ fn identity_config_with_keys(
         secret_encryption_key,
         issuer,
         audience,
-        access_token_lifetime: Duration::from_secs(access_token_minutes.checked_mul(60).ok_or(
-            ConfigError::Invalid {
-                name: "CITADEL_JWT_ACCESS_TOKEN_LIFETIME_MINUTES",
-                message: "is too large".to_owned(),
-            },
-        )?),
-        refresh_token_lifetime: Duration::from_secs(refresh_token_days.checked_mul(86_400).ok_or(
-            ConfigError::Invalid {
-                name: "CITADEL_JWT_REFRESH_TOKEN_LIFETIME_DAYS",
-                message: "is too large".to_owned(),
-            },
-        )?),
-        service_account_limits: service_account_limits()?,
+        access_token_lifetime: Duration::from_secs(
+            u64::from(defaults.access_token_lifetime_minutes) * 60,
+        ),
+        refresh_token_lifetime: Duration::from_secs(
+            u64::from(defaults.browser_session_lifetime_days) * 86400,
+        ),
+        service_account_limits: citadel_identity::ServiceAccountLimitsDetails {
+            default_token_lifetime_days: i64::from(
+                defaults.service_account_default_token_lifetime_days,
+            ),
+            maximum_token_lifetime_days: i64::from(
+                defaults.service_account_maximum_token_lifetime_days,
+            ),
+            maximum_active_tokens_per_account: i64::from(
+                defaults.service_account_maximum_active_tokens,
+            ),
+        },
         service_account_last_used_interval: Duration::from_secs(
             nonzero_seconds(
                 "CITADEL_SERVICE_ACCOUNTS_LAST_USED_WRITE_INTERVAL_MINUTES",
@@ -1130,50 +1137,15 @@ fn validate_database_url(value: &str) -> Result<(), ConfigError> {
     Ok(())
 }
 
-fn service_account_limits() -> Result<citadel_identity::ServiceAccountLimitsDetails, ConfigError> {
-    let limits = citadel_identity::ServiceAccountLimitsDetails {
-        default_token_lifetime_days: parse_env(
-            "CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS",
-            90,
-        )?,
-        maximum_token_lifetime_days: parse_env(
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS",
-            365,
-        )?,
-        maximum_active_tokens_per_account: parse_env(
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT",
-            10,
-        )?,
-    };
-    for (name, valid) in [
-        (
-            "CITADEL_SERVICE_ACCOUNTS_DEFAULT_TOKEN_LIFETIME_DAYS",
-            limits.default_token_lifetime_days > 0,
-        ),
-        (
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_TOKEN_LIFETIME_DAYS",
-            limits.maximum_token_lifetime_days >= limits.default_token_lifetime_days
-                && limits.maximum_token_lifetime_days <= 365_000,
-        ),
-        (
-            "CITADEL_SERVICE_ACCOUNTS_MAXIMUM_ACTIVE_TOKENS_PER_ACCOUNT",
-            limits.maximum_active_tokens_per_account > 0,
-        ),
-    ] {
-        if !valid {
-            return Err(ConfigError::Invalid { name, message: "limits must be positive, maximum lifetime must be at least the default and no more than 365000 days".into() });
-        }
-    }
-    Ok(limits)
-}
-
-fn script_options() -> Result<citadel_scripts::ScriptOptions, ConfigError> {
+fn script_options(
+    defaults: &citadel_instance::InstanceConfiguration,
+) -> Result<citadel_scripts::ScriptOptions, ConfigError> {
     let options = citadel_scripts::ScriptOptions {
-        enabled: parse_env("CITADEL_SCRIPTS_ENABLED", true)?,
-        max_parallel_runs: parse_env("CITADEL_SCRIPTS_MAX_PARALLEL_RUNS", 4)?,
-        max_remote_runs: parse_env("CITADEL_SCRIPTS_MAX_REMOTE_RUNS", 16)?,
-        default_timeout_seconds: parse_env("CITADEL_SCRIPTS_DEFAULT_TIMEOUT_SECONDS", 300)?,
-        max_timeout_seconds: parse_env("CITADEL_SCRIPTS_MAX_TIMEOUT_SECONDS", 1800)?,
+        enabled: defaults.scripts_enabled,
+        max_parallel_runs: defaults.scripts_maximum_parallel_runs,
+        max_remote_runs: defaults.scripts_maximum_remote_runs,
+        default_timeout_seconds: defaults.scripts_default_timeout_seconds as i32,
+        max_timeout_seconds: defaults.scripts_maximum_timeout_seconds as i32,
         poll_interval: Duration::from_secs(parse_env("CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS", 2)?),
         schedule_poll_interval: Duration::from_secs(parse_env(
             "CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS",
@@ -1273,7 +1245,7 @@ fn update_state_directory_from_env() -> Result<Option<PathBuf>, ConfigError> {
 }
 
 pub fn log_format_from_env() -> Result<LogFormat, ConfigError> {
-    parse_env("CITADEL_LOG_FORMAT", LogFormat::default())
+    parse_env(environment::CITADEL_LOG_FORMAT, LogFormat::default())
 }
 
 /// Color is independent of format and defaults to interactive terminals only.

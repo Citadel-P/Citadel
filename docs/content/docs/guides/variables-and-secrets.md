@@ -151,7 +151,7 @@ Use this when the secret value should stay in your external secret manager inste
 
 ### Create A Provider
 
-Open **Settings → Bindings** and create a Vault provider.
+Open **Configuration → Bindings** and create a Vault provider.
 
 Provider fields:
 
@@ -398,11 +398,11 @@ For that stack, `${APP_ENV}` resolves to `staging`.
 
 ## Where To Configure Them
 
-Use **Settings → Bindings** for reusable values shared by multiple resources.
+Use **Configuration → Bindings** for reusable values shared by multiple resources.
 
 Use the stack or deployment `Bindings` tab for resource-specific values and overrides.
 
-Resource tabs list only resource-specific entries. Global entries are inherited automatically at deploy time and remain searchable on **Settings → Bindings**.
+Resource tabs list only resource-specific entries. Global entries are inherited automatically at deploy time and remain searchable on **Configuration → Bindings**.
 
 Use the stack `Config` tab to reference keys in compose content, for example `${IMAGE_TAG}` or `${POSTGRES_PASSWORD}`.
 

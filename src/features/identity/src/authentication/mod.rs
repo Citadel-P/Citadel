@@ -34,11 +34,11 @@ mod service;
 pub mod model;
 
 pub use model::{
-    AccessTokenClaims, InstallationPolicy, InstallationSettings, PreparedSession,
-    RefreshTokenClaims, SessionMetadata, SetupInitializationMode, UserAuthentication,
+    AccessTokenClaims, PreparedSession, RefreshTokenClaims, SessionMetadata, SetupChoices,
+    SetupInitializationMode, SetupPolicy, UserAuthentication,
 };
 
-pub use commands::{InitializeCitadel, Login, NewSession, PatchInstallationSettings};
+pub use commands::{InitializeCitadel, Login, NewSession};
 
 pub use read_models::{
     AuthenticatedBearer, LoginNextStep, LoginOutcome, SessionTokens, SetupStatus, UserSessionRecord,

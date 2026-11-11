@@ -1,82 +1,62 @@
 import { useApiClientContext } from '@/api/api-client-context';
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { resourceQueryKey } from '@/api/dispatch';
+import { resourceReadOptions } from '@/api/read-options';
+import type { ResourceResponse } from '@/api/types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
 import { SetupContext, SetupError } from './setup-context';
 import { MfaPolicy } from '@/api/generated/api.types';
 
-type SetupState =
-  | { status: 'loading'; attempt: number }
-  | { status: 'pending'; attempt: number }
-  | { status: 'complete'; attempt: number }
-  | { status: 'error'; attempt: number; error: SetupError };
-
-type SetupAction =
-  { type: 'PENDING' } | { type: 'COMPLETE' } | { type: 'ERROR'; error: SetupError } | { type: 'RETRY' };
-
-function reducer(state: SetupState, action: SetupAction): SetupState {
-  switch (action.type) {
-    case 'PENDING':
-      return { status: 'pending', attempt: state.attempt };
-    case 'COMPLETE':
-      return { status: 'complete', attempt: state.attempt };
-    case 'ERROR':
-      return { status: 'error', attempt: state.attempt, error: action.error };
-    case 'RETRY':
-      return { status: 'loading', attempt: state.attempt + 1 };
-  }
-}
+const setupQueryKey = resourceQueryKey('getSetupStatus');
 
 export function SetupProvider({ children }: { children: React.ReactNode }) {
   const { apiClient } = useApiClientContext();
-  const [passwordPolicy, setPasswordPolicy] = useState({
-    passwordMinimumLength: 15,
-    passwordMaximumLength: 128,
-    updateChecksEnabled: true,
-    updateChecksAllowed: true,
-    mfaPolicy: MfaPolicy.Optional,
-    minimumMfaPolicy: MfaPolicy.Optional,
+  const client = useQueryClient();
+  const [setupCompleted, setSetupCompleted] = useState(false);
+  const {
+    data: response,
+    error: requestError,
+    isPending,
+    isFetching,
+    refetch,
+  } = useQuery({
+    ...resourceReadOptions(apiClient, 'getSetupStatus'),
+    staleTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
-  const [state, dispatch] = useReducer(reducer, { status: 'loading', attempt: 0 });
-
-  useEffect(() => {
-    if (state.status !== 'loading') return;
-
-    const controller = new AbortController();
-    apiClient.api
-      .getSetupStatus({ signal: controller.signal })
-      .then((response) => {
-        if (controller.signal.aborted) return;
-        setPasswordPolicy({
-          passwordMinimumLength: response.data.passwordMinimumLength,
-          passwordMaximumLength: response.data.passwordMaximumLength,
-          updateChecksEnabled: response.data.updateChecksEnabled ?? true,
-          updateChecksAllowed: response.data.updateChecksAllowed ?? true,
-          mfaPolicy: response.data.mfaPolicy ?? MfaPolicy.Optional,
-          minimumMfaPolicy: response.data.minimumMfaPolicy ?? MfaPolicy.Optional,
-        });
-        dispatch({ type: response.data.requiresSetup ? 'PENDING' : 'COMPLETE' });
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          dispatch({
-            type: 'ERROR',
-            error: getSetupError(error),
-          });
-        }
-      });
-
-    return () => controller.abort();
-  }, [apiClient, state.status, state.attempt]);
-
-  const markSetupComplete = useCallback(() => dispatch({ type: 'COMPLETE' }), []);
-  const retry = useCallback(() => dispatch({ type: 'RETRY' }), []);
+  const status = response?.data;
+  // Reconnect refreshes the running policy through the shared cache. Keep the
+  // established startup gate during a background refresh or transient failure.
+  const error = useMemo(
+    () => (!status && requestError ? getSetupError(requestError) : undefined),
+    [status, requestError],
+  );
+  const markSetupComplete = useCallback(() => {
+    // Route guards must see completion in the same render as navigation.
+    setSetupCompleted(true);
+    void client.cancelQueries({ queryKey: setupQueryKey });
+    client.setQueryData<ResourceResponse<'getSetupStatus'>>(setupQueryKey, (current) =>
+      current ? { ...current, data: { ...current.data, requiresSetup: false } } : current,
+    );
+  }, [client]);
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
   return (
     <SetupContext.Provider
       value={{
-        ...passwordPolicy,
-        isSetupReady: state.status !== 'loading',
-        requiresSetup: state.status === 'pending',
-        error: state.status === 'error' ? state.error : undefined,
+        passwordMinimumLength: status?.passwordMinimumLength ?? 15,
+        passwordMaximumLength: status?.passwordMaximumLength ?? 128,
+        updateChecksEnabled: status?.updateChecksEnabled ?? true,
+        updateChecksAllowed: status?.updateChecksAllowed ?? true,
+        mfaPolicy: status?.mfaPolicy ?? MfaPolicy.Optional,
+        minimumMfaPolicy: status?.minimumMfaPolicy ?? MfaPolicy.Optional,
+        isSetupReady: !!status || (!isPending && !isFetching),
+        requiresSetup: !setupCompleted && (status?.requiresSetup ?? false),
+        error,
         markSetupComplete,
         retry,
       }}>

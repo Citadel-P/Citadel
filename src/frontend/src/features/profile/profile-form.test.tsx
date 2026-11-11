@@ -108,37 +108,34 @@ it('loads the collapsed session count once, reuses the list, and updates on refr
   expect(reads).toBe(3);
 });
 
-it.each([false, true])('shows installation controls only for an administrator (%s)', async (isAdministrator) => {
-  const reads = vi.fn(() =>
-    HttpResponse.json({
-      updateChecksEnabled: true,
-      updateChecksAllowed: true,
-      mfaPolicy: 'Optional',
-      minimumMfaPolicy: 'Optional',
-    }),
-  );
-  server.use(
-    http.get('http://localhost/api/v1/installation/settings', reads),
-    http.get('http://localhost/api/v1/profile/sessions', () =>
-      HttpResponse.json({ sessions: [], canRevokeOtherSessions: false }),
-    ),
-  );
-  renderCitadel(
-    <ProfileForm
-      profile={{ ...profile, authorization: { ...profile.authorization, isAdministrator } }}
-      formatDate={String}
-    />,
-  );
-  if (isAdministrator) {
-    expect(await screen.findByRole('combobox', { name: 'Two-factor authentication policy' })).toBeVisible();
-    expect(screen.queryByRole('switch', { name: 'Check for Citadel updates' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Instance settings Admins only' })).toBeVisible();
-    expect(reads).toHaveBeenCalledOnce();
-  } else {
+it.each([false, true])(
+  'keeps installation settings out of Profile for administrators and other users (%s)',
+  async (isAdministrator) => {
+    const reads = vi.fn(() =>
+      HttpResponse.json({
+        updateChecksEnabled: true,
+        updateChecksAllowed: true,
+        mfaPolicy: 'Optional',
+        minimumMfaPolicy: 'Optional',
+      }),
+    );
+    server.use(
+      http.get('http://localhost/api/v1/installation/settings', reads),
+      http.get('http://localhost/api/v1/profile/sessions', () =>
+        HttpResponse.json({ sessions: [], canRevokeOtherSessions: false }),
+      ),
+    );
+    renderCitadel(
+      <ProfileForm
+        profile={{ ...profile, authorization: { ...profile.authorization, isAdministrator } }}
+        formatDate={String}
+      />,
+    );
+    expect(screen.queryByRole('combobox', { name: 'Two-factor authentication policy' })).not.toBeInTheDocument();
     expect(screen.queryByText('Instance settings')).not.toBeInTheDocument();
     expect(reads).not.toHaveBeenCalled();
-  }
-});
+  },
+);
 
 it('shows password feedback only for the new password and clears it when the dialog closes', async () => {
   server.use(

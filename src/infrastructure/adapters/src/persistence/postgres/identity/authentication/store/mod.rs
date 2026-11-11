@@ -20,7 +20,6 @@ use crate::persistence::postgres::activities::store::insert_activity;
 use crate::persistence::postgres::activities::store::invalid_activity;
 
 mod default_scripts;
-mod installation;
 
 #[derive(Clone)]
 pub struct PostgresIdentityStore {
@@ -63,26 +62,23 @@ impl IdentityStore for PostgresIdentityStore {
         })
     }
 
-    fn installation_settings(
-        &self,
-    ) -> BoxFuture<'_, Result<citadel_identity::InstallationSettings, IdentityError>> {
-        Box::pin(installation::load(&self.pool))
-    }
-
-    fn patch_installation_settings<'a>(
-        &'a self,
-        principal: &'a ActorPrincipal,
-        patch: &'a citadel_identity::PatchInstallationSettings,
-        now: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<citadel_identity::InstallationSettings, IdentityError>> {
-        Box::pin(installation::patch(self, principal, patch, now))
+    fn mfa_policy(&self) -> BoxFuture<'_, Result<citadel_identity::MfaPolicy, IdentityError>> {
+        Box::pin(async move {
+            let policy: String =
+                sqlx::query_scalar("SELECT mfapolicy FROM instancesetupstates WHERE id=1")
+                    .fetch_one(&self.pool)
+                    .await
+                    .map_err(storage)?;
+            citadel_identity::MfaPolicy::from_database_str(&policy)
+                .ok_or_else(|| IdentityError::Storage("Invalid installation MFA policy.".into()))
+        })
     }
 
     fn initialize_administrator<'a>(
         &'a self,
         administrator: &'a User,
         mode: citadel_identity::SetupInitializationMode,
-        settings: citadel_identity::InstallationSettings,
+        settings: citadel_identity::SetupChoices,
     ) -> BoxFuture<'a, Result<UserAuthentication, IdentityError>> {
         Box::pin(async move {
             let mut authorization = Mutation::enter(&self.pool).await;

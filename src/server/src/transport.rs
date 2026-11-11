@@ -215,8 +215,26 @@ pub async fn serve(
     cancellation: CancellationToken,
     shutdown_timeout: Duration,
 ) -> std::io::Result<()> {
+    serve_with_handle(
+        address,
+        transport,
+        app,
+        cancellation,
+        shutdown_timeout,
+        Handle::new(),
+    )
+    .await
+}
+
+pub async fn serve_with_handle(
+    address: SocketAddr,
+    transport: &TransportConfig,
+    app: Router,
+    cancellation: CancellationToken,
+    shutdown_timeout: Duration,
+    handle: Handle<SocketAddr>,
+) -> std::io::Result<()> {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let handle = Handle::new();
     let service = app.into_make_service_with_connect_info::<SocketAddr>();
     match transport.mode {
         TransportMode::Direct => {

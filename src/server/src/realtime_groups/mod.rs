@@ -153,7 +153,7 @@ impl Group {
                     (self.reference(), event.resource_type),
                     (Some("AlertRule"), "Alert")
                         | (Some("Updates"), "ApplicationInfo" | "InstallationSettings")
-                        | (Some("User"), "InstallationSettings")
+                        | (Some("Instance" | "User"), "InstallationSettings")
                 );
             return event.payload["dockerResourceType"] != "containerStats"
                 && resource_matches
@@ -1093,6 +1093,7 @@ mod tests {
         let mut receiver = hub.subscribe();
         let id = Uuid::now_v7();
         let updates = Group::parse(&format!("activity:Updates:{id}")).unwrap();
+        let instance = Group::parse(&format!("activity:Instance:{id}")).unwrap();
         let user = Group::parse(&format!("activity:User:{id}")).unwrap();
         let stack = Group::parse(&format!("activity:Stack:{id}")).unwrap();
         for resource in ["ApplicationInfo", "InstallationSettings"] {
@@ -1100,6 +1101,10 @@ mod tests {
             let event = receiver.try_recv().unwrap();
             assert!(updates.affected_by(&event));
             assert_eq!(user.affected_by(&event), resource == "InstallationSettings");
+            assert_eq!(
+                instance.affected_by(&event),
+                resource == "InstallationSettings"
+            );
             assert!(!stack.affected_by(&event));
         }
         hub.publish_resource_change("Stack", Uuid::nil(), "resourceChanged");

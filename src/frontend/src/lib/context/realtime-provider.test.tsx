@@ -543,6 +543,26 @@ describe('RealtimeProvider', () => {
     expect(queryFn).toHaveBeenCalledTimes(2);
   });
 
+  it('refreshes service-account limits on connection and after Core restarts', async () => {
+    const fake = new FakeRealtimeConnection();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['getServiceAccountLimits', { id: 'resource-1' }], 'cached limits');
+    const queryFn = vi.fn().mockResolvedValueOnce('running limits').mockResolvedValueOnce('restarted limits');
+    render(
+      <RealtimeTestRoot fake={fake} queryClient={queryClient}>
+        <LiveQuerySubscriber queryFn={queryFn} queryKey="getServiceAccountLimits" />
+      </RealtimeTestRoot>,
+    );
+    expect(await screen.findByText('running limits')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    act(() => fake.reconnecting());
+    expect(screen.getByText('running limits')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    act(() => fake.reconnected());
+    expect(await screen.findByText('restarted limits')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(2);
+  });
+
   it('refreshes application info on connection, release changes, and reconnect', async () => {
     const fake = new FakeRealtimeConnection();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -578,6 +598,8 @@ describe('RealtimeProvider', () => {
     ['getInstanceUpdates', 'ApplicationInfoChanged'],
     ['getInstanceUpdates', 'InstallationSettingsChanged'],
     ['getInstallationSettings', 'InstallationSettingsChanged'],
+    ['getInstanceRestart', 'InstallationSettingsChanged'],
+    ['listActivities', 'InstallationSettingsChanged'],
     ['getApplicationInfo', 'InstallationSettingsChanged'],
     ['getProfileMfaStatus', 'InstallationSettingsChanged'],
   ])('reconciles %s on connection, %s, and reconnect', async (queryKey, event) => {
@@ -605,33 +627,36 @@ describe('RealtimeProvider', () => {
     expect(queryFn).toHaveBeenCalledTimes(3);
   });
 
-  it('does not refetch an inactive live-backed query after reconnecting', async () => {
-    const fake = new FakeRealtimeConnection();
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-    const queryKey = ['listStacks', { query: { tags: ['Prod'] } }];
-    const queryFn = vi.fn().mockResolvedValue('cached');
-    await queryClient.fetchQuery({ queryKey, queryFn, staleTime: Infinity });
+  it.each(['listStacks', 'getActivity', 'getServiceAccountLimits'])(
+    'does not refetch inactive %s after reconnecting',
+    async (resource) => {
+      const fake = new FakeRealtimeConnection();
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      });
+      const queryKey = [resource, { id: 'resource-1' }];
+      const queryFn = vi.fn().mockResolvedValue('cached');
+      await queryClient.fetchQuery({ queryKey, queryFn, staleTime: Infinity });
 
-    render(
-      <RealtimeTestRoot fake={fake} queryClient={queryClient}>
-        <ConnectionStatusProbe />
-      </RealtimeTestRoot>,
-    );
-    await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
+      render(
+        <RealtimeTestRoot fake={fake} queryClient={queryClient}>
+          <ConnectionStatusProbe />
+        </RealtimeTestRoot>,
+      );
+      await waitFor(() => expect(screen.getByTestId('live-state')).toHaveTextContent('connected'));
 
-    act(() => {
-      fake.reconnecting();
-      fake.reconnected();
-    });
+      act(() => {
+        fake.reconnecting();
+        fake.reconnected();
+      });
 
-    await waitFor(() => expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true));
-    expect(queryFn).toHaveBeenCalledOnce();
-  });
+      await waitFor(() => expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true));
+      expect(queryFn).toHaveBeenCalledOnce();
+    },
+  );
 
   it('does not report a failed group join as connected', async () => {
     const fake = new FakeRealtimeConnection();

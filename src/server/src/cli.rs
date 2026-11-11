@@ -170,7 +170,11 @@ enum Command {
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    match cli.command.unwrap_or(Command::Serve) {
+    let command = cli.command.unwrap_or(Command::Serve);
+    if !matches!(&command, Command::Serve) {
+        crate::logging::init_from_environment()?;
+    }
+    match command {
         Command::VersionJson => {
             let mut info =
                 serde_json::to_value(citadel_server::application_info_http::application_info())?;
@@ -404,7 +408,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::UpdateTargetReceipt => crate::cli_updates::target_receipt().await,
         #[cfg(target_os = "linux")]
         Command::UpdateHost => crate::cli_updates::host().await,
-        Command::Serve => crate::app::serve(Config::from_env()?).await,
+        Command::Serve => crate::app::serve(Config::from_env_for_startup()?).await,
         Command::Migrate => migrate(DatabaseConfig::from_env()?).await,
         Command::RestoreSystem {
             bundle,
