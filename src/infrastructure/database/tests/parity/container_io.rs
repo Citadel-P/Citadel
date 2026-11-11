@@ -123,8 +123,8 @@ async fn platform_io_upgrade_preserves_existing_platform_history_and_applied_che
         .execute(&mut connection)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO platformnodeiostats(id,platformid,nodeid,created,containerio) VALUES($1,$2,'worker',100,$3)")
-        .bind(Uuid::now_v7()).bind(platform).bind(&counters).execute(&mut connection).await.unwrap();
+    sqlx::query("INSERT INTO platformnodeiostats(platformid,nodeid,created,containerio) VALUES($1,'worker',100,$2)")
+        .bind(platform).bind(&counters).execute(&mut connection).await.unwrap();
     assert_eq!(
         MigrationRunner::migrate(&database.url)
             .await

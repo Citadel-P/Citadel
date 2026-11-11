@@ -44,6 +44,17 @@ impl StatsWindow {
     pub fn since(self, now: i64) -> i64 {
         self.until(now).saturating_sub(self.seconds)
     }
+    /// One resolution for the entire response, including raw/summary boundaries.
+    /// Older sparse minutes may remain raw, but can share a range with summaries.
+    pub fn bucket_seconds_at(self, now: i64) -> i64 {
+        let minimum = if self.since(now) < now.saturating_sub(86_400) {
+            60
+        } else {
+            10
+        };
+        self.bucket_seconds().max(minimum)
+    }
+
     pub fn bucket_seconds(self) -> i64 {
         match self.seconds {
             ..=3600 => 10,
@@ -314,5 +325,26 @@ mod tests {
         projection.is_stale = false;
         projection.state = "shutdown".into();
         assert!(validate_running_task(&projection, &live).is_err());
+    }
+}
+
+#[cfg(test)]
+mod compacted_window_tests {
+    use super::*;
+    #[test]
+    fn old_and_mixed_ranges_have_one_minute_resolution_while_recent_ranges_keep_detail() {
+        let now = 2_000_000;
+        for seconds in [900, 7200] {
+            let from = now - 2 * 86400;
+            let old = StatsWindow::between(from, from + seconds, now).unwrap();
+            assert_eq!(old.bucket_seconds_at(now), 60);
+            let mixed = StatsWindow::between(now - 86410, now - 86410 + seconds, now).unwrap();
+            assert_eq!(mixed.bucket_seconds_at(now), 60);
+        }
+        assert_eq!(StatsWindow::minutes(60).unwrap().bucket_seconds_at(now), 10);
+        assert_eq!(
+            StatsWindow::minutes(360).unwrap().bucket_seconds_at(now),
+            30
+        );
     }
 }

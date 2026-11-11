@@ -105,126 +105,44 @@ pub(crate) async fn persist_scoped_with_disk(
     let disk = disk.and_then(|d| {
         citadel_platforms::HostDiskUsage::new(d.used_bytes, d.total_bytes, d.usage_percent)
     });
+    let mut identities = std::collections::HashSet::with_capacity(stats.len());
+    if stats
+        .iter()
+        .any(|s| !identities.insert((&s.docker_container_id, s.created)))
+    {
+        return Err(RuntimeCapabilityError::new(
+            RuntimeErrorKind::InvalidRequest,
+            "Duplicate container statistics in a direct capture",
+            false,
+        ));
+    }
     let payload = serde_json::to_value(stats).map_err(storage)?;
-    let inserted = sqlx::query_scalar::<_, i64>(
-                r#"
-WITH incoming AS (
-    SELECT * FROM jsonb_to_recordset($2::jsonb) AS value(
-        "dockerContainerId" text, "memoryActive" double precision,
-        "memoryCache" double precision, "cpuUsage" double precision,
-        "memoryLimit" double precision, "rxBytes" double precision,
-        "txBytes" double precision, "blockReadBytes" double precision, "blockWriteBytes" double precision, created bigint)
-), eligible AS (
-    SELECT incoming.*, container.id AS persisted_container_id
-    FROM incoming
-    JOIN containers container
-      ON container.platformid = $1
-     AND container.dockercontainerid = incoming."dockerContainerId"
-     AND container.dockernodeid IS NOT DISTINCT FROM $3
-), inserted AS (
-    INSERT INTO containerstats (
-        id, containerid, memoryactive, memorycache, cpuusage,
-        memorylimit, rxbytes, txbytes, blockreadbytes, blockwritebytes, created)
-    SELECT gen_random_uuid(), eligible.persisted_container_id, eligible."memoryActive",
-           eligible."memoryCache", eligible."cpuUsage", eligible."memoryLimit",
-           eligible."rxBytes", eligible."txBytes", eligible."blockReadBytes", eligible."blockWriteBytes", eligible.created
-    FROM eligible
-    ON CONFLICT (containerid, created) DO UPDATE SET
-        memoryactive = EXCLUDED.memoryactive,
-        memorycache = EXCLUDED.memorycache,
-        cpuusage = EXCLUDED.cpuusage,
-        memorylimit = EXCLUDED.memorylimit,
-        rxbytes = EXCLUDED.rxbytes,
-        txbytes = EXCLUDED.txbytes,
-        blockreadbytes = EXCLUDED.blockreadbytes, blockwritebytes = EXCLUDED.blockwritebytes
-    RETURNING 1
-), persisted_workload AS (
- INSERT INTO workloadstats(id,platformid,deploymentid,stackid,servicename,replicakey,containerid,created,memoryactive,memorycache,cpuusage,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes)
- SELECT gen_random_uuid(),c.platformid,c.deploymentid,c.stackid,
- CASE WHEN c.deploymentid IS NOT NULL THEN '' ELSE COALESCE(NULLIF(c.composeservicename,''),c.id::text) END,
- CASE WHEN c.deploymentid IS NOT NULL THEN 'deployment'
-      WHEN c.composereplicanumber IS NOT NULL THEN 'replica:'||c.composereplicanumber
-      ELSE 'instance:'||c.id::text END,
- c.id,s.created,s."memoryActive",s."memoryCache",s."cpuUsage",s."memoryLimit",s."rxBytes",s."txBytes",s."blockReadBytes",s."blockWriteBytes"
- FROM eligible s JOIN containers c ON c.id=s.persisted_container_id
- WHERE NOT c.isswarmtask AND (c.deploymentid IS NOT NULL OR c.stackid IS NOT NULL)
- ON CONFLICT(containerid,created) DO UPDATE SET
- memoryactive=EXCLUDED.memoryactive,memorycache=EXCLUDED.memorycache,cpuusage=EXCLUDED.cpuusage,
- memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes,blockreadbytes=EXCLUDED.blockreadbytes,blockwritebytes=EXCLUDED.blockwritebytes
-), persisted_service AS (
-    INSERT INTO swarmservicestats (
-        id, platformid, dockerserviceid, dockertaskid, servicename,
-        swarmserviceid, stackid, taskkey, created,
-        memoryactive, memorycache, cpuusage, memorylimit, rxbytes, txbytes, blockreadbytes, blockwritebytes)
-    SELECT gen_random_uuid(), $1, service.dockerserviceid, task.dockertaskid,
-           service.name, service.swarmserviceid, service.stackid,
-           CASE WHEN task.slot IS NOT NULL THEN 'slot:' || task.slot::text
-                ELSE 'node:' || task.dockernodeid END,
-           sample.created, sample."memoryActive", sample."memoryCache",
-           sample."cpuUsage", sample."memoryLimit", sample."rxBytes", sample."txBytes", sample."blockReadBytes", sample."blockWriteBytes"
-    FROM incoming sample
-    JOIN platforms platform ON platform.id = $1
-    JOIN swarmtaskprojections task
-      ON task.platformid = platform.id
-     AND task.dockernodeid = COALESCE($3,
-         CASE WHEN platform.connectortype IN ('Local','Agent','EdgeAgent') THEN platform.platformdescriptor::jsonb->>'nodeID' END)
-     AND task.dockercontainerid = sample."dockerContainerId"
-    JOIN swarmserviceprojections service
-      ON service.platformid = task.platformid
-     AND service.dockerserviceid = task.dockerserviceid
-    WHERE service.ownership <> 'System'
-    ON CONFLICT (platformid, dockertaskid, created) DO UPDATE SET
-        memoryactive = EXCLUDED.memoryactive, memorycache = EXCLUDED.memorycache,
-        cpuusage = EXCLUDED.cpuusage, memorylimit = EXCLUDED.memorylimit,
-        rxbytes = EXCLUDED.rxbytes, txbytes = EXCLUDED.txbytes,
-        blockreadbytes = EXCLUDED.blockreadbytes, blockwritebytes = EXCLUDED.blockwritebytes,
-        swarmserviceid = EXCLUDED.swarmserviceid, stackid = EXCLUDED.stackid
-), platform_sample AS (
-    SELECT COALESCE(SUM("memoryActive"), 0) AS memory_active,
-           COALESCE(SUM("cpuUsage"), 0) AS cpu_usage,
-           COALESCE(SUM("rxBytes"), 0) AS rx_bytes,
-           COALESCE(SUM("txBytes"), 0) AS tx_bytes,
-           jsonb_agg(jsonb_build_object('containerId',"dockerContainerId",
-             'rxBytes',"rxBytes",'txBytes',"txBytes",'blockReadBytes',"blockReadBytes",'blockWriteBytes',"blockWriteBytes")) AS container_io,
-           COALESCE(created, $7::bigint) AS created
-    FROM eligible
-    GROUP BY created
-    UNION ALL SELECT 0,0,0,0,'[]'::jsonb,$7::bigint WHERE $7::bigint IS NOT NULL AND NOT EXISTS(SELECT 1 FROM eligible)
-), persisted_platform AS (
-    INSERT INTO platformstats (
-        id, platformid, memoryusage, cpuusage, rxbytes, txbytes, created, diskusedbytes, disktotalbytes, diskusage, alertpending, containerio)
-    SELECT gen_random_uuid(), platform.id,
-           CASE WHEN platform.memtotal > 0
-                THEN sample.memory_active / platform.memtotal * 100.0 ELSE 0 END,
-           CASE WHEN platform.cpucount > 0
-                THEN sample.cpu_usage / platform.cpucount ELSE sample.cpu_usage END,
-           sample.rx_bytes, sample.tx_bytes, sample.created, $4, $5, $6, true, sample.container_io
-    FROM platform_sample sample
-    JOIN platforms platform ON platform.id = $1
-    WHERE sample.created IS NOT NULL AND $3::text IS NULL
-    ON CONFLICT (platformid, created) DO UPDATE SET
-        memoryusage = EXCLUDED.memoryusage,
-        cpuusage = EXCLUDED.cpuusage,
-        rxbytes = EXCLUDED.rxbytes,
-        txbytes = EXCLUDED.txbytes,
-        diskusedbytes = EXCLUDED.diskusedbytes,
-        disktotalbytes = EXCLUDED.disktotalbytes,
-        diskusage = EXCLUDED.diskusage,
-        alertpending = true, containerio = EXCLUDED.containerio
-)
-SELECT COUNT(*) FROM inserted
-"#,
-            )
-            .bind(platform_id)
-            .bind(payload)
-            .bind(node_id)
-            .bind(disk.map(|d| d.used_bytes))
-            .bind(disk.map(|d| d.total_bytes))
-            .bind(disk.map(|d| d.usage_percent))
-            .bind(stats.is_empty().then(|| chrono::Utc::now().timestamp()))
-            .fetch_one(&mut **transaction)
-            .await
-            .map_err(storage)?;
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(platform_id)
+        .fetch_optional(&mut **transaction)
+        .await
+        .map_err(storage)?;
+    let inserted = sqlx::query_scalar::<_, i64>(concat!(
+        include_str!("container_direct.sql"),
+        include_str!("capture.sql")
+    ))
+    .bind(platform_id)
+    .bind(&payload)
+    .bind(node_id)
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(storage)?;
+    sqlx::query_scalar::<_, i64>(include_str!("platform_direct.sql"))
+        .bind(platform_id)
+        .bind(&payload)
+        .bind(node_id)
+        .bind(disk.map(|d| d.used_bytes))
+        .bind(disk.map(|d| d.total_bytes))
+        .bind(disk.map(|d| d.usage_percent))
+        .bind(stats.is_empty().then(|| chrono::Utc::now().timestamp()))
+        .fetch_one(&mut **transaction)
+        .await
+        .map_err(storage)?;
     Ok(usize::try_from(inserted).unwrap_or(usize::MAX))
 }
 

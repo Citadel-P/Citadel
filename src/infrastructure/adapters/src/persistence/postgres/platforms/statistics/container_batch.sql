@@ -2,7 +2,7 @@ WITH incoming AS (
  SELECT r.*, item.ordinal FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY item(value, ordinal)
  CROSS JOIN LATERAL jsonb_to_record(item.value) r(platform_id uuid, node_id text, connector text, address text, agent_id uuid, connected_at timestamptz, "dockerContainerId" text, "memoryActive" double precision, "memoryCache" double precision, "cpuUsage" double precision, "memoryLimit" double precision, "rxBytes" double precision, "txBytes" double precision, "blockReadBytes" double precision, "blockWriteBytes" double precision, created bigint)
 ), valid AS (
- SELECT i.*, p.memtotal, p.cpucount, p.platformdescriptor::jsonb descriptor, p.connectortype
+ SELECT i.*, true AS include_services, p.memtotal, p.cpucount, p.platformdescriptor::jsonb descriptor, p.connectortype
  FROM incoming i JOIN platforms p ON p.id=i.platform_id
  WHERE (i.connector IN ('Local','Agent') AND p.connectortype=i.connector
         AND i.node_id IS NULL AND rtrim(p.address,'/')=rtrim(i.address,'/'))
@@ -11,45 +11,4 @@ WITH incoming AS (
         AND b.agentid=i.agent_id AND b.lastconnectedatutc=i.connected_at
         AND b.dockernodeid IS NOT DISTINCT FROM i.node_id AND b.resourcetype='Platform'
         AND b.revokedatutc IS NULL AND b.connectionstatus='Connected'))
-), eligible AS (
- SELECT v.*, c.id container_id FROM valid v JOIN containers c ON c.platformid=v.platform_id
- AND c.dockernodeid IS NOT DISTINCT FROM v.node_id AND c.dockercontainerid=v."dockerContainerId"
-), latest AS (
- SELECT DISTINCT ON(container_id,created) * FROM eligible ORDER BY container_id,created,ordinal DESC
-), inserted AS (
- INSERT INTO containerstats(id,containerid,memoryactive,memorycache,cpuusage,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes,created)
- SELECT gen_random_uuid(),container_id,"memoryActive","memoryCache","cpuUsage","memoryLimit","rxBytes","txBytes","blockReadBytes","blockWriteBytes",created FROM latest
- ON CONFLICT(containerid,created) DO UPDATE SET memoryactive=EXCLUDED.memoryactive,memorycache=EXCLUDED.memorycache,
- cpuusage=EXCLUDED.cpuusage,memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes,blockreadbytes=EXCLUDED.blockreadbytes,blockwritebytes=EXCLUDED.blockwritebytes
- WHERE (containerstats.memoryactive,containerstats.memorycache,containerstats.cpuusage,containerstats.memorylimit,containerstats.rxbytes,containerstats.txbytes,containerstats.blockreadbytes,containerstats.blockwritebytes)
- IS DISTINCT FROM (EXCLUDED.memoryactive,EXCLUDED.memorycache,EXCLUDED.cpuusage,EXCLUDED.memorylimit,EXCLUDED.rxbytes,EXCLUDED.txbytes,EXCLUDED.blockreadbytes,EXCLUDED.blockwritebytes)
-), inserted_workloads AS (
- INSERT INTO workloadstats(id,platformid,deploymentid,stackid,servicename,replicakey,containerid,created,memoryactive,memorycache,cpuusage,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes)
- SELECT gen_random_uuid(),c.platformid,c.deploymentid,c.stackid,
- CASE WHEN c.deploymentid IS NOT NULL THEN '' ELSE COALESCE(NULLIF(c.composeservicename,''),c.id::text) END,
- CASE WHEN c.deploymentid IS NOT NULL THEN 'deployment'
-      WHEN c.composereplicanumber IS NOT NULL THEN 'replica:'||c.composereplicanumber
-      ELSE 'instance:'||c.id::text END,
- c.id,s.created,s."memoryActive",s."memoryCache",s."cpuUsage",s."memoryLimit",s."rxBytes",s."txBytes",s."blockReadBytes",s."blockWriteBytes"
- FROM latest s JOIN containers c ON c.id=s.container_id
- WHERE NOT c.isswarmtask AND (c.deploymentid IS NOT NULL OR c.stackid IS NOT NULL)
- ON CONFLICT(containerid,created) DO UPDATE SET
- memoryactive=EXCLUDED.memoryactive,memorycache=EXCLUDED.memorycache,cpuusage=EXCLUDED.cpuusage,
- memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes,blockreadbytes=EXCLUDED.blockreadbytes,blockwritebytes=EXCLUDED.blockwritebytes
-), service_samples AS (
- SELECT v.*, t.dockertaskid, s.dockerserviceid, s.name servicename, s.swarmserviceid, s.stackid,
- CASE WHEN t.slot IS NOT NULL THEN 'slot:'||t.slot::text ELSE 'node:'||t.dockernodeid END taskkey
- FROM valid v JOIN swarmtaskprojections t ON t.platformid=v.platform_id AND t.dockercontainerid=v."dockerContainerId"
- AND t.dockernodeid=COALESCE(v.node_id,v.descriptor->>'nodeID')
- JOIN swarmserviceprojections s ON s.platformid=t.platformid AND s.dockerserviceid=t.dockerserviceid
- WHERE s.ownership<>'System'
-), service_latest AS (
- SELECT DISTINCT ON(platform_id,dockertaskid,created) * FROM service_samples ORDER BY platform_id,dockertaskid,created,ordinal DESC
-), inserted_services AS (
- INSERT INTO swarmservicestats(id,platformid,dockerserviceid,dockertaskid,servicename,swarmserviceid,stackid,taskkey,created,memoryactive,memorycache,cpuusage,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes)
- SELECT gen_random_uuid(),platform_id,dockerserviceid,dockertaskid,servicename,swarmserviceid,stackid,taskkey,created,"memoryActive","memoryCache","cpuUsage","memoryLimit","rxBytes","txBytes","blockReadBytes","blockWriteBytes" FROM service_latest
- ON CONFLICT(platformid,dockertaskid,created) DO UPDATE SET memoryactive=EXCLUDED.memoryactive,memorycache=EXCLUDED.memorycache,cpuusage=EXCLUDED.cpuusage,memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes,blockreadbytes=EXCLUDED.blockreadbytes,blockwritebytes=EXCLUDED.blockwritebytes,swarmserviceid=EXCLUDED.swarmserviceid,stackid=EXCLUDED.stackid
- WHERE (swarmservicestats.memoryactive,swarmservicestats.memorycache,swarmservicestats.cpuusage,swarmservicestats.memorylimit,swarmservicestats.rxbytes,swarmservicestats.txbytes,swarmservicestats.blockreadbytes,swarmservicestats.blockwritebytes,swarmservicestats.swarmserviceid,swarmservicestats.stackid)
- IS DISTINCT FROM (EXCLUDED.memoryactive,EXCLUDED.memorycache,EXCLUDED.cpuusage,EXCLUDED.memorylimit,EXCLUDED.rxbytes,EXCLUDED.txbytes,EXCLUDED.blockreadbytes,EXCLUDED.blockwritebytes,EXCLUDED.swarmserviceid,EXCLUDED.stackid)
 )
-SELECT count(*)::bigint FROM (SELECT ordinal FROM eligible UNION SELECT ordinal FROM service_samples) accepted

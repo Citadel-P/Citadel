@@ -92,12 +92,24 @@ async fn clean_install_restart_and_checksum_enforcement() {
     .unwrap()
     .into_iter()
     .collect();
-    let mut expected: std::collections::BTreeSet<String> = citadel_database::SCHEMA_SQL
-        .lines()
-        .filter_map(|line| line.strip_prefix("CREATE TABLE "))
-        .filter_map(|line| line.split_whitespace().next())
-        .map(str::to_owned)
-        .collect();
+    // Execute the declarative schema: later migrations may replace tables with
+    // views, and daily partitions are created dynamically rather than literal DDL.
+    let declarative = parity::Database::create().await;
+    let mut schema_connection = PgConnection::connect(&declarative.url).await.unwrap();
+    sqlx::raw_sql(citadel_database::SCHEMA_SQL)
+        .execute(&mut schema_connection)
+        .await
+        .unwrap();
+    let mut expected: std::collections::BTreeSet<String> = sqlx::query_scalar::<_, String>(
+        "SELECT tablename FROM pg_tables WHERE schemaname='public'",
+    )
+    .fetch_all(&mut schema_connection)
+    .await
+    .unwrap()
+    .into_iter()
+    .collect();
+    schema_connection.close().await.unwrap();
+    declarative.close().await;
     expected.insert("citadel_schema_migrations".into());
     assert_eq!(
         tables, expected,
