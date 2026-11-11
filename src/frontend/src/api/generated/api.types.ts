@@ -14218,7 +14218,7 @@ export class Api<
      * @summary Get Core restart availability (administrator)
      * @request GET:/api/v1/instance/restart
      * @secure
-     * @response `200` `InstanceRestartView`
+     * @response `200` `InstanceRestartView` Core restart availability and current boot identity
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden

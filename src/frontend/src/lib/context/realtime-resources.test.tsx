@@ -60,7 +60,7 @@ it('updates an open Build activity tab and project status when a webhook queues 
     );
   }
   const socket = new FakeWebSocket();
-  renderCitadel(<Probe />, {
+  const { queryClient } = renderCitadel(<Probe />, {
     groups: { realtimeTransport: 'WebSocketV1', webSocketFactory: () => socket.asWebSocket() },
   });
   expect(await screen.findByText('Idle')).toBeVisible();
@@ -76,6 +76,11 @@ it('updates an open Build activity tab and project status when a webhook queues 
         expect.objectContaining({ arguments: ['activity:Build:b1'] }),
       ]),
     );
+  });
+  // Connecting reconciles activity history before streamed updates take over.
+  await waitFor(() => {
+    expect(activities).toHaveBeenCalledTimes(2);
+    expect(queryClient.isFetching()).toBe(0);
   });
   const activity = {
     id: 'a1',
@@ -100,7 +105,7 @@ it('updates an open Build activity tab and project status when a webhook queues 
   expect(await screen.findByText('Queued')).toBeVisible();
   expect(screen.getAllByText('BuildWebhookReceived')).toHaveLength(1);
   expect(read).toHaveBeenCalledTimes(1);
-  expect(activities).toHaveBeenCalledTimes(1);
+  expect(activities).toHaveBeenCalledTimes(2);
 });
 
 it('uses the unchanged Deployment hook to apply a named event without refetching', async () => {

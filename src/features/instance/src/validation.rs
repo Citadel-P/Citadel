@@ -415,15 +415,15 @@ impl PatchInstanceConfiguration {
                 environment::CITADEL_LOG_FORMAT,
             )?,
         };
-        if let PatchField::Value(level) = &self.log_verbosity {
-            if !matches!(
+        if let PatchField::Value(level) = &self.log_verbosity
+            && !matches!(
                 level.as_str(),
                 "off" | "error" | "warn" | "info" | "debug" | "trace"
-            ) {
-                return Err(InstanceError::Validation(
-                    "Choose a supported log verbosity.".into(),
-                ));
-            }
+            )
+        {
+            return Err(InstanceError::Validation(
+                "Choose a supported log verbosity.".into(),
+            ));
         }
         next.effective(overrides).validate()?;
         Ok(next)

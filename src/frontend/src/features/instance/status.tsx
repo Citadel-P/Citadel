@@ -30,7 +30,8 @@ export function InstanceStatus() {
           )}
           {settings.restartRequired && (
             <AlertMessage type="warning">
-              <span className='font-semibold'>Restart required</span>: saved settings differ from the values currently in use.
+              <span className="font-semibold">Restart required</span>: saved settings differ from the values currently
+              in use.
             </AlertMessage>
           )}
           {save?.status === 'error' && (
