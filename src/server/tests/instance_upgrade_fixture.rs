@@ -18,6 +18,9 @@ mod composition;
 #[path = "../src/logging.rs"]
 mod logging;
 #[cfg(target_os = "linux")]
+#[path = "../src/restart.rs"]
+mod restart;
+#[cfg(target_os = "linux")]
 #[path = "../src/router.rs"]
 mod router;
 #[cfg(target_os = "linux")]

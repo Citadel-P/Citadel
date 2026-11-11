@@ -221,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 436);
+        assert_eq!(operations(&full), 438);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -229,6 +229,13 @@ mod tests {
         );
         for method in ["get", "patch"] {
             let operation = &full["paths"]["/api/v1/installation/settings"][method];
+            assert_eq!(operation["security"], json!([{"Bearer": []}]));
+            assert_eq!(operation["x-citadel-principal"], "human");
+        }
+        assert!(public["paths"].get("/api/v1/instance/restart").is_none());
+        for (method, operation_id) in [("get", "getInstanceRestart"), ("post", "restartInstance")] {
+            let operation = &full["paths"]["/api/v1/instance/restart"][method];
+            assert_eq!(operation["operationId"], operation_id);
             assert_eq!(operation["security"], json!([{"Bearer": []}]));
             assert_eq!(operation["x-citadel-principal"], "human");
         }

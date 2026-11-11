@@ -838,7 +838,9 @@ export const MemoryUsageCell = ({
     return <div className={cn('text-muted-foreground', className)}>0B / 0B</div>;
   }
   return (
-    <span className={cn('text-[13px]', className)} title="Memory working set excluding inactive file cache / memory limit">
+    <span
+      className={cn('text-[13px]', className)}
+      title="Memory working set excluding inactive file cache / memory limit">
       {byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}
     </span>
   );

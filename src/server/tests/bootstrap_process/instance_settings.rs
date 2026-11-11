@@ -342,12 +342,12 @@ async fn administrator_can_restart_core_to_apply_saved_configuration() {
                 server.child.try_wait().unwrap().is_none(),
                 "Core must re-exec without exiting"
             );
-            if let Ok(response) = fixture.client.get(&url).bearer_auth(&token).send().await {
-                if let Ok(next) = response.json::<Value>().await {
-                    if next["available"] == true && next["bootId"] != status["bootId"] {
-                        break;
-                    }
-                }
+            if let Ok(response) = fixture.client.get(&url).bearer_auth(&token).send().await
+                && let Ok(next) = response.json::<Value>().await
+                && next["available"] == true
+                && next["bootId"] != status["bootId"]
+            {
+                break;
             }
             tokio::time::sleep(Duration::from_millis(150)).await;
         }

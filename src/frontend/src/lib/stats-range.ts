@@ -30,7 +30,8 @@ export function statsRangeQuery(range: StatsRange, bounds: StatsBounds): StatsRa
 export const statsRangeIsLive = (range: StatsRange) => range.kind === 'relative' || range.kind === 'today';
 export function statsBucketSeconds(bounds: StatsBounds, now = Math.floor(Date.now() / 1000)) {
   const seconds = bounds.to - bounds.from;
-  const requested = seconds <= 3600 ? 10 : seconds <= 21600 ? 30 : seconds <= 86400 ? 60 : seconds <= 259200 ? 300 : 900;
+  const requested =
+    seconds <= 3600 ? 10 : seconds <= 21600 ? 30 : seconds <= 86400 ? 60 : seconds <= 259200 ? 300 : 900;
   return Math.max(requested, bounds.from < now - 86400 ? 60 : 10);
 }
 export function filterStatsRange<T extends { created?: string | number | null }>(

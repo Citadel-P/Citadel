@@ -140,7 +140,7 @@ async fn patch_installation_settings(
 
 #[utoipa::path(get, path = "/api/v1/instance/restart", operation_id = "getInstanceRestart", tag = "Instance",
     summary = "Get Core restart availability (administrator)",
-    responses((status = 200, body = crate::api::resources::instance::views::InstanceRestartView), crate::openapi::errors::AccessErrors),
+    responses((status = 200, description = "Core restart availability and current boot identity", body = crate::api::resources::instance::views::InstanceRestartView), crate::openapi::errors::AccessErrors),
     security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false))))]
 async fn get_instance_restart(
     State(state): State<InstanceHttpState>,

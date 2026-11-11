@@ -4,7 +4,14 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { ScriptForm } from './form';
 
-const mocks = vi.hoisted(() => ({ open: vi.fn(), save: vi.fn(), create: vi.fn(), mutate: vi.fn(), read: vi.fn(), paid: false }));
+const mocks = vi.hoisted(() => ({
+  open: vi.fn(),
+  save: vi.fn(),
+  create: vi.fn(),
+  mutate: vi.fn(),
+  read: vi.fn(),
+  paid: false,
+}));
 
 vi.mock('@/features/license/use-license-entitlements', () => ({
   useLicenseEntitlements: () => ({
@@ -302,7 +309,6 @@ it('uses the active server default for new Scripts and preserves saved Script ti
   expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(300);
 });
 
-
 describe('Script timeout defaults', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -329,9 +335,11 @@ describe('Script timeout defaults', () => {
   });
 
   it.each(['0', '-1', '1.5', '61'])('rejects an explicit invalid timeout %s', async (value) => {
-    mocks.read.mockImplementation((name: string) => name === 'getApplicationInfo'
-      ? { data: { data: { scriptExecution: { defaultTimeoutSeconds: 23, maximumTimeoutSeconds: 60 } } } }
-      : undefined);
+    mocks.read.mockImplementation((name: string) =>
+      name === 'getApplicationInfo'
+        ? { data: { data: { scriptExecution: { defaultTimeoutSeconds: 23, maximumTimeoutSeconds: 60 } } } }
+        : undefined,
+    );
     const { user } = renderCitadel(<ScriptForm mode="add" />);
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Invalid timeout');
     fireEvent.change(screen.getByRole('textbox', { name: 'script.mts' }), { target: { value: 'console.log("ok");' } });
@@ -343,9 +351,11 @@ describe('Script timeout defaults', () => {
 
   it('loads late defaults without replacing an explicitly edited timeout on refresh', () => {
     let defaults: { defaultTimeoutSeconds: number; maximumTimeoutSeconds: number } | undefined;
-    mocks.read.mockImplementation((name: string) => name === 'getApplicationInfo'
-      ? { data: defaults ? { data: { scriptExecution: defaults } } : undefined }
-      : undefined);
+    mocks.read.mockImplementation((name: string) =>
+      name === 'getApplicationInfo'
+        ? { data: defaults ? { data: { scriptExecution: defaults } } : undefined }
+        : undefined,
+    );
     const view = renderCitadel(<ScriptForm mode="add" />);
     expect(screen.getByRole('spinbutton', { name: 'Timeout' })).toHaveValue(null);
     defaults = { defaultTimeoutSeconds: 23, maximumTimeoutSeconds: 60 };

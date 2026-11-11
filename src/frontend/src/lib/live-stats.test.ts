@@ -81,15 +81,19 @@ describe('chart history ordering and gaps', () => {
 });
 
 it('uses one minute for old or mixed ranges, with matching chart gaps, and preserves recent detail', () => {
-  const now=2_000_000;
-  const old={from:now-2*86400,to:now-2*86400+3600};
-  expect(statsBucketSeconds(old,now)).toBe(60);
-  expect(statsBucketSeconds({...old,to:old.from+7200},now)).toBe(60);
-  expect(statsBucketSeconds({from:now-86410,to:now-86410+3600},now)).toBe(60);
-  expect(statsBucketSeconds({from:now-3600,to:now},now)).toBe(10);
-  expect(statsBucketSeconds({from:now-7200,to:now},now)).toBe(30);
-  vi.spyOn(Date,'now').mockReturnValue(now*1000);
-  const points=[{created:old.from,value:10},{created:old.from+60,value:20},{created:old.from+300,value:30}];
-  expect(statsChartData(points,old)).toEqual([points[0],points[1],{created:old.from+240},points[2]]);
+  const now = 2_000_000;
+  const old = { from: now - 2 * 86400, to: now - 2 * 86400 + 3600 };
+  expect(statsBucketSeconds(old, now)).toBe(60);
+  expect(statsBucketSeconds({ ...old, to: old.from + 7200 }, now)).toBe(60);
+  expect(statsBucketSeconds({ from: now - 86410, to: now - 86410 + 3600 }, now)).toBe(60);
+  expect(statsBucketSeconds({ from: now - 3600, to: now }, now)).toBe(10);
+  expect(statsBucketSeconds({ from: now - 7200, to: now }, now)).toBe(30);
+  vi.spyOn(Date, 'now').mockReturnValue(now * 1000);
+  const points = [
+    { created: old.from, value: 10 },
+    { created: old.from + 60, value: 20 },
+    { created: old.from + 300, value: 30 },
+  ];
+  expect(statsChartData(points, old)).toEqual([points[0], points[1], { created: old.from + 240 }, points[2]]);
   vi.restoreAllMocks();
 });

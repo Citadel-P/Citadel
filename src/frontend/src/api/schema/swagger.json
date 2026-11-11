@@ -51169,7 +51169,8 @@
                   "$ref": "#/components/schemas/InstanceRestartView"
                 }
               }
-            }
+            },
+            "description": "Core restart availability and current boot identity"
           },
           "400": {
             "content": {
