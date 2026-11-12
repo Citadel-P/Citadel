@@ -1,3 +1,7 @@
 [advisories]
-# No vulnerability exceptions: Swagger UI 10 uses the patched ZIP dependency.
-ignore = []
+# SQLx 0.9.0 retains optional libsqlite3-sys 0.37 in Cargo.lock, but Citadel
+# enables PostgreSQL only. Confirmed absent from cargo tree --locked --workspace
+# --all-features --target all (including build/dev dependencies).
+# SQLx requires libsqlite3-sys <0.38; this advisory is fixed in >=0.39.
+# Remove before enabling SQLite, or when SQLx permits the patched dependency.
+ignore = ["RUSTSEC-2026-0459"]
