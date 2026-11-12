@@ -87,14 +87,20 @@ impl PostgresAlertRepository {
             rule.id, observation.resource_id, observation.deduplication_component
         );
         if !observation_matches(rule, observation) {
-            sqlx::query("INSERT INTO alertrulestates(alertruleid,resourceid,consecutivematches,createdbyactorid,lasttriggeredat) VALUES($1,$2,0,$3,$4) ON CONFLICT(alertruleid,resourceid) DO UPDATE SET consecutivematches=0")
-                .bind(rule.id)
-                .bind(observation.resource_id)
-                .bind(rule.audit.created_by_actor_id.value())
-                .bind(last_triggered)
-                .execute(&mut *transaction)
-                .await
-                .map_err(storage)?;
+            // The rule/resource advisory lock fences this state read. Healthy
+            // repeats need no new tuple/WAL when their counter is already zero.
+            // Incident resolution below still runs: triggering resets the counter
+            // too, so zero does not mean there is no open incident.
+            if state.is_none() || consecutive != 0 {
+                sqlx::query("INSERT INTO alertrulestates(alertruleid,resourceid,consecutivematches,createdbyactorid,lasttriggeredat) VALUES($1,$2,0,$3,$4) ON CONFLICT(alertruleid,resourceid) DO UPDATE SET consecutivematches=0")
+                    .bind(rule.id)
+                    .bind(observation.resource_id)
+                    .bind(rule.audit.created_by_actor_id.value())
+                    .bind(last_triggered)
+                    .execute(&mut *transaction)
+                    .await
+                    .map_err(storage)?;
+            }
             let resolved = sqlx::query("UPDATE alertevents SET resolvedat=$2,resolvedbyactorid='00000000-0000-0000-0000-000000000001',resolutionnote='Condition returned to normal.',updatedat=$2,openincidentkey=NULL WHERE openincidentkey=$1 AND resolvedat IS NULL")
                 .bind(&deduplication_key)
                 .bind(observation.observed_at)

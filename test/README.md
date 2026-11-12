@@ -632,8 +632,11 @@ copies must abort and roll back; corrected data can then upgrade. The
 `stats_batch_persistence` storage tests compare raw and compacted gauges, resets,
 nullable disk counters and ownership, exercise rollback and sealed-minute retries,
 and verify sparse minutes, partial-range boundaries, partition expiry and bounded
-default cleanup. They create isolated child databases because maintenance affects
-the whole database. Unchanged direct and buffered retries must preserve tuples and
+default cleanup. A seven-day fixture checks executed compaction plans in both custom
+and generic modes: sample selection and deletion must prune unrelated days while
+preserving other sources and samples outside the compacted hour. They create
+isolated child databases because maintenance affects the whole database.
+Unchanged direct and buffered retries must preserve tuples and
 acceptance counts. Platform history tests compare raw and compacted host/node
 charts with resets, nullable counters, empty captures, removed containers and
 node-only buckets. They exercise pending-alert revision barriers, a concurrent
@@ -650,10 +653,21 @@ persisted same-cluster manager handover with both inventory projections present.
 Its 1,024-source native probe reports elapsed throughput without a latency assertion.
 Run with disposable migration/statistics URLs only.
 
+The `stats_batch_persistence::query_efficiency` probes execute custom and generic
+container-history plans over a multi-source fixture and bound scanned samples to
+the requested source/day (one gauge pass and one counter pass). A native Platform
+query checks a temporary-write budget at fixed `work_mem`, alongside exact totals
+and rates; it does not assert machine-dependent latency. Identity-function wrappers
+in a disposable child database count real capture lookups, checking that repeated
+samples resolve each identity once and still reject sealed corrections. Swarm
+handover coverage includes alternating host/node projections within one batch.
+
 `cargo test --locked -p citadel-server --lib workers::maintenance::tests` uses paused
 Tokio time to model 1,024 continuously sampled sources plus backfill, assert net
 backlog reduction independent of retention sweeps, and bound compaction passes,
-timeouts and cancellation. This validates scheduling capacity, not a hardware SLA.
+timeouts and cancellation. It checks five-minute startup, idle and error delays,
+the full one-minute pause after backlog batches/timeouts, and the return to idle
+after catch-up. This validates scheduling capacity, not a hardware SLA.
 
 The `platforms_http` suite requires `CREATE DATABASE` permission on
 `CITADEL_PLATFORM_DATABASE_URL`. Each test creates and removes its own database
@@ -693,6 +707,10 @@ selector before executing it, so a renamed test cannot silently run zero tests:
 - `alert_persistence::durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure`
   keeps durable observation consumer/receipt coverage on a separate fresh execution
   database, so unrelated queued observations cannot affect its receipt counts.
+- `alert_persistence::threshold_job_policy_requires_fresh_matches_and_respects_suppression_and_severity`
+  also checks that repeated healthy observations preserve the state tuple and
+  cooldown timestamp, while still resetting broken match sequences and resolving
+  incidents whose counters were already reset by triggering.
 - `alert_persistence::update_resolution` runs on another fresh execution database.
   It covers verified update recovery and supersession of pending targets, including
   cooldown, concurrent detection, stale observations, acknowledgment preservation,

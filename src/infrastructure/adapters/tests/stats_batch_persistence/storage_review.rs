@@ -278,6 +278,29 @@ async fn swarm_manager_handover_reuses_a_verified_physical_task_with_both_projec
         stats.iter().filter_map(|s| s.rx_bytes_delta).sum::<f64>(),
         1000.
     );
+    // Both projections can be captured in one flush. Deduplicating identity
+    // lookups must still leave the last observed projection attached to the Task.
+    let mut overlapping = Vec::new();
+    for (capture_scope, age, rx) in [
+        (&host_scope, 9, 1190.),
+        (&node, 8, 1200.),
+        (&host_scope, 7, 1250.),
+    ] {
+        let mut sample = container(capture_scope, "physical-container", now - age, 10.);
+        sample.sample.rx_bytes = rx;
+        overlapping.push(sample);
+    }
+    assert_eq!(
+        batch.persist_batch(&overlapping).await.unwrap().persisted,
+        3
+    );
+    let associated: Uuid =
+        sqlx::query_scalar("SELECT containerid FROM statisticssources WHERE id=$1")
+            .bind(source)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(associated, new);
     // Move the connection back before the host snapshot has removed C2. The
     // previous NULL-node host projection belongs to Task T on N, despite the
     // Platform descriptor now pointing to M. Its node capture must still work.

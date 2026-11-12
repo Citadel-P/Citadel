@@ -64,38 +64,49 @@ pub(crate) async fn run(
         }
     };
     let compaction = async {
-        let mut tick = super::schedule::interval("statistics-compaction", COMPACTION_INTERVAL);
+        let mut tick = super::schedule::interval("statistics-compaction", COMPACTION_IDLE_INTERVAL);
         loop {
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            tokio::select! {
+            let delay = tokio::select! {
                 ()=token.cancelled()=>break,
                 result=tokio::time::timeout(COMPACTION_BUDGET,compact_batch(store.as_ref())) => match result {
-                    Ok(Ok(())) => {},
-                    Ok(Err(error)) => tracing::warn!(%error,"Statistics compaction failed"),
-                    Err(_) => tracing::debug!("Compaction budget exhausted; remaining history waits for the next pass"),
+                    Ok(Ok(false)) => COMPACTION_IDLE_INTERVAL,
+                    Ok(Ok(true)) => COMPACTION_BACKLOG_INTERVAL,
+                    Ok(Err(error)) => {
+                        tracing::warn!(%error,"Statistics compaction failed");
+                        COMPACTION_IDLE_INTERVAL
+                    },
+                    Err(_) => {
+                        tracing::debug!("Compaction budget exhausted; remaining history waits for the next pass");
+                        COMPACTION_BACKLOG_INTERVAL
+                    },
                 }
-            }
+            };
+            // Pause after work completes, including after a timeout. Never catch up
+            // missed ticks with another immediate batch.
+            tick.reset_after(delay);
         }
     };
     tokio::join!(recovery, expiry, retention, compaction);
     Ok(())
 }
 
-// At most 15,360 container source-hours/hour before the time bound. A 1,024-source
-// installation has capacity to catch up as well as process newly eligible hours.
-// Native database cost still determines the actual throughput; polling is unchanged.
-const COMPACTION_INTERVAL: Duration = Duration::from_secs(30);
+// Idle installations check infrequently; backlog gets bounded batches separated
+// by a full minute of rest. Actual throughput depends on database cost.
+const COMPACTION_IDLE_INTERVAL: Duration = Duration::from_secs(300);
+const COMPACTION_BACKLOG_INTERVAL: Duration = Duration::from_secs(60);
 const COMPACTION_BUDGET: Duration = Duration::from_secs(5);
 const COMPACTION_PASSES: usize = 128;
 
-async fn compact_batch(store: &dyn MaintenanceStore) -> Result<(), MaintenanceError> {
+// True means the pass limit was reached and more work may remain.
+async fn compact_batch(store: &dyn MaintenanceStore) -> Result<bool, MaintenanceError> {
     for _ in 0..COMPACTION_PASSES {
         if store.compact().await? == 0 {
-            break;
+            return Ok(false);
         }
         tokio::task::yield_now().await;
     }
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -115,6 +126,7 @@ mod tests {
         sweeps: AtomicUsize,
         active: AtomicBool,
         stall: bool,
+        fail: bool,
     }
     struct Active<'a>(&'a AtomicBool);
     impl Drop for Active<'_> {
@@ -140,6 +152,9 @@ mod tests {
                 self.compactions.fetch_add(1, Ordering::SeqCst);
                 self.active.store(true, Ordering::SeqCst);
                 let _active = Active(&self.active);
+                if self.fail {
+                    return Err(MaintenanceError("test failure".into()));
+                }
                 if self.stall {
                     std::future::pending::<()>().await;
                 }
@@ -189,8 +204,72 @@ mod tests {
         assert_eq!(store.hours.lock().unwrap().iter().sum::<usize>(), 0);
         assert!(store.processed.lock().unwrap().iter().all(|n| *n == 3));
         assert!((3..=4).contains(&store.sweeps.load(Ordering::SeqCst)));
-        assert!(store.compactions.load(Ordering::SeqCst) <= 120 * COMPACTION_PASSES);
+        assert!(store.compactions.load(Ordering::SeqCst) <= 60 * COMPACTION_PASSES);
         assert!(!store.active.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn compaction_waits_five_minutes_at_startup_when_idle_and_after_errors() {
+        for fail in [false, true] {
+            let store = Arc::new(Store {
+                fail,
+                ..Default::default()
+            });
+            let token = CancellationToken::new();
+            let worker = tokio::spawn(run(
+                token.clone(),
+                store.clone(),
+                None,
+                None,
+                Duration::from_secs(900),
+            ));
+            tokio::time::sleep(Duration::from_secs(299)).await;
+            assert_eq!(store.compactions.load(Ordering::SeqCst), 0);
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            assert_eq!(store.compactions.load(Ordering::SeqCst), 1);
+            tokio::time::sleep(Duration::from_secs(297)).await;
+            assert_eq!(store.compactions.load(Ordering::SeqCst), 1);
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            assert_eq!(store.compactions.load(Ordering::SeqCst), 2);
+            token.cancel();
+            worker.await.unwrap().unwrap();
+            assert!(!store.active.load(Ordering::SeqCst));
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn compaction_pauses_between_backlog_batches_then_returns_to_idle() {
+        let store = Arc::new(Store {
+            hours: Mutex::new(vec![129]),
+            processed: Mutex::new(vec![0]),
+            ..Default::default()
+        });
+        let token = CancellationToken::new();
+        let worker = tokio::spawn(run(
+            token.clone(),
+            store.clone(),
+            None,
+            None,
+            Duration::from_secs(900),
+        ));
+        tokio::time::sleep(Duration::from_secs(304)).await;
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 128);
+        assert_eq!(store.hours.lock().unwrap()[0], 1);
+        tokio::time::sleep(Duration::from_secs(58)).await;
+        assert_eq!(
+            store.compactions.load(Ordering::SeqCst),
+            128,
+            "the pause starts after the batch completes"
+        );
+        tokio::time::sleep(Duration::from_secs(4)).await;
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 130);
+        assert_eq!(store.hours.lock().unwrap()[0], 0);
+        tokio::time::sleep(Duration::from_secs(290)).await;
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 130);
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 131);
+        token.cancel();
+        worker.await.unwrap().unwrap();
     }
 
     #[tokio::test(start_paused = true)]
@@ -207,14 +286,16 @@ mod tests {
             None,
             Duration::from_secs(900),
         ));
-        tokio::time::sleep(Duration::from_secs(32)).await;
+        tokio::time::sleep(Duration::from_secs(302)).await;
         assert!(store.active.load(Ordering::SeqCst));
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(
             !store.active.load(Ordering::SeqCst),
             "the five-second budget drops stalled work"
         );
-        tokio::time::sleep(Duration::from_secs(25)).await;
+        tokio::time::sleep(Duration::from_secs(57)).await;
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 1);
+        tokio::time::sleep(Duration::from_secs(3)).await;
         assert!(store.active.load(Ordering::SeqCst));
         token.cancel();
         worker.await.unwrap().unwrap();
@@ -232,7 +313,7 @@ mod tests {
             processed: Mutex::new(vec![0]),
             ..Default::default()
         };
-        compact_batch(&store).await.unwrap();
+        assert!(compact_batch(&store).await.unwrap());
         assert_eq!(store.compactions.load(Ordering::SeqCst), COMPACTION_PASSES);
         assert_eq!(store.hours.lock().unwrap()[0], 1000 - COMPACTION_PASSES);
     }

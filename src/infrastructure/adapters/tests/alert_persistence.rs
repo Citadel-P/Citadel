@@ -693,7 +693,7 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
     ));
     let builtins:Vec<Uuid>=sqlx::query_scalar("UPDATE alertrules SET status='Disabled' WHERE type='PlatformCpuHigh' AND status='Enabled' RETURNING id").fetch_all(&pool).await.unwrap();
     for case in [
-        "matches", "broken", "below", "disabled", "scope", "quiet", "severity",
+        "matches", "broken", "below", "resolved", "disabled", "scope", "quiet", "severity",
     ] {
         let resource = Uuid::now_v7();
         let rule=store.create_rule(actor,&AlertRuleConfiguration {
@@ -730,11 +730,13 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
         };
         let values: Vec<f64> = match case {
             "broken" => vec![90., 90., 10., 90., 90.],
+            "resolved" => vec![90., 90., 90., 10., 10.],
             "below" => vec![10., 20., 30.],
             "severity" => vec![85., 99.],
             _ => vec![90., 90., 90., 90.],
         };
         let mut events = vec![];
+        let mut healthy_state = None;
         for (index, value) in values.into_iter().enumerate() {
             let observation = AlertObservation {
                 alert_type: "PlatformCpuHigh".into(),
@@ -754,12 +756,32 @@ async fn threshold_job_policy_requires_fresh_matches_and_respects_suppression_an
                 let consecutive:i32=sqlx::query_scalar("SELECT consecutivematches FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2").bind(rule.id).bind(resource).fetch_one(&pool).await.unwrap();
                 assert_eq!(consecutive, 0, "a trigger consumes its consecutive matches");
             }
+            if case == "below" || (case == "resolved" && index >= 3) {
+                let state: (String, i32, Option<chrono::DateTime<Utc>>) = sqlx::query_as(
+                    "SELECT xmin::text,consecutivematches,lasttriggeredat FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2",
+                ).bind(rule.id).bind(resource).fetch_one(&pool).await.unwrap();
+                assert_eq!(state.1, 0);
+                if let Some(previous) = &healthy_state {
+                    assert_eq!(
+                        &state, previous,
+                        "healthy repeats must preserve the tuple and cooldown timestamp"
+                    );
+                }
+                healthy_state = Some(state);
+                let open: i64 = sqlx::query_scalar(
+                    "SELECT count(*) FROM alertevents WHERE alertruleid=$1 AND resourceid=$2 AND resolvedat IS NULL",
+                ).bind(rule.id).bind(resource).fetch_one(&pool).await.unwrap();
+                assert_eq!(
+                    open, 0,
+                    "a healthy sample still resolves an incident whose counter was already reset"
+                );
+            }
         }
         match case {
-            "matches" => assert_eq!(
+            "matches" | "resolved" => assert_eq!(
                 events,
                 vec![rule.id],
-                "three high samples trigger; cooldown suppresses repeat"
+                "three high samples create exactly one incident"
             ),
             "severity" => assert_eq!(
                 events,
