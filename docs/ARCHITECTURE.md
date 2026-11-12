@@ -996,7 +996,11 @@ total process-memory limit: transient query results, subscriber views and alloca
 RSS are outside the accounting. At capacity, replaceable statistics samples are
 dropped; committed changes send a small resync marker and clients reconnect through
 the existing snapshot lifecycle. Cache admission failure likewise fails delivery
-closed and reconnects. Durable persistence does not depend on this budget.
+closed and reconnects. A cache remembers its own admission rejection for that event,
+so waiting subscribers do not repeat the rejected read. Rejected projections are
+dropped; fresh events can retry. Loader failures and cancellation remain retryable
+and do not become shared rejection markers. Durable persistence does not depend on
+this budget.
 
 The authorization safety interval reauthenticates and revalidates group access
 without constructing list snapshots or presentation enrichments. Detail groups

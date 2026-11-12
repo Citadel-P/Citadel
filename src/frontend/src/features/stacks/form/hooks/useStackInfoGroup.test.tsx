@@ -23,6 +23,7 @@ function StackContainersProbe() {
   return (
     <>
       <span data-testid="state">{container?.state}</span>
+      <span data-testid="control-state">{container?.controlState}</span>
       <span data-testid="cpu">{container?.containerStat?.cpuUsage ?? '-'}</span>
       <span data-testid="swarm-task">{String(container?.isSwarmTask ?? false)}</span>
       <span data-testid="docker-node">{container?.dockerNodeId ?? '-'}</span>
@@ -80,6 +81,75 @@ describe('useStackInfoGroup', () => {
     expect(screen.getByTestId('count')).toHaveTextContent('0');
     view.unmount();
     expect(fake.listenerCount('ReceiveStackContainerStats')).toBe(0);
+  });
+
+  it('accepts matching Swarm lifecycle patches after HTTP-only compact statistics', async () => {
+    const fake = new FakeRealtimeConnection();
+    const initial = {
+      ...createContainer(ContainerStateStatus.Running),
+      dockerNodeId: 'worker-1',
+      isSwarmTask: true,
+      controlState: ResourceControlState.Idle,
+    };
+    server.use(
+      http.get(`http://localhost/api/v1/stacks/${stackId}/data`, () => HttpResponse.json({ containers: [initial] })),
+    );
+    renderProbe(fake);
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Running));
+    await waitFor(() => expect(fake.listenerCount('ReceiveStackContainerStats')).toBe(1));
+    await waitFor(() => expect(fake.listenerCount('ContainerStateChanged')).toBe(1));
+
+    act(() => fake.emit('ReceiveStackContainerStats', [{ id: containerId, containerStat: { cpuUsage: 23 } }]));
+    act(() =>
+      fake.emit('ContainerStateChanged', [
+        {
+          id: 'database-id',
+          containerId,
+          dockerNodeId: 'worker-1',
+          state: ContainerStateStatus.Exited,
+          controlState: ResourceControlState.Processing,
+        },
+      ]),
+    );
+    expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited);
+    expect(screen.getByTestId('control-state')).toHaveTextContent(ResourceControlState.Processing);
+    expect(screen.getByTestId('docker-node')).toHaveTextContent('worker-1');
+    expect(screen.getByTestId('cpu')).toHaveTextContent('23');
+
+    act(() =>
+      fake.emit('ContainerStateChanged', [
+        {
+          id: 'database-id',
+          containerId,
+          dockerNodeId: 'worker-2',
+          state: ContainerStateStatus.Running,
+          controlState: ResourceControlState.Idle,
+        },
+      ]),
+    );
+    act(() =>
+      fake.emit('ReceiveStackContainerStats', [
+        { id: containerId, containerStat: { cpuUsage: 42 } },
+        { id: 'unknown', containerStat: { cpuUsage: 99 } },
+      ]),
+    );
+    expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited);
+    expect(screen.getByTestId('control-state')).toHaveTextContent(ResourceControlState.Processing);
+    expect(screen.getByTestId('cpu')).toHaveTextContent('42');
+    expect(screen.getByTestId('count')).toHaveTextContent('1');
+    act(() => fake.emit('ContainerEventReceived', { containerId, stackId }, 'destroy'));
+    act(() => fake.emit('ReceiveStackContainerStats', [{ id: containerId, containerStat: { cpuUsage: 99 } }]));
+    act(() =>
+      fake.emit('ContainerStateChanged', [
+        {
+          id: 'database-id',
+          containerId,
+          dockerNodeId: 'worker-1',
+          state: ContainerStateStatus.Running,
+        },
+      ]),
+    );
+    expect(screen.getByTestId('count')).toHaveTextContent('0');
   });
 
   it('keeps a Docker lifecycle event when a stale stats snapshot follows it', async () => {

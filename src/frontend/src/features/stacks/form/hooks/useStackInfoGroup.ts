@@ -182,14 +182,14 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
 
   const handleStackContainerStats = useCallback(
     (patches: Pick<ContainerRuntimeView, 'id' | 'containerStat'>[]) => {
-      const knownIds = new Set(containerData.map((container) => normalizeDockerId(container.id)));
+      const baseline = new Map(containerData.map((container) => [normalizeDockerId(container.id), container]));
       setLiveContainers((current) => {
         let next = current;
         for (const patch of patches) {
           const id = normalizeDockerId(patch.id);
-          if (!id || (!next[id] && !knownIds.has(id))) continue;
+          if (!id || (!next[id] && !baseline.has(id))) continue;
           if (next === current) next = { ...current };
-          next[id] = { ...next[id], containerStat: patch.containerStat };
+          next[id] = { ...baseline.get(id), ...next[id], containerStat: patch.containerStat };
         }
         return next;
       });

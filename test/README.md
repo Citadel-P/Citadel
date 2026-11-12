@@ -1535,3 +1535,28 @@ while existing scheduler tests verify due times, timeout validation and idempote
 Coverage compares scoped and full-platform results, retains shared-volume policy
 workloads and incomplete evidence, and excludes unauthorized policy inventory.
 No production memory-reduction estimate is implied by these regressions.
+
+### Realtime admission and Stack statistics follow-up
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib realtime::retention::tests
+npm --prefix src/frontend run test:run -- src/features/stacks/form/hooks/useStackInfoGroup.test.tsx
+```
+
+The cache tests run eight concurrent readers against fitting, oversized and
+capacity-exhausted projections. They verify one loader call per event, shared
+successful values, admission-rejection markers without retained projections,
+permit release, recovery on a fresh event, and retry after loader errors or
+cancellation. The Stack regression starts with an HTTP-only Swarm container,
+then delivers compact statistics before lifecycle patches; it checks node identity,
+control state, statistics precedence, and unknown/destroyed-container exclusion.
+These checks do not measure production CPU or RSS savings.
+
+The 2026-11-13 follow-up run passed all four Stack hook tests, four cache tests,
+six maintenance-worker tests, and ten native PostgreSQL regressions (one health
+retention, five telemetry budget, three history admission, and one mixed-log test).
+Native checks used the commands above against an isolated PostgreSQL 18.6
+container with `--ignored` and serial execution for the statistics/admission groups.
+Frontend lint, `tsc -b --pretty false`, Rust formatting and `git diff --check` also
+passed. The new Stack sequence failed with Running instead of Exited before the
+fix and passed afterward. The disposable database was removed after verification.
