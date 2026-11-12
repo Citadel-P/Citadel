@@ -605,8 +605,9 @@ The Core installer upgrades inherited Alpine packages as well as installing its
 tools. Run the runtime and Agent image checks after changing these dependencies.
 Scanning an upstream image can still report dependencies with no patched release
 or unreachable functions. Record those separately from fixes; do not suppress
-findings globally or replace official tools with untested forks. Rust's audit policy is in `.cargo/audit.toml`; no vulnerability exceptions are
-currently configured.
+findings globally or replace official tools with untested forks. Rust's audit policy
+is in `.cargo/audit.toml`; its SQLite advisory exception covers an inactive SQLx
+dependency. Remove it before enabling SQLite or when SQLx permits the patched version.
 
 ## Database schema changes
 
