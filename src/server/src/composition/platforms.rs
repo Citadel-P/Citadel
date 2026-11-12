@@ -34,8 +34,14 @@ pub(super) fn build(
         container_runtime,
         ..
     } = runtime;
+    let history = Arc::new(
+        citadel_adapters::persistence::postgres::platforms::history_admission::Admission::new(
+            pool,
+            runtime.dynamic_tasks.clone(),
+        ),
+    );
     let platform_reads = Arc::new(PlatformReadService::new(Arc::new(
-        PostgresPlatformReader::new(pool.clone()),
+        PostgresPlatformReader::with_admission(pool.clone(), history.clone()),
     )));
     let platform_registrations = Arc::new(PlatformRegistrationService::new(
         Arc::new(PostgresPlatformRegistrationRepository::new(pool.clone())),
@@ -152,7 +158,7 @@ pub(super) fn build(
         )),
     image_store: Arc::new(citadel_adapters::persistence::postgres::platforms::images::PostgresImageMutationStore(pool.clone())),
     projections: Arc::new(citadel_adapters::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(pool.clone()).with_node_policy(config.node_agent_policy.clone())),
-        statistics: Arc::new(citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::new(pool.clone())),
+        statistics: Arc::new(citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader::with_admission(pool.clone(), history)),
         services: Arc::new(citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(pool.clone())),
         runtime: Arc::new(container_runtime.runtime_router()),
         tasks: runtime.dynamic_tasks.clone(),

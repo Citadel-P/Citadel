@@ -9,10 +9,24 @@ use uuid::Uuid;
 
 pub struct PostgresStatisticsReader {
     pool: PgPool,
+    history: std::sync::Arc<super::history_admission::Admission>,
 }
 impl PostgresStatisticsReader {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self::with_tasks(
+            pool,
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+        )
+    }
+    pub fn with_tasks(pool: PgPool, tasks: citadel_runtime::DynamicTasks) -> Self {
+        let history = std::sync::Arc::new(super::history_admission::Admission::new(&pool, tasks));
+        Self { pool, history }
+    }
+    pub fn with_admission(
+        pool: PgPool,
+        history: std::sync::Arc<super::history_admission::Admission>,
+    ) -> Self {
+        Self { pool, history }
     }
 }
 fn storage(e: impl std::fmt::Display) -> RuntimeCapabilityError {
@@ -140,15 +154,16 @@ impl StatisticsReader for PostgresStatisticsReader {
             if !sqlx::query_scalar::<_, bool>(exists).bind(id).fetch_one(&self.pool).await.map_err(storage)? {
                 return Ok(None);
             }
+            let mut read = self.history.begin(&self.pool).await?;
             let rows = sqlx::query(include_str!("workload_history.sql"))
                 .bind(id).bind(deployment).bind(window.since(now)).bind(window.until(now))
-                .bind(window.bucket_seconds_at(now)).fetch_all(&self.pool).await.map_err(storage)?;
+                .bind(window.bucket_seconds_at(now)).fetch_all(read.connection()).await.map_err(super::history_admission::storage)?;
             if rows.len() > 65_536 {
                 return Err(capacity("Workload history exceeds 65536 samples; choose a shorter range."));
             }
             let mut series = std::collections::BTreeMap::<String, WorkloadStatSeries>::new();
             for row in rows {
-                let name: String = row.try_get("servicename").map_err(storage)?;
+                let name: String = row.try_get("servicename").map_err(super::history_admission::storage)?;
                 series.entry(name.clone()).or_insert_with(|| WorkloadStatSeries {
                     name, container_ids: vec![], stats: vec![],
                 }).stats.push(map_container(row)?);
@@ -162,7 +177,8 @@ impl StatisticsReader for PostgresStatisticsReader {
                     AND t.dockernodeid=COALESCE(c.dockernodeid,(SELECT platformdescriptor::jsonb->>'nodeID' FROM platforms WHERE id=c.platformid))
                 LEFT JOIN swarmserviceprojections s ON s.platformid=t.platformid AND s.dockerserviceid=t.dockerserviceid
                 WHERE ($2 AND c.deploymentid=$1) OR (NOT $2 AND (c.stackid=$1 OR s.stackid=$1))
-                LIMIT 501"#).bind(id).bind(deployment).fetch_all(&self.pool).await.map_err(storage)?;
+                LIMIT 501"#).bind(id).bind(deployment).fetch_all(read.connection()).await.map_err(super::history_admission::storage)?;
+            read.finish().await?;
             if current.len() > 500 {
                 return Err(capacity("Statistics request exceeds 500 workload series or Containers"));
             }
@@ -191,14 +207,16 @@ impl StatisticsReader for PostgresStatisticsReader {
             if ids.len() > 500 {
                 return Err(capacity("Statistics request exceeds 500 Containers"));
             }
+            let mut read = self.history.begin(&self.pool).await?;
             let rows = sqlx::query(include_str!("container_history.sql"))
                 .bind(ids)
                 .bind(window.since(now))
                 .bind(window.bucket_seconds_at(now))
                 .bind(window.until(now))
-                .fetch_all(&self.pool)
+                .fetch_all(read.connection())
                 .await
-                .map_err(storage)?;
+                .map_err(super::history_admission::storage)?;
+            read.finish().await?;
             if rows.len() > 65_536 {
                 return Err(capacity(
                     "History exceeds 65536 samples; request individual Container history.",
@@ -215,23 +233,16 @@ impl StatisticsReader for PostgresStatisticsReader {
         now: i64,
     ) -> BoxFuture<'_, Result<Vec<PlatformStatSnapshot>, RuntimeCapabilityError>> {
         async move {
-            // JSON expansion overestimates row counts enough to trigger expensive
-            // JIT compilation on this interactive read. Keep the setting local:
-            // commit or SQLx's rollback-on-drop restores the pooled connection.
-            let mut transaction = self.pool.begin().await.map_err(storage)?;
-            sqlx::query("SET LOCAL jit = off")
-                .execute(&mut *transaction)
-                .await
-                .map_err(storage)?;
+            let mut read = self.history.begin(&self.pool).await?;
             let rows = sqlx::query(include_str!("platform_history.sql"))
                 .bind(id)
                 .bind(window.since(now))
                 .bind(window.bucket_seconds_at(now))
                 .bind(window.until(now))
-                .fetch_all(&mut *transaction)
+                .fetch_all(read.connection())
                 .await
-                .map_err(storage)?;
-            transaction.commit().await.map_err(storage)?;
+                .map_err(super::history_admission::storage)?;
+            read.finish().await?;
             rows.into_iter()
                 .map(|row| {
                     Ok(PlatformStatSnapshot {
@@ -278,7 +289,8 @@ impl StatisticsReader for PostgresStatisticsReader {
         async move {
             // Bucket by logical slot first: replacing a Task must not double count
             // replicas, and deleting Container projections must not erase history.
-            sqlx::query(include_str!("service_history.sql"))
+            let mut read = self.history.begin(&self.pool).await?;
+            let rows = sqlx::query(include_str!("service_history.sql"))
                 .bind(id.platform_id)
                 .bind(id.docker_service_id)
                 .bind(id.managed_service_id)
@@ -287,12 +299,16 @@ impl StatisticsReader for PostgresStatisticsReader {
                 .bind(window.since(now))
                 .bind(window.bucket_seconds_at(now))
                 .bind(window.until(now))
-                .fetch_all(&self.pool)
+                .fetch_all(read.connection())
                 .await
-                .map_err(storage)?
-                .into_iter()
-                .map(map_container)
-                .collect()
+                .map_err(super::history_admission::storage)?;
+            read.finish().await?;
+            if rows.len() > 65_536 {
+                return Err(capacity(
+                    "Service history exceeds 65536 samples; choose a shorter range.",
+                ));
+            }
+            rows.into_iter().map(map_container).collect()
         }
         .boxed()
     }

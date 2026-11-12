@@ -203,4 +203,12 @@ impl BuildRepository for PostgresBuildRepository {
     ) -> BoxFuture<'a, Result<citadel_builds::BuildLogEntry, BuildError>> {
         self.append_log_impl(run_id, attempt_id, log)
     }
+    fn append_logs<'a>(
+        &'a self,
+        run_id: Uuid,
+        attempt_id: Uuid,
+        logs: &'a [citadel_builds::BuildLog],
+    ) -> BoxFuture<'a, Result<Vec<citadel_builds::BuildLogEntry>, BuildError>> {
+        self.append_logs_impl(run_id, attempt_id, logs)
+    }
 }

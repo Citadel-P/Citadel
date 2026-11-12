@@ -1,12 +1,17 @@
 use super::*;
+use citadel_platforms::stats_ingestion::StatsBatchStore;
 use citadel_platforms::{
     RuntimeCapabilityError, RuntimeErrorKind, stats_ingestion::StatsWriteOutcome,
 };
+use citadel_runtime::runtime_metrics::RuntimeWork;
 use futures_util::future::BoxFuture;
 use std::sync::{
     Mutex,
     atomic::{AtomicUsize, Ordering},
 };
+use std::{sync::Arc, time::Duration};
+use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Default)]
 struct Store {
@@ -206,4 +211,61 @@ async fn failed_platform_does_not_block_healthy_partition() {
     );
     cancel.cancel();
     worker.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn byte_boundary_preserves_complete_rows_and_releases_retry_ownership() {
+    let store = Arc::new(Store {
+        fail: AtomicUsize::new(1),
+        ..Default::default()
+    });
+    let (sender, token, task) = start(store.clone(), 10, 4);
+    let budget = super::super::budget::Budget::default();
+    let lease = budget.reserve(1000).unwrap();
+    let bytes = super::super::budget::BATCH_BYTES / 2 + 1;
+    for row in [1, 2, 3] {
+        assert!(
+            sender
+                .send_owned(row, Some(lease.clone()), bytes, &token)
+                .await
+        );
+    }
+    drop(lease);
+    settle().await;
+    assert_eq!(
+        budget.available(),
+        super::super::budget::RETAINED_BYTES - 1000
+    );
+    tokio::time::advance(Duration::from_secs(61)).await;
+    settle().await;
+    token.cancel();
+    task.await.unwrap().unwrap();
+    let calls = store.calls.lock().unwrap();
+    assert!(calls.iter().all(|batch| batch.len() == 1));
+    assert_eq!(calls.iter().filter(|batch| batch[0] == 1).count(), 2);
+    assert!(calls.iter().any(|batch| batch == &[2]));
+    assert!(calls.iter().any(|batch| batch == &[3]));
+    assert_eq!(budget.available(), super::super::budget::RETAINED_BYTES);
+}
+
+#[tokio::test(start_paused = true)]
+async fn expired_retry_releases_its_byte_reservation() {
+    let store = Arc::new(Store {
+        fail: AtomicUsize::new(usize::MAX),
+        ..Default::default()
+    });
+    let (sender, token, task) = start(store, 1, 1);
+    let budget = super::super::budget::Budget::default();
+    let lease = budget.reserve(1024).unwrap();
+    assert!(sender.send_owned(1, Some(lease), 128, &token).await);
+    settle().await;
+    assert_eq!(
+        budget.available(),
+        super::super::budget::RETAINED_BYTES - 1024
+    );
+    tokio::time::advance(Duration::from_secs(121)).await;
+    settle().await;
+    assert_eq!(budget.available(), super::super::budget::RETAINED_BYTES);
+    token.cancel();
+    task.await.unwrap().unwrap();
 }

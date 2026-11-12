@@ -12,6 +12,8 @@ pub enum RuntimeWork {
     LocalStats,
     StatsPersistence,
     AlertFlush,
+    AlertBacklog,
+    AlertProgress,
     Recovery,
     Retention,
     LeaseExpiry,
@@ -133,6 +135,16 @@ pub enum RuntimeWork {
     StatsCommit,
     StatsCommittedSamples,
     StatsRetry,
+    StatsRetainedBytes,
+    StatsOversized,
+    StatsCapacityDrop,
+    CompactionDiscovery,
+    CompactionLockWait,
+    CompactionLockHold,
+    CompactionSizing,
+    CompactionInput,
+    CompactionProgress,
+    CompactionStalled,
     StatsRejected,
     ServiceAccountUsageDropped,
     StatsRetentionDrop,
@@ -166,6 +178,8 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::LocalStats,
     RuntimeWork::StatsPersistence,
     RuntimeWork::AlertFlush,
+    RuntimeWork::AlertBacklog,
+    RuntimeWork::AlertProgress,
     RuntimeWork::Recovery,
     RuntimeWork::Retention,
     RuntimeWork::LeaseExpiry,
@@ -284,6 +298,16 @@ const FAMILIES: &[RuntimeWork] = &[
     RuntimeWork::StatsCommit,
     RuntimeWork::StatsCommittedSamples,
     RuntimeWork::StatsRetry,
+    RuntimeWork::StatsRetainedBytes,
+    RuntimeWork::StatsOversized,
+    RuntimeWork::StatsCapacityDrop,
+    RuntimeWork::CompactionDiscovery,
+    RuntimeWork::CompactionLockWait,
+    RuntimeWork::CompactionLockHold,
+    RuntimeWork::CompactionSizing,
+    RuntimeWork::CompactionInput,
+    RuntimeWork::CompactionProgress,
+    RuntimeWork::CompactionStalled,
     RuntimeWork::StatsRejected,
     RuntimeWork::ServiceAccountUsageDropped,
     RuntimeWork::StatsRetentionDrop,
@@ -411,6 +435,17 @@ impl RuntimeWork {
 pub struct BufferedBytes {
     family: RuntimeWork,
     bytes: u64,
+}
+impl BufferedBytes {
+    /// Transfer accounting without a transient double count or release.
+    pub fn split(&mut self, bytes: usize) -> Option<Self> {
+        let bytes = u64::try_from(bytes).ok()?;
+        self.bytes = self.bytes.checked_sub(bytes)?;
+        Some(Self {
+            family: self.family,
+            bytes,
+        })
+    }
 }
 impl Drop for BufferedBytes {
     fn drop(&mut self) {

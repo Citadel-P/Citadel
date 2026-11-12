@@ -19,7 +19,7 @@ use chrono::{DateTime, Utc};
 use citadel_alerts::{
     AlertChannel, AlertChannelConfiguration, AlertDeliveryClaim, AlertError, AlertEvent,
     AlertEventFilter, AlertEventPage, AlertObservation, AlertRepository, AlertRule,
-    AlertRuleConfiguration, AlertRuleListItem, NewAlertEvent, is_in_quiet_hours,
+    AlertRuleConfiguration, AlertRuleListItem, NewAlertEvent,
 };
 
 use citadel_primitives::{ActorId, ResourceType};
@@ -33,7 +33,7 @@ use sqlx::{AssertSqlSafe, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 mod validation;
-use citadel_alerts::rules::evaluation::{observation_matches, rule_applies};
+use citadel_alerts::rules::evaluation::observation_matches;
 use delivery::enqueue_deliveries;
 use validation::*;
 
@@ -45,3 +45,5 @@ pub(crate) mod update_resolution;
 pub mod platform_metrics;
 
 mod instance_updates;
+
+mod rule_evaluation;

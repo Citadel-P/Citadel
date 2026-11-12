@@ -136,22 +136,6 @@ async fn persisted_disk_samples_drive_builtin_alert_and_history_without_containe
 #[tokio::test]
 #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
 async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input() {
-    use citadel_alerts::{AlertEventSink, AlertObservation};
-    use std::sync::{Arc, Mutex};
-    #[derive(Default)]
-    struct Capture(Mutex<Vec<AlertObservation>>);
-    impl AlertEventSink for Capture {
-        fn observe<'a>(
-            &'a self,
-            observation: &'a AlertObservation,
-        ) -> futures_util::future::BoxFuture<
-            'a,
-            Result<Option<citadel_alerts::AlertEvent>, citadel_alerts::AlertError>,
-        > {
-            self.0.lock().unwrap().push(observation.clone());
-            Box::pin(async { Ok(None) })
-        }
-    }
     let url = std::env::var("CITADEL_TEST_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
@@ -168,26 +152,25 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
         sqlx::query("INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,diskusage,diskusedbytes,disktotalbytes,alertpending) VALUES($1,$2,$3,$4,30,0,0,$5,95,100,true)")
             .bind(Uuid::now_v7()).bind(platform).bind(since+offset).bind(cpu).bind(disk).execute(&pool).await.unwrap();
     }
-    struct Unavailable;
-    impl AlertEventSink for Unavailable {
-        fn observe<'a>(
-            &'a self,
-            _: &'a AlertObservation,
-        ) -> futures_util::future::BoxFuture<
-            'a,
-            Result<Option<citadel_alerts::AlertEvent>, citadel_alerts::AlertError>,
-        > {
-            Box::pin(async {
-                Err(citadel_alerts::AlertError::Storage(
-                    "injected failure".into(),
-                ))
-            })
-        }
-    }
+    let rule = super::test_support::metric_rule(&pool, platform).await;
+    // A failed acknowledgement must roll back both events and sample progress.
+    sqlx::raw_sql("CREATE FUNCTION metric_fixture_reject_ack() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NOT NEW.alertpending THEN RAISE EXCEPTION 'injected acknowledgement failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER metric_fixture_reject_ack BEFORE UPDATE ON platformstats FOR EACH ROW EXECUTE FUNCTION metric_fixture_reject_ack();")
+        .execute(&pool).await.unwrap();
     assert!(
-        super::stats_alerts::flush_pending(&pool, &Unavailable, 500)
+        super::stats_alerts::flush_pending(&pool, 500)
             .await
             .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER metric_fixture_reject_ack ON platformstats; DROP FUNCTION metric_fixture_reject_ack();").execute(&pool).await.unwrap();
+    let rolled_back: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM alertevents WHERE alertruleid=$1")
+            .bind(rule)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        rolled_back, 0,
+        "no alert can commit ahead of a failed acknowledgement"
     );
     let pending: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM platformstats WHERE platformid=$1 AND alertpending",
@@ -200,34 +183,36 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
         pending, 3,
         "failed alert evaluation must not acknowledge samples"
     );
-    let capture = Arc::new(Capture::default());
-    super::stats_alerts::flush_pending(&pool, capture.as_ref(), 500)
+    super::stats_alerts::flush_pending(&pool, 500)
         .await
         .unwrap();
-    {
-        let observations = capture.0.lock().unwrap();
-        let cpu = observations
-            .iter()
-            .find(|o| o.resource_id == platform && o.alert_type == "PlatformCpuHigh")
+    let info: serde_json::Value =
+        sqlx::query_scalar("SELECT info FROM alertevents WHERE alertruleid=$1")
+            .bind(rule)
+            .fetch_one(&pool)
+            .await
             .unwrap();
-        assert_eq!(
-            cpu.value,
-            Some(20.0),
-            "one spike is smoothed using .NET median semantics"
-        );
-        assert!(
-            !observations
-                .iter()
-                .any(|o| o.resource_id == platform && o.alert_type == "PlatformDiskHigh"),
-            "newest unavailable disk does not reuse earlier high value"
-        );
-    }
-    capture.0.lock().unwrap().clear();
+    assert_eq!(
+        info["Value"], 20.0,
+        "one spike is smoothed using median semantics"
+    );
+    let disk_events: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM alertevents WHERE resourceid=$1 AND type='PlatformDiskHigh'",
+    )
+    .bind(platform)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        disk_events, 0,
+        "newest unavailable disk does not reuse earlier high value"
+    );
+    sqlx::query("UPDATE alertevents SET openincidentkey=NULL,resolvedat=CURRENT_TIMESTAMP WHERE alertruleid=$1")
+        .bind(rule).execute(&pool).await.unwrap();
     let cancel = CancellationToken::new();
     let worker = tokio::spawn(super::stats_alerts::run(
         cancel.clone(),
         crate::workers::test_support::metrics(&pool),
-        capture.clone(),
         Duration::from_millis(100),
         200,
         tokio::sync::watch::channel(()).1,
@@ -238,15 +223,9 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
     sqlx::query("INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,alertpending) VALUES($1,$2,$3,45,30,0,0,true)").bind(Uuid::now_v7()).bind(platform).bind(now).execute(&pool).await.unwrap();
     tokio::time::timeout(Duration::from_secs(4), async {
         loop {
-            if capture
-                .0
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|o| o.resource_id == platform && o.alert_type == "PlatformCpuHigh")
-            {
-                break;
-            }
+            let observed: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM alertevents WHERE alertruleid=$1 AND (info->>'Value')::double precision=45)")
+                .bind(rule).fetch_one(&pool).await.unwrap();
+            if observed { break; }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
@@ -280,6 +259,11 @@ async fn threshold_flush_smooths_spikes_uses_latest_disk_and_flushes_idle_input(
     assert_eq!(status, "Offline", "statistics never mark platform online");
     sqlx::query("DELETE FROM platforms WHERE id=$1")
         .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM alertrules WHERE id=$1")
+        .bind(rule)
         .execute(&pool)
         .await
         .unwrap();

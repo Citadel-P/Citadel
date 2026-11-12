@@ -4,9 +4,10 @@ use citadel_platforms::{
     RuntimeInventorySnapshot, RuntimeSwarmInventory,
 };
 use futures_util::{FutureExt, future::BoxFuture};
-use serde::Serialize;
 use serde_json::Value;
+use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Transaction};
+use std::borrow::Cow;
 
 #[derive(Clone)]
 pub struct PostgresInventoryProjectionStore {
@@ -59,8 +60,9 @@ impl PostgresInventoryProjectionStore {
             "swarmsecretprojections",
             "swarmnetworkprojections",
         ] {
-            let statement =
-                format!("UPDATE {table} SET isstale=TRUE WHERE platformid=$1 AND observedat<=$2");
+            let statement = format!(
+                "UPDATE {table} SET isstale=TRUE WHERE platformid=$1 AND observedat<=$2 AND NOT isstale"
+            );
             sqlx::query(sqlx::AssertSqlSafe(statement))
                 .bind(platform)
                 .bind(started_at)
@@ -525,7 +527,7 @@ pub(super) async fn persist_image_observations(
     complete: bool,
 ) -> Result<bool, RuntimeCapabilityError> {
     validate_runtime_ids(images.iter().map(|value| value.id.as_str()))?;
-    let payload = json(images)?;
+    let payload = Json(images);
     let changed: bool = sqlx::query_scalar(
         r#"
 WITH incoming AS (
@@ -658,7 +660,7 @@ pub(super) async fn persist_container_set(
             .bind(platform_id).bind(&incoming_ids).bind(node_id)
             .execute(&mut **transaction).await.map_err(storage)?;
     }
-    let payload = json(&containers)?;
+    let payload = Json(containers);
     let conflict = if node_id.is_some() {
         "(dockercontainerid, platformid, dockernodeid) WHERE dockernodeid IS NOT NULL"
     } else {
@@ -805,23 +807,57 @@ pub(super) async fn persist_swarm(
     swarm: &RuntimeSwarmInventory,
 ) -> Result<(), RuntimeCapabilityError> {
     let observed_at = snapshot.observed_at;
-    for table in [
-        "swarmnodeprojections",
-        "swarmserviceprojections",
-        "swarmtaskprojections",
-        "swarmconfigprojections",
-        "swarmsecretprojections",
-        "swarmnetworkprojections",
+    // Only missing identities become stale. Present rows retain their freshness
+    // until the upsert, avoiding a second version of every projection per refresh.
+    for (table, column, ids) in [
+        (
+            "swarmnodeprojections",
+            "dockernodeid",
+            swarm
+                .nodes
+                .iter()
+                .map(|v| v.id.as_str())
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "swarmserviceprojections",
+            "dockerserviceid",
+            swarm.services.iter().map(|v| v.id.as_str()).collect(),
+        ),
+        (
+            "swarmtaskprojections",
+            "dockertaskid",
+            swarm.tasks.iter().map(|v| v.id.as_str()).collect(),
+        ),
+        (
+            "swarmconfigprojections",
+            "dockerconfigid",
+            swarm.configs.iter().map(|v| v.id.as_str()).collect(),
+        ),
+        (
+            "swarmsecretprojections",
+            "dockersecretid",
+            swarm.secrets.iter().map(|v| v.id.as_str()).collect(),
+        ),
+        (
+            "swarmnetworkprojections",
+            "dockernetworkid",
+            snapshot
+                .networks
+                .iter()
+                .filter(|v| v.scope.eq_ignore_ascii_case("swarm"))
+                .map(|v| v.id.as_str())
+                .collect(),
+        ),
     ] {
-        let statement = format!("UPDATE {table} SET isstale = TRUE WHERE platformid = $1");
-        sqlx::query(sqlx::AssertSqlSafe(statement))
-            .bind(snapshot.platform_id)
-            .execute(&mut **transaction)
-            .await
-            .map_err(storage)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE {table} SET isstale=TRUE WHERE platformid=$1 AND NOT isstale AND NOT ({column}=ANY($2))"
+        )))
+        .bind(snapshot.platform_id).bind(ids)
+        .execute(&mut **transaction).await.map_err(storage)?;
     }
 
-    let nodes = json(&swarm.nodes)?;
+    let nodes = Json(&swarm.nodes);
     sqlx::query(
         r#"
 INSERT INTO swarmnodeprojections (
@@ -859,8 +895,8 @@ ON CONFLICT (platformid, dockernodeid) DO UPDATE SET
 
     // Resolve ownership against the current release, not untrusted daemon labels.
     // The upsert below still preserves an explicitly imported Docker identity.
-    let owners: Vec<(uuid::Uuid, String, Value)> = sqlx::query_as(
-        "SELECT s.id,s.name,r.spec FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$1",
+    let owners: Vec<(uuid::Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT s.id,s.name,COALESCE(r.spec->>'projectName',r.spec->>'ProjectName') FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$1",
     )
     .bind(snapshot.platform_id)
     .fetch_all(&mut **transaction)
@@ -870,28 +906,34 @@ ON CONFLICT (platformid, dockernodeid) DO UPDATE SET
         .into_iter()
         .map(|(id, name, spec)| {
             let namespace = spec
-                .get("projectName")
-                .or_else(|| spec.get("ProjectName"))
-                .and_then(Value::as_str)
+                .as_deref()
                 .filter(|name| !name.trim().is_empty())
                 .map(|name| name.trim().to_owned())
                 .unwrap_or_else(|| citadel_stacks::normalize_project_name(&name, id));
             (id, namespace)
         })
         .collect();
-    let mut services = swarm.services.clone();
-    for service in &mut services {
-        if service.ownership == citadel_swarm_services::SwarmServiceOwnership::CitadelStack
-            && let Some(expected) = service.stack_id.and_then(|id| namespaces.get(&id))
-            && service.stack_namespace.as_deref() != Some(expected.as_str())
-        {
-            service.stack_id = None;
-            service.ownership = citadel_swarm_services::SwarmServiceOwnership::OwnershipConflict;
-            service.ownership_diagnostic =
-                Some("The claimed Citadel Stack does not own this Docker Stack namespace.".into());
-        }
-    }
-    let services = json(&services)?;
+    let services: Vec<_> = swarm
+        .services
+        .iter()
+        .map(|service| {
+            let mut service = Cow::Borrowed(service);
+            if service.ownership == citadel_swarm_services::SwarmServiceOwnership::CitadelStack
+                && let Some(expected) = service.stack_id.and_then(|id| namespaces.get(&id))
+                && service.stack_namespace.as_deref() != Some(expected.as_str())
+            {
+                let service = service.to_mut();
+                service.stack_id = None;
+                service.ownership =
+                    citadel_swarm_services::SwarmServiceOwnership::OwnershipConflict;
+                service.ownership_diagnostic = Some(
+                    "The claimed Citadel Stack does not own this Docker Stack namespace.".into(),
+                );
+            }
+            service
+        })
+        .collect();
+    let services = Json(&services);
     sqlx::query(
         r#"
 INSERT INTO swarmserviceprojections (
@@ -952,7 +994,7 @@ ON CONFLICT (platformid, dockerserviceid) DO UPDATE SET
     // Adoption links the existing Docker identity before labels change on Apply.
     // Retain that persisted ownership through subsequent daemon snapshots.
     sqlx::query(
-        "UPDATE swarmserviceprojections p SET ownership='CitadelService',swarmserviceid=s.id,ownershipdiagnostic=NULL FROM swarmservices s WHERE p.platformid=$1 AND s.platformid=p.platformid AND s.dockerserviceid=p.dockerserviceid AND p.stackid IS NULL AND p.ownership IN ('Unmanaged','CitadelService')"
+        "UPDATE swarmserviceprojections p SET ownership='CitadelService',swarmserviceid=s.id,ownershipdiagnostic=NULL FROM swarmservices s WHERE p.platformid=$1 AND s.platformid=p.platformid AND s.dockerserviceid=p.dockerserviceid AND p.stackid IS NULL AND p.ownership IN ('Unmanaged','CitadelService') AND (p.ownership,p.swarmserviceid,p.ownershipdiagnostic) IS DISTINCT FROM ('CitadelService',s.id,NULL::text)"
     ).bind(snapshot.platform_id).execute(&mut **transaction).await.map_err(storage)?;
     sqlx::query(
         "UPDATE swarmserviceprojections p SET ownership='Unmanaged',swarmserviceid=NULL,ownershipdiagnostic='Orphaned Citadel Service ownership' WHERE p.platformid=$1 AND p.ownership='CitadelService' AND p.stackid IS NULL AND NOT EXISTS(SELECT 1 FROM swarmservices s WHERE s.id=p.swarmserviceid AND s.platformid=p.platformid)"
@@ -966,7 +1008,7 @@ ON CONFLICT (platformid, dockerserviceid) DO UPDATE SET
     sqlx::query("UPDATE swarmserviceprojections p SET ownership='OwnershipConflict',ownershipdiagnostic='Multiple Docker identities claim the Citadel Service.' WHERE p.platformid=$1 AND NOT p.isstale AND p.swarmserviceid IS NOT NULL AND (EXISTS(SELECT 1 FROM swarmserviceprojections other WHERE other.platformid=p.platformid AND other.swarmserviceid=p.swarmserviceid AND other.dockerserviceid<>p.dockerserviceid AND NOT other.isstale) OR EXISTS(SELECT 1 FROM swarmservices owner WHERE owner.id=p.swarmserviceid AND owner.platformid=p.platformid AND owner.dockerserviceid IS NOT NULL AND owner.dockerserviceid<>p.dockerserviceid))")
         .bind(snapshot.platform_id).execute(&mut **transaction).await.map_err(storage)?;
 
-    let tasks = json(&swarm.tasks)?;
+    let tasks = Json(&swarm.tasks);
     sqlx::query(
         r#"
 INSERT INTO swarmtaskprojections (
@@ -1051,7 +1093,7 @@ ON CONFLICT (platformid, dockerconfigid) DO UPDATE SET
 "#,
     )
     .bind(snapshot.platform_id)
-    .bind(json(&swarm.configs)?)
+    .bind(Json(&swarm.configs))
     .bind(snapshot.observed_at)
     .execute(&mut **transaction)
     .await
@@ -1082,7 +1124,7 @@ ON CONFLICT (platformid, dockersecretid) DO UPDATE SET
 "#,
     )
     .bind(snapshot.platform_id)
-    .bind(json(&swarm.secrets)?)
+    .bind(Json(&swarm.secrets))
     .bind(snapshot.observed_at)
     .execute(&mut **transaction)
     .await
@@ -1132,7 +1174,7 @@ ON CONFLICT (platformid, dockernetworkid) DO UPDATE SET
 "#,
     )
     .bind(snapshot.platform_id)
-    .bind(json(&networks)?)
+    .bind(Json(&networks))
     .bind(snapshot.observed_at)
     .execute(&mut **transaction)
     .await
@@ -1144,32 +1186,21 @@ async fn update_swarm_counts(
     transaction: &mut Transaction<'_, Postgres>,
     platform_id: uuid::Uuid,
 ) -> Result<(), RuntimeCapabilityError> {
-    sqlx::query(
-        "UPDATE swarmnodeprojections SET runningtaskcount = 0, desiredtaskcount = 0 WHERE platformid = $1",
-    )
-    .bind(platform_id)
-    .execute(&mut **transaction)
-    .await
-    .map_err(storage)?;
-
-    sqlx::query(
-        r#"
-UPDATE swarmnodeprojections node
-SET runningtaskcount = counts.running,
-    desiredtaskcount = counts.desired
-FROM (
+    sqlx::query(r#"
+WITH counts AS (
     SELECT dockernodeid,
-           COUNT(*) FILTER (WHERE state = 'running' AND NOT isstale)::integer AS running,
-           COUNT(*) FILTER (WHERE desiredstate = 'running' AND NOT isstale)::integer AS desired
-    FROM swarmtaskprojections WHERE platformid = $1 GROUP BY dockernodeid
-) counts
-WHERE node.platformid = $1 AND node.dockernodeid = counts.dockernodeid
-"#,
-    )
-    .bind(platform_id)
-    .execute(&mut **transaction)
-    .await
-    .map_err(storage)?;
+        COUNT(*) FILTER (WHERE state='running' AND NOT isstale)::integer running,
+        COUNT(*) FILTER (WHERE desiredstate='running' AND NOT isstale)::integer desired
+    FROM swarmtaskprojections WHERE platformid=$1 GROUP BY dockernodeid
+), incoming AS (
+    SELECT node.dockernodeid, COALESCE(counts.running,0) running, COALESCE(counts.desired,0) desired
+    FROM swarmnodeprojections node LEFT JOIN counts USING(dockernodeid)
+    WHERE node.platformid=$1
+)
+UPDATE swarmnodeprojections node SET runningtaskcount=incoming.running,desiredtaskcount=incoming.desired
+FROM incoming WHERE node.platformid=$1 AND node.dockernodeid=incoming.dockernodeid
+AND (node.runningtaskcount,node.desiredtaskcount) IS DISTINCT FROM (incoming.running,incoming.desired)
+"#).bind(platform_id).execute(&mut **transaction).await.map_err(storage)?;
 
     for (table, id_column, service_column) in [
         ("swarmconfigprojections", "dockerconfigid", "configids"),
@@ -1178,14 +1209,21 @@ WHERE node.platformid = $1 AND node.dockernodeid = counts.dockernodeid
     ] {
         let statement = format!(
             r#"
-UPDATE {table} resource
-SET servicenames = COALESCE((
-    SELECT jsonb_agg(service.name ORDER BY service.name)
-    FROM swarmserviceprojections service
-    WHERE service.platformid = $1 AND NOT service.isstale
-      AND service.{service_column} ? resource.{id_column}
-), '[]'::jsonb)
-WHERE resource.platformid = $1
+WITH names AS (
+    SELECT reference, jsonb_agg(name ORDER BY name) value
+    FROM (
+        SELECT DISTINCT service.dockerserviceid,service.name,reference
+        FROM swarmserviceprojections service
+        CROSS JOIN LATERAL jsonb_array_elements_text(service.{service_column}) reference
+        WHERE service.platformid=$1 AND NOT service.isstale
+    ) referenced_services GROUP BY reference
+), incoming AS (
+    SELECT resource.{id_column} identity, COALESCE(names.value,'[]'::jsonb) value
+    FROM {table} resource LEFT JOIN names ON names.reference=resource.{id_column}
+    WHERE resource.platformid=$1
+)
+UPDATE {table} resource SET servicenames=incoming.value
+FROM incoming WHERE resource.platformid=$1 AND resource.{id_column}=incoming.identity AND resource.servicenames IS DISTINCT FROM incoming.value
 "#
         );
         sqlx::query(sqlx::AssertSqlSafe(statement))
@@ -1221,12 +1259,6 @@ async fn remove_absent_swarm_resources(
             .map_err(storage)?;
     }
     Ok(())
-}
-
-pub(crate) fn json(value: &(impl Serialize + ?Sized)) -> Result<Value, RuntimeCapabilityError> {
-    serde_json::to_value(value).map_err(|error| {
-        RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
-    })
 }
 
 fn bounded_i32(value: i64) -> i32 {

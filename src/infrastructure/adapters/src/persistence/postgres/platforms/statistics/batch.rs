@@ -1,11 +1,12 @@
 //! Set-based writes across sources; scope locks fence reconfiguration/revocation.
+use super::batch_input::{MetadataInput, PlatformCapture, live, scope_ids};
 use citadel_platforms::stats_ingestion::{
     ContainerStatsSample, PlatformStatsSample, StatsBatchStore, StatsScope, StatsWriteOutcome,
 };
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
 use citadel_runtime::runtime_metrics::RuntimeWork;
 use futures_util::future::BoxFuture;
-use serde_json::Value;
+use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Transaction};
 
 #[derive(Clone)]
@@ -27,9 +28,9 @@ fn storage(error: sqlx::Error) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), !permanent)
 }
 
-async fn lock_scopes(
+async fn lock_scopes<'a>(
     tx: &mut Transaction<'_, Postgres>,
-    payload: &Value,
+    scopes: impl Iterator<Item = &'a StatsScope>,
 ) -> Result<(), RuntimeCapabilityError> {
     sqlx::query("SET LOCAL lock_timeout = '500ms'")
         .execute(&mut **tx)
@@ -39,31 +40,18 @@ async fn lock_scopes(
         .execute(&mut **tx)
         .await
         .map_err(storage)?;
+    let (platforms, agents) = scope_ids(scopes);
     // Stable parent order also prevents metadata lock upgrades between writers.
-    sqlx::query("SELECT p.id FROM platforms p WHERE p.id IN (SELECT platform_id FROM jsonb_to_recordset($1) AS i(platform_id uuid)) ORDER BY p.id FOR NO KEY UPDATE")
-        .bind(payload).fetch_all(&mut **tx).await.map_err(storage)?;
-    if payload
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|row| !row["agent_id"].is_null())
-    {
-        sqlx::query("SELECT b.agentid FROM edgeagentbindings b WHERE b.agentid IN (SELECT agent_id FROM jsonb_to_recordset($1) AS i(agent_id uuid)) ORDER BY b.agentid FOR SHARE")
-        .bind(payload).fetch_all(&mut **tx).await.map_err(storage)?;
+    sqlx::query("SELECT id FROM platforms WHERE id=ANY($1::uuid[]) ORDER BY id FOR NO KEY UPDATE")
+        .bind(&platforms)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(storage)?;
+    if !agents.is_empty() {
+        sqlx::query("SELECT agentid FROM edgeagentbindings WHERE agentid=ANY($1::uuid[]) ORDER BY agentid FOR SHARE")
+            .bind(&agents).fetch_all(&mut **tx).await.map_err(storage)?;
     }
     Ok(())
-}
-
-// A session may close while the transaction waits for a scope lock.
-fn prune_closed<'a>(payload: &mut Value, mut scopes: impl Iterator<Item = &'a StatsScope>) {
-    payload.as_array_mut().unwrap().retain(|_| {
-        !scopes
-            .next()
-            .unwrap()
-            .closed
-            .as_ref()
-            .is_some_and(|token| token.is_cancelled())
-    });
 }
 
 impl StatsBatchStore<ContainerStatsSample> for PostgresStatsBatchStore {
@@ -78,21 +66,28 @@ impl StatsBatchStore<ContainerStatsSample> for PostgresStatsBatchStore {
             if samples.is_empty() {
                 return Ok(StatsWriteOutcome::default());
             }
-            let live: Vec<_> = samples
-                .iter()
-                .filter(|s| !s.scope.closed.as_ref().is_some_and(|t| t.is_cancelled()))
-                .collect();
-            let mut payload = serde_json::to_value(&live).map_err(|e| {
-                RuntimeCapabilityError::new(RuntimeErrorKind::InvalidRequest, e.to_string(), false)
-            })?;
+            let mut accepted_samples: Vec<_> = samples.iter().filter(|s| live(&s.scope)).collect();
+            if accepted_samples.is_empty() {
+                return Ok(StatsWriteOutcome {
+                    persisted: 0,
+                    stale: samples.len(),
+                });
+            }
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            lock_scopes(&mut tx, &payload).await?;
-            prune_closed(&mut payload, live.iter().map(|s| &s.scope));
+            lock_scopes(&mut tx, accepted_samples.iter().map(|s| &s.scope)).await?;
+            // A session may close while waiting for its scope lock.
+            accepted_samples.retain(|s| live(&s.scope));
+            if accepted_samples.is_empty() {
+                return Ok(StatsWriteOutcome {
+                    persisted: 0,
+                    stale: samples.len(),
+                });
+            }
             let accepted: i64 = sqlx::query_scalar(concat!(
                 include_str!("container_batch.sql"),
                 include_str!("capture.sql")
             ))
-            .bind(payload)
+            .bind(Json(&accepted_samples))
             .fetch_one(&mut *tx)
             .await
             .map_err(storage)?;
@@ -119,40 +114,39 @@ impl StatsBatchStore<PlatformStatsSample> for PostgresStatsBatchStore {
             if samples.is_empty() {
                 return Ok(StatsWriteOutcome::default());
             }
-            let live: Vec<_> = samples
-                .iter()
-                .filter(|s| !s.scope.closed.as_ref().is_some_and(|t| t.is_cancelled()))
-                .collect();
-            let mut payload = serde_json::to_value(&live).map_err(|e| {
-                RuntimeCapabilityError::new(RuntimeErrorKind::InvalidRequest, e.to_string(), false)
-            })?;
-            for (value, sample) in payload.as_array_mut().unwrap().iter_mut().zip(live.iter()) {
-                if let Some(metadata) = value.get_mut("metadata").and_then(Value::as_object_mut) {
-                    let disk = sample.metadata.as_ref().and_then(|m| m.disk());
-                    metadata.insert(
-                        "diskUsedBytes".into(),
-                        serde_json::json!(disk.map(|d| d.used_bytes)),
-                    );
-                    metadata.insert(
-                        "diskTotalBytes".into(),
-                        serde_json::json!(disk.map(|d| d.total_bytes)),
-                    );
-                    metadata.insert(
-                        "diskUsage".into(),
-                        serde_json::json!(disk.map(|d| d.usage_percent)),
-                    );
-                }
+            let mut accepted_samples: Vec<_> = samples.iter().filter(|s| live(&s.scope)).collect();
+            if accepted_samples.is_empty() {
+                return Ok(StatsWriteOutcome {
+                    persisted: 0,
+                    stale: samples.len(),
+                });
             }
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            lock_scopes(&mut tx, &payload).await?;
-            prune_closed(&mut payload, live.iter().map(|s| &s.scope));
-            sqlx::query(include_str!("platform_metadata_batch.sql"))
-                .bind(&payload)
-                .execute(&mut *tx)
-                .await
-                .map_err(storage)?;
+            lock_scopes(&mut tx, accepted_samples.iter().map(|s| &s.scope)).await?;
+            accepted_samples.retain(|s| live(&s.scope));
+            if accepted_samples.is_empty() {
+                return Ok(StatsWriteOutcome {
+                    persisted: 0,
+                    stale: samples.len(),
+                });
+            }
+            let metadata: Vec<_> = accepted_samples
+                .iter()
+                .filter_map(|s| MetadataInput::from_sample(s))
+                .collect();
+            if !metadata.is_empty() {
+                sqlx::query(include_str!("platform_metadata_batch.sql"))
+                    .bind(Json(&metadata))
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(storage)?;
+            }
+            let captures: Vec<_> = accepted_samples
+                .iter()
+                .map(|s| PlatformCapture::from(*s))
+                .collect();
             let accepted: i64 = sqlx::query_scalar(include_str!("platform_batch.sql"))
-                .bind(payload)
+                .bind(Json(&captures))
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(storage)?;

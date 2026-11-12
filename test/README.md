@@ -1287,6 +1287,77 @@ Container sampling error propagation and recovery are covered by
 This reuses the Unix-socket transport fixture to verify typed failures retain
 Docker's error cause and a subsequent successful reading works normally.
 
+### Telemetry allocation and query regression checks
+
+Use disposable PostgreSQL 18 databases for every command below. Alert fixtures
+require a database named `citadel_update_test_*`; set the three database URLs to
+separate disposable databases. `SQLX_OFFLINE` does not isolate runtime SQL.
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::statistics
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib batch_input
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib history_admission -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test alert_persistence -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::disk_tests -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::runtime_persistence_tests -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test stats_batch_persistence -- --ignored --test-threads=1
+```
+
+The 10,000-container ingress fixture checks complete-capture admission, conservative
+encoded bounds and shared reservation lifetime. Writer tests cover byte boundaries,
+retry ownership and shutdown. Native alert tests use a one-connection pool with cold
+configuration and a database-backed entitlement provider; injected acknowledgement
+failure must roll back events and suppress callbacks. Concurrent corrections must
+remain pending. History admission tests observe `pg_stat_activity`, cancel a real
+sleeping backend, and verify admission is held until server cleanup and local
+settings are restored. Compaction budget fixtures check complete-minute prefixes,
+oversized-minute fencing, another source's progress and later recovery.
+
+Performance comparisons must keep accepted samples, polling, history and query
+memory settings constant. Include full-length Docker IDs, raw and mixed history,
+custom and generic plans, unrelated sources/days, resets, missing counters and
+historical ownership. Compare every returned field and record temporary I/O,
+backend memory, elapsed time and useful progress separately. Encoded SQL argument
+bytes are not allocator peaks; container working set includes cache/shared memory
+and is not a direct measure of PostgreSQL private allocations. Do not trade hidden
+sample loss for a lower memory graph. Retain source/owner/time predicates, narrow
+counter windows, shared history admission, atomic alert acknowledgement and
+complete-minute compaction boundaries in future changes.
+
+#### Review measurements (2026-11-12)
+
+Baseline: `7255781fc16ef298edf0ec620d5bda2bba47e1b9`. Measurements used disposable
+PostgreSQL 18.6, `work_mem=4MB`, JIT off and unchanged accepted input. Timing values
+are illustrative measurements on the development machine, not production SLAs.
+The workload/service fixture contained 50 physical sources, full-length Docker IDs,
+8,641 observations per source, resets and missing block counters. Mixed history
+compacted its first hour. Every output field matched the baseline in all eight
+resource/raw-or-mixed/custom-or-generic combinations (floating tolerance `1e-10`
+relative / `1e-8` absolute).
+
+| Finding | Validated mechanism and implementation | Evidence and limitation |
+| --- | --- | --- |
+| F1 | `statistics/batch.rs`, `batch_input.rs`, `platform_metadata_batch.sql`: full capture JSON was sent to locking/metadata queries. Use UUID arrays and borrowed, narrow projections. | The 10,000-container unit fixture reduces modeled SQL argument bytes from 6,473,688 to 1,618,681, about 75%. These are encoded bytes, not allocator/RSS savings. Native tests preserve duplicate order, metadata, Edge fencing and closure while waiting for a lock. |
+| F2 | `alerts/platform_metrics.rs`, `rule_evaluation.rs`, shared rule selection: alert processing reacquired the pool while holding the flush transaction. Prepare configuration/entitlements first; evaluate and acknowledge atomically. | The one-connection cold path timed out before the change and succeeds afterward, including a database-backed entitlement provider. Injected acknowledgement failure commits no events and emits no callback. Concurrent corrected revisions remain pending. Preparation may make sequential checkouts; evaluation never nests one. |
+| F3 | `workers/statistics/budget.rs`, `ingress.rs`, `writer/`: item counts ignored nested payload size. Shared admission tracks independently reclaimable writer portions through completion/retry; batches honor encoded limits. | Six complete 10,000-container polling cycles fit through a minute flush when container writes make progress. The isolated debug test process peaked at 43,008 KiB RSS; this is not a baseline Core comparison. Oversize/capacity drops are explicit, whole-cycle and rate-reported; retry expiry and shutdown release reservations. Collection/transport and allocator-retained memory remain outside the ingress bound. |
+| F4 | `alerts/platform_metrics.rs`, `workers/stats_alerts.rs`, runtime metrics: wide pending reads retained unused fields and stalled alerts could hide blocked compaction. | The 500-capture/1,000-container fixture's sample CTE width falls from 102 to 64 bytes; neither version spilled. This is a narrow-read improvement, not a claimed major memory win. Bounded diagnostics report pending work, oldest age, progress and blockage without clearing protected work. |
+| F5 | `platforms/history_admission.rs`, `reader.rs`, Core composition: unrestricted expensive reads multiplied database working sets. Shared immediate admission and local timeouts retain ownership through cleanup. | Six one-hour fixture reads completed in 6.56 seconds with one concurrent execution and 4.66 seconds with two; individual latency rose with two. Two slots retain throughput while bounding concurrency, clamped to one for a one-connection pool. Native cancellation tests observe the backend and restored settings. A slow large range can now return a timeout; shorten/retry it. |
+| F6 | `workload_history.sql`, `service_history.sql`: wide array-bearing windows amplified sort/temporary work. Separate weighted gauges from narrow physical counter endpoints and combine logical replicas after physical deltas. | Temporary writes fell 64–80% across the eight comparisons. Mixed generic workload: 323,133,440 → 72,695,808 bytes. Sampled backend anonymous RSS peak: 20,128 → 15,584 KiB. Sampling is a lower-bound observation, not an allocator high-water mark. Generic plans may still choose one date-index scan with owner filtering; the rewrite avoids repeating that scan per owner. |
+| F7 | `platform_maintenance.rs`, `platform_compaction_bounds.sql`, `platform_compaction_size.sql`, maintenance store: an hour cap did not bound nested observations. Size complete-minute prefixes, recheck under the scope lock and rotate candidates. | A 1,000-container source-hour has 360,000 observations; a 16-minute prefix has 96,000. Compaction statement time was 801 → 145 ms and temporary writes 6,316,032 → 0 bytes. Four bounded commits sealed the hour; sizing/discovery round trips are additional cost. Discovery across 1,024 sources measured 15.8 ms / 6,177 shared hits. Oversized minutes stay unsealed and activate failure backoff; cursor advancement lets later sources proceed. |
+
+F1–F7 preserve ownership, history values, alert revision fencing and atomic
+raw-to-summary movement. Those changes add no schema migration, global PostgreSQL setting,
+container memory cap, collection-frequency reduction or replacement database.
+The larger redesigns (separate durable metric-alert queue, shared physical I/O
+storage, statement-cache/release-profile tuning and small-install PostgreSQL
+configuration) remain measurement-gated follow-ups.
+
+This review does not establish an end-to-end demo memory reduction, a Core allocator
+peak reduction, or multi-day catch-up capacity under arbitrary source churn. Cache,
+shared buffers and already allocated database files may remain visible after
+execution work falls. Re-measure an equal deployment workload before claiming that
+the original production memory graph is fixed.
+
 ### Swarm Platform I/O
 
 `stats_batch_persistence::swarm_platform_io_aggregates_nodes_without_losing_history_or_overwriting_host_gauges`
@@ -1367,3 +1438,31 @@ concurrent partial saves and enabled-human-administrator reauthorization. Migrat
 tests retain the preceding checksums and saved installation choices. Frontend
 coverage lives in `features/instance/settings.test.tsx`, the sidebar tests and the
 existing installation-settings mutation and Script form suites.
+
+
+### Inventory, health and execution overhead regression checks
+
+The follow-up to F1–F7 applies to ordinary installations, including large inventories:
+
+- `platform_inventory_persistence::overhead` counts real projection updates during
+  unchanged Swarm reconciliation, verifies absent-resource removal and zero derived
+  counts, and exercises shared health/statistics admission while ordinary SQL remains
+  available. `network_references` also exercises more than two network batches.
+- `citadel-database`'s `parity::health_retention` upgrades populated history through
+  migration `0005`, preserves observations, checks rollback and both local caps, and
+  compares indexed expiry with an OFFSET scan using native EXPLAIN buffer counts.
+  On the disposable PostgreSQL 18 fixture with 10,080 retained samples, the new
+  expiry lookup touched two shared buffers. This is a query-shape check on the
+  upgraded schema, not a before/after production memory benchmark. The global
+  retention lock remains; this optimization adds a narrow counter write.
+- `build_execution::attempts` verifies a multi-row log transaction, ordering, rejected
+  stale attempts and rollback of a failed batch. `backup_execution::completion`
+  exercises multiple row/byte-limited batches through completion retries and lost
+  acknowledgements for both backup and restore.
+- `citadel-docker`'s `builds::output` tests byte bounds, UTF-8, redaction across chunks,
+  quiet-stream flushing, EOF and producer cancellation on persistence failure.
+
+Run native suites against disposable databases as described above. The new migration
+is additive; original migration checksums stay unchanged. No production memory
+reduction is inferred from these checks: PostgreSQL cache and allocator retention
+need equivalent-load measurements after deployment.

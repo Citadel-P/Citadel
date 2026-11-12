@@ -220,25 +220,13 @@ impl PostgresAlertRepository {
                 .iter()
                 .any(|rule| rule.audit.created_by_actor_id.value() != Uuid::from_u128(1))
                 || self.entitlements.advanced_alerting().await?;
-            let rules = rules
-                .iter()
-                .filter(|rule| {
-                    (advanced_alerting
-                        || rule.audit.created_by_actor_id.value() == Uuid::from_u128(1))
-                        && rule_applies(rule, observation.resource_id)
-                        && !is_in_quiet_hours(&rule.quiet_hours, observation.observed_at)
-                })
-                .collect::<Vec<_>>();
-            // Rules are ordered by severity above. Select before cooldown so a
-            // suppressed winner cannot fall through to a less severe duplicate.
-            // Non-matches still reset their counters and resolve old incidents.
-            let mut winner = None;
-            for rule in &rules {
-                if observation_matches(rule, observation) {
-                    winner.get_or_insert(rule);
-                } else {
-                    self.process_rule(rule, observation, receipt).await?;
-                }
+            let (resets, winner) = citadel_alerts::rules::evaluation::select_observation_rules(
+                &rules,
+                observation,
+                advanced_alerting,
+            );
+            for rule in resets {
+                self.process_rule(rule, observation, receipt).await?;
             }
             match winner {
                 Some(rule) => self.process_rule(rule, observation, receipt).await,

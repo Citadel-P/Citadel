@@ -69,3 +69,5 @@ pub(crate) mod image_scan;
 pub(crate) mod volume_helpers;
 
 pub mod image_updates;
+
+pub mod history_admission;

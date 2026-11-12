@@ -1,3 +1,5 @@
+#[path = "platform_inventory_persistence/overhead.rs"]
+mod overhead;
 use std::collections::BTreeMap;
 
 use chrono::Utc;

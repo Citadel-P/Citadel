@@ -114,6 +114,8 @@ pub struct RuntimePlatformStats {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthorizedReadError {
+    #[error(transparent)]
+    Runtime(RuntimeCapabilityError),
     #[error("The requested resource was not found.")]
     NotFound,
     #[error("{0}")]

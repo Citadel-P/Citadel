@@ -1,7 +1,7 @@
 -- Recent observations and all retained transitions stay exact. Older periodic
 -- samples are grouped by state/evidence, so healthy samples never hide failures.
 WITH retained AS MATERIALIZED (
-    SELECT * FROM containerhealthtransitions
+    SELECT id,observedat,state,health,origin FROM containerhealthtransitions
     WHERE containerid=$1 AND recordedat>=now()-interval '7 days'
       AND observedat>=extract(epoch FROM now()-interval '7 days')::bigint
       AND observedat<=extract(epoch FROM now())::bigint

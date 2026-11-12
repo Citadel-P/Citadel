@@ -122,5 +122,20 @@ pub trait BuildRepository: Send + Sync {
         attempt_id: Uuid,
         log: &'a BuildLog,
     ) -> BoxFuture<'a, Result<BuildLogEntry, BuildError>>;
+    /// Append one bounded batch under the same attempt fence, before publication.
+    fn append_logs<'a>(
+        &'a self,
+        run_id: Uuid,
+        attempt_id: Uuid,
+        logs: &'a [BuildLog],
+    ) -> BoxFuture<'a, Result<Vec<BuildLogEntry>, BuildError>> {
+        Box::pin(async move {
+            let mut entries = Vec::with_capacity(logs.len());
+            for log in logs {
+                entries.push(self.append_log(run_id, attempt_id, log).await?);
+            }
+            Ok(entries)
+        })
+    }
     fn cancel_queued<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<bool, BuildError>>;
 }

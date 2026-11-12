@@ -22,4 +22,4 @@ LEFT JOIN LATERAL (
 ) pending ON true
 WHERE ($3::bigint IS NULL OR src.id=$3)
     AND first.created<LEAST($1,(first.created/60+60)*60,last.created/60*60,pending.created/60*60)
-ORDER BY first.created,src.id LIMIT 1
+ORDER BY (src.id<=$4),src.id LIMIT 1

@@ -37,6 +37,7 @@ async fn ingress_preserves_capture_timestamps_and_host_totals_without_database_w
         containers,
         platforms,
         realtime: None,
+        budget: Default::default(),
     };
     let cancel = CancellationToken::new();
     assert!(
@@ -72,6 +73,7 @@ async fn nodes_keep_scoped_captures_and_empty_hosts_still_emit_platform_samples(
         containers,
         platforms,
         realtime: None,
+        budget: Default::default(),
     };
     let cancel = CancellationToken::new();
     assert!(
@@ -111,6 +113,7 @@ async fn one_discovery_cycle_has_one_complete_total_across_completion_seconds() 
         containers,
         platforms,
         realtime: None,
+        budget: Default::default(),
     };
     let cancel = CancellationToken::new();
     let stats = (0..6)
@@ -147,6 +150,7 @@ async fn invalid_sample_cannot_poison_writes_or_publish_a_partial_host_total() {
         containers,
         platforms,
         realtime: None,
+        budget: Default::default(),
     };
     let mut bad = sample("bad", 10);
     bad.cpu_usage = f64::NAN;
@@ -168,4 +172,121 @@ async fn invalid_sample_cannot_poison_writes_or_publish_a_partial_host_total() {
         pq.try_recv().is_err(),
         "partial host total must not masquerade as complete"
     );
+}
+
+#[tokio::test]
+async fn dense_capture_keeps_one_shared_reservation_until_both_writers_release_it() {
+    let budget = super::budget::Budget::default();
+    let (containers, mut cq) = writer::channel(10_000, RuntimeWork::ContainerStatsIngress);
+    let (platforms, mut pq) = writer::channel(2, RuntimeWork::PlatformStatsIngress);
+    let ingress = StatsIngress {
+        containers,
+        platforms,
+        realtime: None,
+        budget: budget.clone(),
+    };
+    let stats = (0..10_000)
+        .map(|i| sample(&format!("{i:064}"), 10))
+        .collect();
+    assert!(
+        ingress
+            .submit_cycle(scope(None), stats, None, 10, &CancellationToken::new())
+            .await
+    );
+    let capture = pq.try_recv().unwrap();
+    assert_eq!(capture.container_io.len(), 10_000);
+    let actual = serde_json::to_vec(&*capture).unwrap().len();
+    assert!(actual < capture.encoded);
+    assert!(capture.encoded <= super::budget::BATCH_BYTES);
+    let reserved = super::budget::RETAINED_BYTES - budget.available();
+    assert!(reserved > actual);
+    while let Ok(row) = cq.try_recv() {
+        assert!(serde_json::to_vec(&*row).unwrap().len() < row.encoded);
+    }
+    assert!(budget.available() > super::budget::RETAINED_BYTES - reserved);
+    assert!(budget.available() < super::budget::RETAINED_BYTES);
+    drop(capture);
+    assert_eq!(budget.available(), super::budget::RETAINED_BYTES);
+}
+
+#[tokio::test]
+async fn oversized_or_saturated_cycle_is_rejected_without_partial_capture_or_wait() {
+    let budget = super::budget::Budget::default();
+    let (containers, cq) = writer::channel(2, RuntimeWork::ContainerStatsIngress);
+    let (platforms, pq) = writer::channel(2, RuntimeWork::PlatformStatsIngress);
+    let ingress = StatsIngress {
+        containers,
+        platforms,
+        realtime: None,
+        budget: budget.clone(),
+    };
+    let token = CancellationToken::new();
+    assert!(
+        ingress
+            .submit_cycle(
+                scope(None),
+                vec![sample(&"x".repeat(super::budget::BATCH_BYTES), 1)],
+                None,
+                1,
+                &token
+            )
+            .await
+    );
+    assert_eq!((cq.len(), pq.len()), (0, 0));
+    let held = budget.reserve(super::budget::RETAINED_BYTES).unwrap();
+    assert!(
+        ingress
+            .submit_cycle(scope(None), vec![sample("small", 1)], None, 1, &token)
+            .await
+    );
+    assert_eq!((cq.len(), pq.len()), (0, 0));
+    drop(held);
+    assert_eq!(budget.available(), super::budget::RETAINED_BYTES);
+    token.cancel();
+    assert!(
+        !ingress
+            .submit_cycle(scope(None), vec![sample("small", 1)], None, 1, &token)
+            .await
+    );
+    assert_eq!(budget.available(), super::budget::RETAINED_BYTES);
+}
+
+#[tokio::test]
+async fn dense_host_keeps_all_six_poll_cycles_until_the_normal_minute_flush() {
+    let budget = super::budget::Budget::default();
+    let (containers, mut cq) = writer::channel(10_000, RuntimeWork::ContainerStatsIngress);
+    let (platforms, mut pq) = writer::channel(8, RuntimeWork::PlatformStatsIngress);
+    let ingress = StatsIngress {
+        containers,
+        platforms,
+        realtime: None,
+        budget: budget.clone(),
+    };
+    let host = scope(None);
+    for cycle in 0..6 {
+        let stats = (0..10_000)
+            .map(|i| sample(&format!("{i:064}"), cycle * 10))
+            .collect();
+        assert!(
+            ingress
+                .submit_cycle(
+                    host.clone(),
+                    stats,
+                    None,
+                    cycle * 10,
+                    &CancellationToken::new()
+                )
+                .await
+        );
+        assert_eq!(
+            cq.len(),
+            10_000,
+            "the byte limit must not hide rejected dense-host cycles"
+        );
+        while cq.try_recv().is_ok() {}
+        assert_eq!(pq.len(), cycle as usize + 1);
+    }
+    assert!(budget.available() < super::budget::RETAINED_BYTES);
+    while pq.try_recv().is_ok() {}
+    assert_eq!(budget.available(), super::budget::RETAINED_BYTES);
 }

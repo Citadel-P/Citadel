@@ -42,6 +42,7 @@ impl From<RuntimeCapabilityError> for SwarmCompletionError {
 impl From<crate::AuthorizedReadError> for SwarmCompletionError {
     fn from(error: crate::AuthorizedReadError) -> Self {
         let kind = match &error {
+            crate::AuthorizedReadError::Runtime(error) => error.kind,
             crate::AuthorizedReadError::NotFound => RuntimeErrorKind::NotFound,
             crate::AuthorizedReadError::Conflict(_) => RuntimeErrorKind::Conflict,
             crate::AuthorizedReadError::Storage(_) => RuntimeErrorKind::Remote,

@@ -26,3 +26,27 @@ pub fn observation_matches(rule: &AlertRule, observation: &AlertObservation) -> 
         (None, _) => observation.matched,
     }
 }
+
+/// Rules arrive in severity order. Select the winner before cooldown so a
+/// suppressed winner never falls through to a lower-severity duplicate.
+/// Nonmatches still reset counters and resolve incidents.
+pub fn select_observation_rules<'a>(
+    rules: &'a [AlertRule],
+    observation: &AlertObservation,
+    advanced: bool,
+) -> (Vec<&'a AlertRule>, Option<&'a AlertRule>) {
+    let mut resets = Vec::new();
+    let mut winner = None;
+    for rule in rules.iter().filter(|rule| {
+        (advanced || rule.audit.created_by_actor_id.value() == Uuid::from_u128(1))
+            && rule_applies(rule, observation.resource_id)
+            && !crate::is_in_quiet_hours(&rule.quiet_hours, observation.observed_at)
+    }) {
+        if observation_matches(rule, observation) {
+            winner.get_or_insert(rule);
+        } else {
+            resets.push(rule);
+        }
+    }
+    (resets, winner)
+}

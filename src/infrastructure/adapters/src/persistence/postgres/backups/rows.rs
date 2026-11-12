@@ -39,24 +39,37 @@ pub(super) async fn write_logs(
     id: Uuid,
     logs: &[BackupLog],
 ) -> Result<(), BackupError> {
-    for log in logs {
-        let sql = match (table, column) {
-            ("backuprunlogs", "backuprunid") => {
-                "INSERT INTO backuprunlogs(id,backuprunid,createdat,stream,message) VALUES($1,$2,CURRENT_TIMESTAMP,$3,$4)"
+    let sql = match (table, column) {
+        ("backuprunlogs", "backuprunid") => {
+            "INSERT INTO backuprunlogs(id,backuprunid,createdat,stream,message) "
+        }
+        ("backuprestorerunlogs", "backuprestorerunid") => {
+            "INSERT INTO backuprestorerunlogs(id,backuprestorerunid,createdat,stream,message) "
+        }
+        _ => return Err(BackupError::Storage("invalid Backup log target".into())),
+    };
+    let mut start = 0;
+    while start < logs.len() {
+        let mut end = start;
+        let mut bytes = 0usize;
+        while end < logs.len() && end - start < 128 {
+            let cost = logs[end].message.len().saturating_add(128);
+            if end > start && bytes.saturating_add(cost) > 64 * 1024 {
+                break;
             }
-            ("backuprestorerunlogs", "backuprestorerunid") => {
-                "INSERT INTO backuprestorerunlogs(id,backuprestorerunid,createdat,stream,message) VALUES($1,$2,CURRENT_TIMESTAMP,$3,$4)"
-            }
-            _ => return Err(BackupError::Storage("invalid Backup log target".into())),
-        };
-        sqlx::query(sql)
-            .bind(Uuid::now_v7())
-            .bind(id)
-            .bind(&log.stream)
-            .bind(&log.message)
-            .execute(&mut **tx)
-            .await
-            .map_err(storage)?;
+            bytes = bytes.saturating_add(cost);
+            end += 1;
+        }
+        let mut query = sqlx::QueryBuilder::new(sql);
+        query.push_values(&logs[start..end], |mut row, log| {
+            row.push_bind(Uuid::now_v7())
+                .push_bind(id)
+                .push("CURRENT_TIMESTAMP")
+                .push_bind(&log.stream)
+                .push_bind(&log.message);
+        });
+        query.build().execute(&mut **tx).await.map_err(storage)?;
+        start = end;
     }
     Ok(())
 }

@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "9ec41bcb4d4ce1448e883e1f19918a04f5bbeed743eb9fc2853287a0e99c7942"
+    "sha256": "45631185583c70201e0146bbfc1717cb318369f8da200a96d527e7849bb59538"
   },
   "migrations": [
     {
@@ -34,6 +34,14 @@
       "name": "query_indexes",
       "file": "0004_query_indexes.sql",
       "sha256": "2f1970bbe326ad5723f27b52ad1cb93629738982f7dea8a70c0d6d12d634b332",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0005",
+      "name": "health_history_retention",
+      "file": "0005_health_history_retention.sql",
+      "sha256": "765d37fd87b42fac97018f60399a0c52df82b0cfd96343cf866fddf2a6ddd83b",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

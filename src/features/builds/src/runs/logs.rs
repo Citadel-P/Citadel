@@ -27,6 +27,14 @@ pub trait BuildLogSink: Send + Sync {
         stream: &'a str,
         message: &'a str,
     ) -> BoxFuture<'a, Result<(), BuildError>>;
+    fn append_batch<'a>(&'a self, logs: &'a [BuildLog]) -> BoxFuture<'a, Result<(), BuildError>> {
+        Box::pin(async move {
+            for log in logs {
+                self.append(&log.stream, &log.message).await?;
+            }
+            Ok(())
+        })
+    }
 }
 
 pub struct NoopBuildLogSink;
@@ -67,42 +75,70 @@ impl BuildLogSink for PersistedBuildLogs {
         stream: &'a str,
         message: &'a str,
     ) -> BoxFuture<'a, Result<(), BuildError>> {
+        Box::pin(async move { self.append_parts(&[(stream, message)]).await })
+    }
+    fn append_batch<'a>(&'a self, logs: &'a [BuildLog]) -> BoxFuture<'a, Result<(), BuildError>> {
         Box::pin(async move {
-            if !matches!(stream, "stdout" | "stderr" | "system") {
-                return Err(BuildError::Validation("Invalid Build log stream.".into()));
-            }
-            // A noisy child must still be drained after the durable log budget
-            // is exhausted. Count metadata as well as message bytes.
-            let mut remaining = message;
+            let parts: Vec<_> = logs
+                .iter()
+                .map(|log| (log.stream.as_str(), log.message.as_str()))
+                .collect();
+            self.append_parts(&parts).await
+        })
+    }
+}
+impl PersistedBuildLogs {
+    async fn append_parts(&self, logs: &[(&str, &str)]) -> Result<(), BuildError> {
+        if logs
+            .iter()
+            .any(|(stream, _)| !matches!(*stream, "stdout" | "stderr" | "system"))
+        {
+            return Err(BuildError::Validation("Invalid Build log stream.".into()));
+        }
+        let mut batch = Vec::new();
+        let mut bytes = 0;
+        for &(stream, mut remaining) in logs {
             while !remaining.is_empty() {
-                let mut end = remaining.len().min(8192);
-                while !remaining.is_char_boundary(end) {
-                    end -= 1;
-                }
+                let end = remaining.floor_char_boundary(8192.min(remaining.len()));
                 let part = &remaining[..end];
                 remaining = &remaining[end..];
+                let cost = part.len() + 128;
                 if self
                     .remaining
                     .try_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
-                        left.checked_sub(part.len() + 128)
+                        left.checked_sub(cost)
                     })
                     .is_err()
                 {
-                    return Ok(());
+                    return self.persist(&batch).await;
                 }
-                let log = BuildLog {
+                if bytes + cost > 64 * 1024 || batch.len() >= 128 {
+                    self.persist(&batch).await?;
+                    batch.clear();
+                    bytes = 0;
+                }
+                batch.push(BuildLog {
                     stream: stream.into(),
                     message: part.replace('\0', ""),
-                };
-                let entry = self
-                    .store
-                    .append_log(self.run, self.attempt_id, &log)
-                    .await?;
-                if let Some(notify) = &self.notifier {
-                    notify(self.run, entry);
-                }
+                });
+                bytes += cost;
             }
-            Ok(())
-        })
+        }
+        self.persist(&batch).await
+    }
+    async fn persist(&self, logs: &[BuildLog]) -> Result<(), BuildError> {
+        if logs.is_empty() {
+            return Ok(());
+        }
+        let entries = self
+            .store
+            .append_logs(self.run, self.attempt_id, logs)
+            .await?;
+        if let Some(notify) = &self.notifier {
+            for entry in entries {
+                notify(self.run, entry);
+            }
+        }
+        Ok(())
     }
 }

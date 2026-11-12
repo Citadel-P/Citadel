@@ -173,9 +173,9 @@ pub async fn register(
             pool.clone(),
         );
     let container_reader = Arc::new(citadel_adapters::persistence::postgres::platforms::background::PostgresContainerMaintenanceReader(pool.clone()));
-    let metric_alerts = Arc::new(citadel_adapters::persistence::postgres::alerts::platform_metrics::PostgresPlatformAlertBatchStore::new(pool.clone(), env!("CITADEL_BUILD_VERSION")));
+    let metric_alerts = Arc::new(citadel_adapters::persistence::postgres::alerts::platform_metrics::PostgresPlatformAlertBatchStore::new(pool.clone(), env!("CITADEL_BUILD_VERSION"), alerts.clone()));
     let maintenance = Arc::new(
-        citadel_adapters::persistence::postgres::maintenance::PostgresMaintenanceStore(
+        citadel_adapters::persistence::postgres::maintenance::PostgresMaintenanceStore::new(
             pool.clone(),
         ),
     );
@@ -273,7 +273,6 @@ pub async fn register(
         crate::workers::stats_alerts::run(
             cancellation.child_token(),
             metric_alerts,
-            alerts.clone(),
             settings.stats_flush_interval,
             i64::try_from(settings.stats_batch_size).unwrap_or(i64::MAX),
             notifications.subscribe(RuntimeSignal::PlatformStats),

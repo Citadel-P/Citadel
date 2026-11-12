@@ -122,6 +122,10 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
     {
         deleted += sqlx::query(sql).execute(pool).await?.rows_affected();
     }
+    // Ordinals remain valid while any retained history exists, including deleted
+    // containers. Remove empty counters in bounded batches to avoid churn leaks.
+    sqlx::query("WITH empty AS (SELECT c.containerid FROM containerhealthhistorycounters c WHERE NOT EXISTS(SELECT 1 FROM containerhealthtransitions h WHERE h.containerid=c.containerid) ORDER BY c.containerid LIMIT 500 FOR UPDATE OF c SKIP LOCKED) DELETE FROM containerhealthhistorycounters c USING empty WHERE c.containerid=empty.containerid")
+        .execute(pool).await?;
     if let Some(days) = build_retention_days.filter(|days| *days > 0) {
         deleted += sqlx::query(BUILD_RETENTION_SQL)
             .bind(days)
@@ -136,7 +140,12 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
 /// Compaction runs independently of the slower retention sweep under the same lease.
 pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let progress = super::platforms::statistics::maintenance::compact(pool).await?;
-    Ok(progress + super::platforms::statistics::platform_maintenance::compact(pool).await?)
+    Ok(progress
+        + super::platforms::statistics::platform_maintenance::compact(
+            pool,
+            &std::sync::atomic::AtomicI64::new(0),
+        )
+        .await?)
 }
 
 /// Refresh tokens have a separate expiry cadence. Backup leases are ownership
@@ -171,7 +180,18 @@ pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
     tx.commit().await
 }
 
-pub struct PostgresMaintenanceStore(pub PgPool);
+pub struct PostgresMaintenanceStore {
+    pool: PgPool,
+    platform_cursor: std::sync::atomic::AtomicI64,
+}
+impl PostgresMaintenanceStore {
+    pub fn new(pool: PgPool) -> Self {
+        Self {
+            pool,
+            platform_cursor: std::sync::atomic::AtomicI64::new(0),
+        }
+    }
+}
 impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore {
     fn reconcile(
         &self,
@@ -180,7 +200,7 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         Result<Vec<&'static str>, citadel_runtime::maintenance::MaintenanceError>,
     > {
         Box::pin(async move {
-            reconcile(&self.0)
+            reconcile(&self.pool)
                 .await
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })
@@ -192,7 +212,7 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         Result<(), citadel_runtime::maintenance::MaintenanceError>,
     > {
         Box::pin(async move {
-            expire_leases(&self.0)
+            expire_leases(&self.pool)
                 .await
                 .map(|_| ())
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
@@ -205,9 +225,16 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         Result<u64, citadel_runtime::maintenance::MaintenanceError>,
     > {
         Box::pin(async move {
-            compact(&self.0)
+            let physical = super::platforms::statistics::maintenance::compact(&self.pool)
                 .await
-                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
+                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
+            let platform = super::platforms::statistics::platform_maintenance::compact(
+                &self.pool,
+                &self.platform_cursor,
+            )
+            .await
+            .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
+            Ok(physical + platform)
         })
     }
     fn cleanup(
@@ -218,7 +245,7 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         Result<u64, citadel_runtime::maintenance::MaintenanceError>,
     > {
         Box::pin(async move {
-            cleanup(&self.0, days)
+            cleanup(&self.pool, days)
                 .await
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })

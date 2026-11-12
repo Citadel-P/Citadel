@@ -13,6 +13,7 @@ use super::writer;
 pub struct StatsIngress {
     pub(super) containers: writer::Ingress<ContainerStatsSample>,
     pub(super) platforms: writer::Ingress<PlatformStatsSample>,
+    pub(super) budget: super::budget::Budget,
     pub(super) realtime: Option<RealtimeHub>,
 }
 
@@ -61,6 +62,7 @@ pub fn register(
         ),
     );
     StatsIngress {
+        budget: Default::default(),
         containers,
         platforms,
         realtime,
@@ -106,6 +108,57 @@ impl StatsIngress {
         if cancel.is_cancelled() {
             return false;
         }
+        // Bound preflight's timestamp map before constructing it. Even the
+        // scalar representations alone cannot fit if these lower bounds exceed
+        // the budget; no payload serialization is needed to reject that case.
+        let scalar_bytes = stats.len().saturating_mul(
+            2 * std::mem::size_of::<ContainerStatsSample>()
+                + 2 * std::mem::size_of::<citadel_platforms::ContainerIoSnapshot>(),
+        );
+        if scalar_bytes > super::budget::RETAINED_BYTES
+            || stats
+                .capacity()
+                .saturating_mul(std::mem::size_of::<RuntimeContainerStat>())
+                > super::budget::RETAINED_BYTES
+        {
+            self.budget.reject(true);
+            return true;
+        }
+        // Reserve before constructing totals or cloned scope/IO representations.
+        // Admission is immediate: waiting collectors cannot accumulate owned input.
+        let scope_bytes = super::budget::scope_bytes(&scope);
+        // The capture and narrow metadata statements each carry scope data.
+        let capture_base = scope_bytes.saturating_mul(2).saturating_add(1024);
+        let mut capture_sizes = BTreeMap::<i64, usize>::new();
+        let oversized = stats.iter().any(|stat| {
+            let bytes = capture_sizes
+                .entry(captured_at.unwrap_or(stat.created))
+                .or_insert(capture_base);
+            *bytes = bytes.saturating_add(super::budget::io_bytes(stat));
+            *bytes > super::budget::BATCH_BYTES
+                || super::budget::container_bytes(scope_bytes, stat) > super::budget::BATCH_BYTES
+        }) || capture_base > super::budget::BATCH_BYTES;
+        if oversized {
+            self.budget.reject(true);
+            // False stops the owning sampler; rejected telemetry must not stop collection.
+            return true;
+        }
+        let (bytes, container_bytes, platform_bytes) = super::budget::cycle_bytes(
+            &scope,
+            &stats,
+            capture_sizes.len(),
+            capture_sizes
+                .values()
+                .copied()
+                .sum::<usize>()
+                .max(capture_base),
+        );
+        let Some(mut lease) = self.budget.reserve(bytes) else {
+            self.budget.reject(bytes > super::budget::RETAINED_BYTES);
+            return true;
+        };
+        let container_lease = super::budget::Lease::split(&mut lease, container_bytes);
+        let platform_lease = super::budget::Lease::split(&mut lease, platform_bytes);
         if let Some(oldest) = stats.iter().map(|s| s.created).min() {
             RuntimeWork::ContainerStatsIngress.age(Duration::from_secs(
                 chrono::Utc::now().timestamp().saturating_sub(oldest).max(0) as u64,
@@ -204,13 +257,16 @@ impl StatsIngress {
             );
         }
         for stat in stats {
+            let encoded = super::budget::container_bytes(scope_bytes, &stat);
             if !self
                 .containers
-                .send(
+                .send_owned(
                     ContainerStatsSample {
                         scope: scope.clone(),
                         sample: stat,
                     },
+                    Some(container_lease.clone()),
+                    encoded,
                     cancel,
                 )
                 .await
@@ -219,7 +275,15 @@ impl StatsIngress {
             }
         }
         for sample in totals.into_values() {
-            if !self.platforms.send(sample, cancel).await {
+            let encoded = capture_sizes
+                .get(&sample.created)
+                .copied()
+                .unwrap_or(capture_base);
+            if !self
+                .platforms
+                .send_owned(sample, Some(platform_lease.clone()), encoded, cancel)
+                .await
+            {
                 return false;
             }
         }

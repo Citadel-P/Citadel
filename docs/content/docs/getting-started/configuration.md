@@ -107,6 +107,16 @@ and save them in `citadel_data`. `CITADEL_JWT_ISSUER` and `CITADEL_JWT_AUDIENCE`
 follow the public URL when not explicitly configured. Back up the data volume
 with PostgreSQL so these keys remain available during recovery.
 
+Statistics buffering has a shared 64 MiB accounting budget and an 8 MiB estimated
+batch limit. A capture that cannot fit is dropped as a whole and reported in Core's
+runtime metrics and logs; increasing the sample-count batch setting does not bypass
+these byte limits. Sampling continues after a rejected capture. These limits do not
+cap PostgreSQL memory or change the memory figures shown for containers.
+
+Statistics and container health history reads share two slots per Core (one with a one-connection query
+pool) and a five-second database statement timeout. Busy or timed-out reads return
+an error; retry, or choose a shorter statistics history range.
+
 For additional options, use the [environment variable reference](/reference/environment-variables).
 Unattended administrator setup is explained in
 [first-run setup](/getting-started/first-run-setup).

@@ -169,10 +169,26 @@ pub(crate) async fn reconcile(
     snapshot: &RuntimeInventorySnapshot,
     swarm: &RuntimeSwarmInventory,
 ) -> Result<(), citadel_swarm_services::SwarmServiceError> {
+    #[derive(serde::Serialize)]
+    struct Hashes<'a> {
+        id: &'a str,
+        runtime_hash: &'a str,
+        legacy_runtime_hash: &'a Option<String>,
+    }
+    let hashes: Vec<_> = swarm
+        .services
+        .iter()
+        .filter(|s| s.legacy_runtime_hash.is_some())
+        .map(|s| Hashes {
+            id: &s.id,
+            runtime_hash: &s.runtime_hash,
+            legacy_runtime_hash: &s.legacy_runtime_hash,
+        })
+        .collect();
     // Upgrade only when the live raw spec still exactly matches the previously
     // applied raw hash. Never adopt an externally changed configuration as applied.
     sqlx::query("UPDATE swarmservices s SET lastappliedruntimehash=live.runtime_hash FROM jsonb_to_recordset($2) AS live(id text,runtime_hash text,legacy_runtime_hash text) WHERE s.platformid=$1 AND s.dockerserviceid=live.id AND s.lastappliedruntimehash=live.legacy_runtime_hash AND s.controlstate='Idle'")
-        .bind(snapshot.platform_id).bind(serde_json::to_value(&swarm.services).map_err(storage)?)
+        .bind(snapshot.platform_id).bind(sqlx::types::Json(&hashes))
         .execute(&mut **tx).await.map_err(storage)?;
     let rows = sqlx::query("SELECT s.* FROM swarmservices s JOIN platforms p ON p.id=s.platformid WHERE s.platformid=$1 AND s.operationstate IN ('Prepared','PendingAcceptance','Accepted','OutcomeUnknown') AND s.operationclusterid=p.clusterid AND s.preparedat<$2 - interval '2 seconds' AND (s.operationstate<>'Prepared' OR s.preparedat<$2 - interval '150 seconds') ORDER BY s.id FOR UPDATE OF s")
         .bind(snapshot.platform_id).bind(snapshot.observed_at).fetch_all(&mut **tx).await.map_err(storage)?;
