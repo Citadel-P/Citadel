@@ -299,6 +299,29 @@ async fn script_claim_is_exclusive_and_interrupted_runs_recover() {
         .with_timezone(&Utc);
     sqlx::query("UPDATE scripts SET scheduleenabled=true,schedulecron='30 10 * * *',scheduletimezone='Europe/Paris',lastscheduledrunat=NULL,controlstate='Idle',currentrunid=NULL,timeoutseconds=2000 WHERE id=$1")
         .bind(action.id).execute(&pool).await.unwrap();
+    // Page large definitions without transferring code into scheduling candidates.
+    let copies: Vec<Uuid> = sqlx::query_scalar("INSERT INTO scripts SELECT (jsonb_populate_record(NULL::scripts,to_jsonb(s)||jsonb_build_object('id',gen_random_uuid(),'name',s.name||'-schedule-'||n,'code',repeat('x',262144),'scheduleenabled',true))).* FROM scripts s CROSS JOIN generate_series(1,65)n WHERE s.id=$1 RETURNING id")
+        .bind(action.id).fetch_all(&pool).await.unwrap();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut after = None;
+    loop {
+        let page = store.list_scheduled(after, 64).await.unwrap();
+        assert!(page.len() <= 64);
+        if page.is_empty() {
+            break;
+        }
+        for candidate in page {
+            assert!(seen.insert(candidate.id));
+            after = Some(candidate.id);
+        }
+    }
+    assert!(copies.iter().all(|id| seen.contains(id)));
+    assert!(seen.contains(&action.id));
+    sqlx::query("DELETE FROM scripts WHERE id=ANY($1)")
+        .bind(copies)
+        .execute(&pool)
+        .await
+        .unwrap();
     let before = store.list_runs(action.id, 100).await.unwrap().len();
     assert_eq!(
         scheduler(pool.clone())

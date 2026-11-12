@@ -171,11 +171,17 @@ impl BackupCoverageService {
         &self,
         principal: &ActorPrincipal,
         platforms: &[Uuid],
+        selection: &CoverageSelection,
     ) -> Option<CoverageContext> {
         tokio::time::timeout(std::time::Duration::from_secs(3), async {
             let snapshot = self
                 .volume_coverage
-                .snapshot(principal.actor_id, principal.is_administrator(), platforms)
+                .snapshot(
+                    principal.actor_id,
+                    principal.is_administrator(),
+                    platforms,
+                    Some(selection),
+                )
                 .await
                 .ok()?;
             let scheduling_available = self.backups.scheduling_available().await.ok()?;
@@ -249,9 +255,13 @@ impl BackupCoverageService {
         id: Uuid,
         platform: Uuid,
     ) -> ResourceBackupSummaryView {
-        self.context(principal, &[platform])
-            .await
-            .map_or_else(|| unavailable(platform), |c| c.workload(kind, id, platform))
+        self.context(
+            principal,
+            &[platform],
+            &CoverageSelection::workload(kind, id),
+        )
+        .await
+        .map_or_else(|| unavailable(platform), |c| c.workload(kind, id, platform))
     }
     pub async fn container(
         &self,
@@ -260,7 +270,16 @@ impl BackupCoverageService {
         node: Option<&str>,
         docker: &str,
     ) -> ResourceBackupSummaryView {
-        self.context(principal, &[platform]).await.map_or_else(
+        self.context(
+            principal,
+            &[platform],
+            &CoverageSelection {
+                container_keys: vec![(platform, node.map(str::to_owned), docker.to_owned())],
+                ..Default::default()
+            },
+        )
+        .await
+        .map_or_else(
             || unavailable(platform),
             |c| c.container(platform, node, docker),
         )
@@ -285,9 +304,6 @@ impl BackupCoverageService {
         platform: Uuid,
         keys: &[(String, Option<String>)],
     ) -> ResourceBackupSummaryView {
-        let Some(c) = self.context(principal, &[platform]).await else {
-            return unavailable(platform);
-        };
         let targets = keys
             .iter()
             .cloned()
@@ -303,6 +319,13 @@ impl BackupCoverageService {
                 included: false,
             })
             .collect::<Vec<_>>();
+        let selection = CoverageSelection {
+            volumes: targets.iter().map(|t| t.target.clone()).collect(),
+            ..Default::default()
+        };
+        let Some(c) = self.context(principal, &[platform], &selection).await else {
+            return unavailable(platform);
+        };
         c.present(
             platform,
             c.snapshot
@@ -323,7 +346,11 @@ impl BackupCoverageService {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let context = self.context(principal, &platforms).await;
+        let selection = CoverageSelection {
+            deployments: views.iter().map(|v| v.id).collect(),
+            ..Default::default()
+        };
+        let context = self.context(principal, &platforms, &selection).await;
         for view in &mut views {
             view.backup_coverage = Some(context.as_ref().map_or_else(
                 || unavailable(view.platform_id),
@@ -346,7 +373,11 @@ impl BackupCoverageService {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let context = self.context(principal, &platforms).await;
+        let selection = CoverageSelection {
+            stacks: views.iter().map(|v| v.id).collect(),
+            ..Default::default()
+        };
+        let context = self.context(principal, &platforms, &selection).await;
         for view in &mut views {
             if let Some(platform) = view.platform_id {
                 view.backup_coverage = Some(context.as_ref().map_or_else(
@@ -371,7 +402,11 @@ impl BackupCoverageService {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let context = self.context(principal, &platforms).await;
+        let selection = CoverageSelection {
+            services: views.iter().map(|v| v.id).collect(),
+            ..Default::default()
+        };
+        let context = self.context(principal, &platforms, &selection).await;
         for view in &mut views {
             view.backup_coverage = Some(context.as_ref().map_or_else(
                 || unavailable(view.platform_id),
@@ -394,7 +429,11 @@ impl BackupCoverageService {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let context = self.context(principal, &platforms).await;
+        let selection = CoverageSelection {
+            containers: views.iter().map(|v| v.id).collect(),
+            ..Default::default()
+        };
+        let context = self.context(principal, &platforms, &selection).await;
         for view in &mut views {
             view.backup_coverage = Some(if view.projection_stale_since.is_some() {
                 unavailable(view.platform_id)

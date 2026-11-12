@@ -309,9 +309,65 @@ async fn stack_preview_and_execution_discover_owned_physical_mounts_without_save
         citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader(
             pool.clone(),
         )
-        .snapshot(actor, true, &[platform])
+        .snapshot(actor, true, &[platform], None)
         .await
         .unwrap();
+    use citadel_backups::coverage::{CoverageSelection, ObservedStorage, StorageTarget};
+    let selected = CoverageSelection {
+        volumes: vec![StorageTarget {
+            platform_id: platform,
+            name: "example_wordpress".into(),
+            host_path: None,
+            docker_node_id: None,
+        }],
+        ..Default::default()
+    };
+    let reader =
+        citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader(
+            pool.clone(),
+        );
+    let scoped = reader
+        .snapshot(actor, true, &[platform], Some(&selected))
+        .await
+        .unwrap();
+    assert!(scoped.containers.iter().all(|c| c.docker_id != "unrelated"));
+    assert!(
+        scoped.workloads.iter().any(|w| w.id == stack.id),
+        "policy-owned workloads retain shared-volume evidence"
+    );
+    let targets = selected
+        .volumes
+        .iter()
+        .cloned()
+        .map(|target| ObservedStorage {
+            target,
+            included: false,
+        })
+        .collect::<Vec<_>>();
+    let full_summary = coverage.evaluate(platform, &targets, None, true, true);
+    let scoped_summary = scoped.evaluate(platform, &targets, None, true, true);
+    assert_eq!(scoped_summary.status, full_summary.status);
+    assert_eq!(scoped_summary.policy_ids, full_summary.policy_ids);
+    assert_eq!(
+        scoped_summary.volumes[0].last_successful_run_at,
+        full_summary.volumes[0].last_successful_run_at
+    );
+    let denied_actor = ActorId::new(Uuid::now_v7());
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'User')")
+        .bind(denied_actor.value())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let denied = reader
+        .snapshot(denied_actor, false, &[platform], Some(&selected))
+        .await
+        .unwrap();
+    assert!(denied.policies.is_empty());
+    assert!(
+        denied.workloads.is_empty(),
+        "unauthorized policy sources do not expand the requested inventory"
+    );
+    assert!(denied.containers.is_empty());
     let workload = coverage
         .workloads
         .iter()
@@ -329,6 +385,18 @@ async fn stack_preview_and_execution_discover_owned_physical_mounts_without_save
     sqlx::query("UPDATE containers SET projectionstalesince=1 WHERE platformid=$1 AND dockercontainerid='database'").bind(platform).execute(&pool).await.unwrap();
     assert!(
         matches!(planner.plan(&claim, &cancel).await, Err(BackupError::Validation(m)) if m.contains("stale or incomplete"))
+    );
+    let incomplete = reader
+        .snapshot(actor, true, &[platform], Some(&selected))
+        .await
+        .unwrap();
+    assert!(
+        !incomplete
+            .workloads
+            .iter()
+            .find(|w| w.id == stack.id)
+            .unwrap()
+            .complete
     );
     let partial = planner
         .preview(BackupPreviewKind::Stack, stack.id, actor, true, &cancel)

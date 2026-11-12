@@ -9,7 +9,7 @@ mod runtime;
 mod service;
 mod tasks;
 pub use definitions::{
-    Script, ScriptConfiguration, UpdateScriptInput, UpdateScriptMetadata,
+    ScheduledScript, Script, ScriptConfiguration, UpdateScriptInput, UpdateScriptMetadata,
     changes_paid_configuration,
 };
 pub use error::ScriptError;

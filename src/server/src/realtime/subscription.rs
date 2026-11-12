@@ -123,6 +123,7 @@ async fn run_authorized_connection(
             }
             event = receiver.recv() => {
                 match event {
+                    Ok(event) if event.event_kind == "resyncRequired" => return Err(RealtimeError::Overloaded),
                     Ok(event) if event_matches(&event, &connection)
                         && event.resource_revision > connection.last_resource_revision => {
                         // The global UI subscription can see only authorized Platform summaries,

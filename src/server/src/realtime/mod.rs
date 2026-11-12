@@ -19,6 +19,7 @@ mod lease;
 pub(crate) mod shared_reads;
 pub use lease::AuthorizationLease;
 mod protocol;
+pub(crate) mod retention;
 mod subscription;
 pub mod topic;
 

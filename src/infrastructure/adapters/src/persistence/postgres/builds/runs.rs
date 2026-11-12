@@ -424,17 +424,12 @@ impl PostgresBuildRepository {
                     message: log.message.clone(),
                 })
                 .collect();
-            let mut query = sqlx::QueryBuilder::new(
-                "INSERT INTO buildrunlogs(id,buildrunid,createdat,stream,message) ",
-            );
-            query.push_values(&entries, |mut row, entry| {
-                row.push_bind(entry.id)
-                    .push_bind(run_id)
-                    .push_bind(now)
-                    .push_bind(&entry.stream)
-                    .push_bind(&entry.message);
-            });
-            query.build().execute(&mut *tx).await.map_err(storage)?;
+            let ids: Vec<_> = entries.iter().map(|entry| entry.id).collect();
+            let streams: Vec<_> = entries.iter().map(|entry| entry.stream.as_str()).collect();
+            let messages: Vec<_> = entries.iter().map(|entry| entry.message.as_str()).collect();
+            sqlx::query("INSERT INTO buildrunlogs(id,buildrunid,createdat,stream,message) SELECT id,$1,$2,stream,message FROM UNNEST($3::uuid[],$4::text[],$5::text[]) AS batch(id,stream,message)")
+                .bind(run_id).bind(now).bind(&ids).bind(&streams).bind(&messages)
+                .execute(&mut *tx).await.map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(entries)
         })

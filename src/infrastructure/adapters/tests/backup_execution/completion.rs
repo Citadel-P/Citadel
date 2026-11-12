@@ -170,8 +170,12 @@ impl BackupPersistence for Store {
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>> {
         self.inner.enqueue_webhook(policy_id, expected_webhook)
     }
-    fn list_scheduled_policies(&self) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
-        self.inner.list_scheduled_policies()
+    fn list_scheduled_policies(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<citadel_backups::ScheduledBackupPolicy>, BackupError>> {
+        self.inner.list_scheduled_policies(after, limit)
     }
     fn enqueue_scheduled_backup(
         &self,

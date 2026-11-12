@@ -52,6 +52,8 @@ pub enum RealtimeReadError {
     Authentication,
     #[error("authorization failed")]
     Authorization,
+    #[error("realtime retained-byte budget exceeded")]
+    Overloaded,
     #[error("realtime read failed: {0}")]
     Storage(String),
 }
@@ -271,6 +273,7 @@ pub(super) fn map_realtime_read_error(error: RealtimeReadError) -> RealtimeError
     match error {
         RealtimeReadError::Authentication => RealtimeError::Authentication,
         RealtimeReadError::Authorization => RealtimeError::Authorization,
+        RealtimeReadError::Overloaded => RealtimeError::Overloaded,
         RealtimeReadError::Storage(message) => RealtimeError::AuthorizationStorage(message),
     }
 }

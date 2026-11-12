@@ -26,12 +26,13 @@ function StackContainersProbe() {
       <span data-testid="cpu">{container?.containerStat?.cpuUsage ?? '-'}</span>
       <span data-testid="swarm-task">{String(container?.isSwarmTask ?? false)}</span>
       <span data-testid="docker-node">{container?.dockerNodeId ?? '-'}</span>
+      <span data-testid="count">{containersInfo.length}</span>
     </>
   );
 }
 
 function renderProbe(fake: FakeRealtimeConnection) {
-  renderCitadel(
+  return renderCitadel(
     <AppContext.Provider
       value={{
         isLoading: false,
@@ -54,6 +55,33 @@ function renderProbe(fake: FakeRealtimeConnection) {
 }
 
 describe('useStackInfoGroup', () => {
+  it('applies compact statistics only to known containers and removes its listener on unmount', async () => {
+    const fake = new FakeRealtimeConnection();
+    const initial = createContainer(ContainerStateStatus.Exited);
+    server.use(
+      http.get(`http://localhost/api/v1/stacks/${stackId}/data`, () => HttpResponse.json({ containers: [initial] })),
+    );
+    const view = renderProbe(fake);
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited));
+    await waitFor(() => expect(fake.listenerCount('ReceiveStackContainerStats')).toBe(1));
+    act(() =>
+      fake.emit('ReceiveStackContainerStats', [
+        { id: containerId, containerStat: { cpuUsage: 23 } },
+        { id: 'unknown', containerStat: { cpuUsage: 99 } },
+      ]),
+    );
+    expect(screen.getByTestId('cpu')).toHaveTextContent('23');
+    expect(screen.getByTestId('state')).toHaveTextContent(ContainerStateStatus.Exited);
+    expect(screen.getByTestId('count')).toHaveTextContent('1');
+    act(() => {
+      fake.emit('ContainerEventReceived', { containerId, stackId }, 'destroy');
+      fake.emit('ReceiveStackContainerStats', [{ id: containerId, containerStat: { cpuUsage: 42 } }]);
+    });
+    expect(screen.getByTestId('count')).toHaveTextContent('0');
+    view.unmount();
+    expect(fake.listenerCount('ReceiveStackContainerStats')).toBe(0);
+  });
+
   it('keeps a Docker lifecycle event when a stale stats snapshot follows it', async () => {
     const fake = new FakeRealtimeConnection();
     const initial = createContainer(ContainerStateStatus.Running);

@@ -1,5 +1,7 @@
+use super::platform_stats::live_platform_stats;
 use super::*;
 use crate::api::resources::platforms::views::ContainerView;
+use std::sync::Arc;
 
 #[test]
 fn health_history_ignores_statistics_and_unrelated_state_patches() {
@@ -395,4 +397,34 @@ fn platform_stats_node_io_preserves_scope_and_excludes_connected_host() {
     assert!(live_platform_stats(Uuid::nil(), &context, &sample, Some("manager")).is_none());
     let empty = json!({"created":43,"containerIo":[]});
     assert!(live_platform_stats(Uuid::nil(), &context, &empty, Some("worker")).is_some());
+}
+
+#[test]
+fn detail_statistics_select_only_the_requested_identity_and_stack() {
+    let target = identity(&container(Some("worker")));
+    let stack = Uuid::now_v7();
+    let mut member = target.clone();
+    member.stack_id = Some(stack);
+    let event = PublishedRuntimeEvent {
+        platform_id: Some(target.platform_id),
+        resource_type: "Platform",
+        resource_id: target.platform_id,
+        event_kind: "runtimeChanged",
+        resource_revision: 1,
+        reads: Default::default(),
+        containers: Default::default(),
+        payload: json!({"dockerNodeId":"worker","stats":(0..10000).map(|i|json!({"dockerContainerId":if i==9999 {target.container_id.clone()} else {format!("other-{i}")},"cpuUsage":i})).collect::<Vec<_>>()}),
+    };
+    let stat = map_stat(&event, &target).unwrap();
+    assert_eq!(stat["cpuUsage"], 9999);
+    let mut wrong_node = target.clone();
+    wrong_node.docker_node_id = None;
+    assert!(map_stat(&event, &wrong_node).is_none());
+    let identities = [member, target];
+    let stats = map_stats_for(
+        &event,
+        identities.iter().filter(|c| c.stack_id == Some(stack)),
+    );
+    assert_eq!(stats.len(), 1);
+    assert_eq!(stats[0], stat);
 }

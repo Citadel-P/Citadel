@@ -884,6 +884,8 @@ ON CONFLICT (platformid, dockernodeid) DO UPDATE SET
     operatingsystem = EXCLUDED.operatingsystem, reachability = EXCLUDED.reachability,
     role = EXCLUDED.role, status = EXCLUDED.status,
     statusmessage = EXCLUDED.statusmessage, versionindex = EXCLUDED.versionindex
+WHERE (swarmnodeprojections.address, swarmnodeprojections.architecture, swarmnodeprojections.availability, swarmnodeprojections.dockercreatedat, swarmnodeprojections.dockerupdatedat, swarmnodeprojections.engineversion, swarmnodeprojections.hostname, swarmnodeprojections.isleader, swarmnodeprojections.isstale, swarmnodeprojections.labels, swarmnodeprojections.operatingsystem, swarmnodeprojections.reachability, swarmnodeprojections.role, swarmnodeprojections.status, swarmnodeprojections.statusmessage, swarmnodeprojections.versionindex)
+    IS DISTINCT FROM (EXCLUDED.address, EXCLUDED.architecture, EXCLUDED.availability, EXCLUDED.dockercreatedat, EXCLUDED.dockerupdatedat, EXCLUDED.engineversion, EXCLUDED.hostname, EXCLUDED.isleader, FALSE, EXCLUDED.labels, EXCLUDED.operatingsystem, EXCLUDED.reachability, EXCLUDED.role, EXCLUDED.status, EXCLUDED.statusmessage, EXCLUDED.versionindex)
 "#,
     )
     .bind(snapshot.platform_id)
@@ -892,6 +894,14 @@ ON CONFLICT (platformid, dockernodeid) DO UPDATE SET
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+    advance_swarm_freshness(
+        transaction,
+        snapshot,
+        "swarmnodeprojections",
+        "dockernodeid",
+        swarm.nodes.iter().map(|v| v.id.as_str()).collect(),
+    )
+    .await?;
 
     // Resolve ownership against the current release, not untrusted daemon labels.
     // The upsert below still preserves an explicitly imported Docker identity.
@@ -982,6 +992,10 @@ ON CONFLICT (platformid, dockerserviceid) DO UPDATE SET
                                THEN EXCLUDED.ownershipdiagnostic ELSE NULL END,
     swarmserviceid = EXCLUDED.swarmserviceid,
     stackid = COALESCE(swarmserviceprojections.stackid, EXCLUDED.stackid)
+WHERE (swarmserviceprojections.configids, swarmserviceprojections.desiredtaskcount, swarmserviceprojections.dockercreatedat, swarmserviceprojections.dockerstacknamespace, swarmserviceprojections.dockerupdatedat, swarmserviceprojections.forceupdate, swarmserviceprojections.image, swarmserviceprojections.isstale, swarmserviceprojections.labels, swarmserviceprojections.liveruntimehash, swarmserviceprojections.mode, swarmserviceprojections.name, swarmserviceprojections.networkids, swarmserviceprojections.ports, swarmserviceprojections.runningtaskcount, swarmserviceprojections.secretids, swarmserviceprojections.updatemessage, swarmserviceprojections.updatestate, swarmserviceprojections.versionindex, swarmserviceprojections.ownership, swarmserviceprojections.ownershipdiagnostic, swarmserviceprojections.swarmserviceid, swarmserviceprojections.stackid)
+    IS DISTINCT FROM (EXCLUDED.configids, EXCLUDED.desiredtaskcount, EXCLUDED.dockercreatedat, EXCLUDED.dockerstacknamespace, EXCLUDED.dockerupdatedat, EXCLUDED.forceupdate, EXCLUDED.image, FALSE, EXCLUDED.labels, EXCLUDED.liveruntimehash, EXCLUDED.mode, EXCLUDED.name, EXCLUDED.networkids, EXCLUDED.ports, EXCLUDED.runningtaskcount, EXCLUDED.secretids, EXCLUDED.updatemessage, EXCLUDED.updatestate, EXCLUDED.versionindex, CASE WHEN swarmserviceprojections.stackid IS NULL
+                     THEN EXCLUDED.ownership ELSE 'CitadelStack' END, CASE WHEN swarmserviceprojections.stackid IS NULL
+                               THEN EXCLUDED.ownershipdiagnostic ELSE NULL END, EXCLUDED.swarmserviceid, COALESCE(swarmserviceprojections.stackid, EXCLUDED.stackid))
 "#,
     )
     .bind(snapshot.platform_id)
@@ -990,6 +1004,14 @@ ON CONFLICT (platformid, dockerserviceid) DO UPDATE SET
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+    advance_swarm_freshness(
+        transaction,
+        snapshot,
+        "swarmserviceprojections",
+        "dockerserviceid",
+        swarm.services.iter().map(|v| v.id.as_str()).collect(),
+    )
+    .await?;
 
     // Adoption links the existing Docker identity before labels change on Apply.
     // Retain that persisted ownership through subsequent daemon snapshots.
@@ -1040,6 +1062,8 @@ ON CONFLICT (platformid, dockertaskid) DO UPDATE SET
     servicename = EXCLUDED.servicename, slot = EXCLUDED.slot, state = EXCLUDED.state,
     statusmessage = EXCLUDED.statusmessage, statustimestamp = EXCLUDED.statustimestamp,
     versionindex = EXCLUDED.versionindex
+WHERE (swarmtaskprojections.desiredstate, swarmtaskprojections.dockercontainerid, swarmtaskprojections.dockercreatedat, swarmtaskprojections.dockernodeid, swarmtaskprojections.dockerserviceid, swarmtaskprojections.dockerupdatedat, swarmtaskprojections.error, swarmtaskprojections.image, swarmtaskprojections.isstale, swarmtaskprojections.name, swarmtaskprojections.nodehostname, swarmtaskprojections.ports, swarmtaskprojections.servicename, swarmtaskprojections.slot, swarmtaskprojections.state, swarmtaskprojections.statusmessage, swarmtaskprojections.statustimestamp, swarmtaskprojections.versionindex)
+    IS DISTINCT FROM (EXCLUDED.desiredstate, EXCLUDED.dockercontainerid, EXCLUDED.dockercreatedat, EXCLUDED.dockernodeid, EXCLUDED.dockerserviceid, EXCLUDED.dockerupdatedat, EXCLUDED.error, EXCLUDED.image, FALSE, EXCLUDED.name, EXCLUDED.nodehostname, EXCLUDED.ports, EXCLUDED.servicename, EXCLUDED.slot, EXCLUDED.state, EXCLUDED.statusmessage, EXCLUDED.statustimestamp, EXCLUDED.versionindex)
 "#,
     )
     .bind(snapshot.platform_id)
@@ -1048,6 +1072,14 @@ ON CONFLICT (platformid, dockertaskid) DO UPDATE SET
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+    advance_swarm_freshness(
+        transaction,
+        snapshot,
+        "swarmtaskprojections",
+        "dockertaskid",
+        swarm.tasks.iter().map(|v| v.id.as_str()).collect(),
+    )
+    .await?;
 
     crate::persistence::postgres::platforms::swarm::reconciliation::reconcile(
         transaction,
@@ -1090,6 +1122,8 @@ ON CONFLICT (platformid, dockerconfigid) DO UPDATE SET
     isstale = FALSE, labels = EXCLUDED.labels, name = EXCLUDED.name,
     observedat = EXCLUDED.observedat, templatingdriver = EXCLUDED.templatingdriver,
     versionindex = EXCLUDED.versionindex
+WHERE (swarmconfigprojections.dockercreatedat, swarmconfigprojections.dockerupdatedat, swarmconfigprojections.isstale, swarmconfigprojections.labels, swarmconfigprojections.name, swarmconfigprojections.templatingdriver, swarmconfigprojections.versionindex)
+    IS DISTINCT FROM (EXCLUDED.dockercreatedat, EXCLUDED.dockerupdatedat, FALSE, EXCLUDED.labels, EXCLUDED.name, EXCLUDED.templatingdriver, EXCLUDED.versionindex)
 "#,
     )
     .bind(snapshot.platform_id)
@@ -1098,6 +1132,14 @@ ON CONFLICT (platformid, dockerconfigid) DO UPDATE SET
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+    advance_swarm_freshness(
+        transaction,
+        snapshot,
+        "swarmconfigprojections",
+        "dockerconfigid",
+        swarm.configs.iter().map(|v| v.id.as_str()).collect(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -1121,6 +1163,8 @@ ON CONFLICT (platformid, dockersecretid) DO UPDATE SET
     driver = EXCLUDED.driver, isstale = FALSE, labels = EXCLUDED.labels,
     name = EXCLUDED.name, observedat = EXCLUDED.observedat,
     versionindex = EXCLUDED.versionindex
+WHERE (swarmsecretprojections.dockercreatedat, swarmsecretprojections.dockerupdatedat, swarmsecretprojections.driver, swarmsecretprojections.isstale, swarmsecretprojections.labels, swarmsecretprojections.name, swarmsecretprojections.versionindex)
+    IS DISTINCT FROM (EXCLUDED.dockercreatedat, EXCLUDED.dockerupdatedat, EXCLUDED.driver, FALSE, EXCLUDED.labels, EXCLUDED.name, EXCLUDED.versionindex)
 "#,
     )
     .bind(snapshot.platform_id)
@@ -1129,6 +1173,14 @@ ON CONFLICT (platformid, dockersecretid) DO UPDATE SET
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+    advance_swarm_freshness(
+        transaction,
+        snapshot,
+        "swarmsecretprojections",
+        "dockersecretid",
+        swarm.secrets.iter().map(|v| v.id.as_str()).collect(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -1171,6 +1223,8 @@ ON CONFLICT (platformid, dockernetworkid) DO UPDATE SET
     isinternal = EXCLUDED.isinternal, isstale = FALSE, labels = EXCLUDED.labels,
     name = EXCLUDED.name, observedat = EXCLUDED.observedat, scope = EXCLUDED.scope,
     subnets = EXCLUDED.subnets
+WHERE (swarmnetworkprojections.dockercreatedat, swarmnetworkprojections.driver, swarmnetworkprojections.enableipv6, swarmnetworkprojections.isattachable, swarmnetworkprojections.isencrypted, swarmnetworkprojections.isingress, swarmnetworkprojections.isinternal, swarmnetworkprojections.isstale, swarmnetworkprojections.labels, swarmnetworkprojections.name, swarmnetworkprojections.scope, swarmnetworkprojections.subnets)
+    IS DISTINCT FROM (EXCLUDED.dockercreatedat, EXCLUDED.driver, EXCLUDED.enableipv6, EXCLUDED.isattachable, EXCLUDED.isencrypted, EXCLUDED.isingress, EXCLUDED.isinternal, FALSE, EXCLUDED.labels, EXCLUDED.name, EXCLUDED.scope, EXCLUDED.subnets)
 "#,
     )
     .bind(snapshot.platform_id)
@@ -1179,6 +1233,14 @@ ON CONFLICT (platformid, dockernetworkid) DO UPDATE SET
     .execute(&mut **transaction)
     .await
     .map_err(storage)?;
+    advance_swarm_freshness(
+        transaction,
+        snapshot,
+        "swarmnetworkprojections",
+        "dockernetworkid",
+        networks.iter().map(|v| v.id.as_str()).collect(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -1273,6 +1335,27 @@ fn bounded_i32(value: i64) -> i32 {
 
 pub(crate) fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), true)
+}
+
+// Same pattern as container inventory: unchanged payloads keep their stored values,
+// while a narrow write advances the timestamp used to fence failed/older refreshes.
+async fn advance_swarm_freshness(
+    tx: &mut Transaction<'_, Postgres>,
+    snapshot: &RuntimeInventorySnapshot,
+    table: &'static str,
+    key: &'static str,
+    ids: Vec<&str>,
+) -> Result<(), RuntimeCapabilityError> {
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "UPDATE {table} SET observedat=$3 WHERE platformid=$1 AND {key}=ANY($2) AND observedat<$3"
+    )))
+    .bind(snapshot.platform_id)
+    .bind(ids)
+    .bind(snapshot.observed_at)
+    .execute(&mut **tx)
+    .await
+    .map_err(storage)?;
+    Ok(())
 }
 
 #[cfg(test)]

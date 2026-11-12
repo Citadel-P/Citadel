@@ -421,7 +421,7 @@ pub struct SwarmSecretSummary {
     pub in_use: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeResourceProjection<T> {
     pub resource: T,
     pub docker_node_id: String,
@@ -430,7 +430,7 @@ pub struct NodeResourceProjection<T> {
 }
 
 /// Identity only, for associating live samples without loading resource details.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ContainerIdentity {
     pub id: Uuid,
     pub platform_id: Uuid,
@@ -439,7 +439,7 @@ pub struct ContainerIdentity {
     pub container_id: String,
     pub docker_node_id: Option<String>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PlatformTelemetryContext {
     pub cpu_count: i64,
     pub mem_total: i64,

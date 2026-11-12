@@ -1,0 +1,1612 @@
+use super::*;
+use super::{platform_stats::live_platform_stats, runtime};
+use crate::realtime::topic::Topic;
+use citadel_activities::{ActivityFilter, ActivityService};
+use citadel_backups::BackupPersistence;
+use citadel_builds::BuildRepository;
+use citadel_deployments::DeploymentRepository;
+use citadel_identity::IdentityService;
+use citadel_platforms::PlatformReadService;
+use citadel_primitives::{PermissionLevel, ResourceType, SpecificPermission};
+use citadel_scripts::ScriptRepository;
+use citadel_stacks::StackRepository;
+use citadel_swarm_services::SwarmServiceRepository;
+use std::sync::Arc;
+
+// Reuse the same authorized read models as HTTP. No internal HTTP requests,
+// browser query policy, or copied SQL schema. Container rows are shared only
+// during delivery of one invalidation, after each reader checks authorization.
+#[derive(Clone)]
+pub struct ApplicationGroupReader {
+    pub admission: citadel_runtime::admission::AdmissionGate,
+    pub image_store: Arc<dyn citadel_platforms::image_mutations::ImageMutationStore>,
+    pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
+    pub registries: Arc<dyn citadel_registries::RegistryRepository>,
+    pub copy_eligibility: Option<Arc<citadel_resource_copies::CopyService>>,
+    pub backup_coverage:
+        Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
+    pub git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence>,
+    pub identity: Arc<IdentityService>,
+    pub platforms: Arc<PlatformReadService>,
+    pub deployments: Arc<dyn DeploymentRepository>,
+    pub stacks: Arc<dyn StackRepository>,
+    pub services: Arc<dyn SwarmServiceRepository>,
+    pub scripts: Arc<dyn ScriptRepository>,
+    pub builds: Arc<dyn BuildRepository>,
+    pub backups: Arc<dyn BackupPersistence>,
+    pub activities: Arc<ActivityService>,
+    pub alerts: Arc<dyn citadel_alerts::AlertRepository>,
+    pub runtime: Arc<dyn citadel_platforms::runtime_provider::PlatformRuntimeProvider>,
+    pub statistics: Arc<dyn citadel_platforms::StatisticsReader>,
+    pub realtime: Option<crate::realtime::RealtimeHub>,
+}
+
+pub(super) fn failure(error: impl std::fmt::Display) -> RealtimeReadError {
+    RealtimeReadError::Storage(error.to_string())
+}
+pub(super) fn rows<T: Serialize>(
+    target: &'static str,
+    values: Vec<T>,
+    style: RowStyle,
+) -> Result<GroupSnapshot, RealtimeReadError> {
+    Ok(GroupSnapshot {
+        rows: vec![GroupRows {
+            target,
+            rows: values
+                .into_iter()
+                .map(serde_json::to_value)
+                .collect::<Result<_, _>>()
+                .map_err(failure)?,
+            style,
+        }],
+        events: vec![],
+    })
+}
+// Health/state observations carry exact committed Docker identities. Keep list delivery
+// scoped to their owners without treating omitted owners as deleted. Runtime
+// reconciliation refreshes owners on that Platform; parent CRUD retains full snapshots.
+pub(super) fn workload_rows<T: Serialize>(
+    target: &'static str,
+    values: Vec<T>,
+    event: Option<&PublishedRuntimeEvent>,
+) -> Result<GroupSnapshot, RealtimeReadError> {
+    let mut snapshot = rows(target, values, RowStyle::Update)?;
+    let Some(change) = event else {
+        return Ok(snapshot);
+    };
+    if change.resource_type != "Platform" {
+        return Ok(snapshot);
+    }
+    let Some(platform) = change.platform_id.map(|id| id.to_string()) else {
+        return Ok(snapshot);
+    };
+    let batch = &mut snapshot.rows[0];
+    batch
+        .rows
+        .retain(|row| row["platformId"].as_str() == Some(platform.as_str()));
+    batch.style = RowStyle::UpdatePatch;
+    let action = change.payload["action"].as_str().unwrap_or("");
+    if !action.starts_with("health")
+        && !matches!(
+            action,
+            "oom" | "start" | "stop" | "die" | "kill" | "pause" | "unpause"
+        )
+    {
+        return Ok(snapshot);
+    }
+    let Some(references) = change.container_ids() else {
+        return Ok(snapshot);
+    };
+    let batch = &mut snapshot.rows[0];
+    // Bounded payloads may omit the changed member; refresh those owners conservatively.
+    batch.rows.retain(|row| {
+        row["platformId"].as_str() == Some(platform.as_str())
+            && (row["probeHealth"]["membersTruncated"] == true
+                || row["probeHealth"]["members"]
+                    .as_array()
+                    .is_some_and(|members| {
+                        members.iter().any(|member| {
+                            member["dockerContainerId"].as_str().is_some_and(|id| {
+                                references.iter().any(|reference| reference == id)
+                            })
+                        })
+                    }))
+    });
+    batch.style = RowStyle::UpdatePatch;
+    Ok(snapshot)
+}
+
+pub(super) fn event(
+    target: &'static str,
+    value: impl Serialize,
+) -> Result<GroupSnapshot, RealtimeReadError> {
+    Ok(GroupSnapshot {
+        rows: vec![],
+        events: vec![ClientEvent::new(
+            target,
+            vec![serde_json::to_value(value).map_err(failure)?],
+        )],
+    })
+}
+
+impl ApplicationGroupReader {
+    pub(super) async fn platform_capabilities(
+        &self,
+        principal: &ActorPrincipal,
+        platform: Uuid,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<crate::api::resources::platforms::views::PlatformCapabilitiesView, RealtimeReadError>
+    {
+        match lease {
+            Some(lease) => {
+                lease
+                    .platform_capabilities(&self.identity, principal, platform)
+                    .await
+            }
+            None => Ok(runtime::daemon_capabilities(self, principal, platform)
+                .await?
+                .0),
+        }
+    }
+
+    pub(super) async fn platform_views(
+        &self,
+        principal: &ActorPrincipal,
+        platforms: Vec<citadel_platforms::PlatformDetails>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<Vec<crate::api::resources::platforms::views::PlatformView>, RealtimeReadError> {
+        use crate::api::resources::platforms::{
+            capabilities::{permission_for, platform_capabilities},
+            views::PlatformView,
+        };
+        let permissions = if lease.is_some() || principal.is_administrator() || platforms.is_empty()
+        {
+            Default::default()
+        } else {
+            let ids: Vec<_> = platforms.iter().map(|platform| platform.id).collect();
+            self.platforms
+                .permissions_for_platforms(principal.actor_id, &ids)
+                .await
+                .map_err(failure)?
+        };
+        let mut views = Vec::with_capacity(platforms.len());
+        for platform in platforms {
+            let mut view = PlatformView::try_from(platform).map_err(failure)?;
+            // Shared observations never contain actor-specific permissions.
+            let capabilities = match lease {
+                Some(lease) => {
+                    lease
+                        .platform_capabilities(&self.identity, principal, view.id)
+                        .await?
+                }
+                None => platform_capabilities(permission_for(
+                    &permissions,
+                    view.id,
+                    principal.is_administrator(),
+                )),
+            };
+            if !capabilities.can_read {
+                return Err(RealtimeReadError::Authorization);
+            }
+            view.capabilities = Some(capabilities);
+            views.push(view);
+        }
+        Ok(views)
+    }
+
+    pub(super) fn container_patch_snapshot(
+        group: &Group,
+        event: Option<&PublishedRuntimeEvent>,
+        platform: Option<Uuid>,
+    ) -> Option<GroupSnapshot> {
+        let event = event.filter(|event| event.platform_id == platform && platform.is_some())?;
+        let patches = event.container_state_patches()?;
+        match group.topic() {
+            Topic::Containers(..) => Some(GroupSnapshot {
+                rows: vec![],
+                events: vec![ClientEvent::new(
+                    "ContainersStateChanged",
+                    vec![json!({"platformId":platform,"patches":patches})],
+                )],
+            }),
+            Topic::DockerDaemon(..) => Some(GroupSnapshot {
+                rows: vec![],
+                events: vec![ClientEvent::new(
+                    "ContainerStateChanged",
+                    vec![json!(patches)],
+                )],
+            }),
+            _ => None,
+        }
+    }
+
+    pub(super) async fn changed_containers(
+        &self,
+        event: &PublishedRuntimeEvent,
+        platform: Uuid,
+        ids: &[String],
+    ) -> Result<Vec<crate::api::resources::platforms::views::ContainerView>, RealtimeReadError>
+    {
+        if event.platform_id != Some(platform) {
+            return Ok(vec![]);
+        }
+        let containers = event
+            .containers
+            .get_or_try_init(|| async {
+                let _read =
+                    citadel_runtime::runtime_metrics::RuntimeWork::RealtimeSharedRead.start();
+                self.platforms
+                    .containers_by_runtime_ids(platform, ids)
+                    .await
+                    .map_err(failure)
+            })
+            .await?;
+        Ok(containers
+            .iter()
+            .cloned()
+            .map(crate::api::resources::platforms::views::ContainerView::from)
+            .collect())
+    }
+
+    pub(super) async fn deployment_permission<P: citadel_primitives::PermissionPolicy>(
+        &self,
+        principal: &ActorPrincipal,
+        id: Uuid,
+    ) -> Result<(), RealtimeReadError> {
+        self.identity
+            .require_resource::<P>(principal, id)
+            .await
+            .map_err(|error| match error {
+                citadel_identity::IdentityError::Forbidden => RealtimeReadError::Authorization,
+                other => failure(other),
+            })
+    }
+
+    pub(super) async fn permission(
+        &self,
+        p: &ActorPrincipal,
+        kind: ResourceType,
+        id: Option<Uuid>,
+        specific: Option<SpecificPermission>,
+    ) -> Result<(), RealtimeReadError> {
+        self.permission_with_lease(p, kind, id, specific, None)
+            .await
+    }
+
+    pub(super) async fn permission_with_lease(
+        &self,
+        p: &ActorPrincipal,
+        kind: ResourceType,
+        id: Option<Uuid>,
+        specific: Option<SpecificPermission>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<(), RealtimeReadError> {
+        use citadel_primitives::PermissionPolicy;
+        let workload_requirement = match (kind, specific) {
+            (ResourceType::Stack, None) => {
+                Some(citadel_stacks::permissions::ReadStack::REQUIREMENT)
+            }
+            (ResourceType::Stack, Some(SpecificPermission::Logs)) => {
+                Some(citadel_stacks::permissions::ViewStackLogs::REQUIREMENT)
+            }
+            (ResourceType::Stack, Some(SpecificPermission::Inspect)) => {
+                Some(citadel_stacks::permissions::InspectStack::REQUIREMENT)
+            }
+            (ResourceType::Stack, Some(SpecificPermission::Terminal)) => {
+                Some(citadel_stacks::permissions::OpenStackTerminal::REQUIREMENT)
+            }
+            (ResourceType::SwarmService, None) => {
+                Some(citadel_swarm_services::permissions::ReadSwarmService::REQUIREMENT)
+            }
+            (ResourceType::SwarmService, Some(SpecificPermission::Logs)) => {
+                Some(citadel_swarm_services::permissions::ViewSwarmServiceLogs::REQUIREMENT)
+            }
+            (ResourceType::SwarmService, Some(SpecificPermission::Inspect)) => {
+                Some(citadel_swarm_services::permissions::InspectSwarmService::REQUIREMENT)
+            }
+            _ => None,
+        };
+        if let Some(lease) = lease {
+            return lease
+                .authorize(
+                    &self.identity,
+                    p,
+                    kind,
+                    id,
+                    workload_requirement.map_or(PermissionLevel::Read, |r| r.level),
+                    workload_requirement.and_then(|r| r.specific).or(specific),
+                )
+                .await;
+        }
+        if p.is_administrator() {
+            return Ok(());
+        }
+        let grant = match id {
+            Some(id) => self.identity.permission_for_resource(p, kind, id).await,
+            None => self.identity.global_permission(p, kind).await,
+        }
+        .map_err(failure)?;
+        if grant.is_some_and(|g| {
+            workload_requirement.map_or_else(
+                || {
+                    g.level.grants(PermissionLevel::Read)
+                        && specific.is_none_or(|s| g.has_specific(s))
+                },
+                |requirement| {
+                    g.level.grants(requirement.level)
+                        && requirement.specific.is_none_or(|s| g.has_specific(s))
+                },
+            )
+        }) {
+            Ok(())
+        } else {
+            Err(RealtimeReadError::Authorization)
+        }
+    }
+
+    async fn read_group(
+        &self,
+        p: &ActorPrincipal,
+        g: &Group,
+        e: Option<&PublishedRuntimeEvent>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<GroupSnapshot, RealtimeReadError> {
+        if let (Some(change), Some(lease)) = (e, lease)
+            && change.payload["dockerResourceType"] == "containerStats"
+            && let Some(platform) = change.platform_id
+            && !lease.matches_scope(&g.name, platform)
+        {
+            return Ok(GroupSnapshot::default());
+        }
+        let mut snapshot = self.read_group_data(p, g, e, lease).await?;
+        if let Topic::DockerDaemon(id) = g.topic() {
+            runtime::attach_swarm_overview(self, p, *id, lease, e, &mut snapshot).await?;
+        }
+        Ok(snapshot)
+    }
+
+    async fn read_group_data(
+        &self,
+        p: &ActorPrincipal,
+        g: &Group,
+        e: Option<&PublishedRuntimeEvent>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<GroupSnapshot, RealtimeReadError> {
+        if matches!(
+            g.topic(),
+            Topic::ContainerExec { .. } | Topic::SwarmTaskExec { .. }
+        ) {
+            self.terminal_target(p, g).await?;
+            return Ok(GroupSnapshot::default());
+        }
+        if matches!(g.topic(), Topic::ContainerLog(..) | Topic::StackLog(..)) {
+            self.log_targets(p, g).await?;
+            return Ok(GroupSnapshot::default());
+        }
+        if let Topic::ContainerProcesses(id) = g.topic() {
+            return self.processes(p, *id, e, lease).await;
+        }
+        if let Topic::ContainerHealth(id) = g.topic() {
+            let container = self
+                .platforms
+                .get_container(*id)
+                .await
+                .map_err(failure)?
+                .ok_or(RealtimeReadError::Authorization)?;
+            // Match the HTTP history permission; workload-only access to
+            // container-info must not grant Platform history access.
+            self.permission_with_lease(
+                p,
+                ResourceType::Platform,
+                Some(container.platform_id),
+                None,
+                lease,
+            )
+            .await?;
+            if let Some(change) = e
+                && (change
+                    .platform_id
+                    .is_some_and(|platform| platform != container.platform_id)
+                    || (change.platform_id.is_none()
+                        && change.resource_id != container.platform_id)
+                    || change
+                        .container_ids()
+                        .is_some_and(|ids| !ids.iter().any(|id| id == &container.container_id)))
+            {
+                return Ok(GroupSnapshot::default());
+            }
+            // History is an HTTP read. Joining (including after reconnect) also
+            // invalidates it to cover changes between the GET and subscription.
+            return event("ContainerHealthHistoryChanged", json!({"resourceId": id}));
+        }
+        use ResourceType::*;
+        let id = g.id();
+        let actor = p.actor_id;
+        let admin = p.is_administrator();
+        let kind = match g.topic() {
+            Topic::Platforms
+            | Topic::Containers(..)
+            | Topic::Images(..)
+            | Topic::DockerDaemon(..) => Platform,
+            Topic::Deployment(..) | Topic::Deployments => Deployment,
+            Topic::Stack(..) | Topic::Stacks | Topic::StackInfo(..) => Stack,
+            Topic::SwarmService(..) | Topic::SwarmServices(..) => SwarmService,
+            Topic::GitRepo(..) | Topic::GitRepositories => GitRepository,
+            Topic::Script(..) | Topic::Scripts | Topic::ScriptRuns(..) => Script,
+            Topic::BackupRepository(..) | Topic::BackupRepositories => BackupRepository,
+            Topic::BackupPolicy(..)
+            | Topic::BackupPolicies
+            | Topic::BackupRuns(..)
+            | Topic::BackupRun(..)
+            | Topic::BackupRestoreRuns(..)
+            | Topic::BackupRestoreRun(..) => BackupPolicy,
+            Topic::BuildProject(..)
+            | Topic::BuildProjects
+            | Topic::BuildRuns(..)
+            | Topic::BuildRun(..) => Build,
+            Topic::BuildAgentPool(..) | Topic::BuildAgentPools => BuildAgentPool,
+            Topic::ContainerInfo(..) => Platform, // resolved through its actual owner below
+            Topic::ResourceCopy(id) => {
+                let copies = self
+                    .copy_eligibility
+                    .as_ref()
+                    .ok_or(RealtimeReadError::Authorization)?;
+                let progress = copies.get(actor, *id).await.map_err(|error| match error {
+                    citadel_resource_copies::CopyError::NotFound => {
+                        RealtimeReadError::Authorization
+                    }
+                    error => failure(error),
+                })?;
+                return event("ResourceCopyInfoUpdated", progress);
+            }
+            Topic::Activity { .. } => return self.activities(p, g, lease).await,
+            Topic::AlertEvents => {
+                let filter = citadel_alerts::AlertEventFilter {
+                    page: 1,
+                    page_size: 100,
+                    resource_id: None,
+                    resource_type: None,
+                    alert_type: None,
+                    unresolved_only: false,
+                };
+                let events = self
+                    .alerts
+                    .list_events(actor, admin, &filter)
+                    .await
+                    .map_err(failure)?;
+                let events: crate::api::resources::alerts::views::AlertEventPage =
+                    events.try_into().map_err(failure)?;
+                return Ok(GroupSnapshot {
+                    rows: vec![GroupRows {
+                        target: "AlertEventReceived",
+                        rows: events
+                            .items
+                            .iter()
+                            .map(serde_json::to_value)
+                            .collect::<Result<_, _>>()
+                            .map_err(failure)?,
+                        style: RowStyle::Notification,
+                    }],
+                    events: vec![
+                        ClientEvent::new(
+                            "AlertEventsUpdated",
+                            vec![serde_json::to_value(events.items).map_err(failure)?],
+                        ),
+                        ClientEvent::new(
+                            "UnresolvedAlertCount",
+                            vec![
+                                json!({"count":self.alerts.unresolved_count(actor,admin).await.map_err(failure)?}),
+                            ],
+                        ),
+                    ],
+                });
+            }
+            _ => return Err(RealtimeReadError::Authorization),
+        };
+        let permission_id = match g.topic() {
+            Topic::SwarmServices(..) => None,
+            Topic::BackupRun(..) => Some(
+                self.backups
+                    .get_run(id.unwrap())
+                    .await
+                    .map_err(failure)?
+                    .backup_policy_id,
+            ),
+            Topic::BackupRestoreRun(..) => {
+                let restore = self
+                    .backups
+                    .get_restore(id.unwrap())
+                    .await
+                    .map_err(failure)?;
+                Some(
+                    self.backups
+                        .get_run(restore.backup_run_id)
+                        .await
+                        .map_err(failure)?
+                        .backup_policy_id,
+                )
+            }
+            Topic::BuildRun(..) => Some(
+                self.builds
+                    .get_run(id.unwrap())
+                    .await
+                    .map_err(failure)?
+                    .build_project_id,
+            ),
+            Topic::ContainerInfo(..) => return self.container_info(p, g, e, lease).await,
+            _ => id,
+        };
+        self.permission_with_lease(
+            p,
+            kind,
+            permission_id,
+            matches!(
+                g.topic(),
+                Topic::BackupRestoreRun(..) | Topic::BackupRestoreRuns(..)
+            )
+            .then_some(SpecificPermission::Restore),
+            lease,
+        )
+        .await?;
+        if let Some(snapshot) = Self::container_patch_snapshot(g, e, id) {
+            return Ok(snapshot);
+        }
+        if matches!(
+            g.topic(),
+            Topic::Deployment(..)
+                | Topic::Deployments
+                | Topic::Stack(..)
+                | Topic::Stacks
+                | Topic::StackInfo(..)
+        ) && let Some(change) = e
+            && let (Some(platform), Some(references)) = (change.platform_id, change.container_ids())
+        {
+            let containers = self
+                .changed_containers(change, platform, &references)
+                .await?;
+            // A missing row may have belonged to this workload before deletion.
+            // Keep the authoritative refresh in that case.
+            if references
+                .iter()
+                .all(|reference| containers.iter().any(|c| &c.container_id == reference))
+                && !containers.iter().any(|container| {
+                    let owner = if matches!(g.topic(), Topic::Deployment(..) | Topic::Deployments) {
+                        container.deployment_id
+                    } else {
+                        container.stack_id
+                    };
+                    owner.is_some_and(|owner| id.is_none_or(|id| id == owner))
+                })
+            {
+                return Ok(GroupSnapshot::default());
+            }
+        }
+        if matches!(g.topic(), Topic::SwarmServices(..)) {
+            self.permission_with_lease(p, Platform, id, None, lease)
+                .await?;
+        }
+        if matches!(g.topic(), Topic::DockerDaemon(..))
+            && e.is_some_and(|event| event.payload["dockerResourceType"] == "nodeAgentCoverage")
+        {
+            return event("SwarmNodeAgentCoverageChanged", id.unwrap());
+        }
+        if matches!(g.topic(), Topic::BuildRun(..))
+            && let Some(event) =
+                e.filter(|event| event.event_kind == "buildLogs" && Some(event.resource_id) == id)
+        {
+            return Ok(GroupSnapshot {
+                rows: vec![],
+                events: vec![ClientEvent::new(
+                    "BuildRunLogsAppended",
+                    vec![json!(id.unwrap()), event.payload["entries"].clone()],
+                )],
+            });
+        }
+        if matches!(g.topic(), Topic::SwarmService(..)) {
+            let service = self
+                .services
+                .get_authorized(actor, admin, id.unwrap())
+                .await
+                .map_err(failure)?;
+            self.permission_with_lease(p, Platform, Some(service.platform_id), None, lease)
+                .await?;
+        }
+        let sample = e.is_some_and(|e| e.payload["dockerResourceType"] == "containerStats");
+        match g.topic() {
+            Topic::Platforms => {
+                if sample {
+                    let platform_id = e.unwrap().platform_id.unwrap();
+                    match self
+                        .permission_with_lease(p, Platform, Some(platform_id), None, lease)
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(RealtimeReadError::Authorization) => {
+                            return Ok(GroupSnapshot::default());
+                        }
+                        Err(error) => return Err(error),
+                    }
+                    let Some(context) =
+                        crate::realtime::shared_reads::telemetry(&self.platforms, platform_id, e)
+                            .await?
+                    else {
+                        return Ok(GroupSnapshot::default());
+                    };
+                    let Some(payload) = live_platform_stats(
+                        platform_id,
+                        &context,
+                        &e.unwrap().payload["platformSample"],
+                        e.unwrap().payload["dockerNodeId"].as_str(),
+                    ) else {
+                        return Ok(GroupSnapshot::default());
+                    };
+                    return event("PlatformStatsUpdated", payload);
+                }
+                if let Some(platform_id) = e.and_then(|e| e.platform_id) {
+                    let allowed = match self
+                        .permission_with_lease(p, Platform, Some(platform_id), None, lease)
+                        .await
+                    {
+                        Ok(()) => true,
+                        Err(RealtimeReadError::Authorization) => false,
+                        Err(error) => return Err(error),
+                    };
+                    let platform = if allowed {
+                        crate::realtime::shared_reads::platform(&self.platforms, platform_id, e)
+                            .await
+                            .map_err(failure)?
+                    } else {
+                        None
+                    };
+                    return rows(
+                        "PlatformUpdated",
+                        self.platform_views(p, platform.into_iter().collect(), lease)
+                            .await?,
+                        RowStyle::PlatformPatch(platform_id),
+                    );
+                }
+                rows(
+                    "PlatformUpdated",
+                    self.platform_views(
+                        p,
+                        self.platforms
+                            .list_authorized(actor, admin, &[])
+                            .await
+                            .map_err(failure)?,
+                        lease,
+                    )
+                    .await?,
+                    RowStyle::Platforms,
+                )
+            }
+            Topic::Containers(..) => {
+                if sample {
+                    let identities =
+                        crate::realtime::shared_reads::identities(&self.platforms, id.unwrap(), e)
+                            .await?;
+                    return event("ContainersStatsUpdated", map_stats(e.unwrap(), &identities));
+                }
+                let capabilities = self.platform_capabilities(p, id.unwrap(), lease).await?;
+                if let Some(references) = e.and_then(PublishedRuntimeEvent::container_ids) {
+                    let mut containers = self
+                        .changed_containers(e.unwrap(), id.unwrap(), &references)
+                        .await?;
+                    for container in &mut containers {
+                        container.capabilities = Some(
+                            crate::api::resources::platforms::capabilities::container_capabilities(
+                                capabilities,
+                                container,
+                                p.is_administrator(),
+                            ),
+                        );
+                    }
+                    if let Some(service) = &self.backup_coverage {
+                        containers = service.enrich_containers(p, containers).await;
+                    }
+                    crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
+                    let mut result = GroupSnapshot::default();
+                    for reference in references {
+                        result.events.extend(event(
+                            "ContainersChanged",
+                            json!({"platformId":id,"containerId":reference,"containers":containers.iter().filter(|c| c.container_id == reference).collect::<Vec<_>>()}),
+                        )?.events);
+                    }
+                    return Ok(result);
+                }
+                let containers =
+                    crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
+                        .await
+                        .map(|value| {
+                            value
+                                .into_iter()
+                                .map(crate::api::resources::platforms::views::ContainerView::from)
+                                .collect::<Vec<_>>()
+                        })
+                        .map_err(failure)?;
+                let mut containers = if let Some(service) = &self.backup_coverage {
+                    service.enrich_containers(p, containers).await
+                } else {
+                    containers
+                };
+                for container in &mut containers {
+                    container.capabilities = Some(
+                        crate::api::resources::platforms::capabilities::container_capabilities(
+                            capabilities,
+                            container,
+                            p.is_administrator(),
+                        ),
+                    );
+                }
+                crate::api::resources::platforms::container_views::enrich_container_owner_names(
+                    &self.platforms,
+                    p,
+                    &mut containers,
+                )
+                .await
+                .map_err(failure)?;
+                event("ContainersInfoUpdated", json!({"containers":containers}))
+            }
+            Topic::Images(..) => {
+                if sample {
+                    return Ok(GroupSnapshot::default());
+                }
+                let platform = id.unwrap();
+                let (capabilities, _) = match lease {
+                    Some(lease) => {
+                        lease
+                            .daemon_capabilities(&self.identity, p, platform)
+                            .await?
+                    }
+                    None => runtime::daemon_capabilities(self, p, platform).await?,
+                };
+                let inventory =
+                    crate::realtime::shared_reads::images(&self.platforms, platform, e).await?;
+                let response = crate::api::resources::platforms::image_views::image_list_view(
+                    p,
+                    platform,
+                    inventory,
+                    crate::api::resources::platforms::runtime_views::image_capabilities(
+                        capabilities,
+                    ),
+                    self.image_store.as_ref(),
+                    self.image_updates.as_ref(),
+                    self.registries.as_ref(),
+                )
+                .await
+                .map_err(failure)?;
+                event(
+                    "ImagesInfoUpdated",
+                    json!({"platformId":platform,"images":response.images,"capabilities":response.capabilities}),
+                )
+            }
+            Topic::DockerDaemon(..) => {
+                if e.is_some_and(|event| {
+                    matches!(event.resource_type, "Deployment" | "Stack" | "SwarmService")
+                        && event.event_kind != "runtimeChanged"
+                }) {
+                    return runtime::network_reference_snapshot(
+                        self,
+                        p,
+                        id.unwrap(),
+                        lease,
+                        e.unwrap(),
+                    )
+                    .await;
+                }
+                if sample {
+                    return Ok(GroupSnapshot::default());
+                }
+                if let Some(references) = e.and_then(PublishedRuntimeEvent::container_ids) {
+                    let capabilities = self.platform_capabilities(p, id.unwrap(), lease).await?;
+                    let mut containers = self
+                        .changed_containers(e.unwrap(), id.unwrap(), &references)
+                        .await?;
+                    for container in &mut containers {
+                        container.capabilities = Some(
+                            crate::api::resources::platforms::capabilities::container_capabilities(
+                                capabilities,
+                                container,
+                                p.is_administrator(),
+                            ),
+                        );
+                    }
+                    crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
+                    let mut result = GroupSnapshot::default();
+                    for reference in references {
+                        result.rows.extend(
+                            rows(
+                                "ContainerEventReceived",
+                                containers
+                                    .iter()
+                                    .filter(|c| c.container_id == reference)
+                                    .collect(),
+                                RowStyle::DockerResourcePatch(reference),
+                            )?
+                            .rows,
+                        );
+                    }
+                    return Ok(result);
+                }
+                if let Some(event) = e
+                    && let Some(snapshot) =
+                        runtime::realtime_resource_snapshot(self, p, id.unwrap(), lease, event)
+                            .await?
+                {
+                    return Ok(snapshot);
+                }
+                let mut result =
+                    runtime::realtime_daemon_snapshot(self, p, id.unwrap(), lease).await?;
+                let capabilities = self.platform_capabilities(p, id.unwrap(), lease).await?;
+                let mut containers =
+                    crate::realtime::shared_reads::containers(&self.platforms, id.unwrap(), e)
+                        .await
+                        .map_err(failure)?
+                        .into_iter()
+                        .map(crate::api::resources::platforms::views::ContainerView::from)
+                        .collect::<Vec<_>>();
+                for container in &mut containers {
+                    container.capabilities = Some(
+                        crate::api::resources::platforms::capabilities::container_capabilities(
+                            capabilities,
+                            container,
+                            p.is_administrator(),
+                        ),
+                    );
+                }
+                crate::api::resources::platforms::container_views::enrich_container_owner_names(
+                    &self.platforms,
+                    p,
+                    &mut containers,
+                )
+                .await
+                .map_err(failure)?;
+                result.rows.extend(
+                    rows(
+                        "ContainerEventReceived",
+                        containers,
+                        RowStyle::DockerResource,
+                    )?
+                    .rows,
+                );
+                result.rows.extend(
+                    rows(
+                        "ImageEventReceived",
+                        crate::realtime::shared_reads::images(&self.platforms, id.unwrap(), e)
+                            .await
+                            .map(|value| {
+                                value
+                                    .into_iter()
+                                    .map(|image| {
+                                        let mut view = crate::api::resources::platforms::views::ImageView::from(image);
+                                        view.capabilities = Some(crate::api::resources::platforms::runtime_views::image_capabilities(capabilities));
+                                        view
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                            .map_err(failure)?,
+                        RowStyle::DockerResource,
+                    )?
+                    .rows,
+                );
+                if crate::realtime::shared_reads::platform(&self.platforms, id.unwrap(), e)
+                    .await
+                    .map_err(failure)?
+                    .is_some_and(|platform| {
+                        platform.platform_type == citadel_platforms::PlatformKind::DockerSwarm
+                    })
+                {
+                    result.events.push(ClientEvent::new("SwarmInventoryUpdated",vec![json!({
+                    "platformId":id,
+                    "nodes":{"items":self.platforms.list_swarm_nodes(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmNodeView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "services":{"items":self.platforms.list_swarm_services(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmServiceView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "tasks":{"items":self.platforms.list_swarm_tasks(id.unwrap(),None,1000).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmTaskView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "networks":{"items":self.platforms.list_swarm_networks(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmNetworkView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "secrets":{"items":self.platforms.list_swarm_secrets(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmSecretView::from).collect::<Vec<_>>()).map_err(failure)?},
+                    "configs":{"items":self.platforms.list_swarm_configs(id.unwrap()).await.map(|value| value.into_iter().map(crate::api::resources::platforms::views::SwarmConfigView::from).collect::<Vec<_>>()).map_err(failure)?},
+                })]));
+                }
+                Ok(result)
+            }
+            Topic::Deployments => {
+                let mut views = self
+                    .deployments
+                    .list_authorized(actor, admin, &Default::default())
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::resources::deployments::views::DeploymentView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?;
+                if let Some(service) = &self.backup_coverage {
+                    views = service.enrich_deployments(p, views).await;
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    crate::api::resources::resource_copies::enrich_deployments(
+                        service, actor, &mut views,
+                    )
+                    .await;
+                }
+                workload_rows("DeploymentInfoUpdated", views, e)
+            }
+            Topic::Deployment(..) => {
+                let mut view = crate::api::resources::deployments::views::DeploymentView::try_from(
+                    self.deployments
+                        .get_authorized(actor, admin, id.unwrap())
+                        .await
+                        .map_err(failure)?,
+                )
+                .map_err(failure)?;
+                if let Some(service) = &self.backup_coverage {
+                    let platform = view.platform_id;
+                    view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::Deployment, id.unwrap(), platform).await);
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    view.copy_eligibility = Some(
+                        crate::api::resources::resource_copies::eligibility(
+                            service,
+                            actor,
+                            citadel_resource_copies::CopyKind::Deployment,
+                            id.unwrap(),
+                        )
+                        .await,
+                    );
+                }
+                workload_rows("DeploymentInfoUpdated", vec![view], e)
+            }
+            Topic::Stacks => {
+                let mut views = self
+                    .stacks
+                    .list_authorized(actor, admin, &Default::default())
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::resources::stacks::views::StackView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?;
+                if let Some(service) = &self.backup_coverage {
+                    views = service.enrich_stacks(p, views).await;
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    crate::api::resources::resource_copies::enrich_stacks(
+                        service, actor, &mut views,
+                    )
+                    .await;
+                }
+                workload_rows("StackInfoUpdated", views, e)
+            }
+            Topic::Stack(..) => {
+                let mut view = crate::api::resources::stacks::views::StackView::try_from(
+                    self.stacks
+                        .get_authorized(actor, admin, id.unwrap())
+                        .await
+                        .map_err(failure)?,
+                )
+                .map_err(failure)?;
+                if let Some(service) = &self.backup_coverage
+                    && let Some(platform) = view.platform_id
+                {
+                    view.backup_coverage = Some(
+                        service
+                            .workload(
+                                p,
+                                citadel_backups::policies::read_models::BackupPreviewKind::Stack,
+                                id.unwrap(),
+                                platform,
+                            )
+                            .await,
+                    );
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    view.copy_eligibility = Some(
+                        crate::api::resources::resource_copies::eligibility(
+                            service,
+                            actor,
+                            citadel_resource_copies::CopyKind::Stack,
+                            id.unwrap(),
+                        )
+                        .await,
+                    );
+                }
+                workload_rows("StackInfoUpdated", vec![view], e)
+            }
+            Topic::StackInfo(..) => {
+                if sample {
+                    let change = e.unwrap();
+                    let platform = change.platform_id.ok_or(RealtimeReadError::Authorization)?;
+                    let identities =
+                        crate::realtime::shared_reads::identities(&self.platforms, platform, e)
+                            .await?;
+                    let values =
+                        map_stats_for(change, identities.iter().filter(|c| c.stack_id == id));
+                    return event(
+                        "ReceiveStackContainerStats",
+                        values
+                            .into_iter()
+                            .filter_map(|stat| {
+                                let docker = stat["dockerContainerId"].as_str()?.to_owned();
+                                Some(json!({"id":docker,"containerStat":stat}))
+                            })
+                            .collect::<Vec<_>>(),
+                    );
+                }
+                let stack = self
+                    .stacks
+                    .get_authorized(actor, admin, id.unwrap())
+                    .await
+                    .map_err(failure)?;
+                let platform = stack.platform_id.ok_or(RealtimeReadError::Authorization)?;
+                if let Some(lease) = lease {
+                    lease.set_scope(&g.name, platform);
+                }
+                if e.and_then(|e| e.platform_id)
+                    .is_some_and(|id| id != platform)
+                {
+                    return Ok(GroupSnapshot::default());
+                }
+                let containers = self
+                    .platforms
+                    .list_stack_containers(id.unwrap())
+                    .await
+                    .map(|value| {
+                        value
+                            .into_iter()
+                            .map(crate::api::resources::platforms::views::ContainerView::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .map_err(failure)?
+                    .into_iter()
+                    .filter(|c| c.stack_id == id)
+                    .map(|c| container_data(c, e))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?;
+                event("ReceiveStackContainersInfo", containers)
+            }
+            Topic::SwarmService(..) => {
+                let mut view = crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from(self.services.get_authorized(actor, admin, id.unwrap()).await.map_err(failure)?).map_err(failure)?;
+                if let Some(service) = &self.backup_coverage {
+                    let platform = view.platform_id;
+                    view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::SwarmService, id.unwrap(), platform).await);
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    view.copy_eligibility = Some(
+                        crate::api::resources::resource_copies::eligibility(
+                            service,
+                            actor,
+                            citadel_resource_copies::CopyKind::SwarmService,
+                            id.unwrap(),
+                        )
+                        .await,
+                    );
+                }
+                workload_rows("SwarmServiceInfoUpdated", vec![view], e)
+            }
+            Topic::SwarmServices(..) => {
+                let mut views = self.services
+                    .list_authorized(
+                        actor,
+                        admin,
+                        &citadel_swarm_services::SwarmServiceFilter {
+                            platform_id: id,
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(
+                        crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from,
+                    )
+                    .collect::<Result<Vec<_>, _>>().map_err(failure)?;
+                if let Some(service) = &self.backup_coverage {
+                    views = service.enrich_services(p, views).await;
+                }
+                if let Some(service) = &self.copy_eligibility {
+                    crate::api::resources::resource_copies::enrich_swarm_services(
+                        service, actor, &mut views,
+                    )
+                    .await;
+                }
+                workload_rows("SwarmServiceInfoUpdated", views, e)
+            }
+            Topic::GitRepositories => rows(
+                "GitRepositoryInfoUpdated",
+                crate::api::resources::git_repositories::views::authorized_repositories(
+                    &self.identity,
+                    p,
+                    self.git_repositories
+                        .list_git_repositories(actor, admin)
+                        .await
+                        .map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::GitRepo(..) => rows(
+                "GitRepositoryInfoUpdated",
+                crate::api::resources::git_repositories::views::authorized_repositories(
+                    &self.identity,
+                    p,
+                    vec![
+                        self.git_repositories
+                            .get_git_repository(id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ],
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::ScriptRuns(script_id) => {
+                let runs = self
+                    .scripts
+                    .list_runs(*script_id, 50)
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::resources::scripts::views::ScriptRunView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?;
+                // Send the window identities before the standard row events. This
+                // removes stale rows on rejoin without putting 50 argument payloads
+                // into one WebSocket frame.
+                let ids: Vec<_> = runs.iter().map(|run| run.id).collect();
+                let mut snapshot = rows("ScriptRunInfoUpdated", runs, RowStyle::Update)?;
+                snapshot.events.push(ClientEvent::new(
+                    "ScriptRunWindow",
+                    vec![json!({"scriptId": script_id, "ids": ids})],
+                ));
+                Ok(snapshot)
+            }
+            Topic::Scripts => rows(
+                "ScriptInfoUpdated",
+                crate::api::resources::scripts::authorized::authorized_scripts(
+                    self.scripts.as_ref(),
+                    p,
+                    self.scripts.list(actor, admin).await.map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::Script(..) => rows(
+                "ScriptInfoUpdated",
+                crate::api::resources::scripts::authorized::authorized_scripts(
+                    self.scripts.as_ref(),
+                    p,
+                    vec![self.scripts.get(id.unwrap()).await.map_err(failure)?],
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BackupRepositories => rows(
+                "BackupRepositoryInfoUpdated",
+                crate::api::resources::backups::views::authorized_repositories(
+                    &self.identity,
+                    p,
+                    self.backups
+                        .list_repositories(actor, admin)
+                        .await
+                        .map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BackupRepository(..) => rows(
+                "BackupRepositoryInfoUpdated",
+                crate::api::resources::backups::views::authorized_repositories(
+                    &self.identity,
+                    p,
+                    vec![
+                        self.backups
+                            .get_repository(id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ],
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BackupPolicies => rows(
+                "BackupPolicyInfoUpdated",
+                crate::api::resources::backups::views::authorized_policies(
+                    &self.identity,
+                    p,
+                    self.backups
+                        .list_policies(actor, admin)
+                        .await
+                        .map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BackupPolicy(..) => rows(
+                "BackupPolicyInfoUpdated",
+                crate::api::resources::backups::views::authorized_policies(
+                    &self.identity,
+                    p,
+                    vec![
+                        self.backups
+                            .get_policy(id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    ],
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BackupRuns(..) => rows(
+                "BackupRunInfoUpdated",
+                self.backups
+                    .list_runs(actor, admin, id, 100)
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::resources::backups::views::BackupRunView::try_from)
+                    .collect::<Result<_, _>>()
+                    .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BackupRun(..) => rows(
+                "BackupRunInfoUpdated",
+                vec![
+                    crate::api::resources::backups::views::BackupRunView::try_from(
+                        self.backups.get_run(id.unwrap()).await.map_err(failure)?,
+                    )
+                    .map_err(failure)?,
+                ],
+                RowStyle::Update,
+            ),
+            Topic::BackupRestoreRuns(..) => rows(
+                "BackupRestoreRunInfoUpdated",
+                self.backups
+                    .list_restores(actor, admin, None, id, 100)
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::resources::backups::views::BackupRestoreRunView::try_from)
+                    .collect::<Result<_, _>>()
+                    .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BackupRestoreRun(..) => rows(
+                "BackupRestoreRunInfoUpdated",
+                vec![
+                    crate::api::resources::backups::views::BackupRestoreRunView::try_from(
+                        self.backups
+                            .get_restore(id.unwrap())
+                            .await
+                            .map_err(failure)?,
+                    )
+                    .map_err(failure)?,
+                ],
+                RowStyle::Update,
+            ),
+            Topic::BuildProjects => rows(
+                "BuildProjectInfoUpdated",
+                crate::api::resources::builds::authorized::authorized_projects(
+                    self.builds.as_ref(),
+                    p,
+                    self.builds.list(actor, admin).await.map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BuildProject(..) => rows(
+                "BuildProjectInfoUpdated",
+                crate::api::resources::builds::authorized::authorized_projects(
+                    self.builds.as_ref(),
+                    p,
+                    vec![self.builds.get(id.unwrap()).await.map_err(failure)?],
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BuildAgentPools => rows(
+                "BuildAgentPoolInfoUpdated",
+                crate::api::resources::builds::authorized::authorized_pools(
+                    self.builds.as_ref(),
+                    p,
+                    self.builds
+                        .list_pools(actor, admin)
+                        .await
+                        .map_err(failure)?,
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BuildAgentPool(..) => rows(
+                "BuildAgentPoolInfoUpdated",
+                crate::api::resources::builds::authorized::authorized_pools(
+                    self.builds.as_ref(),
+                    p,
+                    vec![self.builds.get_pool(id.unwrap()).await.map_err(failure)?],
+                )
+                .await
+                .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BuildRuns(..) => rows(
+                "BuildRunInfoUpdated",
+                self.builds
+                    .list_runs(actor, admin, id, 100)
+                    .await
+                    .map_err(failure)?
+                    .into_iter()
+                    .map(crate::api::resources::builds::views::BuildRunView::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(failure)?,
+                RowStyle::Update,
+            ),
+            Topic::BuildRun(..) => rows(
+                "BuildRunInfoUpdated",
+                vec![
+                    crate::api::resources::builds::views::BuildRunView::try_from(
+                        self.builds.get_run(id.unwrap()).await.map_err(failure)?,
+                    )
+                    .map_err(failure)?,
+                ],
+                RowStyle::Update,
+            ),
+            _ => Err(RealtimeReadError::Authorization),
+        }
+    }
+
+    async fn container_info(
+        &self,
+        p: &ActorPrincipal,
+        g: &Group,
+        e: Option<&PublishedRuntimeEvent>,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<GroupSnapshot, RealtimeReadError> {
+        let id = Uuid::parse_str(g.reference().unwrap())
+            .map_err(|_| RealtimeReadError::Authorization)?;
+        if let Some(change) = e.filter(|e| {
+            e.payload["dockerResourceType"] == "containerStats"
+                || e.payload["containerPatches"].is_array()
+        }) {
+            let platform = change.platform_id.ok_or(RealtimeReadError::Authorization)?;
+            let identities =
+                crate::realtime::shared_reads::identities(&self.platforms, platform, Some(change))
+                    .await?;
+            let Some(identity) = identities.iter().find(|c| c.id == id) else {
+                return Ok(GroupSnapshot::default());
+            };
+            self.container_access(
+                p,
+                identity.platform_id,
+                identity.deployment_id,
+                identity.stack_id,
+                lease,
+            )
+            .await?;
+            if let Some(patch) = change.payload["containerPatches"]
+                .as_array()
+                .and_then(|patches| patches.iter().find(|patch| patch["id"] == json!(id)))
+            {
+                let mut value = patch.clone();
+                value["id"] = json!(identity.container_id);
+                value["resourceId"] = json!(id);
+                return event("ReceiveContainerInfoPatch", value);
+            }
+            return match map_stat(change, identity) {
+                Some(stat) => event(
+                    "ReceiveContainerInfoPatch",
+                    json!({"id":identity.container_id,"resourceId":id,"containerStat":stat}),
+                ),
+                None => Ok(GroupSnapshot::default()),
+            };
+        }
+        let container = self
+            .platforms
+            .get_container(id)
+            .await
+            .map(|value| value.map(crate::api::resources::platforms::views::ContainerView::from))
+            .map_err(failure)?
+            .ok_or(RealtimeReadError::Authorization)?;
+        self.container_access(
+            p,
+            container.platform_id,
+            container.deployment_id,
+            container.stack_id,
+            lease,
+        )
+        .await?;
+        if let Some(lease) = lease {
+            lease.set_scope(&g.name, container.platform_id);
+        }
+        if e.and_then(|e| e.platform_id)
+            .is_some_and(|id| id != container.platform_id)
+        {
+            return Ok(GroupSnapshot::default());
+        }
+        let mut data = container_data(container.clone(), e).map_err(failure)?;
+        if let Some(service) = &self.backup_coverage {
+            data.backup_coverage = Some(
+                service
+                    .container(
+                        p,
+                        container.platform_id,
+                        container.docker_node_id.as_deref(),
+                        &container.container_id,
+                    )
+                    .await,
+            );
+        }
+        event("ReceiveContainerInfo", data)
+    }
+
+    async fn activities(
+        &self,
+        p: &ActorPrincipal,
+        g: &Group,
+        lease: Option<&crate::realtime::AuthorizationLease>,
+    ) -> Result<GroupSnapshot, RealtimeReadError> {
+        let kind = self.activity_kind(p, g, lease).await?;
+        let records = self
+            .activities
+            .list(
+                &crate::api::resources::activities::authorized::activity_access(p),
+                ActivityFilter {
+                    resource_id: g.id(),
+                    resource_type: Some(kind),
+                    page: Some(1),
+                    page_size: Some(10),
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(failure)?;
+        rows(
+            "ActivityEventReceived",
+            records
+                .items
+                .into_iter()
+                .map(crate::api::resources::activities::views::map_activity)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(failure)?,
+            RowStyle::Activity,
+        )
+    }
+}
+
+impl GroupReadPort for ApplicationGroupReader {
+    fn recheck<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        g: &'a Group,
+        lease: &'a crate::realtime::AuthorizationLease,
+    ) -> BoxFuture<'a, Result<(), RealtimeReadError>> {
+        Box::pin(self.recheck_group(p, g, lease))
+    }
+
+    fn read_with_lease<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        g: &'a Group,
+        e: Option<&'a PublishedRuntimeEvent>,
+        lease: &'a crate::realtime::AuthorizationLease,
+    ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+        Box::pin(self.read_group(p, g, e, Some(lease)))
+    }
+
+    fn terminal_invocation<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        method: &'a str,
+        args: &'a [Value],
+    ) -> BoxFuture<'a, Result<Option<TerminalInvocation>, RealtimeReadError>> {
+        Box::pin(self.resolve_terminal_invocation(p, method, args))
+    }
+    fn terminal<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        group: &'a Group,
+        shell: citadel_platforms::terminal::TerminalShell,
+        cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<GroupTerminal, RealtimeReadError>> {
+        Box::pin(self.open_terminal(p, group, shell, cancel))
+    }
+    fn stream<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        g: &'a Group,
+        cancel: &'a tokio_util::sync::CancellationToken,
+    ) -> BoxFuture<'a, Result<Option<GroupStream>, RealtimeReadError>> {
+        Box::pin(self.logs(p, g, cancel))
+    }
+    fn invocation_group<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        target: &'a str,
+        args: &'a [Value],
+    ) -> BoxFuture<'a, Result<Option<Group>, RealtimeReadError>> {
+        Box::pin(self.log_invocation(p, target, args))
+    }
+    fn read<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        g: &'a Group,
+        e: Option<&'a PublishedRuntimeEvent>,
+    ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+        Box::pin(self.read_group(p, g, e, None))
+    }
+}
+
+pub(super) fn container_data(
+    container: crate::api::resources::platforms::views::ContainerView,
+    event: Option<&PublishedRuntimeEvent>,
+) -> Result<
+    crate::api::resources::platforms::container_views::ContainerRuntimeView,
+    serde_json::Error,
+> {
+    let mut value = container.runtime_data()?;
+    if let Some(stat) = event
+        .filter(|event| {
+            event.payload["dockerNodeId"].as_str() == container.docker_node_id.as_deref()
+        })
+        .and_then(|e| e.payload["stats"].as_array())
+        .and_then(|stats| {
+            stats
+                .iter()
+                .find(|s| s["dockerContainerId"] == container.container_id)
+        })
+    {
+        let mut stat = stat.clone();
+        stat["containerId"] = json!(container.id);
+        value.container_stat = Some(serde_json::from_value(stat)?);
+    }
+    Ok(value)
+}
+
+pub(super) fn map_stats(
+    event: &PublishedRuntimeEvent,
+    containers: &[citadel_platforms::ContainerIdentity],
+) -> Vec<Value> {
+    map_stats_for(event, containers.iter())
+}
+pub(super) fn map_stat(
+    event: &PublishedRuntimeEvent,
+    container: &citadel_platforms::ContainerIdentity,
+) -> Option<Value> {
+    if event.payload["dockerNodeId"].as_str() != container.docker_node_id.as_deref() {
+        return None;
+    }
+    let stat = event.payload["stats"]
+        .as_array()?
+        .iter()
+        .find(|s| s["dockerContainerId"].as_str() == Some(container.container_id.as_str()))?;
+    let mut mapped = stat.clone();
+    mapped["containerId"] = json!(container.id);
+    Some(mapped)
+}
+pub(super) fn map_stats_for<'a>(
+    event: &PublishedRuntimeEvent,
+    containers: impl Iterator<Item = &'a citadel_platforms::ContainerIdentity>,
+) -> Vec<Value> {
+    let Some(stats) = event.payload["stats"].as_array() else {
+        return vec![];
+    };
+    let identities: std::collections::HashMap<_, _> = containers
+        .map(|c| ((c.container_id.as_str(), c.docker_node_id.as_deref()), c.id))
+        .collect();
+    stats
+        .iter()
+        .filter_map(|stat| {
+            let id = stat["dockerContainerId"].as_str()?;
+            let container = identities.get(&(id, event.payload["dockerNodeId"].as_str()))?;
+            let mut mapped = stat.clone();
+            mapped["containerId"] = json!(container);
+            Some(mapped)
+        })
+        .collect()
+}

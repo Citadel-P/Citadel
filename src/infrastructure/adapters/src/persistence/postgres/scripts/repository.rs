@@ -177,7 +177,7 @@ impl ScriptRepository for PostgresScriptRepository {
         &'a self,
         after: Option<Uuid>,
         limit: usize,
-    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>> {
+    ) -> BoxFuture<'a, Result<Vec<citadel_scripts::ScheduledScript>, ScriptError>> {
         self.list_scheduled_impl(after, limit)
     }
 

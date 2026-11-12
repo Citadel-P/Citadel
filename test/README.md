@@ -754,6 +754,22 @@ coverage and checks HTTP request-drop cancellation of an active Edge log command
 including release of pending work. Migration/checksum tests keep their separate
 database. Required CI check names and workspace feature resolution are unchanged.
 
+Realtime overhead regressions use the same disposable PostgreSQL fixture:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test platforms_http realtime_ -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib realtime
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test realtime_subscription
+npm --prefix src/frontend run test:run -- src/features/stacks/form/hooks/useStackInfoGroup.test.tsx
+```
+
+`realtime_overhead` holds inventory/configuration table locks to verify that safety
+rechecks do not reload collections and Stack statistics do not reload Compose/release
+configuration. Unit tests cover shared event/cache byte accounting, reservation
+release, cancellation, sample selection and overflow recovery. Stack hook tests check
+that compact samples preserve lifecycle metadata and cannot create unknown containers
+or resurrect removed ones. These checks do not measure production RSS.
+
 ## Focused release regressions
 
 Run these locally when changing process cleanup, authentication dependencies, or
@@ -1343,7 +1359,7 @@ relative / `1e-8` absolute).
 | F4 | `alerts/platform_metrics.rs`, `workers/stats_alerts.rs`, runtime metrics: wide pending reads retained unused fields and stalled alerts could hide blocked compaction. | The 500-capture/1,000-container fixture's sample CTE width falls from 102 to 64 bytes; neither version spilled. This is a narrow-read improvement, not a claimed major memory win. Bounded diagnostics report pending work, oldest age, progress and blockage without clearing protected work. |
 | F5 | `platforms/history_admission.rs`, `reader.rs`, Core composition: unrestricted expensive reads multiplied database working sets. Shared immediate admission and local timeouts retain ownership through cleanup. | Six one-hour fixture reads completed in 6.56 seconds with one concurrent execution and 4.66 seconds with two; individual latency rose with two. Two slots retain throughput while bounding concurrency, clamped to one for a one-connection pool. Native cancellation tests observe the backend and restored settings. A slow large range can now return a timeout; shorten/retry it. |
 | F6 | `workload_history.sql`, `service_history.sql`: wide array-bearing windows amplified sort/temporary work. Separate weighted gauges from narrow physical counter endpoints and combine logical replicas after physical deltas. | Temporary writes fell 64–80% across the eight comparisons. Mixed generic workload: 323,133,440 → 72,695,808 bytes. Sampled backend anonymous RSS peak: 20,128 → 15,584 KiB. Sampling is a lower-bound observation, not an allocator high-water mark. Generic plans may still choose one date-index scan with owner filtering; the rewrite avoids repeating that scan per owner. |
-| F7 | `platform_maintenance.rs`, `platform_compaction_bounds.sql`, `platform_compaction_size.sql`, maintenance store: an hour cap did not bound nested observations. Size complete-minute prefixes, recheck under the scope lock and rotate candidates. | A 1,000-container source-hour has 360,000 observations; a 16-minute prefix has 96,000. Compaction statement time was 801 → 145 ms and temporary writes 6,316,032 → 0 bytes. Four bounded commits sealed the hour; sizing/discovery round trips are additional cost. Discovery across 1,024 sources measured 15.8 ms / 6,177 shared hits. Oversized minutes stay unsealed and activate failure backoff; cursor advancement lets later sources proceed. |
+| F7 | `platform_maintenance.rs`, `platform_compaction_bounds.sql`, `platform_compaction_size.sql`, maintenance store: an hour cap did not bound nested observations. Size complete-minute prefixes, recheck under the scope lock and rotate candidates. | A 1,000-container source-hour has 360,000 observations; a 16-minute prefix has 96,000. Compaction statement time was 801 → 145 ms and temporary writes 6,316,032 → 0 bytes. Four bounded commits sealed the hour; sizing/discovery round trips are additional cost. Discovery across 1,024 sources measured 15.8 ms / 6,177 shared hits. Oversized minutes stay unsealed; source-local stall outcomes let the same bounded worker batch visit later sources. An all-stalled batch rests instead of spinning. |
 
 F1–F7 preserve ownership, history values, alert revision fencing and atomic
 raw-to-summary movement. Those changes add no schema migration, global PostgreSQL setting,
@@ -1466,3 +1482,56 @@ Run native suites against disposable databases as described above. The new migra
 is additive; original migration checksums stay unchanged. No production memory
 reduction is inferred from these checks: PostgreSQL cache and allocator retention
 need equivalent-load measurements after deployment.
+
+### PostgreSQL review follow-up regressions
+
+Use disposable databases with the existing statistics/execution fixture variables:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test stats_batch_persistence health_retention -- --ignored
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test stats_batch_persistence telemetry_budgets -- --ignored
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib history_admission -- --ignored
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib mixed_log_batches -- --ignored --nocapture
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::maintenance::tests
+```
+
+The retention regression overlaps real insertion and cleanup transactions, checks
+commit/rollback, retained ordinals and local caps, and preserves deleted-container
+history. The history admission fixture silently withholds TCP responses and checks
+bounded cleanup, connection replacement and recovery after repeated faults.
+Paused-time worker tests cover source-local stalls, healthy work, all-stalled rest,
+physical progress, database-error backoff and cancellation. The mixed-log probe
+compares variable-arity inserts with stable typed arrays on one connection, reports
+latency and prepared-statement counts, and verifies UTF-8 order and rollback.
+Production log inserts retain the existing row/byte budgets and completion fences;
+`build_execution` and `backup_execution` exercise their durable completion paths.
+These checks do not estimate production RSS savings.
+
+A local PostgreSQL 18.6 follow-up run (unchanged server settings, one connection,
+256 rollback transactions with batch lengths 1–128 repeated twice) measured 100
+cached statements and 1.156 seconds for variable `VALUES`, versus one statement
+and 0.575 seconds for typed arrays. This is a single diagnostic run, not a general
+throughput guarantee. With 100 ms delays on database responses, the native
+compaction probe committed prefixes of nine and ten complete minutes in 2.95 and
+2.64 seconds respectively, within the worker's five-second budget. Worker cadence
+is tested separately with paused time. Core/PostgreSQL RSS, database size and
+retained queue bytes were not measured in this follow-up.
+
+### Scoped coverage, scheduler projections and Swarm payload guards
+
+Use separate disposable PostgreSQL databases for `CITADEL_PLATFORM_DATABASE_URL`
+and `CITADEL_EXECUTION_DATABASE_URL`:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test platform_inventory_persistence -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test backup_source_discovery --test backup_execution --test script_execution -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-backups -p citadel-scripts
+```
+
+Column-specific audit triggers distinguish unchanged Swarm payloads from required
+freshness updates; native tests retain stale-failure, removal and ownership checks.
+Schedule discovery traverses more than one page, including 256 KiB Script bodies,
+while existing scheduler tests verify due times, timeout validation and idempotency.
+Coverage compares scoped and full-platform results, retains shared-volume policy
+workloads and incomplete evidence, and excludes unauthorized policy inventory.
+No production memory-reduction estimate is implied by these regressions.

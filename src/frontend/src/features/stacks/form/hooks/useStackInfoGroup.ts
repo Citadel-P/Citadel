@@ -180,18 +180,37 @@ export const useStackInfoGroup = (stackId?: string, platformId?: string) => {
     [mergeContainerStats],
   );
 
+  const handleStackContainerStats = useCallback(
+    (patches: Pick<ContainerRuntimeView, 'id' | 'containerStat'>[]) => {
+      const knownIds = new Set(containerData.map((container) => normalizeDockerId(container.id)));
+      setLiveContainers((current) => {
+        let next = current;
+        for (const patch of patches) {
+          const id = normalizeDockerId(patch.id);
+          if (!id || (!next[id] && !knownIds.has(id))) continue;
+          if (next === current) next = { ...current };
+          next[id] = { ...next[id], containerStat: patch.containerStat };
+        }
+        return next;
+      });
+    },
+    [containerData],
+  );
+
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
       hubConnection.on('ReceiveStackContainersInfo', handleStackContainersInfoUpdated);
+      hubConnection.on('ReceiveStackContainerStats', handleStackContainerStats);
     },
-    [handleStackContainersInfoUpdated],
+    [handleStackContainersInfoUpdated, handleStackContainerStats],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
       hubConnection.off('ReceiveStackContainersInfo', handleStackContainersInfoUpdated);
+      hubConnection.off('ReceiveStackContainerStats', handleStackContainerStats);
     },
-    [handleStackContainersInfoUpdated],
+    [handleStackContainersInfoUpdated, handleStackContainerStats],
   );
 
   const { isLoading: isStreamLoading } = useRealtimeGroup({

@@ -1,11 +1,16 @@
 //! Compact processed host samples and independently scoped node I/O history.
-use citadel_runtime::runtime_metrics::RuntimeWork;
+use citadel_runtime::{maintenance::CompactionProgress, runtime_metrics::RuntimeWork};
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::{Duration, Instant};
+const SIZING_BUDGET: Duration = Duration::from_secs(1);
 const OBSERVATIONS: i64 = 100_000;
 const INPUT_BYTES: i64 = 32 * 1024 * 1024;
 
-pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sqlx::Error> {
+pub(crate) async fn compact(
+    pool: &PgPool,
+    cursor: &AtomicI64,
+) -> Result<CompactionProgress, sqlx::Error> {
     let now = chrono::Utc::now();
     let cutoff = now.timestamp().saturating_sub(86_400) / 60 * 60;
     let retained_from = now.timestamp() - 604_800 + i64::from(now.timestamp_subsec_nanos() > 0);
@@ -22,7 +27,7 @@ pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sq
     drop(discovery);
     let Some((source, platform, oldest, _)) = candidate else {
         tx.commit().await?;
-        return Ok(0);
+        return Ok(CompactionProgress::default());
     };
     cursor.store(source, Ordering::Relaxed);
     RuntimeWork::CompactionDiscovery.age(std::time::Duration::from_secs(
@@ -49,6 +54,7 @@ pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sq
     let mut progress = 0;
     if let Some((_, _, from, until)) = bounds {
         let sizing = RuntimeWork::CompactionSizing.start();
+        let started = Instant::now();
         let mut end = from / 60 * 60;
         let mut observations = 0;
         let mut bytes = 0;
@@ -79,17 +85,19 @@ pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sq
             observations += items;
             bytes += size;
             end = next;
+            // Leave most of the worker's five-second batch for expansion and
+            // commit. A slow sizing query still has the transaction's timeout.
+            if started.elapsed() >= SIZING_BUDGET {
+                break;
+            }
         }
         drop(sizing);
         if end <= from {
             tx.commit().await?;
-            // Stop the enclosing drain even if physical-container compaction
-            // made progress. The existing failure pause prevents retrying this
-            // dense source repeatedly within the same five-second batch.
-            return Err(sqlx::Error::Protocol(format!(
-                "Statistics source {source} minute {} exceeds the complete-minute compaction budget ({OBSERVATIONS} observations, {INPUT_BYTES} JSON bytes)",
-                from / 60 * 60
-            )));
+            return Ok(CompactionProgress {
+                processed: 0,
+                stalled_source: Some(source),
+            });
         }
         RuntimeWork::CompactionInput.units(observations as u64);
         RuntimeWork::CompactionInput.queued(captures as usize);
@@ -105,5 +113,8 @@ pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sq
     tx.commit().await?;
     drop(hold);
     RuntimeWork::CompactionProgress.units(progress);
-    Ok(progress)
+    Ok(CompactionProgress {
+        processed: progress,
+        stalled_source: None,
+    })
 }

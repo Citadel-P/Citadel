@@ -1,5 +1,6 @@
 //! Commit-fenced notifications follow the existing connection-event pattern.
-use super::*;
+use super::super::*;
+use citadel_backups::coverage::*;
 const CHANNEL: &str = "citadel_backup_coverage";
 
 pub(crate) async fn publish(

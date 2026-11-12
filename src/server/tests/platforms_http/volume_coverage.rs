@@ -19,6 +19,7 @@ impl CoverageReader for CoverageFixture {
         _: ActorId,
         _: bool,
         _: &'a [Uuid],
+        _: Option<&'a CoverageSelection>,
     ) -> BoxFuture<'a, Result<CoverageSnapshot, BackupError>> {
         Box::pin(async { panic!("volume reads must use their coverage projection") })
     }

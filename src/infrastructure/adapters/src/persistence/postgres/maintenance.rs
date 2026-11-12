@@ -124,8 +124,15 @@ pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result
     }
     // Ordinals remain valid while any retained history exists, including deleted
     // containers. Remove empty counters in bounded batches to avoid churn leaks.
+    let mut counters = pool.begin().await?;
+    // Match history admission's lock order. The DELETE needs a fresh snapshot
+    // after waiting for a writer; taking the lock inside its CTE is insufficient.
+    sqlx::query("SELECT pg_advisory_xact_lock(680224102)")
+        .execute(&mut *counters)
+        .await?;
     sqlx::query("WITH empty AS (SELECT c.containerid FROM containerhealthhistorycounters c WHERE NOT EXISTS(SELECT 1 FROM containerhealthtransitions h WHERE h.containerid=c.containerid) ORDER BY c.containerid LIMIT 500 FOR UPDATE OF c SKIP LOCKED) DELETE FROM containerhealthhistorycounters c USING empty WHERE c.containerid=empty.containerid")
-        .execute(pool).await?;
+        .execute(&mut *counters).await?;
+    counters.commit().await?;
     if let Some(days) = build_retention_days.filter(|days| *days > 0) {
         deleted += sqlx::query(BUILD_RETENTION_SQL)
             .bind(days)
@@ -145,7 +152,8 @@ pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
             pool,
             &std::sync::atomic::AtomicI64::new(0),
         )
-        .await?)
+        .await?
+        .processed)
 }
 
 /// Refresh tokens have a separate expiry cadence. Backup leases are ownership
@@ -222,7 +230,10 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         &self,
     ) -> futures_util::future::BoxFuture<
         '_,
-        Result<u64, citadel_runtime::maintenance::MaintenanceError>,
+        Result<
+            citadel_runtime::maintenance::CompactionProgress,
+            citadel_runtime::maintenance::MaintenanceError,
+        >,
     > {
         Box::pin(async move {
             let physical = super::platforms::statistics::maintenance::compact(&self.pool)
@@ -234,7 +245,10 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
             )
             .await
             .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
-            Ok(physical + platform)
+            Ok(citadel_runtime::maintenance::CompactionProgress {
+                processed: physical + platform.processed,
+                stalled_source: platform.stalled_source,
+            })
         })
     }
     fn cleanup(

@@ -3319,9 +3319,48 @@ async fn backup_coverage_uses_persisted_mounts_and_preserves_observation_fences(
     store.persist(&inventory).await.unwrap();
     let reader = PostgresVolumeCoverageReader(pool.clone());
     let read = reader
-        .snapshot(ActorId::new(actor), true, &[platform])
+        .snapshot(ActorId::new(actor), true, &[platform], None)
         .await
         .unwrap();
+    use citadel_backups::coverage::CoverageSelection;
+    let selected = CoverageSelection {
+        container_keys: vec![(
+            platform,
+            read.containers[0].docker_node_id.clone(),
+            read.containers[0].docker_id.clone(),
+        )],
+        ..Default::default()
+    };
+    let scoped = reader
+        .snapshot(ActorId::new(actor), true, &[platform], Some(&selected))
+        .await
+        .unwrap();
+    assert_eq!(scoped.containers.len(), 1);
+    assert_eq!(scoped.containers[0].id, read.containers[0].id);
+    let selected = CoverageSelection {
+        containers: vec![read.containers[0].id],
+        ..Default::default()
+    };
+    assert_eq!(
+        reader
+            .snapshot(ActorId::new(actor), true, &[platform], Some(&selected))
+            .await
+            .unwrap()
+            .containers
+            .len(),
+        1
+    );
+    let empty = reader
+        .snapshot(
+            ActorId::new(actor),
+            true,
+            &[platform],
+            Some(&CoverageSelection::default()),
+        )
+        .await
+        .unwrap();
+    assert!(empty.containers.is_empty());
+    assert!(empty.workloads.is_empty());
     assert!(read.containers[0].complete);
     assert_eq!(read.containers[0].volumes.len(), 2);
     assert!(
@@ -3336,7 +3375,7 @@ async fn backup_coverage_uses_persisted_mounts_and_preserves_observation_fences(
     store.persist(&inventory).await.unwrap();
     store.persist(&old).await.unwrap();
     let read = reader
-        .snapshot(ActorId::new(actor), true, &[platform])
+        .snapshot(ActorId::new(actor), true, &[platform], None)
         .await
         .unwrap();
     assert!(read.containers[0].complete);
@@ -3346,7 +3385,7 @@ async fn backup_coverage_uses_persisted_mounts_and_preserves_observation_fences(
     store.persist(&inventory).await.unwrap();
     assert!(
         !reader
-            .snapshot(ActorId::new(actor), true, &[platform])
+            .snapshot(ActorId::new(actor), true, &[platform], None)
             .await
             .unwrap()
             .containers[0]

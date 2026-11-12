@@ -15,6 +15,7 @@ pub struct AuthorizationLease {
     actor: ActorId,
     generation: Option<watch::Receiver<Uuid>>,
     decisions: Mutex<BTreeMap<Key, bool>>,
+    scopes: Mutex<BTreeMap<String, Uuid>>,
 }
 impl AuthorizationLease {
     pub(super) fn new(actor: ActorId, generation: Option<watch::Receiver<Uuid>>) -> Self {
@@ -22,6 +23,7 @@ impl AuthorizationLease {
             actor,
             generation,
             decisions: Mutex::new(BTreeMap::new()),
+            scopes: Default::default(),
         }
     }
     pub(super) fn tracked(&self) -> bool {
@@ -29,6 +31,20 @@ impl AuthorizationLease {
     }
     pub(super) fn clear(&self) {
         self.decisions.lock().unwrap().clear();
+    }
+    pub(crate) fn set_scope(&self, group: &str, platform: Uuid) {
+        let mut scopes = self.scopes.lock().unwrap();
+        if scopes.len() >= 64 && !scopes.contains_key(group) {
+            scopes.clear();
+        }
+        scopes.insert(group.to_owned(), platform);
+    }
+    pub(crate) fn matches_scope(&self, group: &str, platform: Uuid) -> bool {
+        self.scopes
+            .lock()
+            .unwrap()
+            .get(group)
+            .is_none_or(|id| *id == platform)
     }
     fn current(&self, principal: &ActorPrincipal) -> Result<(), RealtimeReadError> {
         if principal.actor_id != self.actor

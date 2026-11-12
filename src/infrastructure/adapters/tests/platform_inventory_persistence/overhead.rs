@@ -35,6 +35,16 @@ async fn unchanged_swarm_refresh_writes_each_projection_once_and_removes_absent_
         sqlx::raw_sql(sqlx::AssertSqlSafe(format!("CREATE TRIGGER {schema} AFTER UPDATE ON {table} FOR EACH ROW EXECUTE FUNCTION {schema}.record()")))
             .execute(&pool).await.unwrap();
     }
+    // Column-specific triggers distinguish full payload rewrites from timestamp-only writes.
+    for table in tables {
+        let column = if table == "swarmtaskprojections" {
+            "ports"
+        } else {
+            "labels"
+        };
+        sqlx::raw_sql(sqlx::AssertSqlSafe(format!("CREATE TRIGGER {schema}_payload AFTER UPDATE OF {column} ON {table} FOR EACH ROW EXECUTE FUNCTION {schema}.record()")))
+            .execute(&pool).await.unwrap();
+    }
     inventory.observed_at += chrono::Duration::seconds(1);
     store.persist(&inventory).await.unwrap();
     let counts: Vec<(String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
@@ -48,6 +58,39 @@ async fn unchanged_swarm_refresh_writes_each_projection_once_and_removes_absent_
         counts.iter().all(|(_, count)| *count == 1),
         "unchanged inventory should only advance freshness: {counts:?}"
     );
+    for table in tables {
+        let observed: chrono::DateTime<Utc> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT observedat FROM {table} WHERE platformid=$1"
+        )))
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        // PostgreSQL timestamps retain microseconds; Rust observations can include nanoseconds.
+        assert_eq!(
+            observed.timestamp_micros(),
+            inventory.observed_at.timestamp_micros()
+        );
+    }
+    let older = inventory.clone();
+    inventory.observed_at += chrono::Duration::seconds(1);
+    inventory.swarm.as_mut().unwrap().nodes[0]
+        .labels
+        .insert("changed".into(), "yes".into());
+    store.persist(&inventory).await.unwrap();
+    store.persist(&older).await.unwrap();
+    store
+        .mark_swarm_stale(platform, older.observed_at)
+        .await
+        .unwrap();
+    let (labels, stale): (serde_json::Value, bool) =
+        sqlx::query_as("SELECT labels,isstale FROM swarmnodeprojections WHERE platformid=$1")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(labels["changed"], "yes");
+    assert!(!stale);
     inventory.observed_at += chrono::Duration::seconds(1);
     inventory.swarm.as_mut().unwrap().tasks.clear();
     inventory.swarm.as_mut().unwrap().services.clear();

@@ -1993,3 +1993,6 @@ mod storage_review;
 
 #[path = "stats_batch_persistence/telemetry_budgets.rs"]
 mod telemetry_budgets;
+
+#[path = "stats_batch_persistence/health_retention.rs"]
+mod health_retention;

@@ -52,7 +52,7 @@ pub(super) async fn run_group_connection(
             _=recheck.tick()=>{
                 subscription.recheck(service).await?;
                 for joined in state.groups.values() {
-                    let read = tokio::time::timeout(service.inner.subscribe_timeout, reader.read_with_lease(&subscription.principal, &joined.group, None, &subscription.lease));
+                    let read = tokio::time::timeout(service.inner.subscribe_timeout, reader.recheck(&subscription.principal, &joined.group, &subscription.lease));
                     tokio::pin!(read);
                     loop {
                         tokio::select! {
@@ -80,6 +80,7 @@ pub(super) async fn run_group_connection(
                     },
                     Err(broadcast::error::RecvError::Closed)=>return Ok(()),
                 };
+                if event.event_kind == "resyncRequired" { return Err(RealtimeError::Overloaded); }
                 // Background statistics and unrelated resources should not cause
                 // a database authentication read for every open browser socket.
                 let administrator_event = match event.resource_type {

@@ -987,7 +987,28 @@ realtime; HTTP mutation-notification middleware lives in
 The WebSocket write buffer accommodates the bounded outbound queue's largest
 message, including framing overhead. Group snapshots remain capped at 4 MiB;
 large supported snapshots must not disconnect the shared connection and force other
-resource subscriptions to reload. Container process lists load through HTTP and
+resource subscriptions to reload. Published events and their lazy shared read caches
+also share a 32 MiB retained-allocation accounting budget, in addition to the event
+count limit. JSON payloads account for their allocated trees; typed projections use
+a conservative serialization-size estimate without allocating an encoded buffer.
+Reservations live until the last event/cache reference is released. This is not a
+total process-memory limit: transient query results, subscriber views and allocator
+RSS are outside the accounting. At capacity, replaceable statistics samples are
+dropped; committed changes send a small resync marker and clients reconnect through
+the existing snapshot lifecycle. Cache admission failure likewise fails delivery
+closed and reconnects. Durable persistence does not depend on this budget.
+
+The authorization safety interval reauthenticates and revalidates group access
+without constructing list snapshots or presentation enrichments. Detail groups
+still resolve current ownership/existence, and log/terminal groups retain runtime
+target validation. Actor-generation fences continue to invalidate access immediately.
+Container/Stack detail statistics use shared narrow container identities and send
+only matching samples; Stack updates use `ReceiveStackContainerStats`, merging into
+known containers without replacing lifecycle metadata. Connection-local platform
+scope hints skip unrelated samples, survive permission-cache clears, and refresh on
+metadata reads and safety checks. They filter work only and never grant access.
+
+Container process lists load through HTTP and
 refresh only for subscribed Inspect viewers on the existing scoped statistics/state
 events. Each event shares one bounded runtime read per container after actor-specific
 authorization. A process event read that exceeds the configured realtime read timeout
@@ -1016,7 +1037,13 @@ Server parses and validates configuration before constructing services.
 to routes and workers. Constructors receive settings explicitly rather than
 reading environment variables themselves. Composition constructs health/Git/Edge
 adapters and one shared backup-coverage service before route assembly. HTTP coverage
-remains available when realtime is disabled. The router assembles endpoint groups
+remains available when realtime is disabled. Coverage reads carry the requested
+workload/container identities or volume targets into persistence. They also read
+authorized policy-owned workloads, preserving shared-volume matches and uncertainty
+from incomplete policy inventory. Latest run items and successful-history aggregates
+are restricted to requested targets; history remains authorized even when a policy's
+source has subsequently changed. Run items and workload assembly use indexed lookups.
+The router assembles endpoint groups
 and middleware from these constructed dependencies.
 
 Core applies migrations and acquires its background-job lease before running
@@ -1046,6 +1073,8 @@ log notifications. UTF-8 chunking and the 4 MiB per-attempt log budget remain.
 Backup and Restore completion insert logs in chunks of at most 128 rows, targeting
 64 KiB per statement (an existing oversized individual log remains intact), inside
 the same completion transaction. Retries retain the existing completion fence.
+Build, Backup and Restore log inserts use a stable typed-array statement per table,
+so different batch lengths do not create separate prepared-statement variants.
 
 Build selection admits one undispatched preparation/probe per configured target at a time.
 After dispatch, canonical daemon capacity governs concurrent execution.
@@ -1254,8 +1283,11 @@ capacity error, and applies a transaction-local five-second statement timeout an
 `jit=off`. The ordinary pool size is unchanged. A one-connection pool cannot serve
 ingestion concurrently with a history read. This is not a cluster-wide limit.
 Cancellation transfers the connection and permit to existing process-owned cleanup;
-SQLx drains the pending response before rollback, so admission remains held until
-PostgreSQL finishes. Shutdown drains that cleanup before closing pools. Local
+SQLx drains the pending response before rollback. Admission remains held through
+rollback, with a six-second client I/O deadline. On error or deadline expiry the
+connection is detached from the pool and its local transport dropped; it is never
+reused. This bounds local cleanup ownership, not remote backend shutdown time.
+Shutdown drains that cleanup before closing pools. Local
 settings are restored before connection reuse; timeout returns the existing typed
 error rather than an empty chart. Gauge and I/O projections read the indexed history directly
 instead of materializing a shared JSON capture relation; Docker identities use
@@ -1342,9 +1374,13 @@ Sizing inspects at most one minute (60 distinct timestamps) per statement; it do
 not expand a whole hour to discover that it is too large. A single oversized minute
 remains unsealed, emits a stalled-source diagnostic and advances the cursor so a
 later source can proceed. Such a source cannot compact until the input fits;
-normal protected retention still applies. The error stops the current drain and
-uses the existing five-minute failure pause, even when container compaction made
-progress in that pass.
+normal protected retention still applies. A source-local stall lets the same batch
+continue to other sources and preserves committed container progress. A bounded
+visited set stops repeated stalled-source scans; an all-stalled batch rests for
+five minutes, while a batch with remaining useful work rests for one minute.
+Database errors still use the five-minute failure pause. Sizing stops after a
+complete minute once its one-second elapsed budget is reached, leaving time for
+compaction and commit within the worker's five-second batch budget.
 Fixed metrics distinguish discovery, sizing, lock wait/hold, selected captures/input,
 committed progress and stalls. Density/storage-benefit gates still decide whether
 a whole selected minute is summarized or retained raw.
@@ -1386,7 +1422,10 @@ Migration `0005` backfills ordinals without replacing observations or applied
 migration checksums. A narrow counter row is updated for each admitted observation;
 the existing global admission lock and 100,000-ID window remain. Counter rows have
 no container foreign key because retained history outlives removed containers.
-Global eviction and bounded maintenance remove unused counters. The lease-owned
+Global eviction and bounded maintenance remove unused counters. Maintenance takes
+the admission advisory lock in a separate statement before checking for empty
+counters, so its fresh snapshot includes writers that committed while it waited.
+The lease-owned
 maintenance sweep handles age expiry; reads independently enforce seven days.
 
 ## Runtime routing and observations
@@ -1604,3 +1643,18 @@ cleanup or nonzero exit alone is insufficient. Pushes consume Docker's structure
 response stream; complete terminal responses differ from truncated streams,
 timeouts and transport loss. Unsupported build-history inspection retains the
 reservation rather than guessing that execution stopped.
+
+### Bounded schedule discovery and Swarm refresh writes
+
+Script and Backup schedulers page at most 64 narrow candidates at a time. Candidates
+contain identity, cron/time zone and (for Scripts) timeout validation fields. Code,
+arguments and full policy definitions are loaded only by the existing transactional
+enqueue path, which retains its control-state and scheduled-minute fences. Scheduling
+cadence and entitlement checks are unchanged.
+
+Swarm node, service, task, config, secret and network upserts compare semantic fields
+before replacing payloads. Unchanged rows receive only a timestamp update, matching
+the container inventory pattern. Freshness still advances on every accepted refresh:
+stale failure reports and older successful observations cannot overwrite newer state.
+Ownership, missing-resource removal and derived counts retain their existing rules.
+This reduces payload rewrites; it does not eliminate freshness writes.
