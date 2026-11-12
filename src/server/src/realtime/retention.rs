@@ -237,7 +237,7 @@ mod tests {
         let cache = Cache::<String>::new(budget.clone());
         let result = tokio::time::timeout(
             std::time::Duration::from_millis(10),
-            cache.get_or_try_init(|| std::future::pending::<Result<String, RealtimeReadError>>()),
+            cache.get_or_try_init(std::future::pending::<Result<String, RealtimeReadError>>),
         )
         .await;
         assert!(result.is_err());
