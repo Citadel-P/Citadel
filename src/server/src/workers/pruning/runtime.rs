@@ -1,7 +1,6 @@
 //! SwarmTaskContainerPruner: use the normal node-aware mutation path, never force
 //! deletion or remove volumes. Claims recheck state after the candidate query.
 use citadel_platforms::containers::{ContainerAction, ContainerMutationService};
-use citadel_runtime::notifications::NotificationSource;
 
 use citadel_platforms::containers::DeleteContainerOptions;
 
@@ -16,11 +15,11 @@ pub(crate) async fn run(
     token: CancellationToken,
     store: Arc<dyn ContainerMaintenanceReader>,
     containers: Arc<ContainerMutationService>,
-    events: Box<dyn NotificationSource>,
+    mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
     let mut tick = super::super::schedule::interval("pruning", super::super::recovery::FALLBACK);
     let mut startup = true;
-    let mut listener = events;
+    let mut wake_open = true;
     loop {
         if token.is_cancelled() {
             return Ok(());
@@ -29,8 +28,13 @@ pub(crate) async fn run(
             tokio::select! {
                 ()=token.cancelled()=>return Ok(()),
                 _=tick.tick()=>{},
-                event=listener.recv() => {
-                    if let Err(error) = event { tracing::warn!(%error, "Swarm prune event listener failed"); tokio::select! { ()=token.cancelled()=>return Ok(()), _=tokio::time::sleep(std::time::Duration::from_secs(2))=>{} } }
+                changed=wake.changed(), if wake_open => {
+                    if changed.is_err() {
+                        // A stopped hub must not cause a busy loop; the scheduled
+                        // reconciliation remains authoritative for missed wakeups.
+                        wake_open = false;
+                        continue;
+                    }
                 }
             }
         }

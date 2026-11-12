@@ -623,6 +623,27 @@ These must point to disposable test databases. The PowerShell harnesses set them
 for their fixture processes. Recovery tests use separate source and target databases.
 Run ignored database tests serially (`--ignored --test-threads=1`).
 
+The Server `workers::notifications` tests also cover scoped copy/coverage/Stack
+notifications on the shared connection: commit and rollback, reconnect, bounded
+subscriber lag, and independent copy-lane wakeups. `workers::resource_copies`
+unit tests check idle fallback, coalescing, active backoff and cancellation.
+Adapter `backups::coverage::changes::tests` check distinct-platform batching,
+duplicate suppression, bounded batches and resync without a database lookup.
+The native `execution_resources_http` `resource_copies::` tests retain coverage
+for lost commit acknowledgements, cancellation, finalization and admitted
+multi-volume copies during maintenance. Use a fresh disposable
+`CITADEL_EXECUTION_DATABASE_URL`; their storage executors are fixtures.
+
+The Server `workers::notifications` tests cover all fixed wakeup topics, including
+job-alert observations and Swarm pruning: commit/rollback delivery, one shared
+LISTEN backend, reconnect resync and restored subscriptions. Their ignored tests
+use `CITADEL_TEST_DATABASE_URL` on a disposable PostgreSQL database. The
+`workers::alerts` unit tests also check startup draining, coalesced wakeups,
+30-second recovery after hub closure and cancellation. The ignored
+`workers::pruning` test uses `CITADEL_PLATFORM_DATABASE_URL` and a fake Docker
+runtime to verify that the shared notification path still respects pruning
+settings and only deletes terminal tasks without forcing deletion or removing volumes.
+
 Statistics storage coverage includes the `migrations` test
 `compact_statistics_preserve_samples_uniqueness_and_migration_history`: it upgrades
 populated tables from migration 0003 through the consolidated 0004, verifies
@@ -656,8 +677,11 @@ Run with disposable migration/statistics URLs only.
 The `stats_batch_persistence::query_efficiency` probes execute custom and generic
 container-history plans over a multi-source fixture and bound scanned samples to
 the requested source/day (one gauge pass and one counter pass). A native Platform
-query checks a temporary-write budget at fixed `work_mem`, alongside exact totals
-and rates; it does not assert machine-dependent latency. Identity-function wrappers
+query checks a temporary-write budget at fixed `work_mem` over 432,050 raw
+container observations with full-length Docker IDs, in custom and generic modes
+and with an additional compacted node to exercise the mixed path. It compares
+per-bucket values as well as exact totals and rates; it does not assert
+machine-dependent latency. Identity-function wrappers
 in a disposable child database count real capture lookups, checking that repeated
 samples resolve each identity once and still reject sealed corrections. Swarm
 handover coverage includes alternating host/node projections within one batch.

@@ -892,8 +892,19 @@ that event and realtime connection recovery, without periodic browser polling.
 Running workers receive feature persistence interfaces or typed notification sources,
 never SQLx pools, rows or listeners. PostgreSQL notification decoding and dedicated
 LISTEN connections live in the persistence adapters; reconnect events trigger resync
-and durable queues retain their fallback scans. Edge observation persistence keeps
-session fencing inside the adapter. Alert sample flushing preserves its advisory
+and durable queues retain their fallback scans. Job-alert observations and Swarm
+pruning share the existing notification hub's coalescing wakeups instead of holding
+separate PostgreSQL connections. Startup and fallback scans still recover their
+durable work; hub reconnects wake both consumers, and a closed hub cannot spin them.
+Copy progress, backup coverage and Stack drift also share that LISTEN connection.
+Each topic carries resource IDs through a bounded 256-event fanout; slow subscribers receive a
+resync indication. Copy and coverage readers refresh persisted state after a gap;
+Stack drift retains its bounded event batches and five-minute reconciliation.
+Coverage collects up to 256 distinct platform IDs over 50 ms before loading each
+platform's affected resources once per batch. Unmanaged-container creation keeps
+its dedicated listener: its grace queue cannot reconstruct missed creation events
+from a durable queue, so it must not use the bounded, lossy fanout.
+Edge observation persistence keeps session fencing inside the adapter. Alert sample flushing preserves its advisory
 lock and tuple-revision acknowledgement as one adapter operation, while threshold
 and version evaluation belongs to the Alerts feature.
 Alert evaluation retains the rule/resource advisory lock and durable observation
@@ -938,6 +949,13 @@ finalization. Snapshot selection always uses source identity; restore children,
 volume ownership receipts and cleanup use destination identity. Swarm references
 are resolved by name in destination inventory without copying secret/config values.
 Optional destination fields preserve older same-platform durable plans.
+The copy worker runs both lanes at startup and wakes idle lanes from committed
+copy/child-restore changes, with a 30-second fallback for missed notifications.
+While parents are active, or after errors, both lanes retain a two-second delay;
+notifications from their own writes cannot bypass that delay. In-flight current-
+data copies retain their two-second cancellation/authorization checks. Only the
+reconciliation lane prunes expired unstarted reviews; pending-work reads do not
+perform cleanup. Reconnects wake both lanes, and shutdown still joins both.
 The copy worker reconciles durable parent state. Runtime storage
 checks and ownership-verified cleanup use the Platform runtime router, outside
 database transactions. Destination creation commits before resource invalidation.
@@ -1107,7 +1125,10 @@ combine internal deltas with the bridge between adjacent physical-source blocks.
 They never average averages without their original counts. Ownership changes
 split a minute into contiguous segments. Segments with fewer than four samples
 stay raw to avoid increasing storage for sparse polling. The newest source minute
-also stays raw, preserving current usage even for offline containers.
+also stays raw, preserving current usage even for offline containers. Empty
+compacted raw partitions are dropped after a locked recheck. Sparse or latest
+samples can keep a nonempty partition's allocated heap/index space until it empties
+or expires; routine maintenance does not rewrite live history tables to shrink them.
 
 Compaction runs within the existing lease-owned maintenance job, independently of
 the configured retention sweep. Its first check waits five minutes plus the shared
@@ -1191,6 +1212,13 @@ captures. Within mixed windows, summary-only fields stay NULL on raw observation
 during sorting, with endpoints and unit weights derived afterward. This reduces
 temporary I/O without increasing PostgreSQL's memory allowance, changing missing-
 counter semantics or racing compaction between separate reads.
+Both counter paths project their bucket key before ordering by node, container and
+bucket. The following aggregation reuses that order, including with generic
+prepared plans, rather than building a window-wide hash table from underestimated
+JSON row counts. Native tests bound temporary writes at unchanged query memory
+and compare all returned counter values across raw/mixed and custom/generic paths.
+The initial observation sort still scales with the requested history; this does
+not eliminate all temporary I/O or impose a database memory ceiling.
 The shared I/O panel is owned by `components/custom/stats-io-usage`, used by both
 platform and container charts. These are container traffic and block-I/O metrics,
 not host-interface or host-disk totals. Swarm node captures are retained separately

@@ -78,12 +78,15 @@ std::sync::Arc::new(crate::tasks::platforms::TrackedContainerTasks::new(citadel_
     let events = crate::workers::listener(&pool, "citadel_swarm_prune")
         .await
         .unwrap();
+    let hub = crate::workers::notifications::DatabaseNotificationHub::new();
+    let wake = hub.subscribe(citadel_runtime::RuntimeSignal::SwarmPrune);
+    let notifications = tokio::spawn(hub.run(Box::new(events), token.clone()));
     let worker = tokio::spawn(run(
         citadel_runtime::admission::AdmissionGate::default(),
         token.clone(),
         crate::workers::test_support::containers(&pool),
         service,
-        Box::new(events),
+        wake,
     ));
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(runtime.0.lock().unwrap().is_empty());
@@ -106,6 +109,7 @@ std::sync::Arc::new(crate::tasks::platforms::TrackedContainerTasks::new(citadel_
     .expect("enabled terminal tasks must be pruned");
     token.cancel();
     worker.await.unwrap().unwrap();
+    notifications.await.unwrap().unwrap();
     {
         let targets = runtime.0.lock().unwrap();
         assert_eq!(targets.len(), 2);

@@ -3,6 +3,7 @@ use citadel_runtime::RuntimeSignal;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::workers::notifications::ScopedTopic;
 use crate::workers::platforms::*;
 use citadel_adapters::connectors::agent::client::AgentClient;
 use citadel_adapters::persistence::postgres::notifications::PostgresNotifications;
@@ -58,6 +59,7 @@ pub struct WorkerDependencies {
     pub scripts: Arc<ScriptService>,
     pub builds: Arc<BuildService>,
     pub backups: Arc<BackupService>,
+    pub copies: Arc<citadel_resource_copies::CopyService>,
     pub alerts: Arc<citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository>,
     pub alert_deliveries: Arc<AlertDeliveryService>,
 }
@@ -70,23 +72,8 @@ pub async fn register(
 ) -> Result<crate::workers::statistics::StatsIngress, sqlx::Error> {
     // Subscribe before starting inventory/event producers, so committed changes
     // cannot race past the alert/drift/pruning consumers.
-    let coverage_listener=citadel_adapters::persistence::postgres::backups::coverage::changes::PostgresCoverageChanges::connect(&dependencies.pool).await?;
-    supervisor.spawn(
-        "backup-coverage-realtime",
-        crate::workers::backup_coverage::realtime_updates(
-            Box::new(coverage_listener),
-            dependencies.realtime.clone(),
-            cancellation.child_token(),
-        ),
-    );
     let unmanaged_listener =
         PostgresNotifications::connect(&dependencies.pool, "citadel_container_created").await?;
-    let drift_listener =
-        PostgresNotifications::connect(&dependencies.pool, "citadel_stack_drift").await?;
-    let pruning_listener =
-        PostgresNotifications::connect(&dependencies.pool, "citadel_swarm_prune").await?;
-    let job_alert_listener =
-        PostgresNotifications::connect(&dependencies.pool, "citadel_job_alerts").await?;
     let mut target_listener =
         PostgresNotifications::connect(&dependencies.pool, "citadel_platform_targets").await?;
     for signal in citadel_runtime::RuntimeSignal::ALL {
@@ -95,7 +82,41 @@ pub async fn register(
     target_listener
         .listen(citadel_adapters::persistence::postgres::connection_events::CHANNEL)
         .await?;
+    for channel in [
+        "citadel_backup_coverage",
+        "citadel_resource_copies",
+        "citadel_stack_drift",
+    ] {
+        target_listener.listen(channel).await?;
+    }
     let notifications = crate::workers::notifications::DatabaseNotificationHub::new();
+    let coverage_listener = citadel_adapters::persistence::postgres::backups::coverage::changes::PostgresCoverageChanges::from_notifications(&dependencies.pool, notifications.scoped(ScopedTopic::Coverage));
+    let copy_listener = citadel_adapters::persistence::postgres::resource_copies::changes::PostgresCopyChanges::from_notifications(notifications.scoped(ScopedTopic::Copies));
+    let drift_listener = notifications.scoped(ScopedTopic::StackDrift);
+    supervisor.spawn(
+        "backup-coverage-realtime",
+        crate::workers::backup_coverage::realtime_updates(
+            Box::new(coverage_listener),
+            dependencies.realtime.clone(),
+            cancellation.child_token(),
+        ),
+    );
+    supervisor.spawn(
+        "resource-copy-realtime",
+        crate::workers::resource_copies::realtime_updates(
+            Box::new(copy_listener),
+            dependencies.realtime.clone(),
+            cancellation.child_token(),
+        ),
+    );
+    supervisor.spawn(
+        "resource-copies",
+        crate::workers::resource_copies::run(
+            cancellation.child_token(),
+            dependencies.copies.clone(),
+            notifications.copy_work(),
+        ),
+    );
     supervisor.spawn(
         "connection-realtime-updates",
         crate::workers::connection_events::realtime_updates(
@@ -128,6 +149,7 @@ pub async fn register(
         scripts,
         builds,
         backups,
+        copies: _,
         alerts,
         alert_deliveries,
     } = dependencies;
@@ -181,7 +203,7 @@ pub async fn register(
         crate::workers::alerts::observations(
             cancellation.child_token(),
             job_alerts,
-            Box::new(job_alert_listener),
+            notifications.subscribe(RuntimeSignal::JobAlerts),
         ),
     );
     supervisor.spawn(
@@ -203,7 +225,7 @@ pub async fn register(
             cancellation.child_token(),
             container_reader.clone(),
             containers,
-            Box::new(pruning_listener),
+            notifications.subscribe(RuntimeSignal::SwarmPrune),
         ),
     );
     supervisor.spawn(
@@ -212,7 +234,7 @@ pub async fn register(
             admission.clone(),
             cancellation.child_token(),
             stacks.clone(),
-            Box::new(drift_listener),
+            drift_listener,
         ),
     );
     let git_completed = git.subscribe_completion();

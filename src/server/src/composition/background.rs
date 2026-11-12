@@ -93,19 +93,6 @@ pub async fn spawn_all(
             alert_store.clone(),
         ),
     );
-    let copy_changes = citadel_adapters::persistence::postgres::resource_copies::changes::PostgresCopyChanges::connect(pool).await?;
-    supervisor.spawn(
-        "resource-copy-realtime",
-        workers::resource_copies::realtime_updates(
-            Box::new(copy_changes),
-            realtime_hub.clone(),
-            cancellation.child_token(),
-        ),
-    );
-    supervisor.spawn(
-        "resource-copies",
-        workers::resource_copies::run(cancellation.child_token(), copies.clone()),
-    );
     let stats = workers::register(
         &mut supervisor,
         cancellation,
@@ -126,6 +113,7 @@ pub async fn spawn_all(
             git: Arc::clone(git_execution),
             scripts: Arc::clone(scripts),
             builds: Arc::clone(builds),
+            copies: Arc::clone(copies),
             backups: Arc::clone(backups),
             alerts: alert_store.clone(),
             alert_deliveries: alert_deliveries.clone(),
