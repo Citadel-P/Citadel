@@ -378,6 +378,33 @@ impl PostgresBuildRepository {
         log: &'a citadel_builds::BuildLog,
     ) -> BoxFuture<'a, Result<citadel_builds::BuildLogEntry, BuildError>> {
         Box::pin(async move {
+            Ok(self
+                .append_logs_impl(run_id, attempt_id, std::slice::from_ref(log))
+                .await?
+                .remove(0))
+        })
+    }
+    pub(super) fn append_logs_impl<'a>(
+        &'a self,
+        run_id: Uuid,
+        attempt_id: Uuid,
+        logs: &'a [citadel_builds::BuildLog],
+    ) -> BoxFuture<'a, Result<Vec<citadel_builds::BuildLogEntry>, BuildError>> {
+        Box::pin(async move {
+            if logs.is_empty() {
+                return Ok(Vec::new());
+            }
+            if logs.len() > 128
+                || logs
+                    .iter()
+                    .map(|log| log.message.len().saturating_add(128))
+                    .sum::<usize>()
+                    > 64 * 1024
+            {
+                return Err(BuildError::Validation(
+                    "Build log batch exceeds its byte or row limit.".into(),
+                ));
+            }
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let active: Option<Uuid> = sqlx::query_scalar("SELECT id FROM buildruns WHERE id=$1 AND attemptid=$2 AND status IN ('Preparing','Running') AND EXISTS(SELECT 1 FROM buildprojects project WHERE project.id=buildruns.buildprojectid AND project.currentrunid=buildruns.id) FOR UPDATE")
                 .bind(run_id).bind(attempt_id).fetch_optional(&mut *tx).await.map_err(storage)?;
@@ -386,17 +413,25 @@ impl PostgresBuildRepository {
                     "Build Run is no longer active.".into(),
                 ));
             }
-            let entry = citadel_builds::BuildLogEntry {
-                id: Uuid::now_v7(),
-                build_run_id: run_id,
-                created_at: Utc::now(),
-                stream: log.stream.clone(),
-                message: log.message.clone(),
-            };
-            sqlx::query("INSERT INTO buildrunlogs(id,buildrunid,createdat,stream,message) VALUES($1,$2,$3,$4,$5)")
-                .bind(entry.id).bind(run_id).bind(entry.created_at).bind(&entry.stream).bind(&entry.message).execute(&mut *tx).await.map_err(storage)?;
+            let now = Utc::now();
+            let entries: Vec<_> = logs
+                .iter()
+                .map(|log| citadel_builds::BuildLogEntry {
+                    id: Uuid::now_v7(),
+                    build_run_id: run_id,
+                    created_at: now,
+                    stream: log.stream.clone(),
+                    message: log.message.clone(),
+                })
+                .collect();
+            let ids: Vec<_> = entries.iter().map(|entry| entry.id).collect();
+            let streams: Vec<_> = entries.iter().map(|entry| entry.stream.as_str()).collect();
+            let messages: Vec<_> = entries.iter().map(|entry| entry.message.as_str()).collect();
+            sqlx::query("INSERT INTO buildrunlogs(id,buildrunid,createdat,stream,message) SELECT id,$1,$2,stream,message FROM UNNEST($3::uuid[],$4::text[],$5::text[]) AS batch(id,stream,message)")
+                .bind(run_id).bind(now).bind(&ids).bind(&streams).bind(&messages)
+                .execute(&mut *tx).await.map_err(storage)?;
             tx.commit().await.map_err(storage)?;
-            Ok(entry)
+            Ok(entries)
         })
     }
 }

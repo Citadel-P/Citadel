@@ -892,8 +892,19 @@ that event and realtime connection recovery, without periodic browser polling.
 Running workers receive feature persistence interfaces or typed notification sources,
 never SQLx pools, rows or listeners. PostgreSQL notification decoding and dedicated
 LISTEN connections live in the persistence adapters; reconnect events trigger resync
-and durable queues retain their fallback scans. Edge observation persistence keeps
-session fencing inside the adapter. Alert sample flushing preserves its advisory
+and durable queues retain their fallback scans. Job-alert observations and Swarm
+pruning share the existing notification hub's coalescing wakeups instead of holding
+separate PostgreSQL connections. Startup and fallback scans still recover their
+durable work; hub reconnects wake both consumers, and a closed hub cannot spin them.
+Copy progress, backup coverage and Stack drift also share that LISTEN connection.
+Each topic carries resource IDs through a bounded 256-event fanout; slow subscribers receive a
+resync indication. Copy and coverage readers refresh persisted state after a gap;
+Stack drift retains its bounded event batches and five-minute reconciliation.
+Coverage collects up to 256 distinct platform IDs over 50 ms before loading each
+platform's affected resources once per batch. Unmanaged-container creation keeps
+its dedicated listener: its grace queue cannot reconstruct missed creation events
+from a durable queue, so it must not use the bounded, lossy fanout.
+Edge observation persistence keeps session fencing inside the adapter. Alert sample flushing preserves its advisory
 lock and tuple-revision acknowledgement as one adapter operation, while threshold
 and version evaluation belongs to the Alerts feature.
 Alert evaluation retains the rule/resource advisory lock and durable observation
@@ -938,6 +949,13 @@ finalization. Snapshot selection always uses source identity; restore children,
 volume ownership receipts and cleanup use destination identity. Swarm references
 are resolved by name in destination inventory without copying secret/config values.
 Optional destination fields preserve older same-platform durable plans.
+The copy worker runs both lanes at startup and wakes idle lanes from committed
+copy/child-restore changes, with a 30-second fallback for missed notifications.
+While parents are active, or after errors, both lanes retain a two-second delay;
+notifications from their own writes cannot bypass that delay. In-flight current-
+data copies retain their two-second cancellation/authorization checks. Only the
+reconciliation lane prunes expired unstarted reviews; pending-work reads do not
+perform cleanup. Reconnects wake both lanes, and shutdown still joins both.
 The copy worker reconciles durable parent state. Runtime storage
 checks and ownership-verified cleanup use the Platform runtime router, outside
 database transactions. Destination creation commits before resource invalidation.
@@ -969,7 +987,32 @@ realtime; HTTP mutation-notification middleware lives in
 The WebSocket write buffer accommodates the bounded outbound queue's largest
 message, including framing overhead. Group snapshots remain capped at 4 MiB;
 large supported snapshots must not disconnect the shared connection and force other
-resource subscriptions to reload. Container process lists load through HTTP and
+resource subscriptions to reload. Published events and their lazy shared read caches
+also share a 32 MiB retained-allocation accounting budget, in addition to the event
+count limit. JSON payloads account for their allocated trees; typed projections use
+a conservative serialization-size estimate without allocating an encoded buffer.
+Reservations live until the last event/cache reference is released. This is not a
+total process-memory limit: transient query results, subscriber views and allocator
+RSS are outside the accounting. At capacity, replaceable statistics samples are
+dropped; committed changes send a small resync marker and clients reconnect through
+the existing snapshot lifecycle. Cache admission failure likewise fails delivery
+closed and reconnects. A cache remembers its own admission rejection for that event,
+so waiting subscribers do not repeat the rejected read. Rejected projections are
+dropped; fresh events can retry. Loader failures and cancellation remain retryable
+and do not become shared rejection markers. Durable persistence does not depend on
+this budget.
+
+The authorization safety interval reauthenticates and revalidates group access
+without constructing list snapshots or presentation enrichments. Detail groups
+still resolve current ownership/existence, and log/terminal groups retain runtime
+target validation. Actor-generation fences continue to invalidate access immediately.
+Container/Stack detail statistics use shared narrow container identities and send
+only matching samples; Stack updates use `ReceiveStackContainerStats`, merging into
+known containers without replacing lifecycle metadata. Connection-local platform
+scope hints skip unrelated samples, survive permission-cache clears, and refresh on
+metadata reads and safety checks. They filter work only and never grant access.
+
+Container process lists load through HTTP and
 refresh only for subscribed Inspect viewers on the existing scoped statistics/state
 events. Each event shares one bounded runtime read per container after actor-specific
 authorization. A process event read that exceeds the configured realtime read timeout
@@ -978,6 +1021,12 @@ Authorization failures still fail closed. Process snapshots are transient; no da
 history or separate polling worker is involved. Health history loads through its HTTP query;
 the authenticated health group sends small invalidation notifications on join,
 reconnect and committed changes, rather than carrying the retained records.
+Health reads use the same admission and transaction-local timeout as statistics
+history. Network enrichment reads authorized saved workload configuration once
+per request and parses each admitted Compose document once, then matches it across
+the existing 100-network batches. Endpoint SQL arguments borrow only the first
+500 identities per network. Existing row, Compose-byte and per-network result
+limits still report truncation; no cross-request permission cache is introduced.
 Script run history loads through HTTP, then an action-authorized realtime
 group replaces the latest 50-run window on join, reconnect and committed run or
 cleanup changes. Live snapshots update the frontend query cache and cancel older
@@ -992,7 +1041,13 @@ Server parses and validates configuration before constructing services.
 to routes and workers. Constructors receive settings explicitly rather than
 reading environment variables themselves. Composition constructs health/Git/Edge
 adapters and one shared backup-coverage service before route assembly. HTTP coverage
-remains available when realtime is disabled. The router assembles endpoint groups
+remains available when realtime is disabled. Coverage reads carry the requested
+workload/container identities or volume targets into persistence. They also read
+authorized policy-owned workloads, preserving shared-volume matches and uncertainty
+from incomplete policy inventory. Latest run items and successful-history aggregates
+are restricted to requested targets; history remains authorized even when a policy's
+source has subsequently changed. Run items and workload assembly use indexed lookups.
+The router assembles endpoint groups
 and middleware from these constructed dependencies.
 
 Core applies migrations and acquires its background-job lease before running
@@ -1013,6 +1068,17 @@ superseded or removed claims end the attempt. Terminal progress follows confirme
 storage. Build failure observations are optional and enter the durable alert queue
 in the successful completion transaction. Shutdown may leave an unresolved claim
 for existing recovery; the in-memory result does not survive a Core crash.
+
+Build process output is redacted before entering a batch of at most 128 rows and
+64 KiB, with a 250 ms flush deadline and a final flush on EOF. The existing output
+consumer owns the buffer; persistence failure cancels its producer. PostgreSQL
+checks the active attempt once per batch, commits all rows together, then permits
+log notifications. UTF-8 chunking and the 4 MiB per-attempt log budget remain.
+Backup and Restore completion insert logs in chunks of at most 128 rows, targeting
+64 KiB per statement (an existing oversized individual log remains intact), inside
+the same completion transaction. Retries retain the existing completion fence.
+Build, Backup and Restore log inserts use a stable typed-array statement per table,
+so different batch lengths do not create separate prepared-statement variants.
 
 Build selection admits one undispatched preparation/probe per configured target at a time.
 After dispatch, canonical daemon capacity governs concurrent execution.
@@ -1097,6 +1163,37 @@ watermarks can be read together from its snapshot. Newly created sources have a
 zero watermark. Each sample is checked against its source watermark before writes,
 and only identities with accepted samples resolve an ownership snapshot.
 
+Telemetry locking binds sorted, deduplicated UUID arrays, never serialized capture
+payloads. Platform metadata uses a narrow borrowed projection; only the capture
+statement encodes the complete I/O list. Writers recheck closed sessions after
+acquiring scope locks and preserve last-occurrence ordering and missing-disk rules.
+
+The two Core statistics writers share a 64 MiB conservative reservation budget.
+A collection reserves immediately before constructing totals/cloned I/O; envelopes
+keep their reservation through queues, in-flight writes and per-platform retries.
+The container and platform portions release independently, so a completed container
+batch does not consume capacity while platform totals wait for their flush. Estimates include string/vector capacity, owned scope data, growing
+vectors and serialization/driver scratch allowances. Serialization is counted into
+a non-allocating sink before admission; it does not build a second JSON tree. An encoded batch is bounded
+by an 8 MiB estimate as well as the configured item count. Batches split only
+between complete captures. Oversized or capacity-exhausted collections are dropped
+as complete cycles, counted separately and logged at most once per minute; they
+never stop the sampler or publish partial totals. The existing two-minute expiry,
+retry order, polling/flush cadence and bounded shutdown remain unchanged.
+This is an ingress accounting bound, not a process RSS limit: Docker/Agent
+collection and transport decoding allocate before admission. Existing collector
+concurrency/session ownership still bounds that additional work; allocator-retained
+pages, realtime subscribers and other Core services are outside this budget.
+
+Metric-alert flushes prepare cached rules and live entitlements before taking the
+flush transaction. Evaluation, rule state, outbox changes and exact-`xmin`
+acknowledgement then share that one transaction/connection. PostgreSQL notifications
+are transactional; in-process change callbacks run only after commit. A correction
+concurrent with evaluation remains pending. Once per minute, bounded diagnostics
+seek at most 10,001 pending timestamps and report count (a lower bound at the cap),
+oldest age, time since acknowledged progress, and whether pending work blocks raw
+history compaction. Diagnostics never clear pending flags or bypass retention.
+
 The operator controls polling through `CITADEL_STATS_POLL_INTERVAL_SECONDS`;
 storage does not change that setting or the realtime capture cadence. The existing
 lease-owned maintenance worker compacts captures older than 24 hours into minute
@@ -1107,7 +1204,10 @@ combine internal deltas with the bridge between adjacent physical-source blocks.
 They never average averages without their original counts. Ownership changes
 split a minute into contiguous segments. Segments with fewer than four samples
 stay raw to avoid increasing storage for sparse polling. The newest source minute
-also stays raw, preserving current usage even for offline containers.
+also stays raw, preserving current usage even for offline containers. Empty
+compacted raw partitions are dropped after a locked recheck. Sparse or latest
+samples can keep a nonempty partition's allocated heap/index space until it empties
+or expires; routine maintenance does not rewrite live history tables to shrink them.
 
 Compaction runs within the existing lease-owned maintenance job, independently of
 the configured retention sweep. Its first check waits five minutes plus the shared
@@ -1116,8 +1216,10 @@ error, it waits five minutes again. Reaching the pass limit or time budget inste
 schedules another batch after a full 60-second pause, measured from completion so
 slow work cannot trigger immediate catch-up ticks. Each iteration permits at most
 128 passes within five seconds, with a cancellation branch; a pass commits at most
-one container-source-hour and one host/node-hour. Candidates are ordered by oldest
-unsealed observation and source ID so backfill progresses across sources. Container
+one container-source-hour and a prefix of one host/node-hour. Container candidates
+are ordered by oldest unsealed observation. Host/node candidates rotate through
+source IDs using one process-owned cursor; each starts at its oldest eligible
+observation. Restart resets the cursor without changing durable progress. Container
 sample deletion repeats the source and time bounds explicitly, allowing partition
 pruning for both custom and generic prepared plans instead of scanning unrelated
 retained days. Retention is not repeated for each source-hour. Scheduler and native
@@ -1178,10 +1280,20 @@ in `platformstats.containerio`, independently of inventory lifetime. Platform
 history derives reset-aware differences per container before bucket aggregation;
 live charts keep the same per-container baselines. Replacing or removing a
 container never subtracts its previously measured traffic from the period totals.
-The Platform history reader disables PostgreSQL JIT only within its read
-transaction: JSON expansion estimates can otherwise trigger compilation that
-costs more than the interactive query. Commit and rollback restore the pooled
-connection's setting. Gauge and I/O projections read the indexed history directly
+The four statistics history readers and container health history share one per-Core admission limiter, acquired
+after cheap validation and before a query connection. It allows at most two reads
+(or one with a one-connection pool), rejects overload immediately with the existing
+capacity error, and applies a transaction-local five-second statement timeout and
+`jit=off`. The ordinary pool size is unchanged. A one-connection pool cannot serve
+ingestion concurrently with a history read. This is not a cluster-wide limit.
+Cancellation transfers the connection and permit to existing process-owned cleanup;
+SQLx drains the pending response before rollback. Admission remains held through
+rollback, with a six-second client I/O deadline. On error or deadline expiry the
+connection is detached from the pool and its local transport dropped; it is never
+reused. This bounds local cleanup ownership, not remote backend shutdown time.
+Shutdown drains that cleanup before closing pools. Local
+settings are restored before connection reuse; timeout returns the existing typed
+error rather than an empty chart. Gauge and I/O projections read the indexed history directly
 instead of materializing a shared JSON capture relation; Docker identities use
 byte ordering for the per-container windows.
 Platform history checks for I/O summaries inside the same query snapshot. Windows
@@ -1191,6 +1303,19 @@ captures. Within mixed windows, summary-only fields stay NULL on raw observation
 during sorting, with endpoints and unit weights derived afterward. This reduces
 temporary I/O without increasing PostgreSQL's memory allowance, changing missing-
 counter semantics or racing compaction between separate reads.
+Workload and service history resolve historical owners before scanning physical
+raw/summary tables. A single owner-array InitPlan avoids repeating an underestimated
+generic-plan date scan once per owner. Gauges retain their original weights, while
+the counter window carries only physical IDs, timestamps and scalar endpoints.
+Owner changes and replacements are combined into logical replica buckets only
+after physical deltas are calculated; current projections never filter history.
+Both counter paths project their bucket key before ordering by node, container and
+bucket. The following aggregation reuses that order, including with generic
+prepared plans, rather than building a window-wide hash table from underestimated
+JSON row counts. Native tests bound temporary writes at unchanged query memory
+and compare all returned counter values across raw/mixed and custom/generic paths.
+The initial observation sort still scales with the requested history; this does
+not eliminate all temporary I/O or impose a database memory ceiling.
 The shared I/O panel is owned by `components/custom/stats-io-usage`, used by both
 platform and container charts. These are container traffic and block-I/O metrics,
 not host-interface or host-disk totals. Swarm node captures are retained separately
@@ -1246,6 +1371,24 @@ and their watermark still advances so they are considered only once. The newest
 host/node minute also remains raw; partial summary ranges have the same minute-resolution
 limitation as container history.
 
+Host/node compaction sizes a prefix of complete minutes under the existing scope
+lock before expanding records: at most 100,000 I/O observations and 32 MiB of
+uncompressed JSON per transaction, still within the existing one-hour limit.
+Sizing inspects at most one minute (60 distinct timestamps) per statement; it does
+not expand a whole hour to discover that it is too large. A single oversized minute
+remains unsealed, emits a stalled-source diagnostic and advances the cursor so a
+later source can proceed. Such a source cannot compact until the input fits;
+normal protected retention still applies. A source-local stall lets the same batch
+continue to other sources and preserves committed container progress. A bounded
+visited set stops repeated stalled-source scans; an all-stalled batch rests for
+five minutes, while a batch with remaining useful work rests for one minute.
+Database errors still use the five-minute failure pause. Sizing stops after a
+complete minute once its one-second elapsed budget is reached, leaving time for
+compaction and commit within the worker's five-second batch budget.
+Fixed metrics distinguish discovery, sizing, lock wait/hold, selected captures/input,
+committed progress and stalls. Density/storage-benefit gates still decide whether
+a whole selected minute is summarized or retained raw.
+
 Raw host/node tables remain in place: host UUIDs and pending-alert claims/revisions
 are not rewritten. Compaction stops before the earliest pending-alert minute, while
 other sources can continue. Processed raw rows are deleted atomically with summary
@@ -1277,7 +1420,25 @@ partitions, host/node history and health history become vacuum-eligible after
 Daily expiry releases complete partition files; ordinary row deletion makes space
 reusable and does not guarantee immediate filesystem shrinkage.
 
+Health-history retention uses per-container sample/change ordinals and partial
+indexes to delete only entries beyond the 10,080-sample and 200-change caps.
+Migration `0005` backfills ordinals without replacing observations or applied
+migration checksums. A narrow counter row is updated for each admitted observation;
+the existing global admission lock and 100,000-ID window remain. Counter rows have
+no container foreign key because retained history outlives removed containers.
+Global eviction and bounded maintenance remove unused counters. Maintenance takes
+the admission advisory lock in a separate statement before checking for empty
+counters, so its fresh snapshot includes writers that committed while it waited.
+The lease-owned
+maintenance sweep handles age expiry; reads independently enforce seven days.
+
 ## Runtime routing and observations
+
+Inventory persistence serializes borrowed runtime projections directly into SQL
+arguments. Swarm refreshes mark only missing identities stale; present projections
+advance freshness once. Derived task counts and resource service-name lists update
+only when their values change, including transitions to zero or empty. Ownership
+checks, snapshot fencing and complete-snapshot removal remain transactional.
 
 `PlatformRuntimeRouter` resolves persisted Platform identity or an exact Swarm
 node and exposes the capability needed by the caller. Registered Direct consumers
@@ -1486,3 +1647,18 @@ cleanup or nonzero exit alone is insufficient. Pushes consume Docker's structure
 response stream; complete terminal responses differ from truncated streams,
 timeouts and transport loss. Unsupported build-history inspection retains the
 reservation rather than guessing that execution stopped.
+
+### Bounded schedule discovery and Swarm refresh writes
+
+Script and Backup schedulers page at most 64 narrow candidates at a time. Candidates
+contain identity, cron/time zone and (for Scripts) timeout validation fields. Code,
+arguments and full policy definitions are loaded only by the existing transactional
+enqueue path, which retains its control-state and scheduled-minute fences. Scheduling
+cadence and entitlement checks are unchanged.
+
+Swarm node, service, task, config, secret and network upserts compare semantic fields
+before replacing payloads. Unchanged rows receive only a timestamp update, matching
+the container inventory pattern. Freshness still advances on every accepted refresh:
+stale failure reports and older successful observations cannot overwrite newer state.
+Ownership, missing-resource removal and derived counts retain their existing rules.
+This reduces payload rewrites; it does not eliminate freshness writes.

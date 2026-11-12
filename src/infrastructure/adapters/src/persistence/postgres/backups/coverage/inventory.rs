@@ -1,14 +1,29 @@
-use super::*;
+use super::super::*;
+use citadel_backups::coverage::*;
 use citadel_backups::policies::read_models::BackupPreviewKind as Kind;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) async fn read(
     pool: &PgPool,
     platforms: &[Uuid],
+    selection: Option<&CoverageSelection>,
     snapshot: &mut CoverageSnapshot,
 ) -> Result<(), BackupError> {
-    let rows=sqlx::query("SELECT id,platformid,'Deployment' AS kind,spec FROM deployments WHERE platformid=ANY($1) UNION ALL SELECT s.id,r.platformid,'Stack',NULL FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=ANY($1) UNION ALL SELECT id,platformid,'SwarmService',NULL FROM swarmservices WHERE platformid=ANY($1)")
-        .bind(platforms).fetch_all(pool).await.map_err(storage)?;
+    let all = selection.is_none();
+    let selected = selection.cloned().unwrap_or_default();
+    let key_platforms: Vec<_> = selected.container_keys.iter().map(|(p, _, _)| *p).collect();
+    let key_nodes: Vec<_> = selected
+        .container_keys
+        .iter()
+        .map(|(_, n, _)| n.as_deref())
+        .collect();
+    let key_ids: Vec<_> = selected
+        .container_keys
+        .iter()
+        .map(|(_, _, id)| id.as_str())
+        .collect();
+    let rows=sqlx::query("SELECT id,platformid,'Deployment' AS kind,spec FROM deployments WHERE platformid=ANY($1) AND ($2 OR id=ANY($3)) UNION ALL SELECT s.id,r.platformid,'Stack',NULL FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=ANY($1) AND ($2 OR s.id=ANY($4)) UNION ALL SELECT id,platformid,'SwarmService',NULL FROM swarmservices WHERE platformid=ANY($1) AND ($2 OR id=ANY($5))")
+        .bind(platforms).bind(all).bind(&selected.deployments).bind(&selected.stacks).bind(&selected.services).fetch_all(pool).await.map_err(storage)?;
     let mut declared = BTreeMap::<Uuid, BTreeSet<String>>::new();
     for row in rows {
         let id = row.try_get("id").map_err(storage)?;
@@ -39,6 +54,12 @@ pub(super) async fn read(
             complete: false,
         });
     }
+    let workload_index = snapshot
+        .workloads
+        .iter()
+        .enumerate()
+        .map(|(i, w)| ((w.kind, w.id), i))
+        .collect::<BTreeMap<_, _>>();
     // Current desired tasks retain their owner-node identity even when inventory is incomplete.
     let rows=sqlx::query(r#"SELECT c.id,c.platformid,c.dockercontainerid,c.dockernodeid,c.mounts,c.deploymentid,
         CASE WHEN c.dockernodeid IS NULL THEN c.stackid ELSE s.stackid END AS stackid,COALESCE(s.swarmserviceid,managed.id) AS swarmserviceid,
@@ -47,7 +68,13 @@ pub(super) async fn read(
         LEFT JOIN swarmtaskprojections t ON t.platformid=c.platformid AND t.dockercontainerid=c.dockercontainerid AND t.dockernodeid=c.dockernodeid AND lower(t.desiredstate)='running'
         LEFT JOIN swarmserviceprojections s ON s.platformid=t.platformid AND s.dockerserviceid=t.dockerserviceid
         LEFT JOIN swarmservices managed ON managed.platformid=s.platformid AND managed.dockerserviceid=s.dockerserviceid
-        WHERE c.platformid=ANY($1)"#).bind(platforms).fetch_all(pool).await.map_err(storage)?;
+        WHERE c.platformid=ANY($1) AND ($2 OR c.deploymentid=ANY($3)
+            OR (CASE WHEN c.dockernodeid IS NULL THEN c.stackid ELSE s.stackid END)=ANY($4)
+            OR COALESCE(s.swarmserviceid,managed.id)=ANY($5) OR c.id=ANY($6)
+            OR EXISTS(SELECT 1 FROM unnest($7::uuid[],$8::text[],$9::text[]) k(platformid,nodeid,dockerid)
+                WHERE k.platformid=c.platformid AND k.nodeid IS NOT DISTINCT FROM c.dockernodeid AND k.dockerid=c.dockercontainerid))"#)
+        .bind(platforms).bind(all).bind(&selected.deployments).bind(&selected.stacks).bind(&selected.services)
+        .bind(&selected.containers).bind(&key_platforms).bind(&key_nodes).bind(&key_ids).fetch_all(pool).await.map_err(storage)?;
     let mut incomplete = BTreeSet::new();
     let mut deployment_counts = BTreeMap::<Uuid, usize>::new();
     for row in rows {
@@ -100,11 +127,8 @@ pub(super) async fn read(
                         incomplete.insert(id);
                     }
                 }
-                if let Some(w) = snapshot
-                    .workloads
-                    .iter_mut()
-                    .find(|w| w.kind == kind && w.id == id)
-                {
+                if let Some(&index) = workload_index.get(&(kind, id)) {
+                    let w = &mut snapshot.workloads[index];
                     w.complete = true;
                     for t in &targets {
                         let mut t = t.clone();
@@ -132,8 +156,8 @@ pub(super) async fn read(
         });
     }
     // A missing current Swarm task must not allow the remaining node to appear fully protected.
-    let missing=sqlx::query("SELECT DISTINCT s.stackid,s.swarmserviceid FROM swarmtaskprojections t JOIN swarmserviceprojections s USING(platformid,dockerserviceid) LEFT JOIN containers c ON c.platformid=t.platformid AND c.dockercontainerid=t.dockercontainerid AND c.dockernodeid=t.dockernodeid WHERE t.platformid=ANY($1) AND lower(t.desiredstate)='running' AND (c.id IS NULL OR t.isstale OR s.isstale OR lower(t.state)<>'running')")
-        .bind(platforms).fetch_all(pool).await.map_err(storage)?;
+    let missing=sqlx::query("SELECT DISTINCT s.stackid,s.swarmserviceid FROM swarmtaskprojections t JOIN swarmserviceprojections s USING(platformid,dockerserviceid) LEFT JOIN containers c ON c.platformid=t.platformid AND c.dockercontainerid=t.dockercontainerid AND c.dockernodeid=t.dockernodeid WHERE t.platformid=ANY($1) AND ($2 OR s.stackid=ANY($3) OR s.swarmserviceid=ANY($4)) AND lower(t.desiredstate)='running' AND (c.id IS NULL OR t.isstale OR s.isstale OR lower(t.state)<>'running')")
+        .bind(platforms).bind(all).bind(&selected.stacks).bind(&selected.services).fetch_all(pool).await.map_err(storage)?;
     for row in missing {
         for column in ["stackid", "swarmserviceid"] {
             if let Some(id) = row.try_get::<Option<Uuid>, _>(column).map_err(storage)? {
@@ -141,8 +165,8 @@ pub(super) async fn read(
             }
         }
     }
-    let unstable=sqlx::query("SELECT s.stackid,COALESCE(s.swarmserviceid,m.id) AS swarmserviceid FROM swarmserviceprojections s LEFT JOIN swarmservices m ON m.platformid=s.platformid AND m.dockerserviceid=s.dockerserviceid WHERE s.platformid=ANY($1) AND (s.isstale OR s.desiredtaskcount<=0 OR s.desiredtaskcount<>s.runningtaskcount OR s.desiredtaskcount<>(SELECT count(*) FROM swarmtaskprojections t WHERE t.platformid=s.platformid AND t.dockerserviceid=s.dockerserviceid AND lower(t.desiredstate)='running'))")
-        .bind(platforms).fetch_all(pool).await.map_err(storage)?;
+    let unstable=sqlx::query("SELECT s.stackid,COALESCE(s.swarmserviceid,m.id) AS swarmserviceid FROM swarmserviceprojections s LEFT JOIN swarmservices m ON m.platformid=s.platformid AND m.dockerserviceid=s.dockerserviceid WHERE s.platformid=ANY($1) AND ($2 OR s.stackid=ANY($3) OR COALESCE(s.swarmserviceid,m.id)=ANY($4)) AND (s.isstale OR s.desiredtaskcount<=0 OR s.desiredtaskcount<>s.runningtaskcount OR s.desiredtaskcount<>(SELECT count(*) FROM swarmtaskprojections t WHERE t.platformid=s.platformid AND t.dockerserviceid=s.dockerserviceid AND lower(t.desiredstate)='running'))")
+        .bind(platforms).bind(all).bind(&selected.stacks).bind(&selected.services).fetch_all(pool).await.map_err(storage)?;
     for row in unstable {
         for column in ["stackid", "swarmserviceid"] {
             if let Some(id) = row.try_get::<Option<Uuid>, _>(column).map_err(storage)? {

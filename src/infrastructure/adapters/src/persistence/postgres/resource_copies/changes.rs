@@ -26,24 +26,29 @@ pub(crate) async fn restore_changed(
     Ok(())
 }
 
-pub struct PostgresCopyChanges(sqlx::postgres::PgListener);
+use citadel_runtime::notifications::{NotificationSource, RuntimeNotification};
+
+pub struct PostgresCopyChanges(Box<dyn NotificationSource>);
 impl PostgresCopyChanges {
+    pub fn from_notifications(source: Box<dyn NotificationSource>) -> Self {
+        Self(source)
+    }
     pub async fn connect(pool: &PgPool) -> Result<Self, sqlx::Error> {
-        let dedicated = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(1)
-            .connect_lazy_with((*pool.connect_options()).clone().application_name(CHANNEL));
-        let mut listener = sqlx::postgres::PgListener::connect_with(&dedicated).await?;
-        listener.listen(CHANNEL).await?;
-        Ok(Self(listener))
+        let source =
+            super::super::notifications::PostgresNotifications::connect(pool, CHANNEL).await?;
+        Ok(Self::from_notifications(Box::new(source)))
     }
 }
 impl CopyChangeSource for PostgresCopyChanges {
     fn next(&mut self) -> BoxFuture<'_, Result<Option<Uuid>, CopyError>> {
         Box::pin(async move {
-            let Some(event) = self.0.try_recv().await.map_err(storage_error)? else {
-                return Ok(None);
-            };
-            event.payload().parse().map(Some).map_err(storage_error)
+            loop {
+                match self.0.recv().await.map_err(storage_error)? {
+                    RuntimeNotification::ResourceCopy(id) => return Ok(Some(id)),
+                    RuntimeNotification::Resync => return Ok(None),
+                    _ => {}
+                }
+            }
         })
     }
 }

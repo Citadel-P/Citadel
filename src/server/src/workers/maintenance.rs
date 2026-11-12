@@ -98,10 +98,18 @@ const COMPACTION_BACKLOG_INTERVAL: Duration = Duration::from_secs(60);
 const COMPACTION_BUDGET: Duration = Duration::from_secs(5);
 const COMPACTION_PASSES: usize = 128;
 
-// True means the pass limit was reached and more work may remain.
+// True means useful work may remain; stop when a stalled-source scan wraps.
 async fn compact_batch(store: &dyn MaintenanceStore) -> Result<bool, MaintenanceError> {
+    let mut stalled = std::collections::BTreeSet::new();
+    let mut progressed = false;
     for _ in 0..COMPACTION_PASSES {
-        if store.compact().await? == 0 {
+        let pass = store.compact().await?;
+        progressed |= pass.processed > 0;
+        if let Some(source) = pass.stalled_source {
+            if !stalled.insert(source) && pass.processed == 0 {
+                return Ok(progressed);
+            }
+        } else if pass.processed == 0 {
             return Ok(false);
         }
         tokio::task::yield_now().await;
@@ -127,6 +135,8 @@ mod tests {
         active: AtomicBool,
         stall: bool,
         fail: bool,
+        outcomes:
+            Mutex<std::collections::VecDeque<citadel_runtime::maintenance::CompactionProgress>>,
     }
     struct Active<'a>(&'a AtomicBool);
     impl Drop for Active<'_> {
@@ -147,7 +157,10 @@ mod tests {
                 Ok(0)
             })
         }
-        fn compact(&self) -> BoxFuture<'_, Result<u64, MaintenanceError>> {
+        fn compact(
+            &self,
+        ) -> BoxFuture<'_, Result<citadel_runtime::maintenance::CompactionProgress, MaintenanceError>>
+        {
             Box::pin(async {
                 self.compactions.fetch_add(1, Ordering::SeqCst);
                 self.active.store(true, Ordering::SeqCst);
@@ -159,6 +172,9 @@ mod tests {
                     std::future::pending::<()>().await;
                 }
                 tokio::time::sleep(Duration::from_millis(20)).await;
+                if let Some(outcome) = self.outcomes.lock().unwrap().pop_front() {
+                    return Ok(outcome);
+                }
                 let mut hours = self.hours.lock().unwrap();
                 let candidate = hours
                     .iter()
@@ -169,9 +185,12 @@ mod tests {
                 if let Some(i) = candidate {
                     hours[i] -= 1;
                     self.processed.lock().unwrap()[i] += 1;
-                    Ok(1)
+                    Ok(citadel_runtime::maintenance::CompactionProgress {
+                        processed: 1,
+                        stalled_source: None,
+                    })
                 } else {
-                    Ok(0)
+                    Ok(citadel_runtime::maintenance::CompactionProgress::default())
                 }
             })
         }
@@ -316,5 +335,92 @@ mod tests {
         assert!(compact_batch(&store).await.unwrap());
         assert_eq!(store.compactions.load(Ordering::SeqCst), COMPACTION_PASSES);
         assert_eq!(store.hours.lock().unwrap()[0], 1000 - COMPACTION_PASSES);
+    }
+    #[tokio::test(start_paused = true)]
+    async fn source_stalls_do_not_delay_healthy_work_and_all_stalled_batches_rest() {
+        use citadel_runtime::maintenance::CompactionProgress as Progress;
+        for physical_progress in [0, 1] {
+            let stalled = |source| Progress {
+                processed: 0,
+                stalled_source: Some(source),
+            };
+            let store = Arc::new(Store {
+                outcomes: Mutex::new(
+                    [
+                        stalled(1),
+                        Progress {
+                            processed: physical_progress,
+                            stalled_source: Some(2),
+                        },
+                        stalled(1),
+                        // Next batch reaches a corrected source, then a healthy source.
+                        Progress {
+                            processed: 1,
+                            stalled_source: None,
+                        },
+                        Progress {
+                            processed: 1,
+                            stalled_source: None,
+                        },
+                    ]
+                    .into(),
+                ),
+                ..Default::default()
+            });
+            let token = CancellationToken::new();
+            let worker = tokio::spawn(run(
+                token.clone(),
+                store.clone(),
+                None,
+                None,
+                Duration::from_secs(900),
+            ));
+            tokio::time::sleep(Duration::from_secs(301)).await;
+            assert_eq!(
+                store.compactions.load(Ordering::SeqCst),
+                3,
+                "all-stalled scan must stop"
+            );
+            let delay = if physical_progress == 0 { 300 } else { 60 };
+            tokio::time::sleep(Duration::from_secs(delay - 2)).await;
+            assert_eq!(store.compactions.load(Ordering::SeqCst), 3);
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            assert_eq!(store.compactions.load(Ordering::SeqCst), 6);
+            token.cancel();
+            worker.await.unwrap().unwrap();
+        }
+        let store = Arc::new(Store {
+            outcomes: Mutex::new(
+                [
+                    Progress {
+                        processed: 0,
+                        stalled_source: Some(1),
+                    },
+                    Progress {
+                        processed: 1,
+                        stalled_source: None,
+                    },
+                    Progress::default(),
+                ]
+                .into(),
+            ),
+            ..Default::default()
+        });
+        let token = CancellationToken::new();
+        let worker = tokio::spawn(run(
+            token.clone(),
+            store.clone(),
+            None,
+            None,
+            Duration::from_secs(900),
+        ));
+        tokio::time::sleep(Duration::from_secs(301)).await;
+        assert_eq!(
+            store.compactions.load(Ordering::SeqCst),
+            3,
+            "healthy work follows a stall in the same batch"
+        );
+        token.cancel();
+        worker.await.unwrap().unwrap();
     }
 }

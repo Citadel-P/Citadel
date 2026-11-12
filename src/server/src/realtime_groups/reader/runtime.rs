@@ -630,16 +630,17 @@ pub(super) async fn network_reference_snapshot(
         state
             .runtime
             .inventory(platform, &cancel)
-            .await?
+            .await
+            .map_err(super::failure)?
             .list_networks(&cancel)
             .await
+            .map_err(super::failure)
     };
     let networks = if event.platform_id == Some(platform) {
         event.reads.networks.get_or_try_init(read).await.cloned()
     } else {
         read().await
-    }
-    .map_err(super::failure)?;
+    }?;
     let mut nodes = state
         .platforms
         .list_node_networks(platform)

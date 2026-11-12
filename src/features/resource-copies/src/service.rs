@@ -171,12 +171,15 @@ impl CopyService {
     /// Called by the single execution lane, never concurrently with another
     /// current-data execution. Recovery also handles a committed claim whose
     /// acknowledgement was lost; an ambiguous mutation is never replayed.
+    /// Returns whether durable parents remain under observation.
     pub async fn process_current_queue(
         &self,
         cancel: &tokio_util::sync::CancellationToken,
-    ) -> Result<(), CopyError> {
+    ) -> Result<bool, CopyError> {
         self.store.recover_current().await?;
-        for (actor, id) in self.store.pending().await? {
+        let pending = self.store.pending().await?;
+        let active = !pending.is_empty();
+        for (actor, id) in pending {
             if cancel.is_cancelled() {
                 break;
             }
@@ -188,7 +191,7 @@ impl CopyService {
                 break;
             }
         }
-        Ok(())
+        Ok(active)
     }
 
     async fn process_current(
@@ -237,11 +240,15 @@ impl CopyService {
             }
         }
     }
+    /// Returns whether durable parents were found, for active/idle scheduling.
     pub async fn process(
         &self,
         cancel: &tokio_util::sync::CancellationToken,
-    ) -> Result<(), CopyError> {
-        for (actor, id) in self.store.pending().await? {
+    ) -> Result<bool, CopyError> {
+        self.store.prune_reviews().await?;
+        let pending = self.store.pending().await?;
+        let active = !pending.is_empty();
+        for (actor, id) in pending {
             if cancel.is_cancelled() {
                 break;
             }
@@ -307,6 +314,6 @@ impl CopyService {
                 (self.on_change)(progress.kind, destination);
             }
         }
-        Ok(())
+        Ok(active)
     }
 }

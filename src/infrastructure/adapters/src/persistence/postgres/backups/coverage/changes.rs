@@ -1,5 +1,6 @@
 //! Commit-fenced notifications follow the existing connection-event pattern.
-use super::*;
+use super::super::*;
+use citadel_backups::coverage::*;
 const CHANNEL: &str = "citadel_backup_coverage";
 
 pub(crate) async fn publish(
@@ -24,30 +25,64 @@ pub(crate) async fn publish(
     ) affected WHERE platform IS NOT NULL"#).bind(policy).bind(repository).execute(&mut **tx).await.map_err(storage)?;
     Ok(())
 }
+use citadel_runtime::notifications::{NotificationSource, RuntimeNotification};
+use std::{collections::BTreeSet, time::Duration};
+
 pub struct PostgresCoverageChanges {
-    listener: sqlx::postgres::PgListener,
+    source: Box<dyn NotificationSource>,
     pool: PgPool,
+    pending: BTreeSet<Uuid>,
 }
 impl PostgresCoverageChanges {
-    pub async fn connect(pool: &PgPool) -> Result<Self, sqlx::Error> {
-        let dedicated = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(1)
-            .connect_lazy_with((*pool.connect_options()).clone().application_name(CHANNEL));
-        let mut listener = sqlx::postgres::PgListener::connect_with(&dedicated).await?;
-        listener.listen(CHANNEL).await?;
-        Ok(Self {
-            listener,
+    pub fn from_notifications(pool: &PgPool, source: Box<dyn NotificationSource>) -> Self {
+        Self {
+            source,
             pool: pool.clone(),
-        })
+            pending: BTreeSet::new(),
+        }
+    }
+    pub async fn connect(pool: &PgPool) -> Result<Self, sqlx::Error> {
+        let source =
+            super::super::super::notifications::PostgresNotifications::connect(pool, CHANNEL)
+                .await?;
+        Ok(Self::from_notifications(pool, Box::new(source)))
+    }
+    async fn collect(&mut self) -> Result<bool, BackupError> {
+        // Keep IDs across cancellation, and bound both the batch and its latency.
+        loop {
+            match self.source.recv().await.map_err(storage)? {
+                RuntimeNotification::BackupCoverage(id) => {
+                    self.pending.insert(id);
+                    break;
+                }
+                RuntimeNotification::Resync => {
+                    self.pending.clear();
+                    return Ok(false);
+                }
+                _ => {}
+            }
+        }
+        let deadline = tokio::time::Instant::now() + Duration::from_millis(50);
+        while self.pending.len() < 256 {
+            tokio::select! {
+                _ = tokio::time::sleep_until(deadline) => break,
+                event = self.source.recv() => match event.map_err(storage)? {
+                    RuntimeNotification::BackupCoverage(id) => { self.pending.insert(id); }
+                    RuntimeNotification::Resync => { self.pending.clear(); return Ok(false); }
+                    _ => {},
+                },
+            }
+        }
+        Ok(true)
     }
 }
 impl CoverageChangeSource for PostgresCoverageChanges {
     fn next(&mut self) -> BoxFuture<'_, Result<Option<CoverageInvalidation>, BackupError>> {
         Box::pin(async move {
-            let Some(event) = self.listener.try_recv().await.map_err(storage)? else {
+            if self.pending.is_empty() && !self.collect().await? {
                 return Ok(None);
-            };
-            let platform: Uuid = event.payload().parse().map_err(storage)?;
+            }
+            let platform = *self.pending.first().expect("collected coverage platform");
             let rows=sqlx::query("SELECT id,'Deployment' AS kind FROM deployments WHERE platformid=$1 UNION ALL SELECT s.id,'Stack' FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$1 UNION ALL SELECT id,'SwarmService' FROM swarmservices WHERE platformid=$1 UNION ALL SELECT id,'Container' FROM containers WHERE platformid=$1").bind(platform).fetch_all(&self.pool).await.map_err(storage)?;
             let mut change = CoverageInvalidation {
                 platform_id: platform,
@@ -62,7 +97,11 @@ impl CoverageChangeSource for PostgresCoverageChanges {
                 };
                 ids.push(row.try_get("id").map_err(storage)?);
             }
+            self.pending.remove(&platform);
             Ok(Some(change))
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

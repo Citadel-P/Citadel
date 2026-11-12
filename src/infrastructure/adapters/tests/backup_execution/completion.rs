@@ -170,8 +170,12 @@ impl BackupPersistence for Store {
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>> {
         self.inner.enqueue_webhook(policy_id, expected_webhook)
     }
-    fn list_scheduled_policies(&self) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
-        self.inner.list_scheduled_policies()
+    fn list_scheduled_policies(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<citadel_backups::ScheduledBackupPolicy>, BackupError>> {
+        self.inner.list_scheduled_policies(after, limit)
     }
     fn enqueue_scheduled_backup(
         &self,
@@ -372,10 +376,7 @@ impl BackupExecutor for Runtime {
             self.execute(cancel).await;
             {
                 let mut result = super::success_result("a", Some(plan.items[0].id));
-                result.logs.push(BackupLog {
-                    stream: "stdout".into(),
-                    message: "backed up once".into(),
-                });
+                result.logs = batched_logs();
                 result
             }
         })
@@ -392,10 +393,7 @@ impl BackupExecutor for Runtime {
                 exit_code: Some(0),
                 error_code: None,
                 error_message: None,
-                logs: vec![BackupLog {
-                    stream: "stdout".into(),
-                    message: "restored once".into(),
-                }],
+                logs: batched_logs(),
             }
         })
     }
@@ -689,7 +687,18 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
                 } else {
                     store.backup_logs(run_id).await.unwrap()
                 };
-                assert_eq!(logs.len(), 1, "lost acknowledgment must not duplicate logs");
+                let expected = batched_logs();
+                assert_eq!(
+                    logs.len(),
+                    expected.len(),
+                    "lost acknowledgment must not duplicate logs"
+                );
+                assert!(
+                    logs.iter()
+                        .zip(&expected)
+                        .all(|(actual, expected)| actual.stream == expected.stream
+                            && actual.message == expected.message)
+                );
                 if !restore {
                     let persisted = store.get_run(run_id).await.unwrap();
                     assert_eq!(
@@ -739,4 +748,13 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, platform: Uuid, 
         .execute(pool)
         .await
         .unwrap();
+}
+
+fn batched_logs() -> Vec<BackupLog> {
+    (0..257)
+        .map(|i| BackupLog {
+            stream: "stdout".into(),
+            message: format!("{i}:{}", "x".repeat(if i < 130 { 8 } else { 2048 })),
+        })
+        .collect()
 }

@@ -39,8 +39,8 @@ pub enum RuntimeNotification {
     ConnectionResync,
     ContainerCreated(ContainerCreated),
     StackDrift(Uuid),
-    SwarmPrune,
-    JobAlerts,
+    BackupCoverage(Uuid),
+    ResourceCopy(Uuid),
     Resync,
 }
 

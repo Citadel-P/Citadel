@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 mod build_attempts;
 mod container_io;
+mod health_retention;
 mod instance_settings;
 mod query_indexes;
 mod statistics_storage;

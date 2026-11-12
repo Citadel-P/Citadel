@@ -8,9 +8,9 @@ async fn platform_history_bounds_temporary_writes_without_losing_counter_totals(
     let start = (chrono::Utc::now().timestamp() / 86400 - 1) * 86400;
     sqlx::query("INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,containerio)
         SELECT gen_random_uuid(),$1,$2+n*10,2,100,n*200,n*400,
-            (SELECT jsonb_agg(jsonb_build_object('containerId','physical-'||c,
+            (SELECT jsonb_agg(jsonb_build_object('containerId',repeat(md5(c::text),2),
                 'rxBytes',n*10,'txBytes',n*20,'blockReadBytes',n*30,'blockWriteBytes',n*40))
-             FROM generate_series(1,20)c) FROM generate_series(0,8640)n")
+             FROM generate_series(1,50)c) FROM generate_series(0,8640)n")
         .bind(scope.platform_id).bind(start).execute(&pool).await.unwrap();
     sqlx::query("ANALYZE platformstats")
         .execute(&pool)
@@ -35,48 +35,110 @@ async fn platform_history_bounds_temporary_writes_without_losing_counter_totals(
         scope.platform_id,
         start + 86400
     );
-    let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "EXPLAIN(ANALYZE,BUFFERS,TIMING OFF,FORMAT JSON) {execute}"
-    )))
-    .fetch_one(&mut *tx)
-    .await
-    .unwrap();
-    let block_size: i64 = sqlx::query_scalar("SELECT current_setting('block_size')::bigint")
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
-    let temporary_bytes = plan[0]["Plan"]["Temp Written Blocks"].as_i64().unwrap() * block_size;
-    // A native I/O budget, not a wall-clock assertion: 172,820 raw counter rows
-    // must fit within 24 MiB of temporary writes at 4 MiB work_mem. Carrying all
-    // summary fields through the raw window exceeded this budget substantially.
-    assert!(
-        temporary_bytes < 24 * 1024 * 1024,
-        "temporary writes={temporary_bytes}: {plan}"
-    );
-    let rows = sqlx::query(sqlx::AssertSqlSafe(execute))
-        .fetch_all(&mut *tx)
-        .await
-        .unwrap();
-    assert_eq!(rows.len(), 1441);
-    assert_eq!(
-        rows.iter()
-            .map(|r| r.get::<Option<f64>, _>("rxbytesdelta").unwrap_or_default())
-            .sum::<f64>(),
-        86400. * 20.
-    );
-    assert_eq!(
-        rows.iter()
-            .map(|r| r
-                .get::<Option<f64>, _>("blockwritebytesdelta")
-                .unwrap_or_default())
-            .sum::<f64>(),
-        86400. * 80.
-    );
-    assert!(
-        rows.iter().all(
-            |r| r.get::<f64, _>("cpuusage") == 2. && r.get::<f64, _>("rxbytespersecond") == 20.
-        )
-    );
+    let mut expected = None;
+    for mixed in [false, true] {
+        if mixed {
+            // A zero-traffic summary from another node selects the mixed path
+            // without changing any expected chart values from the raw host.
+            sqlx::query("WITH src AS (
+                INSERT INTO platformhistorysources(platformid,nodeid) VALUES($1,'summary-node') RETURNING id
+            ) INSERT INTO platformiorollups(sourceid,containerid,created,lastcreated,
+                firstcounters,lastcounters,counterdeltas,counterdurations,
+                blockreadbytes,blockwritebytes,readcount,writecount)
+            SELECT id,'summary-container',$2,$2+50,
+                ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],
+                ARRAY[50,50,50,50]::bigint[],0,0,6,6 FROM src")
+                .bind(scope.platform_id).bind(start).execute(&mut *tx).await.unwrap();
+        }
+        for mode in ["force_custom_plan", "force_generic_plan"] {
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "SET LOCAL plan_cache_mode={mode}"
+            )))
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+            let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "EXPLAIN(ANALYZE,BUFFERS,TIMING OFF,FORMAT JSON) {execute}"
+            )))
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+            let block_size: i64 =
+                sqlx::query_scalar("SELECT current_setting('block_size')::bigint")
+                    .fetch_one(&mut *tx)
+                    .await
+                    .unwrap();
+            let temporary_bytes =
+                plan[0]["Plan"]["Temp Written Blocks"].as_i64().unwrap() * block_size;
+            // Bound real spill volume rather than machine-dependent latency. With 432,050
+            // raw observations with full-length Docker IDs at 4 MiB work_mem, both
+            // paths fit below 112 MiB. The old generic mixed-history hash
+            // aggregate wrote about 240 MiB for this fixture.
+            assert!(
+                temporary_bytes < 112 * 1024 * 1024,
+                "mixed={mixed}, mode={mode}, temporary writes={temporary_bytes}: {plan}"
+            );
+            let rows = sqlx::query(sqlx::AssertSqlSafe(execute.clone()))
+                .fetch_all(&mut *tx)
+                .await
+                .unwrap();
+            assert_eq!(rows.len(), 1441);
+            assert_eq!(
+                rows.iter()
+                    .map(|r| r.get::<Option<f64>, _>("rxbytesdelta").unwrap_or_default())
+                    .sum::<f64>(),
+                86400. * 50.
+            );
+            assert_eq!(
+                rows.iter()
+                    .map(|r| r
+                        .get::<Option<f64>, _>("blockwritebytesdelta")
+                        .unwrap_or_default())
+                    .sum::<f64>(),
+                86400. * 200.
+            );
+            assert!(
+                rows.iter().all(|r| r.get::<f64, _>("cpuusage") == 2.
+                    && r.get::<f64, _>("rxbytespersecond") == 50.)
+            );
+            let values: Vec<_> = rows
+                .iter()
+                .map(|row| {
+                    (
+                        row.get::<i64, _>("created"),
+                        [
+                            "cpuusage",
+                            "memoryusage",
+                            "rxbytes",
+                            "txbytes",
+                            "blockreadbytes",
+                            "blockwritebytes",
+                            "rxbytesdelta",
+                            "txbytesdelta",
+                            "blockreadbytesdelta",
+                            "blockwritebytesdelta",
+                            "rxbytespersecond",
+                            "txbytespersecond",
+                            "blockreadbytespersecond",
+                            "blockwritebytespersecond",
+                        ]
+                        .map(|field| row.get::<Option<f64>, _>(field)),
+                    )
+                })
+                .collect();
+            if let Some(expected) = &expected {
+                assert_eq!(
+                    &values, expected,
+                    "plan type and idle summary node must not change chart values"
+                );
+            } else {
+                expected = Some(values);
+            }
+            eprintln!(
+                "platform history mixed={mixed}, mode={mode}: temporary bytes={temporary_bytes}"
+            );
+        }
+    }
     sqlx::query("DEALLOCATE bounded_platform")
         .execute(&mut *tx)
         .await

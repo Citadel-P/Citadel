@@ -82,6 +82,18 @@ async fn stopped_workloads_resolve_configured_networks_without_endpoints_and_pre
         assert!(entry.docker_container_id.is_none());
     }
     assert_eq!(admin[2].entries.len(), 2);
+    let many: Vec<_> = (0..205).map(|_| networks[2].clone()).collect();
+    let batched = reader
+        .network_usage(ActorId::new(actor), true, platform, &many)
+        .await
+        .unwrap();
+    assert_eq!(batched.len(), 205);
+    assert!(
+        batched
+            .iter()
+            .all(|usage| usage.entries.len() == 2 && !usage.truncated)
+    );
+
     assert!(admin[3..].iter().all(|usage| usage.entries.is_empty()));
     let grant = Uuid::now_v7();
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,1,0)")

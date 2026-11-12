@@ -96,6 +96,8 @@ mod platform_image_management;
 mod realtime_generation;
 #[path = "platforms_http/realtime_groups.rs"]
 mod realtime_groups;
+#[path = "platforms_http/realtime_overhead.rs"]
+mod realtime_overhead;
 #[path = "platforms_http/registry_browsing.rs"]
 mod registry_browsing;
 #[path = "platforms_http/resource_capabilities.rs"]

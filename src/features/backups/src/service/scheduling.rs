@@ -22,18 +22,26 @@ impl BackupService {
             .and_then(|value| value.with_nanosecond(0))
             .ok_or_else(|| BackupError::Storage("Could not normalize scheduler time.".into()))?;
         let mut queued = 0;
-        for policy in self.store.list_scheduled_policies().await? {
-            if schedule_is_due(
-                policy.cron.as_deref(),
-                policy.time_zone.as_deref().unwrap_or("UTC"),
-                minute,
-            ) && self
-                .store
-                .enqueue_scheduled_backup(policy.id, minute)
-                .await?
-            {
-                queued += 1;
-                self.changed();
+        let mut after = None;
+        loop {
+            let policies = self.store.list_scheduled_policies(after, 64).await?;
+            if policies.is_empty() {
+                break;
+            }
+            for policy in policies {
+                after = Some(policy.id);
+                if schedule_is_due(
+                    policy.cron.as_deref(),
+                    policy.time_zone.as_deref().unwrap_or("UTC"),
+                    minute,
+                ) && self
+                    .store
+                    .enqueue_scheduled_backup(policy.id, minute)
+                    .await?
+                {
+                    queued += 1;
+                    self.changed();
+                }
             }
         }
         Ok(queued)

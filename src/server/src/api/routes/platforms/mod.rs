@@ -644,6 +644,7 @@ fn validate_docker_resource_id(value: &str) -> Result<(), ApiError> {
 
 fn platform_error(error: AuthorizedReadError) -> ApiError {
     match error {
+        AuthorizedReadError::Runtime(error) => ApiError::Runtime(error),
         AuthorizedReadError::NotFound => ApiError::NotFound,
         AuthorizedReadError::Conflict(message) => ApiError::Conflict(message),
         error @ AuthorizedReadError::Storage(_) => ApiError::internal(error),

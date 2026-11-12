@@ -128,6 +128,9 @@ impl CopyRepository for FaultyStore {
     fn cancel(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
         self.inner.cancel(actor, id)
     }
+    fn prune_reviews(&self) -> BoxFuture<'_, Result<(), CopyError>> {
+        self.inner.prune_reviews()
+    }
     fn pending(&self) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>> {
         self.inner.pending()
     }
@@ -623,9 +626,11 @@ async fn maintenance_allows_admitted_multivolume_copy_to_finish() {
     let id = queue(&store, actor, &source).await;
     let gate = citadel_runtime::admission::AdmissionGate::default();
     let cancel = CancellationToken::new();
+    let (_wake, receiver) = tokio::sync::watch::channel(());
     let worker = tokio::spawn(citadel_server::workers::resource_copies::run(
         cancel.clone(),
         copies.clone(),
+        receiver,
     ));
     let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         storage.started.notified().await;

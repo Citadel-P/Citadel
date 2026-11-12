@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 use citadel_platforms::network_usage::*;
 
 pub(super) async fn read(
@@ -15,14 +15,30 @@ pub(super) async fn read(
         };
         networks.len()
     ];
-    // Bound request materialization and response size. Never inspect Docker here.
+    if networks.is_empty() {
+        return Ok(result);
+    }
+    let saved = sqlx::query(concat!(
+        include_str!("network_saved_owners.sql"),
+        include_str!("../../swarm_services/effective_health.sql"),
+        include_str!("network_usage_owners_tail.sql"),
+        include_str!("network_saved.sql")
+    ))
+    .bind(actor.value())
+    .bind(administrator)
+    .bind(platform)
+    .fetch_all(pool)
+    .await
+    .map_err(storage)?;
+    let saved_count = saved.len();
+    let saved: Vec<_> = saved
+        .into_iter()
+        .take(2000)
+        .map(saved_reference)
+        .collect::<Result<_, _>>()?;
+    // Serialize only the admitted ID prefix, without first copying all endpoints.
     for (batch_index, batch) in networks.chunks(100).enumerate() {
-        let mut bounded = serde_json::to_value(batch).map_err(storage)?;
-        for network in bounded.as_array_mut().expect("serialized slice") {
-            if let Some(ids) = network["container_ids"].as_array_mut() {
-                ids.truncate(500);
-            }
-        }
+        let bounded: Vec<_> = batch.iter().map(BoundedNetwork::from).collect();
         let rows = sqlx::query(concat!(
             include_str!("network_usage_owners.sql"),
             include_str!("../../swarm_services/effective_health.sql"),
@@ -32,11 +48,12 @@ pub(super) async fn read(
         .bind(actor.value())
         .bind(administrator)
         .bind(platform)
-        .bind(bounded)
+        .bind(sqlx::types::Json(&bounded))
         .fetch_all(pool)
         .await
         .map_err(storage)?;
-        let scan_truncated = rows.len() > 2000;
+        let scan_truncated = rows.len() + saved_count > 2000;
+        let remaining = 2000usize.saturating_sub(rows.len());
         for (i, network) in batch.iter().enumerate() {
             result[batch_index * 100 + i].truncated =
                 scan_truncated || network.container_ids.len() > 500;
@@ -81,34 +98,8 @@ pub(super) async fn read(
                 push(&mut result[batch_index * 100 + index as usize], entry);
                 continue;
             }
-            let mut references: Vec<String> =
-                serde_json::from_value(row.try_get("refs").map_err(storage)?).unwrap_or_default();
-            // Deployments do not expose host/none/shared namespace modes. An
-            // omitted or empty network list uses Docker's default bridge.
-            if entry.workload_kind == Some(NetworkWorkloadKind::Deployment) && references.is_empty()
-            {
-                references.push("bridge".into());
-            }
-            let project = if entry.workload_kind == Some(NetworkWorkloadKind::Stack) {
-                row.try_get::<Option<String>, _>("projectname")
-                    .map_err(storage)?
-                    .or_else(|| {
-                        entry
-                            .workload_name
-                            .as_deref()
-                            .zip(entry.workload_id)
-                            .map(|(name, id)| citadel_stacks::normalize_project_name(name, id))
-                    })
-            } else {
-                None
-            };
-            if let Some(compose) = row
-                .try_get::<Option<String>, _>("compose")
-                .map_err(storage)?
-                && let Ok(model) = citadel_stacks::parse_compose(&[compose])
-            {
-                references.extend(model.network_names.into_values());
-            }
+        }
+        for (entry, references, project) in saved.iter().take(remaining) {
             for (index, network) in batch.iter().enumerate() {
                 // Saved configuration has no worker-local identity. Do not match it
                 // to a same-named local network on an arbitrary Swarm node.
@@ -125,7 +116,7 @@ pub(super) async fn read(
                     !project.is_empty() && network.stack_project.as_ref() == Some(project)
                 });
                 if reference.is_some() || project_matches {
-                    let mut entry = entry.clone();
+                    let mut entry = (*entry).clone();
                     entry.reference = Some(reference.unwrap_or(&network.name).clone());
                     push(&mut result[batch_index * 100 + index], entry);
                 }
@@ -133,6 +124,79 @@ pub(super) async fn read(
         }
     }
     Ok(result)
+}
+
+#[derive(serde::Serialize)]
+struct BoundedNetwork<'a> {
+    id: &'a str,
+    scope: &'a str,
+    docker_node_id: &'a Option<String>,
+    container_ids: &'a [String],
+}
+impl<'a> From<&'a NetworkUsageQuery> for BoundedNetwork<'a> {
+    fn from(value: &'a NetworkUsageQuery) -> Self {
+        Self {
+            id: &value.id,
+            scope: &value.scope,
+            docker_node_id: &value.docker_node_id,
+            container_ids: &value.container_ids[..value.container_ids.len().min(500)],
+        }
+    }
+}
+type SavedReference = (NetworkUsageEntry, Vec<String>, Option<String>);
+fn saved_reference(row: PgRow) -> Result<SavedReference, AuthorizedReadError> {
+    let kind = match row.try_get::<i32, _>("kind").map_err(storage)? {
+        1 => Some(NetworkWorkloadKind::Deployment),
+        2 => Some(NetworkWorkloadKind::Stack),
+        20 => Some(NetworkWorkloadKind::SwarmService),
+        _ => None,
+    };
+    let entry = NetworkUsageEntry {
+        docker_service_id: None,
+        service_name: None,
+        observed_at: None,
+        is_stale: false,
+        relationship: NetworkRelationship::SavedReference,
+        container_id: None,
+        docker_container_id: None,
+        docker_node_id: None,
+        container_name: None,
+        container_state: None,
+        workload_kind: kind,
+        workload_id: row.try_get("ownerid").map_err(storage)?,
+        workload_name: row.try_get("ownername").map_err(storage)?,
+        workload_status: row.try_get("ownerstatus").map_err(storage)?,
+        workload_processing: row.try_get("ownerprocessing").map_err(storage)?,
+        reference: None,
+    };
+    let mut references: Vec<String> =
+        serde_json::from_value(row.try_get("refs").map_err(storage)?).unwrap_or_default();
+    // Deployments do not expose host/none/shared namespace modes. An
+    // omitted or empty network list uses Docker's default bridge.
+    if entry.workload_kind == Some(NetworkWorkloadKind::Deployment) && references.is_empty() {
+        references.push("bridge".into());
+    }
+    let project = if entry.workload_kind == Some(NetworkWorkloadKind::Stack) {
+        row.try_get::<Option<String>, _>("projectname")
+            .map_err(storage)?
+            .or_else(|| {
+                entry
+                    .workload_name
+                    .as_deref()
+                    .zip(entry.workload_id)
+                    .map(|(name, id)| citadel_stacks::normalize_project_name(name, id))
+            })
+    } else {
+        None
+    };
+    if let Some(compose) = row
+        .try_get::<Option<String>, _>("compose")
+        .map_err(storage)?
+        && let Ok(model) = citadel_stacks::parse_compose(&[compose])
+    {
+        references.extend(model.network_names.into_values());
+    }
+    Ok((entry, references, project))
 }
 
 fn push(usage: &mut NetworkUsage, entry: NetworkUsageEntry) {
@@ -185,4 +249,26 @@ pub(super) async fn containers(
         })
     })
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn network_payload_bounds_endpoints_before_serializing() {
+        let input = NetworkUsageQuery {
+            id: "id".into(),
+            name: "name".into(),
+            scope: "local".into(),
+            docker_node_id: None,
+            container_ids: (0..10_000).map(|i| i.to_string()).collect(),
+            stack_project: None,
+        };
+        let bounded = BoundedNetwork::from(&input);
+        assert_eq!(bounded.container_ids.len(), 500);
+        assert_eq!(bounded.container_ids.as_ptr(), input.container_ids.as_ptr());
+        let encoded = serde_json::to_value(&bounded).unwrap();
+        assert_eq!(encoded["container_ids"].as_array().unwrap().len(), 500);
+        assert!(encoded.get("name").is_none());
+    }
 }

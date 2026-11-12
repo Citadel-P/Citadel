@@ -14,12 +14,18 @@ pub struct PlatformMetricSample {
 
 /// A flush serializes consumers and acknowledges only the exact sample revisions
 /// successfully observed. Cancellation/failure must leave unacknowledged rows retryable.
+#[derive(Debug)]
+pub struct PlatformAlertBacklog {
+    /// Exact below the diagnostic scan cap; otherwise a lower bound.
+    pub pending: usize,
+    pub capped: bool,
+    pub oldest_created: Option<i64>,
+    pub blocks_compaction: bool,
+}
+
 pub trait PlatformAlertBatchStore: Send + Sync {
-    fn flush_pending<'a>(
-        &'a self,
-        alerts: &'a dyn AlertEventSink,
-        batch_size: i64,
-    ) -> BoxFuture<'a, Result<usize, AlertError>>;
+    fn backlog(&self) -> BoxFuture<'_, Result<PlatformAlertBacklog, AlertError>>;
+    fn flush_pending<'a>(&'a self, batch_size: i64) -> BoxFuture<'a, Result<usize, AlertError>>;
 }
 
 pub async fn observe_platform_metrics(
@@ -28,6 +34,20 @@ pub async fn observe_platform_metrics(
     sample: &PlatformMetricSample,
     core_version: &str,
 ) -> Result<(), AlertError> {
+    for observation in platform_metric_observations(platform_id, sample, core_version) {
+        alerts.observe(&observation).await?;
+    }
+    Ok(())
+}
+
+/// Construct observations without I/O so a persistence unit can evaluate them
+/// using its already borrowed connection.
+pub fn platform_metric_observations(
+    platform_id: uuid::Uuid,
+    sample: &PlatformMetricSample,
+    core_version: &str,
+) -> Vec<AlertObservation> {
+    let mut observations = Vec::with_capacity(4);
     let name = &sample.name;
     let version = sample.agent_version.as_deref().unwrap_or_default();
     if !version.is_empty() {
@@ -44,7 +64,7 @@ pub async fn observe_platform_metrics(
             value: None,
             matched: !same_release,
         };
-        alerts.observe(&observation).await?;
+        observations.push(observation);
     }
     let values = [
         ("PlatformCpuHigh", "CPU", sample.cpu_usage),
@@ -74,9 +94,9 @@ pub async fn observe_platform_metrics(
             value: Some(value),
             matched: true,
         };
-        alerts.observe(&observation).await?;
+        observations.push(observation);
     }
-    Ok(())
+    observations
 }
 
 #[cfg(test)]

@@ -28,6 +28,45 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         .await
         .unwrap();
 
+    let batch = vec![log.clone(); 32];
+    let entries = store
+        .append_logs(queued.id, first.attempt_id, &batch)
+        .await
+        .unwrap();
+    assert_eq!(entries.len(), 32);
+    assert!(entries.windows(2).all(|pair| pair[0].id < pair[1].id));
+    let xids: i64 =
+        sqlx::query_scalar("SELECT count(DISTINCT xmin::text) FROM buildrunlogs WHERE id=ANY($1)")
+            .bind(entries.iter().map(|e| e.id).collect::<Vec<_>>())
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(xids, 1, "one transaction owns the batch");
+    sqlx::query("DELETE FROM buildrunlogs WHERE id=ANY($1)")
+        .bind(entries.iter().map(|e| e.id).collect::<Vec<_>>())
+        .execute(pool)
+        .await
+        .unwrap();
+
+    let invalid = [
+        log.clone(),
+        BuildLog {
+            stream: "stdout".into(),
+            message: "invalid\0text".into(),
+        },
+    ];
+    assert!(
+        store
+            .append_logs(queued.id, first.attempt_id, &invalid)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        store.logs(queued.id).await.unwrap().len(),
+        1,
+        "a failed batch must not commit a prefix"
+    );
+
     // The only retry path is a verified pre-start capacity refusal.
     let deferred = BuildExecutionResult {
         status: citadel_builds::BuildRunStatus::Queued,
@@ -114,6 +153,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
     );
     assert!(matches!(
         store.append_log(queued.id, first.attempt_id, &log).await,
+        Err(BuildError::Conflict(_))
+    ));
+    assert!(matches!(
+        store.append_logs(queued.id, first.attempt_id, &batch).await,
         Err(BuildError::Conflict(_))
     ));
     assert_eq!(store.logs(queued.id).await.unwrap().len(), 1);

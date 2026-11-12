@@ -38,7 +38,7 @@ pub struct PublishedRuntimeEvent {
     pub(crate) payload: Value,
     // Shared only for this committed invalidation; readers still enforce ACLs.
     pub(crate) reads: Arc<super::shared_reads::CommittedReads>,
-    pub(crate) containers: Arc<tokio::sync::OnceCell<Vec<citadel_platforms::ContainerDetails>>>,
+    pub(crate) containers: Arc<super::retention::Cache<Vec<citadel_platforms::ContainerDetails>>>,
 }
 
 impl PublishedRuntimeEvent {
@@ -89,6 +89,7 @@ pub struct RealtimeHub {
 }
 
 struct RealtimeHubInner {
+    budget: super::retention::Budget,
     revision: AtomicU64,
     sender: broadcast::Sender<Arc<PublishedRuntimeEvent>>,
     metrics: Arc<Metrics>,
@@ -104,6 +105,7 @@ impl RealtimeHub {
         drop(receiver);
         Self {
             inner: Arc::new(RealtimeHubInner {
+                budget: Default::default(),
                 revision: AtomicU64::new(0),
                 sender,
                 metrics,
@@ -428,6 +430,29 @@ impl RealtimeHub {
             citadel_runtime::runtime_metrics::RuntimeWork::RealtimeRuntimeInvalidation.units(1);
         }
         let revision = self.inner.revision.fetch_add(1, Ordering::AcqRel) + 1;
+        let reservation = self.inner.budget.value(&payload);
+        let (event_kind, payload, reads) = match reservation {
+            Ok(permit) => (
+                event_kind,
+                payload,
+                Arc::new(super::shared_reads::CommittedReads::new(
+                    self.inner.budget.clone(),
+                    permit,
+                )),
+            ),
+            Err(_) if payload["dockerResourceType"] == "containerStats" => {
+                // Samples are replaceable; a subsequent capture refreshes gauges
+                // and counter baselines. Persistence has its independent budget.
+                self.inner.metrics.realtime_overflowed();
+                return revision;
+            }
+            Err(_) => {
+                self.inner.metrics.realtime_overflowed();
+                // Never silently lose a committed invalidation. A tiny sentinel
+                // uses the existing connection resynchronization lifecycle.
+                ("resyncRequired", Value::Null, Default::default())
+            }
+        };
         let event = Arc::new(PublishedRuntimeEvent {
             platform_id,
             resource_type,
@@ -435,8 +460,8 @@ impl RealtimeHub {
             event_kind,
             resource_revision: revision,
             payload,
-            reads: Default::default(),
-            containers: Default::default(),
+            reads,
+            containers: Arc::new(super::retention::Cache::new(self.inner.budget.clone())),
         });
         let _ = self.inner.sender.send(event);
         self.inner.metrics.realtime_event_published();
@@ -588,5 +613,42 @@ mod stats_notification_tests {
         assert_eq!(event.payload["stats"], json!([]));
         drop(subscriber);
         assert_eq!(hub.publish_container_stats(platform, &[]), 1);
+    }
+}
+
+#[cfg(test)]
+mod retention_tests {
+    use super::*;
+    #[test]
+    fn full_budget_drops_samples_but_committed_changes_require_resync() {
+        let hub = RealtimeHub::new(64, Arc::new(Metrics::default()));
+        let mut receiver = hub.subscribe();
+        let platform = Uuid::now_v7();
+        let held = hub.inner.budget.reserve(32 * 1024 * 1024).unwrap();
+        hub.publish_container_stats(platform, &[]);
+        assert!(
+            receiver.try_recv().is_err(),
+            "replaceable samples must not disconnect healthy clients"
+        );
+        hub.publish_resource_change("Stack", Uuid::now_v7(), "updated");
+        assert_eq!(receiver.try_recv().unwrap().event_kind, "resyncRequired");
+        drop(held);
+        hub.publish_resource_change("Stack", Uuid::now_v7(), "updated");
+        assert_eq!(receiver.try_recv().unwrap().event_kind, "updated");
+    }
+    #[test]
+    fn consuming_and_dropping_events_returns_the_shared_payload_budget() {
+        let hub = RealtimeHub::new(64, Arc::new(Metrics::default()));
+        let mut first = hub.subscribe();
+        let mut second = hub.subscribe();
+        let platform = Uuid::now_v7();
+        hub.publish_runtime_change(platform, "container", "update", "one");
+        let event = first.try_recv().unwrap();
+        let other = second.try_recv().unwrap();
+        assert!(Arc::ptr_eq(&event, &other));
+        assert!(hub.inner.budget.reserve(32 * 1024 * 1024).is_err());
+        drop(event);
+        drop(other);
+        assert!(hub.inner.budget.reserve(32 * 1024 * 1024).is_ok());
     }
 }

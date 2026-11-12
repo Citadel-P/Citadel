@@ -34,6 +34,65 @@ use uuid::Uuid;
 const TOKEN: &str = "realtime-test-token-with-at-least-32-characters";
 
 #[tokio::test]
+async fn retained_byte_overflow_resynchronizes_both_subscription_modes() {
+    use citadel_server::realtime_groups::{Group, GroupReadPort, GroupSnapshot};
+    struct Groups;
+    impl GroupReadPort for Groups {
+        fn read<'a>(
+            &'a self,
+            _: &'a ActorPrincipal,
+            _: &'a Group,
+            _: Option<&'a citadel_server::realtime::PublishedRuntimeEvent>,
+        ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+            Box::pin(async { Ok(GroupSnapshot::default()) })
+        }
+    }
+    for groups in [false, true] {
+        let platform_id = Uuid::now_v7();
+        let shutdown = CancellationToken::new();
+        let _guard = shutdown.clone().drop_guard();
+        let service = RealtimeService::new(
+            &config(),
+            Arc::new(FakeReader {
+                platform: platform(platform_id),
+                allowed: Arc::new(AtomicBool::new(true)),
+            }),
+            Arc::new(Metrics::default()),
+            shutdown.clone(),
+        )
+        .with_groups(Arc::new(Groups));
+        let hub = service.hub();
+        let (address, server) = start_server(service, shutdown.clone()).await;
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+                .await
+                .unwrap();
+        if groups {
+            socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":TOKEN}).to_string().into())).await.unwrap();
+            assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+        } else {
+            subscribe(&mut socket, platform_id, 0).await;
+            assert_eq!(receive_json(&mut socket).await["eventKind"], "snapshot");
+        }
+        // One oversized event exceeds the byte budget without filling the count queue.
+        hub.publish_runtime_change(
+            platform_id,
+            "container",
+            "update",
+            "x".repeat(32 * 1024 * 1024),
+        );
+        assert!(matches!(
+            tokio::time::timeout(Duration::from_secs(2), socket.next())
+                .await
+                .unwrap(),
+            Some(Ok(Message::Close(_))) | None
+        ));
+        shutdown.cancel();
+        server.await.unwrap().unwrap();
+    }
+}
+
+#[tokio::test]
 async fn slow_process_reads_clear_only_the_process_panel_and_recover_without_reconnecting() {
     use citadel_server::realtime_groups::{ClientEvent, Group, GroupReadPort, GroupSnapshot};
 

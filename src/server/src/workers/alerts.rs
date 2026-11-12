@@ -1,4 +1,3 @@
-use citadel_runtime::notifications::NotificationSource;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -82,10 +81,13 @@ async fn wait_for_work(
 pub(crate) async fn observations(
     cancel: CancellationToken,
     alerts: Arc<dyn citadel_alerts::PendingAlertObservations>,
-    mut listener: Box<dyn NotificationSource>,
+    mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
     let owner = uuid::Uuid::now_v7();
     loop {
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
         let result = tokio::select! { () = cancel.cancelled() => return Ok(()), result = alerts.process_pending_observation(owner) => result };
         match result {
             Ok(true) => continue,
@@ -95,14 +97,7 @@ pub(crate) async fn observations(
                 tokio::select! { () = cancel.cancelled() => return Ok(()), _ = tokio::time::sleep(Duration::from_secs(5)) => {} }
             }
         }
-        tokio::select! {
-            () = cancel.cancelled() => return Ok(()),
-            _ = tokio::time::sleep(Duration::from_secs(30)) => {},
-            result = listener.recv() => if let Err(error) = result {
-                tracing::warn!(%error, "Job alert listener disconnected; queue polling remains active");
-                tokio::select! { () = cancel.cancelled() => return Ok(()), _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
-            },
-        }
+        super::notifications::wait(&mut wake, &cancel, Duration::from_secs(30)).await;
     }
 }
 
@@ -157,6 +152,67 @@ mod tests {
         assert_eq!(
             tokio::time::Instant::now() - started,
             Duration::from_secs(30)
+        );
+    }
+    struct PendingObservations {
+        remaining: std::sync::atomic::AtomicUsize,
+        attempts: tokio::sync::mpsc::UnboundedSender<bool>,
+    }
+
+    impl citadel_alerts::PendingAlertObservations for PendingObservations {
+        fn process_pending_observation(
+            &self,
+            _: uuid::Uuid,
+        ) -> futures_util::future::BoxFuture<'_, Result<bool, AlertError>> {
+            Box::pin(async move {
+                use std::sync::atomic::Ordering;
+                let found = self
+                    .remaining
+                    .try_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                        remaining.checked_sub(1)
+                    })
+                    .is_ok();
+                self.attempts.send(found).unwrap();
+                Ok(found)
+            })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn observations_drain_on_startup_and_coalesced_wake_then_recover_without_hub() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let (attempts, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let store = Arc::new(PendingObservations {
+            remaining: AtomicUsize::new(2),
+            attempts,
+        });
+        let (sender, wake) = tokio::sync::watch::channel(());
+        let token = CancellationToken::new();
+        let worker = tokio::spawn(observations(token.clone(), store.clone(), wake));
+        let start = tokio::time::Instant::now();
+        for expected in [true, true, false] {
+            assert_eq!(received.recv().await, Some(expected));
+        }
+        assert_eq!(tokio::time::Instant::now(), start);
+        store.remaining.store(2, Ordering::SeqCst);
+        for _ in 0..1000 {
+            sender.send_modify(|_| {});
+        }
+        for expected in [true, true, false] {
+            assert_eq!(received.recv().await, Some(expected));
+        }
+        assert_eq!(tokio::time::Instant::now(), start);
+        // Losing the shared listener must neither lose durable work nor spin.
+        drop(sender);
+        store.remaining.store(1, Ordering::SeqCst);
+        assert_eq!(received.recv().await, Some(true));
+        assert_eq!(received.recv().await, Some(false));
+        assert_eq!(tokio::time::Instant::now() - start, Duration::from_secs(30));
+        token.cancel();
+        worker.await.unwrap().unwrap();
+        assert!(
+            received.try_recv().is_err(),
+            "shutdown must not start another queue scan"
         );
     }
 }

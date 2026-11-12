@@ -93,7 +93,7 @@ pub trait ScriptRepository: Send + Sync {
         &'a self,
         after: Option<Uuid>,
         limit: usize,
-    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>>;
+    ) -> BoxFuture<'a, Result<Vec<ScheduledScript>, ScriptError>>;
     fn enqueue_scheduled<'a>(
         &'a self,
         script_id: Uuid,

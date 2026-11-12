@@ -5,15 +5,20 @@ impl PostgresScriptRepository {
         &'a self,
         after: Option<Uuid>,
         limit: usize,
-    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>> {
+    ) -> BoxFuture<'a, Result<Vec<citadel_scripts::ScheduledScript>, ScriptError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM scripts WHERE enabled=true AND scheduleenabled=true AND schedulecron IS NOT NULL AND ($1::uuid IS NULL OR id>$1) ORDER BY id LIMIT $2")
+            sqlx::query("SELECT id,schedulecron,scheduletimezone,timeoutseconds FROM scripts WHERE enabled=true AND scheduleenabled=true AND schedulecron IS NOT NULL AND ($1::uuid IS NULL OR id>$1) ORDER BY id LIMIT $2")
                 .bind(after).bind(i64::try_from(limit.clamp(1, 64)).unwrap_or(64))
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?
                 .into_iter()
-                .map(map_action)
+                .map(|row| Ok(citadel_scripts::ScheduledScript {
+                    id: row.try_get("id").map_err(storage)?,
+                    schedule_cron: row.try_get("schedulecron").map_err(storage)?,
+                    schedule_time_zone: row.try_get("scheduletimezone").map_err(storage)?,
+                    timeout_seconds: row.try_get("timeoutseconds").map_err(storage)?,
+                }))
                 .collect()
         })
     }

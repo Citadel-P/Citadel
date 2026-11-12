@@ -59,6 +59,8 @@ pub trait CopyRepository: Send + Sync {
         result: Result<(), String>,
     ) -> BoxFuture<'_, Result<(), CopyError>>;
     fn cancel(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>>;
+    /// Remove a bounded batch of expired, unstarted reviews.
+    fn prune_reviews(&self) -> BoxFuture<'_, Result<(), CopyError>>;
     /// A bounded scan of durable parents. Multiple callers may inspect the same
     /// parent; advance must fence each transition in a transaction.
     fn pending(&self) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>>;

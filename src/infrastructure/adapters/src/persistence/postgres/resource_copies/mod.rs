@@ -161,11 +161,16 @@ impl CopyRepository for PostgresCopyRepository {
     fn cancel(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
         Box::pin(self.cancel_copy(actor, id))
     }
-    fn pending(&self) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>> {
+    fn prune_reviews(&self) -> BoxFuture<'_, Result<(), CopyError>> {
         Box::pin(async move {
             // Expired reviews have no child restores and can be removed in
             // bounded batches. Started operation receipts remain durable.
             sqlx::query("WITH expired AS MATERIALIZED (SELECT ctid FROM resourcecopies WHERE status='Review' AND createdat<CURRENT_TIMESTAMP-INTERVAL '1 day' ORDER BY createdat LIMIT 100 FOR UPDATE SKIP LOCKED) DELETE FROM resourcecopies target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))").execute(&self.pool).await.map_err(storage_error)?;
+            Ok(())
+        })
+    }
+    fn pending(&self) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>> {
+        Box::pin(async move {
             let rows = sqlx::query_as::<_,(Uuid,Uuid)>("SELECT actorid,id FROM resourcecopies WHERE status IN ('Restoring','Cancelling','Cleaning') ORDER BY updatedat,id LIMIT 32").fetch_all(&self.pool).await.map_err(storage_error)?;
             Ok(rows
                 .into_iter()

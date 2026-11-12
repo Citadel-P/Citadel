@@ -93,30 +93,7 @@ async fn stats_writes_cannot_delete_history_and_maintenance_keeps_pending_alerts
 #[tokio::test]
 #[ignore = "requires CITADEL_TEST_DATABASE_URL"]
 async fn alert_evaluation_does_not_lock_samples_or_acknowledge_concurrent_upserts() {
-    use citadel_alerts::{AlertEventSink, AlertObservation};
-    use std::{sync::Arc, time::Duration};
-    struct Blocked {
-        entered: tokio::sync::Notify,
-        release: tokio::sync::Notify,
-        first: std::sync::atomic::AtomicBool,
-    }
-    impl AlertEventSink for Blocked {
-        fn observe<'a>(
-            &'a self,
-            _: &'a AlertObservation,
-        ) -> futures_util::future::BoxFuture<
-            'a,
-            Result<Option<citadel_alerts::AlertEvent>, citadel_alerts::AlertError>,
-        > {
-            Box::pin(async move {
-                if !self.first.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                    self.entered.notify_one();
-                    self.release.notified().await;
-                }
-                Ok(None)
-            })
-        }
-    }
+    use std::time::Duration;
     let url = std::env::var("CITADEL_TEST_DATABASE_URL").unwrap();
     citadel_database::MigrationRunner::migrate(&url)
         .await
@@ -127,22 +104,38 @@ async fn alert_evaluation_does_not_lock_samples_or_acknowledge_concurrent_upsert
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$1::text,'Local',2,0,1024,$1::text,0,'{\"$type\":\"Docker\"}','Online',0)").bind(id).execute(&pool).await.unwrap();
     // Earliest possible timestamp ensures this fixture owns the first bounded batch.
     sqlx::query("INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,alertpending) VALUES($1,$2,-9223372036854775808,10,20,0,0,true)").bind(sample).bind(id).execute(&pool).await.unwrap();
-    let alerts = Arc::new(Blocked {
-        entered: Default::default(),
-        release: Default::default(),
-        first: Default::default(),
-    });
-    let (worker_pool, worker_alerts) = (pool.clone(), alerts.clone());
-    let flush = tokio::spawn(async move {
-        stats_alerts::flush_pending(&worker_pool, worker_alerts.as_ref(), 1).await
-    });
-    tokio::time::timeout(Duration::from_secs(5), alerts.entered.notified())
+    let rule = super::test_support::metric_rule(&pool, id).await;
+    let mut blocker = pool.begin().await.unwrap();
+    let blocker_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *blocker)
         .await
         .unwrap();
-    assert_eq!(
-        stats_alerts::flush_pending(&pool, alerts.as_ref(), 1)
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
+        .bind(format!("{rule}:{id}"))
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    let worker_pool = pool.clone();
+    let flush = tokio::spawn(async move { stats_alerts::flush_pending(&worker_pool, 1).await });
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let waiting: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
+            )
+            .bind(blocker_pid)
+            .fetch_one(&pool)
             .await
-            .unwrap(),
+            .unwrap();
+            if waiting {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        stats_alerts::flush_pending(&pool, 1).await.unwrap(),
         0,
         "a second flusher cannot evaluate an active claim"
     );
@@ -155,7 +148,7 @@ async fn alert_evaluation_does_not_lock_samples_or_acknowledge_concurrent_upsert
     .await
     .expect("alert I/O must not hold a sample row lock")
     .unwrap();
-    alerts.release.notify_one();
+    blocker.commit().await.unwrap();
     flush.await.unwrap().unwrap();
     let pending: bool = sqlx::query_scalar("SELECT alertpending FROM platformstats WHERE id=$1")
         .bind(sample)
@@ -163,9 +156,7 @@ async fn alert_evaluation_does_not_lock_samples_or_acknowledge_concurrent_upsert
         .await
         .unwrap();
     assert!(pending, "the concurrent revision must remain pending");
-    stats_alerts::flush_pending(&pool, alerts.as_ref(), 1)
-        .await
-        .unwrap();
+    stats_alerts::flush_pending(&pool, 1).await.unwrap();
     assert!(
         !sqlx::query_scalar::<_, bool>("SELECT alertpending FROM platformstats WHERE id=$1")
             .bind(sample)
@@ -175,6 +166,11 @@ async fn alert_evaluation_does_not_lock_samples_or_acknowledge_concurrent_upsert
     );
     sqlx::query("DELETE FROM platforms WHERE id=$1")
         .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM alertrules WHERE id=$1")
+        .bind(rule)
         .execute(&pool)
         .await
         .unwrap();

@@ -271,15 +271,18 @@ impl PostgresBackupPersistence {
 impl PostgresBackupPersistence {
     pub(super) fn list_scheduled_policies_impl(
         &self,
-    ) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<citadel_backups::ScheduledBackupPolicy>, BackupError>> {
         Box::pin(async move {
-            sqlx::query("SELECT * FROM backuppolicies WHERE enabled=true AND archivedat IS NULL AND cron IS NOT NULL ORDER BY id")
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?
-                .into_iter()
-                .map(map_policy)
-                .collect()
+            sqlx::query("SELECT id,cron,timezone FROM backuppolicies WHERE enabled=true AND archivedat IS NULL AND cron IS NOT NULL AND ($1::uuid IS NULL OR id>$1) ORDER BY id LIMIT $2")
+                .bind(after).bind(limit.clamp(1,64) as i64)
+                .fetch_all(&self.pool).await.map_err(storage)?
+                .into_iter().map(|row| Ok(citadel_backups::ScheduledBackupPolicy {
+                    id: row.try_get("id").map_err(storage)?,
+                    cron: row.try_get("cron").map_err(storage)?,
+                    time_zone: row.try_get("timezone").map_err(storage)?,
+                })).collect()
         })
     }
 }

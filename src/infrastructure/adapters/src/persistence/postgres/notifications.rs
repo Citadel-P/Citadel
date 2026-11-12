@@ -52,8 +52,8 @@ fn decode(channel: &str, payload: &str) -> Option<RuntimeNotification> {
         ),
         "citadel_container_created" => serde_json::from_str(payload).ok().map(ContainerCreated),
         "citadel_stack_drift" => payload.parse().ok().map(StackDrift),
-        "citadel_swarm_prune" => Some(SwarmPrune),
-        "citadel_job_alerts" => Some(JobAlerts),
+        "citadel_backup_coverage" => Some(payload.parse().map(BackupCoverage).unwrap_or(Resync)),
+        "citadel_resource_copies" => Some(payload.parse().map(ResourceCopy).unwrap_or(Resync)),
         _ => RuntimeSignal::ALL
             .into_iter()
             .find(|s| s.channel() == channel)

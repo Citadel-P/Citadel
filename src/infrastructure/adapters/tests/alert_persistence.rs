@@ -937,3 +937,6 @@ async fn recurring_offline_observations_survive_cooldown_and_expose_responsible_
 
 #[path = "alert_persistence/instance_updates.rs"]
 mod instance_updates;
+
+#[path = "alert_persistence/platform_flush.rs"]
+mod platform_flush;

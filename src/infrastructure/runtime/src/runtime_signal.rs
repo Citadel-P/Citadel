@@ -17,9 +17,11 @@ pub enum RuntimeSignal {
     Git,
     AlertRules,
     AlertDelivery,
+    JobAlerts,
+    SwarmPrune,
 }
 impl RuntimeSignal {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 18] = [
         Self::Targets,
         Self::Script,
         Self::Builds,
@@ -36,6 +38,8 @@ impl RuntimeSignal {
         Self::Git,
         Self::AlertRules,
         Self::AlertDelivery,
+        Self::JobAlerts,
+        Self::SwarmPrune,
     ];
     pub const fn channel(self) -> &'static str {
         match self {
@@ -54,6 +58,8 @@ impl RuntimeSignal {
             Self::Git => "citadel_git_work",
             Self::AlertRules => "citadel_alert_rules",
             Self::AlertDelivery => "citadel_alert_delivery",
+            Self::JobAlerts => "citadel_job_alerts",
+            Self::SwarmPrune => "citadel_swarm_prune",
             Self::PlatformStats => "citadel_platform_stats",
         }
     }

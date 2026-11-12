@@ -39,24 +39,40 @@ pub(super) async fn write_logs(
     id: Uuid,
     logs: &[BackupLog],
 ) -> Result<(), BackupError> {
-    for log in logs {
-        let sql = match (table, column) {
-            ("backuprunlogs", "backuprunid") => {
-                "INSERT INTO backuprunlogs(id,backuprunid,createdat,stream,message) VALUES($1,$2,CURRENT_TIMESTAMP,$3,$4)"
+    let sql = match (table, column) {
+        ("backuprunlogs", "backuprunid") => {
+            "INSERT INTO backuprunlogs(id,backuprunid,createdat,stream,message) SELECT id,$1,CURRENT_TIMESTAMP,stream,message FROM UNNEST($2::uuid[],$3::text[],$4::text[]) AS batch(id,stream,message)"
+        }
+        ("backuprestorerunlogs", "backuprestorerunid") => {
+            "INSERT INTO backuprestorerunlogs(id,backuprestorerunid,createdat,stream,message) SELECT id,$1,CURRENT_TIMESTAMP,stream,message FROM UNNEST($2::uuid[],$3::text[],$4::text[]) AS batch(id,stream,message)"
+        }
+        _ => return Err(BackupError::Storage("invalid Backup log target".into())),
+    };
+    let mut start = 0;
+    while start < logs.len() {
+        let mut end = start;
+        let mut bytes = 0usize;
+        while end < logs.len() && end - start < 128 {
+            let cost = logs[end].message.len().saturating_add(128);
+            if end > start && bytes.saturating_add(cost) > 64 * 1024 {
+                break;
             }
-            ("backuprestorerunlogs", "backuprestorerunid") => {
-                "INSERT INTO backuprestorerunlogs(id,backuprestorerunid,createdat,stream,message) VALUES($1,$2,CURRENT_TIMESTAMP,$3,$4)"
-            }
-            _ => return Err(BackupError::Storage("invalid Backup log target".into())),
-        };
+            bytes = bytes.saturating_add(cost);
+            end += 1;
+        }
+        let batch = &logs[start..end];
+        let ids: Vec<_> = batch.iter().map(|_| Uuid::now_v7()).collect();
+        let streams: Vec<_> = batch.iter().map(|log| log.stream.as_str()).collect();
+        let messages: Vec<_> = batch.iter().map(|log| log.message.as_str()).collect();
         sqlx::query(sql)
-            .bind(Uuid::now_v7())
             .bind(id)
-            .bind(&log.stream)
-            .bind(&log.message)
+            .bind(&ids)
+            .bind(&streams)
+            .bind(&messages)
             .execute(&mut **tx)
             .await
             .map_err(storage)?;
+        start = end;
     }
     Ok(())
 }
@@ -327,5 +343,93 @@ pub(super) fn backup_tag_error(error: resource_tags::ResourceTagError) -> Backup
             BackupError::Validation("One or more selected Tags do not exist.".to_owned())
         }
         resource_tags::ResourceTagError::Database(error) => storage(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::Connection;
+
+    #[tokio::test]
+    #[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL"]
+    async fn mixed_log_batches_use_one_statement_preserve_order_and_rollback() {
+        let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
+        let mut connection = sqlx::PgConnection::connect(&url).await.unwrap();
+        sqlx::raw_sql("CREATE TEMP TABLE backuprunlogs(id uuid,backuprunid uuid,createdat timestamptz,stream text,message text)")
+            .execute(&mut connection).await.unwrap();
+        let run = Uuid::now_v7();
+        let logs: Vec<_> = (0..128)
+            .map(|n| BackupLog {
+                stream: "stdout".into(),
+                message: format!("{n}: données 日本語"),
+            })
+            .collect();
+        // Same connection/settings and payloads; timing is diagnostic, not a CI threshold.
+        for arrays in [false, true] {
+            connection.clear_cached_statements().await.unwrap();
+            let start = std::time::Instant::now();
+            for _ in 0..2 {
+                for size in 1..=128 {
+                    let mut tx = connection.begin().await.unwrap();
+                    if arrays {
+                        write_logs(&mut tx, "backuprunlogs", "backuprunid", run, &logs[..size])
+                            .await
+                            .unwrap();
+                    } else {
+                        let mut query = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+                            "INSERT INTO backuprunlogs(id,backuprunid,createdat,stream,message) ",
+                        );
+                        query.push_values(&logs[..size], |mut row, log| {
+                            row.push_bind(Uuid::now_v7())
+                                .push_bind(run)
+                                .push("CURRENT_TIMESTAMP")
+                                .push_bind(&log.stream)
+                                .push_bind(&log.message);
+                        });
+                        query.build().execute(&mut *tx).await.unwrap();
+                    }
+                    tx.rollback().await.unwrap();
+                }
+            }
+            let cached = connection.cached_statements_size();
+            eprintln!(
+                "log batches arrays={arrays}: {:?}, cached statements={cached}",
+                start.elapsed()
+            );
+            if arrays {
+                assert_eq!(cached, 1);
+            } else {
+                assert!(cached > 1);
+            }
+        }
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM backuprunlogs")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "all benchmark transactions rolled back");
+        let mut tx = connection.begin().await.unwrap();
+        // Span row and byte boundaries; array insertion must retain UTF-8 and order.
+        let mut logs = logs;
+        logs.extend((128..300).map(|n| BackupLog {
+            stream: "stderr".into(),
+            message: format!("{n}: {}", "é".repeat(1024)),
+        }));
+        write_logs(&mut tx, "backuprunlogs", "backuprunid", run, &logs)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        let persisted: Vec<(String, String)> =
+            sqlx::query_as("SELECT stream,message FROM backuprunlogs ORDER BY createdat,id")
+                .fetch_all(&mut connection)
+                .await
+                .unwrap();
+        assert_eq!(
+            persisted,
+            logs.into_iter()
+                .map(|log| (log.stream, log.message))
+                .collect::<Vec<_>>()
+        );
+        connection.close().await.unwrap();
     }
 }

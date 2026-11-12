@@ -29,10 +29,6 @@
     -- Match container-map visibility, including unresolved ownership for administrators.
     WHERE $2 OR (a.ownerid IS NULL AND NOT a.hascitadelownershiplabels) OR w.id IS NOT NULL
     UNION ALL
-    SELECT NULL,NULL,NULL,NULL,NULL,w.kind,w.id,w.name,w.refs,
-        CASE WHEN sum(COALESCE(octet_length(w.compose),0)) OVER (ORDER BY w.kind,w.id)<=4194304 THEN w.compose END,w.projectname, NULL,NULL,NULL,false,NULL::text,w.status,COALESCE(w.controlstate='Processing',false)
-    FROM authorized w
-    UNION ALL
     SELECT (r.ordinality-1)::integer,NULL,NULL,NULL,NULL,w.kind,w.id,w.name,'[]'::jsonb,NULL,NULL,
         s.dockerserviceid,s.name,extract(epoch FROM s.observedat)::bigint,s.isstale,NULL::text,w.status,COALESCE(w.controlstate='Processing',false)
     FROM jsonb_array_elements($4::jsonb) WITH ORDINALITY r

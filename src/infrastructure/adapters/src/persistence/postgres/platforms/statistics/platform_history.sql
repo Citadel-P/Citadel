@@ -1,6 +1,9 @@
 -- Use the narrow raw counter path when this snapshot has no I/O summaries.
 -- Mixed windows retain summary endpoints, weights and durations, with summary-
 -- only fields NULL on raw observations to keep their sort tuples compact.
+-- Project and order bucket keys before grouping. Generic plans underestimate JSON
+-- cardinality; retaining this order lets aggregation stream per container instead
+-- of building a hash table for the entire window and spilling it to disk.
 WITH history AS NOT MATERIALIZED (
     SELECT created,cpuusage,memoryusage,rxbytes,txbytes,diskusedbytes,disktotalbytes,diskusage,
         1 AS samplecount,ARRAY[(diskusedbytes IS NOT NULL)::integer,(disktotalbytes IS NOT NULL)::integer,(diskusage IS NOT NULL)::integer] AS diskcounts
@@ -52,14 +55,14 @@ WITH history AS NOT MATERIALIZED (
     FROM raw_counters WINDOW observations AS (PARTITION BY nodeid,"containerId" ORDER BY created)
 ), raw_deltas AS (
     -- Each physical container has its own baseline. Removing a container is not a reset.
-    SELECT *,
+    SELECT *,created/$3 AS bucket,
         CASE WHEN previous_rx IS NULL THEN NULL WHEN "rxBytes">=previous_rx THEN "rxBytes"-previous_rx ELSE "rxBytes" END AS rxbytesdelta,
         CASE WHEN previous_tx IS NULL THEN NULL WHEN "txBytes">=previous_tx THEN "txBytes"-previous_tx ELSE "txBytes" END AS txbytesdelta,
         CASE WHEN previous_read IS NULL THEN NULL WHEN "blockReadBytes">=previous_read THEN "blockReadBytes"-previous_read ELSE "blockReadBytes" END AS blockreadbytesdelta,
         CASE WHEN previous_write IS NULL THEN NULL WHEN "blockWriteBytes">=previous_write THEN "blockWriteBytes"-previous_write ELSE "blockWriteBytes" END AS blockwritebytesdelta
-    FROM raw_samples
+    FROM raw_samples ORDER BY nodeid,"containerId",bucket
 ), raw_per_container AS (
-    SELECT created/$3 AS bucket, nodeid, "containerId", MIN(created) AS created,
+    SELECT bucket, nodeid, "containerId", MIN(created) AS created,
         AVG("blockReadBytes") AS blockreadbytes, AVG("blockWriteBytes") AS blockwritebytes,
         SUM(rxbytesdelta) AS rxbytesdelta, SUM(txbytesdelta) AS txbytesdelta,
         SUM(blockreadbytesdelta) AS blockreadbytesdelta, SUM(blockwritebytesdelta) AS blockwritebytesdelta,
@@ -67,7 +70,7 @@ WITH history AS NOT MATERIALIZED (
         SUM(txbytesdelta)/NULLIF(SUM(created-previous_created) FILTER (WHERE txbytesdelta IS NOT NULL),0) AS txbytespersecond,
         SUM(blockreadbytesdelta)/NULLIF(SUM(created-previous_created) FILTER (WHERE blockreadbytesdelta IS NOT NULL),0) AS blockreadbytespersecond,
         SUM(blockwritebytesdelta)/NULLIF(SUM(created-previous_created) FILTER (WHERE blockwritebytesdelta IS NOT NULL),0) AS blockwritebytespersecond
-    FROM raw_deltas GROUP BY created/$3,nodeid,"containerId"
+    FROM raw_deltas GROUP BY nodeid,"containerId",bucket
 ), counters AS (
     SELECT h.created,NULL::bigint AS lastcreated,h.nodeid,c."containerId" COLLATE "C" AS containerid,
         c."rxBytes" AS first_rx,
@@ -104,7 +107,7 @@ WITH history AS NOT MATERIALIZED (
 ), deltas AS (
     -- Bridge adjacent physical-container blocks before summing across nodes.
     -- Internal summary deltas are added once per bucket below, not per raw row.
-    SELECT *,
+    SELECT *,created/$3 AS bucket,
         statistics_delta(first_rx,previous_rx) AS rxbytesdelta,
         COALESCE(duration_rx,0)+CASE WHEN first_rx IS NOT NULL AND previous_rx IS NOT NULL THEN created-previous_created ELSE 0 END AS rxbytesduration,
         statistics_delta(first_tx,previous_tx) AS txbytesdelta,
@@ -113,9 +116,9 @@ WITH history AS NOT MATERIALIZED (
         COALESCE(duration_read,0)+CASE WHEN first_read IS NOT NULL AND previous_read IS NOT NULL THEN created-previous_created ELSE 0 END AS blockreadbytesduration,
         statistics_delta(first_write,previous_write) AS blockwritebytesdelta,
         COALESCE(duration_write,0)+CASE WHEN first_write IS NOT NULL AND previous_write IS NOT NULL THEN created-previous_created ELSE 0 END AS blockwritebytesduration
-    FROM samples
+    FROM samples ORDER BY nodeid,containerid,bucket
 ), mixed_per_container AS (
-    SELECT created/$3 AS bucket,nodeid,containerid,MIN(created) AS created,
+    SELECT bucket,nodeid,containerid,MIN(created) AS created,
         SUM((CASE WHEN lastcreated IS NULL THEN first_read ELSE blockreadbytes END)*COALESCE(readcount,(first_read IS NOT NULL)::integer))/NULLIF(SUM(COALESCE(readcount,(first_read IS NOT NULL)::integer)),0) AS blockreadbytes,
         SUM((CASE WHEN lastcreated IS NULL THEN first_write ELSE blockwritebytes END)*COALESCE(writecount,(first_write IS NOT NULL)::integer))/NULLIF(SUM(COALESCE(writecount,(first_write IS NOT NULL)::integer)),0) AS blockwritebytes,
         statistics_sum(SUM(internal_rx),SUM(rxbytesdelta)) AS rxbytesdelta,statistics_sum(SUM(internal_tx),SUM(txbytesdelta)) AS txbytesdelta,
@@ -124,7 +127,7 @@ WITH history AS NOT MATERIALIZED (
         statistics_sum(SUM(internal_tx),SUM(txbytesdelta))/NULLIF(SUM(txbytesduration),0) AS txbytespersecond,
         statistics_sum(SUM(internal_read),SUM(blockreadbytesdelta))/NULLIF(SUM(blockreadbytesduration),0) AS blockreadbytespersecond,
         statistics_sum(SUM(internal_write),SUM(blockwritebytesdelta))/NULLIF(SUM(blockwritebytesduration),0) AS blockwritebytespersecond
-    FROM deltas GROUP BY created/$3,nodeid,containerid
+    FROM deltas GROUP BY nodeid,containerid,bucket
 ), per_container AS (
     SELECT * FROM raw_per_container
     UNION ALL

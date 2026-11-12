@@ -124,7 +124,11 @@ pub trait BackupPersistence: Send + Sync {
         policy_id: Uuid,
         expected_webhook: &'a citadel_primitives::WebhookConfig,
     ) -> BoxFuture<'a, Result<BackupRun, BackupError>>;
-    fn list_scheduled_policies(&self) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>>;
+    fn list_scheduled_policies(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<ScheduledBackupPolicy>, BackupError>>;
     fn enqueue_scheduled_backup(
         &self,
         policy_id: Uuid,

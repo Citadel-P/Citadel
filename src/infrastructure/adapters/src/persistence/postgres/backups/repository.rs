@@ -189,8 +189,12 @@ impl BackupPersistence for PostgresBackupPersistence {
         self.enqueue_webhook_impl(policy_id, expected_webhook)
     }
 
-    fn list_scheduled_policies(&self) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
-        self.list_scheduled_policies_impl()
+    fn list_scheduled_policies(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> BoxFuture<'_, Result<Vec<citadel_backups::ScheduledBackupPolicy>, BackupError>> {
+        self.list_scheduled_policies_impl(after, limit)
     }
 
     fn enqueue_scheduled_backup(

@@ -1,8 +1,8 @@
 use citadel_platforms::{RuntimeCapabilityError, RuntimeInventorySnapshot};
 use sqlx::{Postgres, Transaction};
 
-use crate::persistence::postgres::platforms::inventory::store::json;
 use crate::persistence::postgres::platforms::inventory::store::storage;
+use sqlx::types::Json;
 
 /// Called inside the authenticated session's transaction. The persisted scan
 /// watermark also fences late snapshots after a resource has been deleted.
@@ -143,7 +143,7 @@ SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
     )
     .bind(platform_id)
     .bind(node_id)
-    .bind(json(images)?)
+    .bind(Json(images))
     .bind(observed_at)
     .bind(complete)
     .fetch_one(&mut **tx)
@@ -151,8 +151,8 @@ SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
     .map_err(storage)?;
 
     // Retain ordering without reporting freshness-only writes as resource changes.
-    sqlx::query("UPDATE swarmnodeimageprojections SET observedat=$4 WHERE platformid=$1 AND dockernodeid=$2 AND observedat<$4 AND dockerimageid IN (SELECT value->>'id' FROM jsonb_array_elements($3::jsonb) value)")
-        .bind(platform_id).bind(node_id).bind(json(images)?).bind(observed_at)
+    sqlx::query("UPDATE swarmnodeimageprojections SET observedat=$4 WHERE platformid=$1 AND dockernodeid=$2 AND observedat<$4 AND dockerimageid=ANY($3)")
+        .bind(platform_id).bind(node_id).bind(images.iter().map(|value| value.id.as_str()).collect::<Vec<_>>()).bind(observed_at)
         .execute(&mut **tx).await.map_err(storage)?;
     Ok(changed)
 }
@@ -200,7 +200,7 @@ SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
     )
     .bind(platform_id)
     .bind(node_id)
-    .bind(json(volumes)?)
+    .bind(Json(volumes))
     .bind(observed_at)
     .bind(complete)
     .fetch_one(&mut **tx)
@@ -208,8 +208,8 @@ SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
     .map_err(storage)?;
 
     // Retain ordering without reporting freshness-only writes as resource changes.
-    sqlx::query("UPDATE swarmnodevolumeprojections SET observedat=$4 WHERE platformid=$1 AND dockernodeid=$2 AND observedat<$4 AND volumename IN (SELECT value->>'name' FROM jsonb_array_elements($3::jsonb) value)")
-        .bind(platform_id).bind(node_id).bind(json(volumes)?).bind(observed_at)
+    sqlx::query("UPDATE swarmnodevolumeprojections SET observedat=$4 WHERE platformid=$1 AND dockernodeid=$2 AND observedat<$4 AND volumename=ANY($3)")
+        .bind(platform_id).bind(node_id).bind(volumes.iter().map(|value| value.name.as_str()).collect::<Vec<_>>()).bind(observed_at)
         .execute(&mut **tx).await.map_err(storage)?;
     Ok(changed)
 }
@@ -260,15 +260,15 @@ SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
     )
     .bind(platform_id)
     .bind(node_id)
-    .bind(json(networks)?)
+    .bind(Json(networks))
     .bind(observed_at)
     .bind(complete)
     .fetch_one(&mut **tx)
     .await
     .map_err(storage)?;
     // Retain ordering without reporting freshness-only writes as resource changes.
-    sqlx::query("UPDATE swarmnodenetworkprojections SET observedat=$4 WHERE platformid=$1 AND dockernodeid=$2 AND observedat<$4 AND dockernetworkid IN (SELECT value->>'id' FROM jsonb_array_elements($3::jsonb) value)")
-        .bind(platform_id).bind(node_id).bind(json(networks)?).bind(observed_at)
+    sqlx::query("UPDATE swarmnodenetworkprojections SET observedat=$4 WHERE platformid=$1 AND dockernodeid=$2 AND observedat<$4 AND dockernetworkid=ANY($3)")
+        .bind(platform_id).bind(node_id).bind(networks.iter().map(|value| value.id.as_str()).collect::<Vec<_>>()).bind(observed_at)
         .execute(&mut **tx).await.map_err(storage)?;
     Ok(changed)
 }

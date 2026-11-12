@@ -91,7 +91,10 @@ async fn compact_statistics_preserve_samples_uniqueness_and_migration_history() 
         .await
         .unwrap();
     let result = MigrationRunner::migrate(&database.url).await.unwrap();
-    assert_eq!((result.applied, result.already_applied), (1, 3));
+    assert_eq!(
+        (result.applied, result.already_applied),
+        (super::super::migration_count() - 3, 3)
+    );
     let after_journal: Vec<(String, String)> = sqlx::query_as(
         "SELECT id,checksum FROM citadel_schema_migrations WHERE id<='0003' ORDER BY id",
     )

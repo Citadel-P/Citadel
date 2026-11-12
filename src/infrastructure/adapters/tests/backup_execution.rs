@@ -465,7 +465,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     assert!(!coverage[0].policies[0].schedule_configured);
     assert!(
         !coverage_reader
-            .snapshot(actor, true, &[platform])
+            .snapshot(actor, true, &[platform], None)
             .await
             .unwrap()
             .successes
@@ -648,6 +648,27 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
 
     sqlx::query("UPDATE backuppolicies SET cron='* * * * *',timezone='UTC',controlstate='Idle',currentrunid=NULL WHERE id=$1")
         .bind(policies[0].id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let copies: Vec<Uuid> = sqlx::query_scalar("INSERT INTO backuppolicies SELECT (jsonb_populate_record(NULL::backuppolicies,to_jsonb(p)||jsonb_build_object('id',gen_random_uuid(),'name',p.name||'-schedule-'||n,'normalizedname',lower(p.name)||'-schedule-'||n,'cron','0 0 * * *','enabled',true,'archivedat',NULL,'controlstate','Idle','currentrunid',NULL))).* FROM backuppolicies p CROSS JOIN generate_series(1,65)n WHERE p.id=$1 RETURNING id")
+        .bind(policies[0].id).fetch_all(&pool).await.unwrap();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut after = None;
+    loop {
+        let page = store.list_scheduled_policies(after, 64).await.unwrap();
+        assert!(page.len() <= 64);
+        if page.is_empty() {
+            break;
+        }
+        for candidate in page {
+            assert!(seen.insert(candidate.id));
+            after = Some(candidate.id);
+        }
+    }
+    assert!(copies.iter().all(|id| seen.contains(id)));
+    sqlx::query("DELETE FROM backuppolicies WHERE id=ANY($1)")
+        .bind(copies)
         .execute(&pool)
         .await
         .unwrap();

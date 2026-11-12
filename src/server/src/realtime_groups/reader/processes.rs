@@ -74,9 +74,16 @@ impl ApplicationGroupReader {
             .lock()
             .await
             .entry(id)
-            .or_default()
+            .or_insert_with(|| {
+                std::sync::Arc::new(crate::realtime::retention::Cache::new(
+                    change.reads.budget.clone(),
+                ))
+            })
             .clone();
-        let value = cell.get_or_init(read).await.clone();
+        let value = cell
+            .get_or_try_init(|| async { Ok::<_, RealtimeReadError>(read().await) })
+            .await?
+            .clone();
         event("ContainerProcessesUpdated", value)
     }
 }

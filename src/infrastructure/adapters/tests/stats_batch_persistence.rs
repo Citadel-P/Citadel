@@ -1990,3 +1990,9 @@ async fn maintain_statistics(pool: &PgPool) -> Result<u64, sqlx::Error> {
 mod query_efficiency;
 #[path = "stats_batch_persistence/storage_review.rs"]
 mod storage_review;
+
+#[path = "stats_batch_persistence/telemetry_budgets.rs"]
+mod telemetry_budgets;
+
+#[path = "stats_batch_persistence/health_retention.rs"]
+mod health_retention;
