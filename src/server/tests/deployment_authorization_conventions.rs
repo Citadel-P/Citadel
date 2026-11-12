@@ -32,7 +32,7 @@ fn shared_entry_points_use_deployment_policies() {
                 [..],
         ),
         (
-            "realtime_groups/reader/mod.rs",
+            "realtime_groups/reader/application.rs",
             "async fn deployment_permission<",
             &["require_resource::<P>"][..],
         ),

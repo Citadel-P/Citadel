@@ -37,7 +37,7 @@ async fn swarm_backup_preview_resolves_legacy_namespace_and_apply_records_reserv
         citadel_adapters::persistence::postgres::backups::coverage::PostgresVolumeCoverageReader(
             pool.clone(),
         )
-        .snapshot(actor, true, &[platform])
+        .snapshot(actor, true, &[platform], None)
         .await
         .unwrap();
     assert!(
