@@ -976,6 +976,119 @@ async fn close_storage_fixture(pool: PgPool, name: String) {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
+async fn compaction_prunes_unrelated_days_with_custom_and_generic_plans() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let start = (chrono::Utc::now().timestamp() / 86_400 - 7) * 86_400;
+    for day in 0..7_i64 {
+        sqlx::query("SELECT statistics_partition('statisticssamples',$1)")
+            .bind(start / 86_400 + day)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let mut sources = Vec::new();
+    for name in ["compact-bounded", "compact-unrelated"] {
+        let id = add_container(&pool, &scope, name).await;
+        let source: i64 = sqlx::query_scalar(
+            "INSERT INTO statisticssources(platformid,containerid) VALUES($1,$2) RETURNING id",
+        )
+        .bind(scope.platform_id)
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes) SELECT $1,$2+n*10,1,100,5,200,n*100,n*200 FROM generate_series(0,60479) n")
+            .bind(source).bind(start).execute(&pool).await.unwrap();
+        sources.push(source);
+    }
+    sqlx::query("ANALYZE statisticssamples")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let from = start + 3 * 86_400 + 3600;
+    let partition = format!("statisticssamples_d{}", from / 86_400);
+    fn check_scans(node: &serde_json::Value, partition: &str, scans: &mut usize) {
+        if node["Node Type"]
+            .as_str()
+            .is_some_and(|kind| kind.contains("Scan"))
+            && node["Relation Name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("statisticssamples"))
+            && node["Actual Loops"].as_u64().unwrap_or(0) > 0
+        {
+            assert_eq!(
+                node["Relation Name"].as_str().unwrap(),
+                partition,
+                "compaction must not scan unrelated days: {node}"
+            );
+            *scans += 1;
+        }
+        if let Some(children) = node["Plans"].as_array() {
+            for child in children {
+                check_scans(child, partition, scans);
+            }
+        }
+    }
+    for mode in ["force_custom_plan", "force_generic_plan"] {
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SET LOCAL plan_cache_mode='{mode}'"
+        )))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        sqlx::query(concat!(
+            "PREPARE compact_bounded(bigint,bigint,bigint) AS ",
+            include_str!("../src/persistence/postgres/platforms/statistics/compact.sql")
+        ))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) EXECUTE compact_bounded({},{from},{})",
+            sources[0],
+            from + 3600
+        )))
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        sqlx::query("DEALLOCATE compact_bounded")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let mut scans = 0;
+        check_scans(&plan[0]["Plan"], &partition, &mut scans);
+        assert!(
+            scans >= 2,
+            "must inspect both sample selection and deletion scans"
+        );
+        let counts: Vec<(i64, i64)> = sqlx::query_as(
+            "SELECT sourceid,count(*) FROM statisticssamples GROUP BY sourceid ORDER BY sourceid",
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap();
+        assert_eq!(counts, vec![(sources[0], 60480 - 360), (sources[1], 60480)]);
+        let remaining: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM statisticssamples WHERE sourceid=$1 AND created >= $2 AND created < $3",
+        ).bind(sources[0]).bind(from).bind(from + 3600).fetch_one(&mut *tx).await.unwrap();
+        assert_eq!(remaining, 0);
+        let summaries: (i64, i64) = sqlx::query_as(
+            "SELECT count(*),sum(samplecount)::bigint FROM statisticsrollups WHERE sourceid=$1",
+        )
+        .bind(sources[0])
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        assert_eq!(summaries, (60, 360));
+        tx.rollback().await.unwrap();
+    }
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
 async fn shared_history_compacts_with_weighted_gauges_resets_and_immutable_ownership() {
     let (pool, database) = storage_fixture().await;
     let scope = platform(&pool).await;
@@ -1873,5 +1986,7 @@ async fn maintain_statistics(pool: &PgPool) -> Result<u64, sqlx::Error> {
     Ok(retained + citadel_adapters::persistence::postgres::maintenance::compact(pool).await?)
 }
 
+#[path = "stats_batch_persistence/query_efficiency.rs"]
+mod query_efficiency;
 #[path = "stats_batch_persistence/storage_review.rs"]
 mod storage_review;

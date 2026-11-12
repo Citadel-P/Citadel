@@ -53,7 +53,10 @@ WITH marked AS (
  RETURNING sourceid,created,lastcreated
 ), removed AS (
  DELETE FROM statisticssamples s USING inserted r
- WHERE s.sourceid=r.sourceid AND s.created>=r.created AND s.created<=r.lastcreated RETURNING s.created
+ -- Repeat the input bounds so PostgreSQL can prune unrelated daily partitions
+ -- and use the source/time index instead of scanning retained history per batch.
+ WHERE s.sourceid=$1 AND s.created>=$2 AND s.created<$3
+ AND s.sourceid=r.sourceid AND s.created>=r.created AND s.created<=r.lastcreated RETURNING s.created
 ), sealed AS (
  UPDATE statisticssources SET compacteduntil=$3 WHERE id=$1 RETURNING id
 )

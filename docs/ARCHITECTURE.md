@@ -896,6 +896,11 @@ and durable queues retain their fallback scans. Edge observation persistence kee
 session fencing inside the adapter. Alert sample flushing preserves its advisory
 lock and tuple-revision acknowledgement as one adapter operation, while threshold
 and version evaluation belongs to the Alerts feature.
+Alert evaluation retains the rule/resource advisory lock and durable observation
+receipts. A non-matching observation creates or resets its counter only when
+needed; repeated healthy observations preserve an already-zero state tuple and
+its cooldown timestamp. Incident resolution still runs when the counter is zero,
+because triggering an alert also resets that counter.
 
 SQLx remains available to the Server composition root and database test fixtures.
 Do not move SQL into hosting code to avoid adding a narrow feature interface.
@@ -1084,6 +1089,14 @@ new manager's descriptor. A missing old projection can be
 rediscovered only against that Task's physical identity. Unrelated live projections
 cannot take over history. The same seven-day bounded retention applies.
 
+Capture batches resolve repeated projection identities once, in last-occurrence
+order. Ordinary containers reuse an exact existing source through a set-based
+lookup; Swarm Task reassociation still uses the physical-identity validator.
+The Platform lock is acquired before the capture statement, so existing sealing
+watermarks can be read together from its snapshot. Newly created sources have a
+zero watermark. Each sample is checked against its source watermark before writes,
+and only identities with accepted samples resolve an ownership snapshot.
+
 The operator controls polling through `CITADEL_STATS_POLL_INTERVAL_SECONDS`;
 storage does not change that setting or the realtime capture cadence. The existing
 lease-owned maintenance worker compacts captures older than 24 hours into minute
@@ -1096,13 +1109,18 @@ split a minute into contiguous segments. Segments with fewer than four samples
 stay raw to avoid increasing storage for sparse polling. The newest source minute
 also stays raw, preserving current usage even for offline containers.
 
-Compaction runs every 30 seconds within the existing lease-owned maintenance job,
-independently of the configured retention sweep. Each iteration permits at most
+Compaction runs within the existing lease-owned maintenance job, independently of
+the configured retention sweep. Its first check waits five minutes plus the shared
+scheduler's subsecond offset. After finding no eligible work or encountering an
+error, it waits five minutes again. Reaching the pass limit or time budget instead
+schedules another batch after a full 60-second pause, measured from completion so
+slow work cannot trigger immediate catch-up ticks. Each iteration permits at most
 128 passes within five seconds, with a cancellation branch; a pass commits at most
 one container-source-hour and one host/node-hour. Candidates are ordered by oldest
-unsealed observation and source ID so backfill progresses across sources. Retention
-is not repeated for each source-hour. The work budget permits up to 15,360 container
-source-hours per hour before SQL cost, versus 512 previously. Scheduler and native
+unsealed observation and source ID so backfill progresses across sources. Container
+sample deletion repeats the source and time bounds explicitly, allowing partition
+pruning for both custom and generic prepared plans instead of scanning unrelated
+retained days. Retention is not repeated for each source-hour. Scheduler and native
 fixtures cover 1,024 sources plus backfill; actual throughput still depends on
 PostgreSQL resources and source density. Polling and retention durations are not
 changed to meet this budget.
@@ -1120,6 +1138,14 @@ range helper apply the same age rule to bucketing and chart gaps. This conservat
 rule also coarsens older sparse ranges that stayed raw; it needs no response
 contract change or extra scan to discover summaries. Older short-range charts
 therefore have minute resolution, while the newest 24 hours stay raw.
+
+Container history resolves authorized live projection IDs to source IDs before
+reading the raw and summary tables. Explicit source/time predicates remain on
+both physical reads under custom and generic prepared plans. Gauges aggregate
+separately from narrow physical-counter boundaries, avoiding per-raw-row summary
+arrays in the window sort. Summary starts bridge to the preceding observation;
+summary ends only supply the next baseline. Stored internal deltas and durations
+are added once, with the original sample counts used for weighted gauges.
 
 Frontend live statistics accumulate sums and counts at the selected history
 resolution before rendering. Replica averages are summed after temporal
@@ -1158,6 +1184,13 @@ costs more than the interactive query. Commit and rollback restore the pooled
 connection's setting. Gauge and I/O projections read the indexed history directly
 instead of materializing a shared JSON capture relation; Docker identities use
 byte ordering for the per-container windows.
+Platform history checks for I/O summaries inside the same query snapshot. Windows
+without summaries use a narrow raw-counter calculation; mixed windows retain
+summary endpoints, durations and weights. Only the selected path expands raw
+captures. Within mixed windows, summary-only fields stay NULL on raw observations
+during sorting, with endpoints and unit weights derived afterward. This reduces
+temporary I/O without increasing PostgreSQL's memory allowance, changing missing-
+counter semantics or racing compaction between separate reads.
 The shared I/O panel is owned by `components/custom/stats-io-usage`, used by both
 platform and container charts. These are container traffic and block-I/O metrics,
 not host-interface or host-disk totals. Swarm node captures are retained separately
