@@ -180,6 +180,8 @@ impl StatsIngress {
                     ]
                     .into_iter()
                     .all(|v| v.is_finite() && v >= 0.0)
+                    && s.memory_active_cache
+                        .is_none_or(|v| v.is_finite() && v >= 0.0 && v <= s.memory_active)
                     && [s.block_read_bytes, s.block_write_bytes]
                         .into_iter()
                         .flatten()

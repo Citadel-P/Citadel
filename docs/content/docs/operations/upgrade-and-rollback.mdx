@@ -18,6 +18,76 @@ Use the matching current Core, Agent, and frontend build. See
 for baseline and recovery considerations.
 Never rewrite applied migration history or checksums to force an upgrade.
 
+## Enable in-app updates
+
+After creating the administrator account, complete this one-time step on the
+**Docker host**. Release checks work without it, but installing Core or bundled
+PostgreSQL updates from the portal requires a verified installation record.
+**In-app updates not configured** describes this missing setup; it does not mean
+your installed PostgreSQL version is outdated.
+
+The setup command requires Python **3.10 or newer**, native Linux Docker and the
+supported Compose installation with bundled PostgreSQL. For rootful Docker, run
+as root and keep the installation files in a root-owned location such as
+`/opt/citadel`, with `.env` mode `0600`. Do not change ownership of Docker volumes.
+For rootless Docker, run as the daemon's host user without `sudo`; the installation
+files must belong to that user, and Core must already have the supported rootless
+socket and daemon-data mounts described below. Docker Desktop, external databases
+and unsupported custom layouts continue to use manual updates.
+
+For the default installation, after first-run setup:
+
+```bash
+cd /opt/citadel
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/enable-updates.py -o enable-updates.py
+python3 enable-updates.py --directory /opt/citadel --project citadel
+```
+
+Use the **existing** directory and project name. If you started Compose with
+overlays, pass each original absolute path in its original order:
+
+```bash
+python3 enable-updates.py --directory /opt/citadel --project citadel \
+  --compose-file /opt/citadel/docker-compose.yml \
+  --compose-file /opt/citadel/compose.edge.yml
+```
+
+The default private state directory is `/opt/citadel-update-state`; use
+`--state-directory` for a different dedicated host path outside the installation
+and Docker data directories. Do not put it in a Docker volume or delete it during
+updates. The command uses the installed Core image, verifies the live installation
+and recovery prerequisites, creates registration, then adds
+`CITADEL_UPDATE_STATE_DIRECTORY` to the existing `.env`. It briefly restarts **only
+Core**, refreshes registration and verifies the result. PostgreSQL and managed
+workloads are not restarted, no release is downloaded, and no upgrade is approved.
+Core itself does not need additional host-directory mounts.
+
+Return to **Administration → Updates → Config** and select **Check now**. Supported
+updates can now be reviewed in the portal. PostgreSQL updates always require
+explicit approval; automatic Core/Agent schedules do not include the database.
+Repeating a successfully completed setup verifies it without restarting Core.
+
+### Interrupted update setup
+
+A failed setup preserves `.env`, registration and recovery evidence. If it failed
+before changing `.env`, resolve the reported prerequisite and run the command
+again. If the setting was written but Core restart or final verification failed,
+inspect Core health and the original Compose configuration first. Do not delete
+registration or roll back a database to clear the message.
+
+For an intentional configuration change or an interrupted activation, follow the
+[registration refresh procedure](https://github.com/Citadel-P/Citadel/blob/main/docs/DEVELOPMENT.md)
+with the same directory, project, ordered files, socket and state path. A healthy
+Core must be using the configured state directory before refresh. Refresh refuses
+changed storage identity and active or orphaned recovery evidence. The setup
+command does not automatically accept unrelated configuration changes on retry.
+
+Existing user-owned rootful installations outside the supported ownership layout
+need an operator-planned move to protected installer inputs while preserving the
+original project and volumes. CI-managed installations also need their deployment
+procedure to perform the existing explicit registration refresh after intentional
+Core/configuration changes; do not run two replacement mechanisms concurrently.
+
 ## PostgreSQL engine maintenance
 
 Core updates apply Citadel's SQL migrations but keep PostgreSQL running unchanged.
@@ -95,8 +165,8 @@ update-check setting changes.
 Available updates lists **Citadel Core**, **Database**, then **Agents**. Database currently
 offers a qualified PostgreSQL upgrade for registered supported installations.
 **In-app updates unavailable** means PostgreSQL is managed outside Citadel's Compose
-installation. A bundled database shows **Setup required** until the installation is
-registered and its update state directory is configured. **Update blocked** reports
+installation. A bundled database shows **In-app updates not configured** until the
+[one-time update setup](#enable-in-app-updates) has completed. **Update blocked** reports
 an eligibility or database-read problem; **Status unavailable** means Citadel could
 not verify the deployment. Rootless Docker is supported for bundled PostgreSQL and
 Core updates, with the same registration, review, checkpoint and recovery checks.

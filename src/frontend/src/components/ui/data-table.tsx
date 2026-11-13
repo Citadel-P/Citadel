@@ -6,6 +6,7 @@ import {
   ColumnDef,
   ExpandedState,
   RowSelectionState,
+  Row,
   SortingState,
   flexRender,
   createExpandedRowModel,
@@ -17,6 +18,7 @@ import {
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { TableSkeletonRows } from './table-skeleton';
 
 const features = {
@@ -36,6 +38,7 @@ interface DataTableProps<TData extends Identifiable> {
   data: TData[];
   isLoading: boolean;
   getRowId?: (row: TData) => string;
+  getRowClassName?: (row: Row<StockFeatures, TData>) => string | undefined;
   getSubRows?: (row: TData) => TData[] | undefined;
   enableRowSelection?: (row: TData) => boolean;
   enableSubRowSelection?: boolean;
@@ -51,6 +54,7 @@ export function DataTable<TData extends Identifiable>({
   isLoading,
   getRowId,
   getSubRows,
+  getRowClassName,
   enableRowSelection,
   enableSubRowSelection,
   onSelectionChange,
@@ -127,7 +131,10 @@ export function DataTable<TData extends Identifiable>({
         <TableBody>
           {table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'} className="group/rowid">
+              <TableRow
+                key={row.id}
+                data-state={row.getIsSelected() && 'selected'}
+                className={cn('group/rowid', getRowClassName?.(row))}>
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                 ))}

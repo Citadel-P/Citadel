@@ -645,7 +645,8 @@ Core's Compose database container and shared network, independently of service n
 Ambiguous endpoint matches stay unknown; detection does not relax the supported
 registration profile. SQL stays in the PostgreSQL adapter.
 Missing Docker evidence stays unknown; an unregistered bundled database
-requests setup, while only an external database is labelled in-app unavailable.
+reports in-app updates not configured, without implying an available database upgrade,
+while only an external database is labelled in-app unavailable.
 Registered status reads use the startup-verified installation, without launching
 helpers or acquiring update ownership.
 
@@ -661,8 +662,16 @@ helper-image, container-ID and absolute checkpoint-path contracts still describe
 the container/host executor; they do not qualify another execution backend. Future
 Podman or Kubernetes installation support requires its own qualified adapter and recovery
 semantics; no unsupported kind is accepted or routed through Docker Compose.
-Registration is local operator authority, not an administrator-approved update or a user Activity. The installer
-does not yet invoke it automatically. Startup checks registration identity and
+Registration is local operator authority, not an administrator-approved update or a user Activity. The supported installation guides invoke `deploy/install/enable-updates.py` after
+first-run setup. This local host command uses the installed image's registration
+and preflight diagnostics, then atomically adds the state setting to private `.env`,
+recreates only Core without pulling/building, refreshes the intentional change and
+revalidates registration. It preserves ordered Compose inputs and project identity,
+refuses shell overrides, unsafe paths and unsupported daemons, and never repairs
+unknown drift or recovery evidence. Repeated successful setup only revalidates.
+Failures preserve configuration and registration for explicit operator recovery.
+Python orchestrates existing Rust diagnostics; it does not reimplement eligibility
+or grant update approval. Startup checks registration identity and
 private evidence. The local `check-update-installation` diagnostic now revalidates
 the saved invocation and live runtime using the same bounded inspection as registration.
 It requires existing protected registration and lock files, the recorded executor
@@ -1163,6 +1172,21 @@ watermarks can be read together from its snapshot. Newly created sources have a
 zero watermark. Each sample is checked against its source watermark before writes,
 and only identities with accepted samples resolve an ownership snapshot.
 
+Container memory keeps `memoryActive` as Docker working set and `memoryCache`
+as excluded inactive filesystem cache. Optional `memoryActiveCache` records active
+file LRU pages through Local, Direct and Edge collection, live views, raw history
+and rollups. Non-cache memory is derived by subtracting active file cache from the
+working set; it is not process RSS. Missing or inconsistent counters and preexisting
+samples remain unknown. Weighted history buckets, compaction and replica totals
+require complete active-cache coverage; they never treat absent values as zero.
+The shared memory chart defaults to Breakdown and persists its Working set switch
+in browser local storage, using the same segmented control as I/O charts. Memory
+alerts and table values retain working-set semantics.
+
+Container inventory's latest-stat enrichment resolves the physical source first,
+then selects at most one raw and one compacted observation through source/time
+indexes. It does not scan global timestamp history for new or idle containers.
+
 Telemetry locking binds sorted, deduplicated UUID arrays, never serialized capture
 payloads. Platform metadata uses a narrow borrowed projection; only the capture
 statement encodes the complete I/O list. Writers recheck closed sessions after
@@ -1480,6 +1504,11 @@ connections and streams. Raw observations may be shared across subscribers, but
 permission decisions and presentation remain actor-specific. Manual ACL changes
 outside these mutation paths require cache invalidation, such as restarting Core.
 
+Backup subprocess caches also use owned directory cleanup: creation and recursive
+removal run outside async worker threads, and abandoned operations retain a tracked
+cleanup reservation through shutdown. Cache deletion failure does not replay a
+completed backup mutation.
+
 Credential files and Git/Script workspaces belong to infrastructure adapters.
 Use private staging, bounded subprocesses and cleanup on success, failure and
 cancellation. Git SSH requires verified host keys; do not disable host verification.
@@ -1609,6 +1638,12 @@ at enqueue. HTTP progress observers use a bounded broadcast and cannot cancel or
 backpressure execution. Explicit cancellation is persisted, including during the
 queued-to-running transition, and workers observe it before starting a process.
 Queued runs survive restart; interrupted executions fail without being replayed.
+Core and Agent Deno caches live inside each private run workspace and are removed
+with its generated source on completion, failure, timeout or cancellation. The
+cache is not shared across runs: generated module paths and credentials are unique
+to each execution. This bounds retained cache by active work rather than run count;
+per-run imported modules are fetched again. Existing shared-cache directories from
+older installations are not used or automatically deleted.
 
 Before the first external operation, a busy/offline backup host or busy restore
 source returns the run to the queue with a 15-second eligibility delay. Retried

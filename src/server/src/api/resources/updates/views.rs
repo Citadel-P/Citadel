@@ -114,9 +114,11 @@ impl UpdateStatusView {
             last_success: checks.last_success,
             check_error: checks.error,
             available: checks.available.map(Into::into),
-            installation_unavailable_reason: Some(
-                "Register this installation before installing updates.".into(),
-            ),
+            installation_unavailable_reason: Some(if checks_allowed {
+                "In-app Core updates are not configured. Complete the one-time update setup on the Docker host.".into()
+            } else {
+                "Updates are disabled by server configuration.".into()
+            }),
             operation: None,
         }
     }

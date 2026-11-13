@@ -25,6 +25,7 @@ WITH marked AS (
  count(*)::integer AS samplecount,count(blockreadbytes)::integer AS readcount,count(blockwritebytes)::integer AS writecount,
  avg(cpuusage) AS cpuusage,
  avg(memoryactive) AS memoryactive,
+ CASE WHEN count(memoryactivecache)=count(*) THEN avg(memoryactivecache) END AS memoryactivecache,
  avg(memorycache) AS memorycache,
  avg(memorylimit) AS memorylimit,
  avg(rxbytes) AS rxbytes,
@@ -42,9 +43,9 @@ WITH marked AS (
  ARRAY[max(cpuusage),max(memoryactive),max(memorycache),max(memorylimit)] AS peaks
  FROM deltas GROUP BY sourceid,ownerid,segment HAVING count(*)>=4
 ), inserted AS (
- INSERT INTO statisticsrollups(sourceid,ownerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes,
+ INSERT INTO statisticsrollups(sourceid,ownerid,created,cpuusage,memoryactive,memoryactivecache,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes,
  samplecount,readcount,writecount,lastcreated,firstcounters,lastcounters,counterdeltas,counterdurations,peaks)
- SELECT sourceid,ownerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes,
+ SELECT sourceid,ownerid,created,cpuusage,memoryactive,memoryactivecache,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes,
  samplecount,readcount,writecount,lastcreated,
  ARRAY[first_rxbytes,first_txbytes,first_blockreadbytes,first_blockwritebytes],
  ARRAY[last_rxbytes,last_txbytes,last_blockreadbytes,last_blockwritebytes],

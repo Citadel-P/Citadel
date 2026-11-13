@@ -20,7 +20,6 @@ pub struct ExternalToolsConfig {
 pub struct ScriptExecutionConfig {
     pub deno: OsString,
     pub work_root: PathBuf,
-    pub cache_root: PathBuf,
     pub internal_base_url: String,
     pub maximum_log_bytes: usize,
     pub allow_net: Option<String>,
@@ -222,10 +221,6 @@ impl ExecutionConfig {
             scripts: ScriptExecutionConfig {
                 deno: get("CITADEL_DENO_PATH").unwrap_or_else(|| "deno".into()),
                 work_root: absolute("CITADEL_SCRIPTS_WORK_DIR", data_root.join("scripts/runs"))?,
-                cache_root: absolute(
-                    "CITADEL_SCRIPTS_DENO_CACHE_DIR",
-                    data_root.join("scripts/deno-cache"),
-                )?,
                 internal_base_url: string("CITADEL_INTERNAL_BASE_URL")
                     .unwrap_or_else(|| format!("http://127.0.0.1:{http_port}")),
                 maximum_log_bytes,
@@ -399,8 +394,8 @@ mod tests {
         assert_eq!(config.tools.pg_dump, OsString::from("/tools/pg_dump"));
         assert_eq!(config.scripts.internal_base_url, "http://primary:8000");
         assert_eq!(
-            config.scripts.cache_root,
-            PathBuf::from("/data/scripts/deno-cache")
+            config.scripts.work_root,
+            PathBuf::from("/data/scripts/runs")
         );
         assert_eq!(config.scripts.maximum_log_bytes, 1024);
         assert!(!config.edge_agent.allow_insecure);

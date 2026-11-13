@@ -126,6 +126,8 @@ pub struct ContainerStatSnapshot {
     pub container_id: Uuid,
     pub memory_active: f64,
     pub memory_cache: f64,
+    /// Active filesystem cache within the working set; absent when not measured.
+    pub memory_active_cache: Option<f64>,
     pub cpu_usage: f64,
     pub memory_limit: f64,
     pub rx_bytes: f64,

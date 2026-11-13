@@ -2,7 +2,8 @@
 """Packaged registration/revalidation acceptance on a disposable isolated Docker daemon.
 
 Requires a Core image built from this checkout, Docker and Python 3 on the test
-host. Python is test tooling only; registration itself runs from the Core image.
+host. Rust registration runs from the Core image. Optional activation acceptance
+runs the shipped Python host setup command inside the disposable daemon.
 """
 
 import argparse
@@ -64,7 +65,7 @@ class Fixture:
     def docker(self, *args, **kwargs):
         return self.execute("docker", "--host", "unix://" + self.socket, *args, **kwargs)
 
-    def start(self, *, published=False, registry=False, browser_port=None):
+    def start(self, *, published=False, registry=False, browser_port=None, activation=False):
         require(not (published and registry), "Fixture registry cannot be used for published releases")
         require(browser_port is None or (registry and 1 <= browser_port <= 65535),
                 "Browser access requires the private registry and a valid local port")
@@ -107,6 +108,8 @@ class Fixture:
             self.docker("pull", self.core, timeout=300)
             self.tag = self.core
             return
+        if activation:
+            self.execute("apk", "add", "--no-cache", "python3", timeout=180)
         if not browser_port:
             self.host("network", "disconnect", self.network, self.daemon)
             self.host("network", "rm", self.network)
@@ -142,7 +145,7 @@ class Fixture:
     def read(self, path):
         return self.execute("cat", path).stdout
 
-    def profile(self, edge):
+    def profile(self, edge, *, activation=False):
         project = "citadel_edge" if edge else "citadel_base"
         directory = f"/opt/{project}"
         state = f"/opt/{project}-updates"
@@ -240,6 +243,9 @@ class Fixture:
                      "--post-data=" + json.dumps({"name": "acceptance", "email": "acceptance@example.test",
                                                  "password": secrets.token_hex(24)}),
                      f"http://127.0.0.1:{port}/api/v1/setup/initialize")
+        if activation:
+            self.activate_updates(directory, state, project, files, compose, core, before[1], check)
+            return
         first = register(True)
         require(first["kind"] == "DockerCompose", "Registration lost its installation kind")
         if edge:
@@ -349,10 +355,42 @@ class Fixture:
                 "Core recreation changed recovery keys")
         print(f"{project}: registration, host utility, refresh and evidence preservation passed", flush=True)
 
+    def activate_updates(self, directory, state, project, files, compose, core, database, check):
+        """Run the shipped one-time setup rather than manually reproducing its steps."""
+        self.write("/opt/enable-updates.py", (ROOT / "deploy/install/enable-updates.py").read_bytes())
+        keys = self.docker("exec", core, "sha256sum", "/app/data/jwtsecret",
+                           "/app/data/secret-encryption-key", "/app/data/agent/signing-key").stdout
+        image = json.loads(self.docker("inspect", core).stdout)[0]["Image"]
+        args = ["python3", "/opt/enable-updates.py", "--directory", directory,
+                "--project", project, "--state-directory", state]
+        for name in files:
+            args += ["--compose-file", f"{directory}/{name}"]
+        self.execute(*args, timeout=600)
+        replacement = self.docker(*compose, "ps", "--quiet", "server").stdout.decode().strip()
+        require(replacement != core, "Activation did not recreate Core")
+        current = json.loads(self.docker("inspect", replacement, database["Id"]).stdout)
+        require(current[0]["Image"] == image, "Activation changed the Core release")
+        require((current[1]["Id"], current[1]["State"]["StartedAt"], current[1]["RestartCount"])
+                == (database["Id"], database["State"]["StartedAt"], database["RestartCount"]),
+                "Activation changed PostgreSQL")
+        require(self.docker("exec", replacement, "sha256sum", "/app/data/jwtsecret",
+                            "/app/data/secret-encryption-key", "/app/data/agent/signing-key").stdout == keys,
+                "Activation changed recovery keys")
+        registered = self.read(f"{state}/installation.json")
+        require(check(True)["registration"]["coreContainerId"] == replacement,
+                "Activated registration did not match Core")
+        self.execute(*args, timeout=300)
+        require(self.read(f"{state}/installation.json") == registered,
+                "Repeated activation changed registration")
+        require(self.docker(*compose, "ps", "--quiet", "server").stdout.decode().strip() == replacement,
+                "Repeated activation restarted Core")
+        print(f"{project}: shipped update setup, unchanged database/keys and idempotent retry passed", flush=True)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("core_image", help="Core image built from the current checkout")
+    parser.add_argument("--enable-updates", action="store_true", help="Exercise the shipped host activation command")
     args = parser.parse_args()
 
     def interrupted(*_):
@@ -362,9 +400,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="citadel-update-acceptance-") as temporary:
         fixture = Fixture(args.core_image, Path(temporary))
         try:
-            fixture.start()
-            fixture.profile(edge=False)
-            fixture.profile(edge=True)
+            fixture.start(activation=args.enable_updates)
+            fixture.profile(edge=False, activation=args.enable_updates)
+            fixture.profile(edge=True, activation=args.enable_updates)
         finally:
             fixture.close()
 

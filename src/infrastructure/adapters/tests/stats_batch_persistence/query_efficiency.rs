@@ -324,3 +324,89 @@ async fn capture_resolves_identities_once_per_batch_and_preserves_watermarks() {
     assert_eq!(changed, 4);
     close_storage_fixture(pool, database).await;
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
+async fn latest_container_stats_do_not_scan_other_sources_when_redeploy_has_no_samples() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let busy = add_container(&pool, &scope, "busy").await;
+    let empty = add_container(&pool, &scope, "replacement").await;
+    add_container(&pool, &scope, "not-sampled").await;
+    let start = chrono::Utc::now().timestamp() / 86400 * 86400;
+    sqlx::query("INSERT INTO statisticssources(platformid,containerid) VALUES($1,$2),($1,$3)")
+        .bind(scope.platform_id)
+        .bind(busy)
+        .bind(empty)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes)
+        SELECT src.id,$2+n,1,100,5,200,0,0 FROM statisticssources src CROSS JOIN generate_series(1,80000)n WHERE src.containerid=$1")
+        .bind(busy).bind(start).execute(&pool).await.unwrap();
+    sqlx::raw_sql("ANALYZE statisticssources; ANALYZE statisticssamples;")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // A newer compacted observation must beat the raw one. Include a dense
+    // unrelated summary history so missing-source lookups bound both branches.
+    sqlx::query("INSERT INTO statisticsrollups(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,
+        samplecount,readcount,writecount,lastcreated,firstcounters,lastcounters,counterdeltas,counterdurations,peaks)
+        SELECT src.id,$2+n*10+1,1,100,5,200,0,0,1,0,0,$2+n*10+1,
+        ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::bigint[],ARRAY[1,100,5,200]::float8[]
+        FROM statisticssources src CROSS JOIN generate_series(1,8000)n WHERE src.containerid=$1")
+        .bind(busy).bind(start).execute(&pool).await.unwrap();
+    sqlx::raw_sql("ANALYZE statisticsrollups")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let select = include_str!("../../src/persistence/postgres/platforms/queries.rs")
+        .split("pub(super) const CONTAINER_SELECT: &str = r#\"")
+        .nth(1)
+        .unwrap()
+        .split("\"#;")
+        .next()
+        .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("PREPARE latest(uuid,text[]) AS {select} WHERE container.platformid=$1 AND container.dockercontainerid=ANY($2) ORDER BY container.id"))).execute(&mut *tx).await.unwrap();
+    for mode in ["force_custom_plan", "force_generic_plan"] {
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SET LOCAL plan_cache_mode={mode}"
+        )))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        for docker_id in ["replacement", "not-sampled", "busy"] {
+            let execute = format!(
+                "EXECUTE latest('{}',ARRAY['{docker_id}'])",
+                scope.platform_id
+            );
+            let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "EXPLAIN(ANALYZE,BUFFERS,TIMING OFF,FORMAT JSON) {execute}"
+            )))
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+            let blocks = plan[0]["Plan"]["Shared Hit Blocks"].as_i64().unwrap()
+                + plan[0]["Plan"]["Shared Read Blocks"].as_i64().unwrap();
+            assert!(
+                blocks < 300,
+                "{mode} {docker_id} touched {blocks} blocks: {plan}"
+            );
+            let row = sqlx::query(sqlx::AssertSqlSafe(execute))
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+            assert_eq!(
+                row.get::<Option<i64>, _>("stat_created"),
+                if docker_id == "busy" {
+                    Some(start + 80001)
+                } else {
+                    None
+                }
+            );
+        }
+    }
+    tx.rollback().await.unwrap();
+    close_storage_fixture(pool, database).await;
+}

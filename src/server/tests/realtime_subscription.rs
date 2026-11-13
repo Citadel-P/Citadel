@@ -625,6 +625,7 @@ async fn global_subscription_streams_committed_platform_stats_after_store_recrea
                 cpu_usage: 25.0 * revision as f64,
                 memory_active: 512.0,
                 memory_cache: 0.0,
+                memory_active_cache: None,
                 memory_limit: 4096.0,
                 rx_bytes: 10.0,
                 tx_bytes: 20.0,

@@ -97,3 +97,23 @@ it('shows deduplicated unmanaged coverage and storage-specific actions in the sh
   );
   expect(within(row).getByRole('button', { name: 'Backups: Backup failed' })).toBeVisible();
 });
+
+it('distinguishes expanded stack children without tinting unrelated rows', async () => {
+  const { user } = renderCitadel(
+    <ContainersTable
+      actions={{}}
+      isLoading={false}
+      items={[
+        container('db', 'wordpress', 'wordpress-id'),
+        container('web', 'wordpress', 'wordpress-id'),
+        container('standalone', '', null),
+      ]}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: 'wordpress' }));
+  const child = screen.getByRole('link', { name: 'db' }).closest('tr')!;
+  expect(child).toHaveClass('bg-muted/30');
+  expect(screen.getByRole('link', { name: 'standalone' }).closest('tr')).not.toHaveClass('bg-muted/30');
+  await user.click(within(child).getByRole('checkbox'));
+  expect(child).toHaveAttribute('data-state', 'selected');
+});

@@ -752,6 +752,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap();
     let executor = DockerResticBackupExecutor::new(
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         "docker-command-must-not-run",
         "restic/restic:test",
         Arc::new(
@@ -1180,6 +1181,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
             )
             .unwrap();
         let executor = DockerResticBackupExecutor::new(
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             "docker-must-not-run",
             "restic:test",
             Arc::new(Password),

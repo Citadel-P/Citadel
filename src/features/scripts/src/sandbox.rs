@@ -14,7 +14,6 @@ pub struct ScriptSandbox {
     pub workspace: Arc<dyn crate::workspace::ScriptWorkspacePort>,
     pub deno_path: OsString,
     pub work_root: PathBuf,
-    pub cache_directory: Option<PathBuf>,
     pub allow_net: Option<String>,
 }
 
@@ -37,11 +36,7 @@ impl ScriptSandbox {
         progress: Option<&broadcast::Sender<ScriptProgress>>,
     ) -> ScriptRunResult {
         let directory = self.work_root.join(input.run_id.to_string());
-        let mut workspace = match self
-            .workspace
-            .prepare(&directory, self.cache_directory.as_deref(), &input.source)
-            .await
-        {
+        let mut workspace = match self.workspace.prepare(&directory, &input.source).await {
             Ok(workspace) => workspace,
             Err(error) => return ScriptRunResult::failed(None, error),
         };
@@ -68,11 +63,14 @@ impl ScriptSandbox {
             args.push("--deny-import".into());
         }
         args.push(script.as_os_str().to_owned());
-        let mut request = ProcessRequest::new(self.deno_path.clone())
+        let request = ProcessRequest::new(self.deno_path.clone())
             .args(args)
             .current_dir(directory)
             .env("HOME", directory.as_os_str())
             .env("TMPDIR", directory.as_os_str())
+            // Run-specific module paths and credentials make compiled entries
+            // unsuitable for a persistent shared cache. The workspace owns both
+            // source and cache, including failure/cancellation cleanup.
             .env("DENO_DIR", directory.join("deno-cache").as_os_str())
             .env("NO_COLOR", "1")
             .env("DENO_TLS_CA_STORE", "mozilla,system")
@@ -83,9 +81,6 @@ impl ScriptSandbox {
                 maximum_stderr_bytes: input.maximum_log_bytes,
                 output_limit_policy: OutputLimitPolicy::Truncate,
             });
-        if let Some(cache) = &self.cache_directory {
-            request = request.env("DENO_DIR", cache.as_os_str());
-        }
         let output = if let Some(sender) = progress {
             let (chunks, mut receiver) = mpsc::channel(8);
             let consume = async {
@@ -98,8 +93,15 @@ impl ScriptSandbox {
                     } else {
                         &mut stdout
                     };
+                    // Previously retained bytes contain no newline. Scanning
+                    // them again for every chunk makes long lines quadratic.
+                    let line_end = chunk
+                        .bytes
+                        .iter()
+                        .rposition(|byte| *byte == b'\n')
+                        .map(|index| pending.len() + index);
                     pending.extend_from_slice(&chunk.bytes);
-                    if let Some(end) = pending.iter().rposition(|byte| *byte == b'\n') {
+                    if let Some(end) = line_end {
                         let text = redact_run_logs(
                             &String::from_utf8_lossy(&pending[..=end]),
                             &input.token,

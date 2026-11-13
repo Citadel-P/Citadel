@@ -34,13 +34,7 @@ export function CoreStatusBadge({ status, failed = false }: { status?: UpdateSta
         }
       />
     );
-  if (status.available)
-    return (
-      <StateBadge
-        value="Warning"
-        label={status.installationUnavailableReason ? 'Manual update required' : 'Update available'}
-      />
-    );
+  if (status.available) return <StateBadge value="Warning" label="Update available" />;
   if (status.lastSuccess) return <StateBadge value="Success" label="Up to date" />;
   return <StateBadge value="Unknown" label="Not checked" />;
 }
@@ -84,8 +78,8 @@ export function DatabaseStatusBadge({ status }: { status?: UpdateStatusView }) {
     if (status.databaseInstallation === 'Bundled')
       return (
         <StateBadge
-          value="Warning"
-          label={status.installationUnavailableReason ? 'Setup required' : 'Update blocked'}
+          value={status.installationUnavailableReason ? 'Unknown' : 'Warning'}
+          label={status.installationUnavailableReason ? 'In-app updates not configured' : 'Update blocked'}
         />
       );
     return <StateBadge value="Unknown" label="Status unavailable" />;

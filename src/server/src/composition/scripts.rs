@@ -62,10 +62,7 @@ pub(super) fn build(
             config.transport.public_url.to_string(),
         )
         .with_options(config.scripts)?
-        .with_sandbox(
-            config.execution.scripts.cache_root.clone(),
-            config.execution.scripts.allow_net.clone(),
-        )
+        .with_sandbox(config.execution.scripts.allow_net.clone())
         .with_entitlements(entitlements.clone())
         .with_alerts(alert_store.clone())
         .with_change_notifier({

@@ -1,4 +1,10 @@
-import { appendLiveStatBucket, averageStatBuckets, latestLiveStat, mergeStatsBuckets } from './stats-buckets';
+import {
+  appendLiveStatBucket,
+  averageStatBuckets,
+  latestLiveStat,
+  mergeStatsBuckets,
+  sumStatBuckets,
+} from './stats-buckets';
 import { statsBucketSeconds } from './stats-range';
 
 describe('historical and live statistics buckets', () => {
@@ -154,4 +160,26 @@ it('weights throughput by elapsed time rather than the number of observations', 
   });
   const corrected = appendLiveStatBucket(live, { ...samples[2], rxBytes: 2100 }, 300, 3600);
   expect(corrected[0]).toMatchObject({ rxBytesDelta: 1100, rxBytesPerSecond: 1100 / 21 });
+});
+
+it('keeps active-cache breakdown unknown for mixed coverage and corrects duplicate samples', () => {
+  let live = appendLiveStatBucket(
+    [],
+    { created: 301, memoryActive: 100, memoryActiveCache: null as number | null },
+    60,
+    3600,
+  );
+  live = appendLiveStatBucket(live, { created: 311, memoryActive: 100, memoryActiveCache: 20 }, 60, 3600);
+  expect(live[0].memoryActiveCache).toBeNull();
+  expect(live[0].memoryActive).toBe(100);
+  let known = appendLiveStatBucket([], { created: 301, memoryActiveCache: 20 }, 60, 3600);
+  known = appendLiveStatBucket(known, { created: 311, memoryActiveCache: 40 }, 60, 3600);
+  known = appendLiveStatBucket(known, { created: 311, memoryActiveCache: 60 }, 60, 3600);
+  expect(known[0].memoryActiveCache).toBe(40);
+});
+
+it('does not report a partial active-cache sum as complete replica coverage', () => {
+  const known = { created: 301, memoryActive: 100, memoryActiveCache: 20 as number | null };
+  expect(sumStatBuckets([[known], [{ ...known, memoryActiveCache: null }]], 60)[0].memoryActiveCache).toBeNull();
+  expect(sumStatBuckets([[known], [known]], 60)[0].memoryActiveCache).toBe(40);
 });

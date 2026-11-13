@@ -6,6 +6,7 @@ mod build_attempts;
 mod container_io;
 mod health_retention;
 mod instance_settings;
+mod memory_breakdown;
 mod query_indexes;
 mod statistics_storage;
 

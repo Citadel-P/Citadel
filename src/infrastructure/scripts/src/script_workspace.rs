@@ -33,16 +33,10 @@ impl ScriptWorkspacePort for LocalScriptWorkspace {
     fn prepare<'a>(
         &'a self,
         directory: &'a Path,
-        cache: Option<&'a Path>,
         source: &'a str,
     ) -> BoxFuture<'a, Result<Box<dyn ScriptWorkspaceLease>, String>> {
         Box::pin(async move {
             let reservation = DirectoryCleanup::reserve(&self.tasks).map_err(|e| e.to_string())?;
-            if let Some(cache) = cache {
-                tokio::fs::create_dir_all(cache)
-                    .await
-                    .map_err(|e| format!("Could not prepare Deno cache: {e}"))?;
-            }
             let parent = directory
                 .parent()
                 .ok_or("Could not prepare run: invalid directory")?;

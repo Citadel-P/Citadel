@@ -62,6 +62,7 @@ message ContainerStatMessage {
     double txBytes = 6;
     google.protobuf.DoubleValue blockReadBytes = 7;
     google.protobuf.DoubleValue blockWriteBytes = 8;
+    google.protobuf.DoubleValue memoryActiveCache = 9;
 }
 
 message InspectContainerResponse {

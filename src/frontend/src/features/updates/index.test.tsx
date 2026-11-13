@@ -48,7 +48,8 @@ const status = {
   lastSuccess: '2026-11-01T12:00:00Z',
   checkError: null,
   available: { version: '0.1.2', releaseUrl: 'https://github.com/Citadel-P/Citadel/releases/tag/v0.1.2' },
-  installationUnavailableReason: 'Automatic installation is not enabled in this build.',
+  installationUnavailableReason:
+    'In-app Core updates are not configured. Complete the one-time update setup on the Docker host.',
 };
 const settings = {
   updateChecksEnabled: true,
@@ -130,9 +131,9 @@ it('has exactly Config and Activities tabs and checks without installing or refe
     'href',
     status.available.releaseUrl,
   );
-  expect(screen.getByRole('link', { name: 'Manual upgrade guide' })).toHaveAttribute(
+  expect(screen.getByRole('link', { name: 'Set up in-app updates' })).toHaveAttribute(
     'href',
-    'https://docs.citadelplane.com/operations/upgrade-and-rollback/',
+    'https://docs.citadelplane.com/operations/upgrade-and-rollback/#enable-in-app-updates',
   );
   expect(
     within(document.getElementById('available-updates')!).getByText(status.installationUnavailableReason, {
@@ -707,7 +708,12 @@ it.each([false, true])(
 );
 
 it.each([
-  ['Bundled', 'Register this Compose installation to enable updates.', 'Setup required', 'Register the installation'],
+  [
+    'Bundled',
+    'Register this Compose installation to enable updates.',
+    'In-app updates not configured',
+    'Register the installation',
+  ],
   ['Bundled', 'This PostgreSQL major version requires a manual migration.', 'Update blocked', null],
   ['Unknown', 'Could not verify how PostgreSQL is deployed.', 'Status unavailable', 'Register the installation'],
 ])(
@@ -745,4 +751,23 @@ it('shows Back to top on the Updates page when the main container is scrolled', 
   fireEvent.scroll(container, { target: { scrollTop: 500 } });
   fireEvent.click(await screen.findByRole('button', { name: 'Back to top' }));
   expect(container.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+});
+
+it('offers one-time update setup even when Core has no newer release', async () => {
+  server.use(
+    http.get('http://localhost/api/v1/updates', () =>
+      HttpResponse.json({
+        ...status,
+        available: null,
+        databaseInstallation: 'Bundled',
+        databaseUpdateReason:
+          'In-app updates are not configured. This does not mean a PostgreSQL upgrade is available.',
+      }),
+    ),
+  );
+  renderCitadel(<UpdatesPage />, { route: '/updates/config' });
+  expect(await screen.findByText('In-app updates not configured')).toBeVisible();
+  expect(screen.getAllByRole('link', { name: 'Set up in-app updates' })).toHaveLength(2);
+  expect(screen.queryByText('Update available')).not.toBeInTheDocument();
+  expect(screen.queryByText('Setup required')).not.toBeInTheDocument();
 });

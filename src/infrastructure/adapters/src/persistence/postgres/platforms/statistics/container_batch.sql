@@ -1,6 +1,6 @@
 WITH incoming AS (
  SELECT r.*, item.ordinal FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY item(value, ordinal)
- CROSS JOIN LATERAL jsonb_to_record(item.value) r(platform_id uuid, node_id text, connector text, address text, agent_id uuid, connected_at timestamptz, "dockerContainerId" text, "memoryActive" double precision, "memoryCache" double precision, "cpuUsage" double precision, "memoryLimit" double precision, "rxBytes" double precision, "txBytes" double precision, "blockReadBytes" double precision, "blockWriteBytes" double precision, created bigint)
+ CROSS JOIN LATERAL jsonb_to_record(item.value) r(platform_id uuid, node_id text, connector text, address text, agent_id uuid, connected_at timestamptz, "dockerContainerId" text, "memoryActive" double precision, "memoryCache" double precision, "memoryActiveCache" double precision, "cpuUsage" double precision, "memoryLimit" double precision, "rxBytes" double precision, "txBytes" double precision, "blockReadBytes" double precision, "blockWriteBytes" double precision, created bigint)
 ), valid AS (
  SELECT i.*, true AS include_services, p.memtotal, p.cpucount, p.platformdescriptor::jsonb descriptor, p.connectortype
  FROM incoming i JOIN platforms p ON p.id=i.platform_id

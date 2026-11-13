@@ -113,3 +113,21 @@ describe('buildContainerRows', () => {
     expect((rows[0] as ContainerStackGroupResource).displayStatus).toBe(StackReleaseStatus.Degraded);
   });
 });
+
+it('sums stack memory breakdowns and preserves unavailable active cache', () => {
+  const first = {
+    ...container('one'),
+    lastStats: { memoryActive: 100, memoryActiveCache: 40, memoryCache: 20, memoryLimit: 1024 },
+  } as ContainerView;
+  const second = {
+    ...container('two'),
+    lastStats: { memoryActive: 200, memoryActiveCache: 60, memoryCache: 30, memoryLimit: 1024 },
+  } as ContainerView;
+  const summary = (items: ContainerView[]) =>
+    (buildContainerRows(items, { memoryTotal: 2048, cpuCount: 2 })[0] as ContainerStackGroupResource).lastStats;
+  expect(summary([first, second])).toMatchObject({ memoryActive: 300, memoryActiveCache: 100, memoryCache: 50 });
+  expect(
+    summary([first, { ...second, lastStats: { ...second.lastStats!, memoryActiveCache: null } }])?.memoryActiveCache,
+  ).toBeNull();
+  expect(summary([first, { ...second, lastStats: null }])?.memoryActiveCache).toBeNull();
+});

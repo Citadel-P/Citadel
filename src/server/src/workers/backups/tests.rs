@@ -117,6 +117,7 @@ async fn dispatcher_bounds_claims_and_drains_controllers_on_shutdown() {
         BackupService::new(
             store.clone(),
             Arc::new(DockerResticBackupExecutor::new(
+                citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
                 "must-not-run",
                 "unused",
                 Arc::new(NoSecrets),

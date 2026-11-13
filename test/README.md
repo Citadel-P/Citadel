@@ -1087,6 +1087,20 @@ Database gauges are sampled by maintenance; they are not admission authority.
 
 ### Script placement and credentials
 
+Filesystem-only cache and cleanup checks (no database or Docker daemon):
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test script_sandbox --test workspaces
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::backups::restic::process::tests
+CITADEL_DENO_PATH=/absolute/path/to/deno SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test script_sandbox -- --ignored
+```
+
+These verify per-run Deno cache cleanup after repeated/concurrent execution,
+failure, timeout, cancellation and abandoned futures; split-token/UTF-8 log
+redaction; and tracked backup subprocess-cache cleanup through shutdown. Core
+and Agents use the same script sandbox. The real Deno test uses temporary inputs
+and does not contact an external API.
+
 Use a disposable `CITADEL_EXECUTION_DATABASE_URL` for the adapter test
 `remote_attempts_fence_tokens_deferral_shared_capacity_and_recovery` and the Server
 `script_http_execution` integration target. The latter also needs
@@ -1560,3 +1574,43 @@ container with `--ignored` and serial execution for the statistics/admission gro
 Frontend lint, `tsc -b --pretty false`, Rust formatting and `git diff --check` also
 passed. The new Stack sequence failed with Running instead of Exited before the
 fix and passed afterward. The disposable database was removed after verification.
+
+### Container memory breakdown and latest statistics
+
+The `stats_batch_persistence` suite includes `memory_breakdown` coverage for
+active-cache capture, corrected samples, rollups and unknown history. Its
+`latest_container_stats_do_not_scan_other_sources_when_redeploy_has_no_samples`
+test bounds database buffers with 80,000 unrelated samples, under custom and
+generic plans. Use a disposable `CITADEL_STATISTICS_DATABASE_URL` as above.
+The database `migrations` suite includes a five-migration upgrade fixture that
+checks original sample values and applied checksums after adding the nullable
+active-cache column. Use a disposable `CITADEL_TEST_DATABASE_URL`.
+
+Frontend `memory-usage.test.tsx`, `stack-stats.test.tsx` and
+`stats-buckets.test.ts` cover the default Breakdown view, persisted switch,
+missing measurements and complete replica/bucket coverage. Docker mapping tests
+cover cgroup v1/v2 and shared-memory separation.
+
+### In-app update setup
+
+`python3 -m unittest discover -s test/release -p test_update_setup.py` exercises
+`deploy/install/enable-updates.py` with disposable private files and a simulated
+Docker daemon. It checks ordered overlays, immutable helper images, rootless
+executor identity, preflight-before-activation, Core-only recreation, idempotent
+verification, secret-safe failures and preservation after drift/restart/refresh
+failures. Existing adapter bootstrap tests own registration, database identity,
+mount and recovery-state validation. Updates frontend tests cover setup messaging
+even when Core has no available release and retain distinct external, unknown
+and blocked PostgreSQL states.
+
+Run the actual activation command against base and Edge Compose fixtures with:
+
+```bash
+python3 test/scripts/test-update-registration.py <local-core-image-tag> --enable-updates
+```
+
+This creates an isolated disposable Docker daemon, installs Python inside that
+fixture before disconnecting its network, runs normal first-run setup and the
+shipped activation command, then verifies unchanged PostgreSQL identity/start
+time, unchanged Core image and recovery keys, valid refreshed registration and
+no restart on a repeated activation. All fixture containers/volumes are removed.

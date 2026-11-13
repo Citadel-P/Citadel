@@ -5,4 +5,5 @@ const MIGRATIONS: &[EmbeddedMigration] = &[
     EmbeddedMigration { id: "0003", name: "platform_io", file: "0003_platform_io.sql", sql: include_str!("0003_platform_io.sql"), transactional: true },
     EmbeddedMigration { id: "0004", name: "query_indexes", file: "0004_query_indexes.sql", sql: include_str!("0004_query_indexes.sql"), transactional: true },
     EmbeddedMigration { id: "0005", name: "health_history_retention", file: "0005_health_history_retention.sql", sql: include_str!("0005_health_history_retention.sql"), transactional: true },
+    EmbeddedMigration { id: "0006", name: "memory_breakdown", file: "0006_memory_breakdown.sql", sql: include_str!("0006_memory_breakdown.sql"), transactional: true },
 ];

@@ -116,23 +116,45 @@ required-match counts require **Advanced Alerting**.
 
 ## Container memory
 
-The Containers table's **Memory** column shows Docker's working-set usage,
-followed by the memory limit. Container and Stack Stats show that same **Usage**
-value and the excluded inactive file **Cache** separately:
+The Containers table's **Memory** column and memory alerts use Docker's working
+set, followed by the memory limit. Container, Stack, Deployment and Swarm Service
+memory charts offer two views. **Breakdown** is the default; the same browser
+remembers your choice across these pages.
+
+- **Breakdown** stacks **Non-cache memory**, **Active file cache**, and
+  **Inactive file cache**. Non-cache memory includes anonymous allocations, shared
+  memory and kernel charges; it is not process RSS or heap size.
+- **Working set** shows one series matching Docker's calculation. Changing the
+  chart view does not change alert thresholds or table values.
 
 ```text
-Usage = raw container memory − inactive file cache
-Cache = inactive file cache
+Working set = raw container memory − inactive file cache
+Non-cache memory = working set − active file cache
+Total charged = non-cache memory + active file cache + inactive file cache
 ```
 
-This follows [Docker's memory calculation](https://docs.docker.com/reference/cli/docker/container/stats/):
-`total_inactive_file` on cgroup v1 and `inactive_file` on cgroup v2. Active file
-cache stays in Usage. Missing or inconsistent inactive-cache counters are not
-subtracted. Windows containers use the private working set when Linux usage is
-absent. Sampling times can cause small differences from Docker's live display.
+Active file cache can remain after a deployment or script finishes. It is
+potentially reclaimable filesystem memory, not necessarily an application leak.
+The breakdown tooltip also shows working set and total charged memory.
 
-Existing history retains its original readings; only new samples use this
-calculation after Core and Agents are updated. No historical data is rewritten.
+The working set follows [Docker's memory calculation](https://docs.docker.com/reference/cli/docker/container/stats/):
+`total_inactive_file` on cgroup v1 and `inactive_file` on cgroup v2. The active
+cache measurement uses the corresponding `total_active_file` or `active_file`
+counter. Shared memory and tmpfs are not subtracted as filesystem cache.
+Missing or inconsistent counters do not produce a fabricated breakdown. Windows
+containers can report a working set without a Linux cache breakdown.
+
+Earlier samples keep their working-set and inactive-cache readings. They have no
+active-cache measurement, so Breakdown leaves gaps and offers Working set to
+view them. Buckets or service totals with incomplete breakdown coverage also
+remain unavailable. No historical data is rewritten.
+
+The containers table keeps **working set / memory limit** as its Memory value.
+Hover, focus, or click the value to open a breakdown card showing memory excluding
+file cache, active file cache, and inactive file cache. Click pins the card;
+Escape dismisses it. Missing breakdown readings appear as unavailable, including
+stack summaries when a member lacks the required reading. Expanded stack children
+use a subtle background tint and indentation to distinguish them from other rows.
 
 ## Disk Usage
 

@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/pagination';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { byteTransform } from '@/lib/bytes.helper';
 import { useMeasuredWidth, useRead } from '@/lib/hooks';
 import { truncate } from '@/lib/truncate';
 import { cn, filterBySplit, formatId, normalizeDockerId, toFixedNumber } from '@/lib/utils';
@@ -825,26 +824,7 @@ export const UpdateAvailableNotice = ({
   );
 };
 
-export const MemoryUsageCell = ({
-  state,
-  stats,
-  className,
-}: {
-  state: ContainerStateStatus;
-  stats?: Partial<ContainerStatView> | null;
-  className?: string;
-}) => {
-  if (state !== ContainerStateStatus.Running) {
-    return <div className={cn('text-muted-foreground', className)}>0B / 0B</div>;
-  }
-  return (
-    <span
-      className={cn('text-[13px]', className)}
-      title="Memory working set excluding inactive file cache / memory limit">
-      {byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}
-    </span>
-  );
-};
+export { MemoryUsageCell } from './memory-usage-cell';
 
 export const CPUCell = ({
   state,

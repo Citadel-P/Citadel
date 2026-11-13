@@ -292,7 +292,9 @@ use citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapte
             citadel_docker::client::DockerClient::new(if use_agent { "/no-core-docker-allowed.sock" } else { "/var/run/docker.sock" }, Duration::from_secs(30)).unwrap(),
             agent.clone(), edge_registry.clone(),
         ));
-        let executor = DockerResticBackupExecutor::new(if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
+        let executor = DockerResticBackupExecutor::new(
+citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+if use_agent {"/no-core-docker-allowed"} else {"docker"}, helper_image, Arc::new(Password), 256 * 1024, pool.clone()).with_agent(agent).with_edge(edge_registry.clone());
         let cancellation = CancellationToken::new();
         if use_agent && s3_endpoint.is_none() {
             let error = repository_operation(&store, &executor, &repository, "Initialize", "Platform", Some(Uuid::now_v7()), &cancellation).await.unwrap_err();

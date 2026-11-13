@@ -595,6 +595,7 @@ async fn verify_node_projection_isolation(
         docker_container_id: "shared-docker-id".into(),
         memory_active: 100.,
         memory_cache: 0.,
+        memory_active_cache: None,
         memory_limit: 1000.,
         cpu_usage: 1.,
         rx_bytes: 2.,

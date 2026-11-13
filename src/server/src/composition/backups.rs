@@ -43,6 +43,7 @@ pub(super) fn build(
             ),
             Arc::new(
                 DockerResticBackupExecutor::new(
+                    runtime.dynamic_tasks.clone(),
                     config.execution.tools.docker.clone(),
                     config.execution.restic_image.clone(),
                     Arc::new(PostgresBackupSecretResolver::new(

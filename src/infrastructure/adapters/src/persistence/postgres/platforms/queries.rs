@@ -110,7 +110,7 @@ SELECT container.id, container.health, container.platformid, container.dockercon
        image.updatedat AS image_updatedat, image.registryid AS image_registryid,
        deployment.name AS deployment_name, deployment.status AS deployment_status,
        stat.containerid AS stat_containerid, stat.memoryactive AS stat_memoryactive,
-       stat.memorycache AS stat_memorycache, stat.cpuusage AS stat_cpuusage,
+       stat.memoryactivecache AS stat_memoryactivecache, stat.memorycache AS stat_memorycache, stat.cpuusage AS stat_cpuusage,
        stat.memorylimit AS stat_memorylimit, stat.rxbytes AS stat_rxbytes,
        stat.txbytes AS stat_txbytes, stat.blockreadbytes AS stat_blockreadbytes,
        stat.blockwritebytes AS stat_blockwritebytes, stat.created AS stat_created
@@ -120,7 +120,30 @@ LEFT JOIN deployments deployment ON deployment.id=container.deploymentid AND dep
 LEFT JOIN swarmnodeprojections node
   ON node.platformid = container.platformid AND node.dockernodeid = container.dockernodeid
 LEFT JOIN LATERAL (
-    SELECT * FROM containerstats WHERE containerid = container.id ORDER BY created DESC LIMIT 1
+    SELECT src.containerid, latest.*
+    FROM statisticssources src
+    CROSS JOIN LATERAL (
+        -- Seek the last key at or before this source, then require an exact
+        -- source match. Keeping that check outside LIMIT prevents a timestamp
+        -- index scan across unrelated history when this source has no samples.
+        -- Both branches use the existing (sourceid,created) primary key.
+        (SELECT * FROM (
+            SELECT sourceid,created,cpuusage,memoryactive,memoryactivecache,memorycache,memorylimit,
+                   rxbytes,txbytes,blockreadbytes,blockwritebytes
+            FROM statisticssamples WHERE sourceid<=src.id
+            ORDER BY sourceid DESC,created DESC LIMIT 1
+        ) candidate WHERE candidate.sourceid=src.id)
+        UNION ALL
+        (SELECT * FROM (
+            SELECT sourceid,created,cpuusage,memoryactive,memoryactivecache,memorycache,memorylimit,
+                   rxbytes,txbytes,blockreadbytes,blockwritebytes
+            FROM statisticsrollups WHERE sourceid<=src.id
+            ORDER BY sourceid DESC,created DESC LIMIT 1
+        ) candidate WHERE candidate.sourceid=src.id)
+        ORDER BY created DESC LIMIT 1
+    ) latest
+    WHERE src.containerid=container.id
+    OFFSET 0
 ) stat ON TRUE
 "#;
 

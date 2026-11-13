@@ -85,7 +85,7 @@ async fn script_scripts_are_private_and_cleanup_covers_abandonment() {
     let root = Root::new();
     let run = root.0.join("run");
     let workspace = LocalScriptWorkspace::new(tasks.clone())
-        .prepare(&run, None, "short-lived credential")
+        .prepare(&run, "short-lived credential")
         .await
         .unwrap();
     assert_eq!(
@@ -110,7 +110,7 @@ async fn script_scripts_are_private_and_cleanup_covers_abandonment() {
     }
     assert!(
         LocalScriptWorkspace::new(tasks.clone())
-            .prepare(&run, None, "replacement")
+            .prepare(&run, "replacement")
             .await
             .is_err()
     );
@@ -130,7 +130,7 @@ async fn script_does_not_follow_an_existing_workspace_symlink() {
     std::os::unix::fs::symlink(&external, &run).unwrap();
     assert!(
         LocalScriptWorkspace::new(tasks.clone())
-            .prepare(&run, None, "secret")
+            .prepare(&run, "secret")
             .await
             .is_err()
     );

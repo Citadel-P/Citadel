@@ -40,6 +40,11 @@ See [update checks and privacy](/getting-started/configuration#allow-update-chec
 Select **Create administrator**. Citadel creates the account with the built-in
 Admin role and signs you in. Setup cannot be opened again after it succeeds.
 
+After creating the account, [enable in-app updates](/operations/upgrade-and-rollback#enable-in-app-updates)
+on the Docker host to finish setting up the supported Compose installation.
+This verifies installation ownership and briefly restarts Core; creating an account
+or enabling release checks alone does not grant the updater installation access.
+
 The password should be unique to Citadel and stored in a password manager.
 After setup, use [Profile](/guides/profile-and-sessions) for personal settings,
 password changes, and active browser sessions.

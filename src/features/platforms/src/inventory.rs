@@ -288,6 +288,8 @@ pub struct RuntimeContainerStat {
     pub memory_active: f64,
     /// Excluded inactive file cache, in bytes; does not overlap with `memory_active`.
     pub memory_cache: f64,
+    /// Active filesystem cache within the working set; absent when not measured.
+    pub memory_active_cache: Option<f64>,
     pub cpu_usage: f64,
     pub memory_limit: f64,
     pub rx_bytes: f64,

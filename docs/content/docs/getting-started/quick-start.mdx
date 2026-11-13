@@ -15,11 +15,17 @@ editor. Check with `docker --version`, `docker compose version`, and
 
 Download the installation files into a new directory:
 
+The commands below target native Linux with rootful Docker. Open a root shell
+with `sudo -i` first so the installation directory and files have the ownership
+required by the updater. For rootless Docker, use the daemon user's own directory
+and the supported socket/data mounts; do not run these commands with `sudo`.
+See [update setup requirements](/operations/upgrade-and-rollback#enable-in-app-updates).
+
 <InstallationStep name="download">
 
 ```bash
-mkdir -p citadel
-cd citadel
+mkdir -p /opt/citadel
+cd /opt/citadel
 curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/docker-compose.yml -o docker-compose.yml
 curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
 chmod 600 .env
@@ -67,6 +73,21 @@ characters, then select **Create administrator**.
 There is no default username or password. If you see the sign-in page instead,
 this installation already has an administrator. Ask that administrator for your
 account details before continuing.
+
+## Enable in-app updates
+
+After first-run setup, return to the root shell on the Docker host:
+
+```bash
+cd /opt/citadel
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/enable-updates.py -o enable-updates.py
+python3 enable-updates.py --directory /opt/citadel --project citadel
+```
+
+This requires Python **3.10 or newer** and briefly restarts only Core after
+verifying registration. It enables the existing updater without installing any
+updates. For custom paths, overlays, rootless Docker or a failed setup, follow
+[the update setup guide](/operations/upgrade-and-rollback#enable-in-app-updates).
 
 ## 3. Connect Docker
 

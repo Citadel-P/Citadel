@@ -143,6 +143,7 @@ mod tests {
                     docker_container_id: container_id.into(),
                     memory_active: 0.0,
                     memory_cache: 0.0,
+                    memory_active_cache: None,
                     cpu_usage: 0.0,
                     memory_limit: 0.0,
                     rx_bytes: 0.0,
