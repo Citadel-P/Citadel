@@ -581,3 +581,60 @@ fn core_volume_override_is_validated_without_allowing_other_yaml_extensions() {
         assert!(super::profile::validate_input(input.as_bytes()).is_err());
     }
 }
+
+#[test]
+fn accepts_bounded_deployment_limits_and_default_ipam_only() {
+    super::profile::validate_input(br#"
+services:
+  server: {cpus: '${CITADEL_CORE_CPUS:-2.0}', mem_limit: '${CITADEL_CORE_MEMORY_LIMIT:-0}', memswap_limit: '${CITADEL_CORE_MEMORY_LIMIT:-0}'}
+networks:
+  default:
+    ipam:
+      config: [{subnet: 172.30.231.0/24, gateway: 172.30.231.1}]
+"#).unwrap();
+    for invalid in [
+        "services: {}\nnetworks: {default: {ipam: {driver: custom, config: []}}}",
+        "services: {}\nnetworks: {default: {ipam: {config: [{subnet: 172.30.231.0/24, gateway: 172.30.231.1, ip_range: 172.30.231.0/25}]}}}",
+        "services: {server: {cpu_quota: 1000}}",
+    ] {
+        assert!(super::profile::validate_input(invalid.as_bytes()).is_err());
+    }
+}
+
+#[test]
+fn automatic_state_bind_is_stable_across_snapshots_and_rejects_other_directories() {
+    let mut config = resolved();
+    config["services"]["server"]["environment"]["CITADEL_UPDATE_STATE_DIRECTORY"] =
+        json!(super::super::AUTOMATIC_STATE_MOUNT);
+    config["services"]["server"]["volumes"].as_array_mut().unwrap().push(json!({
+        "type":"bind", "source":"/snapshot/.citadel-updates", "target":super::super::AUTOMATIC_STATE_MOUNT, "read_only":true
+    }));
+    super::resolution::normalize_automatic_mount(
+        &mut config,
+        std::path::Path::new("/snapshot"),
+        std::path::Path::new("/opt/citadel"),
+    )
+    .unwrap();
+    let source = config.clone();
+    super::resolution::normalize_automatic_mount(
+        &mut config,
+        std::path::Path::new("/another-snapshot"),
+        std::path::Path::new("/opt/citadel"),
+    )
+    .unwrap();
+    assert_eq!(source, config);
+    super::profile::validate_resolved(&config).unwrap();
+    config["services"]["server"]["volumes"]
+        .as_array_mut()
+        .unwrap()
+        .last_mut()
+        .unwrap()["source"] = json!("/different/.citadel-updates");
+    assert!(
+        super::resolution::normalize_automatic_mount(
+            &mut config,
+            std::path::Path::new("/snapshot"),
+            std::path::Path::new("/opt/citadel")
+        )
+        .is_err()
+    );
+}

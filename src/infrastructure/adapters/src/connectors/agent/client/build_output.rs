@@ -181,6 +181,75 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn terminal_error_drains_redacted_output_through_an_async_sink() {
+        use citadel_builds::{BuildError, BuildLog, BuildLogSink};
+        use citadel_docker::builds::{output, runtime::BuildRuntimeError};
+        use std::sync::Mutex;
+        #[derive(Default)]
+        struct Sink(Mutex<Vec<BuildLog>>);
+        impl BuildLogSink for Sink {
+            fn append<'a>(
+                &'a self,
+                _: &'a str,
+                _: &'a str,
+            ) -> futures_util::future::BoxFuture<'a, Result<(), BuildError>> {
+                Box::pin(async { panic!("expected batch append") })
+            }
+            fn append_batch<'a>(
+                &'a self,
+                logs: &'a [BuildLog],
+            ) -> futures_util::future::BoxFuture<'a, Result<(), BuildError>> {
+                Box::pin(async move {
+                    tokio::task::yield_now().await;
+                    self.0.lock().unwrap().extend_from_slice(logs);
+                    Ok(())
+                })
+            }
+        }
+        let sink = Sink::default();
+        let cancellation = CancellationToken::new();
+        let (sender, receiver) = mpsc::channel(8);
+        // Split the secret across frames and é across the transport's 8192-byte chunks.
+        let tail = format!("-value {}é final diagnostic\n", "x".repeat(8184));
+        let frames = [
+            ImageBuildResponse {
+                stream: Some("compiler secret".into()),
+                ..Default::default()
+            },
+            ImageBuildResponse {
+                stream: Some(tail.clone()),
+                ..Default::default()
+            },
+            ImageBuildResponse {
+                error_message: Some("terminal build failure".into()),
+                ..Default::default()
+            },
+        ];
+        let execution = async {
+            let result = consume_image_build_stream(
+                futures_util::stream::iter(frames.into_iter().map(Ok)),
+                64 * 1024,
+                Some(&sender),
+                &cancellation,
+            )
+            .await;
+            drop(sender);
+            result.map_err(|error| BuildRuntimeError::Command(error.to_string()))
+        };
+        let result =
+            output::capture(execution, receiver, &sink, &["secret-value"], &cancellation).await;
+        assert!(
+            matches!(result, Err(BuildRuntimeError::Command(message)) if message.contains("terminal build failure"))
+        );
+        let logs = sink.0.lock().unwrap();
+        let text: String = logs.iter().map(|log| log.message.as_str()).collect();
+        assert_eq!(
+            text,
+            format!("compiler secret{tail}").replace("secret-value", "[redacted]")
+        );
+    }
+
+    #[tokio::test]
     async fn only_a_complete_pre_start_busy_response_is_replayable() {
         let busy = ImageBuildResponse {
             admission: BuildAdmissionResult::BuildAdmissionCapacityBusyNotStarted as i32,

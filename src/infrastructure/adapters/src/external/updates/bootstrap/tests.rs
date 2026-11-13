@@ -599,3 +599,18 @@ async fn rootless_registration_and_preflight_bind_host_socket_and_storage() {
     fixture.runner.core["Mounts"][2]["Source"] = json!("/other/docker");
     assert!(fixture.check().await.is_err());
 }
+
+#[tokio::test]
+async fn registration_checks_live_resource_limits() {
+    let mut fixture = Fixture::new();
+    fixture.runner.config["services"]["server"]["cpus"] = json!(0.75);
+    fixture.runner.config["services"]["server"]["mem_limit"] = json!(268435456);
+    fixture.runner.config["services"]["server"]["memswap_limit"] = json!(268435456);
+    fixture.runner.core["HostConfig"]["NanoCpus"] = json!(750000000);
+    fixture.runner.core["HostConfig"]["Memory"] = json!(268435456);
+    fixture.runner.core["HostConfig"]["MemorySwap"] = json!(268435456);
+    fixture.register().await.unwrap();
+    fixture.check().await.unwrap();
+    fixture.runner.core["HostConfig"]["Memory"] = json!(536870912);
+    assert!(fixture.check().await.is_err());
+}

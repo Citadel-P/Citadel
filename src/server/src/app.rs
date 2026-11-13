@@ -17,10 +17,18 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
     let mut job_lease = startup::acquire_job_lease(&config)
         .await
         .map_err(|error| startup::phase_error("background-job admission", error))?;
+    #[cfg(target_os = "linux")]
+    let mut automatic_setup = None;
     let mut recovered_update = false;
-    if let Err(error) = startup::while_owned(&mut job_lease, startup::check_updates(&config))
-        .await
-        .map_err(|error| startup::phase_error("update admission lease", error))?
+    if let Err(error) = startup::while_owned(&mut job_lease, async {
+        #[cfg(target_os = "linux")]
+        {
+            automatic_setup = crate::composition::updates::prepare(&mut config).await?;
+        }
+        startup::check_updates(&config).await
+    })
+    .await
+    .map_err(|error| startup::phase_error("update admission lease", error))?
     {
         #[cfg(not(target_os = "linux"))]
         let (recovered, acceptance_failure) = (false, None::<String>);
@@ -57,6 +65,13 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
             .await
             .map_err(|error| startup::phase_error("recovered update admission lease", error))?
             .map_err(|error| startup::phase_error("recovered update admission", error))?;
+        config
+            .update_registration_ready
+            .store(true, std::sync::atomic::Ordering::Release);
+        #[cfg(target_os = "linux")]
+        {
+            automatic_setup = None;
+        }
         recovered_update = true;
     }
     startup::configure(&mut config, &mut job_lease).await?;
@@ -79,6 +94,21 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
         background::spawn_all(&state, background_services, &config),
     )
     .await??;
+    #[cfg(target_os = "linux")]
+    if let Some(setup) = automatic_setup {
+        supervisor.spawn(
+            "automatic-update-setup",
+            citadel_server::workers::updates::run_automatic_setup(
+                crate::composition::updates::registration(
+                    setup,
+                    config.update_registration_ready.clone(),
+                ),
+                state.identity.clone(),
+                state.realtime_hub.clone(),
+                cancellation.child_token(),
+            ),
+        );
+    }
     // The watcher owns the connection by value. Return it on cancellation so
     // the advisory lease remains held through worker/dynamic-task cleanup.
     let (lease_return, lease_retained) = tokio::sync::oneshot::channel();

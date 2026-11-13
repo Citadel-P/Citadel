@@ -213,6 +213,15 @@ class DemoTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name)
         (self.directory / ".env").write_text("PG_PASSWORD=private\n")
+        (self.directory / ".env").chmod(0o600)
+        self.setup = remote.load_update_setup((ROOT / 'deploy/install/enable-updates.py').read_text())
+        self.setup.enable = unittest.mock.Mock()
+        loader = patch.object(remote, 'load_update_setup', return_value=self.setup)
+        loader.start()
+        self.addCleanup(loader.stop)
+        inspection = patch.object(remote.subprocess, 'check_output', return_value='')
+        inspection.start()
+        self.addCleanup(inspection.stop)
         self.payload = dict(channel="dev", version="1.2.3-dev.10", core="ghcr.io/citadel-p/citadel@sha256:" + "a" * 64,
                             agent="ghcr.io/citadel-p/citadel.agent@sha256:" + "b" * 64, compose="services: {}\n")
 
@@ -223,6 +232,7 @@ class DemoTests(unittest.TestCase):
                     DockerRootDir="/home/citadel-preview/.local/share/docker")
         with patch.object(remote.os, "geteuid", return_value=1101), \
              patch.object(remote.pwd, "getpwuid") as account, \
+             patch.object(self.setup, "private_path", side_effect=lambda path, **kwargs: path), \
              patch.object(remote.subprocess, "check_output", return_value=json.dumps(info)) as inspect, \
              patch.object(remote.subprocess, "run") as run:
             account.return_value.pw_name = "citadel-preview"
@@ -230,7 +240,7 @@ class DemoTests(unittest.TestCase):
             self.assertEqual(inspect.call_args.args[0][:3], ["docker", "--host", "unix:///run/user/1101/docker.sock"])
             for call in run.call_args_list:
                 self.assertEqual(call.args[0][:4], ["docker", "--host", "unix:///run/user/1101/docker.sock", "compose"])
-            self.assertEqual((self.directory / ".env").read_text(), "PG_PASSWORD=private\n")
+            self.assertIn("PG_PASSWORD=private\n", (self.directory / ".env").read_text())
             for changes in [dict(ID="different-engine"), dict(SecurityOptions=[]), dict(DockerRootDir="/var/lib/docker")]:
                 run.reset_mock()
                 inspect.return_value = json.dumps(dict(info, **changes))
@@ -269,16 +279,45 @@ class DemoTests(unittest.TestCase):
             self.assertEqual(remote.deploy(self.directory, self.payload)["status"], "deployed")
             command = run.call_args.args[0]
             self.assertIn("--wait", command)
-            self.assertEqual(command[2:6], ["--env-file", ".env", "--env-file", ".release.env"])
+            self.assertEqual(command[4:6], ["--env-file", ".env"])
+            self.assertNotIn(".release.env", command)
             self.assertIn(self.payload["agent"], (self.directory / ".release.env").read_text())
-            self.assertEqual(run.call_args.kwargs["env"]["CITADEL_IMAGE"], self.payload["core"])
-            self.assertEqual((self.directory / ".env").read_text(), "PG_PASSWORD=private\n")
+            self.assertNotIn("CITADEL_IMAGE", run.call_args.kwargs["env"])
+            self.assertIn("CITADEL_IMAGE=" + self.payload["core"], (self.directory / ".env").read_text())
+            self.setup.enable.assert_called_once()
+            self.assertIn("PG_PASSWORD=private\n", (self.directory / ".env").read_text())
             run.reset_mock()
             older = dict(self.payload, version="1.2.3-dev.2")
             self.assertEqual(remote.deploy(self.directory, older)["status"], "skipped-older-release")
             run.assert_not_called()
             with self.assertRaisesRegex(ValueError, "different image"):
                 remote.deploy(self.directory, dict(self.payload, core=self.payload["core"].replace("a" * 64, "f" * 64)))
+
+    def test_deployment_setup_failure_does_not_record_success(self):
+        self.setup.enable.side_effect = self.setup.SetupError('fixture setup failure')
+        with patch.object(remote.subprocess, 'run'), self.assertRaisesRegex(ValueError, 'setup failure'):
+            remote.deploy(self.directory, self.payload)
+        self.assertTrue((self.directory / 'deployment-attempt.json').exists())
+        self.assertFalse((self.directory / 'deployment.json').exists())
+
+    def test_registered_deployment_runs_inside_verified_replacement(self):
+        with (self.directory / '.env').open('a') as output:
+            output.write('CITADEL_UPDATE_STATE_DIRECTORY=/private/state\n')
+        self.setup.enable.side_effect = lambda args, replace: replace()
+        with patch.object(remote.subprocess, 'run'):
+            remote.deploy(self.directory, self.payload)
+        self.assertIsNotNone(self.setup.enable.call_args.kwargs['replace'])
+        self.assertIn('CITADEL_UPDATE_STATE_DIRECTORY=/private/state', (self.directory / '.env').read_text())
+
+    def test_existing_postgres_image_is_preserved_and_only_core_is_replaced(self):
+        (self.directory / 'docker-compose.yml').write_text('existing')
+        digest = 'postgres@sha256:' + 'c' * 64
+        with patch.object(remote.subprocess, 'check_output', side_effect=['db-existing', digest]), patch.object(remote.subprocess, 'run') as run:
+            remote.deploy(self.directory, self.payload)
+        command = run.call_args.args[0]
+        self.assertIn('--no-deps', command)
+        self.assertEqual(command[-1], 'server')
+        self.assertIn('PG_IMAGE=' + digest, (self.directory / '.env').read_text())
 
     def test_failed_upgrade_blocks_older_deploy_but_allows_same_version_retry(self):
         def fail_up(args, **kwargs):
@@ -397,7 +436,7 @@ class DemoTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 remote.deploy(self.directory, self.payload)
         self.assertFalse((self.directory / "deployment-attempt.json").exists())
-        self.assertEqual((self.directory / ".env").read_text(), "PG_PASSWORD=private\n")
+        self.assertIn("PG_PASSWORD=private\n", (self.directory / ".env").read_text())
 
     def test_lock_wait_is_bounded(self):
         with patch.object(remote.fcntl, "flock", side_effect=BlockingIOError), \

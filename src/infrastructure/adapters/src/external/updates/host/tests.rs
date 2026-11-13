@@ -28,8 +28,22 @@ async fn database_status_reads_version_without_host_commands_or_installation_loc
         .connect_lazy("postgres://unused@localhost/unused")
         .unwrap();
     pool.close().await;
-    let runtime = DockerUpdateInstallation::new(runner.clone(), path, "0.1.1".into(), pool);
+    let registered = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let runtime = DockerUpdateInstallation::new(runner.clone(), path, "0.1.1".into(), pool)
+        .with_registration(registered.clone());
     let cancellation = CancellationToken::new();
+    assert!(!runtime.registered());
+    assert!(matches!(
+        runtime.database_update(&cancellation).await,
+        Err(UpdateError::Unavailable(_))
+    ));
+    assert!(matches!(
+        runtime.source(&cancellation).await,
+        Err(UpdateError::Conflict(_))
+    ));
+    assert!(runner.calls.lock().unwrap().is_empty());
+    registered.store(true, std::sync::atomic::Ordering::Release);
+    assert!(runtime.registered());
     assert!(matches!(
         runtime.database_update(&cancellation).await,
         Err(UpdateError::Storage(_))

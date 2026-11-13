@@ -49,8 +49,8 @@ const MemoryUsage = ({
 }) => {
   const bounds = useStatsChartBounds();
   const id = useId().replaceAll(':', '');
-  const [storedMode, setMode] = useLocalStorage<'breakdown' | 'working-set'>('stats-memory-view', 'breakdown');
-  const breakdown = storedMode !== 'working-set';
+  const [storedMode, setMode] = useLocalStorage<'breakdown' | 'working-set'>('stats-memory-view', 'working-set');
+  const breakdown = storedMode === 'breakdown';
   const mode = breakdown ? 'breakdown' : 'working-set';
   const config = breakdown ? breakdownConfig : workingSetConfig;
   const data = useMemo(() => stats.map(memoryBreakdown), [stats]);

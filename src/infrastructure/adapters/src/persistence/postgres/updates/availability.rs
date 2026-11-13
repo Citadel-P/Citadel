@@ -24,7 +24,7 @@ pub(super) async fn core(
         (
             true,
             json!({"TargetVersion": version, "InstalledVersion": installed,
-            "HumanMessage": format!("Citadel Core {version} is verified and eligible for this instance.")}),
+            "HumanMessage": format!("Citadel Core {version} is available. This instance is running {installed}. Review the release in Updates.")}),
         )
     } else {
         let Some(previous) = previous.as_ref() else {

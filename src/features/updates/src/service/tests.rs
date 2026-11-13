@@ -303,55 +303,41 @@ async fn restored_notices_are_filtered_by_installed_version_and_channel() {
 }
 
 #[tokio::test]
-async fn core_availability_requires_successful_check_and_transition_qualification() {
+async fn core_availability_follows_successful_discovery_without_an_installer() {
     let (service, store, source, _) = fixture();
     let token = CancellationToken::new();
-    service.check_now(POLICY, &token).await.unwrap();
-    assert!(
-        store
-            .availability
-            .lock()
-            .unwrap()
-            .iter()
-            .all(Option::is_none)
-    );
-    let mut installer = super::installation::tests::Fixture::new();
-    installer.plan.source.version = "1.0.0".into();
-    installer.plan.target.version = "1.1.0".into();
-    let (installation, _receiver) = installer.service();
-    let service = service.with_installer(Some(installation));
     service.check_now(POLICY, &token).await.unwrap();
     assert_eq!(
         store.availability.lock().unwrap().last(),
         Some(&Some("1.1.0".into()))
     );
-    assert_eq!(
-        installer.state.lock().unwrap().events,
-        ["source", "verify", "inspect"]
-    );
-    assert!(installer.state.lock().unwrap().operation.is_none());
     store.availability.lock().unwrap().clear();
     source.fail.store(true, Ordering::SeqCst);
     service.check_now(POLICY, &token).await.unwrap();
-    assert!(
-        store
-            .availability
-            .lock()
-            .unwrap()
-            .iter()
-            .all(Option::is_none)
-    );
-    source.fail.store(false, Ordering::SeqCst);
-    installer.state.lock().unwrap().agent_drift = true;
-    service.check_now(POLICY, &token).await.unwrap();
-    assert!(
-        store
-            .availability
-            .lock()
-            .unwrap()
-            .iter()
-            .all(Option::is_none)
-    );
+    assert_eq!(*store.availability.lock().unwrap(), vec![None]);
+    assert_eq!(service.available().unwrap().version, "1.1.0");
+}
+
+#[tokio::test]
+async fn core_availability_respects_release_channel_and_installed_version() {
+    for (installed, expected) in [
+        ("1.0.0", Some("1.1.0")),
+        ("1.1.0", None),
+        ("1.2.0", None),
+        ("1.1.0-dev.1", Some("1.1.0-dev.2")),
+        ("1.1.0-dev.2", None),
+    ] {
+        let store = Arc::new(Store::default());
+        let service =
+            ReleaseCheckService::new(installed.into(), Arc::new(Source::default()), store.clone());
+        service
+            .check_now(POLICY, &CancellationToken::new())
+            .await
+            .unwrap();
+        let observations = store.availability.lock().unwrap();
+        let versions: Vec<_> = observations.iter().filter_map(Option::as_deref).collect();
+        assert_eq!(versions, expected.into_iter().collect::<Vec<_>>());
+    }
 }
 
 #[tokio::test]

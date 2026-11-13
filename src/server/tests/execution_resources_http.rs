@@ -1,5 +1,7 @@
 #[path = "execution_resources_http/system_backup_authorization.rs"]
 mod system_backup_authorization;
+#[path = "execution_resources_http/update_alerts.rs"]
+mod update_alerts;
 use axum::{
     Router,
     body::{Body, to_bytes},

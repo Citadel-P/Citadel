@@ -26,6 +26,11 @@ pub trait UpdateHandoffRuntime: Send + Sync {
 }
 
 pub trait UpdateInstallationRuntime: Send + Sync {
+    /// Cheap in-process readiness; status reads never launch registration helpers.
+    fn registered(&self) -> bool {
+        true
+    }
+
     /// Advisory engine availability for status reads. Must not acquire update
     /// ownership or run installation preflight; review/approval call source().
     fn database_update<'a>(
@@ -147,4 +152,13 @@ pub trait DatabaseInstallationRuntime: Send + Sync {
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, crate::DatabaseInstallation>;
+}
+
+/// Complete supported first-install registration without replacing services or
+/// approving an update. Implementations publish readiness only after durability.
+pub trait UpdateRegistrationRuntime: Send + Sync {
+    fn register<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
 }

@@ -7,6 +7,8 @@ use citadel_execution::{
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+const OUTPUT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 pub async fn run(
     request: ProcessRequest,
     cancellation: &CancellationToken,
@@ -89,11 +91,29 @@ pub async fn capture<T>(
         flush(progress, &mut batch).await?;
         Ok::<_, BuildFailure>(())
     };
+    let producer_failed = CancellationToken::new();
     let consume = async {
+        // Keep the same append future alive across producer termination. Dropping
+        // and replaying it could duplicate a batch whose commit was acknowledged late.
+        tokio::pin!(consume);
         let result = tokio::select! {
             biased;
-            result = consume => result,
-            () = cancellation.cancelled() => Err(BuildFailure::Process(ProcessError::Cancelled)),
+            result = &mut consume => result,
+            () = async {
+                tokio::select! {
+                    () = producer_failed.cancelled() => {},
+                    () = cancellation.cancelled() => {},
+                }
+            } => {
+                match tokio::time::timeout(OUTPUT_DRAIN_TIMEOUT, &mut consume).await {
+                    Ok(Ok(())) => Err(BuildFailure::Process(ProcessError::Cancelled)),
+                    Ok(Err(error)) => Err(error),
+                    Err(_) => {
+                        tracing::warn!("Build output drain timed out; final log delivery may be incomplete. Unacknowledged output will not be replayed.");
+                        Err(BuildFailure::Process(ProcessError::Cancelled))
+                    }
+                }
+            }
         };
         if result.is_err() {
             cancellation.cancel();
@@ -103,22 +123,19 @@ pub async fn capture<T>(
     let execute = async {
         let result = execution.await;
         if result.is_err() {
-            // A failed/timed-out producer cannot wait indefinitely for a log
-            // sink blocked on storage or a transport consumer.
-            cancellation.cancel();
+            producer_failed.cancel();
         }
         result
     };
     // Always await executor cleanup, even when persistence fails or is cancelled.
     let (execution, consumed) = tokio::join!(execute, consume);
-    match consumed {
-        // Preserve the original process/transport error rather than replacing a
-        // timeout with the cancellation used to release its output consumer.
-        Err(BuildFailure::Process(ProcessError::Cancelled)) => {
-            execution.and(Err(BuildFailure::Process(ProcessError::Cancelled)))
+    match (execution, consumed) {
+        // Keep producer terminal/cleanup evidence, including the original failure.
+        (Err(error), _) if !matches!(error, BuildFailure::Process(ProcessError::Cancelled)) => {
+            Err(error)
         }
-        Err(error) => Err(error),
-        Ok(()) => execution,
+        (_, Err(error)) => Err(error),
+        (result, Ok(())) => result,
     }
 }
 
@@ -130,7 +147,10 @@ async fn flush(
         progress
             .append_batch(batch)
             .await
-            .map_err(|_| BuildFailure::Validation("Build log persistence failed.".into()))?;
+            .map_err(|_| {
+                tracing::warn!("Build log persistence failed; final log delivery may be incomplete. Unacknowledged output will not be replayed.");
+                BuildFailure::Validation("Build log persistence failed.".into())
+            })?;
         batch.clear();
     }
     Ok(())
@@ -195,7 +215,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn cancellation_or_producer_failure_releases_a_blocked_log_sink() {
         for producer_failed in [false, true] {
             let sink = BlockedLogs(tokio::sync::Notify::new());
@@ -225,7 +245,7 @@ mod tests {
                 }
             };
             let result = tokio::time::timeout(
-                std::time::Duration::from_secs(2),
+                OUTPUT_DRAIN_TIMEOUT + std::time::Duration::from_secs(1),
                 capture(execution, receiver, &sink, &[], &cancellation),
             )
             .await
@@ -245,10 +265,82 @@ mod tests {
         }
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn committed_but_unacknowledged_batch_is_never_replayed() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Unacknowledged {
+            commits: AtomicUsize,
+            committed: tokio::sync::Notify,
+        }
+        impl BuildLogSink for Unacknowledged {
+            fn append<'a>(
+                &'a self,
+                _: &'a str,
+                _: &'a str,
+            ) -> futures_util::future::BoxFuture<'a, Result<(), citadel_builds::BuildError>>
+            {
+                Box::pin(async move {
+                    self.commits.fetch_add(1, Ordering::SeqCst);
+                    self.committed.notify_one();
+                    std::future::pending().await
+                })
+            }
+        }
+        for failed in [false, true] {
+            let sink = Unacknowledged {
+                commits: AtomicUsize::new(0),
+                committed: tokio::sync::Notify::new(),
+            };
+            let cancellation = CancellationToken::new();
+            let (sender, receiver) = mpsc::channel(1);
+            let execution = async {
+                sender
+                    .send(ProcessChunk {
+                        stream: "stderr",
+                        bytes: b"diagnostic".to_vec(),
+                    })
+                    .await
+                    .unwrap();
+                sink.committed.notified().await;
+                drop(sender);
+                if failed {
+                    Err(BuildFailure::Command("terminal failure".into()))
+                } else {
+                    cancellation.cancel();
+                    Ok(())
+                }
+            };
+            let started = tokio::time::Instant::now();
+            let result = tokio::time::timeout(
+                OUTPUT_DRAIN_TIMEOUT + std::time::Duration::from_secs(1),
+                capture(execution, receiver, &sink, &[], &cancellation),
+            )
+            .await
+            .expect("unacknowledged append must have a bounded drain");
+            assert!(started.elapsed() >= OUTPUT_DRAIN_TIMEOUT);
+            assert!(
+                result.is_err(),
+                "unacknowledged output must not become success"
+            );
+            assert_eq!(sink.commits.load(Ordering::SeqCst), 1);
+            if failed {
+                assert!(
+                    matches!(result, Err(BuildFailure::Command(message)) if message == "terminal failure")
+                );
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(BuildFailure::Process(ProcessError::Cancelled))
+                ));
+            }
+        }
+    }
+
     #[tokio::test]
     async fn persistence_failure_cancels_the_producer_instead_of_hanging() {
         let (sender, receiver) = mpsc::channel(1);
         let cancellation = CancellationToken::new();
+        let cleaned = std::sync::atomic::AtomicBool::new(false);
         let execution = async {
             sender
                 .send(ProcessChunk {
@@ -258,7 +350,9 @@ mod tests {
                 .await
                 .unwrap();
             cancellation.cancelled().await;
+            tokio::task::yield_now().await;
             drop(sender);
+            cleaned.store(true, std::sync::atomic::Ordering::SeqCst);
             Ok(())
         };
         let result = tokio::time::timeout(
@@ -267,8 +361,11 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(result.is_err());
+        assert!(
+            matches!(result, Err(BuildFailure::Validation(message)) if message == "Build log persistence failed.")
+        );
         assert!(cancellation.is_cancelled());
+        assert!(cleaned.load(std::sync::atomic::Ordering::SeqCst));
     }
 }
 
@@ -291,11 +388,64 @@ mod batching_tests {
             logs: &'a [citadel_builds::BuildLog],
         ) -> futures_util::future::BoxFuture<'a, Result<(), citadel_builds::BuildError>> {
             Box::pin(async move {
+                tokio::task::yield_now().await;
                 self.0.lock().unwrap().push(logs.to_vec());
                 Ok(())
             })
         }
     }
+    #[tokio::test]
+    async fn producer_failure_preserves_diagnostics_with_an_async_sink() {
+        let sink = Sink::default();
+        let (sender, receiver) = mpsc::channel(8);
+        let execution = async move {
+            sender
+                .send(ProcessChunk {
+                    stream: "stderr",
+                    bytes: b"compiler diagnostic\n".to_vec(),
+                })
+                .await
+                .unwrap();
+            drop(sender);
+            Err::<(), _>(BuildFailure::Command("terminal failure".into()))
+        };
+        let result = capture(execution, receiver, &sink, &[], &CancellationToken::new()).await;
+        assert!(
+            matches!(result, Err(BuildFailure::Command(message)) if message == "terminal failure")
+        );
+        let batches = sink.0.lock().unwrap();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].len(), 1);
+        assert_eq!(batches[0][0].message, "compiler diagnostic\n");
+    }
+
+    #[tokio::test]
+    async fn cancellation_finishes_a_healthy_append_before_returning() {
+        let sink = Sink::default();
+        let cancellation = CancellationToken::new();
+        let (sender, receiver) = mpsc::channel(1);
+        let execution = async {
+            sender
+                .send(ProcessChunk {
+                    stream: "stderr",
+                    bytes: b"last diagnostic".to_vec(),
+                })
+                .await
+                .unwrap();
+            drop(sender);
+            cancellation.cancel();
+            Err::<(), _>(BuildFailure::Process(ProcessError::Cancelled))
+        };
+        let result = capture(execution, receiver, &sink, &[], &cancellation).await;
+        assert!(matches!(
+            result,
+            Err(BuildFailure::Process(ProcessError::Cancelled))
+        ));
+        let batches = sink.0.lock().unwrap();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0][0].message, "last diagnostic");
+    }
+
     #[tokio::test]
     async fn burst_batches_preserve_order_redaction_and_flush_a_quiet_stream() {
         let sink = Sink::default();

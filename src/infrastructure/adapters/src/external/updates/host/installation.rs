@@ -15,6 +15,7 @@ pub struct DockerUpdateInstallation {
     state_directory: PathBuf,
     version: String,
     pool: sqlx::PgPool,
+    registered: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl DockerUpdateInstallation {
@@ -30,17 +31,31 @@ impl DockerUpdateInstallation {
             state_directory,
             version,
             pool,
+            registered: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         }
     }
 }
 
+impl DockerUpdateInstallation {
+    pub fn with_registration(mut self, registered: Arc<std::sync::atomic::AtomicBool>) -> Self {
+        self.registered = registered;
+        self
+    }
+}
+
 impl UpdateInstallationRuntime for DockerUpdateInstallation {
+    fn registered(&self) -> bool {
+        self.registered.load(std::sync::atomic::Ordering::Acquire)
+    }
     fn database_update<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Option<citadel_updates::DatabaseUpdatePlan>, UpdateError>> {
         Box::pin(async move {
-            // Startup validates registration before constructing this runtime.
+            if !self.registered() {
+                return Err(UpdateError::Unavailable("Automatic update setup has not completed. Check Core logs for setup diagnostics.".into()));
+            }
+            // Startup or the supervised first-install task validates registration.
             // Availability is advisory: never acquire the installation lock or
             // launch preflight helpers for a status read. Review and approval
             // each call source() separately before accepting a database plan.
@@ -115,6 +130,11 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<InstallationSnapshot, UpdateError>> {
         Box::pin(async move {
+            if !self.registered() {
+                return Err(UpdateError::Conflict(
+                    "Automatic update setup has not completed.".into(),
+                ));
+            }
             let (response, image, architecture) = self
                 .client
                 .exchange(

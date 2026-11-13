@@ -20,11 +20,16 @@ Never rewrite applied migration history or checksums to force an upgrade.
 
 ## Enable in-app updates
 
-After creating the administrator account, complete this one-time step on the
-**Docker host**. Release checks work without it, but installing Core or bundled
-PostgreSQL updates from the portal requires a verified installation record.
-**In-app updates not configured** describes this missing setup; it does not mean
-your installed PostgreSQL version is outdated.
+The supplied Compose file enables automatic registration after administrator
+account creation. Use `docker compose up -d`. State is stored in `.citadel-updates` beside the Compose
+file. Registration verifies the installation without restarting Core or PostgreSQL.
+Keep this directory: it also holds update recovery evidence and checkpoints.
+
+For custom deployments without the supplied automatic state mount, the optional
+host utility below can configure updates after administrator setup. Release checks
+work without registration, but installing Core or bundled PostgreSQL updates
+requires a verified installation record. A setup message does not mean the
+installed PostgreSQL version is outdated.
 
 The setup command requires Python **3.10 or newer**, native Linux Docker and the
 supported Compose installation with bundled PostgreSQL. For rootful Docker, run
@@ -35,7 +40,7 @@ files must belong to that user, and Core must already have the supported rootles
 socket and daemon-data mounts described below. Docker Desktop, external databases
 and unsupported custom layouts continue to use manual updates.
 
-For the default installation, after first-run setup:
+For a supported custom installation without automatic setup:
 
 ```bash
 cd /opt/citadel
@@ -68,6 +73,15 @@ explicit approval; automatic Core/Agent schedules do not include the database.
 Repeating a successfully completed setup verifies it without restarting Core.
 
 ### Interrupted update setup
+
+For the supplied Compose installation, inspect `docker compose logs server`.
+Fix permissions or unsupported configuration, then run
+`docker compose restart server` to retry pending registration. Automatic setup
+retries briefly while Docker health settles, then stops until Core restarts.
+It never replaces missing registration on an initialized database or overwrites
+conflicting recovery evidence. Do not delete `.citadel-updates` to force a retry.
+
+The following recovery steps apply to the optional host utility.
 
 A failed setup preserves `.env`, registration and recovery evidence. If it failed
 before changing `.env`, resolve the reported prerequisite and run the command

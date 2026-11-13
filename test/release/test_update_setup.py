@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import fcntl
 import tempfile
 import types
 import unittest
@@ -44,6 +45,9 @@ class UpdateSetupTests(unittest.TestCase):
         self.database = {'Id': 'database-unchanged', 'Image': 'postgres-installed', 'State': {'StartedAt': 'original'}, 'RestartCount': 0}
         self.runtime_image = self.image
         self.selected_image = self.image
+        self.existing = ''
+        self.identity_checks = 0
+        self.ready_after = 1
         original_stat = Path.stat
         def stat_path(path, *args, **kwargs):
             if str(path) == self.socket:
@@ -60,6 +64,15 @@ class UpdateSetupTests(unittest.TestCase):
         self.calls.append((args, step, environment.copy()))
         if step == self.fail:
             raise setup.SetupError('fixture failure')
+        if step == 'Existing installation inspection':
+            return self.existing
+        if step == 'Compose project inspection':
+            return json.dumps({'name':'existing-project'})
+        if step == 'First-run setup check':
+            self.identity_checks += 1
+            if self.identity_checks < self.ready_after:
+                raise setup.SetupError('not initialized yet')
+            return json.dumps({'instanceId': '01900000-0000-7000-8000-000000000001'})
         if step == 'Docker context inspection':
             return self.endpoint
         if step == 'Docker inspection':
@@ -78,7 +91,9 @@ class UpdateSetupTests(unittest.TestCase):
         if step == 'Installed image verification':
             return self.selected_image
         if step == 'Installation registration':
-            (self.state / 'installation.json').write_text('registration-fixture')
+            if not (self.state / 'installation.json').exists():
+                (self.state / 'installation.json').write_text('registration-fixture')
+                (self.state / 'installation.lock').touch(mode=0o600)
         if step == 'Installation and recovery preflight' and self.after_preflight:
             self.after_preflight()
         if step == 'Core restart':
@@ -90,6 +105,17 @@ class UpdateSetupTests(unittest.TestCase):
 
     def steps(self):
         return [step for _, step, _ in self.calls]
+
+    def test_automatic_compose_setup_does_not_create_a_second_registration(self):
+        original = self.command
+        def automatic(arguments, **kwargs):
+            if kwargs.get('step') == 'Compose project inspection':
+                return json.dumps({'name': 'existing-project', 'services': {'server': {'environment': {
+                    'CITADEL_UPDATE_STATE_DIRECTORY': '/var/lib/citadel-updates'}}}})
+            return original(arguments, **kwargs)
+        with patch.object(setup, 'run', side_effect=automatic):
+            with self.assertRaisesRegex(setup.SetupError, 'configures updates automatically'):
+                setup.enable(self.args)
 
     def test_enables_after_preflight_restarts_only_core_and_verifies(self):
         original = self.env.read_bytes()
@@ -229,6 +255,99 @@ class UpdateSetupTests(unittest.TestCase):
             setup.enable(self.args)
         self.assertNotIn('Core restart', self.steps())
         self.assertNotIn('Registration refresh', self.steps())
+
+    def test_start_waits_for_account_then_activates_both_updaters(self):
+        self.args.start = True
+        self.args.project = None
+        self.ready_after = 3
+        with patch.object(setup.time, 'sleep') as sleep:
+            setup.enable(self.args)
+        self.assertEqual(sleep.call_count, 2)
+        steps = self.steps()
+        self.assertLess(steps.index('Installation startup'), steps.index('First-run setup check'))
+        self.assertLess(steps.index('First-run setup check'), steps.index('Installation registration'))
+        self.assertIn('Final installation verification', steps)
+
+    def test_start_existing_installation_does_not_pull_or_replace_before_registration(self):
+        self.args.start = True
+        self.existing = 'existing-core\nexisting-db'
+        setup.enable(self.args)
+        self.assertNotIn('Installation image download', self.steps())
+        self.assertNotIn('Installation startup', self.steps())
+        self.assertEqual(self.steps().count('Core restart'), 1)
+
+    def test_start_timeout_leaves_containers_and_env_untouched(self):
+        self.args.start = True
+        self.args.setup_timeout = 1
+        self.ready_after = 100
+        original = self.env.read_bytes()
+        with patch.object(setup.time, 'monotonic', side_effect=[0, 2]):
+            with self.assertRaisesRegex(setup.SetupError, 'wait expired'):
+                setup.enable(self.args)
+        self.assertEqual(self.env.read_bytes(), original)
+        self.assertNotIn('Installation registration', self.steps())
+
+    def test_default_path_and_project_need_no_operator_settings(self):
+        self.args.state_directory = None
+        self.state = self.directory.with_name(self.directory.name + '-update-state')
+        self.args.project = None
+        setup.enable(self.args)
+        self.assertIn(f'{setup.SETTING}={self.state}', self.env.read_text())
+
+    def test_registered_deployment_checks_ownership_stops_core_then_refreshes(self):
+        setup.enable(self.args)
+        self.calls.clear()
+        def replace():
+            self.assertEqual(self.steps()[-1], 'Deployment Core stop')
+            with (self.state / 'installation.lock').open('rb') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.calls.append(([], 'replacement', {}))
+        setup.enable(self.args, replace=replace)
+        self.assertLess(self.steps().index('Deployment ownership check'), self.steps().index('replacement'))
+        self.assertEqual(self.steps()[-2:], ['Registration refresh', 'Final installation verification'])
+
+    def test_registered_deployment_refuses_changed_evidence(self):
+        setup.enable(self.args)
+        self.calls.clear()
+        self.after_preflight = lambda: (self.state / 'execution.json').write_text('new evidence')
+        with self.assertRaises(setup.SetupError):
+            setup.enable(self.args, replace=lambda: self.assertTrue(False, 'must not replace'))
+        self.assertNotIn('Deployment Core stop', self.steps())
+
+    def test_registered_deployment_refuses_concurrent_input_edit(self):
+        setup.enable(self.args)
+        self.calls.clear()
+        self.after_preflight = lambda: self.compose.write_text('changed configuration')
+        with self.assertRaisesRegex(setup.SetupError, 'inputs or evidence changed'):
+            setup.enable(self.args, replace=lambda: self.assertTrue(False, 'must not replace'))
+        self.assertNotIn('Deployment Core stop', self.steps())
+
+    def test_registered_deployment_refuses_an_owned_update(self):
+        setup.enable(self.args)
+        self.calls.clear()
+        self.fail = 'Deployment ownership check'
+        with self.assertRaises(setup.SetupError):
+            setup.enable(self.args, replace=lambda: self.assertTrue(False, 'must not replace'))
+        self.assertNotIn('Deployment Core stop', self.steps())
+
+    def test_registered_deployment_refuses_lock_contention(self):
+        setup.enable(self.args)
+        self.calls.clear()
+        with (self.state / 'installation.lock').open('rb') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(BlockingIOError):
+                setup.enable(self.args, replace=lambda: self.assertTrue(False, 'must not replace'))
+        self.assertNotIn('Deployment Core stop', self.steps())
+
+    def test_registered_deployment_failure_is_not_refreshed_or_rolled_back(self):
+        setup.enable(self.args)
+        self.calls.clear()
+        def replace():
+            raise setup.SetupError('replacement failed')
+        with self.assertRaises(setup.SetupError):
+            setup.enable(self.args, replace=replace)
+        self.assertNotIn('Registration refresh', self.steps())
+        self.assertTrue((self.state / 'installation.json').exists())
 
     def test_docker_errors_do_not_expose_credentials(self):
         with patch.object(setup.subprocess, 'run', side_effect=setup.subprocess.CalledProcessError(

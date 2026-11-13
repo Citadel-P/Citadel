@@ -113,7 +113,8 @@ async fn respond(
         );
         view.database_version = state.checker.database_version().await;
         let cancellation = CancellationToken::new();
-        let database = if state.installer.is_some() {
+        let registered = state.installer.as_ref().is_some_and(|installer| installer.registered());
+        let database = if registered {
             citadel_updates::DatabaseInstallation::Bundled
         } else {
             state.checker.database_installation(&cancellation).await
@@ -126,11 +127,14 @@ async fn respond(
         }.into());
         if let Some(installer) = &state.installer {
             view.operation = installer.active().await?.map(Into::into);
-            // Registration is verified at startup; status does not claim ownership.
+            // Registration is verified at startup or by the supervised setup task.
             // An active Core operation must not make its bundled database look external.
-            view.database_installation = citadel_updates::DatabaseInstallation::Bundled.into();
-            view.set_database_update(installer.database_update(&cancellation).await);
-            if state.instance.installation_policy().update_checks_allowed {
+            if registered || database == citadel_updates::DatabaseInstallation::Bundled {
+                view.set_database_update(installer.database_update(&cancellation).await);
+            }
+            if !installer.registered() {
+                view.installation_unavailable_reason = Some("Automatic update setup has not completed. Check Core logs for setup diagnostics.".into());
+            } else if state.instance.installation_policy().update_checks_allowed {
                 view.installation_unavailable_reason = None;
             }
         }

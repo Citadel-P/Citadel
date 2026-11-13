@@ -10,6 +10,13 @@ pub async fn check_updates(config: &Config) -> Result<(), citadel_updates::Updat
     use citadel_updates::UpdateError;
     let registered_instance = match config.update_state_directory.as_ref() {
         None => None,
+        Some(_)
+            if !config
+                .update_registration_ready
+                .load(std::sync::atomic::Ordering::Acquire) =>
+        {
+            None
+        }
         Some(path) => {
             #[cfg(target_os = "linux")]
             {

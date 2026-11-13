@@ -182,8 +182,11 @@ on shutdown; neither drops a committing check. The check endpoint returns the
 service result without rereading check state.
 
 Update availability uses the existing Alert Rules, observation outbox and delivery outbox.
-Core observations require the installer's verified transition qualification, without
-creating a review or claim. Agent observations follow a successful compatible release
+Core observations follow successful official release discovery for the running Core's
+release channel, including installations that require manual updates. Notices do not
+claim installation eligibility; artifact/transition verification and approval remain
+part of installation review. Update events and their counts are administrator-only;
+ordinary Alert grants do not expose them. Agent observations follow a successful compatible release
 check and inventory refresh, and refresh again after a batch settles. Installation
 aliases are deduplicated; only names, versions, counts and opaque correlation hashes
 enter alert details. Offline/unknown previously advertised targets retain pending
@@ -534,7 +537,7 @@ fall back to maintenance listeners. Each subsequent phase checks ownership again
 so a completed migration cannot bypass a lost lease between periodic checks.
 Normal shutdown retains the lease through worker and dynamic-task cleanup.
 
-When `CITADEL_UPDATE_STATE_DIRECTORY` is explicitly configured, the Linux adapter
+When `CITADEL_UPDATE_STATE_DIRECTORY` is configured, the Linux adapter
 also checks the existing private registration under a short, nonblocking host lock.
 Containerized Core uses a short-lived utility from its actual installed image,
 with exact host-path binds for installer inputs (read-only), state and the local
@@ -662,17 +665,26 @@ helper-image, container-ID and absolute checkpoint-path contracts still describe
 the container/host executor; they do not qualify another execution backend. Future
 Podman or Kubernetes installation support requires its own qualified adapter and recovery
 semantics; no unsupported kind is accepted or routed through Docker Compose.
-Registration is local operator authority, not an administrator-approved update or a user Activity. The supported installation guides invoke `deploy/install/enable-updates.py` after
-first-run setup. This local host command uses the installed image's registration
-and preflight diagnostics, then atomically adds the state setting to private `.env`,
-recreates only Core without pulling/building, refreshes the intentional change and
-revalidates registration. It preserves ordered Compose inputs and project identity,
-refuses shell overrides, unsafe paths and unsupported daemons, and never repairs
-unknown drift or recovery evidence. Repeated successful setup only revalidates.
-Failures preserve configuration and registration for explicit operator recovery.
-Python orchestrates existing Rust diagnostics; it does not reimplement eligibility
-or grant update approval. Startup checks registration identity and
-private evidence. The local `check-update-installation` diagnostic now revalidates
+Registration is local operator authority, not an administrator-approved update or
+user Activity. The supplied Compose file sets the fixed internal
+`/var/lib/citadel-updates` path and a read-only `.citadel-updates` bind. Startup
+resolves its actual host path from Docker metadata, without relying on shell PWD.
+Only a database without completed administrator setup may seed pending registration
+in an empty dedicated directory. The helper makes that directory private; pending
+and verified registration use the same atomic file, so lost verified state cannot
+be mistaken for an interrupted first setup. Invalid state still blocks admission.
+
+A supervised, cancellable task waits for persisted administrator setup and uses
+the existing bounded host helper and bootstrap/preflight checks to complete
+registration. It retries briefly for Docker health, then stays idle until shutdown;
+restarting Core retries pending setup. Readiness is published in memory only after
+registration is durable, followed by the existing Updates invalidation. Status
+reads never launch registration helpers. No container recreation, `.env` mutation,
+database migration or update approval occurs during registration. Custom deployments
+without the automatic mount retain the explicit `enable-updates.py` utility;
+it uses the same Rust diagnostics and preserves configuration and recovery evidence.
+Startup checks verified registration identity and private evidence.
+The local `check-update-installation` diagnostic now revalidates
 the saved invocation and live runtime using the same bounded inspection as registration.
 It requires existing protected registration and lock files, the recorded executor
 UID/GID and socket, and no execution evidence. It compares stable observations of
@@ -728,6 +740,31 @@ validates the immutable checkpoint, restores through the shared system recovery
 implementation, then checks catalog, claim identity and credential decryption before
 atomically recording failure and releasing the restored claim. Original host evidence
 and the original database remain intact; recovery never fabricates target success.
+
+### Deployment-managed update registration
+
+Demo/preview deployment removes the standard automatic state setting and bind
+from its generated base Compose input. CI retains ownership of the existing
+explicit host-state registration and guarded refresh; it never starts a second
+first-install registrar or moves existing recovery state.
+
+Demo/preview release deployment transports the activation script from the same
+release checkout. Core and Agent pins are written into the captured private
+`.env`; `.release.env` remains a release record and is not an additional Compose
+input. The running PostgreSQL image is preserved across Core deployments.
+CPU/memory ceilings and a single default-IPAM subnet/gateway are supported and
+compared against live Docker settings during registration and replacement.
+
+A registered CI deployment verifies the current registration and recovery
+preflight before replacement. Under the existing installation lock it rechecks
+unchanged evidence and database update ownership, then stops only Core. It releases
+the lock before target startup, whose normal database-claim and recovery checks
+remain authoritative. After the intentional replacement, the existing refresh
+command verifies unchanged database/storage identity and binds the new inputs.
+An interrupted replacement or failed refresh preserves registration and requires
+operator recovery; CI does not blindly refresh drift on retry. Activation never
+approves a Core or PostgreSQL update.
+
 
 ### PostgreSQL engine updates
 
@@ -1193,7 +1230,7 @@ and rollups. Non-cache memory is derived by subtracting active file cache from t
 working set; it is not process RSS. Missing or inconsistent counters and preexisting
 samples remain unknown. Weighted history buckets, compaction and replica totals
 require complete active-cache coverage; they never treat absent values as zero.
-The shared memory chart defaults to Breakdown and persists its Working set switch
+The shared memory chart defaults to Working set and persists its view selection
 in browser local storage, using the same segmented control as I/O charts. Memory
 alerts and table values retain working-set semantics.
 
@@ -1659,10 +1696,12 @@ The shared process runner captures bounded stdout/stderr by default. Docker buil
 commands opt into stream-only retention: byte limits still bound forwarding and
 excess output is drained, but no second transcript survives in `ProcessOutput`.
 Git, probes and scripts retain capture because their callers consume final output.
-Build output consumers stop on cancellation or producer failure even when a sink
-is blocked; execution cleanup is still awaited and the original failure is returned.
-Successful execution flushes all admitted output. An interrupted, unacknowledged
-log batch is not replayed because its commit outcome can be ambiguous.
+On cancellation or producer failure, build output consumers have up to five seconds
+to drain admitted output and finalize redaction, keeping any in-flight append alive.
+Execution cleanup is still awaited and the original producer failure is preserved.
+A drain timeout or persistence failure emits a warning that log delivery may be
+incomplete. Successful execution flushes all admitted output. An interrupted,
+unacknowledged log batch is not replayed because its commit outcome can be ambiguous.
 Build and script cancellation-map entries are scoped to their controller futures;
 removing an entry does not release a durable claim or an uncertain executor reservation.
 Stack apply drops copied Compose text and parsed/resolved preparation data before

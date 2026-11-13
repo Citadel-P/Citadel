@@ -385,7 +385,7 @@ These finish an admitted two-volume copy after admission closes, reject new HTTP
 starts, and verify restricted restore claims skip an older unrelated queued run.
 They use fake storage executors; no workload containers or volumes are touched.
 
-`test-update-registration.py` runs the unmodified base installer and a compatible
+`test-update-registration.py` runs the base profile with automatic setup disabled for explicit registration checks, and a compatible
 Edge-overlay installation with custom filenames, comments and resource names,
 completes setup through HTTP and invokes the Rust bootstrap
 from a separate Core-image container. It checks real Docker metadata, initialized
@@ -1106,7 +1106,12 @@ stdout/stderr, truncation, closed consumers, backpressure, timeout, cancellation
 inherited pipes and dropped futures. Stream-only results retain zero transcript
 capacity; output limits count admitted bytes independently. Build output tests
 check redaction across split secrets/UTF-8, bounded persistence batches, failure
-cancellation, and blocked sinks during cancellation or producer timeout. Existing capture-mode script final logs are still checked.
+cancellation, asynchronous final appends after producer failure, and a five-second
+bounded drain for blocked sinks during cancellation or producer timeout. A committed
+but unacknowledged append is never replayed. The adapter library test
+`terminal_error_drains_redacted_output_through_an_async_sink` exercises actual Agent
+frames followed by a terminal error, including split secrets and UTF-8. Existing
+capture-mode script final logs are still checked.
 
 The opt-in `execution_cycles::repeated_stack_build_and_deno_cycles_release_execution_resources`
 scenario labels warmup and three repeated stack/build/Deno cycles. It uses a fake
@@ -1269,11 +1274,18 @@ a **fresh disposable** database named `citadel_update_test_*`:
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib availability
 CITADEL_EXECUTION_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_alerts SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test alert_persistence instance_updates:: -- --ignored --test-threads=1
+# Use a separate fresh database for the HTTP authorization fixture.
+CITADEL_EXECUTION_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_alert_http SQLX_OFFLINE=true cargo test --locked -p citadel-server --test execution_resources_http update_alerts:: -- --ignored --test-threads=1
 ```
 
 The persistence test covers seeded Community rules, channel assignment, delivery
-deduplication, aggregate summary refresh, supersession, failed checks, offline
-observations and stale queued availability after installation. It never sends external notifications.
+deduplication and preserved acknowledgments, aggregate summary refresh, supersession,
+failed checks, administrator-only lists/counts, offline observations, resolution after
+installing or skipping a version, and stale queued availability after installation.
+The release-check service tests also cover manual installations and release channels.
+The HTTP fixture checks direct reads, acknowledgment, resolution and counts for an
+administrator and a regular user with Alert permissions. These fixtures never send
+external notifications.
 
 
 ### PostgreSQL engine maintenance
@@ -1627,7 +1639,7 @@ checks original sample values and applied checksums after adding the nullable
 active-cache column. Use a disposable `CITADEL_TEST_DATABASE_URL`.
 
 Frontend `memory-usage.test.tsx`, `stack-stats.test.tsx` and
-`stats-buckets.test.ts` cover the default Breakdown view, persisted switch,
+`stats-buckets.test.ts` cover the default Working set view, persisted switch,
 missing measurements and complete replica/bucket coverage. Docker mapping tests
 cover cgroup v1/v2 and shared-memory separation.
 
@@ -1638,7 +1650,11 @@ cover cgroup v1/v2 and shared-memory separation.
 Docker daemon. It checks ordered overlays, immutable helper images, rootless
 executor identity, preflight-before-activation, Core-only recreation, idempotent
 verification, secret-safe failures and preservation after drift/restart/refresh
-failures. Existing adapter bootstrap tests own registration, database identity,
+failures. Installer tests also cover automatic project/state defaults, waiting for
+administrator setup, timeout without registration, reuse without pulling existing
+images, and registered CI replacement guards. Demo tests cover captured release
+pins, automatic activation and preserving the deployed PostgreSQL image.
+Existing adapter bootstrap tests own registration, database identity,
 mount and recovery-state validation. Updates frontend tests cover setup messaging
 even when Core has no available release and retain distinct external, unknown
 and blocked PostgreSQL states.
@@ -1647,10 +1663,37 @@ Run the actual activation command against base and Edge Compose fixtures with:
 
 ```bash
 python3 test/scripts/test-update-registration.py <local-core-image-tag> --enable-updates
+python3 test/scripts/test-update-registration.py <local-core-image-tag> --enable-updates --rootless
 ```
 
 This creates an isolated disposable Docker daemon, installs Python inside that
 fixture before disconnecting its network, runs normal first-run setup and the
 shipped activation command, then verifies unchanged PostgreSQL identity/start
 time, unchanged Core image and recovery keys, valid refreshed registration and
-no restart on a repeated activation. All fixture containers/volumes are removed.
+no restart on a repeated activation. It then exercises a guarded CI-style Core
+replacement and registration refresh. The Edge profile includes CPU/memory limits
+and a custom subnet/gateway. A loopback-only registry inside the disposable daemon
+gives the local candidate a real image digest for startup verification; nothing
+is pushed to public GHCR. This is registration/activation coverage, not signed
+release qualification. All fixture containers/volumes are removed.
+
+
+Compose-only automatic setup acceptance (no host Python installer is invoked):
+
+```bash
+python3 test/scripts/test-update-registration.py <local-core-image-tag> --automatic
+python3 test/scripts/test-update-registration.py <local-core-image-tag> --automatic --rootless
+```
+
+These use the supplied automatic Compose mount on disposable rootful/rootless
+Docker daemons, complete administrator setup through HTTP, and verify registration,
+unchanged Core/PostgreSQL start times and identities, unchanged `.env`, helper
+cleanup and admission after a normal Core restart. A private loopback registry
+provides the local candidate digest; no image is pushed to public GHCR.
+Candidate acceptance runs the rootful automatic setup check alongside explicit
+registration and update lifecycle checks. Rootless coverage is available with the
+second command above.
+Adapter tests cover pending registration, atomic completion, lost or corrupt
+state, unsafe permissions, cancellation, drift, lock contention and discovery of
+host paths. Update status remains disabled until the supervised registration task
+has durably completed; status reads launch no helper.

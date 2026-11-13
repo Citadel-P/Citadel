@@ -54,6 +54,7 @@ def deployment_payload(metadata, backend, channel):
     if stale:
         return {"status": "skipped-stale-alias", **payload}
     payload["compose"] = (release.ROOT / "deploy/install/docker-compose.yml").read_text()
+    payload["update_setup"] = (release.ROOT / "deploy/install/enable-updates.py").read_text()
     return payload
 
 
@@ -137,7 +138,7 @@ def main():
         if not args.apply:
             status = "dry-run"
             print(json.dumps({"dryRun": True, "host": host, "directory": directory,
-                              **{k: v for k, v in payload.items() if k != "compose"}}, indent=2))
+                              **{k: v for k, v in payload.items() if k not in ("compose", "update_setup")}}, indent=2))
             return
         status = "failed-remote-deployment"
         remote = Path(__file__).with_name("demo_remote.py").read_text()
@@ -147,7 +148,7 @@ def main():
             "-o", f"UserKnownHostsFile={args.known_hosts}", "-o", "ConnectTimeout=15",
             "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", f"{user}@{host}",
             "python3 -c " + shlex.quote(remote) + " " + shlex.quote(directory),
-        ], input=json.dumps(payload), text=True, stdout=subprocess.PIPE, check=True, timeout=1080)
+        ], input=json.dumps(payload), text=True, stdout=subprocess.PIPE, check=True, timeout=1800)
         outcome = json.loads(result.stdout)
         identity = {key: payload[key] for key in ("channel", "version", "core", "agent")}
         if (outcome.get("status") not in ("deployed", "skipped-older-release")

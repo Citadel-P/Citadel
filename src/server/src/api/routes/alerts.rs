@@ -546,12 +546,15 @@ async fn get_event(
         &h,
     )
     .await?;
-    Ok(no_store(
-        Json(result(
-            AlertEventView::try_from(result(s.store.get_event(id).await, &h)?),
+    let event = result(s.store.get_event(id).await, &h)?;
+    if event.resource_type == "Updates" {
+        api_result(
+            crate::api::resource_access::require_human_administrator(Some(Extension(p))),
             &h,
-        )?)
-        .into_response(),
+        )?;
+    }
+    Ok(no_store(
+        Json(result(AlertEventView::try_from(event), &h)?).into_response(),
     ))
 }
 
@@ -587,6 +590,20 @@ async fn unresolved_count(
     ))
 }
 
+async fn authorize_update_events(
+    s: &AlertsHttpState,
+    p: &ActorPrincipal,
+    ids: &[Uuid],
+    h: &HeaderMap,
+) -> HttpResult<()> {
+    if !(p.is_human() && p.is_administrator())
+        && result(s.store.events_require_administrator(ids).await, h)?
+    {
+        api_result(Err::<(), _>(citadel_identity::IdentityError::Forbidden), h)?;
+    }
+    Ok(())
+}
+
 #[utoipa::path(
     post,
     path = "/api/v1/alertEvents/acknowledge",
@@ -617,6 +634,7 @@ async fn acknowledge(
         &h,
     )
     .await?;
+    authorize_update_events(&s, &p, &i.ids, &h).await?;
     result(s.store.acknowledge(p.actor_id, &i.ids).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
@@ -651,6 +669,7 @@ async fn resolve(
         &h,
     )
     .await?;
+    authorize_update_events(&s, &p, &i.ids, &h).await?;
     result(
         s.store
             .resolve(p.actor_id, &i.ids, i.resolution_note.as_deref())

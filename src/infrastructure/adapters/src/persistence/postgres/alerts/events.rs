@@ -16,6 +16,7 @@ impl PostgresAlertRepository {
 AND ($5::text IS NULL OR event.type=$5)
 AND ($6::text IS NULL OR event.resourcetype=$6)
 AND (NOT $7 OR event.resolvedat IS NULL)
+AND ($8 OR event.resourcetype <> 'Updates')
 AND ($8 OR (SELECT allowed FROM global_access) OR EXISTS (
     SELECT 1 FROM actor_scope scope
     JOIN resourceaccesses access ON access.actorid=scope.actorid
@@ -66,6 +67,17 @@ AND ($8 OR (SELECT allowed FROM global_access) OR EXISTS (
 }
 
 impl PostgresAlertRepository {
+    pub(super) fn events_require_administrator_impl<'a>(
+        &'a self,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<bool, AlertError>> {
+        Box::pin(async move {
+            let ids = normalized_ids(ids, "Alert Event")?;
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM alertevents WHERE id=ANY($1) AND resourcetype='Updates')")
+                .bind(ids).fetch_one(&self.pool).await.map_err(storage)
+        })
+    }
+
     pub(super) fn get_event_impl(&self, id: Uuid) -> BoxFuture<'_, Result<AlertEvent, AlertError>> {
         Box::pin(async move {
             let query = format!("{} WHERE event.id=$1", super::queries::EVENT_SELECT);
@@ -91,6 +103,7 @@ impl PostgresAlertRepository {
                 r#"{AUTHORIZED_CTE}
 SELECT COUNT(*) FROM alertevents event
 WHERE event.resolvedat IS NULL
+  AND ($4 OR event.resourcetype <> 'Updates')
   AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
       SELECT 1 FROM actor_scope scope
       JOIN resourceaccesses access ON access.actorid=scope.actorid

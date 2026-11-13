@@ -57,6 +57,11 @@ pub trait AlertRepository: Send + Sync {
         administrator: bool,
         filter: &'a AlertEventFilter,
     ) -> BoxFuture<'a, Result<AlertEventPage, AlertError>>;
+    /// Check a batch of event identities without loading their diagnostic payloads.
+    fn events_require_administrator<'a>(
+        &'a self,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<bool, AlertError>>;
     fn get_event(&self, id: Uuid) -> BoxFuture<'_, Result<AlertEvent, AlertError>>;
     fn unresolved_count(
         &self,

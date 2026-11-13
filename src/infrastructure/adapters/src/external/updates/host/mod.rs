@@ -9,3 +9,6 @@ pub use runtime::HostUpdateClient;
 
 #[cfg(test)]
 mod tests;
+
+mod automatic;
+pub use automatic::AutomaticComposeRegistration;

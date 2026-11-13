@@ -34,6 +34,7 @@ class CandidateIdentityTests(unittest.TestCase):
             self.assertEqual(run.call_args_list, [
                 call(['bash', 'test/scripts/test-agent-acceptance.sh', 'core-image', 'agent-image'], check=True),
                 call([candidates.sys.executable, 'test/scripts/test-update-registration.py', 'core-image'], check=True),
+                call([candidates.sys.executable, 'test/scripts/test-update-registration.py', 'core-image', '--automatic'], check=True),
                 call([candidates.sys.executable, 'test/scripts/test-instance-upgrade-local.py', '--runtime-image', 'core-image'], check=True),
             ])
 

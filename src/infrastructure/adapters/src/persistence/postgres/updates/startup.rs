@@ -60,3 +60,22 @@ pub async fn check_startup_updates(
     }
     tx.rollback().await.map_err(storage)
 }
+
+/// A new automatic registration may only be seeded before administrator setup.
+pub async fn automatic_setup_is_fresh(pool: &PgPool) -> Result<bool, UpdateError> {
+    let exists: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.instancesetupstates') IS NOT NULL")
+            .fetch_one(pool)
+            .await
+            .map_err(storage)?;
+    if !exists {
+        return Ok(true);
+    }
+    let initialized: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM public.instancesetupstates WHERE initializedat IS NOT NULL)",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(storage)?;
+    Ok(!initialized)
+}

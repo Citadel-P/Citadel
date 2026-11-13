@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """VPS-side deployment, sent over SSH by demo.py. Requires Python 3.10+."""
 import fcntl
+import argparse
+import contextlib
+import types
 import ipaddress
 import json
 import os
@@ -123,9 +126,16 @@ def rootless_target(directory, channel):
     return target
 
 
+def deployment_compose(source):
+    # CI owns guarded registration/refresh for these installations. Keep that
+    # explicit host-state flow; do not start a second first-install registrar.
+    return source.replace('      CITADEL_UPDATE_STATE_DIRECTORY: /var/lib/citadel-updates\n', '').replace(
+        '      - ./.citadel-updates:/var/lib/citadel-updates:ro\n', '')
+
+
 def compose_override(channel, rootless=None):
     # Memory is unlimited by default. Keep CPU ceilings independently tunable
-    # through the operator-owned .env without CI rewriting configuration.
+    # through operator-owned .env settings; CI changes image pins, not resource limits.
     core_cpus, database_cpus = ("1.0", "0.5") if channel == "dev" else ("2.0", "1.0")
     services = {}
     for name, prefix, cpus in (
@@ -160,6 +170,14 @@ def compose_override(channel, rootless=None):
     return json.dumps({"services": services}, indent=2) + "\n"
 
 
+def load_update_setup(source):
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("Missing release update setup tool")
+    setup = types.ModuleType("citadel_update_setup")
+    exec(compile(source, "release-enable-updates.py", "exec"), setup.__dict__)
+    return setup
+
+
 def deploy(directory, payload):
     validate(payload)
     if not isinstance(payload.get("compose"), str) or not payload["compose"].strip():
@@ -178,22 +196,80 @@ def deploy(directory, payload):
                 return {"status": "skipped-older-release", **identity}
             if previous["version"] == payload["version"] and previous != identity:
                 raise ValueError("Existing version has different image digests")
-        docker = ["docker"] if rootless is None else ["docker", "--host", f"unix:///run/user/{rootless['uid']}/docker.sock"]
-        compose = [*docker, "compose", "--env-file", ".env", "--env-file", ".release.env",
+        docker = ["docker", "--host", "unix:///var/run/docker.sock"] if rootless is None else ["docker", "--host", f"unix:///run/user/{rootless['uid']}/docker.sock"]
+        setup = load_update_setup(payload.get("update_setup"))
+        # Same trusted checkout as the remote deploy program; never fetch a script
+        # from a moving branch on the VPS. Its output must not corrupt our JSON.
+        _, settings = setup.read_environment(directory / ".env")
+        args = argparse.Namespace(directory=str(directory), project=settings.get("COMPOSE_PROJECT_NAME"),
+                                  compose_file=[str(directory / "docker-compose.yml"), str(directory / "demo.override.yml")],
+                                  state_directory=None, start=False)
+        compose = [*docker, "compose", "--env-file", ".env",
                    "-f", "docker-compose.yml", "-f", "demo.override.yml"]
-        env = dict(os.environ, CITADEL_IMAGE=payload["core"], CITADEL_EDGE_AGENT_IMAGE=payload["agent"])
+        env = {key: value for key, value in os.environ.items() if key in (
+            "PATH", "HOME", "LANG", "LC_ALL", "DOCKER_CONFIG", "XDG_RUNTIME_DIR")}
         def run(*args, timeout):
             subprocess.run([*compose, *args], cwd=directory, env=env, check=True,
                            stdout=sys.stderr, timeout=timeout)
-        atomic(directory / "docker-compose.yml", payload["compose"])
-        atomic(directory / "demo.override.yml", compose_override(payload["channel"], rootless))
-        atomic(directory / ".release.env", f"CITADEL_IMAGE={payload['core']}\nCITADEL_EDGE_AGENT_IMAGE={payload['agent']}\n")
-        run("config", "--quiet", timeout=30)
-        run("pull", timeout=600)
-        # Persist the highest attempted version before migrations can run. An
-        # older workflow cannot silently roll back a partially upgraded database.
-        atomic(attempted, json.dumps(identity, indent=2) + "\n")
-        run("up", "--detach", "--wait", "--wait-timeout", "180", timeout=240)
+        def replace():
+            original, _ = setup.read_environment(directory / ".env")
+            database = ""
+            if (directory / "docker-compose.yml").exists():
+                database = subprocess.check_output([*compose, "ps", "--quiet", "pg_db"],
+                                                   cwd=directory, env=dict(env, CITADEL_IMAGE=payload["core"],
+                                                                           CITADEL_EDGE_AGENT_IMAGE=payload["agent"]),
+                                                   text=True, timeout=30).strip()
+            pins = {"CITADEL_IMAGE": payload["core"], "CITADEL_EDGE_AGENT_IMAGE": payload["agent"]}
+            if database:
+                # Keep the currently deployed database image when the shipped
+                # template advances its default. Only reviewed DB updates change it.
+                pins["PG_IMAGE"] = subprocess.check_output([*docker, "inspect", "--format", "{{.Config.Image}}", database],
+                                                         text=True, timeout=30).strip()
+                if not re.fullmatch(r"postgres@sha256:[a-f0-9]{64}", pins["PG_IMAGE"]):
+                    raise ValueError("The existing database must use a pinned PostgreSQL image")
+            lines = [line for line in original.decode().splitlines()
+                     if line.strip().partition("=")[0] not in pins]
+            contents = "\n".join(lines) + "\n" + "".join(f"{key}={value}\n" for key, value in pins.items())
+            if setup.read_environment(directory / ".env")[0] != original:
+                raise ValueError("Installation environment changed during deployment")
+            atomic(directory / ".env", contents)
+            atomic(directory / "docker-compose.yml", deployment_compose(payload["compose"]))
+            atomic(directory / "demo.override.yml", compose_override(payload["channel"], rootless))
+            atomic(directory / ".release.env", f"CITADEL_IMAGE={payload['core']}\nCITADEL_EDGE_AGENT_IMAGE={payload['agent']}\n")
+            run("config", "--quiet", timeout=30)
+            if setup.SETTING not in settings:
+                run("pull", timeout=600)
+            atomic(attempted, json.dumps(identity, indent=2) + "\n")
+            if database:
+                run("up", "--detach", "--no-deps", "--wait", "--wait-timeout", "180", "server", timeout=240)
+            else:
+                run("up", "--detach", "--wait", "--wait-timeout", "180", timeout=240)
+        with contextlib.redirect_stdout(sys.stderr), setup.locked_installation(directory):
+            # Pin the same daemon for setup, independent of the caller's context.
+            old_context, old_host = os.environ.pop("DOCKER_CONTEXT", None), os.environ.get("DOCKER_HOST")
+            if rootless is not None:
+                os.environ["DOCKER_HOST"] = f"unix:///run/user/{rootless['uid']}/docker.sock"
+            else:
+                os.environ["DOCKER_HOST"] = "unix:///var/run/docker.sock"
+            try:
+                if setup.SETTING in settings:
+                    # Download before stopping Core, so registry latency does not
+                    # extend its replacement downtime.
+                    subprocess.run([*docker, "pull", payload["core"]], check=True,
+                                   stdout=sys.stderr, timeout=600)
+                    setup.enable(args, replace=replace)
+                else:
+                    replace()
+                    setup.enable(args)
+            except setup.SetupError as error:
+                raise ValueError(str(error)) from None
+            finally:
+                if old_context is not None:
+                    os.environ["DOCKER_CONTEXT"] = old_context
+                if old_host is None:
+                    os.environ.pop("DOCKER_HOST", None)
+                else:
+                    os.environ["DOCKER_HOST"] = old_host
         # This records local Compose health; demo.py verifies public HTTPS next.
         atomic(directory / "deployment.json", json.dumps(identity, indent=2) + "\n")
         return {"status": "deployed", **identity}

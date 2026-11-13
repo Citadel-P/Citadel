@@ -47,3 +47,6 @@ Thumbs.db
 
 # Python build/release tooling
 __pycache__/
+
+# Private installation registration, checkpoints and recovery evidence
+.citadel-updates/

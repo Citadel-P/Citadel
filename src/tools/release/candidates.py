@@ -15,6 +15,7 @@ import release
 def run_acceptance(core, agent):
     subprocess.run(["bash", "test/scripts/test-agent-acceptance.sh", core, agent], check=True)
     subprocess.run([sys.executable, "test/scripts/test-update-registration.py", core], check=True)
+    subprocess.run([sys.executable, "test/scripts/test-update-registration.py", core, "--automatic"], check=True)
     subprocess.run([sys.executable, "test/scripts/test-instance-upgrade-local.py", "--runtime-image", core], check=True)
 
 

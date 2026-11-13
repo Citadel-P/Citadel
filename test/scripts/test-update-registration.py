@@ -62,10 +62,15 @@ class Fixture:
         interactive = ["--interactive"] if kwargs.get("stdin") is not None else []
         return self.host("exec", *interactive, *(["--user=0:0"] if self.rootless else []), self.daemon, *args, **kwargs)
 
+    def activate(self, *args, **kwargs):
+        return self.host('exec', *(['--user=1000:1000'] if self.rootless else []),
+                         '-e', 'DOCKER_HOST=unix://' + self.socket, self.daemon, *args, **kwargs)
+
     def docker(self, *args, **kwargs):
         return self.execute("docker", "--host", "unix://" + self.socket, *args, **kwargs)
 
-    def start(self, *, published=False, registry=False, browser_port=None, activation=False):
+    def start(self, *, published=False, registry=False, browser_port=None, activation=False, automatic=False):
+        registry = registry or activation or automatic
         require(not (published and registry), "Fixture registry cannot be used for published releases")
         require(browser_port is None or (registry and 1 <= browser_port <= 65535),
                 "Browser access requires the private registry and a valid local port")
@@ -125,6 +130,17 @@ class Fixture:
         archive.unlink()
         # This tag exists only inside the disposable daemon and is never pushed.
         self.docker("tag", self.core, self.tag)
+        if activation or automatic:
+            # Startup verifies the installed image's RepoDigest. Give this local
+            # candidate a real digest through an isolated loopback registry;
+            # ghcr.io resolves ONLY to this disposable daemon, never public GHCR.
+            registry_id = self.docker('run', '-d', '--network=host', '-e', 'REGISTRY_HTTP_ADDR=0.0.0.0:80', REGISTRY).stdout.decode().strip()
+            deadline = time.monotonic() + 30
+            while self.docker('exec', registry_id, 'wget', '-qO-', 'http://127.0.0.1/v2/', check=False).returncode:
+                require(time.monotonic() < deadline, 'Private fixture registry did not become ready')
+                time.sleep(1)
+            self.docker('push', self.tag, timeout=300)
+
 
     def close(self):
         try:
@@ -145,16 +161,26 @@ class Fixture:
     def read(self, path):
         return self.execute("cat", path).stdout
 
-    def profile(self, edge, *, activation=False):
+    def profile(self, edge, *, activation=False, automatic=False):
         project = "citadel_edge" if edge else "citadel_base"
         directory = f"/opt/{project}"
-        state = f"/opt/{project}-updates"
-        self.execute("mkdir", "-p", directory, state)
-        self.execute("chmod", "700", directory, state)
+        state = f"{directory}/.citadel-updates" if automatic else f"/opt/{project}-updates"
+        directories = [directory] if automatic else [directory, state]
+        self.execute("mkdir", "-p", *directories)
+        self.execute("chmod", "700", *directories)
+        if self.rootless:
+            self.execute("chown", "1000:1000", *directories)
         sources = ["docker-compose.yml"] + (["compose.edge.yml"] if edge else [])
         files = ["installation.yaml", "edge-ports.yaml"] if edge else sources
         for source, name in zip(sources, files):
             content = (ROOT / "deploy/install" / source).read_text()
+            if not automatic:
+                # Explicit custom deployment exercises the manual registration path.
+                content = content.replace('      CITADEL_UPDATE_STATE_DIRECTORY: /var/lib/citadel-updates\n', '')
+                content = content.replace('      - ./.citadel-updates:/var/lib/citadel-updates:ro\n', '')
+            if self.rootless and source == "docker-compose.yml":
+                content = content.replace('/var/run/docker.sock:/var/run/docker.sock', f'{self.socket}:/var/run/docker.sock')
+                content = content.replace('- /:/host:ro', f'- {self.docker_root}:/host{self.docker_root}:ro')
             if edge:
                 content = "# Local installation notes; not a byte-for-byte template.\n" + content
                 if source == "docker-compose.yml":
@@ -163,7 +189,8 @@ class Fixture:
                         marker = f"  {role}:\n"
                         require(content.count(marker) == 1, "Fixture volume role changed")
                         content = content.replace(marker, marker + f"    name: {actual}\n")
-                    content += "\nnetworks:\n  default:\n    name: acceptance_edge_network\n"
+                    content = content.replace("  server:\n", "  server:\n    cpus: 0.75\n    mem_limit: 0\n    memswap_limit: 0\n", 1)
+                    content += "\nnetworks:\n  default:\n    name: acceptance_edge_network\n    ipam:\n      config:\n        - subnet: 172.30.231.0/24\n          gateway: 172.30.231.1\n"
             self.write(f"{directory}/{name}", content)
         password = secrets.token_hex(24)
         env = (
@@ -189,7 +216,7 @@ class Fixture:
                    "--entrypoint", "/app/citadel-server",
                    "--mount", f"type=bind,src={directory},dst={directory},readonly",
                    "--mount", f"type=bind,src={state},dst={state}",
-                   "--mount", "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock",
+                   "--mount", f"type=bind,src={self.socket},dst=/var/run/docker.sock",
                    self.tag, "register-update-installation", "--directory", directory,
                    "--project", project, "--state-directory", state]
         for name in files:
@@ -205,7 +232,7 @@ class Fixture:
             require((result.returncode == 0) == success,
                     "Unexpected installation diagnostic outcome: " + result.stderr.decode(errors="replace"))
             if expected_error:
-                require(expected_error.encode() in result.stderr, "Installation diagnostic failed for an unexpected reason")
+                require(expected_error.encode() in result.stderr, "Installation diagnostic failed for an unexpected reason: " + result.stderr.decode(errors="replace"))
             return json.loads(result.stdout) if success else None
 
         def register(success, expected_error=None):
@@ -230,19 +257,23 @@ class Fixture:
                 request.seek(0)
                 return invoke(utility, success, stdin=request)
 
-        check(False)
-        require(self.execute("test", "-e", f"{state}/installation.lock", check=False).returncode != 0,
-                "Live check created a missing lock file")
-        refresh(False)
-        register(False, "initialized, reachable Citadel database")
-        require(self.execute("test", "-e", f"{state}/installation.json", check=False).returncode != 0,
-                "Registration must not persist before instance setup")
+        if not automatic:
+            check(False)
+            require(self.execute("test", "-e", f"{state}/installation.lock", check=False).returncode != 0,
+                    "Live check created a missing lock file")
+            refresh(False)
+            register(False, "initialized, reachable Citadel database")
+            require(self.execute("test", "-e", f"{state}/installation.json", check=False).returncode != 0,
+                    "Registration must not persist before instance setup")
         port = "18010" if edge else "18000"
         # HTTP setup is the production path; no fixture SQL or fabricated identity.
-        self.execute("wget", "-qO-", "--header=Content-Type: application/json",
+        setup_response = self.execute("wget", "-qO-", "--header=Content-Type: application/json",
                      "--post-data=" + json.dumps({"name": "acceptance", "email": "acceptance@example.test",
                                                  "password": secrets.token_hex(24)}),
                      f"http://127.0.0.1:{port}/api/v1/setup/initialize")
+        if automatic:
+            self.check_automatic(directory, state, compose, core, database, before, check, port, json.loads(setup_response.stdout)["accessToken"])
+            return
         if activation:
             self.activate_updates(directory, state, project, files, compose, core, before[1], check)
             return
@@ -355,17 +386,77 @@ class Fixture:
                 "Core recreation changed recovery keys")
         print(f"{project}: registration, host utility, refresh and evidence preservation passed", flush=True)
 
+    def check_automatic(self, directory, state, compose, core, database, before, check, port, token):
+        print('Verifying automatic Compose registration without a host installer', flush=True)
+        original_env = self.read(f'{directory}/.env')
+        deadline = time.monotonic() + 210
+        while True:
+            registration = json.loads(self.read(f'{state}/installation.json'))
+            if registration.get('kind') == 'DockerCompose':
+                break
+            if time.monotonic() >= deadline:
+                evidence = Path(tempfile.mkdtemp(prefix='citadel-auto-setup-failure-')) / 'core.log'
+                evidence.write_bytes(self.docker('logs', core).stdout + self.docker('logs', core).stderr)
+                evidence.chmod(0o600)
+                raise AssertionError(f'Automatic registration did not complete; private logs: {evidence}')
+            time.sleep(2)
+        require(registration['stateDirectory'] == state, 'Registration did not resolve the host state path')
+        require(registration['coreContainerId'] == core and registration['databaseContainerId'] == database,
+                'Automatic registration changed service identities')
+        check(True)
+        deadline = time.monotonic() + 30
+        while True:
+            status = json.loads(self.execute('wget', '-qO-', '--header=Authorization: Bearer ' + token,
+                                            f'http://127.0.0.1:{port}/api/v1/updates').stdout)
+            if status.get('databaseManaged'):
+                break
+            require(time.monotonic() < deadline, 'Updates status did not observe automatic registration')
+            time.sleep(1)
+        after = json.loads(self.docker('inspect', core, database).stdout)
+        for original, current in zip(before, after):
+            require(current['State']['StartedAt'] == original['State']['StartedAt']
+                    and current['RestartCount'] == original['RestartCount'], 'Registration restarted a service')
+        require(self.read(f'{directory}/.env') == original_env, 'Registration edited .env')
+        saved = self.read(f'{state}/installation.json')
+        # A normal Core restart must admit completed registration without changing it.
+        self.docker(*compose, 'restart', 'server', timeout=90)
+        deadline = time.monotonic() + 90
+        while True:
+            inspected = json.loads(self.docker('inspect', core).stdout)[0]
+            if inspected['State'].get('Health', {}).get('Status') == 'healthy':
+                break
+            require(time.monotonic() < deadline, 'Registered Core did not become healthy after restart')
+            time.sleep(2)
+        require(self.read(f'{state}/installation.json') == saved, 'Restart rewrote registration')
+        check(True)
+        require(not self.docker('ps', '-aq', '--filter', 'label=com.citadel.update-host').stdout.strip(),
+                'Automatic registration left helper containers')
+        # Destructive negative case is confined to this disposable installation.
+        self.docker(*compose, 'stop', 'server', timeout=90)
+        self.execute('rm', f'{state}/installation.json')
+        self.docker(*compose, 'start', 'server')
+        deadline = time.monotonic() + 90
+        while True:
+            logs = self.docker('logs', '--tail', '50', core)
+            if b'Core is in update maintenance' in logs.stdout + logs.stderr:
+                break
+            require(time.monotonic() < deadline, 'Missing registration did not enter maintenance')
+            time.sleep(2)
+        require(self.execute('test', '-e', f'{state}/installation.json', check=False).returncode != 0,
+                'Missing completed registration was silently recreated')
+        print('Automatic setup, unchanged services/configuration, restart and lost-state fencing verified', flush=True)
+
     def activate_updates(self, directory, state, project, files, compose, core, database, check):
         """Run the shipped one-time setup rather than manually reproducing its steps."""
         self.write("/opt/enable-updates.py", (ROOT / "deploy/install/enable-updates.py").read_bytes())
         keys = self.docker("exec", core, "sha256sum", "/app/data/jwtsecret",
                            "/app/data/secret-encryption-key", "/app/data/agent/signing-key").stdout
         image = json.loads(self.docker("inspect", core).stdout)[0]["Image"]
-        args = ["python3", "/opt/enable-updates.py", "--directory", directory,
+        args = ["python3", "/opt/enable-updates.py", "--start", "--directory", directory,
                 "--project", project, "--state-directory", state]
         for name in files:
             args += ["--compose-file", f"{directory}/{name}"]
-        self.execute(*args, timeout=600)
+        self.activate(*args, timeout=600)
         replacement = self.docker(*compose, "ps", "--quiet", "server").stdout.decode().strip()
         require(replacement != core, "Activation did not recreate Core")
         current = json.loads(self.docker("inspect", replacement, database["Id"]).stdout)
@@ -379,18 +470,45 @@ class Fixture:
         registered = self.read(f"{state}/installation.json")
         require(check(True)["registration"]["coreContainerId"] == replacement,
                 "Activated registration did not match Core")
-        self.execute(*args, timeout=300)
+        self.activate(*args, timeout=300)
         require(self.read(f"{state}/installation.json") == registered,
                 "Repeated activation changed registration")
         require(self.docker(*compose, "ps", "--quiet", "server").stdout.decode().strip() == replacement,
                 "Repeated activation restarted Core")
-        print(f"{project}: shipped update setup, unchanged database/keys and idempotent retry passed", flush=True)
+        deployment_check = """
+import argparse, runpy, subprocess, sys
+from pathlib import Path
+setup = runpy.run_path('/opt/enable-updates.py')
+directory, project, state, *files = sys.argv[1:]
+args = argparse.Namespace(directory=directory, project=project, state_directory=state, compose_file=files)
+def replace():
+    env = Path(directory) / '.env'
+    env.write_text(env.read_text() + 'CITADEL_FIXTURE_DEPLOYMENT=1\\n')
+    command = ['docker', 'compose', '--project-name', project, '--project-directory', directory, '--env-file', str(env)]
+    for file in files:
+        command += ['-f', file]
+    subprocess.run([*command, 'up', '-d', '--no-deps', '--pull', 'never', '--wait', '--wait-timeout', '180', 'server'], check=True)
+setup['enable'](args, replace=replace)
+"""
+        self.activate('python3', '-c', deployment_check, directory, project, state,
+                     *[f'{directory}/{name}' for name in files], timeout=600)
+        deployed = self.docker(*compose, 'ps', '--quiet', 'server').stdout.decode().strip()
+        require(deployed != replacement, 'Registered deployment did not recreate Core')
+        require(check(True)['registration']['coreContainerId'] == deployed,
+                'Registered deployment did not refresh Core identity')
+        after_database = json.loads(self.docker('inspect', database['Id']).stdout)[0]
+        require((after_database['Id'], after_database['State']['StartedAt'], after_database['RestartCount'])
+                == (database['Id'], database['State']['StartedAt'], database['RestartCount']),
+                'Registered deployment changed PostgreSQL')
+        print(f"{project}: automatic setup, idempotence and guarded deployment refresh passed", flush=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("core_image", help="Core image built from the current checkout")
     parser.add_argument("--enable-updates", action="store_true", help="Exercise the shipped host activation command")
+    parser.add_argument("--automatic", action="store_true", help="Exercise Compose-only automatic registration")
+    parser.add_argument("--rootless", action="store_true", help="Use a disposable rootless Docker daemon")
     args = parser.parse_args()
 
     def interrupted(*_):
@@ -398,11 +516,11 @@ def main():
 
     signal.signal(signal.SIGTERM, interrupted)
     with tempfile.TemporaryDirectory(prefix="citadel-update-acceptance-") as temporary:
-        fixture = Fixture(args.core_image, Path(temporary))
+        fixture = Fixture(args.core_image, Path(temporary), rootless=args.rootless)
         try:
-            fixture.start(activation=args.enable_updates)
-            fixture.profile(edge=False, activation=args.enable_updates)
-            fixture.profile(edge=True, activation=args.enable_updates)
+            fixture.start(activation=args.enable_updates, automatic=args.automatic)
+            fixture.profile(edge=False, activation=args.enable_updates, automatic=args.automatic)
+            fixture.profile(edge=True, activation=args.enable_updates, automatic=args.automatic)
         finally:
             fixture.close()
 

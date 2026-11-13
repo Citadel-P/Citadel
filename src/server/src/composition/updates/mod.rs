@@ -32,3 +32,8 @@ pub(super) use agents::build_agents;
 
 #[cfg(test)]
 mod agent_fixture;
+
+#[cfg(target_os = "linux")]
+mod automatic;
+#[cfg(target_os = "linux")]
+pub(crate) use automatic::{prepare, registration};
