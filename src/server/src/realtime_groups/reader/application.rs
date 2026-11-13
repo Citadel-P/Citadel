@@ -116,6 +116,53 @@ pub(super) fn workload_rows<T: Serialize>(
     Ok(snapshot)
 }
 
+// Compute event scope once, before authorized queries, enrichment and serialization.
+pub(super) struct WorkloadSelection {
+    pub platform: Option<Uuid>,
+    references: Option<Vec<String>>,
+}
+impl WorkloadSelection {
+    pub fn new(event: Option<&PublishedRuntimeEvent>) -> Self {
+        let event = event.filter(|e| e.resource_type == "Platform" && e.platform_id.is_some());
+        Self {
+            platform: event.and_then(|e| e.platform_id),
+            references: event.and_then(|e| {
+                let action = e.payload["action"].as_str().unwrap_or("");
+                (action.starts_with("health")
+                    || matches!(
+                        action,
+                        "oom" | "start" | "stop" | "die" | "kill" | "pause" | "unpause"
+                    ))
+                .then(|| e.container_ids())
+                .flatten()
+            }),
+        }
+    }
+    pub fn includes(
+        &self,
+        platform: Option<Uuid>,
+        health: &citadel_primitives::health::WorkloadHealth,
+    ) -> bool {
+        self.platform.is_none_or(|scope| platform == Some(scope))
+            && self.references.as_ref().is_none_or(|references| {
+                health.members_truncated
+                    || health.members.iter().any(|member| {
+                        member
+                            .docker_container_id
+                            .as_ref()
+                            .is_some_and(|docker| references.iter().any(|id| id == docker))
+                    })
+            })
+    }
+    pub fn style(&self) -> RowStyle {
+        if self.platform.is_some() {
+            RowStyle::UpdatePatch
+        } else {
+            RowStyle::Update
+        }
+    }
+}
+
 pub(super) fn event(
     target: &'static str,
     value: impl Serialize,
@@ -389,7 +436,7 @@ impl ApplicationGroupReader {
         if let Topic::ContainerHealth(id) = g.topic() {
             let container = self
                 .platforms
-                .get_container(*id)
+                .container_identity(*id)
                 .await
                 .map_err(failure)?
                 .ok_or(RealtimeReadError::Authorization)?;
@@ -507,31 +554,21 @@ impl ApplicationGroupReader {
             Topic::SwarmServices(..) => None,
             Topic::BackupRun(..) => Some(
                 self.backups
-                    .get_run(id.unwrap())
+                    .run_policy_id(id.unwrap())
                     .await
-                    .map_err(failure)?
-                    .backup_policy_id,
+                    .map_err(failure)?,
             ),
-            Topic::BackupRestoreRun(..) => {
-                let restore = self
-                    .backups
-                    .get_restore(id.unwrap())
+            Topic::BackupRestoreRun(..) => Some(
+                self.backups
+                    .restore_policy_id(id.unwrap())
                     .await
-                    .map_err(failure)?;
-                Some(
-                    self.backups
-                        .get_run(restore.backup_run_id)
-                        .await
-                        .map_err(failure)?
-                        .backup_policy_id,
-                )
-            }
+                    .map_err(failure)?,
+            ),
             Topic::BuildRun(..) => Some(
                 self.builds
-                    .get_run(id.unwrap())
+                    .run_project_id(id.unwrap())
                     .await
-                    .map_err(failure)?
-                    .build_project_id,
+                    .map_err(failure)?,
             ),
             Topic::ContainerInfo(..) => return self.container_info(p, g, e, lease).await,
             _ => id,
@@ -626,15 +663,15 @@ impl ApplicationGroupReader {
                         }
                         Err(error) => return Err(error),
                     }
-                    let Some(context) =
+                    let shared_context =
                         crate::realtime::shared_reads::telemetry(&self.platforms, platform_id, e)
-                            .await?
-                    else {
+                            .await?;
+                    let Some(context) = shared_context.as_ref().as_ref() else {
                         return Ok(GroupSnapshot::default());
                     };
                     let Some(payload) = live_platform_stats(
                         platform_id,
-                        &context,
+                        context,
                         &e.unwrap().payload["platformSample"],
                         e.unwrap().payload["dockerNodeId"].as_str(),
                     ) else {
@@ -655,6 +692,7 @@ impl ApplicationGroupReader {
                         crate::realtime::shared_reads::platform(&self.platforms, platform_id, e)
                             .await
                             .map_err(failure)?
+                            .into_owned()
                     } else {
                         None
                     };
@@ -891,6 +929,8 @@ impl ApplicationGroupReader {
                 if crate::realtime::shared_reads::platform(&self.platforms, id.unwrap(), e)
                     .await
                     .map_err(failure)?
+                    .as_ref()
+                    .as_ref()
                     .is_some_and(|platform| {
                         platform.platform_type == citadel_platforms::PlatformKind::DockerSwarm
                     })
@@ -908,12 +948,26 @@ impl ApplicationGroupReader {
                 Ok(result)
             }
             Topic::Deployments => {
+                let selection = WorkloadSelection::new(e);
                 let mut views = self
                     .deployments
-                    .list_authorized(actor, admin, &Default::default())
+                    .list_authorized(
+                        actor,
+                        admin,
+                        &citadel_deployments::DeploymentFilter {
+                            platform_id: selection.platform,
+                            ..Default::default()
+                        },
+                    )
                     .await
                     .map_err(failure)?
                     .into_iter()
+                    .filter(|value| {
+                        selection.includes(
+                            Some(value.resource.platform_id),
+                            &value.resource.probe_health,
+                        )
+                    })
                     .map(crate::api::resources::deployments::views::DeploymentView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
@@ -926,7 +980,7 @@ impl ApplicationGroupReader {
                     )
                     .await;
                 }
-                workload_rows("DeploymentInfoUpdated", views, e)
+                rows("DeploymentInfoUpdated", views, selection.style())
             }
             Topic::Deployment(..) => {
                 let mut view = crate::api::resources::deployments::views::DeploymentView::try_from(
@@ -954,12 +1008,23 @@ impl ApplicationGroupReader {
                 workload_rows("DeploymentInfoUpdated", vec![view], e)
             }
             Topic::Stacks => {
+                let selection = WorkloadSelection::new(e);
                 let mut views = self
                     .stacks
-                    .list_authorized(actor, admin, &Default::default())
+                    .list_authorized(
+                        actor,
+                        admin,
+                        &citadel_stacks::StackFilter {
+                            platform_id: selection.platform,
+                            ..Default::default()
+                        },
+                    )
                     .await
                     .map_err(failure)?
                     .into_iter()
+                    .filter(|value| {
+                        selection.includes(value.resource.platform_id, &value.resource.probe_health)
+                    })
                     .map(crate::api::resources::stacks::views::StackView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
@@ -972,7 +1037,7 @@ impl ApplicationGroupReader {
                     )
                     .await;
                 }
-                workload_rows("StackInfoUpdated", views, e)
+                rows("StackInfoUpdated", views, selection.style())
             }
             Topic::Stack(..) => {
                 let mut view = crate::api::resources::stacks::views::StackView::try_from(

@@ -137,6 +137,13 @@ impl AlertRepository for PostgresAlertRepository {
         self.list_events_impl(actor, administrator, filter)
     }
 
+    fn events_require_administrator<'a>(
+        &'a self,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<bool, AlertError>> {
+        self.events_require_administrator_impl(ids)
+    }
+
     fn get_event(&self, id: Uuid) -> BoxFuture<'_, Result<AlertEvent, AlertError>> {
         self.get_event_impl(id)
     }

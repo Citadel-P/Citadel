@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use citadel_execution::{
-    OutputLimitPolicy, ProcessChunk, ProcessError, ProcessLimits, ProcessRequest,
+    OutputLimitPolicy, OutputRetention, ProcessChunk, ProcessError, ProcessLimits, ProcessRequest,
 };
 use citadel_processes::run;
 use tokio_util::sync::CancellationToken;
@@ -32,6 +32,18 @@ fn process_helper() {
         },
         Ok("finite-output") => {
             std::io::stdout().write_all(&[b'x'; 128]).unwrap();
+        }
+        Ok("both-streams") => {
+            let stderr = std::thread::spawn(|| {
+                for _ in 0..256 {
+                    std::io::stderr().write_all(&[b'e'; 8192]).unwrap();
+                }
+            });
+            for _ in 0..256 {
+                std::io::stdout().write_all(&[b'o'; 8192]).unwrap();
+            }
+            stderr.join().unwrap();
+            std::process::exit(7);
         }
         Ok("wait") => std::thread::sleep(Duration::from_secs(20)),
         Ok("stream-wait") => {
@@ -97,100 +109,116 @@ async fn child_pid(receiver: &mut tokio::sync::mpsc::Receiver<ProcessChunk>) -> 
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn aborting_the_runner_kills_and_eventually_reaps_its_child() {
-    let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
-    let task = tokio::spawn(async move {
-        run(
-            helper("stream-wait", ProcessLimits::default()).output(sender),
-            &CancellationToken::new(),
-        )
+    for retention in [OutputRetention::Capture, OutputRetention::StreamOnly] {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        let task = tokio::spawn(async move {
+            run(
+                helper("stream-wait", ProcessLimits::default())
+                    .output(sender)
+                    .output_retention(retention),
+                &CancellationToken::new(),
+            )
+            .await
+        });
+        let pid = tokio::time::timeout(Duration::from_secs(5), child_pid(&mut receiver))
+            .await
+            .unwrap();
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
         .await
-    });
-    let pid = tokio::time::timeout(Duration::from_secs(5), child_pid(&mut receiver))
-        .await
-        .unwrap();
-    task.abort();
-    assert!(task.await.unwrap_err().is_cancelled());
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while std::path::Path::new(&format!("/proc/{pid}")).exists() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("Tokio must reap a child whose runner was dropped");
+        .expect("Tokio must reap a child whose runner was dropped");
+    }
 }
 
 #[tokio::test]
 async fn a_full_output_channel_does_not_prevent_timeout_cleanup() {
-    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
-    let limits = ProcessLimits {
-        timeout: Duration::from_millis(200),
-        ..ProcessLimits::default()
-    };
-    let result = tokio::time::timeout(
-        Duration::from_secs(5),
-        run(
-            helper("output", limits).output(sender),
-            &CancellationToken::new(),
-        ),
-    )
-    .await
-    .unwrap();
-    assert!(matches!(result, Err(ProcessError::Timeout(_))));
+    for retention in [OutputRetention::Capture, OutputRetention::StreamOnly] {
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+        let limits = ProcessLimits {
+            timeout: Duration::from_millis(200),
+            ..ProcessLimits::default()
+        };
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            run(
+                helper("output", limits)
+                    .output(sender)
+                    .output_retention(retention),
+                &CancellationToken::new(),
+            ),
+        )
+        .await
+        .unwrap();
+        assert!(matches!(result, Err(ProcessError::Timeout(_))));
+    }
 }
 
 #[tokio::test]
 async fn timeout_still_applies_when_an_exited_child_has_undelivered_output() {
-    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
-    sender
-        .send(ProcessChunk {
-            stream: "stdout",
-            bytes: b"occupied".to_vec(),
-        })
+    for retention in [OutputRetention::Capture, OutputRetention::StreamOnly] {
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+        sender
+            .send(ProcessChunk {
+                stream: "stdout",
+                bytes: b"occupied".to_vec(),
+            })
+            .await
+            .unwrap();
+        let limits = ProcessLimits {
+            timeout: Duration::from_millis(200),
+            ..ProcessLimits::default()
+        };
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            run(
+                helper("exit", limits)
+                    .output(sender)
+                    .output_retention(retention),
+                &CancellationToken::new(),
+            ),
+        )
         .await
-        .unwrap();
-    let limits = ProcessLimits {
-        timeout: Duration::from_millis(200),
-        ..ProcessLimits::default()
-    };
-    let result = tokio::time::timeout(
-        Duration::from_secs(2),
-        run(
-            helper("exit", limits).output(sender),
-            &CancellationToken::new(),
-        ),
-    )
-    .await
-    .expect("pipe collection must obey the process deadline");
-    assert!(matches!(result, Err(ProcessError::Timeout(_))));
+        .expect("pipe collection must obey the process deadline");
+        assert!(matches!(result, Err(ProcessError::Timeout(_))));
+    }
 }
 
 #[tokio::test]
 async fn cancellation_still_applies_when_an_exited_child_has_undelivered_output() {
-    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
-    sender
-        .send(ProcessChunk {
-            stream: "stdout",
-            bytes: b"occupied".to_vec(),
+    for retention in [OutputRetention::Capture, OutputRetention::StreamOnly] {
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+        sender
+            .send(ProcessChunk {
+                stream: "stdout",
+                bytes: b"occupied".to_vec(),
+            })
+            .await
+            .unwrap();
+        let cancellation = CancellationToken::new();
+        let cancel = async {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            cancellation.cancel();
+        };
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(2), async {
+            tokio::join!(
+                run(
+                    helper("exit", ProcessLimits::default())
+                        .output(sender)
+                        .output_retention(retention),
+                    &cancellation
+                ),
+                cancel,
+            )
         })
         .await
-        .unwrap();
-    let cancellation = CancellationToken::new();
-    let cancel = async {
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        cancellation.cancel();
-    };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(2), async {
-        tokio::join!(
-            run(
-                helper("exit", ProcessLimits::default()).output(sender),
-                &cancellation
-            ),
-            cancel,
-        )
-    })
-    .await
-    .expect("pipe collection must remain cancellable");
-    assert!(matches!(result, Err(ProcessError::Cancelled)));
+        .expect("pipe collection must remain cancellable");
+        assert!(matches!(result, Err(ProcessError::Cancelled)));
+    }
 }
 
 #[tokio::test]
@@ -338,4 +366,105 @@ fn excludes_parent_secrets_and_preserves_explicit_workload_environment() {
         .status()
         .unwrap();
     assert!(status.success());
+}
+
+#[tokio::test]
+async fn stream_only_drains_both_streams_without_retaining_a_transcript() {
+    for retention in [OutputRetention::Capture, OutputRetention::StreamOnly] {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let cancellation = CancellationToken::new();
+        let limits = ProcessLimits {
+            timeout: Duration::from_secs(10),
+            maximum_stdout_bytes: 1024 * 1024,
+            maximum_stderr_bytes: 1024 * 1024,
+            output_limit_policy: OutputLimitPolicy::Truncate,
+        };
+        let consume = async {
+            let mut counts = [0usize; 2];
+            while let Some(chunk) = receiver.recv().await {
+                let chunk: ProcessChunk = chunk;
+                counts[usize::from(chunk.stream == "stderr")] += chunk.bytes.len();
+                tokio::task::yield_now().await;
+            }
+            counts
+        };
+        let (output, counts) = tokio::join!(
+            run(
+                helper("both-streams", limits)
+                    .output(sender)
+                    .output_retention(retention),
+                &cancellation
+            ),
+            consume,
+        );
+        let output = output.unwrap();
+        assert_eq!(output.exit_code, Some(7));
+        assert_eq!(counts, [1024 * 1024; 2]);
+        assert!(output.stdout_truncated && output.stderr_truncated);
+        if retention == OutputRetention::Capture {
+            assert_eq!(output.stdout.len(), counts[0]);
+            assert_eq!(output.stderr.len(), counts[1]);
+        } else {
+            assert_eq!(output.stdout.capacity() + output.stderr.capacity(), 0);
+        }
+    }
+}
+
+#[tokio::test]
+async fn stream_only_preserves_limit_errors_and_closed_consumer_errors() {
+    let limits = ProcessLimits {
+        maximum_stdout_bytes: 32,
+        ..ProcessLimits::default()
+    };
+    let result = run(
+        helper("output", limits).output_retention(OutputRetention::StreamOnly),
+        &CancellationToken::new(),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(ProcessError::OutputLimit {
+            stream: "stdout",
+            limit: 32
+        })
+    ));
+
+    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    drop(receiver);
+    let result = run(
+        helper("output", ProcessLimits::default())
+            .output(sender)
+            .output_retention(OutputRetention::StreamOnly),
+        &CancellationToken::new(),
+    )
+    .await;
+    assert!(
+        matches!(result, Err(ProcessError::Io(error)) if error.kind() == std::io::ErrorKind::BrokenPipe)
+    );
+}
+
+#[tokio::test]
+async fn stream_only_cancellation_closes_output_and_reaps() {
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    let cancellation = CancellationToken::new();
+    let limits = ProcessLimits {
+        timeout: Duration::from_secs(5),
+        ..ProcessLimits::default()
+    };
+    let execution = run(
+        helper("stream-wait", limits)
+            .output(sender)
+            .output_retention(OutputRetention::StreamOnly),
+        &cancellation,
+    );
+    let observe = async {
+        let pid = child_pid(&mut receiver).await;
+        cancellation.cancel();
+        while receiver.recv().await.is_some() {}
+        pid
+    };
+    let (result, _pid) = tokio::join!(execution, observe);
+    assert!(matches!(result, Err(ProcessError::Cancelled)));
+    #[cfg(target_os = "linux")]
+    assert!(!std::path::Path::new(&format!("/proc/{_pid}")).exists());
 }

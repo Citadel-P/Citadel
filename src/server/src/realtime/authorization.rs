@@ -146,6 +146,7 @@ impl RealtimeReadPort for IdentityRealtimeReader {
                 .await?;
             super::shared_reads::platform(&self.platforms, platform_id, Some(event))
                 .await?
+                .into_owned()
                 .map(PlatformView::try_from)
                 .transpose()
                 .map_err(|error| RealtimeReadError::Storage(error.to_string()))?

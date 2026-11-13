@@ -291,3 +291,52 @@ async fn dense_host_keeps_all_six_poll_cycles_until_the_normal_minute_flush() {
     while pq.try_recv().is_ok() {}
     assert_eq!(budget.available(), super::budget::RETAINED_BYTES);
 }
+
+#[tokio::test]
+async fn ingress_estimates_each_sample_once_and_keeps_sizes_aligned_after_filtering() {
+    let (containers, mut cq) = writer::channel(8, RuntimeWork::ContainerStatsIngress);
+    let (platforms, mut pq) = writer::channel(8, RuntimeWork::PlatformStatsIngress);
+    let ingress = StatsIngress {
+        containers,
+        platforms,
+        realtime: None,
+        budget: Default::default(),
+    };
+    let scope = scope(None);
+    let mut invalid = sample("invalid", 10);
+    invalid.memory_active_cache = Some(101.0);
+    let mut optional = sample("escaped\"\n\\", 10);
+    optional.memory_active_cache = Some(0.0);
+    optional.block_read_bytes = Some(20.0);
+    let input = vec![
+        invalid,
+        sample(&"a".repeat(64), 10),
+        optional,
+        sample(&"large".repeat(1000), 10),
+    ];
+    let expected: Vec<_> = input
+        .iter()
+        .skip(1)
+        .map(|s| super::budget::container_bytes(super::budget::scope_bytes(&scope), s))
+        .collect();
+    super::budget::CONTAINER_ESTIMATES.with(|count| count.set(0));
+    assert!(
+        ingress
+            .submit(scope, input, None, &CancellationToken::new())
+            .await
+    );
+    assert_eq!(
+        super::budget::CONTAINER_ESTIMATES.with(|count| count.get()),
+        4
+    );
+    for encoded in expected {
+        let envelope = cq.try_recv().unwrap();
+        assert_eq!(envelope.encoded, encoded);
+    }
+    assert!(cq.try_recv().is_err());
+    assert!(
+        pq.try_recv().is_err(),
+        "invalid input must suppress the entire host total"
+    );
+    assert_eq!(ingress.budget.available(), super::budget::RETAINED_BYTES);
+}

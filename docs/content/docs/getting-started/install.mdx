@@ -30,9 +30,7 @@ chmod 600 .env
 
 </InstallationStep>
 
-Keep both files in this directory. For an existing installation, follow
-[upgrade and rollback](/operations/upgrade-and-rollback) and keep your
-existing `.env` and Compose project name.
+Keep the Compose file and `.env` in this directory.
 
 If the download returns `404` because repository access is restricted, open
 [the installation folder](https://github.com/Citadel-P/Citadel/tree/main/deploy/install)
@@ -95,9 +93,7 @@ installation directory:
 <InstallationStep name="start">
 
 ```bash
-docker compose pull
 docker compose up -d
-docker compose ps
 ```
 
 </InstallationStep>
@@ -109,9 +105,7 @@ and use these commands instead:
 <InstallationStep name="start_tls">
 
 ```bash
-docker compose -f docker-compose.yml -f compose.direct-tls.yml pull
 docker compose -f docker-compose.yml -f compose.direct-tls.yml up -d
-docker compose -f docker-compose.yml -f compose.direct-tls.yml ps
 ```
 
 </InstallationStep>
@@ -129,29 +123,21 @@ on a remote server, use the HTTPS address you configured above.
 Complete [first-run setup](/getting-started/first-run-setup),
 then [connect your first Platform](/getting-started/first-platform).
 
-## 4. Enable in-app updates
+## 4. Automatic update setup
 
-After completing first-run setup, return to the Docker host terminal:
+The supplied Compose file configures updates automatically after you create the
+administrator account. Core verifies the Compose files, running containers and
+database identity, then enables in-app Core and bundled PostgreSQL updates.
+No Python scripts, extra setup command or update settings in `.env` are required.
+Neither Core nor PostgreSQL is restarted by registration. Installing an update
+still requires the normal approval; PostgreSQL updates require explicit approval.
 
-```bash
-cd /opt/citadel
-curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/enable-updates.py -o enable-updates.py
-python3 enable-updates.py --directory /opt/citadel --project citadel
-```
+Update registration and recovery files live in `.citadel-updates` beside your
+Compose file. Keep this directory with your installation; do not delete it or
+edit its contents. Compose mounts it read-only into Core; short-lived updater
+helpers access it on the Docker host when needed.
 
-Python **3.10 or newer** is required. Use your actual project and directory, and
-pass the original Compose overlays in order if you used them. Setup verifies the
-installation and briefly restarts only Core; it does not update PostgreSQL or
-install a new release. See [setup details and recovery](/operations/upgrade-and-rollback#enable-in-app-updates).
-
-## 5. Protect your installation data
-
-Keep `.env` private. Keep the `citadel_data` and `postgres_data` volumes: together
-they hold accounts, settings, history, and the keys used to protect saved secrets.
-Configure a [control-plane backup](/resources/backups) and keep a copy away
-from the Docker host. Do not delete these volumes during an upgrade.
-
-See [requirements](/getting-started/requirements),
-[configuration](/getting-started/configuration), and
-[upgrade and rollback](/operations/upgrade-and-rollback) when planning a
-permanent installation.
+Custom layouts must satisfy the supported update profile. If automatic setup
+cannot finish, check `docker compose logs server`, correct the reported issue,
+and restart Core with `docker compose restart server` to retry. See
+[setup recovery](/operations/upgrade-and-rollback#interrupted-update-setup).

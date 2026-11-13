@@ -28,8 +28,9 @@ pub use recovery_keys::{CheckedRecoveryKeys, RecoveryKeySource, check_recovery_k
 mod bootstrap;
 #[cfg(target_os = "linux")]
 pub use bootstrap::{
-    CheckedUpdateInstallation, CheckpointStorage, check_registered_compose_installation,
-    refresh_compose_installation, register_compose_installation,
+    AUTOMATIC_STATE_MOUNT, AutomaticComposeSetup, CheckedUpdateInstallation, CheckpointStorage,
+    check_registered_compose_installation, discover_automatic_setup, refresh_compose_installation,
+    register_compose_installation,
 };
 #[cfg(target_os = "linux")]
 mod journal;
@@ -69,6 +70,6 @@ pub use handoff::{
 };
 #[cfg(target_os = "linux")]
 pub use host::{
-    DockerUpdateInstallation, HostUpdateClient, HostUpdateRequest, HostUpdateResponse,
-    execute_host_update,
+    AutomaticComposeRegistration, DockerUpdateInstallation, HostUpdateClient, HostUpdateRequest,
+    HostUpdateResponse, execute_host_update,
 };

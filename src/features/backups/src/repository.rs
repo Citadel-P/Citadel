@@ -157,6 +157,9 @@ pub trait BackupPersistence: Send + Sync {
         policy_id: Option<Uuid>,
         limit: usize,
     ) -> BoxFuture<'_, Result<Vec<BackupRun>, BackupError>>;
+    /// Resolve the permission resource without loading items or execution details.
+    fn run_policy_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BackupError>>;
+    fn restore_policy_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BackupError>>;
     fn get_run(&self, id: Uuid) -> BoxFuture<'_, Result<BackupRun, BackupError>>;
     fn backup_logs(&self, id: Uuid) -> BoxFuture<'_, Result<Vec<BackupLog>, BackupError>>;
     fn cancel_backup(&self, id: Uuid) -> BoxFuture<'_, Result<bool, BackupError>>;

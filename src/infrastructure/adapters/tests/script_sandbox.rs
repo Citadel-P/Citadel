@@ -213,6 +213,37 @@ async fn actual_deno_cache_does_not_accumulate_across_repeated_or_concurrent_run
     let (result, ()) = tokio::join!(sandbox.execute(run, &cancellation, None), cancel);
     assert_eq!(result.status, ScriptRunStatus::Cancelled);
     fixture.assert_empty();
+
+    let cancelled = CancellationToken::new();
+    let run = input(
+        "await Deno.writeTextFile(Deno.cwd() + '/pid', Deno.pid.toString()); await new Promise(() => setInterval(() => {}, 1000));",
+    );
+    let marker = sandbox.work_root.join(run.run_id.to_string()).join("pid");
+    let _pid;
+    {
+        let execution = sandbox.execute(run, &cancelled, None);
+        tokio::pin!(execution);
+        _pid = tokio::select! {
+            result = &mut execution => panic!("unexpected completion: {:?}", result.status),
+            pid = tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    if let Ok(value) = tokio::fs::read_to_string(&marker).await
+                        && let Ok(pid) = value.parse::<u32>() { break pid; }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }) => pid.expect("Deno did not start"),
+        };
+    }
+    fixture.tasks.drain(Duration::from_secs(5)).await.unwrap();
+    fixture.assert_empty();
+    #[cfg(target_os = "linux")]
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while std::path::Path::new(&format!("/proc/{_pid}")).exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("abandoned Deno child must be reaped");
 }
 
 struct ChunkedOutput;
@@ -277,3 +308,7 @@ async fn long_progress_lines_preserve_split_utf8_and_redaction() {
     assert!(!streamed.contains("fixture-secret"));
     fixture.assert_empty();
 }
+
+#[cfg(unix)]
+#[path = "script_sandbox/execution_cycles.rs"]
+mod execution_cycles;

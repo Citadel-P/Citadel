@@ -116,6 +116,12 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .unwrap();
     assert!(!rolled_back);
     let queued = store.enqueue(actor, project.id, "Manual").await.unwrap();
+    assert_eq!(store.run_project_id(queued.id).await.unwrap(), project.id);
+    assert!(matches!(
+        store.run_project_id(Uuid::now_v7()).await,
+        Err(citadel_builds::BuildError::NotFound)
+    ));
+
     let claim = store
         .claim_next(Utc::now() - Duration::minutes(5))
         .await

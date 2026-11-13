@@ -56,6 +56,7 @@ pub struct Config {
     pub instance_overrides: citadel_instance::InstanceOverrides,
     pub updates_enabled: bool,
     pub update_state_directory: Option<PathBuf>,
+    pub update_registration_ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub execution: execution::ExecutionConfig,
     pub listen_address: SocketAddr,
     pub database_url: String,
@@ -318,6 +319,9 @@ impl Config {
             instance_overrides: overrides,
             updates_enabled: release_checks_allowed_from_env()?,
             update_state_directory: update_state_directory_from_env()?,
+            update_registration_ready: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+                true,
+            )),
             execution,
             listen_address,
             database_url,

@@ -49,6 +49,8 @@ impl HostUpdateClient {
     ) -> Result<(HostUpdateResponse, String, String), UpdateError> {
         validate_absolute(&self.state_directory)?;
         let requested_state = match &request {
+            HostUpdateRequest::AutomaticStartup { setup, .. }
+            | HostUpdateRequest::RegisterAutomatic(setup) => setup.state_directory.as_path(),
             HostUpdateRequest::Startup { state_directory }
             | HostUpdateRequest::Check { state_directory } => state_directory.as_path(),
             HostUpdateRequest::CheckDatabase(plan) => {

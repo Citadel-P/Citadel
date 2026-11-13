@@ -251,6 +251,14 @@ impl BackupPersistence for Store {
     ) -> BoxFuture<'_, Result<Vec<BackupRun>, BackupError>> {
         self.inner.list_runs(actor, administrator, policy_id, limit)
     }
+    fn run_policy_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BackupError>> {
+        self.inner.run_policy_id(id)
+    }
+
+    fn restore_policy_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BackupError>> {
+        self.inner.restore_policy_id(id)
+    }
+
     fn get_run(&self, id: Uuid) -> BoxFuture<'_, Result<BackupRun, BackupError>> {
         self.inner.get_run(id)
     }

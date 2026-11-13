@@ -180,6 +180,10 @@ impl BuildRepository for PostgresBuildRepository {
         self.list_runs_impl(actor, administrator, project_id, limit)
     }
 
+    fn run_project_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BuildError>> {
+        self.run_project_id_impl(id)
+    }
+
     fn get_run<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildRun, BuildError>> {
         self.get_run_impl(id)
     }

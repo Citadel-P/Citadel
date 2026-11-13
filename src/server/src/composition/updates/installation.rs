@@ -30,12 +30,15 @@ pub(crate) fn build_installation(
     let repository = Arc::new(PostgresUpdateRepository::new(pool.clone()));
     Ok(Some(UpdateInstallService::new(
         repository.clone(),
-        Arc::new(DockerUpdateInstallation::new(
-            process.clone(),
-            directory,
-            env!("CITADEL_BUILD_VERSION").into(),
-            pool.clone(),
-        )),
+        Arc::new(
+            DockerUpdateInstallation::new(
+                process.clone(),
+                directory,
+                env!("CITADEL_BUILD_VERSION").into(),
+                pool.clone(),
+            )
+            .with_registration(config.update_registration_ready.clone()),
+        ),
         Arc::new(ReleaseInspectionService::new(
             super::releases::artifacts(process.clone())?,
             Arc::new(DockerReleaseInspection::new(process)),

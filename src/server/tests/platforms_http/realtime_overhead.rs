@@ -13,6 +13,16 @@ use tokio_util::sync::CancellationToken;
 #[tokio::test]
 #[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
 async fn realtime_collection_recheck_does_not_reload_locked_inventory() {
+    recheck_with_locked_tables(false).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn realtime_container_recheck_does_not_load_statistics_images_or_deployments() {
+    recheck_with_locked_tables(true).await;
+}
+
+async fn recheck_with_locked_tables(detail: bool) {
     let f = fixture().await;
     let cancellation = CancellationToken::new();
     let _guard = cancellation.clone().drop_guard();
@@ -48,14 +58,30 @@ async fn realtime_collection_recheck_does_not_reload_locked_inventory() {
             .unwrap();
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &f.administrator).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
-    let group = format!("containers:{}", f.platform_id);
+    let group = if detail {
+        let id: Uuid = sqlx::query_scalar(
+            "SELECT id FROM containers WHERE platformid=$1 AND dockercontainerid='container-1'",
+        )
+        .bind(f.platform_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        format!("container-info:{id}")
+    } else {
+        format!("containers:{}", f.platform_id)
+    };
     assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
+    let initial = receive(&mut socket).await;
     assert_eq!(
-        receive(&mut socket).await["target"],
-        "ContainersInfoUpdated"
+        initial["target"],
+        if detail {
+            "ReceiveContainerInfo"
+        } else {
+            "ContainersInfoUpdated"
+        }
     );
     let mut lock = f.pool.begin().await.unwrap();
-    sqlx::query("LOCK TABLE containers IN ACCESS EXCLUSIVE MODE")
+    sqlx::query(if detail { "LOCK TABLE statisticssamples, statisticsrollups, images, deployments IN ACCESS EXCLUSIVE MODE" } else { "LOCK TABLE containers IN ACCESS EXCLUSIVE MODE" })
         .execute(&mut *lock)
         .await
         .unwrap();
@@ -147,5 +173,137 @@ async fn realtime_stack_statistics_do_not_reload_stack_configuration() {
     );
     assert!(snapshot.events[0].arguments[0][0].get("state").is_none());
     lock.rollback().await.unwrap();
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn realtime_scoped_workloads_query_only_the_platform_and_preserve_unaffected_rows() {
+    use citadel_server::realtime_groups::GroupSubscription;
+    let f = fixture().await;
+    let other = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,volumecount,platformdescriptor,status) VALUES($1,$2,$2,'Local',2,0,1000,0,0,'{\"$type\":\"Docker\"}','Online')")
+        .bind(other).bind(other.to_string()).execute(&f.pool).await.unwrap();
+    let spec: citadel_deployments::DeploymentSpec = serde_json::from_value(json!({"image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}})).unwrap();
+    for platform in [f.platform_id, other] {
+        for _ in 0..3 {
+            let id = Uuid::now_v7();
+            sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,controlstate,createdbyactorid) VALUES($1,$2,$3,$4,'Healthy','Idle',$5)")
+                .bind(id).bind(id.to_string()).bind(platform).bind(spec.to_storage_value().unwrap()).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+        }
+    }
+    let reader = reader(&f);
+    let group = Group::parse("deployments").unwrap();
+    let initial = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(initial.rows[0].rows.len(), 6);
+    let mut subscription = GroupSubscription::new(group.clone());
+    subscription.apply(initial, 100).unwrap();
+    // Malformed configuration on another platform must never be loaded by this scoped read.
+    sqlx::query("UPDATE deployments SET spec='{}' WHERE platformid=$1")
+        .bind(other)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));
+    let mut receiver = hub.subscribe();
+    hub.publish_runtime_change(f.platform_id, "platform", "update", "");
+    let change = receiver.recv().await.unwrap();
+    let scoped = reader
+        .read(&f.administrator, &group, Some(&change))
+        .await
+        .unwrap();
+    assert_eq!(scoped.rows[0].rows.len(), 3);
+    assert!(
+        scoped.rows[0]
+            .rows
+            .iter()
+            .all(|row| row["platformId"] == json!(f.platform_id))
+    );
+    let events = subscription.apply(scoped, 100).unwrap();
+    assert_eq!(events.len(), 3);
+    assert!(events.iter().all(|e| e.target == "DeploymentInfoUpdated"));
+    // Full snapshots still validate/read all authorized rows.
+    assert!(reader.read(&f.administrator, &group, None).await.is_err());
+    sqlx::query("UPDATE deployments SET spec=$1 WHERE platformid=$2")
+        .bind(spec.to_storage_value().unwrap())
+        .bind(other)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let reconnect = reader.read(&f.administrator, &group, None).await.unwrap();
+    assert_eq!(reconnect.rows[0].rows.len(), 6);
+    let mut denied = f.administrator.clone();
+    denied.roles.clear();
+    denied.actor_id = ActorId::new(Uuid::now_v7());
+    assert!(reader.read(&denied, &group, Some(&change)).await.is_err());
+    cleanup(f).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn realtime_telemetry_context_is_shared_without_bypassing_actor_access() {
+    use citadel_platforms::stats_ingestion::{PlatformStatsSample, StatsScope};
+    let f = fixture().await;
+    let reader = reader(&f);
+    let group = Group::parse("platforms").unwrap();
+    let total = PlatformStatsSample {
+        scope: StatsScope {
+            platform_id: f.platform_id,
+            node_id: None,
+            connector: "Local".into(),
+            address: None,
+            agent_id: None,
+            connected_at: None,
+            closed: None,
+        },
+        created: 1,
+        memory_active: 100.,
+        cpu_usage: 20.,
+        rx_bytes: 1.,
+        tx_bytes: 2.,
+        metadata: None,
+        container_io: vec![],
+    };
+    let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));
+    let mut receiver = hub.subscribe();
+    hub.publish_scoped_container_stats_with_total(f.platform_id, None, &[], Some(&total));
+    let change = receiver.recv().await.unwrap();
+    let initial = reader
+        .read(&f.administrator, &group, Some(&change))
+        .await
+        .unwrap();
+    assert_eq!(initial.events[0].target, "PlatformStatsUpdated");
+    let mut lock = f.pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE platforms IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    for _ in 0..8 {
+        let snapshot = tokio::time::timeout(
+            StdDuration::from_secs(1),
+            reader.read(&f.administrator, &group, Some(&change)),
+        )
+        .await
+        .expect("subscriber reread the shared telemetry context")
+        .unwrap();
+        assert_eq!(snapshot.events[0].arguments, initial.events[0].arguments);
+    }
+    lock.rollback().await.unwrap();
+    let mut denied = f.administrator.clone();
+    denied.roles.clear();
+    denied.actor_id = ActorId::new(Uuid::now_v7());
+    assert!(reader.read(&denied, &group, Some(&change)).await.is_err());
+    sqlx::query("UPDATE platforms SET memtotal=memtotal+1000 WHERE id=$1")
+        .bind(f.platform_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    hub.publish_scoped_container_stats_with_total(f.platform_id, None, &[], Some(&total));
+    let fresh = receiver.recv().await.unwrap();
+    let refreshed = reader
+        .read(&f.administrator, &group, Some(&fresh))
+        .await
+        .unwrap();
+    assert_ne!(refreshed.events[0].arguments, initial.events[0].arguments);
     cleanup(f).await;
 }

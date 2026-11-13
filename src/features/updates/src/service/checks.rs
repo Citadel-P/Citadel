@@ -31,7 +31,6 @@ pub struct ReleaseCheckService {
     check_lock: Arc<tokio::sync::Mutex<()>>,
     notifier: Arc<dyn UpdateChangeNotifier>,
     agents: Option<crate::AgentUpdateService>,
-    installer: Option<crate::UpdateInstallService>,
     database: Option<Arc<dyn crate::DatabaseInstallationRuntime>>,
 }
 
@@ -49,7 +48,6 @@ impl ReleaseCheckService {
             check_lock: Default::default(),
             notifier: Arc::new(NoopUpdateChangeNotifier),
             agents: None,
-            installer: None,
             database: None,
         }
     }
@@ -67,11 +65,6 @@ impl ReleaseCheckService {
             Some(runtime) => runtime.database_installation(cancellation).await,
             None => crate::DatabaseInstallation::Unknown,
         }
-    }
-
-    pub fn with_installer(mut self, installer: Option<crate::UpdateInstallService>) -> Self {
-        self.installer = installer;
-        self
     }
 
     pub async fn resolve_installed_alert(&self) -> Result<(), UpdateError> {
@@ -255,21 +248,12 @@ impl ReleaseCheckService {
             Err(_) => self.publish(self.available(), true),
         }
         self.resolve_installed_alert().await?;
-        if checked
-            && let Some(notice) = self.available()
-            && let Some(installer) = &self.installer
-        {
-            // Qualification performs no claim, approval or installation. Failed or
-            // unsupported inspection must neither advertise nor clear an old alert.
-            if installer
-                .qualify_availability(&notice.version, cancellation)
-                .await
-                .is_ok()
-            {
-                self.repository
-                    .observe_core_availability(&self.current_version, Some(&notice.version))
-                    .await?;
-            }
+        if checked && let Some(notice) = self.available() {
+            // Discovery is informational, including installations updated manually.
+            // Review/approval still verifies artifacts and installation eligibility.
+            self.repository
+                .observe_core_availability(&self.current_version, Some(&notice.version))
+                .await?;
         }
         if let Some(agents) = &self.agents {
             agents.check(cancellation).await?;

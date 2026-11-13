@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Enable the existing Citadel updater on a local Linux Compose installation.
 
-Run after first-run setup. This does not install a release or update PostgreSQL.
+The supplied Compose file registers updates automatically; this utility is for custom deployments.
+For existing installations, run this command after first-run setup. Activation
+does not install a release or update PostgreSQL.
 The packaged Rust registration/check commands remain the authority for eligibility.
 """
 import argparse
+from contextlib import contextmanager
 import fcntl
 import json
 import os
@@ -14,6 +17,7 @@ import signal
 import stat
 import subprocess
 import sys
+import time
 import tempfile
 import uuid
 
@@ -45,11 +49,19 @@ def private_path(path, directory=False, private=False):
     return path
 
 
+def read_input(path):
+    with path.open('rb') as source:
+        value = source.read(1024 * 1024 + 1)
+    if len(value) > 1024 * 1024:
+        raise SetupError('Installation input exceeds the 1 MiB limit.')
+    return value
+
+
 def read_environment(path):
     private_path(path, private=True)
     if path.stat().st_size > 1024 * 1024:
         raise SetupError("The installer .env is too large.")
-    raw = path.read_bytes()
+    raw = read_input(path)
     values = {}
     for line in raw.decode('utf-8').splitlines():
         line = line.strip()
@@ -72,13 +84,16 @@ def run(args, *, cwd, environment, step, timeout=180):
         raise SetupError(f"{step} failed. No update was approved. Preserve .env and the update-state directory; see the update setup recovery guide.") from error
 
 
-def enable(args):
+def enable(args, *, replace=None):
+    """Activate updates, or verify and refresh an explicitly owned CI replacement.
+
+    replace is a trusted deployment callback, never an HTTP input. Existing
+    registrations must pass preflight before that callback may change anything.
+    """
     directory = private_path(Path(args.directory), directory=True)
     files = [private_path(Path(value)) for value in args.compose_file] if args.compose_file else [private_path(directory / 'docker-compose.yml')]
     if not 1 <= len(files) <= 4 or len(set(files)) != len(files) or any(p.parent != directory for p in files):
         raise SetupError("Supply the original one to four Compose files, in order, directly inside the installation directory.")
-    if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', args.project):
-        raise SetupError("Supply the existing Compose project name; do not choose a new name.")
     state = Path(args.state_directory) if args.state_directory else directory.with_name(directory.name + '-update-state')
     private_path(state.parent, directory=True)
     if state == directory or state in directory.parents or directory in state.parents:
@@ -86,6 +101,12 @@ def enable(args):
     env_path = directory / '.env'
     original, settings = read_environment(env_path)
     configured = settings.get(SETTING)
+    if not args.state_directory and configured:
+        state = Path(configured)
+        private_path(state, directory=True, private=True)
+    if state == directory or state in directory.parents or directory in state.parents:
+        raise SetupError('Use a separate update-state directory outside the installation directory.')
+    project = args.project or settings.get('COMPOSE_PROJECT_NAME')
     if configured is not None and configured != str(state):
         raise SetupError("The existing update-state setting differs; it was not replaced.")
     # Do not let shell variables silently override the protected Compose inputs.
@@ -122,9 +143,36 @@ def enable(args):
     docker_root = Path(info['DockerRootDir'])
     if state == docker_root or docker_root in state.parents:
         raise SetupError("Keep update state outside Docker's data directory.")
-    compose = [*docker, 'compose', '--project-name', args.project, '--project-directory', str(directory), '--env-file', str(env_path)]
+    compose = [*docker, 'compose', '--project-directory', str(directory), '--env-file', str(env_path)]
     for path in files:
         compose += ['-f', str(path)]
+    resolved = json.loads(command([*compose, 'config', '--format', 'json'], 'Compose project inspection'))
+    if resolved.get('services', {}).get('server', {}).get('environment', {}).get(SETTING) == '/var/lib/citadel-updates':
+        raise SetupError('This Compose installation configures updates automatically. Complete administrator setup and check Core logs. Restart Core to retry pending setup; do not create a second state directory.')
+    if project is None:
+        project = resolved['name']
+    if not isinstance(project, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', project):
+        raise SetupError("Supply the existing Compose project name; do not choose a new name.")
+    compose += ['--project-name', project]
+    if getattr(args, 'start', False) and not configured:
+        # Existing installations are never implicitly upgraded by the installer.
+        existing = command([*compose, 'ps', '--all', '--quiet'], 'Existing installation inspection')
+        if not existing:
+            print('Downloading installation images and starting Citadel…', flush=True)
+            command([*compose, 'pull'], 'Installation image download', timeout=600)
+            command([*compose, 'up', '-d', '--wait', '--wait-timeout', '180'], 'Installation startup', timeout=240)
+        print('Complete administrator setup in your browser. This command will then enable Core and PostgreSQL updates automatically.', flush=True)
+        deadline = time.monotonic() + getattr(args, 'setup_timeout', 1800)
+        while True:
+            try:
+                identity = command([*compose, 'exec', '-T', 'server', '/app/citadel-server', 'instance-identity-json'], 'First-run setup check', timeout=15)
+                if uuid.UUID(json.loads(identity)['instanceId']).int:
+                    break
+            except (SetupError, ValueError, KeyError, TypeError, AttributeError):
+                pass
+            if time.monotonic() >= deadline:
+                raise SetupError('Administrator setup was not verified before the wait expired. Containers were left running; finish setup and rerun this command.')
+            time.sleep(3)
     def inspect_service(service):
         ids = command([*compose, 'ps', '-q', service], 'Compose service inspection').splitlines()
         if len(ids) != 1:
@@ -157,20 +205,45 @@ def enable(args):
             except SetupError:
                 print(f'If retained, inspect setup helper {name}. Do not delete update-state files.', file=sys.stderr)
             raise
-    register = ['register-update-installation', '--directory', str(directory), '--project', args.project,
+    register = ['register-update-installation', '--directory', str(directory), '--project', project,
                 '--state-directory', str(state)]
     for path in files:
         register += ['--compose-file', str(path)]
     check = ['check-update-installation', '--state-directory', str(state)]
     # Rust refuses drift, unsafe mounts, unfinished setup, and active/orphaned
     # recovery evidence. Never refresh an unknown previous configuration.
+    inputs = {path: read_input(path) for path in [env_path, *files]}
     helper_command(register, 'Installation registration')
+    registration = read_input(state / 'installation.json')
+    entries = {p.name: (p.lstat().st_ino, p.lstat().st_mtime_ns, p.lstat().st_size) for p in state.iterdir()}
     helper_command(check, 'Installation and recovery preflight')
     runtime_env = core['Config'].get('Env', [])
     if configured:
         if f'{SETTING}={state}' not in runtime_env:
             raise SetupError("The setting exists but Core is not using it. Complete the documented interrupted-setup procedure; no automatic retry was attempted.")
-        return 'In-app updates are already configured and verified.'
+        if replace is None:
+            return 'In-app updates are already configured and verified.'
+        # Exclude updater helpers while retiring the source. Recheck the evidence
+        # observed by Rust, and database ownership, after acquiring the same lock.
+        # Startup needs this lock, so release it once Core is stopped. A new Core
+        # cannot pass update preflight until the intentional refresh below.
+        lock_path = private_path(state / 'installation.lock', private=True)
+        fd = os.open(lock_path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'rb') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            current = {p.name: (p.lstat().st_ino, p.lstat().st_mtime_ns, p.lstat().st_size) for p in state.iterdir()}
+            if (current != entries or read_input(state / 'installation.json') != registration
+                    or any(read_input(path) != content for path, content in inputs.items())):
+                raise SetupError('Update inputs or evidence changed before deployment; no replacement was attempted.')
+            command([*docker, 'exec', core['Id'], '/app/citadel-server', 'instance-identity-json', '--verify-migrations'], 'Deployment ownership check', timeout=30)
+            command([*docker, 'stop', '--time', '60', core['Id']], 'Deployment Core stop', timeout=90)
+        replace()
+        current_database = inspect_service('pg_db')
+        if (current_database['Id'], current_database['State']['StartedAt'], current_database['RestartCount']) != (database['Id'], database['State']['StartedAt'], database['RestartCount']):
+            raise SetupError('Deployment changed PostgreSQL. Registration was not refreshed; preserve recovery evidence.')
+        helper_command([*register, '--refresh'], 'Registration refresh')
+        helper_command(check, 'Final installation verification')
+        return 'Deployment registration refreshed; Core and PostgreSQL updates are configured.'
     if any(value.startswith(SETTING + '=') for value in runtime_env):
         raise SetupError("Core's update-state setting is not owned by .env. Keep the existing configuration and review it manually.")
     selected_image = command([*docker, 'image', 'inspect', core['Config']['Image'], '--format', '{{.Id}}'], 'Installed image verification')
@@ -212,25 +285,35 @@ def enable(args):
     return 'In-app Core and PostgreSQL updates are configured. No release or database upgrade was installed.'
 
 
+@contextmanager
+def locked_installation(directory):
+    directory = private_path(Path(directory), directory=True)
+    lock_path = directory / '.update-setup.lock'
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'r+b') as lock:
+        private_path(lock_path, private=True)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--directory', required=True, help='Original absolute Compose installation directory')
-    parser.add_argument('--project', required=True, help='Existing Compose project name')
+    parser.add_argument('--directory', default=str(Path.cwd()), help='Original absolute Compose installation directory')
+    parser.add_argument('--project', help='Existing Compose project name')
     parser.add_argument('--compose-file', action='append', default=[], help='Original absolute Compose path; repeat in original order')
     parser.add_argument('--state-directory', help='Private host directory; defaults to <installation-directory>-update-state')
+    parser.add_argument('--start', action='store_true', help='Start a new installation and enable updates automatically after administrator setup')
+    parser.add_argument('--setup-timeout', type=int, default=1800, help='Maximum first-run setup wait in seconds (default: 1800)')
     args = parser.parse_args()
+    if args.setup_timeout < 1:
+        parser.error('--setup-timeout must be positive')
     def interrupted(*_):
         raise KeyboardInterrupt()
     signal.signal(signal.SIGTERM, interrupted)
     try:
         if sys.platform != 'linux':
             raise SetupError('Run update setup on the Linux Docker host.')
-        directory = private_path(Path(args.directory), directory=True)
-        lock_path = directory / '.update-setup.lock'
-        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, 'r+b') as lock:
-            private_path(lock_path, private=True)
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with locked_installation(args.directory):
             print(enable(args))
     except KeyboardInterrupt:
         print('Setup interrupted. Preserve .env and update-state files; verify Core health before retrying.', file=sys.stderr)

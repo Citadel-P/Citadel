@@ -49,9 +49,7 @@ Start Citadel:
 <InstallationStep name="start">
 
 ```bash
-docker compose pull
 docker compose up -d
-docker compose ps
 ```
 
 </InstallationStep>
@@ -74,20 +72,11 @@ There is no default username or password. If you see the sign-in page instead,
 this installation already has an administrator. Ask that administrator for your
 account details before continuing.
 
-## Enable in-app updates
-
-After first-run setup, return to the root shell on the Docker host:
-
-```bash
-cd /opt/citadel
-curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/enable-updates.py -o enable-updates.py
-python3 enable-updates.py --directory /opt/citadel --project citadel
-```
-
-This requires Python **3.10 or newer** and briefly restarts only Core after
-verifying registration. It enables the existing updater without installing any
-updates. For custom paths, overlays, rootless Docker or a failed setup, follow
-[the update setup guide](/operations/upgrade-and-rollback#enable-in-app-updates).
+Core automatically verifies the installation and enables in-app Core and bundled
+PostgreSQL updates after account creation. No extra command or Python scripts are
+needed, and registration does not restart either container. Database upgrades
+still require explicit approval. Keep the generated `.citadel-updates` directory
+beside your Compose file; it holds update registration and recovery state.
 
 ## 3. Connect Docker
 

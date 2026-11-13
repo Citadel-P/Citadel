@@ -182,8 +182,11 @@ on shutdown; neither drops a committing check. The check endpoint returns the
 service result without rereading check state.
 
 Update availability uses the existing Alert Rules, observation outbox and delivery outbox.
-Core observations require the installer's verified transition qualification, without
-creating a review or claim. Agent observations follow a successful compatible release
+Core observations follow successful official release discovery for the running Core's
+release channel, including installations that require manual updates. Notices do not
+claim installation eligibility; artifact/transition verification and approval remain
+part of installation review. Update events and their counts are administrator-only;
+ordinary Alert grants do not expose them. Agent observations follow a successful compatible release
 check and inventory refresh, and refresh again after a batch settles. Installation
 aliases are deduplicated; only names, versions, counts and opaque correlation hashes
 enter alert details. Offline/unknown previously advertised targets retain pending
@@ -534,7 +537,7 @@ fall back to maintenance listeners. Each subsequent phase checks ownership again
 so a completed migration cannot bypass a lost lease between periodic checks.
 Normal shutdown retains the lease through worker and dynamic-task cleanup.
 
-When `CITADEL_UPDATE_STATE_DIRECTORY` is explicitly configured, the Linux adapter
+When `CITADEL_UPDATE_STATE_DIRECTORY` is configured, the Linux adapter
 also checks the existing private registration under a short, nonblocking host lock.
 Containerized Core uses a short-lived utility from its actual installed image,
 with exact host-path binds for installer inputs (read-only), state and the local
@@ -662,17 +665,26 @@ helper-image, container-ID and absolute checkpoint-path contracts still describe
 the container/host executor; they do not qualify another execution backend. Future
 Podman or Kubernetes installation support requires its own qualified adapter and recovery
 semantics; no unsupported kind is accepted or routed through Docker Compose.
-Registration is local operator authority, not an administrator-approved update or a user Activity. The supported installation guides invoke `deploy/install/enable-updates.py` after
-first-run setup. This local host command uses the installed image's registration
-and preflight diagnostics, then atomically adds the state setting to private `.env`,
-recreates only Core without pulling/building, refreshes the intentional change and
-revalidates registration. It preserves ordered Compose inputs and project identity,
-refuses shell overrides, unsafe paths and unsupported daemons, and never repairs
-unknown drift or recovery evidence. Repeated successful setup only revalidates.
-Failures preserve configuration and registration for explicit operator recovery.
-Python orchestrates existing Rust diagnostics; it does not reimplement eligibility
-or grant update approval. Startup checks registration identity and
-private evidence. The local `check-update-installation` diagnostic now revalidates
+Registration is local operator authority, not an administrator-approved update or
+user Activity. The supplied Compose file sets the fixed internal
+`/var/lib/citadel-updates` path and a read-only `.citadel-updates` bind. Startup
+resolves its actual host path from Docker metadata, without relying on shell PWD.
+Only a database without completed administrator setup may seed pending registration
+in an empty dedicated directory. The helper makes that directory private; pending
+and verified registration use the same atomic file, so lost verified state cannot
+be mistaken for an interrupted first setup. Invalid state still blocks admission.
+
+A supervised, cancellable task waits for persisted administrator setup and uses
+the existing bounded host helper and bootstrap/preflight checks to complete
+registration. It retries briefly for Docker health, then stays idle until shutdown;
+restarting Core retries pending setup. Readiness is published in memory only after
+registration is durable, followed by the existing Updates invalidation. Status
+reads never launch registration helpers. No container recreation, `.env` mutation,
+database migration or update approval occurs during registration. Custom deployments
+without the automatic mount retain the explicit `enable-updates.py` utility;
+it uses the same Rust diagnostics and preserves configuration and recovery evidence.
+Startup checks verified registration identity and private evidence.
+The local `check-update-installation` diagnostic now revalidates
 the saved invocation and live runtime using the same bounded inspection as registration.
 It requires existing protected registration and lock files, the recorded executor
 UID/GID and socket, and no execution evidence. It compares stable observations of
@@ -728,6 +740,31 @@ validates the immutable checkpoint, restores through the shared system recovery
 implementation, then checks catalog, claim identity and credential decryption before
 atomically recording failure and releasing the restored claim. Original host evidence
 and the original database remain intact; recovery never fabricates target success.
+
+### Deployment-managed update registration
+
+Demo/preview deployment removes the standard automatic state setting and bind
+from its generated base Compose input. CI retains ownership of the existing
+explicit host-state registration and guarded refresh; it never starts a second
+first-install registrar or moves existing recovery state.
+
+Demo/preview release deployment transports the activation script from the same
+release checkout. Core and Agent pins are written into the captured private
+`.env`; `.release.env` remains a release record and is not an additional Compose
+input. The running PostgreSQL image is preserved across Core deployments.
+CPU/memory ceilings and a single default-IPAM subnet/gateway are supported and
+compared against live Docker settings during registration and replacement.
+
+A registered CI deployment verifies the current registration and recovery
+preflight before replacement. Under the existing installation lock it rechecks
+unchanged evidence and database update ownership, then stops only Core. It releases
+the lock before target startup, whose normal database-claim and recovery checks
+remain authoritative. After the intentional replacement, the existing refresh
+command verifies unchanged database/storage identity and binds the new inputs.
+An interrupted replacement or failed refresh preserves registration and requires
+operator recovery; CI does not blindly refresh drift on retry. Activation never
+approves a Core or PostgreSQL update.
+
 
 ### PostgreSQL engine updates
 
@@ -1012,14 +1049,24 @@ and do not become shared rejection markers. Durable persistence does not depend 
 this budget.
 
 The authorization safety interval reauthenticates and revalidates group access
-without constructing list snapshots or presentation enrichments. Detail groups
-still resolve current ownership/existence, and log/terminal groups retain runtime
+without constructing list snapshots or presentation enrichments. Container detail
+rechecks read only current container identity/ownership; build, backup and restore
+run rechecks resolve only the parent permission resource. Other detail groups still
+resolve current ownership/existence, and log/terminal groups retain runtime
 target validation. Actor-generation fences continue to invalidate access immediately.
 Container/Stack detail statistics use shared narrow container identities and send
 only matching samples; Stack updates use `ReceiveStackContainerStats`, merging into
 known containers without replacing lifecycle metadata. Connection-local platform
 scope hints skip unrelated samples, survive permission-cache clears, and refresh on
 metadata reads and safety checks. They filter work only and never grant access.
+
+Platform-scoped Deployment/Stack invalidations pass that scope to the authorized
+repository query and select typed health owners before coverage/copy enrichment
+and JSON conversion. Truncated member lists refresh conservatively. Scoped rows
+remain update patches; initial, reconnect and workload CRUD reads retain full
+snapshots. Scalar Platform reads and live telemetry context borrow their event's
+cached projection, whose reservation remains owned by that event. Actor-specific
+output construction and access checks remain per subscriber.
 
 Container process lists load through HTTP and
 refresh only for subscribed Inspect viewers on the existing scoped statistics/state
@@ -1166,7 +1213,11 @@ cannot take over history. The same seven-day bounded retention applies.
 
 Capture batches resolve repeated projection identities once, in last-occurrence
 order. Ordinary containers reuse an exact existing source through a set-based
-lookup; Swarm Task reassociation still uses the physical-identity validator.
+lookup; unchanged Workload owners also reuse the complete nullable ownership key,
+with the existing creation helper on a miss. Capture sorts/materialized rows retain
+only metrics and capture/ownership identity, rather than the full Platform descriptor
+and connector/session admission fields. Swarm Task reassociation still uses the
+physical-identity validator.
 The Platform lock is acquired before the capture statement, so existing sealing
 watermarks can be read together from its snapshot. Newly created sources have a
 zero watermark. Each sample is checked against its source watermark before writes,
@@ -1179,7 +1230,7 @@ and rollups. Non-cache memory is derived by subtracting active file cache from t
 working set; it is not process RSS. Missing or inconsistent counters and preexisting
 samples remain unknown. Weighted history buckets, compaction and replica totals
 require complete active-cache coverage; they never treat absent values as zero.
-The shared memory chart defaults to Breakdown and persists its Working set switch
+The shared memory chart defaults to Working set and persists its view selection
 in browser local storage, using the same segmented control as I/O charts. Memory
 alerts and table values retain working-set semantics.
 
@@ -1198,7 +1249,10 @@ keep their reservation through queues, in-flight writes and per-platform retries
 The container and platform portions release independently, so a completed container
 batch does not consume capacity while platform totals wait for their flush. Estimates include string/vector capacity, owned scope data, growing
 vectors and serialization/driver scratch allowances. Serialization is counted into
-a non-allocating sink before admission; it does not build a second JSON tree. An encoded batch is bounded
+a non-allocating sink once per sample before admission; the same estimate travels
+through reservation and enqueue. The temporary estimate vector is included in
+accounting and stays aligned when invalid readings are filtered. This does not
+build a second JSON tree. An encoded batch is bounded
 by an 8 MiB estimate as well as the configured item count. Batches split only
 between complete captures. Oversized or capacity-exhausted collections are dropped
 as complete cycles, counted separately and logged at most once per minute; they
@@ -1638,8 +1692,26 @@ at enqueue. HTTP progress observers use a bounded broadcast and cannot cancel or
 backpressure execution. Explicit cancellation is persisted, including during the
 queued-to-running transition, and workers observe it before starting a process.
 Queued runs survive restart; interrupted executions fail without being replayed.
+The shared process runner captures bounded stdout/stderr by default. Docker build
+commands opt into stream-only retention: byte limits still bound forwarding and
+excess output is drained, but no second transcript survives in `ProcessOutput`.
+Git, probes and scripts retain capture because their callers consume final output.
+On cancellation or producer failure, build output consumers have up to five seconds
+to drain admitted output and finalize redaction, keeping any in-flight append alive.
+Execution cleanup is still awaited and the original producer failure is preserved.
+A drain timeout or persistence failure emits a warning that log delivery may be
+incomplete. Successful execution flushes all admitted output. An interrupted,
+unacknowledged log batch is not replayed because its commit outcome can be ambiguous.
+Build and script cancellation-map entries are scoped to their controller futures;
+removing an entry does not release a durable claim or an uncertain executor reservation.
+Stack apply drops copied Compose text and parsed/resolved preparation data before
+execution. The source bundle remains borrowed by the runtime until execution ends,
+then is released before completion retries; immutable release provenance and
+binding snapshots remain available. Staged release files keep their existing lifetime.
+
 Core and Agent Deno caches live inside each private run workspace and are removed
 with its generated source on completion, failure, timeout or cancellation. The
+in-memory generated source is released once the workspace has written it. The
 cache is not shared across runs: generated module paths and credentials are unique
 to each execution. This bounds retained cache by active work rather than run count;
 per-run imported modules are fetched again. Existing shared-cache directories from

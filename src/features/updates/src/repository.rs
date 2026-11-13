@@ -21,7 +21,9 @@ pub trait ReleaseCheckRepository: Send + Sync {
     /// Version of the connected PostgreSQL server, never the client binary or image tag.
     fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>>;
 
-    /// Availability must come from verified transition qualification, not release discovery.
+    /// Informational availability from a successful official release check.
+    /// None only resolves targets reached by the running Core version; it does
+    /// not mean a failed check proved the release unavailable.
     fn observe_core_availability<'a>(
         &'a self,
         installed: &'a str,

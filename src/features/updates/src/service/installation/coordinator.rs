@@ -66,17 +66,6 @@ impl UpdateInstallService {
         )
     }
 
-    pub(crate) async fn qualify_availability(
-        &self,
-        version: &str,
-        cancellation: &CancellationToken,
-    ) -> Result<(), UpdateError> {
-        let _reservation = self.reserve()?;
-        self.prepare_scheduled(version, cancellation)
-            .await
-            .map(|_| ())
-    }
-
     pub async fn review(
         &self,
         actor: UpdateActor,
@@ -87,6 +76,10 @@ impl UpdateInstallService {
 
     pub async fn review_database(&self, actor: UpdateActor) -> Result<UpdatePlan, UpdateError> {
         self.review_component(actor, "", true).await
+    }
+
+    pub fn registered(&self) -> bool {
+        self.runtime.registered()
     }
 
     pub async fn database_update(

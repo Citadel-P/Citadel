@@ -255,17 +255,122 @@ async fn instance_availability_uses_seeded_community_rules_and_existing_outbox()
         .unwrap();
     flush(&alerts).await;
     assert_eq!(counts(&pool, "CoreUpdateAvailable").await, (1, 1));
-    // Superseding verification queued just before an update must not resurrect a stale alert.
+    let core_event: Uuid = sqlx::query_scalar(
+        "SELECT id FROM alertevents WHERE type='CoreUpdateAvailable' AND resolvedat IS NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        alerts
+            .get_event(core_event)
+            .await
+            .unwrap()
+            .message
+            .contains("is available")
+    );
+    alerts.acknowledge(actor, &[core_event]).await.unwrap();
+    let deliveries_before: i64 = sqlx::query_scalar("SELECT count(*) FROM alertdeliveryoutbox")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    updates
+        .observe_core_availability("0.1.2", Some("0.1.3"))
+        .await
+        .unwrap();
+    flush(&alerts).await;
+    assert!(
+        alerts
+            .get_event(core_event)
+            .await
+            .unwrap()
+            .acknowledged_at
+            .is_some()
+    );
+    let deliveries_after: i64 = sqlx::query_scalar("SELECT count(*) FROM alertdeliveryoutbox")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(deliveries_after, deliveries_before);
+    // Even an explicit Alert grant cannot expose instance update notices to non-admins.
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,0)")
+        .bind(Uuid::now_v7()).bind(actor.value()).bind(core_event)
+        .bind(citadel_primitives::ResourceType::Alert as i32).execute(&pool).await.unwrap();
+    let filter = AlertEventFilter {
+        alert_type: Some("CoreUpdateAvailable".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        alerts
+            .list_events(actor, false, &filter)
+            .await
+            .unwrap()
+            .total_count,
+        0
+    );
+    assert_eq!(alerts.unresolved_count(actor, false).await.unwrap(), 0);
+    assert_eq!(
+        alerts
+            .list_events(actor, true, &filter)
+            .await
+            .unwrap()
+            .total_count,
+        1
+    );
+    assert!(
+        alerts
+            .events_require_administrator(&[core_event])
+            .await
+            .unwrap()
+    );
     updates
         .observe_core_availability("0.1.2", Some("0.1.4"))
         .await
         .unwrap();
+    flush(&alerts).await;
+    assert_eq!(counts(&pool, "CoreUpdateAvailable").await, (2, 1));
+    assert!(
+        alerts
+            .get_event(core_event)
+            .await
+            .unwrap()
+            .resolution_note
+            .unwrap()
+            .contains("Superseded")
+    );
+    // Installing an older release must leave the newer notice open.
     updates
-        .observe_core_availability("0.1.4", None)
+        .observe_core_availability("0.1.3", None)
         .await
         .unwrap();
     flush(&alerts).await;
-    assert_eq!(counts(&pool, "CoreUpdateAvailable").await, (1, 0));
+    assert_eq!(counts(&pool, "CoreUpdateAvailable").await, (2, 1));
+    // Resolution still works with the rule disabled, including skipped versions.
+    sqlx::query("UPDATE alertrules SET status='Disabled' WHERE type='CoreUpdateAvailable'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    updates
+        .observe_core_availability("0.1.5", None)
+        .await
+        .unwrap();
+    flush(&alerts).await;
+    assert_eq!(counts(&pool, "CoreUpdateAvailable").await, (2, 0));
+    sqlx::query("UPDATE alertrules SET status='Enabled' WHERE type='CoreUpdateAvailable'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // Queued discovery just before installation must not resurrect a stale alert.
+    updates
+        .observe_core_availability("0.1.5", Some("0.1.6"))
+        .await
+        .unwrap();
+    updates
+        .observe_core_availability("0.1.6", None)
+        .await
+        .unwrap();
+    flush(&alerts).await;
+    assert_eq!(counts(&pool, "CoreUpdateAvailable").await, (2, 0));
     // Resolution is housekeeping, independent of rule enablement or external channels.
     sqlx::query("UPDATE alertrules SET status='Disabled' WHERE type='AgentUpdatesAvailable'")
         .execute(&pool)

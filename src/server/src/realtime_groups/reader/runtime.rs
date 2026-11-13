@@ -33,9 +33,9 @@ pub(super) async fn attach_swarm_overview(
     if !has_inventory && !local_delta {
         return Ok(());
     }
-    let Some(platform) =
-        crate::realtime::shared_reads::platform(&state.platforms, id, event).await?
-    else {
+    let shared_platform =
+        crate::realtime::shared_reads::platform(&state.platforms, id, event).await?;
+    let Some(platform) = shared_platform.as_ref().as_ref() else {
         return Ok(());
     };
     if platform.platform_type != citadel_platforms::PlatformKind::DockerSwarm {
@@ -53,7 +53,7 @@ pub(super) async fn attach_swarm_overview(
     let overview =
         serde_json::to_value(crate::api::resources::platforms::swarm_views::for_platform(
             summary,
-            &platform,
+            platform,
             capabilities,
         ))
         .map_err(super::failure)?;
@@ -126,6 +126,8 @@ pub(crate) async fn realtime_resource_snapshot(
                 .map_err(failure)?;
         let events = if crate::realtime::shared_reads::platform(&state.platforms, id, Some(event))
             .await?
+            .as_ref()
+            .as_ref()
             .is_some_and(|p| p.platform_type == citadel_platforms::PlatformKind::DockerSwarm)
         {
             vec![ClientEvent::new(
@@ -162,6 +164,8 @@ pub(crate) async fn realtime_resource_snapshot(
             let manager_count =
                 crate::realtime::shared_reads::platform(&state.platforms, id, Some(event))
                     .await?
+                    .as_ref()
+                    .as_ref()
                     .map_or(0, |p| p.volume_count.max(0) as usize);
             payload["volumeCount"] = serde_json::json!(
                 manager_count + payload["volumes"].as_array().map_or(0, Vec::len)
@@ -280,6 +284,8 @@ pub(crate) async fn realtime_resource_snapshot(
                     let online =
                         crate::realtime::shared_reads::platform(&state.platforms, id, Some(event))
                             .await?
+                            .as_ref()
+                            .as_ref()
                             .is_some_and(|p| {
                                 p.status == citadel_primitives::PlatformStatus::Online
                             });

@@ -39,7 +39,9 @@ it('shows the same working-set usage in the stats tab and Memory column without 
   );
 
   expect(screen.getByText('94 MB / 1 GB')).toBeVisible();
-  expect(screen.getByRole('radio', { name: 'Breakdown' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Working set' })).toBeChecked();
+  expect(screen.getByText('94 MB')).toBeVisible();
+  fireEvent.click(screen.getByRole('radio', { name: 'Breakdown' }));
   expect(screen.getByText('64 MB')).toBeVisible();
   expect(screen.getByText('30 MB')).toBeVisible();
   fireEvent.click(screen.getByRole('radio', { name: 'Working set' }));
@@ -54,22 +56,23 @@ it('does not show a stopped container’s last usage as current memory', () => {
   expect(screen.getByText('0B / 0B')).toBeVisible();
 });
 
-it('persists the mode across charts and falls back to breakdown for an invalid preference', () => {
+it('preserves a saved breakdown preference and falls back to working set for an invalid preference', () => {
   const first = render(<MemoryUsage stats={[sample]} isLoading={false} />);
-  fireEvent.click(screen.getByRole('radio', { name: 'Working set' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Breakdown' }));
   first.unmount();
   const second = render(<MemoryUsage stats={[sample]} isLoading={false} />);
-  expect(screen.getByRole('radio', { name: 'Working set' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Breakdown' })).toBeChecked();
   second.unmount();
   localStorage.setItem('stats-memory-view', '"invalid"');
   render(<MemoryUsage stats={[sample]} isLoading={false} />);
-  expect(screen.getByRole('radio', { name: 'Breakdown' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Working set' })).toBeChecked();
 });
 it('does not invent a breakdown for old or inconsistent measurements', () => {
   expect(memoryBreakdown(sample).nonCache).toBe(64 * mib);
   expect(memoryBreakdown({ ...sample, memoryActiveCache: null }).nonCache).toBeNull();
   expect(memoryBreakdown({ ...sample, memoryActiveCache: 100 * mib }).nonCache).toBeNull();
   render(<MemoryUsage stats={[{ ...sample, memoryActiveCache: null }]} isLoading={false} />);
+  fireEvent.click(screen.getByRole('radio', { name: 'Breakdown' }));
   expect(screen.getByRole('status')).toHaveTextContent('Memory breakdown is unavailable');
   fireEvent.click(screen.getByRole('radio', { name: 'Working set' }));
   expect(screen.queryByRole('status')).not.toBeInTheDocument();

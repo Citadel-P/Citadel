@@ -115,6 +115,13 @@ impl PlatformReadService {
             .await
     }
 
+    pub async fn container_identity(
+        &self,
+        container: Uuid,
+    ) -> Result<Option<ContainerIdentity>, AuthorizedReadError> {
+        self.store.container_identity(container).await
+    }
+
     pub async fn container_identities(
         &self,
         platform: Uuid,

@@ -29,7 +29,7 @@ impl ApplicationGroupReader {
                     .ok_or(RealtimeReadError::Authorization)?;
                 let container = self
                     .platforms
-                    .get_container(id)
+                    .container_identity(id)
                     .await
                     .map_err(failure)?
                     .ok_or(RealtimeReadError::Authorization)?;
@@ -155,24 +155,11 @@ impl ApplicationGroupReader {
                 ResourceType::BackupPolicy
             }
             BackupRun(id) => {
-                permission_id = Some(
-                    self.backups
-                        .get_run(*id)
-                        .await
-                        .map_err(failure)?
-                        .backup_policy_id,
-                );
+                permission_id = Some(self.backups.run_policy_id(*id).await.map_err(failure)?);
                 ResourceType::BackupPolicy
             }
             BackupRestoreRun(id) => {
-                let restore = self.backups.get_restore(*id).await.map_err(failure)?;
-                permission_id = Some(
-                    self.backups
-                        .get_run(restore.backup_run_id)
-                        .await
-                        .map_err(failure)?
-                        .backup_policy_id,
-                );
+                permission_id = Some(self.backups.restore_policy_id(*id).await.map_err(failure)?);
                 specific = Some(SpecificPermission::Restore);
                 ResourceType::BackupPolicy
             }
@@ -182,13 +169,7 @@ impl ApplicationGroupReader {
                 ResourceType::Build
             }
             BuildRun(id) => {
-                permission_id = Some(
-                    self.builds
-                        .get_run(*id)
-                        .await
-                        .map_err(failure)?
-                        .build_project_id,
-                );
+                permission_id = Some(self.builds.run_project_id(*id).await.map_err(failure)?);
                 ResourceType::Build
             }
             BuildAgentPools => ResourceType::BuildAgentPool,

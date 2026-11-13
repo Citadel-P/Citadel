@@ -52,7 +52,25 @@ macro_rules! shared_read {
         }
     };
 }
-shared_read!(platform, platform, get_platform, Option<PlatformDetails>);
+pub(crate) async fn platform<'a>(
+    service: &PlatformReadService,
+    platform: Uuid,
+    event: Option<&'a PublishedRuntimeEvent>,
+) -> Result<std::borrow::Cow<'a, Option<PlatformDetails>>, RealtimeReadError> {
+    let read = || async {
+        let _read = RuntimeWork::RealtimeSharedRead.start();
+        service
+            .get_platform(platform)
+            .await
+            .map_err(|e| RealtimeReadError::Storage(e.to_string()))
+    };
+    match event.filter(|e| e.platform_id == Some(platform)) {
+        Some(event) => Ok(std::borrow::Cow::Borrowed(
+            event.reads.platform.get_or_try_init(read).await?,
+        )),
+        None => Ok(std::borrow::Cow::Owned(read().await?)),
+    }
+}
 shared_read!(
     swarm_summary,
     swarm_summary,
@@ -99,12 +117,28 @@ pub(crate) async fn identities<'a>(
         None => Ok(std::borrow::Cow::Owned(read().await?)),
     }
 }
-shared_read!(
-    telemetry,
-    telemetry,
-    platform_telemetry,
-    Option<citadel_platforms::PlatformTelemetryContext>
-);
+pub(crate) async fn telemetry<'a>(
+    service: &PlatformReadService,
+    platform: Uuid,
+    event: Option<&'a PublishedRuntimeEvent>,
+) -> Result<
+    std::borrow::Cow<'a, Option<citadel_platforms::PlatformTelemetryContext>>,
+    RealtimeReadError,
+> {
+    let read = || async {
+        let _read = RuntimeWork::RealtimeSharedRead.start();
+        service
+            .platform_telemetry(platform)
+            .await
+            .map_err(|e| RealtimeReadError::Storage(e.to_string()))
+    };
+    match event.filter(|e| e.platform_id == Some(platform)) {
+        Some(event) => Ok(std::borrow::Cow::Borrowed(
+            event.reads.telemetry.get_or_try_init(read).await?,
+        )),
+        None => Ok(std::borrow::Cow::Owned(read().await?)),
+    }
+}
 
 impl CommittedReads {
     pub(crate) fn new(budget: Budget, payload: tokio::sync::OwnedSemaphorePermit) -> Self {

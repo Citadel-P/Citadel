@@ -238,6 +238,14 @@ impl BackupPersistence for PostgresBackupPersistence {
         self.list_runs_impl(actor, administrator, policy_id, limit)
     }
 
+    fn run_policy_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BackupError>> {
+        self.run_policy_id_impl(id)
+    }
+
+    fn restore_policy_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BackupError>> {
+        self.restore_policy_id_impl(id)
+    }
+
     fn get_run(&self, id: Uuid) -> BoxFuture<'_, Result<BackupRun, BackupError>> {
         self.get_run_impl(id)
     }

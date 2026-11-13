@@ -10,6 +10,8 @@ use tokio_util::sync::CancellationToken;
 
 /// Local operator input, never an HTTP request. Paths are the actual host paths;
 /// a container running this check must mount the inputs at those same paths.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InstallerComposeInputs {
     pub directory: PathBuf,
     pub project: String,
@@ -191,8 +193,9 @@ impl InstallerComposeInputs {
         if !output.succeeded() || output.stdout_truncated || output.stderr_truncated {
             return Err(resolution_failed());
         }
-        let config: Value =
+        let mut config: Value =
             serde_json::from_slice(&output.stdout).map_err(|_| resolution_failed())?;
+        normalize_automatic_mount(&mut config, snapshot.path(), &self.directory)?;
         Ok(config)
     }
 
@@ -340,4 +343,37 @@ fn resolution_failed() -> UpdateError {
     unsupported(
         "Cannot safely resolve the installer Compose configuration. Check the private .env and packaged Docker Compose tool.",
     )
+}
+
+/// Compose resolves relative binds inside our private snapshot. Map only the
+/// dedicated automatic state bind back to the original host directory, so
+/// source/target comparison remains stable and other paths are never rewritten.
+pub(super) fn normalize_automatic_mount(
+    config: &mut Value,
+    snapshot: &std::path::Path,
+    directory: &std::path::Path,
+) -> Result<(), UpdateError> {
+    let core = &mut config["services"]["server"];
+    if core["environment"]["CITADEL_UPDATE_STATE_DIRECTORY"] != super::super::AUTOMATIC_STATE_MOUNT
+    {
+        return Ok(());
+    }
+    let expected = directory.join(".citadel-updates");
+    let temporary = snapshot.join(".citadel-updates");
+    let mounts = core["volumes"]
+        .as_array_mut()
+        .ok_or_else(resolution_failed)?;
+    for mount in mounts
+        .iter_mut()
+        .filter(|m| m["target"] == super::super::AUTOMATIC_STATE_MOUNT)
+    {
+        let source = mount["source"].as_str().ok_or_else(resolution_failed)?;
+        if source != expected.to_str().ok_or_else(resolution_failed)?
+            && source != temporary.to_str().ok_or_else(resolution_failed)?
+        {
+            return Err(resolution_failed());
+        }
+        mount["source"] = serde_json::json!(expected);
+    }
+    Ok(())
 }

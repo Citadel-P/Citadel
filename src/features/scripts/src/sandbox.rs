@@ -40,6 +40,9 @@ impl ScriptSandbox {
             Ok(workspace) => workspace,
             Err(error) => return ScriptRunResult::failed(None, error),
         };
+        // The workspace now owns the generated module. Do not keep its second
+        // in-memory copy alive for the lifetime of the Deno child.
+        drop(input.source);
         let directory = workspace.directory();
         let script = workspace.entrypoint();
         let mut args = vec![
@@ -144,7 +147,10 @@ impl ScriptSandbox {
         } else {
             self.process.run(request, cancellation).await
         };
-        let _ = workspace.cleanup().await;
+        if workspace.cleanup().await.is_err() {
+            // The workspace guard retains ownership and retries cleanup on Drop.
+            tracing::warn!(run_id=%input.run_id, "Script workspace cleanup failed; owned cleanup will retry");
+        }
         match output {
             Ok(output) => {
                 let logs = redact_run_logs(

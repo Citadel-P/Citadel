@@ -16,16 +16,17 @@ class PublicDeploymentComposeTests(unittest.TestCase):
     def render(self, channel, project, port, extra="", rootless=None):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
-            (path / "docker-compose.yml").write_text((ROOT / "deploy/install/docker-compose.yml").read_text())
+            (path / "docker-compose.yml").write_text(remote.deployment_compose((ROOT / "deploy/install/docker-compose.yml").read_text()))
             (path / "demo.override.yml").write_text(remote.compose_override(channel, rootless))
             (path / ".env").write_text(
                 f"COMPOSE_PROJECT_NAME={project}\nCITADEL_HTTP_PORT={port}\nCITADEL_EDGE_PORT={port + 1}\n"
                 "PG_USER=fixture\nPG_PASSWORD=fixture-password\nPG_DATABASE=fixture\n" + extra)
             core = "ghcr.io/citadel-p/citadel@sha256:" + "a" * 64
             agent = "ghcr.io/citadel-p/citadel.agent@sha256:" + "b" * 64
-            (path / ".release.env").write_text(f"CITADEL_IMAGE={core}\nCITADEL_EDGE_AGENT_IMAGE={agent}\n")
+            with (path / ".env").open("a") as environment:
+                environment.write(f"CITADEL_IMAGE={core}\nCITADEL_EDGE_AGENT_IMAGE={agent}\n")
             result = subprocess.run(
-                ["docker", "compose", "--env-file", ".env", "--env-file", ".release.env",
+                ["docker", "compose", "--env-file", ".env",
                  "-f", "docker-compose.yml", "-f", "demo.override.yml", "config", "--format", "json"],
                 cwd=path, env={k: v for k, v in os.environ.items()
                                if not k.startswith(("CITADEL_", "COMPOSE_", "PG_"))},
@@ -34,6 +35,13 @@ class PublicDeploymentComposeTests(unittest.TestCase):
             self.assertEqual(value["services"]["server"]["image"], core)
             self.assertEqual(value["services"]["server"]["environment"]["CITADEL_EDGE_AGENT_IMAGE"], agent)
             return value
+
+    def test_ci_keeps_explicit_registration_without_automatic_state_mount(self):
+        config = self.render("latest", "citadel_stable", 18000,
+                             extra="CITADEL_UPDATE_STATE_DIRECTORY=/private/existing-updates\n")
+        core = config["services"]["server"]
+        self.assertEqual(core["environment"]["CITADEL_UPDATE_STATE_DIRECTORY"], "/private/existing-updates")
+        self.assertFalse(any(mount["target"] == "/var/lib/citadel-updates" for mount in core["volumes"]))
 
     def test_targets_have_independent_resources_without_memory_caps(self):
         preview = self.render("dev", "citadel", 18000)
@@ -148,6 +156,12 @@ class CanonicalConfigurationComposeTests(unittest.TestCase):
                     self.assertEqual([(p["host_ip"], p["published"], p["target"]) for p in server["ports"]],
                                      [("127.0.0.1", str(port), 8000)])
                     settings = server["environment"]
+                    self.assertEqual(settings["CITADEL_UPDATE_STATE_DIRECTORY"], "/var/lib/citadel-updates")
+                    state_mount = [v for v in server["volumes"] if v["target"] == "/var/lib/citadel-updates"]
+                    self.assertEqual(len(state_mount), 1)
+                    self.assertEqual(state_mount[0]["source"], str(root / ".citadel-updates"))
+                    self.assertTrue(state_mount[0]["read_only"])
+                    self.assertNotIn("CITADEL_UPDATE_STATE_DIRECTORY", template)
                     self.assertEqual(settings["CITADEL_PUBLIC_URL"], f"http://localhost:{port}")
                     self.assertEqual(settings["CITADEL_TRANSPORT_MODE"], "Disabled")
                     self.assertEqual(settings["CITADEL_HTTP_ALLOWED_HOSTS"], "localhost;127.0.0.1")

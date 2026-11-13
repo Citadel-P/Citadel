@@ -29,7 +29,7 @@ pub use repository::{
 };
 pub use runtime::{
     DatabaseInstallationRuntime, ReleaseArtifactSource, ReleaseInspectionRuntime, ReleaseSource,
-    UpdateDrainRuntime, UpdateHandoffRuntime, UpdateInstallationRuntime,
+    UpdateDrainRuntime, UpdateHandoffRuntime, UpdateInstallationRuntime, UpdateRegistrationRuntime,
 };
 pub use service::{
     NoopUpdateChangeNotifier, ReleaseCheckPolicy, ReleaseCheckService, ReleaseInspectionService,

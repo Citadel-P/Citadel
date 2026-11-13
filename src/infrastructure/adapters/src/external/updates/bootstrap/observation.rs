@@ -132,14 +132,23 @@ pub(super) async fn observe_with_helper(
     } else {
         "/host".into()
     };
-    validate_mounts(
-        core,
-        &[
-            ("volume", &checked.core_volume, "/app/data", true),
-            ("bind", socket, SOCKET, true),
-            ("bind", host_source, &host_target, false),
-        ],
-    )?;
+    let mut core_mounts = vec![
+        ("volume", checked.core_volume.as_str(), "/app/data", true),
+        ("bind", socket, SOCKET, true),
+        ("bind", host_source, host_target.as_str(), false),
+    ];
+    let automatic_state = inputs.directory.join(".citadel-updates");
+    if config["services"]["server"]["environment"]["CITADEL_UPDATE_STATE_DIRECTORY"]
+        == super::super::AUTOMATIC_STATE_MOUNT
+    {
+        core_mounts.push((
+            "bind",
+            automatic_state.to_str().ok_or_else(failed)?,
+            super::super::AUTOMATIC_STATE_MOUNT,
+            false,
+        ));
+    }
+    validate_mounts(core, &core_mounts)?;
     validate_mounts(
         database,
         &[(
@@ -203,6 +212,18 @@ pub(super) async fn observe_with_helper(
         return Err(refuse(
             "The installation must use its registered local Compose bridge network.",
         ));
+    }
+    if let Some(expected) = config["networks"]["default"]["ipam"]["config"].as_array() {
+        let actual = network["IPAM"]["Config"].as_array().ok_or_else(failed)?;
+        if actual.len() != expected.len()
+            || expected.iter().zip(actual).any(|(expected, actual)| {
+                expected["subnet"] != actual["Subnet"] || expected["gateway"] != actual["Gateway"]
+            })
+        {
+            return Err(refuse(
+                "Running network addressing differs from the registered Compose inputs.",
+            ));
+        }
     }
     for container in [core, database] {
         let networks = container["NetworkSettings"]["Networks"]
@@ -342,6 +363,7 @@ fn validate_service(
             "Running Citadel services do not match the supplied Compose invocation or are not stable.",
         ));
     }
+    super::super::compose::verify_limits(expected, &actual["HostConfig"])?;
     let mut environment = BTreeMap::new();
     for entry in actual["Config"]["Env"].as_array().ok_or_else(failed)? {
         let (key, value) = entry

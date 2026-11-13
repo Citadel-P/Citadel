@@ -47,7 +47,7 @@ use authorization::{authorize, instance};
 pub use queries::read_instance_identity;
 pub use repository::PostgresUpdateRepository;
 use repository::storage;
-pub use startup::check_startup_updates;
+pub use startup::{automatic_setup_is_fresh, check_startup_updates};
 
 mod agent_operations;
 mod schedule;

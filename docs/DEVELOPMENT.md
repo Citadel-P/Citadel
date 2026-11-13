@@ -225,12 +225,15 @@ the project, configuration fingerprint and desired image/volume/network names.
 Errors omit Compose output because it may contain secrets. It does not save a
 registration or prove that running containers match these settings.
 
-The standard host-side activation command is `deploy/install/enable-updates.py`,
-run after first-run setup with the existing directory/project and ordered Compose
-files. See [the product setup guide](content/docs/operations/upgrade-and-rollback.mdx#enable-in-app-updates).
-It calls the registration and preflight commands below from the installed Core
-image, enables `.env`, recreates only Core and explicitly refreshes registration.
-The lower-level commands remain available for diagnostics and operator recovery.
+The supplied Compose installation starts with `docker compose up -d`. It sets the
+internal update-state mount and registers automatically after administrator setup.
+Core discovers the host directory and ordered files from Docker Compose labels,
+then uses the existing restricted host helper. A pending registration is atomically
+replaced with verified registration; no containers are recreated and `.env` is
+not modified. See [the product setup guide](content/docs/operations/upgrade-and-rollback.mdx#enable-in-app-updates).
+The optional `enable-updates.py` utility remains for supported custom deployments
+without automatic setup. Lower-level commands remain available for diagnostics
+and operator recovery.
 
 The next step for a current-build development installation is the Linux bootstrap
 command below. The state directory must already exist, be mode `0700`, and belong

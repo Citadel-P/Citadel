@@ -118,7 +118,7 @@ required-match counts require **Advanced Alerting**.
 
 The Containers table's **Memory** column and memory alerts use Docker's working
 set, followed by the memory limit. Container, Stack, Deployment and Swarm Service
-memory charts offer two views. **Breakdown** is the default; the same browser
+memory charts offer two views. **Working set** is the default; the same browser
 remembers your choice across these pages.
 
 - **Breakdown** stacks **Non-cache memory**, **Active file cache**, and

@@ -6,6 +6,9 @@ use serde_json::Value;
 
 const SERVICE_FIELDS: &[&str] = &[
     "image",
+    "cpus",
+    "mem_limit",
+    "memswap_limit",
     "restart",
     "env_file",
     "environment",
@@ -87,7 +90,15 @@ pub(super) fn validate_input(bytes: &[u8]) -> Result<(), UpdateError> {
                 if resource.is_null() {
                     continue;
                 }
-                fields(resource, &["name", "driver", "labels"])?;
+                fields(
+                    resource,
+                    if kind == "networks" {
+                        &["name", "driver", "labels", "ipam"]
+                    } else {
+                        &["name", "driver", "labels"]
+                    },
+                )?;
+                validate_ipam(resource, kind)?;
                 if resource.get("driver").is_some_and(|v| v != driver) {
                     return Err(invalid());
                 }
@@ -161,7 +172,11 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
             .as_array()
             .ok_or_else(invalid)?
             .iter()
-            .find(|m| m["type"] == "bind" && m["source"] != socket)
+            .find(|m| {
+                m["type"] == "bind"
+                    && m["source"] != socket
+                    && m["target"] != super::super::AUTOMATIC_STATE_MOUNT
+            })
             .and_then(|m| m["source"].as_str())
             .ok_or_else(invalid)?
     } else {
@@ -176,14 +191,27 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
     } else {
         "/host".into()
     };
-    mounts(
-        core,
-        &[
-            ("volume", "citadel_data", "/app/data", false),
-            ("bind", socket, "/var/run/docker.sock", false),
-            ("bind", host_source, &host_target, true),
-        ],
-    )?;
+    let mut core_mounts = vec![
+        ("volume", "citadel_data", "/app/data", false),
+        ("bind", socket, "/var/run/docker.sock", false),
+        ("bind", host_source, &host_target, true),
+    ];
+    if core["environment"]["CITADEL_UPDATE_STATE_DIRECTORY"] == super::super::AUTOMATIC_STATE_MOUNT
+    {
+        let state = core["volumes"]
+            .as_array()
+            .ok_or_else(invalid)?
+            .iter()
+            .find(|m| m["target"] == super::super::AUTOMATIC_STATE_MOUNT)
+            .ok_or_else(invalid)?;
+        let source = state["source"].as_str().ok_or_else(invalid)?;
+        super::super::files::validate_absolute(std::path::Path::new(source))?;
+        if !source.ends_with("/.citadel-updates") {
+            return Err(invalid());
+        }
+        core_mounts.push(("bind", source, super::super::AUTOMATIC_STATE_MOUNT, true));
+    }
+    mounts(core, &core_mounts)?;
     mounts(
         database,
         &[("volume", "postgres_data", "/var/lib/postgresql", false)],
@@ -196,12 +224,7 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
         for name in names {
             let resource = &config[kind][name];
             fields(resource, &["name", "driver", "labels", "ipam"])?;
-            if resource
-                .get("ipam")
-                .is_some_and(|v| v.as_object().is_none_or(|v| !v.is_empty()))
-            {
-                return Err(invalid());
-            }
+            validate_ipam(resource, kind)?;
             if resource.get("driver").is_some_and(|v| v != driver) {
                 return Err(invalid());
             }
@@ -240,6 +263,33 @@ fn mounts(service: &Value, expected: &[(&str, &str, &str, bool)]) -> Result<(), 
         if let Some(volume) = mount.get("volume") {
             // No subpaths or alternate copy semantics for the persistent roots.
             fields(volume, &[])?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_ipam(resource: &Value, kind: &str) -> Result<(), UpdateError> {
+    let Some(ipam) = resource.get("ipam") else {
+        return Ok(());
+    };
+    if ipam.as_object().is_some_and(|v| v.is_empty()) {
+        return Ok(());
+    }
+    if kind != "networks" {
+        return Err(invalid());
+    }
+    fields(ipam, &["driver", "config"])?;
+    if ipam.get("driver").is_some_and(|v| v != "default") {
+        return Err(invalid());
+    }
+    let config = ipam["config"]
+        .as_array()
+        .filter(|v| v.len() == 1)
+        .ok_or_else(invalid)?;
+    fields(&config[0], &["subnet", "gateway"])?;
+    for key in ["subnet", "gateway"] {
+        if config[0][key].as_str().is_none_or(str::is_empty) {
+            return Err(invalid());
         }
     }
     Ok(())

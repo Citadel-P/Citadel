@@ -16,8 +16,17 @@ use tokio_util::sync::CancellationToken;
     deny_unknown_fields
 )]
 pub enum HostUpdateRequest {
-    Startup { state_directory: PathBuf },
-    Check { state_directory: PathBuf },
+    AutomaticStartup {
+        setup: super::super::AutomaticComposeSetup,
+        allow_initialize: bool,
+    },
+    RegisterAutomatic(super::super::AutomaticComposeSetup),
+    Startup {
+        state_directory: PathBuf,
+    },
+    Check {
+        state_directory: PathBuf,
+    },
     CheckDatabase(Box<citadel_updates::UpdatePlan>),
     Launch(Box<UpdateOperation>),
     Finalize(Box<FinalizeUpdateRequest>),
@@ -34,6 +43,7 @@ pub enum HostUpdateRequest {
     deny_unknown_fields
 )]
 pub enum HostUpdateResponse {
+    RegistrationPending,
     Registered(Box<super::super::RegisteredComposeInstallation>),
     Checked(Box<CheckedUpdateInstallation>),
     DatabaseChecked {
@@ -53,6 +63,28 @@ pub async fn execute_host_update(
     cancellation: &CancellationToken,
 ) -> Result<HostUpdateResponse, UpdateError> {
     match request {
+        HostUpdateRequest::AutomaticStartup {
+            setup,
+            allow_initialize,
+        } => {
+            match super::super::bootstrap::prepare_automatic_setup(
+                &setup,
+                allow_initialize,
+                process,
+                cancellation,
+            )
+            .await?
+            {
+                Some(registration) => Ok(HostUpdateResponse::Registered(Box::new(registration))),
+                None => Ok(HostUpdateResponse::RegistrationPending),
+            }
+        }
+        HostUpdateRequest::RegisterAutomatic(setup) => {
+            Ok(HostUpdateResponse::Registered(Box::new(
+                super::super::bootstrap::complete_automatic_setup(&setup, process, cancellation)
+                    .await?,
+            )))
+        }
         HostUpdateRequest::CheckDatabase(plan) => {
             let blocker = match super::super::handoff::check_database_eligibility(
                 &plan,

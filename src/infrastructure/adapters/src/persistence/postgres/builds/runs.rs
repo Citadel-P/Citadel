@@ -435,3 +435,16 @@ impl PostgresBuildRepository {
         })
     }
 }
+
+impl PostgresBuildRepository {
+    pub(super) fn run_project_id_impl(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BuildError>> {
+        Box::pin(async move {
+            sqlx::query_scalar("SELECT buildprojectid FROM buildruns WHERE id=$1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)?
+                .ok_or(BuildError::NotFound)
+        })
+    }
+}

@@ -385,7 +385,7 @@ These finish an admitted two-volume copy after admission closes, reject new HTTP
 starts, and verify restricted restore claims skip an older unrelated queued run.
 They use fake storage executors; no workload containers or volumes are touched.
 
-`test-update-registration.py` runs the unmodified base installer and a compatible
+`test-update-registration.py` runs the base profile with automatic setup disabled for explicit registration checks, and a compatible
 Edge-overlay installation with custom filenames, comments and resource names,
 completes setup through HTTP and invokes the Rust bootstrap
 from a separate Core-image container. It checks real Docker metadata, initialized
@@ -683,7 +683,10 @@ and with an additional compacted node to exercise the mixed path. It compares
 per-bucket values as well as exact totals and rates; it does not assert
 machine-dependent latency. Identity-function wrappers
 in a disposable child database count real capture lookups, checking that repeated
-samples resolve each identity once and still reject sealed corrections. Swarm
+samples resolve each identity once, reuse warm Workload owners without helper
+calls, preserve old owners on reassignment, and still reject sealed corrections.
+A descriptor-heavy capture fixture checks executed materialization outputs and
+zero temporary writes at fixed `work_mem`, with all samples retained. Swarm
 handover coverage includes alternating host/node projections within one batch.
 
 `cargo test --locked -p citadel-server --lib workers::maintenance::tests` uses paused
@@ -764,8 +767,12 @@ npm --prefix src/frontend run test:run -- src/features/stacks/form/hooks/useStac
 ```
 
 `realtime_overhead` holds inventory/configuration table locks to verify that safety
-rechecks do not reload collections and Stack statistics do not reload Compose/release
-configuration. Unit tests cover shared event/cache byte accounting, reservation
+rechecks do not reload collections or container statistics/image/deployment joins,
+and Stack statistics do not reload Compose/release configuration. A two-platform
+workload fixture verifies scoped SQL reads, full reconnect snapshots, authorization
+and preservation of unaffected rows. Telemetry unit tests count estimator calls and
+check encoded-size alignment after invalid samples, while a locked-table shared-read test checks that subscribers reuse the same
+event-owned telemetry context without bypassing authorization. Unit tests cover shared event/cache byte accounting, reservation
 release, cancellation, sample selection and overflow recovery. Stack hook tests check
 that compact samples preserve lifecycle metadata and cannot create unknown containers
 or resurrect removed ones. These checks do not measure production RSS.
@@ -1085,6 +1092,44 @@ durations, and result-persistence attempt counts/durations. Edge transfer,
 control and output buffered-byte gauges follow buffer ownership through drop.
 Database gauges are sampled by maintenance; they are not admission authority.
 
+### Execution retention and cleanup
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-processes --test process_runner -- --include-ignored
+SQLX_OFFLINE=true cargo test --locked -p citadel-docker --lib builds::output
+SQLX_OFFLINE=true cargo test --locked -p citadel-builds -p citadel-scripts --lib ownership_tests
+CITADEL_DENO_PATH=/absolute/path/to/deno SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test script_sandbox -- --include-ignored --nocapture
+```
+
+The process regressions compare capture and stream-only modes, including concurrent
+stdout/stderr, truncation, closed consumers, backpressure, timeout, cancellation,
+inherited pipes and dropped futures. Stream-only results retain zero transcript
+capacity; output limits count admitted bytes independently. Build output tests
+check redaction across split secrets/UTF-8, bounded persistence batches, failure
+cancellation, asynchronous final appends after producer failure, and a five-second
+bounded drain for blocked sinks during cancellation or producer timeout. A committed
+but unacknowledged append is never replayed. The adapter library test
+`terminal_error_drains_redacted_output_through_an_async_sink` exercises actual Agent
+frames followed by a terminal error, including split secrets and UTF-8. Existing
+capture-mode script final logs are still checked.
+
+The opt-in `execution_cycles::repeated_stack_build_and_deno_cycles_release_execution_resources`
+scenario labels warmup and three repeated stack/build/Deno cycles. It uses a fake
+Docker CLI, manual and Git-shaped source bundles (including context, env and config
+files), the real staging/output adapters, and real Deno. It checks transient roots,
+zero build transcript capacity, run-cache removal and tracked cleanup counts.
+It does not run a Docker daemon, a Git checkout, or measure deployed Core RSS.
+The adjacent real-Deno test also verifies abandoned-future cleanup and Linux reaping.
+For durable claim/completion and HTTP-disconnect behavior, run `stacks_http` against
+an empty `CITADEL_WORKLOAD_DATABASE_URL` and `build_execution` against a separate
+empty `CITADEL_EXECUTION_DATABASE_URL`, with `--ignored --test-threads=1`.
+
+These changes reduce bounded execution-time allocations. They do not establish
+that a post-operation container working-set plateau is a Rust heap leak or predict
+its size. A representative repeated workload still needs matched cgroup anonymous/
+file-cache measurements, Core PSS and helper-process observations before and after
+cleanup. Do not infer live allocations from RSS alone.
+
 ### Script placement and credentials
 
 Filesystem-only cache and cleanup checks (no database or Docker daemon):
@@ -1229,11 +1274,18 @@ a **fresh disposable** database named `citadel_update_test_*`:
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-updates --lib availability
 CITADEL_EXECUTION_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_alerts SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test alert_persistence instance_updates:: -- --ignored --test-threads=1
+# Use a separate fresh database for the HTTP authorization fixture.
+CITADEL_EXECUTION_DATABASE_URL=postgres://postgres@127.0.0.1:PORT/citadel_update_test_alert_http SQLX_OFFLINE=true cargo test --locked -p citadel-server --test execution_resources_http update_alerts:: -- --ignored --test-threads=1
 ```
 
 The persistence test covers seeded Community rules, channel assignment, delivery
-deduplication, aggregate summary refresh, supersession, failed checks, offline
-observations and stale queued availability after installation. It never sends external notifications.
+deduplication and preserved acknowledgments, aggregate summary refresh, supersession,
+failed checks, administrator-only lists/counts, offline observations, resolution after
+installing or skipping a version, and stale queued availability after installation.
+The release-check service tests also cover manual installations and release channels.
+The HTTP fixture checks direct reads, acknowledgment, resolution and counts for an
+administrator and a regular user with Alert permissions. These fixtures never send
+external notifications.
 
 
 ### PostgreSQL engine maintenance
@@ -1587,7 +1639,7 @@ checks original sample values and applied checksums after adding the nullable
 active-cache column. Use a disposable `CITADEL_TEST_DATABASE_URL`.
 
 Frontend `memory-usage.test.tsx`, `stack-stats.test.tsx` and
-`stats-buckets.test.ts` cover the default Breakdown view, persisted switch,
+`stats-buckets.test.ts` cover the default Working set view, persisted switch,
 missing measurements and complete replica/bucket coverage. Docker mapping tests
 cover cgroup v1/v2 and shared-memory separation.
 
@@ -1598,7 +1650,11 @@ cover cgroup v1/v2 and shared-memory separation.
 Docker daemon. It checks ordered overlays, immutable helper images, rootless
 executor identity, preflight-before-activation, Core-only recreation, idempotent
 verification, secret-safe failures and preservation after drift/restart/refresh
-failures. Existing adapter bootstrap tests own registration, database identity,
+failures. Installer tests also cover automatic project/state defaults, waiting for
+administrator setup, timeout without registration, reuse without pulling existing
+images, and registered CI replacement guards. Demo tests cover captured release
+pins, automatic activation and preserving the deployed PostgreSQL image.
+Existing adapter bootstrap tests own registration, database identity,
 mount and recovery-state validation. Updates frontend tests cover setup messaging
 even when Core has no available release and retain distinct external, unknown
 and blocked PostgreSQL states.
@@ -1607,10 +1663,37 @@ Run the actual activation command against base and Edge Compose fixtures with:
 
 ```bash
 python3 test/scripts/test-update-registration.py <local-core-image-tag> --enable-updates
+python3 test/scripts/test-update-registration.py <local-core-image-tag> --enable-updates --rootless
 ```
 
 This creates an isolated disposable Docker daemon, installs Python inside that
 fixture before disconnecting its network, runs normal first-run setup and the
 shipped activation command, then verifies unchanged PostgreSQL identity/start
 time, unchanged Core image and recovery keys, valid refreshed registration and
-no restart on a repeated activation. All fixture containers/volumes are removed.
+no restart on a repeated activation. It then exercises a guarded CI-style Core
+replacement and registration refresh. The Edge profile includes CPU/memory limits
+and a custom subnet/gateway. A loopback-only registry inside the disposable daemon
+gives the local candidate a real image digest for startup verification; nothing
+is pushed to public GHCR. This is registration/activation coverage, not signed
+release qualification. All fixture containers/volumes are removed.
+
+
+Compose-only automatic setup acceptance (no host Python installer is invoked):
+
+```bash
+python3 test/scripts/test-update-registration.py <local-core-image-tag> --automatic
+python3 test/scripts/test-update-registration.py <local-core-image-tag> --automatic --rootless
+```
+
+These use the supplied automatic Compose mount on disposable rootful/rootless
+Docker daemons, complete administrator setup through HTTP, and verify registration,
+unchanged Core/PostgreSQL start times and identities, unchanged `.env`, helper
+cleanup and admission after a normal Core restart. A private loopback registry
+provides the local candidate digest; no image is pushed to public GHCR.
+Candidate acceptance runs the rootful automatic setup check alongside explicit
+registration and update lifecycle checks. Rootless coverage is available with the
+second command above.
+Adapter tests cover pending registration, atomic completion, lost or corrupt
+state, unsafe permissions, cancellation, drift, lock contention and discovery of
+host paths. Update status remains disabled until the supervised registration task
+has durably completed; status reads launch no helper.

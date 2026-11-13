@@ -123,6 +123,9 @@ class UpgradeFixture(registration.Fixture):
         self.execute("mkdir", "-p", self.installation, self.state)
         self.execute("chmod", "700", self.installation, self.state)
         content = self.compose_file.read_text()
+        # This fixture deliberately exercises explicit registration and recovery.
+        content = content.replace('      CITADEL_UPDATE_STATE_DIRECTORY: /var/lib/citadel-updates\n', '')
+        content = content.replace('      - ./.citadel-updates:/var/lib/citadel-updates:ro\n', '')
         if self.rootless:
             self.execute("chown", "1000:1000", self.installation, self.state)
             content = content.replace("/var/run/docker.sock:/var/run/docker.sock", f"{self.socket}:/var/run/docker.sock")

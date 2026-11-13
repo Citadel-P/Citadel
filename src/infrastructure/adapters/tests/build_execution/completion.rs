@@ -235,6 +235,10 @@ impl BuildRepository for Store {
         self.inner
             .list_runs(actor, administrator, project_id, limit)
     }
+    fn run_project_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BuildError>> {
+        self.inner.run_project_id(id)
+    }
+
     fn get_run<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildRun, BuildError>> {
         self.inner.get_run(id)
     }
