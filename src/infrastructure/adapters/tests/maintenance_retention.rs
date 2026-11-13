@@ -45,10 +45,18 @@ async fn copy_review_expiry_preserves_started_operations_and_skips_locked_review
     let copies = PostgresCopyRepository::new(pool.clone());
     let actual = tokio::time::timeout(std::time::Duration::from_secs(5), copies.pending())
         .await
-        .expect("expiry must skip the locked review")
+        .expect("pending reads must not wait for locked reviews")
         .unwrap();
     assert_eq!(actual.len(), pending.len());
     assert!(pending.iter().all(|entry| actual.contains(entry)));
+    let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM resourcecopies WHERE status='Review' AND createdat<now()-interval '1 day'")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(remaining, 102, "pending reads must not prune reviews");
+
+    tokio::time::timeout(std::time::Duration::from_secs(5), copies.prune_reviews())
+        .await
+        .expect("expiry must skip the locked review")
+        .unwrap();
     let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM resourcecopies WHERE status='Review' AND createdat<now()-interval '1 day'")
         .fetch_one(&pool).await.unwrap();
     assert_eq!(
@@ -63,6 +71,7 @@ async fn copy_review_expiry_preserves_started_operations_and_skips_locked_review
         .unwrap();
     lock.commit().await.unwrap();
     protected.push(held);
+    copies.prune_reviews().await.unwrap();
     let actual = copies.pending().await.unwrap();
     assert!(actual.contains(&(ActorId::new(actor), held)));
     let remaining: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM resourcecopies")
