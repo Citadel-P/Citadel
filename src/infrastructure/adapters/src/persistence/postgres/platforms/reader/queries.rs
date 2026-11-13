@@ -159,6 +159,29 @@ impl PlatformReader for PostgresPlatformReader {
         ))
     }
 
+    fn container_identity(
+        &self,
+        container: Uuid,
+    ) -> BoxFuture<'_, Result<Option<citadel_platforms::ContainerIdentity>, AuthorizedReadError>>
+    {
+        Box::pin(async move {
+            sqlx::query("SELECT id,platformid,deploymentid,stackid,dockercontainerid,dockernodeid FROM containers WHERE id=$1")
+                .bind(container)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)?
+                .map(|r| Ok(citadel_platforms::ContainerIdentity {
+                    id: r.try_get("id").map_err(storage)?,
+                    platform_id: r.try_get("platformid").map_err(storage)?,
+                    deployment_id: r.try_get("deploymentid").map_err(storage)?,
+                    stack_id: r.try_get("stackid").map_err(storage)?,
+                    container_id: r.try_get("dockercontainerid").map_err(storage)?,
+                    docker_node_id: r.try_get("dockernodeid").map_err(storage)?,
+                }))
+                .transpose()
+        })
+    }
+
     fn container_identities(
         &self,
         platform: Uuid,

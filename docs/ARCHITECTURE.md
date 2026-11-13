@@ -1012,14 +1012,24 @@ and do not become shared rejection markers. Durable persistence does not depend 
 this budget.
 
 The authorization safety interval reauthenticates and revalidates group access
-without constructing list snapshots or presentation enrichments. Detail groups
-still resolve current ownership/existence, and log/terminal groups retain runtime
+without constructing list snapshots or presentation enrichments. Container detail
+rechecks read only current container identity/ownership; build, backup and restore
+run rechecks resolve only the parent permission resource. Other detail groups still
+resolve current ownership/existence, and log/terminal groups retain runtime
 target validation. Actor-generation fences continue to invalidate access immediately.
 Container/Stack detail statistics use shared narrow container identities and send
 only matching samples; Stack updates use `ReceiveStackContainerStats`, merging into
 known containers without replacing lifecycle metadata. Connection-local platform
 scope hints skip unrelated samples, survive permission-cache clears, and refresh on
 metadata reads and safety checks. They filter work only and never grant access.
+
+Platform-scoped Deployment/Stack invalidations pass that scope to the authorized
+repository query and select typed health owners before coverage/copy enrichment
+and JSON conversion. Truncated member lists refresh conservatively. Scoped rows
+remain update patches; initial, reconnect and workload CRUD reads retain full
+snapshots. Scalar Platform reads and live telemetry context borrow their event's
+cached projection, whose reservation remains owned by that event. Actor-specific
+output construction and access checks remain per subscriber.
 
 Container process lists load through HTTP and
 refresh only for subscribed Inspect viewers on the existing scoped statistics/state
@@ -1166,7 +1176,11 @@ cannot take over history. The same seven-day bounded retention applies.
 
 Capture batches resolve repeated projection identities once, in last-occurrence
 order. Ordinary containers reuse an exact existing source through a set-based
-lookup; Swarm Task reassociation still uses the physical-identity validator.
+lookup; unchanged Workload owners also reuse the complete nullable ownership key,
+with the existing creation helper on a miss. Capture sorts/materialized rows retain
+only metrics and capture/ownership identity, rather than the full Platform descriptor
+and connector/session admission fields. Swarm Task reassociation still uses the
+physical-identity validator.
 The Platform lock is acquired before the capture statement, so existing sealing
 watermarks can be read together from its snapshot. Newly created sources have a
 zero watermark. Each sample is checked against its source watermark before writes,
@@ -1198,7 +1212,10 @@ keep their reservation through queues, in-flight writes and per-platform retries
 The container and platform portions release independently, so a completed container
 batch does not consume capacity while platform totals wait for their flush. Estimates include string/vector capacity, owned scope data, growing
 vectors and serialization/driver scratch allowances. Serialization is counted into
-a non-allocating sink before admission; it does not build a second JSON tree. An encoded batch is bounded
+a non-allocating sink once per sample before admission; the same estimate travels
+through reservation and enqueue. The temporary estimate vector is included in
+accounting and stays aligned when invalid readings are filtered. This does not
+build a second JSON tree. An encoded batch is bounded
 by an 8 MiB estimate as well as the configured item count. Batches split only
 between complete captures. Oversized or capacity-exhausted collections are dropped
 as complete cycles, counted separately and logged at most once per minute; they
@@ -1638,8 +1655,24 @@ at enqueue. HTTP progress observers use a bounded broadcast and cannot cancel or
 backpressure execution. Explicit cancellation is persisted, including during the
 queued-to-running transition, and workers observe it before starting a process.
 Queued runs survive restart; interrupted executions fail without being replayed.
+The shared process runner captures bounded stdout/stderr by default. Docker build
+commands opt into stream-only retention: byte limits still bound forwarding and
+excess output is drained, but no second transcript survives in `ProcessOutput`.
+Git, probes and scripts retain capture because their callers consume final output.
+Build output consumers stop on cancellation or producer failure even when a sink
+is blocked; execution cleanup is still awaited and the original failure is returned.
+Successful execution flushes all admitted output. An interrupted, unacknowledged
+log batch is not replayed because its commit outcome can be ambiguous.
+Build and script cancellation-map entries are scoped to their controller futures;
+removing an entry does not release a durable claim or an uncertain executor reservation.
+Stack apply drops copied Compose text and parsed/resolved preparation data before
+execution. The source bundle remains borrowed by the runtime until execution ends,
+then is released before completion retries; immutable release provenance and
+binding snapshots remain available. Staged release files keep their existing lifetime.
+
 Core and Agent Deno caches live inside each private run workspace and are removed
 with its generated source on completion, failure, timeout or cancellation. The
+in-memory generated source is released once the workspace has written it. The
 cache is not shared across runs: generated module paths and credentials are unique
 to each execution. This bounds retained cache by active work rather than run count;
 per-run imported modules are fetched again. Existing shared-cache directories from

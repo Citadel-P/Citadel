@@ -64,6 +64,12 @@ pub trait PlatformReader: Send + Sync {
         docker_image: &'a str,
     ) -> BoxFuture<'a, Result<Option<Uuid>, AuthorizedReadError>>;
 
+    /// Current existence and ownership only; callers still authorize the resolved owner.
+    fn container_identity(
+        &self,
+        container: Uuid,
+    ) -> BoxFuture<'_, Result<Option<ContainerIdentity>, AuthorizedReadError>>;
+
     fn container_identities(
         &self,
         platform: Uuid,

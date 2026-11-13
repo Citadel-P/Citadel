@@ -311,3 +311,16 @@ impl PostgresBackupPersistence {
         })
     }
 }
+
+impl PostgresBackupPersistence {
+    pub(super) fn restore_policy_id_impl(
+        &self,
+        id: Uuid,
+    ) -> BoxFuture<'_, Result<Uuid, BackupError>> {
+        Box::pin(async move {
+            sqlx::query_scalar("SELECT r.backuppolicyid FROM backuprestoreruns s JOIN backupruns r ON r.id=s.backuprunid WHERE s.id=$1")
+                .bind(id).fetch_optional(&self.pool).await.map_err(storage)?
+                .ok_or(BackupError::NotFound)
+        })
+    }
+}

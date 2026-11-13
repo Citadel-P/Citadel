@@ -19,6 +19,15 @@ pub enum OutputLimitPolicy {
     Truncate,
 }
 
+/// Whether to retain a second transcript in the final result. Forwarding and
+/// byte limits are independent of this choice.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum OutputRetention {
+    #[default]
+    Capture,
+    StreamOnly,
+}
+
 impl Default for ProcessLimits {
     fn default() -> Self {
         Self {
@@ -36,6 +45,7 @@ impl Default for ProcessLimits {
 /// values, or stdin may contain credentials.
 pub struct ProcessRequest {
     pub output: Option<mpsc::Sender<ProcessChunk>>,
+    pub output_retention: OutputRetention,
     pub program: OsString,
     pub arguments: Vec<OsString>,
     pub current_directory: Option<PathBuf>,
@@ -49,6 +59,7 @@ impl ProcessRequest {
     pub fn new(program: impl Into<OsString>) -> Self {
         Self {
             output: None,
+            output_retention: OutputRetention::Capture,
             program: program.into(),
             arguments: Vec::new(),
             current_directory: None,
@@ -89,6 +100,13 @@ impl ProcessRequest {
     #[must_use]
     pub fn limits(mut self, limits: ProcessLimits) -> Self {
         self.limits = limits;
+        self
+    }
+
+    /// StreamOnly leaves result buffers empty; limits and truncation still apply.
+    #[must_use]
+    pub fn output_retention(mut self, retention: OutputRetention) -> Self {
+        self.output_retention = retention;
         self
     }
 

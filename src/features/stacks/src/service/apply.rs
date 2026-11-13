@@ -622,6 +622,15 @@ pub(super) async fn execute_apply(
             return Err(error);
         }
     };
+    // Only immutable binding snapshots are needed after execution. Parsed YAML,
+    // copied Compose text and resolved secret values are preparation-only.
+    drop(compose_files);
+    drop(model);
+    let snapshots = resolved
+        .entries
+        .into_iter()
+        .map(|entry| entry.snapshot)
+        .collect::<Vec<_>>();
     let labels_override_path = ".citadel/citadel.labels.yml".to_owned();
     source.files.push(StackSourceFile {
         relative_path: labels_override_path.clone(),
@@ -639,7 +648,7 @@ pub(super) async fn execute_apply(
         return fail_apply_before_runtime(&store, actor, &claim, &sender, &error.to_string()).await;
     }
     let progress = StackProgress::new(sender.clone(), redactions.clone(), cancellation.clone());
-    match tokio::time::timeout(
+    let outcome = tokio::time::timeout(
         timeout,
         runtime.apply(
             &claim,
@@ -649,8 +658,13 @@ pub(super) async fn execute_apply(
             Some(&progress),
         ),
     )
-    .await
-    {
+    .await;
+    // Runtime has finished borrowing the bundle. Completion retries only need
+    // release_source and snapshots, not repository bytes or environment values.
+    drop(source);
+    drop(environment);
+    drop(progress);
+    match outcome {
         Ok(Ok(mut result)) => {
             redact_runtime_messages(&mut result, &redactions);
             let outcome_message = if result.status == StackReleaseStatus::Healthy {
@@ -679,11 +693,6 @@ pub(super) async fn execute_apply(
                         binding.record_applied(resolved, applied_at);
                     }
                 }
-                let snapshots = resolved
-                    .entries
-                    .iter()
-                    .map(|entry| entry.snapshot.clone())
-                    .collect::<Vec<_>>();
                 // Retry only completion persistence, preserving the source,
                 // bindings and build provenance of the successful Docker run.
                 for attempt in 0..3 {

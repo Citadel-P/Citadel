@@ -113,6 +113,8 @@ pub trait BuildRepository: Send + Sync {
         project_id: Option<Uuid>,
         limit: usize,
     ) -> BoxFuture<'a, Result<Vec<BuildRun>, BuildError>>;
+    /// Resolve the permission resource without loading execution details.
+    fn run_project_id(&self, id: Uuid) -> BoxFuture<'_, Result<Uuid, BuildError>>;
     fn get_run<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildRun, BuildError>>;
     fn logs<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<Vec<BuildLogEntry>, BuildError>>;
     /// Append redacted output only while this attempt owns the active run/project.

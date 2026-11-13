@@ -683,7 +683,10 @@ and with an additional compacted node to exercise the mixed path. It compares
 per-bucket values as well as exact totals and rates; it does not assert
 machine-dependent latency. Identity-function wrappers
 in a disposable child database count real capture lookups, checking that repeated
-samples resolve each identity once and still reject sealed corrections. Swarm
+samples resolve each identity once, reuse warm Workload owners without helper
+calls, preserve old owners on reassignment, and still reject sealed corrections.
+A descriptor-heavy capture fixture checks executed materialization outputs and
+zero temporary writes at fixed `work_mem`, with all samples retained. Swarm
 handover coverage includes alternating host/node projections within one batch.
 
 `cargo test --locked -p citadel-server --lib workers::maintenance::tests` uses paused
@@ -764,8 +767,12 @@ npm --prefix src/frontend run test:run -- src/features/stacks/form/hooks/useStac
 ```
 
 `realtime_overhead` holds inventory/configuration table locks to verify that safety
-rechecks do not reload collections and Stack statistics do not reload Compose/release
-configuration. Unit tests cover shared event/cache byte accounting, reservation
+rechecks do not reload collections or container statistics/image/deployment joins,
+and Stack statistics do not reload Compose/release configuration. A two-platform
+workload fixture verifies scoped SQL reads, full reconnect snapshots, authorization
+and preservation of unaffected rows. Telemetry unit tests count estimator calls and
+check encoded-size alignment after invalid samples, while a locked-table shared-read test checks that subscribers reuse the same
+event-owned telemetry context without bypassing authorization. Unit tests cover shared event/cache byte accounting, reservation
 release, cancellation, sample selection and overflow recovery. Stack hook tests check
 that compact samples preserve lifecycle metadata and cannot create unknown containers
 or resurrect removed ones. These checks do not measure production RSS.
@@ -1084,6 +1091,39 @@ durable build/data reservation counts, pending cleanup, preparation and cleanup
 durations, and result-persistence attempt counts/durations. Edge transfer,
 control and output buffered-byte gauges follow buffer ownership through drop.
 Database gauges are sampled by maintenance; they are not admission authority.
+
+### Execution retention and cleanup
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-processes --test process_runner -- --include-ignored
+SQLX_OFFLINE=true cargo test --locked -p citadel-docker --lib builds::output
+SQLX_OFFLINE=true cargo test --locked -p citadel-builds -p citadel-scripts --lib ownership_tests
+CITADEL_DENO_PATH=/absolute/path/to/deno SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test script_sandbox -- --include-ignored --nocapture
+```
+
+The process regressions compare capture and stream-only modes, including concurrent
+stdout/stderr, truncation, closed consumers, backpressure, timeout, cancellation,
+inherited pipes and dropped futures. Stream-only results retain zero transcript
+capacity; output limits count admitted bytes independently. Build output tests
+check redaction across split secrets/UTF-8, bounded persistence batches, failure
+cancellation, and blocked sinks during cancellation or producer timeout. Existing capture-mode script final logs are still checked.
+
+The opt-in `execution_cycles::repeated_stack_build_and_deno_cycles_release_execution_resources`
+scenario labels warmup and three repeated stack/build/Deno cycles. It uses a fake
+Docker CLI, manual and Git-shaped source bundles (including context, env and config
+files), the real staging/output adapters, and real Deno. It checks transient roots,
+zero build transcript capacity, run-cache removal and tracked cleanup counts.
+It does not run a Docker daemon, a Git checkout, or measure deployed Core RSS.
+The adjacent real-Deno test also verifies abandoned-future cleanup and Linux reaping.
+For durable claim/completion and HTTP-disconnect behavior, run `stacks_http` against
+an empty `CITADEL_WORKLOAD_DATABASE_URL` and `build_execution` against a separate
+empty `CITADEL_EXECUTION_DATABASE_URL`, with `--ignored --test-threads=1`.
+
+These changes reduce bounded execution-time allocations. They do not establish
+that a post-operation container working-set plateau is a Rust heap leak or predict
+its size. A representative repeated workload still needs matched cgroup anonymous/
+file-cache measurements, Core PSS and helper-process observations before and after
+cleanup. Do not infer live allocations from RSS alone.
 
 ### Script placement and credentials
 

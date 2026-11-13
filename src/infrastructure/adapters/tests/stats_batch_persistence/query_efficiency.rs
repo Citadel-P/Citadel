@@ -271,7 +271,7 @@ async fn capture_resolves_identities_once_per_batch_and_preserves_watermarks() {
         .execute(&pool).await.unwrap();
     let store = PostgresStatsBatchStore::new(pool.clone());
     let start = chrono::Utc::now().timestamp() - 180;
-    for (offset, expected_sources) in [(0, 2_i64), (60, 0)] {
+    for (offset, expected_sources, expected_owners) in [(0, 2_i64, 1_i64), (60, 0, 0)] {
         let captures: Vec<_> = ["ordinary", "managed"]
             .into_iter()
             .flat_map(|name| {
@@ -284,7 +284,7 @@ async fn capture_resolves_identities_once_per_batch_and_preserves_watermarks() {
             .fetch_one(&pool).await.unwrap();
         assert_eq!(
             calls,
-            (expected_sources, 1),
+            (expected_sources, expected_owners),
             "lookups must scale with identities, not samples"
         );
         sqlx::query("TRUNCATE identity_calls")
@@ -292,6 +292,30 @@ async fn capture_resolves_identities_once_per_batch_and_preserves_watermarks() {
             .await
             .unwrap();
     }
+    // An ownership change must miss the full key; previous captures retain their owner.
+    let replacement = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status) VALUES($1,'00000000-0000-0000-0000-000000000001','replacement-owner',$2,'{}','Stopped')")
+        .bind(replacement).bind(scope.platform_id).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE containers SET deploymentid=$1 WHERE id=$2")
+        .bind(replacement)
+        .bind(managed)
+        .execute(&pool)
+        .await
+        .unwrap();
+    store
+        .persist_batch(&[container(&scope, "managed", start + 120, 1.)])
+        .await
+        .unwrap();
+    let owners: Vec<Uuid> = sqlx::query_scalar("SELECT o.deploymentid FROM statisticssamples s JOIN statisticsowners o ON o.id=s.ownerid WHERE o.sourceid=(SELECT id FROM statisticssources WHERE containerid=$1) ORDER BY s.created")
+        .bind(managed).fetch_all(&pool).await.unwrap();
+    assert_eq!(owners.len(), 13);
+    assert!(owners[..12].iter().all(|id| *id == deployment));
+    assert_eq!(owners[12], replacement);
+    let calls: i64 = sqlx::query_scalar("SELECT count(*) FROM identity_calls WHERE kind='owner'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(calls, 1);
     sqlx::query("UPDATE statisticssources SET compacteduntil=$1 WHERE platformid=$2")
         .bind(start + 90)
         .bind(scope.platform_id)
@@ -407,6 +431,55 @@ async fn latest_container_stats_do_not_scan_other_sources_when_redeploy_has_no_s
             );
         }
     }
+    tx.rollback().await.unwrap();
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
+async fn capture_does_not_materialize_platform_descriptors_with_each_sample() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    add_container(&pool, &scope, "narrow").await;
+    sqlx::query("UPDATE platforms SET platformdescriptor=json_build_object('$type','Docker','fixture',repeat('descriptor-',6000)) WHERE id=$1")
+        .bind(scope.platform_id).execute(&pool).await.unwrap();
+    let start = chrono::Utc::now().timestamp();
+    let samples: Vec<_> = (0..128)
+        .map(|n| container(&scope, "narrow", start + n, 1.))
+        .collect();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL work_mem='4MB'")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let plan: serde_json::Value = sqlx::query_scalar(concat!(
+        "EXPLAIN(ANALYZE,BUFFERS,VERBOSE,FORMAT JSON) ",
+        include_str!("../../src/persistence/postgres/platforms/statistics/container_batch.sql"),
+        include_str!("../../src/persistence/postgres/platforms/statistics/capture.sql")
+    ))
+    .bind(serde_json::to_value(&samples).unwrap())
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(plan[0]["Plan"]["Temp Written Blocks"], 0, "{plan}");
+    fn check(node: &serde_json::Value) {
+        if node["Subplan Name"] == "CTE projected" {
+            let output = node["Output"].to_string();
+            assert!(!output.contains("descriptor"), "{output}");
+            assert!(!output.contains("connected_at"), "{output}");
+        }
+        if let Some(children) = node["Plans"].as_array() {
+            for child in children {
+                check(child);
+            }
+        }
+    }
+    check(&plan[0]["Plan"]);
+    let persisted: i64 = sqlx::query_scalar("SELECT count(*) FROM statisticssamples")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert_eq!(persisted, 128);
     tx.rollback().await.unwrap();
     close_storage_fixture(pool, database).await;
 }

@@ -1,7 +1,9 @@
 use super::runtime::BuildRuntimeError as BuildFailure;
 use citadel_builds::BuildLogSink;
 use citadel_execution::SecretRedactor as Redactor;
-use citadel_execution::{ProcessChunk, ProcessOutput, ProcessRequest};
+use citadel_execution::{
+    OutputRetention, ProcessChunk, ProcessError, ProcessOutput, ProcessRequest,
+};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -15,9 +17,14 @@ pub async fn run(
     let (sender, receiver) = mpsc::channel(8);
     capture(
         async {
-            citadel_processes::run(request.output(sender), &cancellation)
-                .await
-                .map_err(BuildFailure::Process)
+            citadel_processes::run(
+                request
+                    .output(sender)
+                    .output_retention(OutputRetention::StreamOnly),
+                &cancellation,
+            )
+            .await
+            .map_err(BuildFailure::Process)
         },
         receiver,
         progress,
@@ -83,15 +90,36 @@ pub async fn capture<T>(
         Ok::<_, BuildFailure>(())
     };
     let consume = async {
-        let result = consume.await;
+        let result = tokio::select! {
+            biased;
+            result = consume => result,
+            () = cancellation.cancelled() => Err(BuildFailure::Process(ProcessError::Cancelled)),
+        };
         if result.is_err() {
             cancellation.cancel();
         }
         result
     };
-    let (execution, consumed) = tokio::join!(execution, consume);
-    consumed?;
-    execution
+    let execute = async {
+        let result = execution.await;
+        if result.is_err() {
+            // A failed/timed-out producer cannot wait indefinitely for a log
+            // sink blocked on storage or a transport consumer.
+            cancellation.cancel();
+        }
+        result
+    };
+    // Always await executor cleanup, even when persistence fails or is cancelled.
+    let (execution, consumed) = tokio::join!(execute, consume);
+    match consumed {
+        // Preserve the original process/transport error rather than replacing a
+        // timeout with the cancellation used to release its output consumer.
+        Err(BuildFailure::Process(ProcessError::Cancelled)) => {
+            execution.and(Err(BuildFailure::Process(ProcessError::Cancelled)))
+        }
+        Err(error) => Err(error),
+        Ok(()) => execution,
+    }
 }
 
 async fn flush(
@@ -153,6 +181,70 @@ mod tests {
         }
     }
 
+    struct BlockedLogs(tokio::sync::Notify);
+    impl BuildLogSink for BlockedLogs {
+        fn append<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a str,
+        ) -> futures_util::future::BoxFuture<'a, Result<(), citadel_builds::BuildError>> {
+            Box::pin(async {
+                self.0.notify_one();
+                std::future::pending().await
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_or_producer_failure_releases_a_blocked_log_sink() {
+        for producer_failed in [false, true] {
+            let sink = BlockedLogs(tokio::sync::Notify::new());
+            let cancellation = CancellationToken::new();
+            let (sender, receiver) = mpsc::channel(1);
+            let cleaned = std::sync::atomic::AtomicBool::new(false);
+            let execution = async {
+                sender
+                    .send(ProcessChunk {
+                        stream: "stdout",
+                        bytes: b"pending log".to_vec(),
+                    })
+                    .await
+                    .unwrap();
+                sink.0.notified().await;
+                if !producer_failed {
+                    cancellation.cancel();
+                }
+                drop(sender);
+                cleaned.store(true, std::sync::atomic::Ordering::SeqCst);
+                if producer_failed {
+                    Err(BuildFailure::Process(ProcessError::Timeout(
+                        std::time::Duration::from_secs(1),
+                    )))
+                } else {
+                    Ok(())
+                }
+            };
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                capture(execution, receiver, &sink, &[], &cancellation),
+            )
+            .await
+            .expect("a blocked sink must not retain a finished/cancelled executor");
+            assert!(cleaned.load(std::sync::atomic::Ordering::SeqCst));
+            if producer_failed {
+                assert!(matches!(
+                    result,
+                    Err(BuildFailure::Process(ProcessError::Timeout(_)))
+                ));
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(BuildFailure::Process(ProcessError::Cancelled))
+                ));
+            }
+        }
+    }
+
     #[tokio::test]
     async fn persistence_failure_cancels_the_producer_instead_of_hanging() {
         let (sender, receiver) = mpsc::channel(1);
@@ -210,7 +302,7 @@ mod batching_tests {
         let (sender, receiver) = mpsc::channel(8);
         let cancel = CancellationToken::new();
         let execution = async {
-            for bytes in [b"first secret".as_slice(), b"-value\n", b"last\n"] {
+            for bytes in [b"first secret".as_slice(), b"-value\n\xc3", b"\xa9 last\n"] {
                 sender
                     .send(ProcessChunk {
                         stream: "stdout",
@@ -238,6 +330,7 @@ mod batching_tests {
             .collect();
         assert!(output.starts_with("first ") && output.ends_with("last\n"));
         assert!(!output.contains("secret-value"));
+        assert!(output.contains("é last"));
         assert!(batches.len() < 3, "the burst must coalesce");
         assert!(batches.iter().all(|batch| {
             batch.len() <= 128
@@ -283,5 +376,36 @@ mod batching_tests {
                 .collect::<String>(),
             message
         );
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn build_streams_both_pipes_and_returns_only_completion_metadata() {
+        let sink = Sink::default();
+        let request = ProcessRequest::new("/bin/sh").args([
+            "-c",
+            "(head -c 2097152 /dev/zero | tr '\\0' x) & (head -c 2097152 /dev/zero | tr '\\0' y >&2) & wait; exit 7",
+        ]).limits(super::super::runtime::limits(std::time::Duration::from_secs(10), 1024 * 1024));
+        let output = run(request, &CancellationToken::new(), &sink, &[])
+            .await
+            .unwrap();
+        assert_eq!(output.exit_code, Some(7));
+        assert!(output.stdout_truncated && output.stderr_truncated);
+        assert_eq!(output.stdout.capacity() + output.stderr.capacity(), 0);
+        let batches = sink.0.lock().unwrap();
+        for (stream, byte) in [("stdout", b'x'), ("stderr", b'y')] {
+            let logs: Vec<_> = batches
+                .iter()
+                .flatten()
+                .filter(|log| log.stream == stream)
+                .collect();
+            assert_eq!(
+                logs.iter().map(|log| log.message.len()).sum::<usize>(),
+                1024 * 1024
+            );
+            assert!(
+                logs.iter()
+                    .all(|log| log.message.bytes().all(|value| value == byte))
+            );
+        }
     }
 }

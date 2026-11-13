@@ -278,6 +278,15 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .enqueue_backup(actor, policies[0].id, "Manual", None)
         .await
         .unwrap();
+    assert_eq!(store.run_policy_id(first.id).await.unwrap(), policies[0].id);
+    assert!(matches!(
+        store.run_policy_id(Uuid::now_v7()).await,
+        Err(citadel_backups::BackupError::NotFound)
+    ));
+    assert!(matches!(
+        store.restore_policy_id(Uuid::now_v7()).await,
+        Err(citadel_backups::BackupError::NotFound)
+    ));
     let _second = store
         .enqueue_backup(actor, policies[1].id, "Manual", None)
         .await
@@ -532,6 +541,10 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(
+        store.restore_policy_id(restore.run.id).await.unwrap(),
+        first_claim.run.backup_policy_id
+    );
     assert_eq!(lease_durations(&pool, restore.run.id).await, (90.0, 90.0));
     store
         .finish_restore(

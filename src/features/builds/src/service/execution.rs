@@ -25,6 +25,10 @@ impl BuildService {
             .lock()
             .map_err(|_| BuildError::Storage("Build cancellation state is poisoned.".to_owned()))?
             .insert(claim.run.id, cancellation.clone());
+        let active = ActiveRun {
+            entries: &self.active,
+            id: claim.run.id,
+        };
         let logs = logs::PersistedBuildLogs::new(
             self.store.clone(),
             claim.run.id,
@@ -74,9 +78,7 @@ impl BuildService {
                 }
             }
         };
-        if let Ok(mut active) = self.active.lock() {
-            active.remove(&claim.run.id);
-        }
+        drop(active);
         let observation = if self.alerts.is_some()
             && matches!(
                 result.status,
@@ -180,6 +182,59 @@ impl BuildService {
             Ok(())
         } else {
             Err(BuildError::Conflict("Build Run is not active.".to_owned()))
+        }
+    }
+}
+
+// Local cancellation bookkeeping is not the durable claim or executor reservation.
+// Remove it even if the controller future is dropped; recovery still owns the run.
+struct ActiveRun<'a> {
+    entries: &'a std::sync::Mutex<std::collections::HashMap<Uuid, CancellationToken>>,
+    id: Uuid,
+}
+impl Drop for ActiveRun<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.remove(&self.id);
+        }
+    }
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn abandoned_controller_removes_only_its_local_cancellation_entry() {
+        let entries = std::sync::Mutex::new(std::collections::HashMap::new());
+        let other = Uuid::now_v7();
+        entries
+            .lock()
+            .unwrap()
+            .insert(other, CancellationToken::new());
+        for _ in 0..8 {
+            let id = Uuid::now_v7();
+            let entered = tokio::sync::Notify::new();
+            {
+                let controller = async {
+                    entries.lock().unwrap().insert(id, CancellationToken::new());
+                    let _active = ActiveRun {
+                        entries: &entries,
+                        id,
+                    };
+                    entered.notify_one();
+                    std::future::pending::<()>().await;
+                };
+                tokio::pin!(controller);
+                tokio::select! {
+                    () = &mut controller => unreachable!(),
+                    () = entered.notified() => {},
+                }
+                assert_eq!(entries.lock().unwrap().len(), 2);
+            }
+            let entries = entries.lock().unwrap();
+            assert_eq!(entries.len(), 1);
+            assert!(!entries[&other].is_cancelled());
         }
     }
 }

@@ -428,3 +428,58 @@ fn detail_statistics_select_only_the_requested_identity_and_stack() {
     assert_eq!(stats.len(), 1);
     assert_eq!(stats[0], stat);
 }
+
+#[test]
+fn typed_workload_selection_preserves_full_refreshes_and_truncated_membership() {
+    use citadel_primitives::health::WorkloadHealth;
+    let platform = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let mut change = PublishedRuntimeEvent {
+        platform_id: Some(platform),
+        resource_type: "Platform",
+        resource_id: platform,
+        event_kind: "runtimeChanged",
+        resource_revision: 1,
+        reads: Default::default(),
+        containers: Default::default(),
+        payload: json!({"dockerResourceType":"container", "action":"health_status: unhealthy", "runtimeResourceId":"changed"}),
+    };
+    let mut health = WorkloadHealth::default();
+    let selection = WorkloadSelection::new(Some(&change));
+    assert_eq!(selection.platform, Some(platform));
+    assert!(!selection.includes(Some(platform), &health));
+    health.members_truncated = true;
+    assert!(selection.includes(Some(platform), &health));
+    assert!(!selection.includes(Some(other), &health));
+    assert!(matches!(selection.style(), RowStyle::UpdatePatch));
+    health.members_truncated = false;
+    health.members.push(
+        serde_json::from_value(json!({
+            "containerId":null,"dockerContainerId":"changed","taskId":null,
+            "platformId":platform,"nodeId":null,"name":"member","service":"web",
+            "state":"Running","available":true,"observation":null
+        }))
+        .unwrap(),
+    );
+    assert!(selection.includes(Some(platform), &health));
+    change.payload["action"] = json!("destroy");
+    assert!(
+        WorkloadSelection::new(Some(&change)).includes(Some(platform), &WorkloadHealth::default())
+    );
+    for event in [
+        None,
+        Some(&PublishedRuntimeEvent {
+            resource_type: "Stack",
+            ..change.clone()
+        }),
+        Some(&PublishedRuntimeEvent {
+            platform_id: None,
+            ..change.clone()
+        }),
+    ] {
+        let selection = WorkloadSelection::new(event);
+        assert!(selection.includes(Some(other), &WorkloadHealth::default()));
+        assert!(matches!(selection.style(), RowStyle::Update));
+        assert!(selection.platform.is_none());
+    }
+}

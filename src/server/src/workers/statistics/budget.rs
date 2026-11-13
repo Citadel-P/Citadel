@@ -119,7 +119,13 @@ pub fn io_bytes(stat: &RuntimeContainerStat) -> usize {
     })
     .saturating_add(1)
 }
+#[cfg(test)]
+thread_local! {
+    pub(super) static CONTAINER_ESTIMATES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 pub fn container_bytes(scope: usize, stat: &RuntimeContainerStat) -> usize {
+    #[cfg(test)]
+    CONTAINER_ESTIMATES.with(|count| count.set(count.get() + 1));
     // Flattening removes two braces and adds one comma. Keep extra allowance
     // for the surrounding batch array, separators and UUID scope-lock arguments.
     scope.saturating_add(encoded(stat)).saturating_add(64)
@@ -137,13 +143,17 @@ fn scope_owned(scope: &StatsScope) -> usize {
 pub fn cycle_bytes(
     scope: &StatsScope,
     stats: &Vec<RuntimeContainerStat>,
+    estimates: &Vec<usize>,
     captures: usize,
     capture_bytes: usize,
 ) -> (usize, usize, usize) {
-    let scope_size = scope_bytes(scope);
-    let container = stats.iter().fold(128usize, |total, stat| {
-        total.saturating_add(
-                container_bytes(scope_size, stat)
+    assert_eq!(stats.len(), estimates.len());
+    let container = stats
+        .iter()
+        .zip(estimates)
+        .fold(128usize, |total, (stat, encoded)| {
+            total.saturating_add(
+                encoded
                     .saturating_mul(2)
                     .saturating_add(
                         2 * std::mem::size_of::<
@@ -154,7 +164,7 @@ pub fn cycle_bytes(
                     .saturating_add(stat.docker_container_id.capacity())
                     .saturating_add(64),
             )
-    });
+        });
     let platform = stats
         .iter()
         .fold(capture_bytes.saturating_mul(2), |total, stat| {
@@ -170,11 +180,13 @@ pub fn cycle_bytes(
     let input = stats
         .capacity()
         .saturating_mul(std::mem::size_of::<RuntimeContainerStat>())
+        .saturating_add(stats.iter().fold(0usize, |total, s| {
+            total.saturating_add(s.docker_container_id.capacity())
+        }))
         .saturating_add(
-            stats
-                .iter()
-                .map(|s| s.docker_container_id.capacity())
-                .sum::<usize>(),
+            estimates
+                .capacity()
+                .saturating_mul(std::mem::size_of::<usize>()),
         )
         .saturating_add(4096)
         .saturating_add(scope_owned(scope));

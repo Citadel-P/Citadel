@@ -100,7 +100,7 @@ impl StatsIngress {
     async fn submit_inner(
         &self,
         scope: StatsScope,
-        stats: Vec<RuntimeContainerStat>,
+        mut stats: Vec<RuntimeContainerStat>,
         metadata: Option<RuntimePlatformStats>,
         captured_at: Option<i64>,
         cancel: &CancellationToken,
@@ -130,13 +130,18 @@ impl StatsIngress {
         // The capture and narrow metadata statements each carry scope data.
         let capture_base = scope_bytes.saturating_mul(2).saturating_add(1024);
         let mut capture_sizes = BTreeMap::<i64, usize>::new();
+        let mut estimates = Vec::with_capacity(stats.len());
         let oversized = stats.iter().any(|stat| {
             let bytes = capture_sizes
                 .entry(captured_at.unwrap_or(stat.created))
                 .or_insert(capture_base);
             *bytes = bytes.saturating_add(super::budget::io_bytes(stat));
-            *bytes > super::budget::BATCH_BYTES
-                || super::budget::container_bytes(scope_bytes, stat) > super::budget::BATCH_BYTES
+            if *bytes > super::budget::BATCH_BYTES {
+                return true;
+            }
+            let encoded = super::budget::container_bytes(scope_bytes, stat);
+            estimates.push(encoded);
+            encoded > super::budget::BATCH_BYTES
         }) || capture_base > super::budget::BATCH_BYTES;
         if oversized {
             self.budget.reject(true);
@@ -146,11 +151,12 @@ impl StatsIngress {
         let (bytes, container_bytes, platform_bytes) = super::budget::cycle_bytes(
             &scope,
             &stats,
+            &estimates,
             capture_sizes.len(),
             capture_sizes
                 .values()
                 .copied()
-                .sum::<usize>()
+                .fold(0usize, usize::saturating_add)
                 .max(capture_base),
         );
         let Some(mut lease) = self.budget.reserve(bytes) else {
@@ -165,33 +171,38 @@ impl StatsIngress {
             ));
         }
         let original_count = stats.len();
-        let stats: Vec<_> = stats
-            .into_iter()
-            .filter(|s| {
-                let valid = s.created >= 0
-                    && !s.docker_container_id.is_empty()
-                    && [
-                        s.memory_active,
-                        s.memory_cache,
-                        s.memory_limit,
-                        s.cpu_usage,
-                        s.rx_bytes,
-                        s.tx_bytes,
-                    ]
+        let mut index = 0;
+        let mut retained = 0;
+        stats.retain(|s| {
+            let valid = s.created >= 0
+                && !s.docker_container_id.is_empty()
+                && [
+                    s.memory_active,
+                    s.memory_cache,
+                    s.memory_limit,
+                    s.cpu_usage,
+                    s.rx_bytes,
+                    s.tx_bytes,
+                ]
+                .into_iter()
+                .all(|v| v.is_finite() && v >= 0.0)
+                && s.memory_active_cache
+                    .is_none_or(|v| v.is_finite() && v >= 0.0 && v <= s.memory_active)
+                && [s.block_read_bytes, s.block_write_bytes]
                     .into_iter()
-                    .all(|v| v.is_finite() && v >= 0.0)
-                    && s.memory_active_cache
-                        .is_none_or(|v| v.is_finite() && v >= 0.0 && v <= s.memory_active)
-                    && [s.block_read_bytes, s.block_write_bytes]
-                        .into_iter()
-                        .flatten()
-                        .all(|v| v.is_finite() && v >= 0.0);
-                if !valid {
-                    RuntimeWork::StatsRejected.units(1);
-                }
-                valid
-            })
-            .collect();
+                    .flatten()
+                    .all(|v| v.is_finite() && v >= 0.0);
+            if !valid {
+                RuntimeWork::StatsRejected.units(1);
+            }
+            if valid {
+                estimates[retained] = estimates[index];
+                retained += 1;
+            }
+            index += 1;
+            valid
+        });
+        estimates.truncate(retained);
         let metadata = metadata.filter(|m| {
             let valid = m.mem_total >= 0
                 && m.container_count >= 0
@@ -258,8 +269,7 @@ impl StatsIngress {
                 totals.last_key_value().map(|(_, sample)| sample),
             );
         }
-        for stat in stats {
-            let encoded = super::budget::container_bytes(scope_bytes, &stat);
+        for (stat, encoded) in stats.into_iter().zip(estimates) {
             if !self
                 .containers
                 .send_owned(

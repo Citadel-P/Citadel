@@ -1,0 +1,233 @@
+use crate::OwnedChild;
+use crate::tool_environment;
+use citadel_execution::{
+    OutputLimitPolicy, OutputRetention, ProcessChunk, ProcessError, ProcessLimits, ProcessOutput,
+    ProcessRequest, ProcessRunner,
+};
+use futures_util::future::BoxFuture;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::process::Command;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
+const READ_BUFFER_BYTES: usize = 8 * 1024;
+#[derive(Default)]
+pub struct SystemProcess;
+impl ProcessRunner for SystemProcess {
+    fn run<'a>(
+        &'a self,
+        request: ProcessRequest,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<ProcessOutput, ProcessError>> {
+        Box::pin(run(request, cancellation))
+    }
+}
+/// Runs one child process with bounded output, timeout, and cooperative
+/// cancellation. On every non-exit completion path the child is killed and
+/// reaped before this method returns. On Unix, cleanup also kills helpers in
+/// the child's process group; the container init reaps orphaned descendants.
+pub async fn run(
+    request: ProcessRequest,
+    cancellation: &CancellationToken,
+) -> Result<ProcessOutput, ProcessError> {
+    validate_limits(request.limits)?;
+    if cancellation.is_cancelled() {
+        return Err(ProcessError::Cancelled);
+    }
+
+    let mut command = Command::new(&request.program);
+    command
+        .env_clear()
+        .envs(tool_environment())
+        .args(&request.arguments)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    if request.stdin.is_some() {
+        command.stdin(Stdio::piped());
+    } else {
+        command.stdin(Stdio::null());
+    }
+    if let Some(directory) = &request.current_directory {
+        command.current_dir(directory);
+    }
+    for (key, value) in &request.environment {
+        command.env(key, value);
+    }
+
+    let mut child = OwnedChild::spawn(&mut command).map_err(ProcessError::Spawn)?;
+    let stdout = child.take_stdout().expect("piped stdout is available");
+    let stderr = child.take_stderr().expect("piped stderr is available");
+    let (limit_sender, mut limit_receiver) = mpsc::channel(1);
+    let output_cancellation = cancellation.child_token();
+    let stdout_reader = tokio::spawn(read_bounded(
+        stdout,
+        "stdout",
+        request.limits,
+        request.output_retention,
+        limit_sender.clone(),
+        request.output.clone(),
+        output_cancellation.clone(),
+    ));
+    let stderr_reader = tokio::spawn(read_bounded(
+        stderr,
+        "stderr",
+        request.limits,
+        request.output_retention,
+        limit_sender,
+        request.output,
+        output_cancellation.clone(),
+    ));
+    let stdin_writer = request.stdin.map(|input| {
+        let mut stdin = child.child.stdin.take().expect("piped stdin is available");
+        tokio::spawn(async move {
+            stdin.write_all(&input).await?;
+            // Input ownership ends when the bytes have been written, not when
+            // the child exits or closes the pipe. Build archives can be large.
+            drop(input);
+            stdin.shutdown().await
+        })
+    });
+
+    // A caller may drop this future when its transport disconnects. Keep pipe
+    // tasks owned by this invocation instead of detaching them with live pipes.
+    let mut tasks = vec![stdout_reader.abort_handle(), stderr_reader.abort_handle()];
+    tasks.extend(
+        stdin_writer
+            .as_ref()
+            .map(tokio::task::JoinHandle::abort_handle),
+    );
+    let _tasks = PipeTasks(tasks);
+    let _output_guard = output_cancellation.clone().drop_guard();
+
+    let timeout = tokio::time::sleep(request.limits.timeout);
+    tokio::pin!(timeout);
+    // The deadline includes pipe collection: descendants may inherit the pipes,
+    // or an output consumer may stop reading even after the child has exited.
+    let result = tokio::select! {
+        biased;
+        () = cancellation.cancelled() => Err(ProcessError::Cancelled),
+        Some((stream, limit)) = limit_receiver.recv() => Err(ProcessError::OutputLimit { stream, limit }),
+        () = &mut timeout => Err(ProcessError::Timeout(request.limits.timeout)),
+        result = async {
+            if let Some(writer) = stdin_writer {
+                writer.await
+                    .map_err(|error| ProcessError::Io(std::io::Error::other(error.to_string())))?
+                    .map_err(ProcessError::Io)?;
+            }
+            let (stdout, stdout_truncated) = join_reader(stdout_reader).await?;
+            let (stderr, stderr_truncated) = join_reader(stderr_reader).await?;
+            // Keep the leader unreaped while inherited pipes are open. Its PID
+            // cannot be reused as an unrelated process group during cleanup.
+            let status = child.wait().await.map_err(ProcessError::Io)?;
+            Ok(ProcessOutput {
+                exit_code: status.code(),
+                stdout,
+                stderr,
+                stdout_truncated,
+                stderr_truncated,
+            })
+        } => result,
+    };
+
+    if result.is_err() {
+        output_cancellation.cancel();
+        child.terminate().await.map_err(ProcessError::Io)?;
+    }
+    // PipeTasks aborts any readers/writer still blocked on inherited pipes.
+    result
+}
+
+fn validate_limits(limits: ProcessLimits) -> Result<(), ProcessError> {
+    if limits.timeout.is_zero() {
+        return Err(ProcessError::Timeout(Duration::ZERO));
+    }
+    if limits.maximum_stdout_bytes == 0 {
+        return Err(ProcessError::OutputLimit {
+            stream: "stdout",
+            limit: 0,
+        });
+    }
+    if limits.maximum_stderr_bytes == 0 {
+        return Err(ProcessError::OutputLimit {
+            stream: "stderr",
+            limit: 0,
+        });
+    }
+    Ok(())
+}
+
+async fn read_bounded<R>(
+    mut reader: R,
+    stream: &'static str,
+    limits: ProcessLimits,
+    retention: OutputRetention,
+    limit_sender: mpsc::Sender<(&'static str, usize)>,
+    output_sender: Option<mpsc::Sender<ProcessChunk>>,
+    cancellation: CancellationToken,
+) -> Result<(Vec<u8>, bool), std::io::Error>
+where
+    R: AsyncRead + Unpin,
+{
+    let limit = if stream == "stdout" {
+        limits.maximum_stdout_bytes
+    } else {
+        limits.maximum_stderr_bytes
+    };
+    let mut output = Vec::new();
+    // Forwarded bytes count even when the final transcript is not captured.
+    let mut admitted = 0usize;
+    let mut truncated = false;
+    let mut buffer = [0_u8; READ_BUFFER_BYTES];
+    loop {
+        let count = reader.read(&mut buffer).await?;
+        if count == 0 {
+            return Ok((output, truncated));
+        }
+        let remaining = limit.saturating_sub(admitted);
+        let retained = count.min(remaining);
+        if retained > 0
+            && let Some(sender) = &output_sender
+        {
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => {},
+                result = sender.send(ProcessChunk { stream, bytes: buffer[..retained].to_vec() }) => {
+                    result.map_err(|_| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Output consumer closed."))?;
+                }
+            }
+        }
+        admitted += retained;
+        if retention == OutputRetention::Capture {
+            output.extend_from_slice(&buffer[..retained]);
+        }
+        if count > remaining {
+            truncated = true;
+            if limits.output_limit_policy == OutputLimitPolicy::Error {
+                let _ = limit_sender.try_send((stream, limit));
+            }
+            // Continue draining until the owner kills the process. This avoids
+            // a pipe deadlock if the notification races process completion.
+            continue;
+        }
+    }
+}
+
+async fn join_reader(
+    reader: tokio::task::JoinHandle<Result<(Vec<u8>, bool), std::io::Error>>,
+) -> Result<(Vec<u8>, bool), ProcessError> {
+    reader
+        .await
+        .map_err(|error| ProcessError::Io(std::io::Error::other(error.to_string())))?
+        .map_err(ProcessError::Io)
+}
+
+struct PipeTasks(Vec<tokio::task::AbortHandle>);
+impl Drop for PipeTasks {
+    fn drop(&mut self) {
+        for task in &self.0 {
+            task.abort();
+        }
+    }
+}
