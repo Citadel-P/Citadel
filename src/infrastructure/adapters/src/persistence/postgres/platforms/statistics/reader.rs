@@ -47,6 +47,7 @@ fn map_container(row: PgRow) -> Result<ContainerStatSnapshot, RuntimeCapabilityE
         cpu_usage: row.try_get("cpuusage").map_err(storage)?,
         memory_active: row.try_get("memoryactive").map_err(storage)?,
         memory_cache: row.try_get("memorycache").map_err(storage)?,
+        memory_active_cache: row.try_get("memoryactivecache").map_err(storage)?,
         memory_limit: row.try_get("memorylimit").map_err(storage)?,
         rx_bytes: row.try_get("rxbytes").map_err(storage)?,
         tx_bytes: row.try_get("txbytes").map_err(storage)?,

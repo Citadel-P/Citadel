@@ -12,8 +12,6 @@ use citadel_primitives::schedule::schedule_is_due;
 
 use std::collections::HashMap;
 
-use std::path::PathBuf;
-
 use std::sync::{Arc, Mutex};
 
 use std::time::Duration;
@@ -96,7 +94,6 @@ impl ScriptService {
                 workspace,
                 deno_path: config.deno_path,
                 work_root: config.work_root,
-                cache_directory: None,
                 allow_net: None,
             },
             tasks,
@@ -129,8 +126,7 @@ impl ScriptService {
 }
 
 impl ScriptService {
-    pub fn with_sandbox(mut self, cache_directory: PathBuf, allow_net: Option<String>) -> Self {
-        self.sandbox.cache_directory = Some(cache_directory);
+    pub fn with_sandbox(mut self, allow_net: Option<String>) -> Self {
         self.sandbox.allow_net = allow_net;
         self
     }

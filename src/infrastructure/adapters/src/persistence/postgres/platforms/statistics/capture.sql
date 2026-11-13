@@ -47,14 +47,14 @@
 ), latest AS (
  SELECT DISTINCT ON(source_id,created) * FROM owned ORDER BY source_id,created,ordinal DESC
 ), inserted AS (
- INSERT INTO statisticssamples(sourceid,ownerid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes)
- SELECT source_id,owner_id,created,"cpuUsage","memoryActive","memoryCache","memoryLimit","rxBytes","txBytes","blockReadBytes","blockWriteBytes" FROM latest
+ INSERT INTO statisticssamples(sourceid,ownerid,created,cpuusage,memoryactive,memoryactivecache,memorycache,memorylimit,rxbytes,txbytes,blockreadbytes,blockwritebytes)
+ SELECT source_id,owner_id,created,"cpuUsage","memoryActive","memoryActiveCache","memoryCache","memoryLimit","rxBytes","txBytes","blockReadBytes","blockWriteBytes" FROM latest
  ON CONFLICT(sourceid,created) DO UPDATE SET
  ownerid=COALESCE(statisticssamples.ownerid,EXCLUDED.ownerid),
- cpuusage=EXCLUDED.cpuusage,memoryactive=EXCLUDED.memoryactive,memorycache=EXCLUDED.memorycache,
+ cpuusage=EXCLUDED.cpuusage,memoryactive=EXCLUDED.memoryactive,memoryactivecache=EXCLUDED.memoryactivecache,memorycache=EXCLUDED.memorycache,
  memorylimit=EXCLUDED.memorylimit,rxbytes=EXCLUDED.rxbytes,txbytes=EXCLUDED.txbytes,
  blockreadbytes=EXCLUDED.blockreadbytes,blockwritebytes=EXCLUDED.blockwritebytes
- WHERE (statisticssamples.cpuusage,statisticssamples.memoryactive,statisticssamples.memorycache,statisticssamples.memorylimit,statisticssamples.rxbytes,statisticssamples.txbytes,statisticssamples.blockreadbytes,statisticssamples.blockwritebytes,statisticssamples.ownerid)
- IS DISTINCT FROM (EXCLUDED.cpuusage,EXCLUDED.memoryactive,EXCLUDED.memorycache,EXCLUDED.memorylimit,EXCLUDED.rxbytes,EXCLUDED.txbytes,EXCLUDED.blockreadbytes,EXCLUDED.blockwritebytes,COALESCE(statisticssamples.ownerid,EXCLUDED.ownerid))
+ WHERE (statisticssamples.cpuusage,statisticssamples.memoryactive,statisticssamples.memoryactivecache,statisticssamples.memorycache,statisticssamples.memorylimit,statisticssamples.rxbytes,statisticssamples.txbytes,statisticssamples.blockreadbytes,statisticssamples.blockwritebytes,statisticssamples.ownerid)
+ IS DISTINCT FROM (EXCLUDED.cpuusage,EXCLUDED.memoryactive,EXCLUDED.memoryactivecache,EXCLUDED.memorycache,EXCLUDED.memorylimit,EXCLUDED.rxbytes,EXCLUDED.txbytes,EXCLUDED.blockreadbytes,EXCLUDED.blockwritebytes,COALESCE(statisticssamples.ownerid,EXCLUDED.ownerid))
 )
 SELECT count(DISTINCT ordinal)::bigint FROM owned WHERE container_id IS NOT NULL OR include_services

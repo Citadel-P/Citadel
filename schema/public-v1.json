@@ -5423,6 +5423,14 @@
             "format": "double",
             "type": "number"
           },
+          "memoryActiveCache": {
+            "description": "Active filesystem cache within the working set; absent when not measured.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "memoryCache": {
             "format": "double",
             "type": "number"
@@ -5540,6 +5548,14 @@
           "memoryActive": {
             "format": "double",
             "type": "number"
+          },
+          "memoryActiveCache": {
+            "description": "Active filesystem cache within the working set; absent when not measured.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "memoryCache": {
             "format": "double",
@@ -9027,6 +9043,14 @@
                 "memoryActive": {
                   "format": "double",
                   "type": "number"
+                },
+                "memoryActiveCache": {
+                  "description": "Active filesystem cache within the working set; absent when not measured.",
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "memoryCache": {
                   "format": "double",

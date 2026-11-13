@@ -207,7 +207,6 @@ impl ScriptService for Runtime {
             ),
             deno_path: self.deno_path.clone(),
             work_root: self.script_root.clone(),
-            cache_directory: None,
             allow_net: None,
         };
         let task_attempt = attempt.clone();

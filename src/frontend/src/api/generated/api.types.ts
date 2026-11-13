@@ -2660,6 +2660,11 @@ export interface ContainerStatSnapshot {
   created: number;
   /** @format double */
   memoryActive: number;
+  /**
+   * Active filesystem cache within the working set; absent when not measured.
+   * @format double
+   */
+  memoryActiveCache?: number | null;
   /** @format double */
   memoryCache: number;
   /** @format double */
@@ -2703,6 +2708,11 @@ export interface ContainerStatView {
   created: number;
   /** @format double */
   memoryActive: number;
+  /**
+   * Active filesystem cache within the working set; absent when not measured.
+   * @format double
+   */
+  memoryActiveCache?: number | null;
   /** @format double */
   memoryCache: number;
   /** @format double */
@@ -3770,6 +3780,11 @@ export interface HistoryContainerStatSnapshot {
     created: number;
     /** @format double */
     memoryActive: number;
+    /**
+     * Active filesystem cache within the working set; absent when not measured.
+     * @format double
+     */
+    memoryActiveCache?: number | null;
     /** @format double */
     memoryCache: number;
     /** @format double */

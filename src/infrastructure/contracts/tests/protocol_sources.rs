@@ -5,6 +5,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
     // Central Agent updates add commands 6–8 and new RPC/messages. Existing
     // field numbers, command discriminants and authenticated envelopes are unchanged.
     // Container block I/O counters add optional fields 7–8 without changing existing statistics.
+    // Active filesystem cache adds optional field 9, preserving working-set fields and absence.
     // Agent update settlement adds source identity fields and runtime image evidence.
     let sources = [
         (
@@ -20,7 +21,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "ab8345474b2a45449f801e0f21774e8890b1177a19889fd8d1c2c8a3461781d3",
+            "60ee6c196a2dfcee865ba96f4d758da7b445d2cb5618e36fbe90db5454da29f1",
         ),
         (
             "platform_service.proto",
@@ -286,6 +287,49 @@ fn container_block_io_counters_are_optional_additive_wire_fields() {
         ContainerStatMessage::decode(sample.encode_to_vec().as_slice()).unwrap(),
         sample
     );
+}
+
+#[test]
+fn container_active_cache_is_an_optional_additive_wire_field() {
+    use citadel_contracts::citadel::shared_models::v1::ContainerStatMessage;
+    use prost::Message;
+
+    #[derive(Clone, PartialEq, Message)]
+    struct OldMemoryStat {
+        #[prost(double, tag = "1")]
+        memory_active: f64,
+        #[prost(double, tag = "2")]
+        memory_cache: f64,
+    }
+
+    let old = OldMemoryStat {
+        memory_active: 100.0,
+        memory_cache: 20.0,
+    };
+    let mut current = ContainerStatMessage::decode(old.encode_to_vec().as_slice()).unwrap();
+    assert!(current.memory_active_cache.is_none());
+
+    for active_cache in [0.0_f64, 30.0] {
+        let field_only = ContainerStatMessage {
+            memory_active_cache: Some(active_cache),
+            ..Default::default()
+        };
+        // Field 9 is a DoubleValue message: observed zero has an empty payload,
+        // while a nonzero value contains field 1's fixed64 representation.
+        let mut expected = vec![0x4a, 0];
+        if active_cache != 0.0 {
+            expected = vec![0x4a, 9, 0x09];
+            expected.extend(active_cache.to_le_bytes());
+        }
+        assert_eq!(field_only.encode_to_vec(), expected);
+        current.memory_active_cache = Some(active_cache);
+        let encoded = current.encode_to_vec();
+        assert_eq!(OldMemoryStat::decode(encoded.as_slice()).unwrap(), old);
+        assert_eq!(
+            ContainerStatMessage::decode(encoded.as_slice()).unwrap(),
+            current
+        );
+    }
 }
 
 #[test]

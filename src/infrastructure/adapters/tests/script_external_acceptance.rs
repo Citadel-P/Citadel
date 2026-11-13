@@ -141,7 +141,7 @@ async fn real_script_execution_persists_results_and_retries_failure_notification
                 stale_after: Duration::from_secs(600),
             },
         )
-        .with_sandbox(root.join("cache"), None)
+        .with_sandbox(None)
         .with_alerts(alerts.clone()),
     );
     let channel = alerts

@@ -1,5 +1,6 @@
 mod admission;
 mod local_helpers;
+mod process;
 use super::restore_storage::RestoreVolumeOwner;
 use crate::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission;
 use citadel_backups::spec::{BackupExecutionLocation, BackupRepositorySpec};
@@ -45,6 +46,7 @@ use crate::persistence::postgres::platforms::local_target::LocalDockerTargetGuar
 
 #[derive(Clone)]
 pub struct DockerResticBackupExecutor {
+    cleanup_tasks: citadel_runtime::DynamicTasks,
     local_authority: Uuid,
     local_budget: citadel_runtime::IoBudget,
     admission: Arc<PostgresBackupDataAdmission>,
@@ -129,6 +131,7 @@ impl<'a> ResticOperation<'a> {
 
 impl DockerResticBackupExecutor {
     pub fn new(
+        cleanup_tasks: citadel_runtime::DynamicTasks,
         docker: impl Into<OsString>,
         image: impl Into<String>,
         secrets: Arc<dyn BackupSecretResolver>,
@@ -136,6 +139,7 @@ impl DockerResticBackupExecutor {
         pool: PgPool,
     ) -> Self {
         Self {
+            cleanup_tasks,
             admission: Arc::new(crate::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission::new(pool.clone())),
             local_authority: Uuid::now_v7(),
             local_budget: citadel_runtime::IoBudget::new(2.try_into().expect("positive capacity"), citadel_runtime::runtime_metrics::RuntimeWork::LocalHeavyWork),
@@ -2604,71 +2608,6 @@ impl ResticOperation<'_> {
             Err(docker_failure_message(&args, &output.stderr))
         }
     }
-    async fn run_observed(
-        &self,
-        mut request: ProcessRequest,
-        cancellation: &CancellationToken,
-    ) -> Result<citadel_execution::ProcessOutput, citadel_execution::ProcessError> {
-        if let Some(settings) = &self.executor.settings {
-            tokio::fs::create_dir_all(&settings.working_directory)
-                .await
-                .map_err(citadel_execution::ProcessError::Io)?;
-            if request.current_directory.is_none() {
-                request.current_directory = Some(settings.working_directory.clone());
-            }
-        }
-        // Restic cache and Docker CLI configuration belong to this invocation,
-        // never to the Core account's home directory.
-        struct Workspace(std::path::PathBuf);
-        impl Drop for Workspace {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.0);
-            }
-        }
-        let root = request
-            .current_directory
-            .clone()
-            .unwrap_or_else(std::env::temp_dir)
-            .join(format!("citadel-backup-process-{}", Uuid::now_v7()));
-        let mut directory = std::fs::DirBuilder::new();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            directory.mode(0o700);
-        }
-        directory
-            .create(&root)
-            .map_err(citadel_execution::ProcessError::Io)?;
-        let _cleanup = Workspace(root.clone());
-        request = request
-            .env("HOME", root.as_os_str())
-            .env("TMPDIR", root.as_os_str())
-            .env("RESTIC_CACHE_DIR", root.join("restic-cache").as_os_str())
-            .env("DOCKER_CONFIG", root.join("docker").as_os_str());
-        if request.program == self.executor.docker {
-            for key in ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"] {
-                if !request.environment.iter().any(|(name, _)| name == key)
-                    && let Some(value) = std::env::var_os(key)
-                {
-                    request = request.env(key, value);
-                }
-            }
-        }
-        let Some(progress) = &self.progress else {
-            return run(request, cancellation).await;
-        };
-        let (sender, receiver) = tokio::sync::mpsc::channel(32);
-        let (result, ()) = tokio::join!(
-            run(request.output(sender), cancellation),
-            observe_output(
-                receiver,
-                progress,
-                self.executor.log_line_limit(),
-                self.executor.maximum_output
-            )
-        );
-        result
-    }
     async fn exec_agent(
         &self,
         agent: &AgentExecutionClient,
@@ -3341,6 +3280,7 @@ mod tests {
             .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
             .unwrap();
         let executor = DockerResticBackupExecutor::new(
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             "must-not-run",
             "unused",
             Arc::new(NoSecrets),
@@ -3392,6 +3332,7 @@ mod tests {
             .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
             .unwrap();
         let executor = DockerResticBackupExecutor::new(
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             "must-not-run",
             "unused",
             Arc::new(NoSecrets),

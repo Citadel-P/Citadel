@@ -12,7 +12,6 @@ pub trait ScriptWorkspacePort: Send + Sync {
     fn prepare<'a>(
         &'a self,
         directory: &'a Path,
-        cache: Option<&'a Path>,
         source: &'a str,
     ) -> BoxFuture<'a, Result<Box<dyn ScriptWorkspaceLease>, String>>;
 }

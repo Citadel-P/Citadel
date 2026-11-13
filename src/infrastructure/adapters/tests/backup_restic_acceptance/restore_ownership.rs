@@ -55,6 +55,8 @@ pub(super) async fn reject_raced_destinations(
             let claim = store.claim_restore(Utc::now() - chrono::Duration::hours(1), citadel_backups::RestoreClaimScope::All).await.unwrap().unwrap();
             assert_eq!(claim.run.id, queued.id);
             let executor = DockerResticBackupExecutor::new(
+citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+
                 path, IMAGE, Arc::new(Password), 256 * 1024, pool.clone(),
             );
             let cancellation = CancellationToken::new();

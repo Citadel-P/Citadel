@@ -87,16 +87,18 @@ export function CoreUpdateAvailability({
           </AlertMessage>
         </div>
       )}
-      {data.available && data.installationUnavailableReason && (
-        <AlertMessage type="warning" className="my-0">
+      {data.installationUnavailableReason && (
+        <AlertMessage type="info" className="my-0">
           {data.installationUnavailableReason}{' '}
-          <a
-            className="underline"
-            href="https://docs.citadelplane.com/operations/upgrade-and-rollback/"
-            target="_blank"
-            rel="noreferrer">
-            Manual upgrade guide
-          </a>
+          {data.checksAllowed && (
+            <a
+              className="underline"
+              href="https://docs.citadelplane.com/operations/upgrade-and-rollback/#enable-in-app-updates"
+              target="_blank"
+              rel="noreferrer">
+              Set up in-app updates
+            </a>
+          )}
         </AlertMessage>
       )}
     </div>
@@ -118,14 +120,20 @@ export function DatabaseUpdateAvailability({ data }: { data?: UpdateStatusView }
       </div>
       <p className="text-muted-foreground">
         {data?.databaseManaged
-          ? 'PostgreSQL 18 minor updates require review and restart Core. The existing data directory is preserved.'
+          ? 'PostgreSQL updates require your approval and briefly stop Core and the database. They are not included in automatic Core/Agent updates. The existing data directory is preserved.'
           : (data?.databaseUpdateReason ?? 'Could not verify database update eligibility.')}{' '}
         <a
           className="underline"
-          href="https://docs.citadelplane.com/operations/upgrade-and-rollback/#postgresql-engine-maintenance"
+          href={
+            data?.databaseInstallation === 'Bundled' && data.installationUnavailableReason
+              ? 'https://docs.citadelplane.com/operations/upgrade-and-rollback/#enable-in-app-updates'
+              : 'https://docs.citadelplane.com/operations/upgrade-and-rollback/#postgresql-engine-maintenance'
+          }
           target="_blank"
           rel="noreferrer">
-          Database upgrade guide
+          {data?.databaseInstallation === 'Bundled' && data.installationUnavailableReason
+            ? 'Set up in-app updates'
+            : 'Database upgrade guide'}
         </a>
       </p>
     </div>

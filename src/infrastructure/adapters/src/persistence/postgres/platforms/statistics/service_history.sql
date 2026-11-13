@@ -12,21 +12,22 @@ WITH owners AS MATERIALIZED (
     SELECT * FROM statisticssamples WHERE ownerid IS NOT NULL AND ownerid=ANY(ARRAY(SELECT id FROM owners))
         AND created>=$6 AND created<=$8
 ), summaries AS MATERIALIZED (
-    SELECT sourceid,ownerid,created,lastcreated,cpuusage,memoryactive,memorycache,memorylimit,
+    SELECT sourceid,ownerid,created,lastcreated,cpuusage,memoryactive,memoryactivecache,memorycache,memorylimit,
         rxbytes,txbytes,blockreadbytes,blockwritebytes,samplecount,readcount,writecount,
         firstcounters,lastcounters,counterdeltas,counterdurations
     FROM statisticsrollups WHERE ownerid IS NOT NULL AND ownerid=ANY(ARRAY(SELECT id FROM owners))
         AND created>=$6 AND created<=$8 AND lastcreated<=$8
 ), gauge_parts AS (
     SELECT o.replicakey,r.created/$7 AS bucket,MIN(r.created) AS created,COUNT(*) AS samplecount,
-        SUM(r.cpuusage) AS cpuusage,SUM(r.memoryactive) AS memoryactive,SUM(r.memorycache) AS memorycache,
+        SUM(r.cpuusage) AS cpuusage,SUM(r.memoryactive) AS memoryactive,
+        SUM(r.memoryactivecache) AS memoryactivecache,COUNT(r.memoryactivecache) AS cachecount,SUM(r.memorycache) AS memorycache,
         SUM(r.memorylimit) AS memorylimit,SUM(r.rxbytes) AS rxbytes,SUM(r.txbytes) AS txbytes,
         SUM(r.blockreadbytes) AS blockreadbytes,SUM(r.blockwritebytes) AS blockwritebytes,
         COUNT(r.blockreadbytes) AS readcount,COUNT(r.blockwritebytes) AS writecount
     FROM raw r JOIN owners o ON o.id=r.ownerid GROUP BY o.replicakey,r.created/$7
     UNION ALL
     SELECT o.replicakey,r.created/$7,MIN(r.created),SUM(r.samplecount),
-        SUM(r.cpuusage*r.samplecount),SUM(r.memoryactive*r.samplecount),SUM(r.memorycache*r.samplecount),
+        SUM(r.cpuusage*r.samplecount),SUM(r.memoryactive*r.samplecount),SUM(r.memoryactivecache*r.samplecount),SUM(CASE WHEN r.memoryactivecache IS NOT NULL THEN r.samplecount ELSE 0 END),SUM(r.memorycache*r.samplecount),
         SUM(r.memorylimit*r.samplecount),SUM(r.rxbytes*r.samplecount),SUM(r.txbytes*r.samplecount),
         SUM(r.blockreadbytes*r.readcount),SUM(r.blockwritebytes*r.writecount),SUM(r.readcount),SUM(r.writecount)
     FROM summaries r JOIN owners o ON o.id=r.ownerid GROUP BY o.replicakey,r.created/$7
@@ -70,6 +71,7 @@ WITH owners AS MATERIALIZED (
 ), gauges AS (
     SELECT replicakey,bucket,MIN(created) AS created,
         SUM(cpuusage)/SUM(samplecount) AS cpuusage,SUM(memoryactive)/SUM(samplecount) AS memoryactive,
+        CASE WHEN SUM(cachecount)=SUM(samplecount) THEN SUM(memoryactivecache)/SUM(samplecount) END AS memoryactivecache,
         SUM(memorycache)/SUM(samplecount) AS memorycache,SUM(memorylimit)/SUM(samplecount) AS memorylimit,
         SUM(rxbytes)/SUM(samplecount) AS rxbytes,SUM(txbytes)/SUM(samplecount) AS txbytes,
         SUM(blockreadbytes)/NULLIF(SUM(readcount),0) AS blockreadbytes,
@@ -82,7 +84,7 @@ WITH owners AS MATERIALIZED (
 )
 
 SELECT '00000000-0000-0000-0000-000000000000'::uuid AS containerid,MIN(created) AS created,
-    SUM(cpuusage) AS cpuusage,SUM(memoryactive) AS memoryactive,SUM(memorycache) AS memorycache,
+    SUM(cpuusage) AS cpuusage,SUM(memoryactive) AS memoryactive,CASE WHEN COUNT(memoryactivecache)=COUNT(*) THEN SUM(memoryactivecache) END AS memoryactivecache,SUM(memorycache) AS memorycache,
     SUM(memorylimit) AS memorylimit,SUM(rxbytes) AS rxbytes,SUM(txbytes) AS txbytes,
     SUM(rxbytesdelta) AS rxbytesdelta,SUM(txbytesdelta) AS txbytesdelta,
     SUM(blockreadbytes) AS blockreadbytes,

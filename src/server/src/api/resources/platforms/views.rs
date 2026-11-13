@@ -215,6 +215,8 @@ pub struct ContainerStatView {
     pub container_id: Uuid,
     pub memory_active: f64,
     pub memory_cache: f64,
+    /// Active filesystem cache within the working set; absent when not measured.
+    pub memory_active_cache: Option<f64>,
     pub cpu_usage: f64,
     pub memory_limit: f64,
     pub rx_bytes: f64,
@@ -250,6 +252,7 @@ impl From<citadel_platforms::ContainerStatSnapshot> for ContainerStatView {
             container_id: value.container_id,
             memory_active: value.memory_active,
             memory_cache: value.memory_cache,
+            memory_active_cache: value.memory_active_cache,
             cpu_usage: value.cpu_usage,
             memory_limit: value.memory_limit,
             rx_bytes: value.rx_bytes,

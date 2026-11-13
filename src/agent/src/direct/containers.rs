@@ -470,6 +470,7 @@ fn stat(s: citadel_platforms::RuntimeContainerStat) -> ContainerStatMessage {
     ContainerStatMessage {
         memory_active: s.memory_active,
         memory_cache: s.memory_cache,
+        memory_active_cache: s.memory_active_cache,
         cpu_usage: s.cpu_usage,
         memory_limit: s.memory_limit,
         rx_bytes: s.rx_bytes,
@@ -481,6 +482,27 @@ fn stat(s: citadel_platforms::RuntimeContainerStat) -> ContainerStatMessage {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn memory_breakdown_preserves_unknown_and_zero_in_agent_responses() {
+        for active_cache in [None, Some(0.), Some(30.)] {
+            let message = super::stat(citadel_platforms::RuntimeContainerStat {
+                docker_container_id: "memory".into(),
+                created: 1,
+                memory_active: 100.,
+                memory_cache: 20.,
+                memory_active_cache: active_cache,
+                cpu_usage: 0.,
+                memory_limit: 1000.,
+                rx_bytes: 0.,
+                tx_bytes: 0.,
+                block_read_bytes: None,
+                block_write_bytes: None,
+            });
+            assert_eq!(message.memory_active_cache, active_cache);
+            assert_eq!(message.memory_active, 100.);
+        }
+    }
+
     #[test]
     fn container_summary_preserves_compose_identity_and_stopped_state() {
         let labels: std::collections::HashMap<String, String> = [

@@ -1640,6 +1640,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
             cpu_usage: 42.0,
             memory_active: 10.0,
             memory_cache: 2.0,
+            memory_active_cache: None,
             memory_limit: 128.0,
             rx_bytes: 0.0,
             tx_bytes: 0.0,

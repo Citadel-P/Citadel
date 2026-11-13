@@ -162,6 +162,7 @@ pub(super) fn map_container(row: PgRow) -> Result<ContainerDetails, AuthorizedRe
                 container_id,
                 memory_active: row.try_get("stat_memoryactive").map_err(storage)?,
                 memory_cache: row.try_get("stat_memorycache").map_err(storage)?,
+                memory_active_cache: row.try_get("stat_memoryactivecache").map_err(storage)?,
                 cpu_usage: row.try_get("stat_cpuusage").map_err(storage)?,
                 memory_limit: row.try_get("stat_memorylimit").map_err(storage)?,
                 rx_bytes: row.try_get("stat_rxbytes").map_err(storage)?,

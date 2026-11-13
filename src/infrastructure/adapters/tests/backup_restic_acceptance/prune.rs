@@ -25,7 +25,9 @@ async fn repository_prune_preserves_all_snapshots_and_policy_retention_stays_sco
             name: format!("prune-{}", Uuid::now_v7()), password_secret_id: secret,
             spec: serde_json::from_value(json!({"$type":"FileSystem","location":"Core","path":root.join("repository")})).unwrap(),
         }).await.unwrap();
-        let executor = DockerResticBackupExecutor::new("must-not-run-docker", IMAGE, Arc::new(Password), 1024 * 1024, pool.clone()).with_restic(restic.clone());
+        let executor = DockerResticBackupExecutor::new(
+citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+"must-not-run-docker", IMAGE, Arc::new(Password), 1024 * 1024, pool.clone()).with_restic(restic.clone());
         let cancel = CancellationToken::new();
         repository_operation(&store, &executor, &repository, "Initialize", "Core", None, &cancel).await.unwrap();
         sqlx::query("UPDATE backuprepositories SET status='Ready' WHERE id=$1").bind(repository.id).execute(&pool).await.unwrap();
@@ -91,6 +93,7 @@ async fn verify_agent_prune_dispatch(pool: &sqlx::PgPool, repository: &BackupRep
         .register(EdgeTarget::platform(platform), Uuid::now_v7())
         .unwrap();
     let executor = DockerResticBackupExecutor::new(
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         "docker-must-not-run",
         IMAGE,
         Arc::new(Password),

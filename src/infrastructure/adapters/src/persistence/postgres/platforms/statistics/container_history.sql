@@ -18,20 +18,22 @@ WITH sources AS MATERIALIZED (
     ) s
 ), gauge_parts AS (
     SELECT sourceid,created/$3 AS bucket,MIN(created) AS created,COUNT(*) AS samplecount,
-        SUM(cpuusage) AS cpuusage,SUM(memoryactive) AS memoryactive,SUM(memorycache) AS memorycache,
+        SUM(cpuusage) AS cpuusage,SUM(memoryactive) AS memoryactive,
+        SUM(memoryactivecache) AS memoryactivecache,COUNT(memoryactivecache) AS cachecount,SUM(memorycache) AS memorycache,
         SUM(memorylimit) AS memorylimit,SUM(rxbytes) AS rxbytes,SUM(txbytes) AS txbytes,
         SUM(blockreadbytes) AS blockreadbytes,SUM(blockwritebytes) AS blockwritebytes,
         COUNT(blockreadbytes) AS readcount,COUNT(blockwritebytes) AS writecount
     FROM raw GROUP BY sourceid,created/$3
     UNION ALL
     SELECT sourceid,created/$3,MIN(created),SUM(samplecount),
-        SUM(cpuusage*samplecount),SUM(memoryactive*samplecount),SUM(memorycache*samplecount),
+        SUM(cpuusage*samplecount),SUM(memoryactive*samplecount),SUM(memoryactivecache*samplecount),SUM(CASE WHEN memoryactivecache IS NOT NULL THEN samplecount ELSE 0 END),SUM(memorycache*samplecount),
         SUM(memorylimit*samplecount),SUM(rxbytes*samplecount),SUM(txbytes*samplecount),
         SUM(blockreadbytes*readcount),SUM(blockwritebytes*writecount),SUM(readcount),SUM(writecount)
     FROM summaries GROUP BY sourceid,created/$3
 ), gauges AS (
     SELECT sourceid,bucket,MIN(created) AS created,
         SUM(cpuusage)/SUM(samplecount) AS cpuusage,SUM(memoryactive)/SUM(samplecount) AS memoryactive,
+        CASE WHEN SUM(cachecount)=SUM(samplecount) THEN SUM(memoryactivecache)/SUM(samplecount) END AS memoryactivecache,
         SUM(memorycache)/SUM(samplecount) AS memorycache,SUM(memorylimit)/SUM(samplecount) AS memorylimit,
         SUM(rxbytes)/SUM(samplecount) AS rxbytes,SUM(txbytes)/SUM(samplecount) AS txbytes,
         SUM(blockreadbytes)/NULLIF(SUM(readcount),0) AS blockreadbytes,
@@ -74,7 +76,7 @@ WITH sources AS MATERIALIZED (
         SUM(writedelta)/NULLIF(SUM(writeduration),0) AS blockwritebytespersecond
     FROM contributions GROUP BY sourceid,bucket
 )
-SELECT src.containerid,g.created,g.cpuusage,g.memoryactive,g.memorycache,g.memorylimit,g.rxbytes,g.txbytes,
+SELECT src.containerid,g.created,g.cpuusage,g.memoryactive,g.memoryactivecache,g.memorycache,g.memorylimit,g.rxbytes,g.txbytes,
     g.blockreadbytes,g.blockwritebytes,io.rxbytesdelta,io.txbytesdelta,io.blockreadbytesdelta,io.blockwritebytesdelta,
     io.rxbytespersecond,io.txbytespersecond,io.blockreadbytespersecond,io.blockwritebytespersecond
 FROM gauges g JOIN io USING(sourceid,bucket) JOIN sources src ON src.id=g.sourceid

@@ -14,6 +14,12 @@ aggregates node-scoped container counters into Swarm Platform network and disk-I
 history. Node captures retain their authenticated scope and session fencing;
 they do not update the connected manager's CPU, memory, disk-capacity or metadata.
 
+Container statistics also carry optional `memoryActiveCache` (field 9), the
+active filesystem-cache component within the existing Docker working set.
+Direct and Edge preserve absence; Core does not infer zero or subtract shared
+memory from Docker's general `file` counter. Operations, authentication, node
+allowlists and session fencing are unchanged.
+
 ## Transports
 
 | Transport | Connection | Authentication |

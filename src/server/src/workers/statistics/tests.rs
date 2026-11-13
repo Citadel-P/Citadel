@@ -20,6 +20,7 @@ fn sample(id: &str, created: i64) -> RuntimeContainerStat {
         created,
         memory_active: 100.0,
         memory_cache: 0.0,
+        memory_active_cache: None,
         cpu_usage: 2.0,
         memory_limit: 200.0,
         rx_bytes: 3.0,

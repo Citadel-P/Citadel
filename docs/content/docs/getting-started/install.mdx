@@ -12,11 +12,17 @@ The installation uses published container images.
 For a new installation, create a directory and download the Compose file and
 environment template:
 
+The commands below target native Linux with rootful Docker. Open a root shell
+with `sudo -i` first so the installation directory and files have the ownership
+required by the updater. For rootless Docker, use the daemon user's own directory
+and the supported socket/data mounts; do not run these commands with `sudo`.
+See [update setup requirements](/operations/upgrade-and-rollback#enable-in-app-updates).
+
 <InstallationStep name="download">
 
 ```bash
-mkdir -p citadel
-cd citadel
+mkdir -p /opt/citadel
+cd /opt/citadel
 curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/docker-compose.yml -o docker-compose.yml
 curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/.env.example -o .env
 chmod 600 .env
@@ -123,7 +129,22 @@ on a remote server, use the HTTPS address you configured above.
 Complete [first-run setup](/getting-started/first-run-setup),
 then [connect your first Platform](/getting-started/first-platform).
 
-## 4. Protect your installation data
+## 4. Enable in-app updates
+
+After completing first-run setup, return to the Docker host terminal:
+
+```bash
+cd /opt/citadel
+curl -fSL https://raw.githubusercontent.com/Citadel-P/Citadel/main/deploy/install/enable-updates.py -o enable-updates.py
+python3 enable-updates.py --directory /opt/citadel --project citadel
+```
+
+Python **3.10 or newer** is required. Use your actual project and directory, and
+pass the original Compose overlays in order if you used them. Setup verifies the
+installation and briefly restarts only Core; it does not update PostgreSQL or
+install a new release. See [setup details and recovery](/operations/upgrade-and-rollback#enable-in-app-updates).
+
+## 5. Protect your installation data
 
 Keep `.env` private. Keep the `citadel_data` and `postgres_data` volumes: together
 they hold accounts, settings, history, and the keys used to protect saved secrets.

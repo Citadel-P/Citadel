@@ -1,3 +1,4 @@
+import MemoryUsage from './stats/memory-usage';
 import { appendLiveStatBucket, averageStatBuckets } from '@/lib/stats-buckets';
 import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
 import { StatsChartRange, useStatsChartBounds } from '@/components/custom/stats-chart-range';
@@ -32,7 +33,7 @@ type ContainerSelection = 'all' | string;
 type MetricKind = 'memory' | 'cpu' | 'network';
 type StatField = keyof Pick<
   ContainerStatView,
-  'cpuUsage' | 'memoryActive' | 'memoryCache' | 'memoryLimit' | 'rxBytes' | 'txBytes'
+  'cpuUsage' | 'memoryActive' | 'memoryActiveCache' | 'memoryCache' | 'memoryLimit' | 'rxBytes' | 'txBytes'
 >;
 
 type StackStatsProps = {
@@ -66,7 +67,7 @@ type MetricConfig = {
 
 type ChartDatum = {
   created: number;
-} & Partial<Record<StatField, number>>;
+} & Partial<Record<StatField, number | null>>;
 
 const ALL_CONTAINERS = 'all';
 type MetricViewState = {
@@ -77,7 +78,7 @@ const STACK_STAT_METRICS: MetricConfig[] = [
   {
     kind: 'memory',
     title: 'Memory Usage',
-    description: 'Memory usage excludes file cache. Cache is shown separately.',
+    description: 'Memory working set and filesystem cache.',
     fields: [
       {
         key: 'memoryActive',
@@ -93,6 +94,12 @@ const STACK_STAT_METRICS: MetricConfig[] = [
       },
     ],
     summaryFields: [
+      {
+        key: 'memoryActiveCache',
+        label: 'Active file cache',
+        color: 'var(--chart-2)',
+        formatter: (value) => byteTransform(value, 2),
+      },
       {
         key: 'memoryActive',
         label: 'Usage',
@@ -311,6 +318,23 @@ const StackMetricCard = ({
     ? buildMetricChartData(currentSeries, metric, effectiveContainer, { start: bounds.from, end: bounds.to }).at(-1)
     : chartData.at(-1);
 
+  if (metric.kind === 'memory') {
+    return (
+      <MemoryUsage
+        stats={chartData}
+        current={latest}
+        isLoading={isLoading}
+        controls={
+          <StackMetricControls
+            selectedContainer={effectiveContainer}
+            onSelectedContainerChange={onSelectedContainerChange}
+            containers={series}
+          />
+        }
+      />
+    );
+  }
+
   return isLoading ? (
     <Skeleton className="h-72 w-full rounded-xl" />
   ) : (
@@ -329,7 +353,7 @@ const StackMetricCard = ({
           <StatsSummaryItem
             key={field.key}
             label={field.label}
-            value={latest?.[field.key] !== undefined ? field.formatter(Number(latest[field.key])) : '-'}
+            value={latest?.[field.key] != null ? field.formatter(Number(latest[field.key])) : '-'}
           />
         ))}
       </StatsPanelHeader>
@@ -505,6 +529,7 @@ export const buildServiceSeries = (
         containerId: '',
         cpuUsage: stat.cpuUsage ?? 0,
         memoryActive: stat.memoryActive ?? 0,
+        memoryActiveCache: stat.memoryActiveCache,
         memoryCache: stat.memoryCache ?? 0,
         memoryLimit: stat.memoryLimit ?? 0,
         rxBytes: stat.rxBytes ?? 0,
@@ -551,7 +576,8 @@ const buildMetricChartData = (
       const point = byTime.get(created) ?? { created };
 
       fields.forEach((field) => {
-        point[field.key] = Number(stat[field.key] ?? 0);
+        point[field.key] =
+          field.key === 'memoryActiveCache' && stat[field.key] == null ? null : Number(stat[field.key] ?? 0);
       });
 
       byTime.set(created, point);
@@ -584,7 +610,8 @@ const buildAggregatedMetricChartData = (
 
       const point: ChartDatum & { sampleCreated: number } = { created: pointTime, sampleCreated: created };
       fields.forEach((field) => {
-        point[field.key] = Number(stat[field.key] ?? 0);
+        point[field.key] =
+          field.key === 'memoryActiveCache' && stat[field.key] == null ? null : Number(stat[field.key] ?? 0);
       });
 
       latestContainerPointByBucket.set(key, point);
@@ -597,6 +624,10 @@ const buildAggregatedMetricChartData = (
     const point = totalsByTime.get(containerPoint.created) ?? { created: containerPoint.created };
 
     fields.forEach((field) => {
+      if (field.key === 'memoryActiveCache' && (containerPoint[field.key] == null || point[field.key] === null)) {
+        point[field.key] = null;
+        return;
+      }
       point[field.key] = aggregateMetricField(
         field,
         Number(point[field.key] ?? 0),

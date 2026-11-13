@@ -159,6 +159,7 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
         cpu_usage: 10.0,
         memory_active: 20.0,
         memory_cache: 2.0,
+        memory_active_cache: Some(5.0),
         memory_limit: 100.0,
         rx_bytes: 3.0,
         tx_bytes: 4.0,
@@ -230,6 +231,15 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
     .await
     .unwrap();
     assert_eq!(retained, (20.0, 20.0));
+    let cache: Option<f64> = sqlx::query_scalar(
+        "SELECT memoryactivecache FROM swarmservicestats WHERE platformid=$1 AND created=$2",
+    )
+    .bind(f.platform_id)
+    .bind(sample.created)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(cache, Some(5.));
     // Same Docker ID on a different node must not be attributed to this Task.
     sqlx::query("UPDATE swarmtaskprojections SET dockernodeid='other-node' WHERE platformid=$1")
         .bind(f.platform_id)
@@ -267,6 +277,7 @@ async fn service_history_survives_task_replacement_without_double_counting_or_cr
     assert_eq!(stats.len(), 1);
     assert_eq!(stats[0].cpu_usage, 20.0);
     assert_eq!(stats[0].memory_active, 20.0);
+    assert_eq!(stats[0].memory_active_cache, Some(5.));
     let other = reader
         .service(
             ServiceStatIdentity {
@@ -489,6 +500,7 @@ async fn workload_history_requires_its_own_permission_and_preserves_stack_groupi
         cpu_usage: 10.0,
         memory_active: 20.0,
         memory_cache: 2.0,
+        memory_active_cache: None,
         memory_limit: 100.0,
         rx_bytes: 3.0,
         tx_bytes: 4.0,
@@ -722,6 +734,7 @@ async fn maintenance_retention_is_batched_and_failed_stats_writes_roll_back_all_
         cpu_usage: 1.0,
         memory_active: 1.0,
         memory_cache: 0.0,
+        memory_active_cache: None,
         memory_limit: 1.0,
         rx_bytes: 0.0,
         tx_bytes: 0.0,
@@ -841,6 +854,7 @@ async fn connected_manager_history_uses_reported_node_identity_without_replacing
         cpu_usage: 10.0,
         memory_active: 20.0,
         memory_cache: 0.0,
+        memory_active_cache: None,
         memory_limit: 100.0,
         rx_bytes: 1.0,
         tx_bytes: 2.0,
@@ -971,6 +985,7 @@ async fn workload_history_survives_replacement_and_keeps_service_replica_and_own
             cpu_usage: cpu,
             memory_active: cpu,
             memory_cache: 2.0,
+            memory_active_cache: None,
             memory_limit: 100.0,
             rx_bytes: 3.0,
             tx_bytes: 4.0,

@@ -790,6 +790,7 @@ async fn process_snapshots_authorize_share_reads_scope_nodes_and_clear_stopped_c
         docker_container_id: docker_id.clone(),
         memory_active: 0.,
         memory_cache: 0.,
+        memory_active_cache: None,
         memory_limit: 0.,
         cpu_usage: 0.,
         rx_bytes: 0.,

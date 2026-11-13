@@ -277,7 +277,7 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
     // Match Docker's working set: subtract inactive file cache only. Keep
     // that same excluded amount as Cache so the two components do not overlap.
     // Ignore inconsistent counters, following Docker's v1 then v2 fallback.
-    let memory_cache = value
+    let inactive_cache = value
         .memory_stats
         .stats
         .get("total_inactive_file")
@@ -289,8 +289,17 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
                 .get("inactive_file")
                 .filter(|&&cache| cache < usage)
         })
-        .copied()
-        .unwrap_or_default();
+        .copied();
+    let memory_cache = inactive_cache.unwrap_or_default();
+    // File LRU counters exclude tmpfs/shared memory. Do not subtract `file`,
+    // which includes those allocations, or fabricate a split if counters disagree.
+    let memory_active_cache = value
+        .memory_stats
+        .stats
+        .get("total_active_file")
+        .or_else(|| value.memory_stats.stats.get("active_file"))
+        .filter(|&&active| inactive_cache.is_some() && active <= usage.saturating_sub(memory_cache))
+        .map(|&active| active as f64);
     let cpu_delta = value
         .cpu_stats
         .cpu_usage
@@ -333,6 +342,7 @@ fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
         docker_container_id: id.to_owned(),
         memory_active: usage.saturating_sub(memory_cache) as f64,
         memory_cache: memory_cache as f64,
+        memory_active_cache,
         cpu_usage,
         memory_limit: value.memory_stats.limit as f64,
         rx_bytes: rx_bytes as f64,
@@ -815,6 +825,43 @@ mod tests {
         assert_eq!(stat.rx_bytes, 10.0);
         assert_eq!(stat.tx_bytes, 20.0);
     }
+    #[test]
+    fn active_file_cache_is_optional_and_does_not_subtract_shared_memory() {
+        for (counters, expected) in [
+            (
+                vec![
+                    ("inactive_file", 200),
+                    ("active_file", 300),
+                    ("file", 700),
+                    ("shmem", 200),
+                ],
+                Some(300.),
+            ),
+            (
+                vec![("total_inactive_file", 200), ("total_active_file", 300)],
+                Some(300.),
+            ),
+            (vec![("inactive_file", 200), ("active_file", 0)], Some(0.)),
+            (vec![("inactive_file", 200), ("active_file", 900)], None),
+            (vec![("inactive_file", 200)], None),
+            (vec![("active_file", 300)], None),
+            (vec![("inactive_file", 1200), ("active_file", 300)], None),
+        ] {
+            let mut value = ContainerStats::default();
+            value.memory_stats.usage = Some(1000);
+            value.memory_stats.stats = counters.into_iter().map(|(k, v)| (k.into(), v)).collect();
+            let stat = map_container_stat("memory", value);
+            assert_eq!(stat.memory_active_cache, expected);
+            if let Some(cache) = expected {
+                assert_eq!(stat.memory_active, 800.);
+                assert_eq!(
+                    stat.memory_active - cache + cache + stat.memory_cache,
+                    1000.
+                );
+            }
+        }
+    }
+
     #[test]
     fn memory_breakdown_handles_cgroup_versions_missing_and_inconsistent_counters() {
         for (counters, expected_usage, expected_cache) in [

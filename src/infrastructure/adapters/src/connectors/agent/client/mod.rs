@@ -103,6 +103,7 @@ pub(crate) fn map_container_stats(
             docker_container_id: id,
             memory_active: stat.memory_active,
             memory_cache: stat.memory_cache,
+            memory_active_cache: stat.memory_active_cache,
             cpu_usage: stat.cpu_usage,
             memory_limit: stat.memory_limit,
             rx_bytes: stat.rx_bytes,
@@ -2771,7 +2772,9 @@ mod tests {
             (absent.block_read_bytes, absent.block_write_bytes),
             (None, None)
         );
+        assert_eq!(absent.memory_active_cache, None);
         let message = wire.containers.get_mut("container").unwrap();
+        message.memory_active_cache = Some(30.);
         message.block_read_bytes = Some(125.);
         message.block_write_bytes = Some(60.);
         let measured = super::map_container_stats(wire.clone()).remove(0);
@@ -2779,6 +2782,7 @@ mod tests {
             (measured.block_read_bytes, measured.block_write_bytes),
             (Some(125.), Some(60.))
         );
+        assert_eq!(measured.memory_active_cache, Some(30.));
         wire.captured_at = None;
         assert!(super::map_container_stats(wire)[0].created > 123);
     }

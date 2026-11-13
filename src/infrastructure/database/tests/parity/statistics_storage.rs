@@ -130,7 +130,16 @@ async fn compact_statistics_preserve_samples_uniqueness_and_migration_history() 
             .as_deref(),
         Some("23505")
     );
-    for (table, before) in tables.into_iter().zip(samples) {
+    for (table, mut before) in tables.into_iter().zip(samples) {
+        if table != "platformnodeiostats" {
+            // The new measurement must be explicitly unknown on retained
+            // samples; keep checking every original field and owner as well.
+            for row in before.as_array_mut().unwrap() {
+                row.as_object_mut()
+                    .unwrap()
+                    .insert("memoryactivecache".into(), serde_json::Value::Null);
+            }
+        }
         let after:serde_json::Value=sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "SELECT jsonb_agg(to_jsonb(s)-ARRAY['samplecount','readcount','writecount','lastcreated','firstcounters','lastcounters','counterdeltas','counterdurations','peaks'] ORDER BY created) FROM {table} s"
         ))).fetch_one(&mut connection).await.unwrap();

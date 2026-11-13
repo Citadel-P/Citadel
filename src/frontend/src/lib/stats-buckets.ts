@@ -7,6 +7,7 @@ type Stat = { created?: number | string | null };
 const metrics = [
   'cpuUsage',
   'memoryActive',
+  'memoryActiveCache',
   'memoryCache',
   'memoryLimit',
   'memoryUsage',
@@ -28,6 +29,7 @@ const metrics = [
 ] as const;
 type Accumulator<T> = {
   seconds: number;
+  observations: number;
   latest: T;
   baseline?: T;
   sums: Partial<Record<(typeof metrics)[number], number>>;
@@ -61,6 +63,7 @@ export function appendLiveStatBucket<T extends Stat>(
   const sameBucket = last && Math.floor(Number(last.created) / seconds) === Math.floor(timestamp / seconds);
   const state: Accumulator<T> = {
     seconds,
+    observations: sameBucket ? (previous?.observations ?? 0) : 0,
     latest: next,
     baseline: previous?.latest,
     sums: sameBucket ? { ...previous?.sums } : {},
@@ -68,6 +71,7 @@ export function appendLiveStatBucket<T extends Stat>(
   };
   const duplicate = sameBucket && previous && timestamp === Number(previous.latest.created);
   if (duplicate) state.baseline = previous.baseline;
+  else state.observations += 1;
   const measured = withCounterDeltas(next, state.baseline);
   const previousMeasured = previous ? withCounterDeltas(previous.latest, previous.baseline) : undefined;
   const point: Bucket<T> = { ...next, created: sameBucket ? last?.created : next.created, [accumulator]: state };
@@ -93,7 +97,14 @@ export function appendLiveStatBucket<T extends Stat>(
     state.sums[key] = sum;
     state.counts[key] = count;
     if (key in measured || count) {
-      (point as Record<string, unknown>)[key] = count ? (key.endsWith('Delta') ? sum : sum / count) : null;
+      (point as Record<string, unknown>)[key] =
+        key === 'memoryActiveCache' && count !== state.observations
+          ? null
+          : count
+            ? key.endsWith('Delta')
+              ? sum
+              : sum / count
+            : null;
     }
   }
   const retained = (sameBucket ? current.slice(0, -1) : current).filter(
@@ -151,7 +162,10 @@ export function sumStatBuckets<T extends Stat>(series: readonly (readonly T[])[]
         const value = (sample as Record<string, unknown>)[metric];
         if (typeof value === 'number' && Number.isFinite(value)) total = (total ?? 0) + value;
       }
-      (result as Record<string, unknown>)[metric] = total;
+      (result as Record<string, unknown>)[metric] =
+        metric === 'memoryActiveCache' && samples.some((sample) => (sample as Record<string, unknown>)[metric] == null)
+          ? null
+          : total;
     }
     return result;
   };

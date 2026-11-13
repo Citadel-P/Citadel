@@ -4,7 +4,10 @@ import { ContainerStateStatus, type ContainerRuntimeView, type ContainerStatView
 import { useRead } from '@/lib/hooks';
 import { buildServiceSeries, StackStats } from './stack-stats';
 
-vi.mock('@/lib/hooks', () => ({ useRead: vi.fn() }));
+vi.mock('@/lib/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hooks')>()),
+  useRead: vi.fn(),
+}));
 vi.mock('@/components/ui/chart', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/ui/chart')>()),
   ChartContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -148,4 +151,13 @@ it('keeps current stack usage separate from the chart averages', () => {
   } as unknown as ReturnType<typeof useRead>);
   render(<StackStats stackId="stack" containers={[{ ...container('a'), containerStat: sample(now, 42) }]} />);
   expect(screen.getByText('42.00%')).toBeVisible();
+});
+
+it('preserves unknown active cache when combining live replicas', () => {
+  const history = [{ serviceName: 'web', containerIds: ['a', 'b'], stats: [] }];
+  const known = { ...sample(301, 1), memoryActiveCache: 20 };
+  const unknown = { ...sample(301, 1), memoryActiveCache: null };
+  const combined = buildServiceSeries(history, [container('a'), container('b')], { a: [known], b: [unknown] }, 60);
+  expect(combined[0].stats[0].memoryActiveCache).toBeNull();
+  expect(combined[0].stats[0].memoryActive).toBe(200);
 });

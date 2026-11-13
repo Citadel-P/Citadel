@@ -45,6 +45,7 @@ async fn local_restart_reconciles_exact_helpers_and_fences_late_starts() {
     let store = PostgresBackupPersistence::new(pool.clone());
     let repository=store.create_repository(ActorId::new(citadel_identity::SYSTEM_ACTOR_ID),&BackupRepositoryConfiguration{name:format!("helper-{}",Uuid::now_v7()),spec:serde_json::from_value(serde_json::json!({"$type":"FileSystem","location":"Core","path":"/tmp/citadel-review-unused"})).unwrap(),password_secret_id:secret}).await.unwrap();
     let old = DockerResticBackupExecutor::new(
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         "docker",
         "postgres:17-alpine",
         Arc::new(UnusedSecrets),
@@ -52,6 +53,7 @@ async fn local_restart_reconciles_exact_helpers_and_fences_late_starts() {
         pool.clone(),
     );
     let new = DockerResticBackupExecutor::new(
+        citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
         "docker",
         "postgres:17-alpine",
         Arc::new(UnusedSecrets),
@@ -206,6 +208,7 @@ async fn local_restart_reconciles_exact_helpers_and_fences_late_starts() {
         );
         // Docker unavailable cannot fabricate a cleanup receipt either.
         let unavailable = DockerResticBackupExecutor::new(
+            citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             "missing-citadel-test-docker",
             "postgres:17-alpine",
             Arc::new(UnusedSecrets),

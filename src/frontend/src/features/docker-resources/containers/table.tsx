@@ -1,3 +1,4 @@
+import { memoryBreakdown } from '@/lib/memory-stats';
 import { healthOrder } from '@/components/custom/health-status';
 import type { ContainerGroupHealth, ContainerHealthItem } from './group-health';
 import { ContainerGroupHealthCell } from './group-health-cell';
@@ -111,6 +112,9 @@ export const ContainersTable = ({
           : undefined
       }
       getSubRows={getSubRows}
+      getRowClassName={(row) =>
+        row.depth > 0 ? 'bg-muted/30 even:bg-muted/30 hover:bg-muted/50 data-[state=selected]:bg-muted/60' : undefined
+      }
       onSelectionChange={handleSelectionChange}
     />
   );
@@ -517,11 +521,19 @@ const aggregateStats = (
 ): Omit<ContainerStatView, 'containerId' | 'created'> => {
   containers = containers.filter((container) => !container.projectionStaleSince);
   const memoryLimit = getAggregateMemoryLimit(containers, platformLimits.memoryTotal);
+  const breakdowns = containers.map((container) =>
+    container.lastStats ? memoryBreakdown(container.lastStats) : undefined,
+  );
+  const activeCache =
+    breakdowns.length > 0 && breakdowns.every((stat) => stat?.activeCache != null)
+      ? breakdowns.reduce((total, stat) => total + stat!.activeCache!, 0)
+      : null;
   const cpuLimit = platformLimits.cpuCount > 0 ? platformLimits.cpuCount * 100 : 0;
 
   return {
     memoryActive: clampToLimit(sumStat(containers, 'memoryActive'), memoryLimit),
     memoryCache: clampToLimit(sumStat(containers, 'memoryCache'), memoryLimit),
+    memoryActiveCache: activeCache == null ? null : clampToLimit(activeCache, memoryLimit),
     cpuUsage: clampToLimit(sumStat(containers, 'cpuUsage'), cpuLimit),
     memoryLimit,
     rxBytes: sumStat(containers, 'rxBytes'),

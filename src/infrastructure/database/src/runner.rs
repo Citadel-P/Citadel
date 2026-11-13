@@ -377,8 +377,8 @@ mod tests {
                 .iter()
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
-            ["0001", "0002", "0003", "0004", "0005"],
-            "the catalog includes the consolidated migration and health history retention upgrade"
+            ["0001", "0002", "0003", "0004", "0005", "0006"],
+            "the catalog includes the health history retention and memory breakdown upgrades"
         );
         assert_eq!(
             manifest["0001"].sha256,

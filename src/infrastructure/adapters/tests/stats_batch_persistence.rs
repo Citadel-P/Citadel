@@ -33,6 +33,7 @@ fn container(scope: &StatsScope, id: &str, created: i64, cpu: f64) -> ContainerS
             created,
             memory_active: 100.0,
             memory_cache: 5.0,
+            memory_active_cache: None,
             cpu_usage: cpu,
             memory_limit: 200.0,
             rx_bytes: 3.0,
@@ -1996,3 +1997,6 @@ mod telemetry_budgets;
 
 #[path = "stats_batch_persistence/health_retention.rs"]
 mod health_retention;
+
+#[path = "stats_batch_persistence/memory_breakdown.rs"]
+mod memory_breakdown;

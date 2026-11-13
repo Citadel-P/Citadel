@@ -63,7 +63,9 @@ pub(super) async fn verify(
         // Invalid Core socket proves preflight and ownership checks use destination routing.
         let router=Arc::new(PlatformRuntimeRouter::new(pool.clone(),DockerClient::new("/no-source-daemon.sock",Duration::from_secs(2)).unwrap(),Some(agent.clone()),Default::default()));
         let storage=CopyStorageRuntime {image:IMAGE.into(),runtime:router.clone()};
-        let executor=DockerResticBackupExecutor::new("/no-source-daemon",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent));
+        let executor=DockerResticBackupExecutor::new(
+citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
+"/no-source-daemon",IMAGE,Arc::new(Password),256*1024,pool.clone()).with_agent(Some(agent));
         let cancel=CancellationToken::new();
         for (kind,id) in [(CopyKind::Deployment,deployment.id),(CopyKind::Stack,stack.id)] {
             let source=store.source(actor,kind,id).await.unwrap();

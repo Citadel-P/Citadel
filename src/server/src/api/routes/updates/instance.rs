@@ -120,7 +120,7 @@ async fn respond(
         };
         view.database_installation = database.into();
         view.database_update_reason = Some(match database {
-            citadel_updates::DatabaseInstallation::Bundled => "Register this Compose installation and configure its update state directory to enable in-app database updates.",
+            citadel_updates::DatabaseInstallation::Bundled => "In-app updates are not configured for this Compose installation. Complete the one-time update setup on the Docker host. This message does not mean a PostgreSQL upgrade is available.",
             citadel_updates::DatabaseInstallation::External => "PostgreSQL is managed outside this Citadel Compose installation. Update it using its own deployment or provider.",
             citadel_updates::DatabaseInstallation::Unknown => "Could not verify how PostgreSQL is deployed. Check Core’s local Docker access and Compose configuration.",
         }.into());

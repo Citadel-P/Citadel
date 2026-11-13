@@ -157,6 +157,7 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
                     docker_container_id: "container-1".into(),
                     memory_active: 128.0,
                     memory_cache: 32.0,
+                    memory_active_cache: Some(64.),
                     cpu_usage: 4.5,
                     memory_limit: 1024.0,
                     rx_bytes: 12.0,
@@ -184,6 +185,7 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
                     docker_container_id: "not-in-this-platform".into(),
                     memory_active: 4096.0,
                     memory_cache: 0.0,
+                    memory_active_cache: None,
                     cpu_usage: 100.0,
                     memory_limit: 4096.0,
                     rx_bytes: 1000.0,
@@ -233,7 +235,9 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
         .find(|container| container.container_id == "container-1")
         .unwrap();
     assert_eq!(container.name, "web");
-    assert_eq!(container.last_stats.unwrap().cpu_usage, 4.5);
+    let stat = container.last_stats.unwrap();
+    assert_eq!(stat.cpu_usage, 4.5);
+    assert_eq!(stat.memory_active_cache, Some(64.));
     let images = reads.list_images(platform_id).await.unwrap();
     assert_eq!(images.len(), 2);
     assert!(
@@ -639,6 +643,7 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
         docker_container_id: "container-1".into(),
         memory_active: 128.0,
         memory_cache: 32.0,
+        memory_active_cache: None,
         cpu_usage: 4.5,
         memory_limit: 1024.0,
         rx_bytes: 12.0,
