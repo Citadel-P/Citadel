@@ -1654,6 +1654,10 @@ failures. Installer tests also cover automatic project/state defaults, waiting f
 administrator setup, timeout without registration, reuse without pulling existing
 images, and registered CI replacement guards. Demo tests cover captured release
 pins, automatic activation and preserving the deployed PostgreSQL image.
+They also verify that state creation/write failures stop deployment before image
+pulls, installer input changes or Core replacement, and preserve configured state.
+Bootstrap tests accept matching Compose-owned volumes without optional Citadel
+labels and reject missing ownership, foreign projects and conflicting roles.
 Existing adapter bootstrap tests own registration, database identity,
 mount and recovery-state validation. Updates frontend tests cover setup messaging
 even when Core has no available release and retain distinct external, unknown

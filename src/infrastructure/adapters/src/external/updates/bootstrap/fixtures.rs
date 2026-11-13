@@ -242,7 +242,35 @@ impl ProcessRunner for Runner {
                     {"Type":"bind","Source":self.core["Mounts"][1]["Source"],"Destination":SOCKET,"RW":true}]}])
                 }
                 ["volume", "inspect", name] => {
-                    json!([{"Name":name,"Driver":"local","Scope":"local","Options":null,"Mountpoint":format!("/var/lib/docker/volumes/{name}/_data"), "CreatedAt":"2026-11-01T00:00:00Z", "Labels":{"com.citadel.system":"true","com.citadel.system-role":if name.ends_with("citadel_data") {"core"} else {"database"}}}])
+                    let core = name.ends_with("citadel_data");
+                    let mut labels = json!({
+                        "com.docker.compose.project": "citadel-test",
+                        "com.docker.compose.volume": if core { "citadel_data" } else { "postgres_data" },
+                        "com.citadel.system": "true",
+                        "com.citadel.system-role": if core { "core" } else { "database" },
+                    });
+                    match self.mode {
+                        "compose-volume-labels" => {
+                            labels.as_object_mut().unwrap().remove("com.citadel.system");
+                            labels
+                                .as_object_mut()
+                                .unwrap()
+                                .remove("com.citadel.system-role");
+                        }
+                        "foreign-volume-project" => {
+                            labels["com.docker.compose.project"] = json!("other")
+                        }
+                        "wrong-volume-role" => labels["com.docker.compose.volume"] = json!("other"),
+                        "conflicting-volume-system" => {
+                            labels["com.citadel.system"] = json!("false")
+                        }
+                        "conflicting-volume-role" => {
+                            labels["com.citadel.system-role"] = json!("other")
+                        }
+                        "missing-volume-labels" => labels = json!({}),
+                        _ => {}
+                    }
+                    json!([{"Name":name,"Driver":"local","Scope":"local","Options":null,"Mountpoint":format!("/var/lib/docker/volumes/{name}/_data"), "CreatedAt":"2026-11-01T00:00:00Z", "Labels":labels}])
                 }
                 ["network", "inspect", name] => {
                     let mut members = json!({CORE: {}, DATABASE: {}});

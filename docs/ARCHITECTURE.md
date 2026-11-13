@@ -748,6 +748,15 @@ from its generated base Compose input. CI retains ownership of the existing
 explicit host-state registration and guarded refresh; it never starts a second
 first-install registrar or moves existing recovery state.
 
+Before pulling images or replacing Core, deployment validates the selected state
+directory's ownership and private permissions and probes actual write access.
+Unregistered rootless targets use a dedicated directory under the deployment
+account's home when no sibling state directory exists; configured and interrupted
+state paths are preserved. Registration verifies each volume's Compose project
+and volume-role labels alongside its exact exclusive container mounts. Citadel
+system labels are optional on existing volumes but must agree when present;
+registration never relabels or recreates persistent volumes.
+
 Demo/preview release deployment transports the activation script from the same
 release checkout. Core and Agent pins are written into the captured private
 `.env`; `.release.env` remains a release record and is not an additional Compose

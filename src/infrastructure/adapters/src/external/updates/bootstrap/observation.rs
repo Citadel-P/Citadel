@@ -159,9 +159,14 @@ pub(super) async fn observe_with_helper(
         )],
     )?;
     let mut volumes = Vec::new();
-    for (name, role, container) in [
-        (&checked.core_volume, "core", core),
-        (&checked.database_volume, "database", database),
+    for (name, role, compose_volume, container) in [
+        (&checked.core_volume, "core", "citadel_data", core),
+        (
+            &checked.database_volume,
+            "database",
+            "postgres_data",
+            database,
+        ),
     ] {
         let id = container["Id"].as_str().ok_or_else(failed)?;
         let mut expected = vec![id.to_owned()];
@@ -183,8 +188,6 @@ pub(super) async fn observe_with_helper(
         if volume["Name"] != *name
             || volume["Driver"] != "local"
             || volume["Scope"] != "local"
-            || volume["Labels"]["com.citadel.system"] != "true"
-            || volume["Labels"]["com.citadel.system-role"] != role
             || volume
                 .get("Options")
                 .is_some_and(|v| !v.is_null() && v.as_object().is_none_or(|v| !v.is_empty()))
@@ -192,6 +195,22 @@ pub(super) async fn observe_with_helper(
         {
             return Err(refuse(
                 "Updates require distinct local Citadel volumes and update state outside those volumes.",
+            ));
+        }
+        // Compose ownership and the exact exclusive mounts establish identity.
+        // Updating a Compose template does not relabel existing Docker volumes.
+        let labels = &volume["Labels"];
+        if labels["com.docker.compose.project"] != inputs.project
+            || labels["com.docker.compose.volume"] != compose_volume
+            || labels
+                .get("com.citadel.system")
+                .is_some_and(|v| v != "true")
+            || labels
+                .get("com.citadel.system-role")
+                .is_some_and(|v| v != role)
+        {
+            return Err(refuse(
+                "Citadel volume ownership labels must match the registered Compose project and volume role.",
             ));
         }
         volumes.push(volume.clone());
