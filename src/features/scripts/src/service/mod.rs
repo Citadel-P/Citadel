@@ -1,3 +1,6 @@
+mod dispatch;
+pub use dispatch::ClaimedScriptRun;
+
 mod scheduling;
 
 mod direct;
@@ -55,6 +58,7 @@ pub struct ScriptService {
     remote: Option<Arc<dyn RemoteScriptExecutor>>,
     remote_base_url: String,
     progress: tokio::sync::broadcast::Sender<ScriptProgress>,
+    state_changed: tokio::sync::watch::Sender<()>,
     options: ScriptOptions,
     entitlements: Option<Arc<dyn ScriptEntitlements>>,
 }
@@ -110,6 +114,7 @@ impl ScriptService {
             remote: None,
             remote_base_url: String::new(),
             progress: tokio::sync::broadcast::channel(128).0,
+            state_changed: tokio::sync::watch::channel(()).0,
             options: ScriptOptions::default(),
             entitlements: None,
         }

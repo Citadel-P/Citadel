@@ -5,6 +5,9 @@ use citadel_primitives::PatchField;
 impl InstanceConfiguration {
     pub fn effective(&self, overrides: &InstanceOverrides) -> Self {
         Self {
+            database_max_connections: overrides
+                .database_max_connections
+                .unwrap_or(self.database_max_connections),
             password_minimum_length: overrides
                 .password_minimum_length
                 .unwrap_or(self.password_minimum_length),
@@ -89,6 +92,12 @@ impl InstanceConfiguration {
     }
 
     pub fn validate(&self) -> Result<(), InstanceError> {
+        if self.database_max_connections == 0 {
+            return Err(InstanceError::Validation(format!(
+                "databaseMaxConnections must be greater than zero. ({})",
+                environment::CITADEL_DATABASE_MAX_CONNECTIONS
+            )));
+        }
         if !(8..=128).contains(&self.password_minimum_length) {
             return Err(InstanceError::Validation(format!(
                 "passwordMinimumLength must be between 8 and 128. ({})",
@@ -218,7 +227,8 @@ impl InstanceConfiguration {
 
 impl PatchInstanceConfiguration {
     pub fn is_empty(&self) -> bool {
-        matches!(self.password_minimum_length, PatchField::Missing)
+        matches!(self.database_max_connections, PatchField::Missing)
+            && matches!(self.password_minimum_length, PatchField::Missing)
             && matches!(self.browser_session_lifetime_days, PatchField::Missing)
             && matches!(
                 self.service_account_default_token_lifetime_days,
@@ -264,6 +274,12 @@ impl PatchInstanceConfiguration {
         overrides: &InstanceOverrides,
     ) -> Result<InstanceConfiguration, InstanceError> {
         let next = InstanceConfiguration {
+            database_max_connections: patch_value(
+                &self.database_max_connections,
+                &saved.database_max_connections,
+                &overrides.database_max_connections,
+                environment::CITADEL_DATABASE_MAX_CONNECTIONS,
+            )?,
             password_minimum_length: patch_value(
                 &self.password_minimum_length,
                 &saved.password_minimum_length,

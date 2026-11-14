@@ -21,7 +21,6 @@ const DEFAULT_API_PORT: u16 = 8000;
 const DEFAULT_MONITORING_INTERVAL_SECONDS: u64 = 10;
 const DEFAULT_RECONCILIATION_INTERVAL_SECONDS: u64 = 30 * 60;
 const DEFAULT_EVENT_QUEUE_CAPACITY: usize = 256;
-const DEFAULT_DATABASE_MAX_CONNECTIONS: u32 = 5;
 const DEFAULT_DOCKER_REQUEST_TIMEOUT_SECONDS: u64 = 10;
 const DEFAULT_SHUTDOWN_TIMEOUT_SECONDS: u64 = 10;
 const DEFAULT_REALTIME_QUEUE_CAPACITY: usize = 64;
@@ -274,10 +273,9 @@ impl Config {
         let transport = transport_config(port, &defaults)?;
         let listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let (database_url, database_source) = database_url()?;
-        let database_max_connections = parse_env(
-            "CITADEL_DATABASE_MAX_CONNECTIONS",
-            DEFAULT_DATABASE_MAX_CONNECTIONS,
-        )?;
+        let database_max_connections = overrides
+            .database_max_connections
+            .unwrap_or(defaults.database_max_connections);
         if database_max_connections == 0 {
             return Err(ConfigError::Invalid {
                 name: "CITADEL_DATABASE_MAX_CONNECTIONS",

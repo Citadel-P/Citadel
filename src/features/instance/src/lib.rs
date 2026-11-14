@@ -4,6 +4,7 @@ mod commands;
 pub mod environment;
 mod error;
 mod model;
+mod read_models;
 mod repository;
 mod restart;
 mod service;
@@ -14,6 +15,7 @@ pub use error::InstanceError;
 pub use model::{
     InstallationPolicy, InstallationSettings, InstanceConfiguration, InstanceOverrides, LogFormat,
 };
+pub use read_models::DatabaseConnections;
 pub use repository::{InstanceRepository, InstanceRestartRepository};
 pub use restart::{InstanceRestartService, RestartStatus};
 pub use service::InstanceService;

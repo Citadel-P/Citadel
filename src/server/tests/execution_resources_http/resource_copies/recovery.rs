@@ -114,6 +114,9 @@ impl CopyRepository for FaultyStore {
             self.inner.get(actor, id).await
         })
     }
+    fn is_restoring(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<bool, CopyError>> {
+        self.inner.is_restoring(actor, id)
+    }
     fn cleanup(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
         self.inner.cleanup(actor, id)
     }
@@ -131,8 +134,11 @@ impl CopyRepository for FaultyStore {
     fn prune_reviews(&self) -> BoxFuture<'_, Result<(), CopyError>> {
         self.inner.prune_reviews()
     }
-    fn pending(&self) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>> {
-        self.inner.pending()
+    fn pending(
+        &self,
+        after: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>> {
+        self.inner.pending(after)
     }
     fn plan(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyPlan, CopyError>> {
         Box::pin(async move {
@@ -262,14 +268,22 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
         .unwrap();
     let cancel = CancellationToken::new();
     let abandoned = queue(&store.inner, actor, &source).await;
-    assert!(copies.process_current_queue(&cancel).await.is_err());
+    assert!(
+        copies
+            .process_current_queue(&cancel, &mut None)
+            .await
+            .is_err()
+    );
     assert_eq!(
         store.get(actor, abandoned).await.unwrap().restores[0].status,
         "Running"
     );
     // No Core restart: the next execution scan fences the ambiguous claim.
-    copies.process_current_queue(&cancel).await.unwrap();
-    copies.process(&cancel).await.unwrap();
+    copies
+        .process_current_queue(&cancel, &mut None)
+        .await
+        .unwrap();
+    copies.process(&cancel, &mut None).await.unwrap();
     assert_eq!(
         store.get(actor, abandoned).await.unwrap().status,
         CopyStatus::Failed
@@ -277,9 +291,30 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
     assert_eq!(storage.executions.load(Ordering::SeqCst), 0);
 
     let active = queue(&store.inner, actor, &source).await;
-    let execution = copies.process_current_queue(&cancel);
+    let mut cursor = None;
+    let execution = copies.process_current_queue(&cancel, &mut cursor);
     let reconcile = async {
         storage.started.notified().await;
+        let version: String =
+            sqlx::query_scalar("SELECT xmin::text FROM resourcecopies WHERE id=$1")
+                .bind(active)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        for _ in 0..3 {
+            copies.process(&cancel, &mut None).await.unwrap();
+            assert!(store.is_restoring(actor, active).await.unwrap());
+        }
+        let unchanged: String =
+            sqlx::query_scalar("SELECT xmin::text FROM resourcecopies WHERE id=$1")
+                .bind(active)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            unchanged, version,
+            "unchanged copy reconciliation must not rewrite its row"
+        );
         // A different completed parent can finalize while storage is blocked.
         let other = queue(&store.inner, actor, &source).await;
         let (_, job) = store
@@ -294,7 +329,7 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
             .await
             .unwrap();
         copies.cleanup(actor, abandoned).await.unwrap();
-        copies.process(&cancel).await.unwrap();
+        copies.process(&cancel, &mut None).await.unwrap();
         assert_eq!(
             store.get(actor, other).await.unwrap().status,
             CopyStatus::Succeeded
@@ -317,7 +352,7 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
     result.unwrap();
     assert_eq!(storage.executions.load(Ordering::SeqCst), 1);
     assert_eq!(store.completion_attempts.load(Ordering::SeqCst), 3);
-    copies.process(&cancel).await.unwrap();
+    copies.process(&cancel, &mut None).await.unwrap();
     assert_eq!(
         store.get(actor, active).await.unwrap().status,
         CopyStatus::Succeeded
@@ -325,7 +360,8 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
 
     // Cancellation reaches the execution lane; shutdown does not detach work.
     let stopping = queue(&store.inner, actor, &source).await;
-    let execution = copies.process_current_queue(&cancel);
+    let mut cursor = None;
+    let execution = copies.process_current_queue(&cancel, &mut cursor);
     let stop = async {
         storage.started.notified().await;
         copies.cancel(actor, stopping).await.unwrap();
@@ -336,7 +372,7 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
     .await
     .expect("Cancellation did not reach storage");
     result.unwrap();
-    copies.process(&cancel).await.unwrap();
+    copies.process(&cancel, &mut None).await.unwrap();
     assert_eq!(
         store.get(actor, stopping).await.unwrap().status,
         CopyStatus::Cancelled
@@ -344,7 +380,8 @@ async fn copy_execution_recovers_database_failures_without_blocking_reconciliati
     assert_eq!(storage.cancelled.load(Ordering::SeqCst), 1);
 
     let shutdown = queue(&store.inner, actor, &source).await;
-    let execution = copies.process_current_queue(&cancel);
+    let mut cursor = None;
+    let execution = copies.process_current_queue(&cancel, &mut cursor);
     let stop = async {
         storage.started.notified().await;
         cancel.cancel();
@@ -429,7 +466,7 @@ async fn finalization_name_conflict_rolls_back_creation_and_preserves_successful
     ));
     let copies = CopyService::new(store.clone(), storage.clone(), backups, Arc::new(|_, _| {}));
     let cancel = CancellationToken::new();
-    copies.process(&cancel).await.unwrap();
+    copies.process(&cancel, &mut None).await.unwrap();
     let failed = store.get(actor, id).await.unwrap();
     assert_eq!(failed.status, CopyStatus::Failed);
     assert!(failed.destination_id.is_none());
@@ -452,10 +489,10 @@ async fn finalization_name_conflict_rolls_back_creation_and_preserves_successful
     assert_eq!(persisted, ("Failed".into(), None, failed.message.clone()));
 
     // Normal reconciliation and execution cannot reopen a terminal parent or repeat receipts.
-    copies.process(&cancel).await.unwrap();
+    copies.process(&cancel, &mut None).await.unwrap();
     tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        copies.process_current_queue(&cancel),
+        copies.process_current_queue(&cancel, &mut None),
     )
     .await
     .expect("completed restores must not run again")
@@ -538,7 +575,7 @@ async fn finalization_storage_faults_and_lost_commit_acknowledgements_reconcile_
     for flag in [&store.fail_read, &store.fail_plan] {
         flag.store(true, Ordering::SeqCst);
         assert!(matches!(
-            copies.process(&cancel).await,
+            copies.process(&cancel, &mut None).await,
             Err(CopyError::Storage(_))
         ));
         assert_eq!(
@@ -568,12 +605,12 @@ async fn finalization_storage_faults_and_lost_commit_acknowledgements_reconcile_
     assert_eq!(pending.restores[0].status, "Succeeded");
     store.lose_finalization.store(true, Ordering::SeqCst);
     assert!(matches!(
-        copies.process(&cancel).await,
+        copies.process(&cancel, &mut None).await,
         Err(CopyError::Storage(_))
     ));
     let committed = store.get(actor, id).await.unwrap();
     assert_eq!(committed.status, CopyStatus::Succeeded);
-    copies.process(&cancel).await.unwrap();
+    copies.process(&cancel, &mut None).await.unwrap();
     assert_eq!(
         store.get(actor, id).await.unwrap().destination_id,
         committed.destination_id

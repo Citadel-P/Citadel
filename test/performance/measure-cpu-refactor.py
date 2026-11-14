@@ -78,6 +78,46 @@ def network_bytes(text):
     return {"rx": rx, "tx": tx}
 
 
+async def postgres_resources(container=POSTGRES):
+    """Read cgroup counters; file includes shmem, which is not reclaimable cache."""
+    raw = await command("docker", "exec", container, "sh", "-c", """
+if test -f /sys/fs/cgroup/memory.current; then
+    echo v2
+    cat /sys/fs/cgroup/memory.current /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.stat
+else
+    echo v1
+    cat /sys/fs/cgroup/memory/memory.usage_in_bytes /sys/fs/cgroup/cpuacct/cpuacct.usage /sys/fs/cgroup/memory/memory.stat
+fi
+""")
+    lines = raw.splitlines()
+    total = int(lines[1])
+    v2 = lines[0] == "v2"
+    values = dict((key, int(value)) for key, value in (line.split() for line in lines[2 if v2 else 3:]))
+    file_bytes = values["file"] if v2 else values.get("total_cache", values["cache"])
+    shmem = values.get("shmem", 0) if v2 else values.get("total_shmem", values.get("shmem", 0))
+    inactive = values["inactive_file"] if v2 else values.get("total_inactive_file", values["inactive_file"])
+    active = values["active_file"] if v2 else values.get("total_active_file", values["active_file"])
+    file_cache = max(0, file_bytes - shmem)
+    return {"total_bytes": total,
+            "anon_bytes": values["anon"] if v2 else values.get("total_rss", values["rss"]),
+            "file_bytes": file_bytes, "shmem_bytes": shmem,
+            "kernel_bytes": values.get("kernel"), "active_file_bytes": active,
+            "inactive_file_bytes": inactive,
+            "non_cache_bytes": max(0, total - file_cache),
+            "working_set_bytes": max(0, total - inactive),
+            "cpu_usage_usec": values["usage_usec"] if v2 else int(lines[2]) / 1000}
+
+
+async def postgres_io():
+    # Preserve per-device counters: summing stacked devices can double-count I/O.
+    raw = await command("docker", "exec", POSTGRES, "sh", "-c",
+                        "test ! -f /sys/fs/cgroup/io.stat || cat /sys/fs/cgroup/io.stat")
+    return {fields[0]: {key: int(value) for key, value in
+                       (item.split("=", 1) for item in fields[1:])}
+            for line in raw.splitlines() if (fields := line.split())}
+
+
+
 async def capture(args):
     # Refuse an occupied API port before any setup request could reach another Core.
     with socket.socket() as probe:
@@ -102,8 +142,8 @@ async def capture(args):
     # Fail before starting Core if either pinned fixture is unavailable.
     await command("docker", "exec", ENGINE, "docker", "image", "inspect", IMAGE)
     metadata = {
-        "commit": await command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
-        "dirty": bool(await command("git", "-C", str(ROOT), "status", "--porcelain")),
+        "commit": await command("git", "-C", str(args.source), "rev-parse", "HEAD"),
+        "dirty": bool(await command("git", "-C", str(args.source), "status", "--porcelain")),
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "kernel": platform.platform(), "logical_cpus": os.cpu_count(),
         "cpu_model": next((line.split(":", 1)[1].strip() for line in
@@ -114,7 +154,13 @@ async def capture(args):
         "realtime_subscribers": 0, "workload_image": IMAGE,
         "postgres_image": await command("docker", "inspect", "--format", "{{.Image}}", POSTGRES),
         "docker_image": await command("docker", "inspect", "--format", "{{.Image}}", ENGINE),
-        "capture_version": 2,
+        "capture_version": 3, "stack_burst": args.stack_burst,
+        "maintenance_seconds": args.maintenance_seconds,
+        "maintenance_start_seconds": args.maintenance_start_seconds,
+        "allocator_environment": {"MALLOC_MMAP_THRESHOLD_": "131072"},
+        "postgres_settings": json.loads(await sql("""SELECT json_object_agg(name, setting)
+            FROM pg_settings WHERE name IN ('server_version','shared_buffers','work_mem',
+                'maintenance_work_mem','max_connections','shared_preload_libraries','track_io_timing')""")),
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     (args.output / "environment.json").write_text(json.dumps(metadata, indent=2) + "\n")
@@ -131,7 +177,7 @@ async def capture(args):
                 headers["Authorization"] = "Bearer " + token
             req = urllib.request.Request(base + path, method=method, headers=headers,
                                          data=None if body is None else json.dumps(body).encode())
-            with urllib.request.urlopen(req, timeout=45) as response:
+            with urllib.request.urlopen(req, timeout=180) as response:
                 payload = response.read().decode()
                 if not payload:
                     return None
@@ -180,7 +226,8 @@ async def capture(args):
 
     statement_query = """
 SELECT COALESCE(json_agg(s), '[]') FROM (
- SELECT queryid::text, calls, rows, total_exec_time, query
+ SELECT queryid::text, calls, rows, total_exec_time, query,
+        shared_blks_hit, shared_blks_read, shared_blks_dirtied, temp_blks_written, wal_bytes::float8
  FROM pg_stat_statements
  WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database())
  AND query NOT LIKE '%pg_stat_statements%'
@@ -188,20 +235,29 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
 """
 
     async def snapshot():
-        runtime, statements, postgres_net, docker_net = await asyncio.gather(
+        runtime, statements, postgres_net, docker_net, postgres, io, pg_io = await asyncio.gather(
             api("/metrics"), sql(statement_query),
             command("docker", "exec", POSTGRES, "cat", "/proc/net/dev"),
             command("docker", "exec", ENGINE, "cat", "/proc/net/dev"),
+            postgres_resources(),
+            postgres_io(),
+            sql("""SELECT row_to_json(s) FROM (
+                SELECT sum(read_bytes) AS read_bytes, sum(write_bytes) AS write_bytes,
+                       sum(extend_bytes) AS extend_bytes, sum(read_time) AS read_ms,
+                       sum(write_time) AS write_ms, sum(fsyncs) AS fsyncs
+                FROM pg_stat_io) s"""),
         )
-        return {"metrics": metrics(runtime), "statements": json.loads(statements),
+        return {"metrics": metrics(runtime), "statements": json.loads(statements), "postgres": postgres,
+                "io": io, "pg_io": json.loads(pg_io),
                 "network": {"postgres": network_bytes(postgres_net),
                             "docker": network_bytes(docker_net)}}
 
     with tempfile.TemporaryDirectory(prefix="citadel-cpu-") as temp:
         sock = Path(temp) / "docker.sock"
         proxy_server = await asyncio.start_unix_server(proxy, path=sock)
-        env = {"PATH": os.environ["PATH"], "LANG": "C.UTF-8",
-               "CITADEL_DATABASE_URL": f"postgres://citadel_cpu:citadel_cpu_fixture@127.0.0.1:55449/{database}",
+        env = {"PATH": os.environ["PATH"], "LANG": "C.UTF-8", "MALLOC_MMAP_THRESHOLD_": "131072",
+               "HOME": temp,
+               "CITADEL_DATABASE_URL": f"postgres://citadel_cpu:citadel_cpu_fixture@127.0.0.1:{args.postgres_port}/{database}",
                "CITADEL_TRANSPORT_MODE": "Disabled", "CITADEL_HTTP_LISTEN_PORT": "58049",
                "CITADEL_JWT_KEY": "cpu-measurement-disposable-signing-key-32bytes",
                "CITADEL_SECRETS_ENCRYPTION_KEY": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
@@ -214,15 +270,25 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
         with (args.output / "server.log").open("w") as log:
             proc = await asyncio.create_subprocess_exec(str(binary), "serve", env=env,
                                                         cwd=temp, stdout=log, stderr=log)
+            process_started = time.monotonic()
             samples = []
 
             async def sample_cpu():
                 tick_hz = os.sysconf("SC_CLK_TCK")
                 previous, at = process_ticks(proc.pid), time.monotonic()
+                postgres = None
+                sampled_pg_at = 0.0
+                postgres_cpu = None
                 while True:
                     await asyncio.sleep(1)
                     current, now = process_ticks(proc.pid), time.monotonic()
-                    samples.append({"time": time.time(), "cpu_percent":
+                    if now - sampled_pg_at >= 5:
+                        measured_pg = await postgres_resources()
+                        if postgres is not None:
+                            postgres_cpu = (measured_pg["cpu_usage_usec"] - postgres["cpu_usage_usec"]) / (now - sampled_pg_at) / 10000
+                        postgres = measured_pg
+                        sampled_pg_at = now
+                    samples.append({"time": time.time(), "postgres": postgres, "postgres_cpu_percent": postgres_cpu, "cpu_percent":
                                     (current - previous) / tick_hz / (now - at) * 100,
                                     **process_residency(proc.pid)})
                     previous, at = current, now
@@ -246,7 +312,8 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
                 statements = []
                 for row in after["statements"]:
                     prior = old.get(row["queryid"], {})
-                    delta = {k: row[k] - prior.get(k, 0) for k in ("calls", "rows", "total_exec_time")}
+                    delta = {k: row[k] - prior.get(k, 0) for k in ("calls", "rows", "total_exec_time", "shared_blks_hit", "shared_blks_read",
+                                                                           "shared_blks_dirtied", "temp_blks_written", "wal_bytes")}
                     if delta["calls"]:
                         statements.append({**delta, "query": row["query"]})
                 paths = collections.Counter()
@@ -260,11 +327,25 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
                           "cpu_average": (end_ticks - ticks) / os.sysconf("SC_CLK_TCK") / duration * 100,
                           "cpu_p95": values[max(0, math.ceil(len(values) * .95) - 1)] if values else None,
                           "cpu_max": max(values, default=None), "docker_requests": dict(paths),
+                          "postgres_before": before["postgres"], "postgres_after": after["postgres"],
+                          "postgres_cpu_average": (after["postgres"]["cpu_usage_usec"] - before["postgres"]["cpu_usage_usec"]) / duration / 10000,
+                          "postgres_cpu_max": max((sample["postgres_cpu_percent"] for sample in inside
+                                                   if sample["postgres_cpu_percent"] is not None), default=None),
+                          "postgres_memory_peak": {key: max((sample["postgres"][key] for sample in inside), default=None)
+                                                   for key in ("total_bytes", "working_set_bytes", "non_cache_bytes")},
                           "db_calls": sum(s["calls"] for s in statements), "statements": statements,
+                          "postgres_io_by_device": {device: {key: value - before["io"].get(device, {}).get(key, 0)
+                                                              for key, value in counters.items()}
+                                                    for device, counters in after["io"].items()},
+                          "postgres_io_operations": {key: (value or 0) - (before["pg_io"][key] or 0)
+                                                     for key, value in after["pg_io"].items()},
                           "metrics_delta": {k: v - before["metrics"].get(k, 0) for k, v in after["metrics"].items()
                                             if k.endswith("_total") or "_total{" in k},
                           "gauges_at_end": {k: v for k, v in after["metrics"].items()
                                             if not (k.endswith("_total") or "_total{" in k)},
+                          "residency_at_end": process_residency(proc.pid),
+                          "residency_peak": {key: max((s[key] for s in inside), default=None)
+                                             for key in ("rss_bytes", "pss_bytes", "threads")},
                           "residency_mean": {key: sum(s[key] for s in inside) / len(inside)
                                              for key in ("rss_bytes", "pss_bytes", "threads")} if inside else {},
                           "network_bytes": {service: {direction: count - before["network"][service][direction]
@@ -277,6 +358,30 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
 
             async def no_action():
                 pass
+
+            async def seed_history():
+                await sql("""
+INSERT INTO statisticssources(platformid,containerid)
+ SELECT (SELECT id FROM platforms LIMIT 1),gen_random_uuid() FROM generate_series(1,2000);
+INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes)
+ SELECT s.id,(extract(epoch FROM now())::bigint/86400-3)*86400+n,1,100,5,200,n,n
+ FROM (SELECT id FROM statisticssources ORDER BY id DESC LIMIT 4) s CROSS JOIN generate_series(1,80000)n;
+-- Populated default partition exercises expiry across the seven-day boundary.
+INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes)
+ SELECT (SELECT max(id) FROM statisticssources),(extract(epoch FROM now())::bigint/86400-8)*86400+n,1,100,5,200,n,n
+ FROM generate_series(1,10001)n;
+INSERT INTO activityevents(id,createdat,createdbyactorid,eventtype,info,resourcename,resourcetype,status)
+ SELECT gen_random_uuid(),now()-interval '100 days','00000000-0000-0000-0000-000000000001','Measurement','{}','fixture','Test','Succeeded'
+ FROM generate_series(1,100001);
+ANALYZE statisticssources; ANALYZE statisticssamples; ANALYZE activityevents;
+""")
+
+            async def history_counts():
+                return json.loads(await sql("""SELECT json_build_object(
+                    'raw', (SELECT count(*) FROM statisticssamples),
+                    'rollups', (SELECT count(*) FROM statisticsrollups),
+                    'expired_raw', (SELECT count(*) FROM statisticssamples WHERE created<extract(epoch FROM now())::bigint-604800),
+                    'expired_activities', (SELECT count(*) FROM activityevents WHERE createdat<now()-interval '90 days'))"""))
 
             async def run_container(index):
                 name = f"{database}-{index}"
@@ -300,6 +405,27 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
                     await command("docker", "exec", ENGINE, "docker", "rm", name)
                     workload_names.remove(name)
 
+            async def stack_burst(platform_id):
+                stacks = []
+                for index in range(4):
+                    name = f"{database}-stack-{index}"
+                    workload_names.append(name)
+                    compose = (f"services:\n  app:\n    image: {IMAGE}\n"
+                               f"    container_name: {name}\n    command: [sleep, '86400']\n")
+                    stack = await api("/api/v1/stacks", {
+                        "name": name, "platformId": platform_id, "stackSource": "WebEditor",
+                        "spec": {"$type": "WebEditor", "composeFile": compose,
+                                 "updateBehavior": "Disabled", "destroyBeforeDeploy": False}})
+                    stacks.append(stack["id"])
+
+                async def apply(stack_id, recreate):
+                    progress = await api("/api/v1/stacks/apply", {"id": stack_id, "recreate": recreate})
+                    if not isinstance(progress, list) or progress[-1].get("stackStatus") != "Healthy":
+                        raise RuntimeError(f"stack deployment failed: {progress}")
+
+                await window("four-stack-deploy", lambda: asyncio.gather(*(apply(s, False) for s in stacks)), 60)
+                await window("four-stack-redeploy", lambda: asyncio.gather(*(apply(s, True) for s in stacks)), 60)
+
             try:
                 for _ in range(120):
                     if proc.returncode is not None:
@@ -314,7 +440,7 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
                 auth = await api("/api/v1/setup/initialize", {"name": "cpuadmin", "email": "cpu@example.test",
                                                            "password": "Fixture!Measure-42-Only"})
                 token = auth["accessToken"]
-                await api("/api/v1/platforms", {"name": "cpu-local", "connectorType": "Local", "type": "Docker",
+                platform_created = await api("/api/v1/platforms", {"name": "cpu-local", "connectorType": "Local", "type": "Docker",
                                                 "pruneHistoricalSwarmTaskContainers": False})
                 await asyncio.sleep(30)
                 await window("idle", no_action, args.idle_seconds)
@@ -326,7 +452,20 @@ SELECT COALESCE(json_agg(s), '[]') FROM (
                 await window("stats-20-running", no_action, args.stats_seconds)
                 await window("20-stop", lambda: stop(many), 30)
                 await window("event-burst", burst, 30)
+                if args.stack_burst:
+                    await stack_burst(platform_created["id"])
                 await window("recovery-idle", no_action, 60)
+                if args.maintenance_seconds:
+                    if args.maintenance_start_seconds:
+                        remaining = args.maintenance_start_seconds - (time.monotonic() - process_started)
+                        if remaining < 0:
+                            raise RuntimeError("ordinary scenarios overran the requested maintenance start")
+                        await asyncio.sleep(remaining)
+                    await seed_history()
+                    counts_before = await history_counts()
+                    await window("aged-maintenance", no_action, args.maintenance_seconds)
+                    (args.output / "maintenance-progress.json").write_text(json.dumps(
+                        {"before": counts_before, "after": await history_counts()}, indent=2) + "\n")
                 (args.output / "summary.json").write_text(json.dumps(results, indent=2) + "\n")
             finally:
                 sampler.cancel()
@@ -353,10 +492,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     parser.add_argument("--binary", type=Path, default=ROOT / "target/release/citadel-server")
+    parser.add_argument("--source", type=Path, default=ROOT, help="source checkout used to build --binary")
+    parser.add_argument("--postgres-port", type=int, default=55449)
+    parser.add_argument("--stack-burst", action="store_true", help="deploy and recreate four Compose stacks through Core")
     parser.add_argument("--idle-seconds", type=int, default=300)
     parser.add_argument("--stats-seconds", type=int, default=60)
+    parser.add_argument("--maintenance-seconds", type=int, default=0,
+                        help="opt-in aged telemetry/Activity backlog window (use at least 900s for retention cadence)")
+    parser.add_argument("--maintenance-start-seconds", type=int, default=0,
+                        help="align backlog seeding to this offset after Core starts; fail if earlier scenarios overrun")
     args = parser.parse_args()
-    if args.idle_seconds < 1 or args.stats_seconds < 1:
+    if args.idle_seconds < 1 or args.stats_seconds < 1 or min(args.maintenance_seconds, args.maintenance_start_seconds) < 0:
         parser.error("window durations must be positive")
     asyncio.run(capture(args))
 

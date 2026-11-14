@@ -8,6 +8,7 @@ pub struct CopyService {
     store: Arc<dyn CopyRepository>,
     storage: Arc<dyn CopyStorage>,
     on_change: Arc<dyn Fn(CopyKind, Uuid) + Send + Sync>,
+    control_changed: tokio::sync::watch::Sender<()>,
 }
 impl CopyService {
     pub fn new(
@@ -21,6 +22,7 @@ impl CopyService {
             storage,
             backups,
             on_change,
+            control_changed: tokio::sync::watch::channel(()).0,
         }
     }
     /// Read-only eligibility for resource list and detail models; never creates a review
@@ -154,6 +156,11 @@ impl CopyService {
         Ok(progress)
     }
     async fn cancel_children(&self, progress: &CopyProgress) -> Result<(), CopyError> {
+        if progress.data_mode == CopyDataMode::CurrentData
+            && progress.status != CopyStatus::Restoring
+        {
+            self.control_changed.send_modify(|_| {});
+        }
         if progress.status == CopyStatus::Cancelling
             && progress.data_mode == CopyDataMode::ExistingBackup
         {
@@ -171,14 +178,17 @@ impl CopyService {
     /// Called by the single execution lane, never concurrently with another
     /// current-data execution. Recovery also handles a committed claim whose
     /// acknowledgement was lost; an ambiguous mutation is never replayed.
-    /// Returns whether durable parents remain under observation.
+    /// Returns true after completing one claimed job. The caller retains the page
+    /// cursor so waiting parents rotate without rewriting their timestamps.
     pub async fn process_current_queue(
         &self,
         cancel: &tokio_util::sync::CancellationToken,
+        cursor: &mut Option<Uuid>,
     ) -> Result<bool, CopyError> {
         self.store.recover_current().await?;
-        let pending = self.store.pending().await?;
-        let active = !pending.is_empty();
+        let pending = self.store.pending(*cursor).await?;
+        let last = pending.last().map(|(_, id)| *id);
+        let full = pending.len() == 32;
         for (actor, id) in pending {
             if cancel.is_cancelled() {
                 break;
@@ -188,10 +198,19 @@ impl CopyService {
             if let Some((plan, volume)) = self.store.claim_current(actor, id).await? {
                 self.process_current(actor, id, plan, volume, cancel)
                     .await?;
-                break;
+                *cursor = if full || last != Some(id) {
+                    Some(id)
+                } else {
+                    None
+                };
+                return Ok(true);
             }
+            *cursor = Some(id);
         }
-        Ok(active)
+        if !full {
+            *cursor = None;
+        }
+        Ok(false)
     }
 
     async fn process_current(
@@ -204,9 +223,19 @@ impl CopyService {
     ) -> Result<(), CopyError> {
         let execution_cancel = cancel.child_token();
         let _guard = execution_cancel.clone().drop_guard();
+        // Subscribe before checking persisted control state to cover cancellation
+        // between the durable claim and starting the owned storage operation.
+        let mut changes = self.control_changed.subscribe();
+        if !self.store.is_restoring(actor, id).await.unwrap_or(false) {
+            execution_cancel.cancel();
+        }
         let execution = self.storage.copy_current(&plan, &volume, &execution_cancel);
         tokio::pin!(execution);
-        let mut poll = tokio::time::interval(std::time::Duration::from_secs(2));
+        let mut poll = tokio::time::interval_at(
+            tokio::time::Instant::now() + std::time::Duration::from_secs(30),
+            std::time::Duration::from_secs(30),
+        );
+        poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let result = loop {
             tokio::select! {
                 result = &mut execution => break result.map_err(|e| e.to_string()),
@@ -214,10 +243,22 @@ impl CopyService {
                     execution_cancel.cancel();
                     break execution.await.map_err(|e| e.to_string());
                 }
-                _ = poll.tick() => {
-                    match self.store.get(actor, id).await {
-                        Ok(progress) if progress.status == CopyStatus::Restoring => {},
-                        _ => { execution_cancel.cancel(); break execution.await.map_err(|e| e.to_string()); }
+                _ = async {
+                    tokio::select! { _ = poll.tick() => {}, _ = changes.changed() => {} }
+                } => {
+                    // Database latency must not stop polling storage output/cleanup.
+                    tokio::select! {
+                        result = &mut execution => break result.map_err(|e| e.to_string()),
+                        result = self.store.is_restoring(actor, id) => {
+                            if !matches!(result, Ok(true)) {
+                                execution_cancel.cancel();
+                                break execution.await.map_err(|e| e.to_string());
+                            }
+                        }
+                        () = cancel.cancelled() => {
+                            execution_cancel.cancel();
+                            break execution.await.map_err(|e| e.to_string());
+                        }
                     }
                 }
             }
@@ -244,9 +285,13 @@ impl CopyService {
     pub async fn process(
         &self,
         cancel: &tokio_util::sync::CancellationToken,
+        cursor: &mut Option<Uuid>,
     ) -> Result<bool, CopyError> {
-        self.store.prune_reviews().await?;
-        let pending = self.store.pending().await?;
+        if cursor.is_none() {
+            self.store.prune_reviews().await?;
+        }
+        let pending = self.store.pending(*cursor).await?;
+        let full = pending.len() == 32;
         let active = !pending.is_empty();
         for (actor, id) in pending {
             if cancel.is_cancelled() {
@@ -283,6 +328,7 @@ impl CopyService {
                     break;
                 }
                 self.store.finish_cleanup(actor, id, result).await?;
+                *cursor = Some(id);
                 continue;
             }
             let storage_result = if let Ok(current) = current
@@ -313,6 +359,10 @@ impl CopyService {
             if let Some(destination) = progress.destination_id {
                 (self.on_change)(progress.kind, destination);
             }
+            *cursor = Some(id);
+        }
+        if !full {
+            *cursor = None;
         }
         Ok(active)
     }

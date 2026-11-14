@@ -497,3 +497,86 @@ async fn two_preparations_can_track_six_executions_and_drain() {
         pool.close().await;
     }
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL with pg_stat_statements preloaded"]
+async fn idle_build_dispatch_backs_off_but_notifications_and_deferred_retries_stay_prompt() {
+    let (pool, actor, store, mut input) = fixture().await;
+    sqlx::query("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+        .execute(&pool)
+        .await
+        .unwrap();
+    async fn probes(pool: &sqlx::PgPool) -> i64 {
+        sqlx::query_scalar("SELECT COALESCE(sum(calls),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query LIKE 'SELECT EXISTS(SELECT % FROM buildruns WHERE status IN%'")
+            .fetch_one(pool).await.unwrap()
+    }
+    let executor = Arc::new(BlockingExecutor(AtomicUsize::new(0)));
+    let token = CancellationToken::new();
+    let service = Arc::new(BuildService::new(
+        Arc::new(crate::tasks::builds::TrackedBuildTasks::new(
+            citadel_runtime::DynamicTasks::new(token.clone()),
+        )),
+        token.clone(),
+        store.clone(),
+        executor.clone(),
+        chrono::Duration::minutes(5),
+    ));
+    let before = probes(&pool).await;
+    let (wake, receive) = tokio::sync::watch::channel(());
+    let worker = tokio::spawn(build_runs(
+        citadel_runtime::admission::AdmissionGate::default(),
+        token.clone(),
+        service,
+        2,
+        receive,
+    ));
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(
+        probes(&pool).await - before,
+        1,
+        "empty queues must not poll every two seconds"
+    );
+    input.name = format!("deferred-wake-{}", Uuid::now_v7());
+    let project = store.create(actor, &input).await.unwrap();
+    let run = store.enqueue(actor, project.id, "Manual").await.unwrap();
+    sqlx::query(
+        "UPDATE buildruns SET nextattemptat=CURRENT_TIMESTAMP+INTERVAL '3 seconds' WHERE id=$1",
+    )
+    .bind(run.id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Same committed wake receiver used by the shared notification hub.
+    wake.send_modify(|_| {});
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(
+        executor.0.load(Ordering::SeqCst),
+        0,
+        "wake must not bypass the retry deadline"
+    );
+    let waiting_probes = probes(&pool).await;
+    tokio::time::sleep(Duration::from_millis(2100)).await;
+    assert_eq!(
+        probes(&pool).await,
+        waiting_probes,
+        "future retries must not poll every two seconds"
+    );
+    tokio::time::timeout(Duration::from_secs(6), async {
+        while executor.0.load(Ordering::SeqCst) == 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("a queued retry must not inherit the 30-second idle delay");
+    token.cancel();
+    tokio::time::timeout(Duration::from_secs(5), worker)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        store.get_run(run.id).await.unwrap().status,
+        citadel_builds::BuildRunStatus::Cancelled
+    );
+    pool.close().await;
+}

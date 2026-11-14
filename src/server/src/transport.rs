@@ -99,6 +99,9 @@ pub fn secure_router_with_grpc(
     readiness: Arc<Readiness>,
     grpc: Option<Router>,
 ) -> Result<Router, Box<dyn std::error::Error>> {
+    // As with the documentation router, construct schema-derived metadata before
+    // serving requests: the deeper middleware stack can overflow in debug builds.
+    crate::api::endpoint_catalog::initialize();
     router = router.route("/api/{*path}", any(api_not_found));
 
     if let Some(root) = &transport.static_root {

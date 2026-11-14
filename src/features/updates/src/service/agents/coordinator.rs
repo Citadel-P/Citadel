@@ -13,6 +13,7 @@ pub struct AgentUpdateService {
     pub(super) entitlements: Arc<dyn AgentUpdateEntitlements>,
     pub(super) notifier: Arc<dyn UpdateChangeNotifier>,
     execution: Arc<tokio::sync::Mutex<()>>,
+    pub(super) work_changed: tokio::sync::watch::Sender<()>,
     pub(super) core: Option<Arc<super::schedule::ScheduledCore>>,
 }
 impl AgentUpdateService {
@@ -31,6 +32,7 @@ impl AgentUpdateService {
             entitlements,
             notifier,
             execution: Arc::new(tokio::sync::Mutex::new(())),
+            work_changed: tokio::sync::watch::channel(()).0,
             core: None,
         }
     }
@@ -186,6 +188,7 @@ impl AgentUpdateService {
         self.repository
             .save_schedule(actor, &schedule, entitled)
             .await?;
+        self.work_changed.send_modify(|_| {});
         self.notifier.changed();
         Ok(())
     }
@@ -292,6 +295,7 @@ impl AgentUpdateService {
             ));
         }
         let operation = self.repository.approve(actor, review, request).await?;
+        self.work_changed.send_modify(|_| {});
         self.notifier.changed();
         Ok(operation)
     }

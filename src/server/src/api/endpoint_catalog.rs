@@ -86,6 +86,11 @@ static ENDPOINTS: LazyLock<Vec<Endpoint>> = LazyLock::new(|| {
     endpoints.into_values().collect()
 });
 
+/// Prepare setup policy during HTTP composition, outside the request middleware stack.
+pub(crate) fn initialize() {
+    LazyLock::force(&ENDPOINTS);
+}
+
 pub(crate) fn script_catalog_json() -> String {
     let endpoints: Vec<_> = ENDPOINTS.iter().filter_map(|endpoint| {
         let path = endpoint.path.strip_prefix("/api/v1/")?;

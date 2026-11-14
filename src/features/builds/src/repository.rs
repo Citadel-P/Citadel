@@ -1,6 +1,9 @@
 use crate::*;
 
 pub trait BuildRepository: Send + Sync {
+    /// Earliest future retry or queue-expiry deadline; an uncached scheduling hint.
+    fn next_retry_at(&self) -> BoxFuture<'_, Result<Option<DateTime<Utc>>, BuildError>>;
+
     fn health_pools(
         &self,
         after: Uuid,

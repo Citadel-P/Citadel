@@ -82,26 +82,17 @@ impl StatisticsReader for PostgresStatisticsReader {
         now: i64,
     ) -> BoxFuture<'a, Result<Vec<ServiceTaskSample>, RuntimeCapabilityError>> {
         async move {
-            let rows=sqlx::query(r#"WITH current_tasks AS (
-                SELECT DISTINCT ON (CASE WHEN slot IS NOT NULL THEN 'slot:'||slot::text ELSE 'node:'||dockernodeid END)
-                    dockernodeid,dockercontainerid
-                FROM swarmtaskprojections WHERE platformid=$1 AND dockerserviceid=$2 AND NOT isstale
-                    AND lower(state)='running' AND lower(desiredstate)='running'
-                ORDER BY CASE WHEN slot IS NOT NULL THEN 'slot:'||slot::text ELSE 'node:'||dockernodeid END,
-                    COALESCE(statustimestamp,observedat) DESC,dockertaskid DESC LIMIT 501
-            ) SELECT task.dockernodeid,container.id,latest.created
-                FROM current_tasks task JOIN platforms platform ON platform.id=$1
-                LEFT JOIN LATERAL (
-                    SELECT CASE WHEN COUNT(*)=1 THEN (array_agg(candidate.id))[1] END AS id
-                    FROM (SELECT id FROM containers
-                        WHERE platformid=$1 AND task.dockernodeid=COALESCE(dockernodeid,
-                            CASE WHEN platform.connectortype IN ('Local','Agent') THEN platform.platformdescriptor::jsonb->>'nodeID' END)
-                        AND dockercontainerid=task.dockercontainerid AND projectionstalesince IS NULL LIMIT 2) candidate
-                ) container ON true
-                LEFT JOIN LATERAL (SELECT created FROM containerstats WHERE containerid=container.id AND created<=$3 ORDER BY created DESC LIMIT 1) latest ON true"#)
-                .bind(platform_id).bind(service_id).bind(now).fetch_all(&self.pool).await.map_err(storage)?;
+            let rows = sqlx::query(include_str!("service_current_tasks.sql"))
+                .bind(platform_id)
+                .bind(service_id)
+                .bind(now)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
             if rows.len() > 500 {
-                return Err(capacity("Service statistics supports at most 500 current Tasks"));
+                return Err(capacity(
+                    "Service statistics supports at most 500 current Tasks",
+                ));
             }
             rows.into_iter()
                 .map(|row| {

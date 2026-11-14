@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { InstanceConfigurationView } from '@/api/generated/api.types';
 import { MfaPolicy } from '@/api/generated/api.types';
 import {
@@ -18,6 +18,7 @@ import { useRead } from '@/lib/hooks';
 import { MfaPolicyControl } from './mfa-policy';
 import { useUpdateInstallationSettings } from '@/hooks/use-installation-settings';
 import { instanceSections } from './fields';
+import { DatabaseConnectionsSnapshot } from './database-connections';
 
 type InstanceFormValue = InstanceConfigurationView & { mfaPolicy: MfaPolicy };
 
@@ -35,7 +36,7 @@ export function InstanceSettingsForm() {
       '': defineSection<InstanceFormValue>({
         items: instanceSections.map((section) =>
           defineGroupField<InstanceFormValue>({
-            id: section.label.toLowerCase(),
+            id: section.label.toLowerCase().replaceAll(' ', '-'),
             label: section.label,
             description: section.description,
             items: [
@@ -127,9 +128,20 @@ export function InstanceSettingsForm() {
                     return null;
                   },
                   render: (value, set) => {
+                    const withDatabaseSnapshot = (control: ReactNode) =>
+                      field.key === 'databaseMaxConnections' ? (
+                        <div className="space-y-4">
+                          {control}
+                          <DatabaseConnectionsSnapshot
+                            configuredMaximum={settings?.effectiveConfiguration.databaseMaxConnections}
+                          />
+                        </div>
+                      ) : (
+                        control
+                      );
                     const change = (value: unknown) => set({ [field.key]: value } as Partial<InstanceFormValue>);
                     if (managed)
-                      return (
+                      return withDatabaseSnapshot(
                         <output aria-label={field.label} className="block max-w-100 break-words text-sm font-medium">
                           {typeof effective === 'boolean'
                             ? effective
@@ -138,7 +150,7 @@ export function InstanceSettingsForm() {
                             : effective === ''
                               ? 'Automatic'
                               : String(effective)}
-                        </output>
+                        </output>,
                       );
                     const disabled = save.isPending;
                     if (typeof value === 'boolean')
@@ -166,7 +178,7 @@ export function InstanceSettingsForm() {
                           </SelectContent>
                         </Select>
                       );
-                    return (
+                    return withDatabaseSnapshot(
                       <FieldInput
                         id={field.key}
                         className="w-full max-w-100"
@@ -178,7 +190,7 @@ export function InstanceSettingsForm() {
                         step={1}
                         placeholder={field.key === 'agentImageOverride' ? 'Automatic' : undefined}
                         onChange={change}
-                      />
+                      />,
                     );
                   },
                 });

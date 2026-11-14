@@ -17,7 +17,7 @@ Core's `.env` does not configure remote Agents.
 
 ## Instance controls and deployment overrides
 
-Administrators can manage the 26 controls described in [Instance settings](/operations/instance-settings).
+Administrators can manage the controls described in [Instance settings](/operations/instance-settings).
 MFA applies on save; the other controls apply at the next Core start. An explicitly
 supplied environment value overrides the saved choice even when it equals the
 default. The page shows deployment-managed fields and pending restarts. Remove the
@@ -207,7 +207,7 @@ the packaged image sets `CITADEL_STATIC_ROOT=/app/wwwroot` and accepts an overri
 | `CITADEL_HTTP_FORWARDED_LIMIT` | `1` trusted hop |
 | `CITADEL_HTTP_BODY_LIMIT_BYTES` | `2097152` bytes |
 | `CITADEL_HTTP_REQUESTS_PER_MINUTE` | `600` |
-| `CITADEL_DATABASE_MAX_CONNECTIONS` | `5` |
+| <code id="citadel-database-max-connections" className="scroll-mt-24">CITADEL_DATABASE_MAX_CONNECTIONS</code> | `3`; overrides the saved Instance query-pool limit for this Core |
 | `CITADEL_DOCKER_SOCKET` | `/var/run/docker.sock` inside Core |
 | `CITADEL_DOCKER_TIMEOUT_SECONDS` | `10` seconds |
 | `CITADEL_STATIC_ROOT` | Optional frontend directory |

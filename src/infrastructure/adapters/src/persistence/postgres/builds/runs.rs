@@ -87,7 +87,8 @@ impl PostgresBuildRepository {
                 .map_err(storage)?;
             sqlx::query("UPDATE buildprojects SET controlstate='Queued',currentrunid=$2,rowversion=rowversion+1,updatedat=CURRENT_TIMESTAMP WHERE id=$1").bind(id).bind(run_id).execute(&mut *tx).await.map_err(storage)?;
             record_run_activity(&mut tx, run_id).await?;
-            let run = sqlx::query("SELECT * FROM buildruns WHERE id=$1")
+            let query = format!("SELECT {RUN_COLUMNS} FROM buildruns WHERE id=$1");
+            let run = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(run_id)
                 .fetch_one(&mut *tx)
                 .await
@@ -134,6 +135,14 @@ impl PostgresBuildRepository {
         stale_before: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<Option<BuildClaim>, BuildError>> {
         Box::pin(async move {
+            // Negative hint only: active runs still need transactional recovery even
+            // without queued work. Enqueue notifications and the fallback cover races.
+            let active: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM buildruns WHERE status IN ('Queued','Preparing','Running'))",
+            ).fetch_one(&self.pool).await.map_err(storage)?;
+            if !active {
+                return Ok(None);
+            }
             let mut tx = self.pool.begin().await.map_err(storage)?;
             recover(&mut tx, stale_before).await?;
             // Serialize only the short claim transaction, not Build execution.
@@ -281,7 +290,7 @@ impl PostgresBuildRepository {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTE}
-SELECT run.* FROM buildruns run
+SELECT {RUN_COLUMNS} FROM buildruns run
 WHERE ($4::uuid IS NULL OR run.buildprojectid=$4)
   AND ($5 OR (SELECT allowed FROM global_access) OR EXISTS (
       SELECT 1 FROM actor_scope scope

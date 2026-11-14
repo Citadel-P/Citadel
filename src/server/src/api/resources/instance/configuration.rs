@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceConfigurationView {
+    pub database_max_connections: u32,
     pub password_minimum_length: u32,
     pub browser_session_lifetime_days: u32,
     pub service_account_default_token_lifetime_days: i32,
@@ -32,6 +33,7 @@ pub struct InstanceConfigurationView {
 impl From<citadel_instance::InstanceConfiguration> for InstanceConfigurationView {
     fn from(value: citadel_instance::InstanceConfiguration) -> Self {
         Self {
+            database_max_connections: value.database_max_connections,
             password_minimum_length: value.password_minimum_length,
             browser_session_lifetime_days: value.browser_session_lifetime_days,
             service_account_default_token_lifetime_days: value
@@ -65,6 +67,7 @@ impl From<citadel_instance::InstanceConfiguration> for InstanceConfigurationView
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceOverridesView {
+    pub database_max_connections: Option<u32>,
     pub password_minimum_length: Option<u32>,
     pub browser_session_lifetime_days: Option<u32>,
     pub service_account_default_token_lifetime_days: Option<i32>,
@@ -94,6 +97,7 @@ pub struct InstanceOverridesView {
 impl From<citadel_instance::InstanceOverrides> for InstanceOverridesView {
     fn from(value: citadel_instance::InstanceOverrides) -> Self {
         Self {
+            database_max_connections: value.database_max_connections,
             password_minimum_length: value.password_minimum_length,
             browser_session_lifetime_days: value.browser_session_lifetime_days,
             service_account_default_token_lifetime_days: value
@@ -127,6 +131,9 @@ impl From<citadel_instance::InstanceOverrides> for InstanceOverridesView {
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchInstanceConfigurationRequest {
+    #[serde(default)]
+    #[schema(value_type = Option<u32>, required = false)]
+    pub database_max_connections: citadel_primitives::PatchField<u32>,
     #[serde(default)]
     #[schema(value_type = Option<u32>, required = false)]
     pub password_minimum_length: citadel_primitives::PatchField<u32>,
@@ -206,6 +213,7 @@ pub struct PatchInstanceConfigurationRequest {
 impl From<PatchInstanceConfigurationRequest> for citadel_instance::PatchInstanceConfiguration {
     fn from(value: PatchInstanceConfigurationRequest) -> Self {
         Self {
+            database_max_connections: value.database_max_connections,
             password_minimum_length: value.password_minimum_length,
             browser_session_lifetime_days: value.browser_session_lifetime_days,
             service_account_default_token_lifetime_days: value

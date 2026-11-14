@@ -10,32 +10,64 @@ pub async fn run(
 ) -> Result<(), CopyError> {
     // Independent lanes preserve cancellation/finalization while the single
     // execution lane is occupied. Neither lane cancels an admitted durable copy.
+    let (completed, mut completions) = watch::channel(());
     let execution = async {
         let mut wake = wake.clone();
+        let mut cursor = None;
+        let mut progressed = false;
         while !cancel.is_cancelled() {
-            let result = service.process_current_queue(&cancel).await;
-            let active = match result {
-                Ok(active) => active,
+            if cursor.is_none() {
+                wake.borrow_and_update();
+            }
+            let result = service.process_current_queue(&cancel, &mut cursor).await;
+            let failed = match result {
+                Ok(worked) => {
+                    if worked {
+                        progressed = true;
+                        completed.send_modify(|_| {});
+                    }
+                    false
+                }
                 Err(error) => {
                     tracing::error!(%error, "Resource copy execution failed");
                     true
                 }
             };
-            wait_for_work(&mut wake, &cancel, active).await;
+            if !failed && (cursor.is_some() || std::mem::take(&mut progressed)) {
+                continue;
+            }
+            wait_for_work(&mut wake, &cancel, failed).await;
         }
     };
     let reconciliation = async {
         let mut wake = wake.clone();
+        let mut cursor = None;
         while !cancel.is_cancelled() {
-            let result = service.process(&cancel).await;
-            let active = match result {
-                Ok(active) => active,
+            // Keep signals arriving during any page pending until the sweep
+            // completes, including changes to IDs already visited in this sweep.
+            if cursor.is_none() {
+                wake.borrow_and_update();
+                completions.borrow_and_update();
+            }
+            let result = service.process(&cancel, &mut cursor).await;
+            let failed = match result {
+                Ok(_) => false,
                 Err(error) => {
                     tracing::error!(%error, "Resource copy reconciliation failed");
                     true
                 }
             };
-            wait_for_work(&mut wake, &cancel, active).await;
+            if !failed && cursor.is_some() {
+                continue;
+            }
+            if failed {
+                wait_for_work(&mut wake, &cancel, true).await;
+            } else {
+                tokio::select! {
+                    _ = completions.changed() => {},
+                    () = wait_for_work(&mut wake, &cancel, false) => {},
+                }
+            }
         }
     };
     tokio::join!(execution, reconciliation);
@@ -45,14 +77,14 @@ pub async fn run(
 pub(super) async fn wait_for_work(
     wake: &mut watch::Receiver<()>,
     cancel: &CancellationToken,
-    active: bool,
+    failed: bool,
 ) {
-    if active {
-        // A worker's own writes also notify. Retain the existing active cadence
-        // and error backoff so those writes cannot create a tight feedback loop.
+    if failed {
+        // Failed database operations retain a cancellable backoff even when
+        // notifications arrive. Successful passes wait for changes or recovery.
         tokio::select! {
             () = cancel.cancelled() => {},
-            () = tokio::time::sleep(Duration::from_secs(2)) => {},
+            () = tokio::time::sleep(Duration::from_secs(5)) => {},
         }
     } else {
         super::super::notifications::wait(wake, cancel, Duration::from_secs(30)).await;

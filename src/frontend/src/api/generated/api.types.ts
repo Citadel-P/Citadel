@@ -2995,6 +2995,34 @@ export interface CurrentProfileView {
   teams: ProfileResourceInfo[];
 }
 
+export interface DatabaseConnectionsView {
+  /**
+   * @format int32
+   * @min 0
+   */
+  borrowed: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  idle: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  maximum: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  open: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  sharedBuffersBytes?: number | null;
+}
+
 export interface DeleteContainerOptions {
   force?: boolean;
   link?: boolean;
@@ -4133,6 +4161,11 @@ export interface InstanceConfigurationView {
   buildRetentionDays: number;
   /** @min 0 */
   buildTrackingSlots: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  databaseMaxConnections: number;
   logFormat: LogFormatView;
   logVerbosity: string;
   openapiEnabled: boolean;
@@ -4202,6 +4235,11 @@ export interface InstanceOverridesView {
   buildRetentionDays?: number | null;
   /** @min 0 */
   buildTrackingSlots?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  databaseMaxConnections?: number | null;
   logFormat?: LogFormatView | null;
   logVerbosity?: string | null;
   openapiEnabled?: boolean | null;
@@ -4931,6 +4969,11 @@ export interface PatchInstanceConfigurationRequest {
   buildRetentionDays?: number | null;
   /** @min 0 */
   buildTrackingSlots?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  databaseMaxConnections?: number | null;
   logFormat?: string | null;
   logVerbosity?: string | null;
   openapiEnabled?: boolean | null;
@@ -14221,6 +14264,31 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetDatabaseConnections
+     * @summary Get this Core's database connection snapshot (administrator)
+     * @request GET:/api/v1/instance/database-connections
+     * @secure
+     * @response `200` `DatabaseConnectionsView` Query pool usage and connected PostgreSQL shared buffers
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getDatabaseConnections: (params: RequestParams = {}) =>
+      this.request<DatabaseConnectionsView, ProblemDetails>({
+        path: `/api/v1/instance/database-connections`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),

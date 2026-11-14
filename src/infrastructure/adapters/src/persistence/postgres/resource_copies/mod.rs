@@ -135,6 +135,9 @@ impl CopyRepository for PostgresCopyRepository {
     fn get(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
         Box::pin(self.get_copy(actor, id))
     }
+    fn is_restoring(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<bool, CopyError>> {
+        Box::pin(self.read_restoring(actor, id))
+    }
     fn cleanup(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>> {
         Box::pin(self.cleanup_copy(actor, id))
     }
@@ -169,9 +172,12 @@ impl CopyRepository for PostgresCopyRepository {
             Ok(())
         })
     }
-    fn pending(&self) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>> {
+    fn pending(
+        &self,
+        after: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>> {
         Box::pin(async move {
-            let rows = sqlx::query_as::<_,(Uuid,Uuid)>("SELECT actorid,id FROM resourcecopies WHERE status IN ('Restoring','Cancelling','Cleaning') ORDER BY updatedat,id LIMIT 32").fetch_all(&self.pool).await.map_err(storage_error)?;
+            let rows = sqlx::query_as::<_,(Uuid,Uuid)>("SELECT actorid,id FROM resourcecopies WHERE status IN ('Restoring','Cancelling','Cleaning') AND ($1::uuid IS NULL OR id>$1) ORDER BY id LIMIT 32").bind(after).fetch_all(&self.pool).await.map_err(storage_error)?;
             Ok(rows
                 .into_iter()
                 .map(|(actor, id)| (ActorId::new(actor), id))

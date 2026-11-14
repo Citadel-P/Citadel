@@ -30,6 +30,9 @@ const defaults = instanceSettings();
 
 beforeEach(() => {
   server.use(
+    http.get('http://localhost/api/v1/instance/database-connections', () =>
+      HttpResponse.json({ maximum: 3, open: 2, borrowed: 1, idle: 1, sharedBuffersBytes: 67108864 }),
+    ),
     http.get('http://localhost/api/v1/updates', () => HttpResponse.json({ lastAttempt: null })),
     http.get('http://localhost/api/v1/updates/agents', () =>
       HttpResponse.json({

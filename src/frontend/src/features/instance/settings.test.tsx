@@ -22,6 +22,11 @@ function InstanceSettingsWithStatus() {
 
 beforeEach(() => {
   localStorage.clear();
+  server.use(
+    http.get('http://localhost/api/v1/instance/database-connections', () =>
+      HttpResponse.json({ maximum: 3, open: 2, idle: 1, borrowed: 1, sharedBuffersBytes: 67108864 }),
+    ),
+  );
 });
 
 it('keeps MFA as a draft, resets it, and saves it with other changed fields in one request', async () => {
@@ -101,7 +106,7 @@ it('disables the MFA selector when the deployment requires MFA for everyone', as
   expect(await screen.findByRole('combobox', { name: 'Two-factor authentication policy' })).toBeDisabled();
 });
 
-it('registers an administrator page and exposes all 26 controls with server defaults and units', async () => {
+it('registers an administrator page and exposes all 27 controls with server defaults and units', async () => {
   server.use(http.get(url, () => HttpResponse.json(initial())));
   renderCitadel(<InstanceSettingsWithStatus />);
   expect(InstanceComponents.access).toBe('administrator');
@@ -112,8 +117,9 @@ it('registers an administrator page and exposes all 26 controls with server defa
     'Builds',
     'Backups',
     'Runtime',
+    'Database connections',
   ]);
-  expect(instanceSections.flatMap((s) => s.fields)).toHaveLength(25);
+  expect(instanceSections.flatMap((s) => s.fields)).toHaveLength(26);
   expect(await screen.findByRole('spinbutton', { name: 'Minimum password length (characters)' })).toHaveValue(15);
   expect(screen.getByRole('spinbutton', { name: 'Browser session lifetime (days)' })).toHaveValue(30);
   expect(screen.getByRole('combobox', { name: 'Two-factor authentication policy' })).toHaveTextContent('Optional');
@@ -331,4 +337,102 @@ it('keeps unmanaged fields editable and excludes environment values from the sav
   await user.type(minimum, '20');
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
   await waitFor(() => expect(requests).toEqual([{ configuration: { passwordMinimumLength: 20 } }]));
+});
+
+it('saves the shared query-pool default and shows this Core still using its running limit', async () => {
+  let settings = initial();
+  const requests: unknown[] = [];
+  server.use(
+    http.get(url, () => HttpResponse.json(settings)),
+    http.patch(url, async ({ request }) => {
+      const body = (await request.json()) as { configuration: Partial<InstanceConfigurationView> };
+      requests.push(body);
+      settings = {
+        ...settings,
+        configuration: { ...settings.configuration, ...body.configuration },
+        effectiveConfiguration: { ...settings.effectiveConfiguration, ...body.configuration },
+        restartRequired: true,
+      };
+      return HttpResponse.json(settings);
+    }),
+  );
+  const { user } = renderCitadel(<InstanceSettingsWithStatus />);
+  const maximum = await screen.findByRole('spinbutton', { name: 'Maximum query connections per Core' });
+  expect(maximum).toHaveValue(3);
+  await user.clear(maximum);
+  await user.type(maximum, '0');
+  await user.tab();
+  expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeDisabled();
+  await user.clear(maximum);
+  await user.type(maximum, '8');
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+  await waitFor(() => expect(requests).toEqual([{ configuration: { databaseMaxConnections: 8 } }]));
+  expect(await screen.findByText('Saved choice: 8. Currently in use: 3.')).toBeVisible();
+  expect(screen.getByText('Restart pending')).toBeVisible();
+  const snapshot = await screen.findByText('This Core · snapshot');
+  expect(snapshot).toBeVisible();
+  expect(maximum.compareDocumentPosition(snapshot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText('2 open · 1 borrowed · 1 idle')).toBeVisible();
+  expect(screen.getByText('Running limit: 3')).toBeVisible();
+  const details = screen.getByRole('button', { name: 'Advanced database information' });
+  expect(details).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText('64 MiB')).not.toBeInTheDocument();
+  await user.click(details);
+  expect(details).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText('64 MiB')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Database configuration guide' })).toHaveAttribute(
+    'href',
+    'https://docs.citadelplane.com/operations/instance-settings/#database-connections',
+  );
+  await user.keyboard('{Enter}');
+  expect(details).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('keeps per-Core pool overrides managed and does not require access to PostgreSQL settings', async () => {
+  const settings = initial();
+  settings.deploymentOverrides.databaseMaxConnections = 5;
+  settings.effectiveConfiguration.databaseMaxConnections = 5;
+  settings.runningConfiguration.databaseMaxConnections = 5;
+  const reads = vi.fn();
+  server.use(
+    http.get(url, () => HttpResponse.json(settings)),
+    http.get('http://localhost/api/v1/instance/database-connections', () => {
+      reads();
+      return HttpResponse.json({ maximum: 5, open: 2, borrowed: 1, idle: 1, sharedBuffersBytes: null });
+    }),
+  );
+  const { user } = renderCitadel(<InstanceSettingsForm />);
+  expect(await screen.findByLabelText('Maximum query connections per Core')).toHaveTextContent('5');
+  expect(screen.queryByRole('spinbutton', { name: 'Maximum query connections per Core' })).not.toBeInTheDocument();
+  expect(screen.getByText('Saved choice: 3. Currently in use: 5.')).toBeVisible();
+  expect(await screen.findByText('This Core · snapshot')).toBeVisible();
+  expect(screen.queryByText(/Running limit:/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Advanced database information' }));
+  expect(await screen.findByText('Unavailable')).toBeVisible();
+  expect(screen.getByText(/Your database administrator or provider manages this setting/)).toBeVisible();
+  const minimum = screen.getByRole('spinbutton', { name: 'Minimum password length (characters)' });
+  await user.clear(minimum);
+  await user.type(minimum, '20');
+  expect(reads).toHaveBeenCalledTimes(1);
+  expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeEnabled();
+});
+
+it('lets an administrator retry an unavailable snapshot without blocking settings', async () => {
+  let fail = true;
+  server.use(
+    http.get(url, () => HttpResponse.json(initial())),
+    http.get('http://localhost/api/v1/instance/database-connections', () =>
+      fail
+        ? new HttpResponse(null, { status: 503 })
+        : HttpResponse.json({ maximum: 3, open: 1, borrowed: 0, idle: 1, sharedBuffersBytes: 134217728 }),
+    ),
+  );
+  const { user } = renderCitadel(<InstanceSettingsForm />);
+  expect(await screen.findByText('Could not load pool usage.')).toBeVisible();
+  expect(screen.getByRole('spinbutton', { name: 'Maximum query connections per Core' })).toBeEnabled();
+  fail = false;
+  await user.click(screen.getByRole('button', { name: 'Retry database information' }));
+  await screen.findByText('1 open · 0 borrowed · 1 idle');
+  await user.click(screen.getByRole('button', { name: 'Advanced database information' }));
+  expect(await screen.findByText('128 MiB')).toBeVisible();
 });

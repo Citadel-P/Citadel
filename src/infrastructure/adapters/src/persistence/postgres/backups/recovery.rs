@@ -1,5 +1,37 @@
 use super::*;
 
+/// Uncached hints only. Recovery includes orphaned control state even when both
+/// queues are empty; valid leases still fence active work and retained storage.
+pub(super) async fn claim_work(
+    pool: &PgPool,
+    before: DateTime<Utc>,
+    restores: bool,
+) -> Result<(bool, bool), BackupError> {
+    sqlx::query_as(
+        r#"SELECT
+        CASE WHEN $2 THEN EXISTS(SELECT 1 FROM backuprestoreruns WHERE status='Queued')
+             ELSE EXISTS(SELECT 1 FROM backupruns WHERE status='Queued') END,
+        EXISTS(SELECT 1 FROM backupruns r
+            WHERE r.status IN('Preparing','Running','ApplyingRetention') AND r.startedat<$1
+            AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l
+                WHERE l.ownerrunid=r.id AND l.attemptid=r.attemptid AND l.expiresat>CURRENT_TIMESTAMP))
+        OR EXISTS(SELECT 1 FROM backuprestoreruns r
+            WHERE r.status IN('Preparing','Running') AND r.startedat<$1
+            AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l
+                WHERE l.ownerrunid=r.id AND l.attemptid=r.attemptid AND l.expiresat>CURRENT_TIMESTAMP))
+        OR EXISTS(SELECT 1 FROM backuppolicies p WHERE p.controlstate<>'Idle'
+            AND NOT EXISTS(SELECT 1 FROM backupruns r WHERE r.id=p.currentrunid
+                AND r.status IN('Queued','Preparing','Running','ApplyingRetention')))
+        OR EXISTS(SELECT 1 FROM backuprepositories r WHERE r.controlstate<>'Idle'
+            AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.id))"#,
+    )
+    .bind(before)
+    .bind(restores)
+    .fetch_one(pool)
+    .await
+    .map_err(storage)
+}
+
 pub(crate) async fn recover_stale(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     before: DateTime<Utc>,

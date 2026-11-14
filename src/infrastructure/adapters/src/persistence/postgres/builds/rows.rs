@@ -1,5 +1,13 @@
 use super::*;
 
+// Display reads exclude execution-only snapshots; claims still load those explicitly.
+pub(super) const RUN_COLUMNS: &str =
+    "id, buildprojectid, projectnamesnapshot, gitrepositoryid, gitrepositorynamesnapshot,
+platformsnapshot, branch, resolvedcommitsha, contextpath, dockerfilepath, target,
+registrysnapshot, imagerepository, imagereferences, trigger, status, imagedigest,
+timeoutseconds, queuedat, startedat, completedat, exitcode, errorcode, errormessage,
+triggeredbyactorid";
+
 pub(super) async fn exists_run(pool: &PgPool, id: Uuid) -> Result<bool, BuildError> {
     sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM buildruns WHERE id=$1)")
         .bind(id)
@@ -9,7 +17,8 @@ pub(super) async fn exists_run(pool: &PgPool, id: Uuid) -> Result<bool, BuildErr
 }
 
 pub(super) async fn get_run(pool: &PgPool, id: Uuid) -> Result<BuildRun, BuildError> {
-    sqlx::query("SELECT * FROM buildruns WHERE id=$1")
+    let query = format!("SELECT {RUN_COLUMNS} FROM buildruns WHERE id=$1");
+    sqlx::query(AssertSqlSafe(query.as_str()))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -60,7 +69,14 @@ pub(super) async fn enrich_projects(
     let mut tags = resource_tags::load(&mut *connection, "Build", &ids)
         .await
         .map_err(storage)?;
-    let rows = sqlx::query("SELECT run.* FROM unnest($1::uuid[]) ids(id) CROSS JOIN LATERAL (SELECT * FROM buildruns WHERE buildprojectid=ids.id ORDER BY queuedat DESC,id DESC LIMIT 1) run").bind(&ids).fetch_all(connection).await.map_err(storage)?;
+    let query = format!(
+        "SELECT run.* FROM unnest($1::uuid[]) ids(id) CROSS JOIN LATERAL (SELECT {RUN_COLUMNS} FROM buildruns WHERE buildprojectid=ids.id ORDER BY queuedat DESC,id DESC LIMIT 1) run"
+    );
+    let rows = sqlx::query(AssertSqlSafe(query.as_str()))
+        .bind(&ids)
+        .fetch_all(connection)
+        .await
+        .map_err(storage)?;
     let mut runs = std::collections::HashMap::new();
     for row in rows {
         let run = map_run(row)?;

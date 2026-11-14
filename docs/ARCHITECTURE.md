@@ -89,7 +89,7 @@ first-run setup choices/restrictions and a narrow persisted MFA-policy read.
 Server composition joins Instance changes with first-run setup notifications for
 the update checker, preserving immediate scheduling without an ownership cycle.
 
-MFA retains its live minimum-policy behavior. The other 25 controls require Core
+MFA retains its live minimum-policy behavior. The other controls require Core
 restart. Server resolves saved configuration after migration/recovery admission
 and before constructing Identity, execution and monitoring consumers, logger and
 OpenAPI routes. Explicit environment presence takes precedence over stored choices,
@@ -100,10 +100,29 @@ permit pools and claimed work keep their existing ownership/recovery behavior;
 there is no hot-reload or automatic restart controller. Script creation reads only
 the active timeout defaults from authenticated application information.
 
+The Database connections section uses the same persisted configuration and environment
+precedence for the maximum query connections per Core. A saved value is an
+installation-wide default; an explicit `CITADEL_DATABASE_MAX_CONNECTIONS` overrides
+it for the responding Core. Startup resolves it before creating the serving pool;
+changes require Core restart. Restart-pending and pool usage refer to that Core,
+not an aggregate across processes. This does not introduce multi-Core hosting support.
+An administrator-only snapshot reads pool counters locally and the connected server's
+`shared_buffers` with one uncached query bounded to two seconds including pool
+acquisition. An unavailable server setting leaves the pool counters readable.
+The page reads on mount and reconciles on reconnect, without periodic polling.
+Dedicated background connections are excluded. PostgreSQL settings remain read-only
+and deployment/provider-managed for both bundled and external databases.
+
+Shared HTTP transport composition initializes the schema-derived endpoint catalog
+before attaching setup middleware and accepting requests, including callers that
+construct routers without the CLI. Only endpoint metadata is retained; request-time
+setup policy reads the cached catalog without constructing schemas in the middleware
+stack. CLI commands that do not construct HTTP routers need no catalog initialization.
+
 The executable `app` module coordinates admission, serving and shutdown. `startup`
 owns the migration/settings-resolution sequence; `config/instance` maps deployment
 overrides and resolved choices into Server runtime options. Only promoted override names live in
-`citadel-instance::environment`; database, bootstrap, path and listener identifiers
+`citadel-instance::environment`; database connection identity, bootstrap, path and listener identifiers
 remain with their hosting/recovery consumers. Server parses explicit promoted
 overrides once, preserving absence, before admission; after migrations it merges
 saved choices and validates the effective values before constructing consumers.
@@ -288,6 +307,13 @@ identities, phase and execution IDs. Its active uniqueness constraint and the
 manual Core/Agent claim guards preserve one owner through the phase transition.
 No transaction spans Agent RPCs. Schedule edits affect future unclaimed occurrences;
 an owned occurrence may finish preparation across minute boundaries.
+The worker probes only active ownership flags, cron/time zone and the persisted
+last-consumed minute while idle; it does not load release or completed operation
+JSON. Manual approval and schedule edits wake its shared local watch only after
+commit. A 30-second fallback capped at the next minute boundary covers missed
+wakes and clock-based schedules. Active work and failures retain a five-second
+retry cadence; recovery and schedule reservation still use the existing durable
+state and ownership checks.
 
 Scheduled Core authorization is a dedicated installer command with a fresh Team
 check, not a fabricated administrator approval. It reuses qualification, source
@@ -956,6 +982,24 @@ feature look identical.
 
 ### Models and persistence
 
+The shared PostgreSQL query pool defaults to at most three connections and permits
+zero idle connections. SQLx's periodic maintenance sweep retires sessions idle for
+60 seconds without interrupting checked-out connections or transactions. The limit
+is configurable through `CITADEL_DATABASE_MAX_CONNECTIONS`; SQLx controls the default
+maximum lifetime. Notification listeners and the background-job lease own separate
+connections. History admission allows two concurrent reads with the default pool;
+ingestion, ordinary requests and background work share the remaining connection.
+No connection is reserved for a particular writer. Larger installations can increase
+the pool limit when concurrent work causes contention.
+
+The packaged Compose database uses a 64 MiB shared-buffer budget, not a container
+memory cap. The updater installation profile permits only the PostgreSQL command
+shape `postgres -c shared_buffers=<positive integer>MB`; it still rejects Core
+command overrides, additional database options and external configuration files.
+Existing database volumes and applied migrations are unchanged. Operators must
+recreate PostgreSQL to apply a changed Compose buffer setting; a Core image update
+alone does not modify it.
+
 Use the business resource name, such as `Deployment` or `BackupPolicy`. Resources
 may include tags and related metadata loaded efficiently by their repository;
 a separate `*Details` wrapper is not mandatory. Use smaller projections when a
@@ -964,6 +1008,9 @@ list, worker or lookup only needs a subset of the data.
 Reuse shared vocabulary where semantics match. Resource-specific state and
 validation stay with the feature. Decode persisted enum values and JSON into
 feature types at the repository boundary.
+Build Run display reads project only the fields consumed by the public run model;
+Activity recording uses its own smaller projection. Execution claims retain the
+argument, secret-reference and tag-template snapshots needed to run the build.
 
 Use `Repository` for durable business resources, `Store` for projections, samples
 or transient state, and `Reader` for read-only queries. Keep claims, row-version
@@ -989,6 +1036,11 @@ Copy progress, backup coverage and Stack drift also share that LISTEN connection
 Each topic carries resource IDs through a bounded 256-event fanout; slow subscribers receive a
 resync indication. Copy and coverage readers refresh persisted state after a gap;
 Stack drift retains its bounded event batches and five-minute reconciliation.
+Container lifecycle batches index returned rows by Docker ID once, retaining input
+order and stale identity-hint retries. Distinct Stack drift notifications use one
+SQL statement within the state transaction; rollback discards the entire batch.
+Duplicate queued or processing Stack webhooks do not send new-work notifications;
+the durable retry and missed-wakeup fallback remains in place.
 Coverage collects up to 256 distinct platform IDs over 50 ms before loading each
 platform's affected resources once per batch. Unmanaged-container creation keeps
 its dedicated listener: its grace queue cannot reconstruct missed creation events
@@ -1038,13 +1090,19 @@ finalization. Snapshot selection always uses source identity; restore children,
 volume ownership receipts and cleanup use destination identity. Swarm references
 are resolved by name in destination inventory without copying secret/config values.
 Optional destination fields preserve older same-platform durable plans.
-The copy worker runs both lanes at startup and wakes idle lanes from committed
-copy/child-restore changes, with a 30-second fallback for missed notifications.
-While parents are active, or after errors, both lanes retain a two-second delay;
-notifications from their own writes cannot bypass that delay. In-flight current-
-data copies retain their two-second cancellation/authorization checks. Only the
-reconciliation lane prunes expired unstarted reviews; pending-work reads do not
-perform cleanup. Reconnects wake both lanes, and shutdown still joins both.
+Resource Copy execution and reconciliation use committed copy/child notifications
+with a 30-second fallback and a five-second failure backoff. Each lane owns an
+immutable-ID cursor over bounded pages, so waiting parents beyond the first page
+are visited without updating `updatedat` merely to rotate the queue. Only actual
+state/plan changes write the copy row. Current-data cancellation uses a local
+post-commit wakeup and an authorized narrow status read; full plan/progress reads
+remain in reconciliation and finalization. Recovery still settles ambiguous claims
+before executing another copy, and source/target authorization remains transactional.
+Completed current-data jobs immediately advance execution and wake reconciliation
+locally, even if database notifications are missed. Only the reconciliation lane
+prunes expired unstarted reviews, once per scan;
+pending-work reads do not perform cleanup. Reconnects wake both lanes, and shutdown
+still joins both.
 The copy worker reconciles durable parent state. Runtime storage
 checks and ownership-verified cleanup use the Platform runtime router, outside
 database transactions. Destination creation commits before resource invalidation.
@@ -1224,6 +1282,28 @@ Interactive streams normally end with their caller. Durable operations use
 persisted claims and may continue after a browser disconnect. Recovery inspects
 and settles interrupted work; it must not blindly replay ambiguous mutations.
 PostgreSQL notifications are wakeups, while claims and queue rows remain authoritative.
+Build claims first check the existing active-status index for Queued, Preparing or
+Running work. A negative result skips the recovery/claim transaction; it is never
+cached. A positive result retains the full transaction and recovery fences.
+Committed notifications and the existing fallback handle an enqueue racing this check.
+After an empty Build claim, an uncached retry-deadline hint selects the earlier
+of the next future retry/queue expiry and a 30-second recovery fallback. Already-due
+but blocked work does not force a two-second poll. Committed notifications,
+controller completion and preparation availability also wake dispatch.
+Backup and Restore claims similarly probe for queued work and recovery candidates
+before opening a transaction. Only eligible stale runs or orphaned policy/repository
+control state trigger the shared recovery UPDATEs. Negative hints are never cached;
+lease/attempt fences remain in the original recovery transaction, and an expired
+lease alone does not authorize releasing retained storage.
+Script claims use the same uncached negative hint for Queued or Running rows, so
+an empty queue skips recovery transactions without hiding interrupted runs.
+A single Script dispatcher claims work and owns bounded execution tasks, following
+the Build worker pattern. Local and remote permits remain separate and travel
+with each claim through cleanup and result persistence. Dispatch alternates queue
+priority so fast local work cannot starve remote work. Committed notifications,
+controller completion and a 30-second fallback (or the configured polling interval
+if longer) wake dispatch; execution capacity does not multiply idle polling.
+Admission remains held through finalization, and shutdown drains owned tasks.
 
 Ordinary Direct Platform scripts, builds and updates reuse the existing Platform
 runtime registry. Registered Direct Build Pools have one composition-owned registry
@@ -1318,8 +1398,19 @@ collection and transport decoding allocate before admission. Existing collector
 concurrency/session ownership still bounds that additional work; allocator-retained
 pages, realtime subscribers and other Core services are outside this budget.
 
+Host/node capture admission carries only the required measurements and scalar
+manager node ID beyond session validation. Writer lock/statement timeouts are
+submitted together, before the existing separate lock and revalidation steps.
+Only actual host INSERT/UPDATE work emits the transactional PlatformStats hint;
+accepted node-only captures and unchanged host replays do not wake host alerts.
+Accepted/stale accounting still includes admissible no-op replays. Pending rows
+and periodic/reconnect fallback remain the durable alert recovery path.
+
 Metric-alert flushes prepare cached rules and live entitlements before taking the
-flush transaction. Evaluation, rule state, outbox changes and exact-`xmin`
+flush transaction. Successful enabled-rule parent checks are reused only within
+a context borrowing that transaction; its FOR SHARE locks remain held throughout.
+The first-parent lock order is unchanged. Each rule/resource advisory lock and
+subsequent mutable-state read still runs separately for every observation. Evaluation, rule state, outbox changes and exact-`xmin`
 acknowledgement then share that one transaction/connection. PostgreSQL notifications
 are transactional; in-process change callbacks run only after commit. A correction
 concurrent with evaluation remains pending. Once per minute, bounded diagnostics
@@ -1350,7 +1441,8 @@ schedules another batch after a full 60-second pause, measured from completion s
 slow work cannot trigger immediate catch-up ticks. Each iteration permits at most
 128 passes within five seconds, with a cancellation branch; a pass commits at most
 one container-source-hour and a prefix of one host/node-hour. Container candidates
-are ordered by oldest unsealed observation. Host/node candidates rotate through
+rotate through source-ID pages, starting at each source's oldest unsealed
+observation. Host/node candidates rotate through
 source IDs using one process-owned cursor; each starts at its oldest eligible
 observation. Restart resets the cursor without changing durable progress. Container
 sample deletion repeats the source and time bounds explicitly, allowing partition
@@ -1417,7 +1509,7 @@ The four statistics history readers and container health history share one per-C
 after cheap validation and before a query connection. It allows at most two reads
 (or one with a one-connection pool), rejects overload immediately with the existing
 capacity error, and applies a transaction-local five-second statement timeout and
-`jit=off`. The ordinary pool size is unchanged. A one-connection pool cannot serve
+`jit=off`. A one-connection pool cannot serve
 ingestion concurrently with a history read. This is not a cluster-wide limit.
 Cancellation transfers the connection and permit to existing process-owned cleanup;
 SQLx drains the pending response before rollback. Admission remains held through
@@ -1481,6 +1573,20 @@ physical child through the timestamp index and `FOR UPDATE SKIP LOCKED`.
 Statement-local `ctid` arrays target each child individually: tuple locations are
 not globally unique across partitions. Empty retired source/owner metadata is
 cleaned in bounded batches after its measurements expire.
+Physical compaction discovery advances through source-ID pages of at most 64 before
+probing history. Eligible candidates are reused within that bounded page; empty
+pages advance the scan too. Source-and-timestamp range seeks avoid scanning other
+sources on a miss. Selection remains advisory: bounds are reread under the Platform
+lock before committing raw deletion, summaries and watermarks. The cursor resumes
+across budget-limited batches and wraps after a completed scan, so newly eligible
+and earlier sources are revisited. A pending scan prevents an empty page from being
+mistaken for an idle installation. A productive scan continues into the next scan
+within the existing pass/time budget: completion alone is not evidence of an idle
+installation. Only a scan without progress permits the worker to stop on empty
+pages or repeated host/node stalls. Cancellation can discard a candidate, but the
+next complete scan rediscovers its authoritative state.
+Swarm task freshness uses the same source-scoped seek pattern for raw and rollup
+timestamps, retaining the requested upper time bound and null for absent samples.
 
 Platform history uses the same 24-hour raw window and seven-day retention.
 `platformhistorysources` identifies the connected host (empty node ID) or reporting
@@ -1532,8 +1638,21 @@ not perform a blocking raw-table rewrite or promise immediate filesystem shrinka
 
 Partition/compaction transactions use bounded
 lock and statement timeouts and roll back on cancellation. Parent partition locks
-are released before row cleanup/analysis; daily rotation also analyzes the
-partitioned parents because autovacuum handles their children.
+are released after each parent family, before acquiring another family's locks,
+row cleanup or analysis. This prevents expiry from holding summary-parent locks
+while waiting for a raw parent read by concurrent compaction. Each completed
+family's expiry remains committed if a later family fails or is cancelled.
+Partition creation/removal analyzes only
+the affected parents, with a separate bounded transaction per parent. PostgreSQL
+18 `ANALYZE ONLY` retains inherited statistics across the partitions without
+recursively reanalyzing children, whose statistics autovacuum maintains. An idle
+partition pass performs no analysis.
+Each retention tick inventories/prepares partitions once, then drains at most 128
+round-robin batches within the worker's ten-second budget. Exhausted families and
+physical children are skipped only for that invocation; later history deletion
+keeps dependent orphan cleanup eligible. Cancellation discards this local progress.
+The next tick rechecks every family from the database. Counter cleanup still takes
+the admission advisory lock before its fresh deletion snapshot.
 Locked rows are left for a later maintenance pass. Health transitions, Activities,
 Script/Build history, refresh-token expiry and expired copy reviews use the same
 statement-local locked-tuple deletion pattern with their existing cutoffs and batch
@@ -1754,7 +1873,11 @@ and webhook runs all enter the same durable FIFO queue; only a worker claims a
 run after acquiring the applicable local or remote tracking slot. Source, arguments and run-as identity are frozen
 at enqueue. HTTP progress observers use a bounded broadcast and cannot cancel or
 backpressure execution. Explicit cancellation is persisted, including during the
-queued-to-running transition, and workers observe it before starting a process.
+queued-to-running transition. Workers register the local cancellation token before
+the durable pre-execution recheck, closing the registration race without one-second
+polling. Local cancellation is immediate; a 30-second narrow fallback covers missed
+signals. Progress viewers use broadcasts and post-cancellation wakeups, check status
+only on lag or a 30-second fallback, and fetch the full terminal run once.
 Queued runs survive restart; interrupted executions fail without being replayed.
 The shared process runner captures bounded stdout/stderr by default. Docker build
 commands opt into stream-only retention: byte limits still bound forwarding and

@@ -15,6 +15,7 @@ pub async fn connect_pool(
     PgPoolOptions::new()
         .min_connections(0)
         .max_connections(max_connections)
+        .idle_timeout(Duration::from_secs(60))
         .acquire_timeout(acquire_timeout)
         .connect(database_url)
         .await

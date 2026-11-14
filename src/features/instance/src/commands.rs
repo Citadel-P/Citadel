@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchInstanceConfiguration {
     #[serde(default, skip_serializing_if = "PatchField::is_missing")]
+    pub database_max_connections: PatchField<u32>,
+    #[serde(default, skip_serializing_if = "PatchField::is_missing")]
     pub password_minimum_length: PatchField<u32>,
     #[serde(default, skip_serializing_if = "PatchField::is_missing")]
     pub browser_session_lifetime_days: PatchField<u32>,

@@ -175,6 +175,20 @@ impl PostgresScriptRepository {
         remote: bool,
     ) -> BoxFuture<'a, Result<ScriptClaimResult, ScriptError>> {
         Box::pin(async move {
+            // Negative hint only, like Build claims. Running rows must still
+            // reach recovery; enqueue notifications and the fallback cover races.
+            let active: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM scriptruns WHERE status IN ('Queued','Running'))",
+            )
+            .fetch_one(&self.pool)
+            .await
+            .map_err(storage)?;
+            if !active {
+                return Ok(ScriptClaimResult {
+                    claim: None,
+                    recovered_scripts: Vec::new(),
+                });
+            }
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let recovered_scripts = recover_interrupted(&mut tx, stale_before).await?;
             let row = sqlx::query("SELECT run.id,run.scriptid FROM scriptruns run JOIN scripts script ON script.id=run.scriptid WHERE run.status='Queued' AND script.currentrunid=run.id AND (run.executor->>'kind'<>'Core')=$1 AND (run.nexteligibleat IS NULL OR run.nexteligibleat<=CURRENT_TIMESTAMP) ORDER BY run.queuedat,run.id FOR UPDATE OF run,script SKIP LOCKED LIMIT 1").bind(remote).fetch_optional(&mut *tx).await.map_err(storage)?;

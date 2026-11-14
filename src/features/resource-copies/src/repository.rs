@@ -51,6 +51,8 @@ pub trait CopyRepository: Send + Sync {
     ) -> BoxFuture<'a, Result<(), CopyError>>;
     fn start(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>>;
     fn get(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>>;
+    /// Authorized control-state read without the copy plan or child progress.
+    fn is_restoring(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<bool, CopyError>>;
     fn cleanup(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyProgress, CopyError>>;
     fn finish_cleanup(
         &self,
@@ -62,8 +64,12 @@ pub trait CopyRepository: Send + Sync {
     /// Remove a bounded batch of expired, unstarted reviews.
     fn prune_reviews(&self) -> BoxFuture<'_, Result<(), CopyError>>;
     /// A bounded scan of durable parents. Multiple callers may inspect the same
-    /// parent; advance must fence each transition in a transaction.
-    fn pending(&self) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>>;
+    /// parent; advance must fence each transition in a transaction. Page by immutable
+    /// ID so unchanged parents need no timestamp writes to rotate the queue.
+    fn pending(
+        &self,
+        after: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<(ActorId, Uuid)>, CopyError>>;
     fn plan(&self, actor: ActorId, id: Uuid) -> BoxFuture<'_, Result<CopyPlan, CopyError>>;
     fn advance(
         &self,

@@ -22,6 +22,11 @@ impl PostgresInstanceRepository {
     }
 }
 impl InstanceRepository for PostgresInstanceRepository {
+    fn database_connections(
+        &self,
+    ) -> BoxFuture<'_, Result<citadel_instance::DatabaseConnections, InstanceError>> {
+        Box::pin(async { Ok(super::database::snapshot(&self.pool).await) })
+    }
     fn installation_settings(&self) -> BoxFuture<'_, Result<InstallationSettings, InstanceError>> {
         Box::pin(super::settings::load(&self.pool))
     }

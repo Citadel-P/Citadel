@@ -2000,3 +2000,8 @@ mod health_retention;
 
 #[path = "stats_batch_persistence/memory_breakdown.rs"]
 mod memory_breakdown;
+
+#[path = "stats_batch_persistence/capture_work.rs"]
+mod capture_work;
+#[path = "stats_batch_persistence/maintenance_work.rs"]
+mod maintenance_work;

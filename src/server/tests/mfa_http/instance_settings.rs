@@ -18,6 +18,55 @@ async fn instance_configuration_patches_are_atomic_audited_and_deployment_restri
         .execute(&fixture.pool)
         .await
         .unwrap();
+    let database_path = "/api/v1/instance/database-connections";
+    let response = send_json(
+        &fixture.app,
+        Method::GET,
+        database_path,
+        json!(null),
+        Some(fixture.principal.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let snapshot = json_body(response).await;
+    let buffers: i64 =
+        sqlx::query_scalar("SELECT pg_size_bytes(current_setting('shared_buffers'))")
+            .fetch_one(&fixture.pool)
+            .await
+            .unwrap();
+    assert_eq!(snapshot["sharedBuffersBytes"], buffers);
+    assert_eq!(
+        snapshot["maximum"],
+        fixture.pool.options().get_max_connections()
+    );
+    assert_eq!(
+        snapshot["open"].as_u64().unwrap(),
+        snapshot["idle"].as_u64().unwrap() + snapshot["borrowed"].as_u64().unwrap()
+    );
+    let response = send_json(
+        &fixture.app,
+        Method::GET,
+        database_path,
+        json!(null),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let mut non_admin = fixture.principal.clone();
+    non_admin.roles.clear();
+    let response = send_json(
+        &fixture.app,
+        Method::GET,
+        database_path,
+        json!(null),
+        Some(non_admin),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let mut notification = fixture.instance.installation_changes();
     let defaults =
         serde_json::to_value(citadel_instance::InstanceConfiguration::default()).unwrap();

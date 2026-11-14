@@ -12,6 +12,7 @@ pub enum LogFormat {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct InstanceConfiguration {
+    pub database_max_connections: u32,
     pub password_minimum_length: u32,
     pub browser_session_lifetime_days: u32,
     pub service_account_default_token_lifetime_days: i32,
@@ -42,6 +43,7 @@ pub struct InstanceConfiguration {
 impl Default for InstanceConfiguration {
     fn default() -> Self {
         Self {
+            database_max_connections: 3,
             password_minimum_length: 15,
             browser_session_lifetime_days: 30,
             service_account_default_token_lifetime_days: 90,
@@ -75,6 +77,7 @@ impl Default for InstanceConfiguration {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstanceOverrides {
+    pub database_max_connections: Option<u32>,
     pub password_minimum_length: Option<u32>,
     pub browser_session_lifetime_days: Option<u32>,
     pub service_account_default_token_lifetime_days: Option<i32>,

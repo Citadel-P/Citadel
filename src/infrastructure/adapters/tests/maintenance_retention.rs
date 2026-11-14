@@ -43,7 +43,7 @@ async fn copy_review_expiry_preserves_started_operations_and_skips_locked_review
     let held: Uuid = sqlx::query_scalar("SELECT id FROM resourcecopies WHERE status='Review' AND createdat<now()-interval '1 day' LIMIT 1 FOR UPDATE")
         .fetch_one(&mut *lock).await.unwrap();
     let copies = PostgresCopyRepository::new(pool.clone());
-    let actual = tokio::time::timeout(std::time::Duration::from_secs(5), copies.pending())
+    let actual = tokio::time::timeout(std::time::Duration::from_secs(5), copies.pending(None))
         .await
         .expect("pending reads must not wait for locked reviews")
         .unwrap();
@@ -72,7 +72,7 @@ async fn copy_review_expiry_preserves_started_operations_and_skips_locked_review
     lock.commit().await.unwrap();
     protected.push(held);
     copies.prune_reviews().await.unwrap();
-    let actual = copies.pending().await.unwrap();
+    let actual = copies.pending(None).await.unwrap();
     assert!(actual.contains(&(ActorId::new(actor), held)));
     let remaining: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM resourcecopies")
         .fetch_all(&pool)
@@ -80,5 +80,23 @@ async fn copy_review_expiry_preserves_started_operations_and_skips_locked_review
         .unwrap();
     assert_eq!(remaining.len(), protected.len());
     assert!(protected.iter().all(|id| remaining.contains(id)));
+    // Paging must visit waiting parents beyond the first 32 without rewriting
+    // timestamps (including equal timestamps and random, non-time-ordered IDs).
+    sqlx::query("INSERT INTO resourcecopies(id,actorid,kind,sourceid,name,platformid,plan,status) SELECT gen_random_uuid(),$1,'Deployment',gen_random_uuid(),'paging-'||n::text,$2,'{}','Restoring' FROM generate_series(1,70) n")
+        .bind(actor).bind(platform).execute(&pool).await.unwrap();
+    let expected: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM resourcecopies WHERE status IN ('Restoring','Cancelling','Cleaning') ORDER BY id")
+        .fetch_all(&pool).await.unwrap();
+    let mut after = None;
+    let mut seen = Vec::new();
+    loop {
+        let page = copies.pending(after).await.unwrap();
+        assert!(page.len() <= 32);
+        if page.is_empty() {
+            break;
+        }
+        after = page.last().map(|(_, id)| *id);
+        seen.extend(page.into_iter().map(|(_, id)| id));
+    }
+    assert_eq!(seen, expected);
     pool.close().await;
 }

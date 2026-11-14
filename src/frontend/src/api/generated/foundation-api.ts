@@ -149,6 +149,7 @@ export const foundationOperations = {
   getContainerStats: { method: 'GET', path: '/api/v1/containers/{id}/stats' },
   getContainersData: { method: 'GET', path: '/api/v1/stacks/{stackId}/data' },
   getCurrentProfile: { method: 'GET', path: '/api/v1/profile' },
+  getDatabaseConnections: { method: 'GET', path: '/api/v1/instance/database-connections' },
   getDeployment: { method: 'GET', path: '/api/v1/deployments/{deploymentId}' },
   getDeploymentBackupSourcePreview: { method: 'GET', path: '/api/v1/deployments/{deploymentId}/backup-source-preview' },
   getDeploymentConfig: { method: 'GET', path: '/api/v1/deployments/{deploymentId}/_cfg' },

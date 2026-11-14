@@ -96,6 +96,29 @@ remain deployment configuration.
 - **Access-token lifetime (advanced):** 15 minutes by default. After restart it
   applies to subsequently issued tokens, including tokens issued by refresh.
 
+## Database connections
+
+**Maximum query connections per Core** defaults to **3** and applies after Core
+restart. More connections permit more simultaneous queries but consume additional
+PostgreSQL session memory. The saved choice is shared by the installation;
+`CITADEL_DATABASE_MAX_CONNECTIONS` overrides it for an individual Core process.
+This limit does not change PostgreSQL's server-wide connection limit. Dedicated
+notification and coordination connections are additional, so leave capacity for
+those connections and other database clients.
+
+Below the connection-limit field, a compact read-only snapshot shows the responding
+Core's approximate open, borrowed and idle connection counts. The running limit
+appears when it differs from the effective saved choice. It loads when the section
+opens and after reconnect, without periodic polling. Saved and running values are
+shown separately; saving a limit does not resize the running pool.
+
+Expand **Advanced database information** for deployment-override guidance and
+**PostgreSQL shared buffers**, which shows the connected server's configured page-buffer
+budget, not total or currently resident memory. It shows **Unavailable** if the
+setting cannot be read. These server settings remain managed by your deployment
+or database provider, including when PostgreSQL runs outside Citadel. Changing
+shared buffers requires a PostgreSQL restart, not a Core restart.
+
 ## Monitoring
 
 Collection defaults to **10 seconds** across Local, Direct and Edge monitoring.

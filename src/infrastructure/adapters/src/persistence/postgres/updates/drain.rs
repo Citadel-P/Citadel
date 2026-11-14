@@ -8,15 +8,7 @@ impl UpdateDrainRepository for PostgresUpdateRepository {
     ) -> BoxFuture<'a, Result<Vec<UpdateDrainBlocker>, UpdateError>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-                .execute(&mut *tx)
-                .await
-                .map_err(storage)?;
-            sqlx::query("SET LOCAL statement_timeout = '2s'")
-                .execute(&mut *tx)
-                .await
-                .map_err(storage)?;
-            sqlx::query("SET LOCAL lock_timeout = '200ms'")
+            sqlx::raw_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY; SET LOCAL statement_timeout = '2s'; SET LOCAL lock_timeout = '200ms'")
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;

@@ -34,6 +34,7 @@ impl ScriptService {
             "scripts.progress",
             Box::pin(async move {
                 let mut updates = service.progress.subscribe();
+                let mut changes = service.state_changed.subscribe();
                 let run = match service
                     .store
                     .enqueue_with_draft(actor, id, &trigger, &args, timeout_seconds, draft.as_ref())
@@ -51,7 +52,8 @@ impl ScriptService {
                 let _ = started.send(Ok(receiver));
                 // A terminal database read also covers queued cancellation and a
                 // completion that raced admission or overflowed the progress ring.
-                let mut refresh = tokio::time::interval(Duration::from_secs(2));
+                let mut refresh = tokio::time::interval(Duration::from_secs(30));
+                refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 loop {
                     tokio::select! {
                         () = service.shutdown.cancelled() => break,
@@ -63,26 +65,27 @@ impl ScriptService {
                                     let _ = tokio::time::timeout(Duration::from_secs(5), sender.send(item)).await;
                                     break;
                                 }
-                                // Logs remain available on the persisted run. A
-                                // slow viewer must not backpressure the executor.
+                                // Slow viewers never backpressure execution.
                                 let _ = sender.try_send(item);
+                                continue;
                             }
                             Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                            _ => {}
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {},
+                            _ => continue,
                         },
-                        _ = refresh.tick() => {
-                            let current = service.store.get_run(id, run.id).await?;
-                            if is_terminal(current.status) {
-                                let result = ScriptRunResult {
-                                    status: current.status,
-                                    exit_code: current.exit_code,
-                                    logs: current.logs.unwrap_or_default(),
-                                    error: current.error_message,
-                                };
-                                let _ = tokio::time::timeout(Duration::from_secs(5), sender.send(ScriptProgress::completed(&run, &result))).await;
-                                break;
-                            }
-                        }
+                        _ = changes.changed() => {},
+                        _ = refresh.tick() => {},
+                    }
+                    if is_terminal(service.store.run_status(id, run.id).await?) {
+                        let current = service.store.get_run(id, run.id).await?;
+                        let result = ScriptRunResult {
+                            status: current.status,
+                            exit_code: current.exit_code,
+                            logs: current.logs.unwrap_or_default(),
+                            error: current.error_message,
+                        };
+                        let _ = tokio::time::timeout(Duration::from_secs(5), sender.send(ScriptProgress::completed(&run, &result))).await;
+                        break;
                     }
                 }
                 Ok(())

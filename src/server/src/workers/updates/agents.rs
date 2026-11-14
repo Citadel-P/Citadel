@@ -6,13 +6,21 @@ pub async fn run_agents(
     service: AgentUpdateService,
     cancellation: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut wake = service.work_changes();
     loop {
-        tokio::select! {biased;()=cancellation.cancelled()=>return Ok(()),_=interval.tick()=>{}}
-        // Let a claimed attempt settle; shutdown never detaches its cleanup.
-        if let Err(error) = service.tick(&cancellation).await {
-            tracing::warn!(%error,"Agent update worker could not finish its current check");
+        if cancellation.is_cancelled() {
+            return Ok(());
         }
+        // Let a claimed attempt settle; shutdown never detaches its cleanup.
+        let delay = match service.poll(&cancellation).await {
+            Ok(delay) => delay,
+            Err(error) => {
+                tracing::warn!(%error,"Agent update worker could not finish its current check");
+                // Errors must not create a notification-driven retry loop.
+                tokio::select! { ()=cancellation.cancelled()=>return Ok(()), ()=tokio::time::sleep(std::time::Duration::from_secs(5))=>{} }
+                continue;
+            }
+        };
+        super::super::notifications::wait(&mut wake, &cancellation, delay).await;
     }
 }

@@ -232,4 +232,18 @@ export const instanceSections: { label: string; description: string; fields: Ins
       },
     ],
   },
+  {
+    label: 'Database connections',
+    description: 'Balance query concurrency and database memory usage.',
+    fields: [
+      {
+        key: 'databaseMaxConnections',
+        label: 'Maximum query connections per Core',
+        environment: 'CITADEL_DATABASE_MAX_CONNECTIONS',
+        minimum: 1,
+        maximum: 4294967295,
+        description: 'Higher limits allow more simultaneous queries but use more database memory.',
+      },
+    ],
+  },
 ];

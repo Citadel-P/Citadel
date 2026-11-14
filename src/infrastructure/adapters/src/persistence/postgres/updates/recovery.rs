@@ -126,11 +126,7 @@ impl PostgresUpdateRepository {
         operation: &UpdateOperation,
     ) -> Result<(), UpdateError> {
         let mut tx = self.pool.begin().await.map_err(storage)?;
-        sqlx::query("SET LOCAL lock_timeout='5s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(storage)?;
-        sqlx::query("SET LOCAL statement_timeout='15s'")
+        sqlx::raw_sql("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='15s'")
             .execute(&mut *tx)
             .await
             .map_err(storage)?;
@@ -187,11 +183,7 @@ impl PostgresUpdateRepository {
         operation: &UpdateOperation,
     ) -> Result<(), UpdateError> {
         let mut tx = self.pool.begin().await.map_err(storage)?;
-        sqlx::query("SET LOCAL lock_timeout='5s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(storage)?;
-        sqlx::query("SET LOCAL statement_timeout='15s'")
+        sqlx::raw_sql("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='15s'")
             .execute(&mut *tx)
             .await
             .map_err(storage)?;

@@ -101,7 +101,7 @@ fn deployment_override_conflicts_and_invalid_inputs_do_not_mutate_saved_choices(
 fn every_promoted_field_round_trips_and_can_be_partially_patched() {
     let defaults = InstanceConfiguration::default();
     let json = serde_json::to_value(&defaults).unwrap();
-    assert_eq!(json.as_object().unwrap().len(), 25);
+    assert_eq!(json.as_object().unwrap().len(), 26);
     for (name, default) in json.as_object().unwrap() {
         let value = match default {
             serde_json::Value::Bool(v) => serde_json::json!(!v),
@@ -152,4 +152,29 @@ fn https_policy_checks_the_effective_configuration_and_only_the_deployment_conne
         ..Default::default()
     };
     assert!(next.effective(&overrides).validate_deployment(true).is_ok());
+}
+
+#[test]
+fn database_pool_default_patch_and_per_core_override_are_distinct() {
+    let saved: InstanceConfiguration = serde_json::from_str("{}").unwrap();
+    assert_eq!(saved.database_max_connections, 3);
+    let patch: PatchInstanceConfiguration =
+        serde_json::from_str(r#"{"databaseMaxConnections":8}"#).unwrap();
+    assert!(!patch.is_empty());
+    let next = patch.apply(&saved, &Default::default()).unwrap();
+    assert_eq!(next.database_max_connections, 8);
+    assert_eq!(saved.database_max_connections, 3);
+    let overrides = InstanceOverrides {
+        database_max_connections: Some(5),
+        ..Default::default()
+    };
+    assert_eq!(next.effective(&overrides).database_max_connections, 5);
+    assert!(patch.apply(&saved, &overrides).is_err());
+    for input in [
+        r#"{"databaseMaxConnections":0}"#,
+        r#"{"databaseMaxConnections":null}"#,
+    ] {
+        let patch: PatchInstanceConfiguration = serde_json::from_str(input).unwrap();
+        assert!(patch.apply(&saved, &Default::default()).is_err());
+    }
 }

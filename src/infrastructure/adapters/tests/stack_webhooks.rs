@@ -53,6 +53,12 @@ async fn stack_webhook_queue_is_fenced_atomic_bounded_and_settled_with_apply() {
         "the wakeup must expose committed queue work"
     );
     store.enqueue_webhook(&stack, Some(&commit)).await.unwrap();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err(),
+        "duplicate queued work must not wake the worker"
+    );
     let jobs = store.ready_webhooks(10).await.unwrap();
     assert_eq!(jobs.len(), 1);
     let id = jobs[0].id;
@@ -93,6 +99,13 @@ async fn stack_webhook_queue_is_fenced_atomic_bounded_and_settled_with_apply() {
     );
     assert_eq!(usize::from(a.is_ok()) + usize::from(b.is_ok()), 1);
     let claim = a.or(b).unwrap();
+    store.enqueue_webhook(&stack, Some(&commit)).await.unwrap();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err(),
+        "duplicate processing work must not wake the worker"
+    );
     store
         .fail_apply(actor, &claim, "connection lost", true)
         .await

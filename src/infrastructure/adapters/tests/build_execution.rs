@@ -116,6 +116,33 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .unwrap();
     assert!(!rolled_back);
     let queued = store.enqueue(actor, project.id, "Manual").await.unwrap();
+    // Exercise every display projection; execution-only snapshots stay in claims.
+    let listed = store.list(actor, true).await.unwrap();
+    let latest = listed
+        .into_iter()
+        .find(|p| p.id == project.id)
+        .unwrap()
+        .latest_run
+        .unwrap();
+    let history = store
+        .list_runs(actor, true, Some(project.id), 100)
+        .await
+        .unwrap();
+    assert_eq!(history.len(), 1);
+    for display in [
+        store.get_run(queued.id).await.unwrap(),
+        store.get(project.id).await.unwrap().latest_run.unwrap(),
+        latest,
+        history.into_iter().next().unwrap(),
+    ] {
+        assert_eq!(display.id, queued.id);
+        assert_eq!(display.status, queued.status);
+        assert_eq!(display.registry_id, queued.registry_id);
+        assert_eq!(display.registry_host, queued.registry_host);
+        assert_eq!(display.image_references, queued.image_references);
+        assert_eq!(display.queued_at, queued.queued_at);
+        assert_eq!(display.triggered_by_actor_id, queued.triggered_by_actor_id);
+    }
     assert_eq!(store.run_project_id(queued.id).await.unwrap(), project.id);
     assert!(matches!(
         store.run_project_id(Uuid::now_v7()).await,

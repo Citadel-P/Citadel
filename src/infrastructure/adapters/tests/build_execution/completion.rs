@@ -16,6 +16,12 @@ struct Store {
     resume: tokio::sync::Notify,
 }
 impl BuildRepository for Store {
+    fn next_retry_at(
+        &self,
+    ) -> BoxFuture<'_, Result<Option<chrono::DateTime<chrono::Utc>>, BuildError>> {
+        self.inner.next_retry_at()
+    }
+
     fn health_pools(
         &self,
         after: Uuid,

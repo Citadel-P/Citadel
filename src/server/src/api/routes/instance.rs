@@ -40,6 +40,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Instance
 fn settings_routes() -> utoipa_axum::router::OpenApiRouter<InstanceHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(get_installation_settings))
+        .normalized_routes(utoipa_axum::routes!(get_database_connections))
         .normalized_routes(utoipa_axum::routes!(patch_installation_settings))
 }
 
@@ -57,6 +58,27 @@ impl From<InstanceError> for ApiError {
             InstanceError::Conflict(message) => ApiError::Conflict(message),
             source @ InstanceError::Storage(_) => ApiError::internal(source),
         }
+    }
+}
+
+#[utoipa::path(get, path = "/api/v1/instance/database-connections", operation_id = "getDatabaseConnections", tag = "Instance",
+    summary = "Get this Core's database connection snapshot (administrator)",
+    responses((status = 200, description = "Query pool usage and connected PostgreSQL shared buffers", body = crate::api::resources::instance::views::DatabaseConnectionsView), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false))))]
+async fn get_database_connections(
+    State(state): State<InstanceHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    match state.instance.database_connections(&principal).await {
+        Ok(snapshot) => no_store(
+            Json(crate::api::resources::instance::views::DatabaseConnectionsView::from(snapshot))
+                .into_response(),
+        ),
+        Err(error) => error_response(error, &headers),
     }
 }
 

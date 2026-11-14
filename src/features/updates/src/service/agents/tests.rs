@@ -36,6 +36,7 @@ struct Fixture {
     probe_started: tokio::sync::Notify,
     continue_probe: tokio::sync::Notify,
     release_checks: AtomicUsize,
+    state_reads: AtomicUsize,
     availability_observations: Mutex<Vec<Vec<String>>>,
 }
 fn target(id: &str, version: &str) -> AgentUpdateTarget {
@@ -158,6 +159,7 @@ impl Fixture {
             probe_started: tokio::sync::Notify::new(),
             continue_probe: tokio::sync::Notify::new(),
             release_checks: AtomicUsize::new(0),
+            state_reads: AtomicUsize::new(0),
             availability_observations: Mutex::new(vec![]),
         })
     }
@@ -356,6 +358,24 @@ impl AgentUpdateRuntime for Fixture {
     }
 }
 impl AgentUpdateRepository for Fixture {
+    fn pending_work(&self) -> BoxFuture<'_, Result<AgentUpdateWork, UpdateError>> {
+        Box::pin(async {
+            let last = *self.claimed.lock().unwrap();
+            let state = self.state.lock().unwrap();
+            Ok(AgentUpdateWork {
+                active: state.operation.as_ref().is_some_and(|op| !op.finished)
+                    || state
+                        .run
+                        .as_ref()
+                        .is_some_and(|run| run.phase != UpdateSchedulePhase::Finished),
+                schedule_enabled: state.schedule.enabled,
+                cron: state.schedule.cron.clone(),
+                time_zone: state.schedule.time_zone.clone(),
+                last_scheduled_minute: last,
+            })
+        })
+    }
+
     fn observe_agent_availability<'a>(
         &'a self,
         _: &'a AgentUpdateRelease,
@@ -383,6 +403,7 @@ impl AgentUpdateRepository for Fixture {
         })
     }
     fn state(&self) -> BoxFuture<'_, Result<AgentUpdateState, UpdateError>> {
+        self.state_reads.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok(self.state.lock().unwrap().clone()) })
     }
     fn save_release<'a>(
@@ -1446,4 +1467,100 @@ async fn cleanup_interruption_before_acknowledgement_commit_preserves_durable_re
         assert_eq!(*f.installs.lock().unwrap(), ["C"]);
         assert_eq!(*f.cleanups.lock().unwrap(), ["C", "C"]);
     }
+}
+
+#[tokio::test]
+async fn worker_skips_full_state_when_idle_and_wakes_after_manual_commit() {
+    let f = Fixture::new();
+    let service = f.service();
+    let cancel = CancellationToken::new();
+    let wake = service.work_changes();
+    let delay = service.poll(&cancel).await.unwrap();
+    assert!(delay > std::time::Duration::ZERO && delay <= std::time::Duration::from_secs(30));
+    assert_eq!(f.state_reads.load(Ordering::SeqCst), 0);
+    {
+        let mut state = f.state.lock().unwrap();
+        state.schedule.enabled = true;
+        state.schedule.cron = "* * * * *".into();
+    }
+    service.poll(&cancel).await.unwrap();
+    assert_eq!(
+        f.state_reads.load(Ordering::SeqCst),
+        0,
+        "expired schedule entitlements must not load full state"
+    );
+    f.state.lock().unwrap().schedule.enabled = false;
+    assert!(!wake.has_changed().unwrap());
+    assert!(
+        service
+            .approve(actor(), Uuid::now_v7(), Uuid::nil())
+            .await
+            .is_err()
+    );
+    assert!(
+        !wake.has_changed().unwrap(),
+        "failed mutation must not wake dispatch"
+    );
+    let review = service
+        .review(actor(), &["C".into()], &cancel)
+        .await
+        .unwrap();
+    service
+        .approve(actor(), review.id, Uuid::now_v7())
+        .await
+        .unwrap();
+    assert!(wake.has_changed().unwrap());
+    assert_eq!(
+        service.poll(&cancel).await.unwrap(),
+        std::time::Duration::from_secs(5)
+    );
+    assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+    let reads = f.state_reads.load(Ordering::SeqCst);
+    service.poll(&cancel).await.unwrap();
+    assert_eq!(
+        f.state_reads.load(Ordering::SeqCst),
+        reads,
+        "finished operations must stay off the idle path"
+    );
+}
+
+#[tokio::test]
+async fn worker_runs_due_schedules_and_skips_consumed_minutes() {
+    let f = Fixture::new();
+    f.team.store(true, Ordering::SeqCst);
+    let service = f.service();
+    let cancel = CancellationToken::new();
+    let wake = service.work_changes();
+    service
+        .save_schedule(
+            actor(),
+            UpdateSchedule {
+                include_core: false,
+                targets: vec!["C".into()],
+                enabled: true,
+                cron: "* * * * *".into(),
+                time_zone: "UTC".into(),
+            },
+            &cancel,
+        )
+        .await
+        .unwrap();
+    assert!(wake.has_changed().unwrap());
+    for _ in 0..6 {
+        service.poll(&cancel).await.unwrap();
+    }
+    assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+    assert!(
+        f.state
+            .lock()
+            .unwrap()
+            .run
+            .as_ref()
+            .is_some_and(|run| run.phase == UpdateSchedulePhase::Finished)
+    );
+    // Keep the consumed hint ahead of a wall-clock minute boundary during assertion.
+    *f.claimed.lock().unwrap() = Some(Utc::now() + chrono::Duration::minutes(1));
+    let reads = f.state_reads.load(Ordering::SeqCst);
+    service.poll(&cancel).await.unwrap();
+    assert_eq!(f.state_reads.load(Ordering::SeqCst), reads);
 }

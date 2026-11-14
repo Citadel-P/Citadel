@@ -483,3 +483,93 @@ async fn capture_does_not_materialize_platform_descriptors_with_each_sample() {
     tx.rollback().await.unwrap();
     close_storage_fixture(pool, database).await;
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
+async fn swarm_freshness_seeks_sources_and_respects_future_samples_in_both_plans() {
+    use citadel_adapters::persistence::postgres::platforms::statistics::reader::PostgresStatisticsReader;
+    use citadel_platforms::StatisticsReader;
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let start = chrono::Utc::now().timestamp() / 86400 * 86400;
+    for n in 0..=6 {
+        add_container(&pool, &scope, &format!("task-{n}")).await;
+    }
+    sqlx::query("UPDATE containers SET dockernodeid='node' WHERE platformid=$1")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO statisticssources(platformid,containerid) SELECT platformid,id FROM containers WHERE platformid=$1 AND dockercontainerid<>'task-6'")
+        .bind(scope.platform_id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes)
+        SELECT s.id,$2+n,1,100,5,200,0,0 FROM statisticssources s JOIN containers c ON c.id=s.containerid CROSS JOIN generate_series(1,80000)n WHERE c.platformid=$1 AND c.dockercontainerid='task-0'")
+        .bind(scope.platform_id).bind(start).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO statisticsrollups(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,samplecount,readcount,writecount,lastcreated,firstcounters,lastcounters,counterdeltas,counterdurations,peaks)
+        SELECT s.id,$2+n*10,1,100,5,200,0,0,1,0,0,$2+n*10,ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::bigint[],ARRAY[1,100,5,200]::float8[]
+        FROM statisticssources s JOIN containers c ON c.id=s.containerid CROSS JOIN generate_series(1,8000)n WHERE c.platformid=$1 AND c.dockercontainerid='task-0'")
+        .bind(scope.platform_id).bind(start).execute(&pool).await.unwrap();
+    // 1: raw wins; 2: rollup wins; 3: future-only; 4/5: empty; 6: no source.
+    for (name, raw, rollup) in [("task-1", 20, 10), ("task-2", 10, 20), ("task-3", 200, 300)] {
+        sqlx::query("INSERT INTO statisticssamples(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes)
+            SELECT s.id,$3,1,100,5,200,0,0 FROM statisticssources s JOIN containers c ON c.id=s.containerid WHERE c.platformid=$1 AND c.dockercontainerid=$2")
+            .bind(scope.platform_id).bind(name).bind(start+raw).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO statisticsrollups(sourceid,created,cpuusage,memoryactive,memorycache,memorylimit,rxbytes,txbytes,samplecount,readcount,writecount,lastcreated,firstcounters,lastcounters,counterdeltas,counterdurations,peaks)
+            SELECT s.id,$3,1,100,5,200,0,0,1,0,0,$3,ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::float8[],ARRAY[0,0,0,0]::bigint[],ARRAY[1,100,5,200]::float8[] FROM statisticssources s JOIN containers c ON c.id=s.containerid WHERE c.platformid=$1 AND c.dockercontainerid=$2")
+            .bind(scope.platform_id).bind(name).bind(start+rollup).execute(&pool).await.unwrap();
+    }
+    sqlx::query("INSERT INTO swarmtaskprojections(platformid,dockertaskid,desiredstate,dockercontainerid,dockernodeid,dockerserviceid,image,name,nodehostname,observedat,ports,servicename,slot,state,versionindex)
+        SELECT $1,'task-'||n,'running','task-'||n,'node','service','image','task','node',now(),'{}','service',n,'running',1 FROM generate_series(1,6)n")
+        .bind(scope.platform_id).execute(&pool).await.unwrap();
+    sqlx::raw_sql("ANALYZE statisticssources; ANALYZE statisticssamples; ANALYZE statisticsrollups; ANALYZE containers; ANALYZE swarmtaskprojections").execute(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query(concat!(
+        "PREPARE freshness(uuid,text,bigint) AS ",
+        include_str!(
+            "../../src/persistence/postgres/platforms/statistics/service_current_tasks.sql"
+        )
+    ))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    for mode in ["force_custom_plan", "force_generic_plan"] {
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SET LOCAL plan_cache_mode={mode}"
+        )))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        let execute = format!(
+            "EXECUTE freshness('{}','service',{})",
+            scope.platform_id,
+            start + 100
+        );
+        let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "EXPLAIN(ANALYZE,BUFFERS,WAL,TIMING OFF,FORMAT JSON) {execute}"
+        )))
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        let blocks = plan[0]["Plan"]["Shared Hit Blocks"].as_i64().unwrap()
+            + plan[0]["Plan"]["Shared Read Blocks"].as_i64().unwrap();
+        assert!(blocks < 600, "{mode}: {plan}");
+        let rows = sqlx::query(sqlx::AssertSqlSafe(execute))
+            .fetch_all(&mut *tx)
+            .await
+            .unwrap();
+        let timestamps: Vec<Option<i64>> = rows.iter().map(|row| row.get("created")).collect();
+        assert_eq!(
+            timestamps,
+            vec![Some(start + 20), Some(start + 20), None, None, None, None]
+        );
+        eprintln!("Swarm freshness {mode}: {blocks} buffers");
+    }
+    tx.rollback().await.unwrap();
+    let tasks = PostgresStatisticsReader::new(pool.clone())
+        .service_current_tasks(scope.platform_id, "service", start + 100)
+        .await
+        .unwrap();
+    assert_eq!(tasks.len(), 6);
+    assert_eq!(tasks.iter().filter(|t| t.created.is_some()).count(), 2);
+    close_storage_fixture(pool, database).await;
+}
