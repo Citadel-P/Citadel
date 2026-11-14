@@ -1,6 +1,6 @@
-use crate::connectors::agent::client::AgentClient;
 use crate::connectors::edge::EdgeRegistry;
 use crate::connectors::edge::EdgeTarget;
+use crate::connectors::routing::build_pools::BuildPoolRuntimeRegistry;
 use citadel_builds::{
     BuildAgentPool, BuildError, BuildPoolCheck, BuildPoolChecker, BuildPoolTarget, pool_target,
 };
@@ -9,7 +9,7 @@ use futures_util::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 
 pub struct AgentBuildPoolChecker {
-    pub agent: Option<AgentClient>,
+    pub direct: std::sync::Arc<BuildPoolRuntimeRegistry>,
     pub edge: EdgeRegistry,
     pub admission: std::sync::Arc<dyn citadel_builds::BuildAdmissionStore>,
 }
@@ -37,11 +37,9 @@ impl BuildPoolChecker for AgentBuildPoolChecker {
                     .await
                 }
                 BuildPoolTarget::Inbound(endpoint) => {
-                    let configured = self.agent.as_ref().ok_or_else(|| {
-                        BuildError::Validation("Signed Agent transport is not configured.".into())
-                    })?;
-                    let client = configured
-                        .for_address(&endpoint, pool.id, cancellation)
+                    let client = self
+                        .direct
+                        .resolve(pool.id, &endpoint, cancellation)
                         .await
                         .map_err(|error| BuildError::Validation(error.to_string()))?;
                     agent_version = client

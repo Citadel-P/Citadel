@@ -181,6 +181,33 @@ exiting or applying a settings change. Policy monitoring and the worker are join
 on shutdown; neither drops a committing check. The check endpoint returns the
 service result without rereading check state.
 
+Release discovery and artifact reads each own a long-lived HTTP client with their
+respective redirect policy, request timeout and response-size bounds. Each pool
+retains at most one idle connection per host for 90 seconds. Agent artifact checks
+still fetch and validate current publication metadata and manifest checksums on
+every request. Successful Agent signature verification retains only one
+version/full-image-digest pair for 15 minutes in process memory; expiry, a changed
+key or restart requires verification again. Concurrent verifiers share that result
+through a cancellable lock. Failed or cancelled verification is never cached, and
+runner cancellation cleanup is awaited before releasing the lock. Core artifact
+verification remains uncached. This reduces repeated check work; it does not evict
+filesystem cache populated by the first verifier execution.
+
+Workload image metadata checks in Core and Agents lazily initialize a separate
+registry HTTPS client on the long-lived Docker client. Docker client clones share
+its connection pool (one idle connection per host, expiring after 90 seconds).
+Every inspection still reads current metadata and owns its credentials and bearer
+token; authentication is never cached on the shared transport. Redirects remain
+disabled, with the existing timeout, response-size and digest checks preserved.
+
+Core and Agent select their executable command before constructing Tokio. The
+container healthcheck uses a current-thread runtime and probes the actual HTTP/TLS
+listener; serving and other commands retain the multithreaded runtime. Automatic
+loopback probes bypass proxies, reject redirects and require HTTP 200. Agent also
+validates its healthy response body. Core's explicit `healthcheck --url` retains
+its custom URL redirect/status behavior. TLS chain validation and the narrowly
+scoped loopback hostname handling are unchanged, as is the entrypoint privilege drop.
+
 Update availability uses the existing Alert Rules, observation outbox and delivery outbox.
 Core observations follow successful official release discovery for the running Core's
 release channel, including installations that require manual updates. Notices do not
@@ -222,8 +249,15 @@ unless helper evidence establishes replacement. Helper absence alone is never pr
 that a request was cancelled.
 After helper creation is attempted, settlement locates the owned helper. The authenticated
 replacement must match the operation label and the helper's exact command/image;
-the helper must have exited successfully before ownership is released. Retained
-exited helpers provide idempotent evidence after lost replies and Core restarts.
+the helper must have exited successfully before ownership is released. Exited
+helpers provide idempotent evidence after lost replies and Core restarts
+until Core persists the verified Succeeded target. Core then explicitly requests
+removal of the exact stopped source and helper, without force or volume removal,
+and persists `cleanupCompleted` in the existing operation JSON. The operation
+retains ownership until cleanup is acknowledged; retries after lost replies or
+restarts use durable success instead of re-verifying a deleted helper. Completed
+targets with acknowledged cleanup are not contacted again. Failed attempts retain
+their containers for inspection.
 An unresolved or failed helper keeps the operation owned for manual recovery;
 timeouts never establish that a Docker mutation was cancelled.
 Swarm cleanup uses the reviewed node IDs stored in the operation. Missing sessions
@@ -235,7 +269,7 @@ separate container from the verified target image. It preserves configuration,
 identity mounts and host ports, carries the source's standard or rootless Unix
 socket into the helper, and pins custom network attachments by ID while retaining
 aliases and gateway priorities. Dynamic addresses are reassigned; fixed addresses
-and legacy links require manual handover. It retains previous containers for recovery and
+and legacy links require manual handover. It retains previous containers during replacement and on failure, and
 requires authenticated reconnect with the expected image/version and changed
 container identity. Managed Swarm services reuse NodeAgentSetupService with a
 bounded node-local drain; Repair uses the stored approved digest. Mixed or stale
@@ -748,6 +782,15 @@ from its generated base Compose input. CI retains ownership of the existing
 explicit host-state registration and guarded refresh; it never starts a second
 first-install registrar or moves existing recovery state.
 
+Before pulling images or replacing Core, deployment validates the selected state
+directory's ownership and private permissions and probes actual write access.
+Unregistered rootless targets use a dedicated directory under the deployment
+account's home when no sibling state directory exists; configured and interrupted
+state paths are preserved. Registration verifies each volume's Compose project
+and volume-role labels alongside its exact exclusive container mounts. Citadel
+system labels are optional on existing volumes but must agree when present;
+registration never relabels or recreates persistent volumes.
+
 Demo/preview release deployment transports the activation script from the same
 release checkout. Core and Agent pins are written into the captured private
 `.env`; `.release.env` remains a release record and is not an additional Compose
@@ -1181,6 +1224,18 @@ Interactive streams normally end with their caller. Durable operations use
 persisted claims and may continue after a browser disconnect. Recovery inspects
 and settles interrupted work; it must not blindly replay ambiguous mutations.
 PostgreSQL notifications are wakeups, while claims and queue rows remain authoritative.
+
+Ordinary Direct Platform scripts, builds and updates reuse the existing Platform
+runtime registry. Registered Direct Build Pools have one composition-owned registry
+shared by health checks, scripts, builds and updates. It rechecks registration on
+selection, normalizes endpoints and shares a lazy channel per resource ID under an
+immutable transport/trust policy. Channel creation holds only a short map lock;
+connects and RPCs run outside it. Signer clones observe key rotation. The existing
+pool-health worker retires deleted or reconfigured registrations; operations already
+holding a client keep ownership. These registries cache neither authorization nor
+health. Recovery and cleanup of retained attempts still connect to the persisted
+original endpoint and verify the original execution authority; they never select a
+replacement solely because it has the same resource ID.
 
 Platform and Build Pool connection transitions publish typed events on
 `citadel_connection_events` within the transaction that persists the transition
@@ -1635,6 +1690,15 @@ Test runners and fixture requirements are listed in [test/README.md](../test/REA
 
 ### Execution capacity and renewable backup ownership
 
+Stack, Deployment and Swarm Service binding resolution selects effective definitions
+before validating or resolving values. The existing case-normalized ordering and
+scope precedence determine the winner; shadowed external secrets make no Vault
+request. Invalid winning secrets still fail without falling back. Composition
+creates one cloneable secret resolver for catalog validation, bindings, backups and
+builds. Its Vault connection pool is shared, while grants, provider configuration,
+tokens and plaintext values are resolved per request. Tokens stay on individual
+requests; TLS, redirect, deadline and response-size policies are unchanged.
+
 Build dispatch uses bounded controllers with a separate preparation semaphore.
 A host reservation precedes Git preparation; `dispatchstarted` is committed with
 the pinned input before transport submission. Preparation failures can release
@@ -1708,6 +1772,19 @@ Stack apply drops copied Compose text and parsed/resolved preparation data befor
 execution. The source bundle remains borrowed by the runtime until execution ends,
 then is released before completion retries; immutable release provenance and
 binding snapshots remain available. Staged release files keep their existing lifetime.
+
+Core and Agents load the same build-owned script SDK from `scripts/citadel.js`
+beside the executable; native Cargo development/tests use the generated asset in
+`src/infrastructure/scripts/generated/`. `xtask openapi` bundles the HTTP helpers
+with the existing handler-derived endpoint catalog and verifies it in CI. Agents
+consume the generated JavaScript without depending on Server. Development builds,
+debugger startup and `npm run dev` regenerate the SDK and frontend contracts through
+one serialized generation wrapper. Each run's source
+contains only its client context, `args`, `run` and user code. A private import map
+resolves `citadel:sdk` to the executor's asset, with read permission for that exact
+file and write permission only for the run workspace. The trusted bootstrap still
+dynamically imports user code under Deno's permission checks. SDK files are shared;
+authenticated clients, JavaScript processes and caches are not.
 
 Core and Agent Deno caches live inside each private run workspace and are removed
 with its generated source on completion, failure, timeout or cancellation. The

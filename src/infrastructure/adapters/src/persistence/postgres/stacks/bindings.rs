@@ -20,6 +20,10 @@ pub struct PostgresStackBindingResolver {
 }
 
 impl PostgresStackBindingResolver {
+    pub fn with_resolver(pool: PgPool, secrets: PostgresSecretValueResolver) -> Self {
+        Self { pool, secrets }
+    }
+
     pub fn new(pool: PgPool, protector: Arc<dyn SecretProtector>) -> Result<Self, StackError> {
         Ok(Self {
             pool: pool.clone(),
@@ -60,6 +64,13 @@ impl StackBindingResolverPort for PostgresStackBindingResolver {
             let mut effective = BTreeMap::new();
             for row in rows {
                 let name: String = row.try_get("name").map_err(storage)?;
+                effective.insert(name.to_ascii_lowercase(), row);
+            }
+            // Resolve only winning definitions: shadowed Secrets must not perform
+            // provider requests or prevent an authorized resource override.
+            let mut entries = Vec::with_capacity(effective.len());
+            for row in effective.into_values() {
+                let name: String = row.try_get("name").map_err(storage)?;
                 let kind: String = row.try_get("kind").map_err(storage)?;
                 let scope: String = row.try_get("scope").map_err(storage)?;
                 let secret_id: Option<Uuid> = row.try_get("secretid").map_err(storage)?;
@@ -95,33 +106,28 @@ impl StackBindingResolverPort for PostgresStackBindingResolver {
                             })?,
                     )
                 };
-                effective.insert(
-                    name.to_ascii_lowercase(),
-                    StackBinding {
-                        name: name.clone(),
-                        value,
-                        secret,
-                        snapshot: ResourceBindingSnapshot {
-                            name,
-                            kind,
-                            scope,
-                            value: if secret {
-                                "********".to_owned()
-                            } else {
-                                row.try_get::<Option<String>, _>("value")
-                                    .map_err(storage)?
-                                    .unwrap_or_default()
-                            },
-                            secret_id,
-                            secret_delivery_mode: delivery,
-                            target_path,
+                entries.push(StackBinding {
+                    name: name.clone(),
+                    value,
+                    secret,
+                    snapshot: ResourceBindingSnapshot {
+                        name,
+                        kind,
+                        scope,
+                        value: if secret {
+                            "********".to_owned()
+                        } else {
+                            row.try_get::<Option<String>, _>("value")
+                                .map_err(storage)?
+                                .unwrap_or_default()
                         },
+                        secret_id,
+                        secret_delivery_mode: delivery,
+                        target_path,
                     },
-                );
+                });
             }
-            Ok(ResolvedStackBindings {
-                entries: effective.into_values().collect(),
-            })
+            Ok(ResolvedStackBindings { entries })
         })
     }
 }

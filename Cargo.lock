@@ -979,9 +979,11 @@ dependencies = [
  "citadel-runtime",
  "citadel-scripts",
  "futures-util",
+ "serde_json",
  "tokio",
  "tokio-util",
  "tracing",
+ "url",
  "uuid",
 ]
 

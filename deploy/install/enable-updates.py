@@ -84,6 +84,38 @@ def run(args, *, cwd, environment, step, timeout=180):
         raise SetupError(f"{step} failed. No update was approved. Preserve .env and the update-state directory; see the update setup recovery guide.") from error
 
 
+def resolve_state_directory(directory, settings, requested=None):
+    state = Path(requested) if requested else directory.with_name(directory.name + '-update-state')
+    configured = settings.get(SETTING)
+    if not requested and configured:
+        state = Path(configured)
+    if state == directory or state in directory.parents or directory in state.parents:
+        raise SetupError('Use a separate update-state directory outside the installation directory.')
+    private_path(state.parent, directory=True)
+    if configured is not None:
+        if configured != str(state):
+            raise SetupError('The existing update-state setting differs; it was not replaced.')
+        if not requested:
+            private_path(state, directory=True, private=True)
+    return state
+
+
+def prepare_state_directory(state):
+    """Check actual write access before deployment changes any running service."""
+    private_path(state.parent, directory=True)
+    try:
+        state.mkdir(mode=0o700, exist_ok=True)
+        private_path(state, directory=True, private=True)
+        if state.stat().st_uid != os.geteuid():
+            raise SetupError('Update state must belong to the deployment user; existing ownership was not changed.')
+        with tempfile.TemporaryFile(dir=state) as probe:
+            probe.write(b'update-state preflight\n')
+            probe.flush()
+            os.fsync(probe.fileno())
+    except OSError as error:
+        raise SetupError('Cannot create or write the update-state directory. Provision a private directory owned by the deployment user before deploying; existing state was not moved.') from error
+
+
 def enable(args, *, replace=None):
     """Activate updates, or verify and refresh an explicitly owned CI replacement.
 
@@ -94,21 +126,11 @@ def enable(args, *, replace=None):
     files = [private_path(Path(value)) for value in args.compose_file] if args.compose_file else [private_path(directory / 'docker-compose.yml')]
     if not 1 <= len(files) <= 4 or len(set(files)) != len(files) or any(p.parent != directory for p in files):
         raise SetupError("Supply the original one to four Compose files, in order, directly inside the installation directory.")
-    state = Path(args.state_directory) if args.state_directory else directory.with_name(directory.name + '-update-state')
-    private_path(state.parent, directory=True)
-    if state == directory or state in directory.parents or directory in state.parents:
-        raise SetupError("Use a separate update-state directory outside the installation directory.")
     env_path = directory / '.env'
     original, settings = read_environment(env_path)
     configured = settings.get(SETTING)
-    if not args.state_directory and configured:
-        state = Path(configured)
-        private_path(state, directory=True, private=True)
-    if state == directory or state in directory.parents or directory in state.parents:
-        raise SetupError('Use a separate update-state directory outside the installation directory.')
+    state = resolve_state_directory(directory, settings, args.state_directory)
     project = args.project or settings.get('COMPOSE_PROJECT_NAME')
-    if configured is not None and configured != str(state):
-        raise SetupError("The existing update-state setting differs; it was not replaced.")
     # Do not let shell variables silently override the protected Compose inputs.
     environment = {key: value for key, value in os.environ.items() if key in (
         'PATH', 'HOME', 'LANG', 'LC_ALL', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'XDG_RUNTIME_DIR')}
@@ -182,9 +204,7 @@ def enable(args, *, replace=None):
     image = core['Image']  # Immutable installed image ID; never pull a newer release.
     if not re.fullmatch(r'sha256:[a-f0-9]{64}', image):
         raise SetupError("Cannot establish the installed Core image identity.")
-    if not state.exists():
-        state.mkdir(mode=0o700)
-    private_path(state, directory=True, private=True)
+    prepare_state_directory(state)
     helper = [*docker, 'run', '--rm', '--pull', 'never', '--network', 'none', '--user', '0:0',
               '--read-only', '--tmpfs', '/tmp:rw,nosuid,nodev', '--entrypoint', '/app/citadel-server',
               '--mount', f'type=bind,src={directory},dst={directory},readonly',

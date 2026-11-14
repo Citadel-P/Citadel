@@ -2,7 +2,7 @@ use citadel_docker::client::DockerClient;
 use citadel_platforms::containers::ContainerAction;
 use std::time::Duration;
 
-/// Runs in a separate container. Source and failed replacement are retained for inspection.
+/// Runs in a separate container. Retain the source until Core commits verified success.
 pub async fn replace(
     source_id: &str,
     source_image: &str,

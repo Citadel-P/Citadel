@@ -9,7 +9,6 @@ use citadel_adapters::persistence::postgres::backups::secrets::PostgresBackupSec
 use citadel_adapters::persistence::postgres::backups::source_planner::PostgresBackupSourcePlanner;
 use citadel_adapters::persistence::postgres::licensing::store::PostgresLicenseEntitlementService;
 use citadel_adapters::security::identity::backup_authorization::IdentityBackupRunAuthorizer;
-use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
 use citadel_backups::BackupService;
 use citadel_git::GitRepositoryExecutionService;
 use citadel_identity::IdentityService;
@@ -19,7 +18,6 @@ use std::sync::Arc;
 pub(super) fn build(
     config: &Config,
     runtime: &RuntimeContext,
-    secret_protector: &Arc<AesGcmSecretProtector>,
     identity: &Arc<IdentityService>,
     git_execution: &Arc<GitRepositoryExecutionService>,
     entitlements: &Arc<PostgresLicenseEntitlementService>,
@@ -46,10 +44,9 @@ pub(super) fn build(
                     runtime.dynamic_tasks.clone(),
                     config.execution.tools.docker.clone(),
                     config.execution.restic_image.clone(),
-                    Arc::new(PostgresBackupSecretResolver::new(
-                        pool.clone(),
-                        secret_protector.clone(),
-                    )?),
+                    Arc::new(PostgresBackupSecretResolver::with_resolver(
+                        runtime.secret_values.clone(),
+                    )),
                     options.maximum_log_bytes,
                     pool.clone(),
                 )

@@ -310,6 +310,13 @@ impl AgentUpdateService {
                 if operation.targets[index].phase == Failed {
                     failed = true;
                 }
+                if operation.targets[index].phase == Succeeded {
+                    // Success survives Core restarts and authorizes idempotent removal even
+                    // when the helper was already deleted before its acknowledgement was lost.
+                    self.cleanup_target(&mut operation, index, cancellation)
+                        .await?;
+                    continue;
+                }
                 if !matches!(operation.targets[index].phase, Pending | Updating) {
                     continue;
                 }
@@ -362,6 +369,10 @@ impl AgentUpdateService {
                 operation.updated_at = Utc::now();
                 operation = self.repository.save_operation(&operation).await?;
                 self.notifier.changed();
+                if outcome.0 == Succeeded {
+                    self.cleanup_target(&mut operation, index, cancellation)
+                        .await?;
+                }
             }
             operation.finished = true;
             operation.updated_at = Utc::now();
@@ -372,6 +383,32 @@ impl AgentUpdateService {
             return Ok(());
         }
         self.tick_schedule(state, cancellation).await
+    }
+    async fn cleanup_target(
+        &self,
+        operation: &mut AgentUpdateOperation,
+        index: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<(), UpdateError> {
+        if operation.targets[index].cleanup_completed {
+            return Ok(());
+        }
+        let result = self
+            .runtime
+            .cleanup(&operation.targets[index].target, operation.id, cancellation)
+            .await;
+        if cancellation.is_cancelled() {
+            return Err(UpdateError::Cancelled);
+        }
+        let message = result.as_ref().err().map(|_| "Agent updated successfully. Waiting to remove the previous Agent and updater containers; cleanup will retry automatically.".to_owned());
+        if operation.targets[index].message != message || result.is_ok() {
+            operation.targets[index].message = message;
+            operation.targets[index].cleanup_completed = result.is_ok();
+            operation.updated_at = Utc::now();
+            *operation = self.repository.save_operation(operation).await?;
+            self.notifier.changed();
+        }
+        result
     }
     async fn execute_target(
         &self,

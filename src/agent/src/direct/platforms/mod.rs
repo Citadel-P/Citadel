@@ -14,9 +14,13 @@ impl platform_service_server::PlatformService for Runtime {
     async fn set_agent_update_drain(
         &self,
         request: Request<AgentUpdateDrainRequest>,
-    ) -> Result<Response<()>, Status> {
-        self.drain_agent_update(request.into_inner()).await?;
-        Ok(Response::new(()))
+    ) -> Result<Response<AgentUpdateDrainResponse>, Status> {
+        let request = request.into_inner();
+        let cleanup_completed = request.cleanup;
+        self.drain_agent_update(request).await?;
+        Ok(Response::new(AgentUpdateDrainResponse {
+            cleanup_completed,
+        }))
     }
 
     async fn get_agent_update_info(

@@ -144,6 +144,9 @@ pub struct AgentUpdateResult {
     pub target: AgentUpdateTarget,
     pub phase: AgentUpdatePhase,
     pub message: Option<String>,
+    /// Durable acknowledgement; only meaningful for a succeeded target.
+    #[serde(default)]
+    pub cleanup_completed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

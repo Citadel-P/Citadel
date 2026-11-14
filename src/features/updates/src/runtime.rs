@@ -106,6 +106,14 @@ pub trait ReleaseInspectionRuntime: Send + Sync {
 }
 
 pub trait AgentUpdateRuntime: Send + Sync {
+    /// Remove owned standalone update containers after verified success is persisted.
+    /// Must be idempotent after lost replies; Swarm has no standalone helpers to remove.
+    fn cleanup<'a>(
+        &'a self,
+        target: &'a AgentUpdateTarget,
+        operation: Uuid,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>>;
     /// Restore admission after an attempted rollout. Failure retains the durable operation
     /// so the worker can retry cleanup after reconnect, without repeating replacement.
     fn resume<'a>(

@@ -16,6 +16,8 @@ pub struct BackgroundServices {
     pub agent: Option<citadel_adapters::connectors::agent::client::AgentClient>,
     pub volume_content:
         Arc<citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter>,
+    pub build_pool_targets:
+        Arc<citadel_adapters::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     pub runtime_targets:
         Arc<citadel_adapters::connectors::routing::platforms::registry::PlatformRuntimeRegistry>,
     pub image_scanner: Arc<citadel_adapters::connectors::routing::images::scanner::ImageScanner>,
@@ -54,6 +56,7 @@ pub async fn spawn_all(
         agent,
         volume_content,
         runtime_targets,
+        build_pool_targets,
         image_scanner,
         alert_deliveries,
         last_used_worker,
@@ -100,6 +103,7 @@ pub async fn spawn_all(
             admission: state.admission.clone(),
             image_updates: platform_state.image_updates.clone(),
             targets: runtime_targets.clone(),
+            build_pool_targets,
             volume_content,
             containers: platform_state.containers.clone(),
             docker,

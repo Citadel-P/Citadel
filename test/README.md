@@ -70,8 +70,8 @@ SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib workers::updates::
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --test update_release_cli
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --lib diagnostics_http::tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-server --test configuration
-SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::releases::tests
-SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::artifacts::tests
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::releases::
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::artifacts::
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::inspection::tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::compose::tests
 SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::bootstrap::tests
@@ -915,6 +915,40 @@ activities, realtime invalidations, and deterministic OpenAPI/Docker contract
 generation. The script removes its uniquely named PostgreSQL container and
 network in `finally`.
 
+## HTTP client ownership and executable probes
+
+With `CITADEL_EXECUTION_DATABASE_URL` pointing to a disposable PostgreSQL database:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test secret_value_resolution --test agent_transport -- --include-ignored --test-threads=1
+```
+
+The binding fixtures cover all three workload resolvers, case-insensitive overrides,
+zero Vault calls for shadowed secrets, winning-secret failures, grants, delivery and
+masked snapshots. Vault transport fixtures count accepted peer connections across
+feature resolvers and exercise concurrent provider tokens, changed configuration,
+revoked grants, redirects and oversized responses. Agent fixtures count actual
+HTTP/2 connections for registered Build Pools, concurrent first selection, distinct
+signed audiences, key rotation, configuration changes and deletion. Explicit
+original-endpoint clients remain usable after registration changes; TLS, bounded
+cancellation and ambiguous-mutation retry rules use the existing transport fixtures.
+
+Executable probe tests need only loopback sockets and OpenSSL; no Docker daemon or
+database is contacted:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test healthcheck --test configuration
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --test healthcheck --test lifecycle
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --bin citadel-server runtime_flavor
+SQLX_OFFLINE=true cargo test --locked -p citadel-agent --bin citadel-agent runtime_flavor
+```
+
+They check configured listeners, deadlines, unhealthy/absent responses, proxy and
+redirect rejection, custom Core URLs and Direct TLS trust. Linux probe fixtures
+also inspect the child process's thread count while its request is active. Runtime
+unit tests preserve multithreaded serving. Startup measurements from debug probe
+processes are not estimates of resident Core memory or production savings.
+
 ## Deployment CRUD
 
 Run `./test/scripts/Test-Deployments.ps1` from the repository root. It
@@ -983,6 +1017,14 @@ Normal browser development (`dev.sh compose-up`) builds and mounts release Core
 by default. Use `CITADEL_COMPOSE_PROFILE=dev` for faster unoptimized builds; use
 the default release profile for comparable CPU/I/O measurements.
 Native debugger tasks retain their development profile.
+
+Development builds, F5 and `npm run dev` regenerate OpenAPI, the shared script SDK
+and frontend models through `src/tools/build/generate-api.sh`. The wrapper serializes
+concurrent startup generators; failures prevent the dependent process from starting.
+Run `python3 -m unittest discover -s test/release -p test_api_generation.py -v`
+for disposable, stub-Cargo checks of serialization, failure propagation, lock release
+and the actual npm startup hook. CI's `openapi --check` and `api:verify` still check
+artifact freshness against the real Rust definitions.
 
 Cross-platform copy regression tests live in
 `src/server/tests/execution_resources_http/resource_copies/destinations.rs`.
@@ -1143,7 +1185,18 @@ CITADEL_DENO_PATH=/absolute/path/to/deno SQLX_OFFLINE=true cargo test --locked -
 These verify per-run Deno cache cleanup after repeated/concurrent execution,
 failure, timeout, cancellation and abandoned futures; split-token/UTF-8 log
 redaction; and tracked backup subprocess-cache cleanup through shutdown. Core
-and Agents use the same script sandbox. The real Deno test uses temporary inputs
+and Agents use the same script sandbox. The SDK tests also check API methods,
+query/path/body/error compatibility, concurrent client and run isolation, SDK write
+denial, and forbidden direct/transitive imports from other runs. Lifecycle checks
+leave the shared SDK unchanged. The HTTP execution fixture checks the generated
+wrapper's TypeScript, top-level await, `citadel`, `args` and `run` bindings.
+`cargo run --locked -p xtask -- openapi --check` verifies the bundled catalog against
+handler metadata. Core and Agent image smoke tests load the packaged SDK through
+the trusted bootstrap and check that scripts cannot overwrite it. Both image suites
+first run `bash test/scripts/test-script-sdk-image.sh IMAGE`: this verifies SDK
+directory traversal, file readability and sandbox import/write isolation as both
+UID 65532 and UID 1000, without a database, network or Docker socket mount.
+The real Deno test uses temporary inputs
 and does not contact an external API.
 
 Use a disposable `CITADEL_EXECUTION_DATABASE_URL` for the adapter test
@@ -1209,14 +1262,15 @@ volumes, network and built images. Existing installations are untouched.
 
 Omit `--browser` for automated approval and verification of authenticated
 reconnection, target digest, changed container IDs, preserved identity mounts and
-ports, and retained source containers. It updates Direct first and verifies the
+ports, and removal of the previous Agent and updater helper without deleting
+identity volumes. It updates Direct first and verifies the
 unselected Edge container is unchanged, then updates Edge using the generated
 `edge-agent` label and mixed-case Edge mode. Edge's isolated daemon listens only
 at `/run/user/1001/docker.sock`; the Agent uses two custom networks with aliases.
-The runner verifies the helper uses that socket and replacement retains both
-network IDs and aliases. This exercises a rootless socket layout, not a genuinely
-unprivileged daemon or its host kernel configuration. Both must settle their exited helper
-before the operation finishes. This mode disconnects the outer test daemon
+Successful replacement requires the helper to use that socket; the runner also
+verifies both network IDs and aliases are preserved. This exercises a rootless socket layout, not a genuinely
+unprivileged daemon or its host kernel configuration. Both must settle their exited helper, persist verified success, and remove the
+source and helper before the operation finishes. This mode disconnects the outer test daemon
 from its network after loading prerequisites. Browser mode publishes only the UI
 on loopback and retains outbound connectivity. Neither mode exposes Docker or
 PostgreSQL on the host.
@@ -1231,6 +1285,10 @@ deduplication, stale reviews, request replay, sequential failure handling,
 interrupted-attempt reconciliation, Team scheduling and authorization rechecks.
 They also cover shutdown after dispatch, cancellation during verification and
 lost Swarm resume acknowledgements without releasing the claim or redispatching.
+Cleanup regressions verify persistence before deletion, retries after restart/lost
+acknowledgements, and no repeat cleanup after acknowledgement. Fake-daemon Agent
+tests exercise partial deletion, changed ownership, running/failed helpers, volume
+preservation, and rejection of standalone cleanup by Swarm-node sessions.
 
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::agents
@@ -1287,6 +1345,21 @@ The HTTP fixture checks direct reads, acknowledgment, resolution and counts for 
 administrator and a regular user with Alert permissions. These fixtures never send
 external notifications.
 
+
+### Release check overhead
+
+Release HTTP pooling and Agent signature-cache regressions run without GitHub,
+Docker or a database:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --lib external::updates::
+```
+
+Loopback HTTP fixtures check TCP connection reuse with fresh responses, bounded
+reads and redirect/privacy rules. Stub verifiers check single-entry expiry,
+version/digest changes, concurrent callers, cancellation and failed-refresh retry.
+Publication validation still runs on Agent cache hits, and Core verification runs
+on every request. These tests do not measure production memory savings.
 
 ### PostgreSQL engine maintenance
 
@@ -1654,6 +1727,10 @@ failures. Installer tests also cover automatic project/state defaults, waiting f
 administrator setup, timeout without registration, reuse without pulling existing
 images, and registered CI replacement guards. Demo tests cover captured release
 pins, automatic activation and preserving the deployed PostgreSQL image.
+They also verify that state creation/write failures stop deployment before image
+pulls, installer input changes or Core replacement, and preserve configured state.
+Bootstrap tests accept matching Compose-owned volumes without optional Citadel
+labels and reject missing ownership, foreign projects and conflicting roles.
 Existing adapter bootstrap tests own registration, database identity,
 mount and recovery-state validation. Updates frontend tests cover setup messaging
 even when Core has no available release and retain distinct external, unknown
@@ -1697,3 +1774,15 @@ Adapter tests cover pending registration, atomic completion, lost or corrupt
 state, unsafe permissions, cancellation, drift, lock contention and discovery of
 host paths. Update status remains disabled until the supervised registration task
 has durably completed; status reads launch no helper.
+
+## Registry metadata HTTP reuse
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-docker --lib image_metadata::tests
+```
+
+Loopback OCI fixtures check connection reuse across Docker client clones while
+successive inspections use different credentials and then anonymous access. Each
+inspection must fetch fresh metadata. The suite also covers platform selection,
+immutable digest verification, credential origin validation and sanitized errors.
+These tests require neither a Docker daemon nor external registry access.

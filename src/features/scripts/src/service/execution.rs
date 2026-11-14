@@ -143,7 +143,7 @@ impl ScriptService {
         };
         let script = crate::sandbox::ScriptExecution {
             run_id: claim.run.id,
-            source: script_source(base_url, &token, &claim.run, &self.endpoint_catalog_json),
+            source: script_source(base_url, &token, &claim.run),
             token,
             args_json: claim.run.args_json.clone(),
             base_url: base_url.clone(),

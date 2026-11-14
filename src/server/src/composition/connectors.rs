@@ -11,6 +11,8 @@ pub(super) struct ConnectorComponents {
             citadel_adapters::connectors::edge::EdgeIntake,
         >,
     pub agent: Option<AgentClient>,
+    pub build_pool_targets:
+        Arc<citadel_adapters::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     pub agent_setup: Arc<citadel_server::api::resources::platforms::views::AgentSetupView>,
     pub agent_setup_context: platforms_http::AgentSetupContext,
     pub edge_context: citadel_server::api::resources::platforms::edge::EdgeHttpContext,
@@ -64,6 +66,11 @@ pub(super) fn build(
             pool.clone(),
             agent.clone(),
         );
+    let build_pool_targets =
+        citadel_adapters::connectors::routing::build_pools::BuildPoolRuntimeRegistry::new(
+            pool.clone(),
+            agent.clone(),
+        );
     let edge_registry = citadel_adapters::connectors::edge::EdgeRegistry::default();
     let edge_service = citadel_contracts::citadel::edge::v1::edge_agent_service_server::EdgeAgentServiceServer::new(
         citadel_adapters::connectors::edge::EdgeIntake::new(
@@ -110,6 +117,7 @@ pub(super) fn build(
         edge_context,
         edge_registry,
         runtime_targets,
+        build_pool_targets,
         container_runtime,
     })
 }

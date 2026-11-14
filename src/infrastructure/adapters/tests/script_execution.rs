@@ -438,7 +438,6 @@ fn scheduler(pool: sqlx::PgPool) -> citadel_scripts::ScriptService {
             deno_path: "must-not-execute".into(),
             work_root: std::env::temp_dir(),
             internal_base_url: "http://unused.invalid".into(),
-            endpoint_catalog_json: "{}".into(),
             maximum_log_bytes: 1024,
             stale_after: std::time::Duration::from_secs(300),
         },

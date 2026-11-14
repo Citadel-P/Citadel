@@ -27,7 +27,9 @@ pub async fn healthcheck() -> Result<(), AgentError> {
         .send()
         .await?
         .error_for_status()?;
-    if response.json::<serde_json::Value>().await?["Status"] != "Healthy" {
+    if response.status() != reqwest::StatusCode::OK
+        || response.json::<serde_json::Value>().await?["Status"] != "Healthy"
+    {
         return Err("Agent health response is not healthy".into());
     }
     Ok(())

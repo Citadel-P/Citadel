@@ -216,14 +216,11 @@ fn generated_script_exposes_typed_clients_without_persisting_the_token() {
         logs: None,
         error_message: None,
     };
-    let source = script_source(
-        "http://127.0.0.1:8000/",
-        "temporary-token",
-        &run,
-        r#"[{"key":"listPlatforms","group":"platforms","method":"GET","path":"/api/v1/platforms"}]"#,
-    );
-    assert!(source.contains("__citadelGroups[endpoint.group]"));
-    assert!(source.contains("listPlatforms"));
+    let source = script_source("http://127.0.0.1:8000/", "temporary-token", &run);
+    assert!(source.contains("from \"citadel:sdk\""));
+    assert!(!source.contains("listPlatforms"));
+    assert!(!source.contains("fetch("));
+    assert!(!source.contains("__citadelEndpointCatalog"));
     assert!(source.contains("temporary-token"));
     assert!(source.ends_with("console.log(args.value);\n"));
 }

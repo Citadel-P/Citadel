@@ -84,9 +84,19 @@ The receipt fences duplicate dispatch and survives cleanup retries, but not an A
 process restart. Active preparation, unknown operations and helper dispatch remain
 unsettled; a missing helper is not cancellation evidence.
 The replacement checks its operation label and the owned helper's
-command, image and successful exit before acknowledging cleanup. Missing, pending
+command, image and successful exit before acknowledging settlement. Missing, pending
 or failed helper evidence leaves recovery ownership with Core; it does not permit
-redispatch. Exited helpers remain available as evidence across Core restarts.
+redispatch. Exited helpers remain available as evidence across Core restarts until
+Core persists verified success. A subsequent `SetAgentUpdateDrain` request with
+`resume=true`, `cleanup=true` and the same source/operation identity removes the
+stopped source first and helper last, by full container ID, without force or volume
+removal. Cleanup checks the live replacement operation label and the retained
+containers' identities and stopped state. Both absent is an idempotent cleanup
+acknowledgement only on this post-commit path; ordinary settlement still requires
+the helper. `AgentUpdateDrainResponse.cleanup_completed` must explicitly acknowledge
+removal; an empty/default response cannot establish cleanup. Core persists the
+acknowledgement before completing the operation.
+Swarm-node sessions reject standalone source identities and cleanup requests.
 Edge preflight recognizes the generated `edge-agent` role, handles mode casing
 exactly as startup does, and requires effective key/identity files directly inside
 a persistent `/app/data` mount (including Edge Build Pool filenames). Unsupported
@@ -98,8 +108,8 @@ falls back to another daemon's socket, and verifies the source container/image
 before replacement. Custom network endpoints are recreated by network ID with
 aliases and gateway priorities; observed addresses, endpoint IDs and generated DNS
 names are not copied. Fixed IPAM addresses and legacy links remain unsupported
-because the previous container is retained. The same path serves Direct and Edge;
-no wire-contract or Swarm self-replacement permission changes are involved.
+because the previous container must coexist during handover. The same path serves
+Direct and Edge; Swarm self-replacement remains forbidden.
 Data, build and script reconciliation remain admitted during drain so authenticated
 cleanup can release existing reservations. Their authority and generation checks
 still apply; new reservations and workload mutations remain blocked.
@@ -497,7 +507,7 @@ requires G0 and G1; Swarm-node operations additionally require G8.
 | citadel.networks.v1.NetworkService/Inspect | citadel.networks.v1.InspectNetworkRequest | citadel.networks.v1.InspectNetworkResponse | unary | NETWORK_INSPECT | 61 | allowed | client/finite.rs:inspect_network | G1 |
 | citadel.platforms.v1.PlatformService/GetAgentUpdateInfo | google.protobuf.Empty | citadel.platforms.v1.AgentUpdateInfo | unary | PLATFORM_AGENT_UPDATE_INFO | 6 | allowed | agent/direct/updates/runtime.rs:agent_update_info | G1 |
 | citadel.platforms.v1.PlatformService/UpdateAgent | citadel.platforms.v1.UpdateAgentRequest | citadel.platforms.v1.UpdateAgentResponse | unary | PLATFORM_UPDATE_AGENT | 7 | denied | agent/direct/updates/runtime.rs:start_agent_update | G1 |
-| citadel.platforms.v1.PlatformService/SetAgentUpdateDrain | citadel.platforms.v1.AgentUpdateDrainRequest | google.protobuf.Empty | unary | PLATFORM_AGENT_UPDATE_DRAIN | 8 | allowed | agent/direct/updates/runtime.rs:drain_agent_update | G1 |
+| citadel.platforms.v1.PlatformService/SetAgentUpdateDrain | citadel.platforms.v1.AgentUpdateDrainRequest | citadel.platforms.v1.AgentUpdateDrainResponse | unary | PLATFORM_AGENT_UPDATE_DRAIN | 8 | allowed | agent/direct/updates/runtime.rs:drain_agent_update | G1 |
 | citadel.platforms.v1.PlatformService/GetPlatformInfo | google.protobuf.Empty | citadel.shared_models.v1.PlatformInfoResponse | unary | PLATFORM_GET_INFO | 2 | allowed | client/finite.rs:info | G1 |
 | citadel.platforms.v1.PlatformService/CheckHealth | google.protobuf.Empty | citadel.platforms.v1.CheckHealthResponse | unary | PLATFORM_CHECK_HEALTH | 1 | allowed | client/transport/mod.rs:ping | G1 |
 | citadel.platforms.v1.PlatformService/Prune | citadel.platforms.v1.PruneRequest | citadel.platforms.v1.PruneResponse | unary | PLATFORM_PRUNE | 5 | denied | client/finite.rs:prune_resources | G1 |
@@ -678,6 +688,10 @@ or changing its terminal outcome. Unreachable or restarted Agents retain holds.
 
 Direct and ordinary Edge Agents execute Deno actions under the same sandbox as
 Core. Swarm-node sessions cannot check, run, or reconcile scripts work.
+Both executors package the generated JavaScript SDK matching their build. The existing
+source payload imports `citadel:sdk`; the receiving executor maps that specifier to
+its local read-only asset. No SDK download or additional wire field is required.
+
 Remote actions require HTTPS for Core's public API and Agent transport; plaintext
 Edge Agents advertise no scripts slots. Direct calls retain signed-body
 verification and configured CA trust. Agents need a trusted public Core HTTPS

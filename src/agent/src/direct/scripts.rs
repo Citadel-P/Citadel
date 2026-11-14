@@ -410,6 +410,10 @@ mod execution_tests {
         for (source, status) in [
             ("console.log('fixture-secret');", "Succeeded"),
             (
+                "import { createCitadelClient } from 'citadel:sdk'; const citadel = createCitadelClient({baseUrl:'https://core.invalid', token:'fixture-secret'}); if (typeof citadel.platforms.listPlatforms !== 'function') throw Error('Packaged SDK unavailable');",
+                "Succeeded",
+            ),
+            (
                 "if ((await Deno.permissions.request({name: 'net', host: 'core.invalid:5432'})).state !== 'denied') throw new Error('Other Core ports must be denied');",
                 "Succeeded",
             ),

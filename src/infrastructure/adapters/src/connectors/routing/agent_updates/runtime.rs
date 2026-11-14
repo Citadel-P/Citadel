@@ -1,6 +1,6 @@
 use crate::{
     connectors::{
-        agent::{client::AgentClient, execution::AgentExecutionClient},
+        agent::execution::AgentExecutionClient,
         edge::{EdgeRegistry, EdgeTarget},
     },
     external::updates::GithubReleaseArtifacts,
@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub struct AgentUpdateRuntimeRouter {
     pub pool: sqlx::PgPool,
     pub platforms: super::super::platforms::runtime::PlatformRuntimeRouter,
-    pub agent: Option<AgentClient>,
+    pub pools: Arc<crate::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     pub edge: EdgeRegistry,
     pub artifacts: GithubReleaseArtifacts,
     pub swarm_store: Arc<dyn NodeAgentSetupStore>,
@@ -47,14 +47,12 @@ impl AgentUpdateRuntimeRouter {
                         .map_err(error)?,
                 )),
                 citadel_builds::BuildPoolTarget::Inbound(endpoint) => {
-                    Ok(AgentExecutionClient::Direct(Arc::new(
-                        self.agent
-                            .as_ref()
-                            .ok_or_else(|| error("Signed Agent transport is not configured"))?
-                            .for_address(&endpoint, r.id, cancel)
+                    Ok(AgentExecutionClient::Direct(
+                        self.pools
+                            .resolve(r.id, &endpoint, cancel)
                             .await
                             .map_err(error)?,
-                    )))
+                    ))
                 }
             };
         }
@@ -146,28 +144,25 @@ impl AgentUpdateRuntime for AgentUpdateRuntimeRouter {
             if target.kind == AgentUpdateKind::SwarmService {
                 self.resume_swarm(target, operation, cancel).await?;
             } else {
-                let r = self.registration(target).await?;
-                let client = self.client(&r, cancel).await?;
-                let info = client.update_info(cancel).await.map_err(error)?;
-                if info.installation_id != target.id {
-                    return Err(error("Agent installation identity changed during recovery"));
-                }
-                let (source, image) = target
-                    .revision
-                    .split_once(':')
-                    .ok_or_else(|| error("Agent source identity is missing"))?;
-                client
-                    .settle_update(
-                        citadel_contracts::citadel::platforms::v1::AgentUpdateDrainRequest {
-                            operation_id: operation.to_string(),
-                            resume: true,
-                            source_container_id: source.into(),
-                            source_image: image.into(),
-                        },
-                        cancel,
-                    )
-                    .await
-                    .map_err(error)?;
+                self.settle_standalone(target, operation, false, cancel)
+                    .await?;
+            }
+            Ok(())
+        })
+    }
+    fn cleanup<'a>(
+        &'a self,
+        target: &'a AgentUpdateTarget,
+        operation: Uuid,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            if cancel.is_cancelled() {
+                return Err(UpdateError::Cancelled);
+            }
+            if target.kind != AgentUpdateKind::SwarmService {
+                self.settle_standalone(target, operation, true, cancel)
+                    .await?;
             }
             Ok(())
         })
@@ -277,6 +272,43 @@ impl AgentUpdateRuntime for AgentUpdateRuntimeRouter {
 }
 
 impl AgentUpdateRuntimeRouter {
+    async fn settle_standalone(
+        &self,
+        target: &AgentUpdateTarget,
+        operation: Uuid,
+        cleanup: bool,
+        cancel: &CancellationToken,
+    ) -> Result<(), UpdateError> {
+        let registration = self.registration(target).await?;
+        let client = self.client(&registration, cancel).await?;
+        let info = client.update_info(cancel).await.map_err(error)?;
+        if info.installation_id != target.id {
+            return Err(error("Agent installation identity changed during recovery"));
+        }
+        let (source, image) = target
+            .revision
+            .split_once(':')
+            .ok_or_else(|| error("Agent source identity is missing"))?;
+        let response = client
+            .settle_update(
+                citadel_contracts::citadel::platforms::v1::AgentUpdateDrainRequest {
+                    operation_id: operation.to_string(),
+                    resume: true,
+                    source_container_id: source.into(),
+                    source_image: image.into(),
+                    cleanup,
+                },
+                cancel,
+            )
+            .await
+            .map_err(error)?;
+        if cleanup && !response.cleanup_completed {
+            return Err(error(
+                "Agent did not acknowledge removal of the previous Agent and updater containers",
+            ));
+        }
+        Ok(())
+    }
     async fn verify_once(
         &self,
         target: &AgentUpdateTarget,

@@ -221,6 +221,8 @@ async fn http_and_websocket_guards_reject_restricted_credentials() {
             Default::default(),
             identity.clone(),
             true,
+            citadel_adapters::connectors::routing::platforms::registry::PlatformRuntimeRegistry::new(pool.clone(), None),
+            citadel_adapters::connectors::routing::build_pools::BuildPoolRuntimeRegistry::new(pool.clone(), None),
         );
         let store = citadel_adapters::persistence::postgres::scripts::PostgresScriptRepository::new(
             pool.clone(),

@@ -1,11 +1,5 @@
 use citadel_adapters::{
-    connectors::{
-        agent::client::AgentClient,
-        edge::EdgeRegistry,
-        routing::{
-            agent_updates::AgentUpdateRuntimeRouter, platforms::runtime::PlatformRuntimeRouter,
-        },
-    },
+    connectors::routing::agent_updates::AgentUpdateRuntimeRouter,
     external::updates::GithubReleaseArtifacts,
     persistence::postgres::{
         licensing::store::PostgresLicenseEntitlementService, updates::PostgresUpdateRepository,
@@ -20,25 +14,17 @@ use std::sync::Arc;
 
 pub(crate) fn build_agents(
     config: &Config,
-    pool: &sqlx::PgPool,
-    docker: &citadel_docker::client::DockerClient,
-    agent: Option<AgentClient>,
-    edge: EdgeRegistry,
+    context: &super::super::RuntimeContext,
     platforms: &PlatformsHttpState,
     entitlements: Arc<PostgresLicenseEntitlementService>,
 ) -> Result<AgentUpdateService, citadel_updates::UpdateError> {
     let realtime = platforms.realtime.clone();
     let notifications = realtime.clone();
     let runtime = Arc::new(AgentUpdateRuntimeRouter {
-        pool: pool.clone(),
-        platforms: PlatformRuntimeRouter::new(
-            pool.clone(),
-            docker.clone(),
-            agent.clone(),
-            edge.clone(),
-        ),
-        agent,
-        edge,
+        pool: context.pool.clone(),
+        platforms: context.container_runtime.runtime_router(),
+        pools: context.build_pool_targets.clone(),
+        edge: context.edge_registry.clone(),
         artifacts: GithubReleaseArtifacts::new(Arc::new(citadel_processes::SystemProcess))?,
         swarm_store: platforms.node_agent_store.clone(),
         swarm_runtime: platforms.node_agent_runtime.clone(),
@@ -58,7 +44,7 @@ pub(crate) fn build_agents(
     let runtime = Arc::new(super::agent_fixture::Runtime(runtime));
     Ok(AgentUpdateService::new(
         env!("CITADEL_BUILD_VERSION").into(),
-        Arc::new(PostgresUpdateRepository::new(pool.clone())),
+        Arc::new(PostgresUpdateRepository::new(context.pool.clone())),
         runtime,
         entitlements,
         Arc::new(UpdatesRealtimeNotifier::new(realtime)),

@@ -1,6 +1,5 @@
 //! Executable lifecycle: initialization, supervised serving, and bounded shutdown.
 use crate::{
-    cli,
     composition::{ServerComponents, background},
     logging, router as api, startup,
 };
@@ -8,10 +7,6 @@ use axum::Router;
 use citadel_server::{config::Config, transport};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-
-pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    cli::run().await
-}
 
 pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let mut job_lease = startup::acquire_job_lease(&config)

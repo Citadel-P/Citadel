@@ -12,7 +12,6 @@ use citadel_adapters::{
         },
         licensing::store::PostgresLicenseEntitlementService,
     },
-    security::identity::crypto::AesGcmSecretProtector,
 };
 use citadel_builds::BuildService;
 use citadel_git::GitRepositoryExecutionService;
@@ -22,7 +21,6 @@ use std::sync::Arc;
 pub(super) fn build(
     config: &Config,
     runtime: &RuntimeContext,
-    secret_protector: &Arc<AesGcmSecretProtector>,
     git_execution: &Arc<GitRepositoryExecutionService>,
     entitlements: &Arc<PostgresLicenseEntitlementService>,
     alert_store: &Arc<PostgresAlertRepository>,
@@ -37,10 +35,9 @@ pub(super) fn build(
         ..
     } = runtime;
     let data_root = &config.execution.paths.data_root;
-    let build_secrets = Arc::new(PostgresBuildSecretResolver::new(
-        pool.clone(),
-        secret_protector.clone(),
-    )?);
+    let build_secrets = Arc::new(PostgresBuildSecretResolver::with_resolver(
+        runtime.secret_values.clone(),
+    ));
     let build_registries = Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone()));
     let build_store = Arc::new(PostgresBuildRepository::new(pool.clone()));
     let local_builds = Arc::new(
@@ -74,16 +71,22 @@ pub(super) fn build(
             cancellation.clone(),
             build_store.clone(),
             Arc::new(
-                PlatformBuildExecutor::new(pool.clone(), local_builds, agent_builds)
-                    .with_git_source(git_execution.clone())
-                    .with_edge(AgentDockerBuildExecutor::new_edge(
-                        data_root.join("git-repositories"),
-                        edge_registry.clone(),
-                        build_secrets,
-                        build_registries,
-                        4 * 1024 * 1024,
-                        build_store.clone(),
-                    )),
+                PlatformBuildExecutor::new(
+                    pool.clone(),
+                    local_builds,
+                    agent_builds,
+                    runtime.platform_targets.clone(),
+                    runtime.build_pool_targets.clone(),
+                )
+                .with_git_source(git_execution.clone())
+                .with_edge(AgentDockerBuildExecutor::new_edge(
+                    data_root.join("git-repositories"),
+                    edge_registry.clone(),
+                    build_secrets,
+                    build_registries,
+                    4 * 1024 * 1024,
+                    build_store.clone(),
+                )),
             ),
             chrono::Duration::minutes(10),
         )
@@ -112,7 +115,7 @@ pub(super) fn build(
         .with_pool_checker(Arc::new(
             citadel_adapters::connectors::agent::build_pool_checker::AgentBuildPoolChecker {
                 admission: build_store.clone(),
-                agent: agent.clone(),
+                direct: runtime.build_pool_targets.clone(),
                 edge: edge_registry.clone(),
             },
         ))

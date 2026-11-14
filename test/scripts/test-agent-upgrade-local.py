@@ -245,15 +245,12 @@ class AgentUpgrade(local.LocalUpgrade):
                     require(endpoint.get("GwPriority", 0) == new_networks[name].get("GwPriority", 0), "Agent gateway priority changed")
                     aliases = set(endpoint.get("Aliases") or []) - {before["Id"], before["Id"][:12]}
                     require(aliases <= set(new_networks[name].get("Aliases") or []), "Agent network aliases changed")
-                helpers = self.nested(kind, "ps", "-aq", "--filter", "label=com.citadel.system-role=agent-updater").stdout.decode().split()
-                require(len(helpers) == 1, "Expected one retained Edge update helper")
-                helper = json.loads(self.nested(kind, "inspect", helpers[0]).stdout)[0]
-                require(helper["Mounts"][0]["Source"] == self.agent_socket(kind), "Helper selected the wrong Docker socket")
-                require(helper["State"]["ExitCode"] == 0, "Edge helper did not finish successfully")
-            retained = json.loads(self.nested(kind, "inspect", before["Id"]).stdout)[0]
-            require(not retained["State"]["Running"], "Previous Agent is still running")
+            helpers = self.nested(kind, "ps", "-aq", "--filter", "label=com.citadel.system-role=agent-updater").stdout.decode().split()
+            require(not helpers, "Completed update retained an updater helper")
+            containers = self.nested(kind, "ps", "-aq", "--no-trunc").stdout.decode().split()
+            require(before["Id"] not in containers, "Completed update retained the previous Agent")
         print("Direct and Edge updates succeeded: authenticated reconnect, target digest, "
-              "preserved mounts/ports and retained source containers verified", flush=True)
+              "preserved mounts/ports and source/helper removal verified", flush=True)
 
     def serve_agents(self, port):
         password, _, _ = self.setup_agents(browser_port=port)

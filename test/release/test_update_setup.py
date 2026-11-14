@@ -249,6 +249,24 @@ class UpdateSetupTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.state.stat().st_mode), 0o755)
         self.assertNotIn('Installation registration', self.steps())
 
+    def test_state_symlink_cannot_redirect_write_probe(self):
+        target = self.root / 'another-state'
+        target.mkdir(mode=0o700)
+        self.state.symlink_to(target, target_is_directory=True)
+        with patch.object(setup.tempfile, 'TemporaryFile') as probe, \
+             self.assertRaisesRegex(setup.SetupError, 'no symlinks'):
+            setup.prepare_state_directory(self.state)
+        probe.assert_not_called()
+        self.assertEqual(list(target.iterdir()), [])
+
+    def test_state_write_probe_preserves_existing_evidence(self):
+        self.state.mkdir(mode=0o700)
+        evidence = self.state / 'installation.json'
+        evidence.write_text('private registration')
+        setup.prepare_state_directory(self.state)
+        self.assertEqual(evidence.read_text(), 'private registration')
+        self.assertEqual(list(self.state.iterdir()), [evidence])
+
     def test_existing_setting_without_running_activation_requires_explicit_recovery(self):
         self.env.write_text(self.env.read_text() + f'{setup.SETTING}={self.state}\n')
         with self.assertRaisesRegex(setup.SetupError, 'not using it'):

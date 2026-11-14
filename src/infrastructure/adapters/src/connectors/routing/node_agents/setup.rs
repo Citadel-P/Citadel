@@ -11,7 +11,7 @@ impl NodeAgentRuntimeRouter {
         &self,
         claim: &NodeAgentRemovalClaim,
         cancel: &CancellationToken,
-    ) -> Result<Target, RuntimeCapabilityError> {
+    ) -> Result<Target<'_>, RuntimeCapabilityError> {
         let target = self.target(claim.platform_id, cancel).await?;
         validate_identity(&target.inventory().get_info(cancel).await?, claim)?;
         Ok(target)

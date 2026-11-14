@@ -24,6 +24,10 @@ pub struct PostgresBuildSecretResolver {
 }
 
 impl PostgresBuildSecretResolver {
+    pub fn with_resolver(resolver: PostgresSecretValueResolver) -> Self {
+        Self { resolver }
+    }
+
     pub fn new(pool: PgPool, protector: Arc<dyn SecretProtector>) -> Result<Self, BuildError> {
         Ok(Self {
             resolver: PostgresSecretValueResolver::new(pool, protector)

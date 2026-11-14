@@ -60,6 +60,8 @@ pub struct PlatformBuildExecutor {
     pool: PgPool,
     local: Arc<dyn BuildExecutor>,
     agent: Option<AgentDockerBuildExecutor>,
+    platforms: Arc<dyn crate::connectors::routing::platforms::runtime::PlatformAgentResolver>,
+    pools: Arc<crate::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     edge: Option<AgentDockerBuildExecutor>,
     git: Option<Arc<citadel_git::GitRepositoryExecutionService>>,
 }
@@ -70,11 +72,15 @@ impl PlatformBuildExecutor {
         pool: PgPool,
         local: Arc<dyn BuildExecutor>,
         agent: Option<AgentDockerBuildExecutor>,
+        platforms: Arc<dyn crate::connectors::routing::platforms::runtime::PlatformAgentResolver>,
+        pools: Arc<crate::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     ) -> Self {
         Self {
             pool,
             local,
             agent,
+            platforms,
+            pools,
             edge: None,
             git: None,
         }
@@ -150,7 +156,12 @@ impl BuildExecutor for PlatformBuildExecutor {
                         )),
                     },
                     citadel_builds::BuildPoolTarget::Inbound(endpoint) => match &self.agent {
-                        Some(agent) => match agent.for_address(&endpoint, id, cancellation).await {
+                        Some(agent) => match self
+                            .pools
+                            .resolve(id, &endpoint, cancellation)
+                            .await
+                            .map(|client| agent.with_client(client))
+                        {
                             Ok(agent) => {
                                 agent
                                     .execute_with_preparation(
@@ -201,7 +212,11 @@ impl BuildExecutor for PlatformBuildExecutor {
                 }
                 "Agent" => match &self.agent {
                     Some(agent) => {
-                        match agent.for_address(&address, platform_id, cancellation).await {
+                        match tokio::select! {
+                            biased;
+                            () = cancellation.cancelled() => return waiting(claim, "Build selection cancelled."),
+                            result = self.platforms.resolve_agent(platform_id, &address) => result.map(|client| agent.with_client(client)),
+                        } {
                             Ok(agent) => {
                                 agent
                                     .execute_with_preparation(
@@ -254,31 +269,16 @@ enum BuildTransport {
 }
 
 impl AgentDockerBuildExecutor {
-    async fn for_address(
-        &self,
-        endpoint: &str,
-        agent_id: uuid::Uuid,
-        cancellation: &CancellationToken,
-    ) -> Result<Self, BuildFailure> {
-        let BuildTransport::Direct(client) = &self.client else {
-            return Err(BuildFailure::Validation(
-                "An inbound Build Pool requires signed Agent transport.".into(),
-            ));
-        };
-        let client = client
-            .for_address(endpoint, agent_id, cancellation)
-            .await
-            .map_err(|error| BuildFailure::Validation(error.to_string()))?;
-        let mut executor = Self::new(
-            self.git_cache_root.clone(),
-            client,
-            self.secrets.clone(),
-            self.registries.clone(),
-            self.maximum_log_bytes,
-            self.admission.clone(),
-        );
-        executor.git = self.git.clone();
-        Ok(executor)
+    fn with_client(&self, client: Arc<AgentClient>) -> Self {
+        Self {
+            git_cache_root: self.git_cache_root.clone(),
+            git: self.git.clone(),
+            client: BuildTransport::Direct(client),
+            secrets: self.secrets.clone(),
+            registries: self.registries.clone(),
+            maximum_log_bytes: self.maximum_log_bytes,
+            admission: self.admission.clone(),
+        }
     }
     #[must_use]
     pub fn new(

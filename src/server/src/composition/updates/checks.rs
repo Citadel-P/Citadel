@@ -5,10 +5,13 @@ use citadel_updates::ReleaseCheckService;
 use sqlx::PgPool;
 use std::sync::Arc;
 
-pub(crate) fn build(pool: &PgPool, realtime: Option<RealtimeHub>) -> ReleaseCheckService {
+pub(crate) fn build(
+    pool: &PgPool,
+    realtime: Option<RealtimeHub>,
+) -> Result<ReleaseCheckService, citadel_updates::UpdateError> {
     let checker = ReleaseCheckService::new(
         env!("CITADEL_BUILD_VERSION").to_owned(),
-        super::releases::source(),
+        super::releases::source()?,
         Arc::new(PostgresUpdateRepository::new(pool.clone())),
     )
     .with_notifier(Arc::new(UpdatesRealtimeNotifier::new(realtime)));
@@ -19,5 +22,5 @@ pub(crate) fn build(pool: &PgPool, realtime: Option<RealtimeHub>) -> ReleaseChec
             pool.clone(),
         ),
     ));
-    checker
+    Ok(checker)
 }

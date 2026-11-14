@@ -23,6 +23,8 @@ pub struct AgentScriptExecutor {
     edge: EdgeRegistry,
     identity: Arc<IdentityService>,
     secure_edge: bool,
+    platforms: Arc<dyn crate::connectors::routing::platforms::runtime::PlatformAgentResolver>,
+    pools: Arc<crate::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
 }
 impl AgentScriptExecutor {
     pub fn new(
@@ -31,6 +33,8 @@ impl AgentScriptExecutor {
         edge: EdgeRegistry,
         identity: Arc<IdentityService>,
         secure_edge: bool,
+        platforms: Arc<dyn crate::connectors::routing::platforms::runtime::PlatformAgentResolver>,
+        pools: Arc<crate::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     ) -> Self {
         Self {
             pool,
@@ -38,9 +42,50 @@ impl AgentScriptExecutor {
             edge,
             identity,
             secure_edge,
+            platforms,
+            pools,
         }
     }
-    async fn connect(
+    async fn connect_current(
+        &self,
+        target: &Target,
+        cancel: &CancellationToken,
+    ) -> Result<Option<AgentExecutionClient>, ScriptError> {
+        let Some(endpoint) = &target.endpoint else {
+            return self.connect_original(target, cancel).await;
+        };
+        if !url::Url::parse(endpoint).is_ok_and(|url| url.scheme() == "https") {
+            return Err(ScriptError::Validation(
+                "Remote scripts requires HTTPS for Direct Agents.".into(),
+            ));
+        }
+        let selection = async {
+            match target.kind {
+                ResourceType::Platform => self.platforms.resolve_agent(target.id, endpoint).await,
+                ResourceType::BuildAgentPool => {
+                    self.pools.resolve(target.id, endpoint, cancel).await
+                }
+                _ => Err(citadel_platforms::RuntimeCapabilityError::new(
+                    citadel_platforms::RuntimeErrorKind::InvalidRequest,
+                    "Invalid Agent resource type",
+                    false,
+                )),
+            }
+        };
+        let client = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Ok(None),
+            result = tokio::time::timeout(Duration::from_secs(10), selection) => result,
+        };
+        Ok(client
+            .ok()
+            .and_then(Result::ok)
+            .map(AgentExecutionClient::Direct))
+    }
+
+    // Retained attempts carry their original endpoint. Never resolve them via
+    // a registration that may now select a different executor.
+    async fn connect_original(
         &self,
         target: &Target,
         cancel: &CancellationToken,
@@ -206,7 +251,7 @@ impl RemoteScriptExecutor for AgentScriptExecutor {
                 if !target.available {
                     continue;
                 }
-                let client = match self.connect(&target, cancellation).await {
+                let client = match self.connect_current(&target, cancellation).await {
                     Ok(Some(client)) => client,
                     Ok(None) => continue,
                     // An incompatible candidate must not prevent Automatic from
@@ -375,7 +420,7 @@ impl RemoteScriptExecutor for AgentScriptExecutor {
                 available: true,
             };
             let client = self
-                .connect(&target, cancel)
+                .connect_original(&target, cancel)
                 .await?
                 .ok_or_else(|| ScriptError::Conflict("The original Agent is offline.".into()))?;
             let host = tokio::select! {
@@ -408,7 +453,7 @@ impl RemoteScriptExecutor for AgentScriptExecutor {
                     endpoint: reservation.endpoint.clone(),
                     available: true,
                 };
-                let Ok(Some(client)) = self.connect(&target, cancellation).await else {
+                let Ok(Some(client)) = self.connect_original(&target, cancellation).await else {
                     continue;
                 };
                 changed |= self.cleanup(&client, &reservation).await?;

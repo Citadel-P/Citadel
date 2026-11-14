@@ -28,12 +28,11 @@ mod router;
 mod startup;
 
 #[cfg(target_os = "linux")]
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ordinary cargo test must not start a server. The Docker-only runner puts
     // this file inside its explicitly unpublishable test images.
     if std::path::Path::new("/app/upgrade-fixture.json").is_file() {
-        app::run().await?;
+        cli::run()?;
     }
     Ok(())
 }

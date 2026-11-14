@@ -1,13 +1,14 @@
 use super::*;
 use citadel_contracts::citadel::platforms::v1::{
-    AgentUpdateDrainRequest, AgentUpdateInfo, UpdateAgentRequest, UpdateAgentResponse,
+    AgentUpdateDrainRequest, AgentUpdateDrainResponse, AgentUpdateInfo, UpdateAgentRequest,
+    UpdateAgentResponse,
 };
 impl AgentClient {
     pub(crate) async fn settle_update(
         &self,
         request: AgentUpdateDrainRequest,
         cancel: &CancellationToken,
-    ) -> Result<(), RuntimeCapabilityError> {
+    ) -> Result<AgentUpdateDrainResponse, RuntimeCapabilityError> {
         self.retry_unary(cancel, || async {
             let request = self.signer.sign(
                 request.clone(),
@@ -17,7 +18,7 @@ impl AgentClient {
             self.platform_client()
                 .set_agent_update_drain(request)
                 .await
-                .map(|_| ())
+                .map(|response| response.into_inner())
                 .map_err(normalize_status)
         })
         .await

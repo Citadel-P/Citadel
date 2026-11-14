@@ -39,6 +39,11 @@ impl Runtime {
     ) -> Result<(), Status> {
         let operation = uuid::Uuid::parse_str(&request.operation_id)
             .map_err(|_| Status::invalid_argument("Invalid Agent update operation"))?;
+        if request.cleanup && (!request.resume || request.source_container_id.is_empty()) {
+            return Err(Status::invalid_argument(
+                "Cleanup requires a settled standalone update",
+            ));
+        }
         if request.resume {
             if !request.source_container_id.is_empty() {
                 if request.source_container_id.len() != 64
@@ -59,6 +64,16 @@ impl Runtime {
                     .inspect_container_document(id)
                     .await
                     .map_err(docker_error)?;
+                if request.cleanup {
+                    return super::cleanup::cleanup(
+                        &self.docker,
+                        &current,
+                        &request.source_container_id,
+                        &request.source_image,
+                        &request.operation_id,
+                    )
+                    .await;
+                }
                 if current["Id"] == request.source_container_id {
                     if current["Image"] != request.source_image
                         || current["State"]["Running"] != true

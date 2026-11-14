@@ -44,6 +44,8 @@ pub struct WorkerDependencies {
     pub admission: citadel_runtime::admission::AdmissionGate,
     pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
     pub targets: Arc<PlatformRuntimeRegistry>,
+    pub build_pool_targets:
+        Arc<citadel_adapters::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     pub volume_content:
         Arc<citadel_adapters::connectors::routing::volumes::content::VolumeContentAdapter>,
     pub containers: Arc<citadel_platforms::containers::ContainerMutationService>,
@@ -135,6 +137,7 @@ pub async fn register(
         admission,
         image_updates,
         targets,
+        build_pool_targets,
         volume_content,
         containers,
         docker,
@@ -328,6 +331,7 @@ pub async fn register(
             cancellation.child_token(),
             builds,
             Arc::new(edge.clone()),
+            build_pool_targets,
         ),
     );
     supervisor.spawn(

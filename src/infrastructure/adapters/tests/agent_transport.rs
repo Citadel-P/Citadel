@@ -43,7 +43,10 @@ impl PlatformService for FixtureService {
     async fn set_agent_update_drain(
         &self,
         _: tonic::Request<citadel_contracts::citadel::platforms::v1::AgentUpdateDrainRequest>,
-    ) -> Result<tonic::Response<()>, tonic::Status> {
+    ) -> Result<
+        tonic::Response<citadel_contracts::citadel::platforms::v1::AgentUpdateDrainResponse>,
+        tonic::Status,
+    > {
         Err(tonic::Status::unimplemented("fixture"))
     }
     async fn get_agent_update_info(
@@ -488,3 +491,6 @@ async fn private_ca_is_required_preserved_on_retarget_and_checks_the_hostname() 
     stop.cancel();
     task.await.unwrap();
 }
+
+#[path = "agent_transport/registered.rs"]
+mod registered;

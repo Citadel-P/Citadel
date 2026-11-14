@@ -37,6 +37,6 @@ pub(crate) fn settled(
             "Agent update recovery required: the owned helper has not completed a verified replacement. Inspect the retained source and helper; do not start another update.",
         );
     }
-    // Retain exited helpers as idempotent evidence for retries and Core restarts.
+    // Keep evidence until Core persists success and explicitly requests cleanup.
     Ok(())
 }

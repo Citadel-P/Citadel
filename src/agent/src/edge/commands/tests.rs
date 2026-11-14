@@ -1218,3 +1218,38 @@ async fn data_admission_survives_edge_replacement_and_cleanup_fences_late_reques
         BuildAdmissionResult::BuildAdmissionFencedNotStarted as i32
     );
 }
+
+#[tokio::test]
+async fn swarm_node_rejects_standalone_update_cleanup_before_docker_access() {
+    use citadel_contracts::citadel::platforms::v1::AgentUpdateDrainRequest;
+    let h = Harness::new().await;
+    let (mut commands, mut receiver) = h.commands();
+    commands.profile = EdgeProfile::SwarmNode(crate::config::SwarmIdentity {
+        bootstrap_file: "unused".into(),
+        platform_id: h.identity.platform_id.to_string(),
+        cluster_id: "cluster".into(),
+        node_id: "node".into(),
+        node_hostname: "worker".into(),
+        service_id: "service".into(),
+        task_id: "task".into(),
+    });
+    let before = h.calls.load(Ordering::SeqCst);
+    for cleanup in [false, true] {
+        let mut command = h.command(
+            EdgeCommandKind::PlatformAgentUpdateDrain,
+            AgentUpdateDrainRequest {
+                operation_id: Uuid::now_v7().to_string(),
+                resume: true,
+                source_container_id: "a".repeat(64),
+                source_image: "sha256:old".into(),
+                cleanup,
+            },
+        );
+        command.node_id = "node".into();
+        start(&mut commands, command).await;
+        finish(&mut commands).await;
+        let messages = take(&mut receiver);
+        failed(messages.last().unwrap(), "permission_denied");
+    }
+    assert_eq!(h.calls.load(Ordering::SeqCst), before);
+}

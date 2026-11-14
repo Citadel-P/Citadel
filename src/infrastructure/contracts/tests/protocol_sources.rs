@@ -7,6 +7,8 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
     // Container block I/O counters add optional fields 7–8 without changing existing statistics.
     // Active filesystem cache adds optional field 9, preserving working-set fields and absence.
     // Agent update settlement adds source identity fields and runtime image evidence.
+    // Post-commit cleanup adds request field 5 and an explicit response acknowledgement;
+    // empty/default responses never prove deletion and ordinary settlement remains unchanged.
     let sources = [
         (
             "script_service.proto",
@@ -26,7 +28,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "platform_service.proto",
             include_str!("../proto/platform_service.proto"),
-            "858945bbd433fbdc45ec43f01dcd678f0ed8e3c3c7f3fa5206bb4afa313ed35d",
+            "efe4795c779abb7c485aaea7b790206d380309cf2304e4b9e9976cda86d364b1",
         ),
         (
             "container_service.proto",
@@ -235,12 +237,26 @@ fn container_mount_inventory_uses_additive_fields_and_preserves_unknown_state() 
 
 #[test]
 fn agent_update_settlement_uses_additive_identity_fields() {
-    use citadel_contracts::citadel::platforms::v1::{AgentUpdateDrainRequest, AgentUpdateInfo};
+    use citadel_contracts::citadel::platforms::v1::{
+        AgentUpdateDrainRequest, AgentUpdateDrainResponse, AgentUpdateInfo,
+    };
     use prost::Message;
 
     let drain = AgentUpdateDrainRequest::decode(&[][..]).unwrap();
     assert!(drain.source_container_id.is_empty());
     assert!(drain.source_image.is_empty());
+    assert!(!drain.cleanup);
+    assert!(
+        !AgentUpdateDrainResponse::decode(&[][..])
+            .unwrap()
+            .cleanup_completed
+    );
+    let response = AgentUpdateDrainResponse {
+        cleanup_completed: true,
+    };
+    assert_eq!(response.encode_to_vec(), [0x08, 1]);
+    <()>::decode(response.encode_to_vec().as_slice()).unwrap();
+
     assert!(
         AgentUpdateInfo::decode(&[][..])
             .unwrap()
@@ -250,9 +266,13 @@ fn agent_update_settlement_uses_additive_identity_fields() {
     let drain = AgentUpdateDrainRequest {
         source_container_id: "s".into(),
         source_image: "i".into(),
+        cleanup: true,
         ..Default::default()
     };
-    assert_eq!(drain.encode_to_vec(), [0x1a, 1, b's', 0x22, 1, b'i']); // fields 3–4
+    assert_eq!(
+        drain.encode_to_vec(),
+        [0x1a, 1, b's', 0x22, 1, b'i', 0x28, 1]
+    ); // fields 3–5
     let info = AgentUpdateInfo {
         runtime_image: "r".into(),
         ..Default::default()

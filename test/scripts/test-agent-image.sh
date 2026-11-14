@@ -2,6 +2,7 @@
 set -euo pipefail
 
 image="${1:?Usage: test-agent-image.sh IMAGE [EXPECTED_VERSION]}"
+bash "$(dirname "${BASH_SOURCE[0]}")/test-script-sdk-image.sh" "$image"
 expected_version="${2:-}"
 fixture="citadel-agent-image-test-$$-$RANDOM"
 socket="${CITADEL_AGENT_TEST_DOCKER_SOCKET:-/var/run/docker.sock}"
@@ -107,6 +108,15 @@ for program in pg_dump shoutrrr; do
 done
 mkdir /tmp/script-fixture
 cat > /tmp/script-fixture/script.ts <<'TS'
+import { createCitadelClient } from 'citadel:sdk';
+const citadel = createCitadelClient({baseUrl: 'https://fixture.invalid', token: 'disposable'});
+if (typeof citadel.platforms.listPlatforms !== 'function') throw Error('SDK endpoint catalog missing');
+try {
+  await Deno.writeTextFile('/app/scripts/citadel.js', 'corrupted');
+  throw Error('SDK is writable by scripts');
+} catch (error) {
+  if (!(error instanceof Deno.errors.NotCapable)) throw error;
+}
 const message: string = 'agent script fixture';
 await Deno.writeTextFile('/tmp/script-fixture/payload', message);
 if (await Deno.readTextFile('/tmp/script-fixture/payload') !== message) throw new Error('File round trip failed');
@@ -117,9 +127,12 @@ try {
   if (!(error instanceof Deno.errors.NotCapable)) throw error;
 }
 TS
-deno run --no-prompt --no-config --no-lock --no-npm --deny-import \
-  --allow-read=/tmp/script-fixture --allow-write=/tmp/script-fixture \
-  --allow-env=NO_COLOR,DENO_DIR /tmp/script-fixture/script.ts
+printf '%s\n' '{"imports":{"citadel:sdk":"file:///app/scripts/citadel.js"}}' > /tmp/script-fixture/imports.json
+printf '%s\n' "const action = new URL('./script.ts', import.meta.url).href; await import(action);" > /tmp/script-fixture/bootstrap.ts
+DENO_DIR=/tmp/script-fixture/deno-cache deno run --no-prompt --no-config --no-lock --no-npm --deny-import \
+  --import-map=/tmp/script-fixture/imports.json \
+  --allow-read=/tmp/script-fixture,/app/scripts/citadel.js --allow-write=/tmp/script-fixture \
+  --allow-env=NO_COLOR,DENO_DIR /tmp/script-fixture/bootstrap.ts
 docker version
 docker compose version
 docker buildx version

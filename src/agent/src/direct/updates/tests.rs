@@ -212,6 +212,7 @@ async fn standalone_preparation_failure_settles_but_helper_dispatch_stays_owned(
             resume: true,
             source_container_id: source.clone(),
             source_image: "sha256:old".into(),
+            cleanup: false,
         };
         assert_eq!(creates.load(Ordering::SeqCst), usize::from(!fail_pull));
         assert_eq!(
