@@ -35,6 +35,7 @@ async fn saved_instance_choices_apply_after_restart_to_real_consumers() {
         .unwrap();
     assert_eq!(before["restartRequired"], false);
     let configuration = json!({
+        "databaseMaxConnections": 4,
         "passwordMinimumLength": 40, "browserSessionLifetimeDays": 7,
         "serviceAccountDefaultTokenLifetimeDays": 10, "serviceAccountMaximumTokenLifetimeDays": 20,
         "serviceAccountMaximumActiveTokens": 3, "accessTokenLifetimeMinutes": 5,

@@ -213,6 +213,90 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         assert!(created.latest_run.is_none());
         policies.push(created);
     }
+    // Empty queues must still repair orphaned control state from either dispatcher.
+    for restores in [false, true] {
+        sqlx::query(
+            "UPDATE backuppolicies SET controlstate='Processing',currentrunid=NULL WHERE id=$1",
+        )
+        .bind(policies[0].id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE backuprepositories SET controlstate='Processing',currentrunid=NULL WHERE id=$1",
+        )
+        .bind(repository.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        if restores {
+            assert!(
+                store
+                    .claim_restore(
+                        Utc::now() - Duration::minutes(10),
+                        citadel_backups::RestoreClaimScope::All
+                    )
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+        } else {
+            assert!(
+                store
+                    .claim_backup(Utc::now() - Duration::minutes(10))
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        let states: (String, String) = sqlx::query_as("SELECT (SELECT controlstate FROM backuppolicies WHERE id=$1), (SELECT controlstate FROM backuprepositories WHERE id=$2)")
+            .bind(policies[0].id).bind(repository.id).fetch_one(&pool).await.unwrap();
+        assert_eq!(states, ("Idle".into(), "Idle".into()));
+    }
+    // An expired lease is still ownership evidence until cleanup confirms release.
+    let held = Uuid::now_v7();
+    assert!(
+        store
+            .acquire_repository_operation(
+                repository.id,
+                held,
+                "Validate",
+                Utc::now() - Duration::seconds(1)
+            )
+            .await
+            .unwrap()
+    );
+    assert!(
+        store
+            .claim_backup(Utc::now() - Duration::minutes(10))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .claim_restore(
+                Utc::now() - Duration::minutes(10),
+                citadel_backups::RestoreClaimScope::All
+            )
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT ownerrunid FROM backuprepositoryleases WHERE backuprepositoryid=$1"
+        )
+        .bind(repository.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        held
+    );
+    store
+        .release_repository_operation(repository.id, held)
+        .await
+        .unwrap();
     admission::verify_queue_progress_and_owner_recovery(&pool, actor, platform, &repository_input)
         .await;
     admission::verify(&pool, actor, platform, &repository_input).await;

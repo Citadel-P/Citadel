@@ -2,6 +2,28 @@ use serde::Serialize;
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DatabaseConnectionsView {
+    pub maximum: u32,
+    pub open: u32,
+    pub idle: u32,
+    pub borrowed: u32,
+    pub shared_buffers_bytes: Option<u64>,
+}
+
+impl From<citadel_instance::DatabaseConnections> for DatabaseConnectionsView {
+    fn from(value: citadel_instance::DatabaseConnections) -> Self {
+        Self {
+            maximum: value.maximum,
+            open: value.open,
+            idle: value.idle,
+            borrowed: value.borrowed,
+            shared_buffers_bytes: value.shared_buffers_bytes,
+        }
+    }
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct InstallationSettingsView {
     pub configuration: super::configuration::InstanceConfigurationView,
     pub effective_configuration: super::configuration::InstanceConfigurationView,

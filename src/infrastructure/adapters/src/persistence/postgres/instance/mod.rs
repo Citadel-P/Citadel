@@ -1,4 +1,5 @@
 mod authorization;
+mod database;
 mod repository;
 mod restart;
 mod settings;

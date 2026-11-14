@@ -207,8 +207,15 @@ impl PostgresBackupPersistence {
     ) -> BoxFuture<'_, Result<Option<BackupClaim>, BackupError>> {
         Box::pin(async move {
             for _ in 0..16 {
+                let (queued, recovery) =
+                    super::recovery::claim_work(&self.pool, stale_before, false).await?;
+                if !queued && !recovery {
+                    return Ok(None);
+                }
                 let mut tx = self.pool.begin().await.map_err(storage)?;
-                recover_stale(&mut tx, stale_before).await?;
+                if recovery {
+                    recover_stale(&mut tx, stale_before).await?;
+                }
                 let row=sqlx::query("SELECT r.id,r.backuppolicyid,r.backuprepositoryid,r.sourceplan,p.source FROM backupruns r JOIN backuppolicies p ON p.id=r.backuppolicyid JOIN backuprepositories br ON br.id=r.backuprepositoryid WHERE r.status='Queued' AND (r.nextattemptat IS NULL OR r.nextattemptat<=CURRENT_TIMESTAMP) AND NOT EXISTS(SELECT 1 FROM resourcecopyrestores cr JOIN resourcecopies cp ON cp.id=cr.copyid JOIN backuprestoreruns rr ON rr.id=cr.restoreid WHERE rr.backuprepositoryid=r.backuprepositoryid AND cp.status IN ('Restoring','Cancelling')) AND p.archivedat IS NULL AND br.archivedat IS NULL AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.backuprepositoryid) ORDER BY COALESCE(r.nextattemptat,r.queuedat),r.queuedat,r.id FOR UPDATE OF r,p,br SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)?;
                 let Some(row) = row else {
                     tx.commit().await.map_err(storage)?;

@@ -477,6 +477,54 @@ fn registered_file_names_and_order_are_not_bound_to_templates() {
 }
 
 #[test]
+fn database_buffer_budget_preserves_the_restricted_command_profile() {
+    let fixture = Fixture::new(false);
+    for size in ["64MB", "128MB", "256MB"] {
+        let command = json!(["postgres", "-c", format!("shared_buffers={size}")]);
+        let input = json!({"services": {"pg_db": {"command": command}}});
+        assert!(super::profile::validate_input(&serde_json::to_vec(&input).unwrap()).is_ok());
+        let mut config = resolved();
+        config["services"]["server"]["command"] = Value::Null;
+        config["services"]["pg_db"]["command"] = command;
+        assert!(
+            fixture
+                .inputs
+                .validate_resolved(&config, "a".repeat(64))
+                .is_ok()
+        );
+    }
+    for (service, command) in [
+        ("server", json!(["postgres", "-c", "shared_buffers=64MB"])),
+        ("pg_db", json!("postgres -c shared_buffers=64MB")),
+        ("pg_db", json!(["sh", "-c", "postgres"])),
+        (
+            "pg_db",
+            json!(["postgres", "-c", "config_file=/outside/postgresql.conf"]),
+        ),
+        ("pg_db", json!(["postgres", "-c", "shared_buffers=0MB"])),
+        (
+            "pg_db",
+            json!(["postgres", "-c", "shared_buffers=${PG_BUFFERS}"]),
+        ),
+        (
+            "pg_db",
+            json!(["postgres", "-c", "shared_buffers=64MB", "-c", "fsync=off"]),
+        ),
+    ] {
+        let input = json!({"services": {service: {"command": command}}});
+        assert!(super::profile::validate_input(&serde_json::to_vec(&input).unwrap()).is_err());
+        let mut config = resolved();
+        config["services"][service]["command"] = command;
+        assert!(
+            fixture
+                .inputs
+                .validate_resolved(&config, "a".repeat(64))
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn explicit_installer_database_path_preserves_the_supported_volume_layout() {
     let fixture = Fixture::new(false);
     let mut config = resolved();

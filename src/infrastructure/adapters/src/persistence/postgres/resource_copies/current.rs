@@ -2,6 +2,11 @@
 use super::{operations::*, *};
 impl PostgresCopyRepository {
     pub(super) async fn recover_current_jobs(&self) -> Result<(), CopyError> {
+        let active: bool = sqlx::query_scalar(r#"SELECT EXISTS(SELECT 1 FROM resourcecopies WHERE status IN ('Restoring','Cancelling') AND plan->'request'->>'dataMode' = 'CurrentData' AND jsonb_path_exists(plan, '$.current_volumes[*] ? (@.status == "Running")'))"#)
+            .fetch_one(&self.pool).await.map_err(storage_error)?;
+        if !active {
+            return Ok(());
+        }
         let mut tx = self.pool.begin().await.map_err(storage_error)?;
         let rows = sqlx::query(r#"SELECT id,plan FROM resourcecopies WHERE status IN ('Restoring','Cancelling') AND plan->'request'->>'dataMode' = 'CurrentData' AND jsonb_path_exists(plan, '$.current_volumes[*] ? (@.status == "Running")') FOR UPDATE"#)
             .fetch_all(&mut *tx).await.map_err(storage_error)?;

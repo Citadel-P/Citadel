@@ -563,6 +563,26 @@ describe('RealtimeProvider', () => {
     expect(queryFn).toHaveBeenCalledTimes(2);
   });
 
+  it('refreshes the database snapshot on connection and after Core restarts', async () => {
+    const fake = new FakeRealtimeConnection();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['getDatabaseConnections', { id: 'resource-1' }], 'cached limits');
+    const queryFn = vi.fn().mockResolvedValueOnce('running limits').mockResolvedValueOnce('restarted limits');
+    render(
+      <RealtimeTestRoot fake={fake} queryClient={queryClient}>
+        <LiveQuerySubscriber queryFn={queryFn} queryKey="getDatabaseConnections" />
+      </RealtimeTestRoot>,
+    );
+    expect(await screen.findByText('running limits')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    act(() => fake.reconnecting());
+    expect(screen.getByText('running limits')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    act(() => fake.reconnected());
+    expect(await screen.findByText('restarted limits')).toBeVisible();
+    expect(queryFn).toHaveBeenCalledTimes(2);
+  });
+
   it('refreshes application info on connection, release changes, and reconnect', async () => {
     const fake = new FakeRealtimeConnection();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

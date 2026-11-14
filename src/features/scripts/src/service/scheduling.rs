@@ -15,41 +15,6 @@ impl ScriptService {
         self.changed(Some(id));
         Ok(())
     }
-    async fn claim_next(
-        &self,
-        stale_before: DateTime<Utc>,
-        remote: bool,
-    ) -> Result<Option<ScriptRunClaim>, ScriptError> {
-        let result = self.store.claim_next(stale_before, remote).await?;
-        for script_id in result.recovered_scripts {
-            self.changed(Some(script_id));
-        }
-        Ok(result.claim)
-    }
-    pub async fn process_one(&self, cancellation: &CancellationToken) -> Result<bool, ScriptError> {
-        if !self.options.enabled {
-            return Ok(false);
-        }
-        let stale_before = Utc::now()
-            - chrono::Duration::from_std(self.stale_after)
-                .map_err(|error| ScriptError::Storage(error.to_string()))?;
-        if let Ok(_permit) = self.slots.clone().try_acquire_owned()
-            && let Some(claim) = self.claim_next(stale_before, false).await?
-        {
-            self.execute_claim(&claim, cancellation, Some(&self.progress))
-                .await?;
-            return Ok(true);
-        }
-        let Ok(_permit) = self.remote_slots.clone().try_acquire_owned() else {
-            return Ok(false);
-        };
-        let Some(claim) = self.claim_next(stale_before, true).await? else {
-            return Ok(false);
-        };
-        self.execute_claim(&claim, cancellation, Some(&self.progress))
-            .await?;
-        Ok(true)
-    }
 }
 
 impl ScriptService {

@@ -89,8 +89,11 @@ pub async fn build_runs(
                 controller_result(result)?;
             }
             let mut preparation_busy = false;
+            let mut fallback = Duration::from_secs(30);
             if controllers.len() < tracking_slots {
-                let Some(permit) = admission.enter("Builds", &cancellation).await else { break; };
+                let Some(permit) = admission.enter("Builds", &cancellation).await else {
+                    break;
+                };
                 if let Some(preparation) = service.try_preparation() {
                     // Complete this short durable claim even if shutdown arrives.
                     // A returned claim is always handed to an owned controller.
@@ -100,12 +103,22 @@ pub async fn build_runs(
                         let cancellation = cancellation.clone();
                         controllers.spawn(async move {
                             let _admission = permit;
-                            let _tracking = citadel_runtime::runtime_metrics::RuntimeWork::BuildTracking.start();
-                            service.execute_claim(claim, preparation, &cancellation).await
+                            let _tracking =
+                                citadel_runtime::runtime_metrics::RuntimeWork::BuildTracking
+                                    .start();
+                            service
+                                .execute_claim(claim, preparation, &cancellation)
+                                .await
                         });
                         continue;
                     }
-                } else { preparation_busy = true; }
+                    if let Some(deadline) = service.next_retry_at().await? {
+                        let delay = (deadline - chrono::Utc::now()).to_std().unwrap_or_default();
+                        fallback = delay.min(fallback).max(Duration::from_millis(250));
+                    }
+                } else {
+                    preparation_busy = true;
+                }
             }
             tokio::select! {
                 () = cancellation.cancelled() => break,
@@ -113,11 +126,12 @@ pub async fn build_runs(
                     if let Some(result) = result { controller_result(result)?; }
                 }
                 () = service.preparation_available(), if preparation_busy => {},
-                _ = super::super::notifications::wait(&mut wake, &cancellation, Duration::from_secs(2)) => {},
+                _ = super::super::notifications::wait(&mut wake, &cancellation, fallback) => {},
             }
         }
         Ok(())
-    }.await;
+    }
+    .await;
     if result.is_err() {
         cancellation.cancel();
     }

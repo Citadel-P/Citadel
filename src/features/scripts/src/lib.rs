@@ -20,7 +20,7 @@ pub use runs::{
     ScriptRunResult, code_hash, redact_logs,
 };
 pub use runtime::{ScriptEntitlements, ScriptRunTokenIssuer, ScriptRuntimeConfig};
-pub use service::ScriptService;
+pub use service::{ClaimedScriptRun, ScriptService};
 pub use tasks::ScriptTaskSpawner;
 #[cfg(test)]
 mod tests;

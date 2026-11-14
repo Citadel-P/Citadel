@@ -6,6 +6,7 @@ import {
 } from '@/api/generated/api.types';
 
 const configuration: InstanceConfigurationView = {
+  databaseMaxConnections: 3,
   passwordMinimumLength: 15,
   browserSessionLifetimeDays: 30,
   serviceAccountDefaultTokenLifetimeDays: 90,

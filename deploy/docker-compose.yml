@@ -40,6 +40,7 @@ services:
 
   pg_db:
     image: postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+    command: ["postgres", "-c", "shared_buffers=64MB"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_USER:?Set PG_USER in .env}

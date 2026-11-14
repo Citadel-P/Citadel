@@ -62,7 +62,7 @@ impl PostgresCopyRepository {
             } else {
                 "Copy stopped. No workload was created. Destination volumes are retained, including partial data from failed restores. Inspect and explicitly remove unwanted volumes after verifying their ownership."
             };
-            sqlx::query("UPDATE resourcecopies SET status=$2,message=$3,updatedat=CURRENT_TIMESTAMP WHERE id=$1").bind(id).bind(status).bind(message).execute(&mut *tx).await.map_err(storage_error)?;
+            sqlx::query("UPDATE resourcecopies SET status=$2,message=$3,updatedat=CURRENT_TIMESTAMP WHERE id=$1 AND (status IS DISTINCT FROM $2 OR message IS DISTINCT FROM $3)").bind(id).bind(status).bind(message).execute(&mut *tx).await.map_err(storage_error)?;
         } else if let Some(storage_result) = storage_result
             && !current.restores.is_empty()
             && current.restores.iter().all(|r| r.status == "Succeeded")
@@ -95,12 +95,6 @@ impl PostgresCopyRepository {
                     }
                 }
             }
-        } else {
-            sqlx::query("UPDATE resourcecopies SET updatedat=CURRENT_TIMESTAMP WHERE id=$1")
-                .bind(id)
-                .execute(&mut *tx)
-                .await
-                .map_err(storage_error)?;
         }
         let result = progress(&mut tx, actor, id).await?;
         if result.status != current.status

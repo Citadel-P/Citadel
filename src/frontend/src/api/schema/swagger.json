@@ -7302,6 +7302,45 @@
         ],
         "type": "object"
       },
+      "DatabaseConnectionsView": {
+        "properties": {
+          "borrowed": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "idle": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "open": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sharedBuffersBytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "maximum",
+          "open",
+          "idle",
+          "borrowed"
+        ],
+        "type": "object"
+      },
       "DatabaseInstallationView": {
         "enum": [
           "Bundled",
@@ -11771,6 +11810,11 @@
             "minimum": 0,
             "type": "integer"
           },
+          "databaseMaxConnections": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
           "logFormat": {
             "$ref": "#/components/schemas/LogFormatView"
           },
@@ -11833,6 +11877,7 @@
           }
         },
         "required": [
+          "databaseMaxConnections",
           "passwordMinimumLength",
           "browserSessionLifetimeDays",
           "serviceAccountDefaultTokenLifetimeDays",
@@ -11928,6 +11973,14 @@
             ]
           },
           "buildTrackingSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "databaseMaxConnections": {
+            "format": "int32",
             "minimum": 0,
             "type": [
               "integer",
@@ -14799,6 +14852,14 @@
             ]
           },
           "buildTrackingSlots": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "databaseMaxConnections": {
+            "format": "int32",
             "minimum": 0,
             "type": [
               "integer",
@@ -51180,6 +51241,94 @@
         "x-citadel-principal": "human",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/instance/database-connections": {
+      "get": {
+        "operationId": "getDatabaseConnections",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseConnectionsView"
+                }
+              }
+            },
+            "description": "Query pool usage and connected PostgreSQL shared buffers"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get this Core's database connection snapshot (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false
       }
     },
     "/api/v1/instance/restart": {

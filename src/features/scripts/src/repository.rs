@@ -84,6 +84,12 @@ pub trait ScriptRepository: Send + Sync {
         script_id: Uuid,
         limit: usize,
     ) -> BoxFuture<'a, Result<Vec<ScriptRun>, ScriptError>>;
+    /// Narrow reconciliation read; execution payload and logs are fetched only at completion.
+    fn run_status(
+        &self,
+        script_id: Uuid,
+        run_id: Uuid,
+    ) -> BoxFuture<'_, Result<ScriptRunStatus, ScriptError>>;
     fn get_run<'a>(
         &'a self,
         script_id: Uuid,

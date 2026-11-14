@@ -373,6 +373,12 @@ struct InstanceSettingsStore {
 }
 
 impl citadel_instance::InstanceRepository for InstanceSettingsStore {
+    fn database_connections(
+        &self,
+    ) -> BoxFuture<'_, Result<citadel_instance::DatabaseConnections, citadel_instance::InstanceError>>
+    {
+        unreachable!("update checks do not read database diagnostics")
+    }
     fn installation_settings(
         &self,
     ) -> BoxFuture<

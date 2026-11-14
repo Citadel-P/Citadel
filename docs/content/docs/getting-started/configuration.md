@@ -113,6 +113,33 @@ runtime metrics and logs; increasing the sample-count batch setting does not byp
 these byte limits. Sampling continues after a rejected capture. These limits do not
 cap PostgreSQL memory or change the memory figures shown for containers.
 
+Core uses at most three PostgreSQL query connections by default to reduce
+per-session memory. Dedicated notification and background-job lease connections
+are separate. Administrators can change **Maximum query connections per Core** in
+**Administration → Instance → Config → Database connections**, then restart Core.
+Additional sessions allow more concurrent queries but can retain more database memory.
+An explicit `CITADEL_DATABASE_MAX_CONNECTIONS` environment variable takes precedence
+and makes this field deployment-managed. The saved value is an installation-wide
+default; an environment override applies to the individual Core process.
+
+The section also shows a snapshot of this Core's open, borrowed and idle query
+connections, and the connected PostgreSQL server's configured shared-buffer budget.
+These are not cluster-wide counts or current memory measurements. Dedicated background
+connections and other database clients consume additional connection capacity.
+The snapshot does not poll. If the server setting cannot be read, it shows **Unavailable**.
+For external PostgreSQL, your database administrator or provider manages server
+settings and restarts; Citadel does not change them from this page.
+
+The packaged Compose files start PostgreSQL with `shared_buffers=64MB`. This is
+the database page-buffer budget, not a total memory limit; query sessions and the
+operating system's filesystem cache consume additional memory. For a larger
+database workload, edit the `pg_db.command` value in your Compose file, for example
+to `["postgres", "-c", "shared_buffers=128MB"]`. In-app updates support this literal
+positive integer size in MB. Changing it requires recreating the PostgreSQL
+container with Compose and briefly interrupts database access; preserve its data
+volume. Updating only the Core image does not change an existing Compose file or
+the running PostgreSQL buffer setting.
+
 Statistics and container health history reads share two slots per Core (one with a one-connection query
 pool) and a five-second database statement timeout. Busy or timed-out reads return
 an error; retry, or choose a shorter statistics history range.

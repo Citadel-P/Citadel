@@ -128,6 +128,18 @@ impl PostgresCopyRepository {
         drop(access);
         self.get_copy(actor, id).await
     }
+    pub(super) async fn read_restoring(&self, actor: ActorId, id: Uuid) -> Result<bool, CopyError> {
+        let _access = self.access(actor).await?;
+        sqlx::query_scalar(
+            "SELECT status='Restoring' FROM resourcecopies WHERE id=$1 AND actorid=$2",
+        )
+        .bind(id)
+        .bind(actor.value())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(storage_error)?
+        .ok_or(CopyError::NotFound)
+    }
     pub(super) async fn get_copy(
         &self,
         actor: ActorId,

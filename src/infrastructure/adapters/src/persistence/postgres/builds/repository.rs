@@ -11,6 +11,17 @@ impl PostgresBuildRepository {
 use super::*;
 
 impl BuildRepository for PostgresBuildRepository {
+    fn next_retry_at(
+        &self,
+    ) -> BoxFuture<'_, Result<Option<chrono::DateTime<chrono::Utc>>, BuildError>> {
+        Box::pin(async {
+            sqlx::query_scalar("SELECT min(LEAST(nextattemptat,queuedat+INTERVAL '24 hours')) FROM buildruns WHERE status='Queued' AND nextattemptat>CURRENT_TIMESTAMP")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(storage)
+        })
+    }
+
     fn health_pools(
         &self,
         after: Uuid,

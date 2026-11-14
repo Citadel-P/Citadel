@@ -8,6 +8,10 @@ pub(super) fn read_overrides(
     get: impl Fn(&str) -> Option<String>,
 ) -> Result<InstanceOverrides, ConfigError> {
     Ok(InstanceOverrides {
+        database_max_connections: optional::<u32>(
+            &get,
+            environment::CITADEL_DATABASE_MAX_CONNECTIONS,
+        )?,
         password_minimum_length: optional::<u32>(
             &get,
             environment::CITADEL_PASSWORDS_MINIMUM_LENGTH,
@@ -164,6 +168,7 @@ impl Config {
             maximum_token_lifetime_days: i64::from(c.service_account_maximum_token_lifetime_days),
             maximum_active_tokens_per_account: i64::from(c.service_account_maximum_active_tokens),
         };
+        self.database_max_connections = c.database_max_connections;
         self.probe_interval =
             Duration::from_secs(u64::from(c.statistics_collection_interval_seconds));
         self.stats_flush_interval =
@@ -230,6 +235,11 @@ mod tests {
         let defaults = InstanceConfiguration::default();
         assert_eq!(defaults.effective(&absent), defaults);
         let cases = [
+            (
+                "CITADEL_DATABASE_MAX_CONNECTIONS",
+                "databaseMaxConnections",
+                "8",
+            ),
             (
                 "CITADEL_PASSWORDS_MINIMUM_LENGTH",
                 "passwordMinimumLength",
@@ -384,10 +394,16 @@ mod tests {
         }
         let mut config = Config::from_env_for_startup().unwrap();
         let mut saved = InstanceConfiguration {
+            database_max_connections: 7,
             statistics_collection_interval_seconds: 17,
             ..Default::default()
         };
         config.resolve_instance_configuration(&saved).unwrap();
+        assert_eq!(config.database_max_connections, 7);
+        config.instance_overrides.database_max_connections = Some(4);
+        config.resolve_instance_configuration(&saved).unwrap();
+        assert_eq!(config.database_max_connections, 4);
+        assert_eq!(config.instance_configuration.database_max_connections, 4);
         let now = tokio::time::Instant::now();
         let mut samples = crate::workers::schedule::interval("local-stats", config.probe_interval);
         let first = samples.tick().await;

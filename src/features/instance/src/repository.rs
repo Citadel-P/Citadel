@@ -4,6 +4,9 @@ use citadel_identity::ActorPrincipal;
 use futures_util::future::BoxFuture;
 
 pub trait InstanceRepository: Send + Sync {
+    fn database_connections(
+        &self,
+    ) -> BoxFuture<'_, Result<crate::DatabaseConnections, InstanceError>>;
     fn installation_settings(&self) -> BoxFuture<'_, Result<InstallationSettings, InstanceError>>;
     fn patch_installation_settings<'a>(
         &'a self,

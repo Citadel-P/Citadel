@@ -6,8 +6,6 @@ impl ScriptService {
         cancellation: &CancellationToken,
         progress: Option<&tokio::sync::broadcast::Sender<ScriptProgress>>,
     ) -> Result<(), ScriptError> {
-        // Verify before registering local state or starting external work.
-        let cancelled = self.store.cancellation_requested(claim.run.id).await?;
         self.changed(Some(claim.run.script_id));
         let run_cancellation = cancellation.child_token();
         self.active_runs
@@ -18,6 +16,9 @@ impl ScriptService {
             entries: &self.active_runs,
             id: claim.run.id,
         };
+        // Register before the durable recheck: cancellation either reaches this
+        // token or is observed here before any process starts.
+        let cancelled = self.store.cancellation_requested(claim.run.id).await?;
         if let Some(sender) = progress {
             progress::send(
                 sender,
@@ -32,7 +33,10 @@ impl ScriptService {
         }
         let execution = self.execute(claim, &run_cancellation, progress);
         tokio::pin!(execution);
-        let mut check = tokio::time::interval(Duration::from_secs(1));
+        let mut check = tokio::time::interval_at(
+            tokio::time::Instant::now() + Duration::from_secs(30),
+            Duration::from_secs(30),
+        );
         check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let result = loop {
             tokio::select! {
@@ -87,6 +91,7 @@ impl ScriptService {
         {
             token.cancel();
         }
+        self.state_changed.send_modify(|_| {});
         self.changed(Some(script_id));
         Ok(())
     }

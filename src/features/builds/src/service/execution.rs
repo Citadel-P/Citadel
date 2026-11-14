@@ -2,6 +2,10 @@ use super::*;
 use crate::runs::logs;
 
 impl BuildService {
+    pub async fn next_retry_at(&self) -> Result<Option<chrono::DateTime<chrono::Utc>>, BuildError> {
+        self.store.next_retry_at().await
+    }
+
     pub async fn process_one(&self, shutdown: &CancellationToken) -> Result<bool, BuildError> {
         let preparation = tokio::select! {
             () = shutdown.cancelled() => return Ok(false),

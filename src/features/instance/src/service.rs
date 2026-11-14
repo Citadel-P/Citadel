@@ -67,6 +67,16 @@ impl InstanceService {
         self.installation_settings().await
     }
 
+    pub async fn database_connections(
+        &self,
+        principal: &ActorPrincipal,
+    ) -> Result<crate::DatabaseConnections, InstanceError> {
+        if !principal.is_administrator() {
+            return Err(InstanceError::Forbidden);
+        }
+        self.repository.database_connections().await
+    }
+
     pub async fn patch_installation_settings(
         &self,
         principal: &ActorPrincipal,

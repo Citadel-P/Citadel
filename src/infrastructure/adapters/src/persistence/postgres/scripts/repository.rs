@@ -106,6 +106,24 @@ impl ScriptRepository for PostgresScriptRepository {
         self.claim_next_impl(stale_before, remote)
     }
 
+    fn run_status(
+        &self,
+        script_id: Uuid,
+        run_id: Uuid,
+    ) -> BoxFuture<'_, Result<citadel_scripts::ScriptRunStatus, ScriptError>> {
+        Box::pin(async move {
+            let status: String =
+                sqlx::query_scalar("SELECT status FROM scriptruns WHERE id=$1 AND scriptid=$2")
+                    .bind(run_id)
+                    .bind(script_id)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(storage)?
+                    .ok_or(ScriptError::NotFound)?;
+            serde_json::from_value(serde_json::Value::String(status)).map_err(storage)
+        })
+    }
+
     fn cancellation_requested(&self, run_id: Uuid) -> BoxFuture<'_, Result<bool, ScriptError>> {
         Box::pin(async move {
             sqlx::query_scalar("SELECT cancelrequested FROM scriptruns WHERE id=$1")

@@ -6,6 +6,7 @@ use serde_json::Value;
 
 const SERVICE_FIELDS: &[&str] = &[
     "image",
+    "command",
     "cpus",
     "mem_limit",
     "memswap_limit",
@@ -62,8 +63,9 @@ pub(super) fn validate_input(bytes: &[u8]) -> Result<(), UpdateError> {
     )?;
     let services = value.get("services").ok_or_else(invalid)?;
     fields(services, &["server", "pg_db"])?;
-    for service in services.as_object().ok_or_else(invalid)?.values() {
+    for (name, service) in services.as_object().ok_or_else(invalid)? {
         fields(service, SERVICE_FIELDS)?;
+        validate_database_command(name, service)?;
         if let Some(env_files) = service.get("env_file") {
             // Only this captured private environment file may be opened by Compose.
             let files = env_files.as_array().ok_or_else(invalid)?;
@@ -123,6 +125,8 @@ fn untagged(value: &serde_yaml_ng::Value) -> bool {
 pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
     let core = &config["services"]["server"];
     let database = &config["services"]["pg_db"];
+    validate_database_command("server", core)?;
+    validate_database_command("pg_db", database)?;
     for service in [core, database] {
         if service["restart"] != "unless-stopped" {
             return Err(invalid());
@@ -231,6 +235,28 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
         }
     }
     Ok(())
+}
+
+// Allow the packaged buffer budget and literal operator sizing, without opening
+// the installation profile to shell commands or external PostgreSQL config files.
+fn validate_database_command(name: &str, service: &Value) -> Result<(), UpdateError> {
+    // Compose emits null for the image's default command even when the source
+    // file has no command key. That is not an executable override.
+    let Some(command) = service.get("command").filter(|value| !value.is_null()) else {
+        return Ok(());
+    };
+    let args = command.as_array().ok_or_else(invalid)?;
+    if name != "pg_db" || args.len() != 3 || args[0] != "postgres" || args[1] != "-c" {
+        return Err(invalid());
+    }
+    let size = args[2]
+        .as_str()
+        .and_then(|value| value.strip_prefix("shared_buffers="))
+        .and_then(|value| value.strip_suffix("MB"))
+        .filter(|value| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|value| *value > 0);
+    size.map(|_| ()).ok_or_else(invalid)
 }
 
 fn mounts(service: &Value, expected: &[(&str, &str, &str, bool)]) -> Result<(), UpdateError> {
