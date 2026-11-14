@@ -1587,21 +1587,34 @@ available, otherwise that field is empty. Keep database/image settings identical
 and retain the environment metadata and raw captures outside the repository.
 
 These measurements establish less database work, not a particular RAM reduction.
-The 2026-11-14 local release comparison against `33db4867` completed all nine
-scenarios, including four Stack deployments/recreations and the normal retention
-cycle. It exposed two remaining issues: partition expiry and compaction acquire
-raw/rollup relation locks in conflicting orders (confirmed with a separate
-two-session blocking probe), and paged physical discovery ends useful compaction
-batches too early after a scan wraps. With 2,000 churned identities and four
-populated sources, baseline completed 93 source-hour compactions (5,332 rollups),
-while the pending changes completed 15 (900 rollups) in the same backlog window.
-Both retained 10,001 expired samples and 95,001 expired Activities after the
-partition-lock timeout. Lower CPU/WAL in that run therefore does not establish
-an equal-work improvement. Settled PostgreSQL non-cache memory was about
-213 versus 207 MiB; Core PSS was about 46 versus 52 MiB. Resolve the lock ordering
-and backlog throughput before treating these changes as deployment-validated.
-These are single-run local observations with sampler overhead, not production
-sizing guarantees; Core PSS excludes helper memory and container file cache.
+The initial 2026-11-14 local release comparison against `33db4867` exposed two
+maintenance defects: cross-family partition locks conflicted with compaction,
+and paged discovery treated a productive scan as exhausted. The follow-up commits
+partition changes per parent family and carries committed scan progress with the
+process-owned cursor across worker budgets. A scan must revisit productive
+sources before it can report idle; the existing pass/time budgets remain unchanged.
+
+A matched rerun used fresh fixtures and all nine scenarios, including four Stack
+deployments/recreations and the normal retention cycle. With 2,000 churned
+identities and four populated sources, the fixes produced 5,332 rollups in 92
+compaction statements, versus 900 in 15 statements before the fixes and 5,332 in
+93 statements on the deployed baseline. Expired samples and Activities both
+reached zero; the earlier runs left 10,001 and 95,001 respectively. Remaining raw
+rows were 771, including live telemetry and newest-minute samples. No retention,
+compaction or slow-statement warnings appeared in the fixed run.
+
+Against the deployed baseline, sampled PostgreSQL CPU peak was 65.5% → 41.9%,
+while average CPU was 2.32% → 2.52%. Total SQL execution was 6.23 → 7.41 seconds,
+WAL 62.6 → 73.2 MiB and temporary writes 3.1 → 18.3 MiB: the fixed run also
+completed the previously interrupted expiry work. Compaction execution itself
+was 4.28 → 3.89 seconds. These totals do not establish an equal-work reduction in
+all resource use. Settled PostgreSQL working set was 238 → 225 MiB, non-cache
+memory 213 → 211 MiB, and Core PSS 46 → 52 MiB. Memory uses the median of the
+last 30 seconds, excluding endpoint snapshot processes. These single-run local
+observations include sampler overhead and are not production sizing guarantees;
+Core PSS excludes helper memory and container file cache. Ordinary telemetry
+SQL timing varied between runs, so no general throughput gain is claimed.
+
 The conditional mature Build-retention JSON/reference candidate and host-minute
 sizing optimization remain separate investigations; their protection/sizing rules
 are unchanged in this follow-up.
