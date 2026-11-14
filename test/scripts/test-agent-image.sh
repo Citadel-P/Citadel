@@ -2,6 +2,7 @@
 set -euo pipefail
 
 image="${1:?Usage: test-agent-image.sh IMAGE [EXPECTED_VERSION]}"
+bash "$(dirname "${BASH_SOURCE[0]}")/test-script-sdk-image.sh" "$image"
 expected_version="${2:-}"
 fixture="citadel-agent-image-test-$$-$RANDOM"
 socket="${CITADEL_AGENT_TEST_DOCKER_SOCKET:-/var/run/docker.sock}"

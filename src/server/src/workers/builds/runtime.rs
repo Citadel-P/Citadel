@@ -53,8 +53,16 @@ pub async fn pool_health(
     cancellation: CancellationToken,
     service: Arc<BuildService>,
     edge: Arc<dyn citadel_builds::BuildPoolConnections>,
+    direct: Arc<dyn citadel_builds::BuildPoolConnections>,
 ) -> Result<(), BuildError> {
     while !cancellation.is_cancelled() {
+        let refreshed = tokio::select! {
+            () = cancellation.cancelled() => return Ok(()),
+            result = direct.expire_connections() => result,
+        };
+        if let Err(error) = refreshed {
+            tracing::warn!(%error, "Direct Build Pool connection reconciliation failed");
+        }
         if let Err(error) = edge.expire_connections().await {
             tracing::warn!(%error, "Build Pool connection reconciliation failed");
         }

@@ -17,3 +17,5 @@ pub mod volumes;
 pub mod resource_copies;
 
 pub mod agent_updates;
+
+pub mod build_pools;

@@ -156,6 +156,8 @@ pub struct DockerClient {
     terminal_tasks: std::sync::Arc<citadel_runtime::DynamicTasks>,
     pub(crate) host_disk: std::sync::Arc<crate::host_disk_usage::HostDiskUsageProvider>,
     pub(super) client: Client,
+    pub(crate) image_metadata_client:
+        std::sync::Arc<std::sync::OnceLock<Result<Client, reqwest::Error>>>,
     endpoint: DockerEndpoint,
     pub(super) base_url: String,
     pub(super) request_timeout: Duration,
@@ -219,6 +221,7 @@ impl DockerClient {
                 host_root.into(),
             )),
             client,
+            image_metadata_client: Default::default(),
             endpoint,
             base_url,
             request_timeout,

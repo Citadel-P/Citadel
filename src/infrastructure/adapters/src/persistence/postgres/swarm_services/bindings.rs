@@ -19,6 +19,10 @@ pub struct PostgresSwarmServiceBindingResolver {
 }
 
 impl PostgresSwarmServiceBindingResolver {
+    pub fn with_resolver(pool: PgPool, secrets: PostgresSecretValueResolver) -> Self {
+        Self { pool, secrets }
+    }
+
     pub fn new(
         pool: PgPool,
         protector: Arc<dyn SecretProtector>,
@@ -63,6 +67,13 @@ impl SwarmServiceBindingResolverPort for PostgresSwarmServiceBindingResolver {
             let mut effective = std::collections::BTreeMap::new();
             for row in rows {
                 let name: String = row.try_get("name").map_err(storage)?;
+                effective.insert(name.to_ascii_lowercase(), row);
+            }
+            // Resolve only winning definitions: shadowed Secrets must not perform
+            // provider requests or prevent an authorized resource override.
+            let mut entries = Vec::with_capacity(effective.len());
+            for row in effective.into_values() {
+                let name: String = row.try_get("name").map_err(storage)?;
                 let secret = row.try_get::<String, _>("kind").map_err(storage)? == "Secret";
                 let value = if secret {
                     if row
@@ -102,18 +113,13 @@ impl SwarmServiceBindingResolverPort for PostgresSwarmServiceBindingResolver {
                             })?,
                     )
                 };
-                effective.insert(
-                    name.to_ascii_lowercase(),
-                    ResolvedSwarmServiceBinding {
-                        name,
-                        value,
-                        secret,
-                    },
-                );
+                entries.push(ResolvedSwarmServiceBinding {
+                    name,
+                    value,
+                    secret,
+                });
             }
-            Ok(ResolvedSwarmServiceBindings {
-                entries: effective.into_values().collect(),
-            })
+            Ok(ResolvedSwarmServiceBindings { entries })
         })
     }
 }

@@ -5,7 +5,8 @@ use axum::{
     http::{HeaderMap, StatusCode, Uri},
     response::Response,
 };
-use citadel_execution::ProcessOutput;
+use citadel_execution::{ProcessError, ProcessOutput, ProcessRequest};
+use citadel_updates::RELEASE_OIDC_ISSUER;
 use serde_json::{Value, json};
 use std::sync::{
     Mutex,
@@ -42,10 +43,17 @@ impl ProcessRunner for Runner {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::SeqCst);
             assert_eq!(request.program, "cosign");
+            let image = request.arguments.last().unwrap().to_str().unwrap();
+            let agent = image.contains("citadel.agent@");
+            let expected_image = if agent {
+                format!("ghcr.io/citadel-p/citadel.agent@sha256:{}", "a".repeat(64))
+            } else {
+                format!("ghcr.io/citadel-p/citadel@sha256:{}", "b".repeat(64))
+            };
             assert_eq!(request.arguments, ["verify", "--certificate-identity",
                 "https://github.com/Citadel-P/Citadel/.github/workflows/ci.yml@refs/tags/v1.2.3",
                 "--certificate-oidc-issuer", RELEASE_OIDC_ISSUER,
-                "--check-claims=true", "--output=json", &format!("ghcr.io/citadel-p/citadel@sha256:{}", "b".repeat(64))]
+                "--check-claims=true", "--output=json", &expected_image]
                 .map(std::ffi::OsString::from));
             assert_eq!(request.environment.len(), 1);
             assert_eq!(request.environment[0].0, "HOME");
@@ -83,6 +91,7 @@ struct Fixture {
     runner: Arc<Runner>,
     server: Option<tokio::task::JoinHandle<()>>,
     requests: Arc<AtomicUsize>,
+    publication: Arc<Mutex<Value>>,
 }
 impl Fixture {
     async fn start(
@@ -100,8 +109,10 @@ impl Fixture {
                 .collect();
             format!("{digest}  release-manifest.json\n")
         });
+        let publication = Arc::new(Mutex::new(publication));
+        let current_publication = publication.clone();
         let router = Router::new().fallback(move |uri: Uri, headers: HeaderMap| {
-            let publication = publication.clone();
+            let publication = current_publication.lock().unwrap().clone();
             let manifest = manifest.clone();
             let checksum = checksum.clone();
             count.fetch_add(1, Ordering::SeqCst);
@@ -136,6 +147,7 @@ impl Fixture {
             runner,
             server: Some(server),
             requests,
+            publication,
         }
     }
     async fn normal() -> Self {
@@ -393,4 +405,38 @@ async fn cancellation_waits_for_verifier_cleanup_before_removing_its_private_hom
     runner.finish.notify_one();
     assert!(matches!(attempt.await, Err(UpdateError::Cancelled)));
     assert!(!home.exists());
+}
+
+#[tokio::test]
+async fn agent_checks_revalidate_publication_even_when_the_signature_is_cached() {
+    let fixture = Fixture::normal().await;
+    let mut signature = valid_signature();
+    signature.stdout = String::from_utf8(signature.stdout)
+        .unwrap()
+        .replace(&"b".repeat(64), &"a".repeat(64))
+        .into_bytes();
+    *fixture.runner.response.lock().unwrap() = Some(Ok(signature));
+    let cancel = CancellationToken::new();
+    fixture.source.agent("1.2.3", &cancel).await.unwrap();
+    fixture.source.agent("1.2.3", &cancel).await.unwrap();
+    assert_eq!(fixture.requests.load(Ordering::SeqCst), 6);
+    assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), 1);
+    // Removing the publication cannot be masked by cached signature evidence.
+    fixture.publication.lock().unwrap()["draft"] = json!(true);
+    assert!(fixture.source.agent("1.2.3", &cancel).await.is_err());
+    assert_eq!(fixture.requests.load(Ordering::SeqCst), 7);
+    assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), 1);
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn core_artifacts_are_reverified_on_every_request() {
+    let fixture = Fixture::normal().await;
+    let cancel = CancellationToken::new();
+    fixture.source.verify("1.2.3", &cancel).await.unwrap();
+    *fixture.runner.response.lock().unwrap() = Some(Ok(valid_signature()));
+    fixture.source.verify("1.2.3", &cancel).await.unwrap();
+    assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(fixture.requests.load(Ordering::SeqCst), 6);
+    fixture.stop().await;
 }

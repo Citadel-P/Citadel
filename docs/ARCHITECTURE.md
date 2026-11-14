@@ -181,6 +181,33 @@ exiting or applying a settings change. Policy monitoring and the worker are join
 on shutdown; neither drops a committing check. The check endpoint returns the
 service result without rereading check state.
 
+Release discovery and artifact reads each own a long-lived HTTP client with their
+respective redirect policy, request timeout and response-size bounds. Each pool
+retains at most one idle connection per host for 90 seconds. Agent artifact checks
+still fetch and validate current publication metadata and manifest checksums on
+every request. Successful Agent signature verification retains only one
+version/full-image-digest pair for 15 minutes in process memory; expiry, a changed
+key or restart requires verification again. Concurrent verifiers share that result
+through a cancellable lock. Failed or cancelled verification is never cached, and
+runner cancellation cleanup is awaited before releasing the lock. Core artifact
+verification remains uncached. This reduces repeated check work; it does not evict
+filesystem cache populated by the first verifier execution.
+
+Workload image metadata checks in Core and Agents lazily initialize a separate
+registry HTTPS client on the long-lived Docker client. Docker client clones share
+its connection pool (one idle connection per host, expiring after 90 seconds).
+Every inspection still reads current metadata and owns its credentials and bearer
+token; authentication is never cached on the shared transport. Redirects remain
+disabled, with the existing timeout, response-size and digest checks preserved.
+
+Core and Agent select their executable command before constructing Tokio. The
+container healthcheck uses a current-thread runtime and probes the actual HTTP/TLS
+listener; serving and other commands retain the multithreaded runtime. Automatic
+loopback probes bypass proxies, reject redirects and require HTTP 200. Agent also
+validates its healthy response body. Core's explicit `healthcheck --url` retains
+its custom URL redirect/status behavior. TLS chain validation and the narrowly
+scoped loopback hostname handling are unchanged, as is the entrypoint privilege drop.
+
 Update availability uses the existing Alert Rules, observation outbox and delivery outbox.
 Core observations follow successful official release discovery for the running Core's
 release channel, including installations that require manual updates. Notices do not
@@ -1198,6 +1225,18 @@ persisted claims and may continue after a browser disconnect. Recovery inspects
 and settles interrupted work; it must not blindly replay ambiguous mutations.
 PostgreSQL notifications are wakeups, while claims and queue rows remain authoritative.
 
+Ordinary Direct Platform scripts, builds and updates reuse the existing Platform
+runtime registry. Registered Direct Build Pools have one composition-owned registry
+shared by health checks, scripts, builds and updates. It rechecks registration on
+selection, normalizes endpoints and shares a lazy channel per resource ID under an
+immutable transport/trust policy. Channel creation holds only a short map lock;
+connects and RPCs run outside it. Signer clones observe key rotation. The existing
+pool-health worker retires deleted or reconfigured registrations; operations already
+holding a client keep ownership. These registries cache neither authorization nor
+health. Recovery and cleanup of retained attempts still connect to the persisted
+original endpoint and verify the original execution authority; they never select a
+replacement solely because it has the same resource ID.
+
 Platform and Build Pool connection transitions publish typed events on
 `citadel_connection_events` within the transaction that persists the transition
 and its activity. PostgreSQL delivers them after commit. The shared
@@ -1650,6 +1689,15 @@ and affected runtime mappings, not just successful compilation.
 Test runners and fixture requirements are listed in [test/README.md](../test/README.md).
 
 ### Execution capacity and renewable backup ownership
+
+Stack, Deployment and Swarm Service binding resolution selects effective definitions
+before validating or resolving values. The existing case-normalized ordering and
+scope precedence determine the winner; shadowed external secrets make no Vault
+request. Invalid winning secrets still fail without falling back. Composition
+creates one cloneable secret resolver for catalog validation, bindings, backups and
+builds. Its Vault connection pool is shared, while grants, provider configuration,
+tokens and plaintext values are resolved per request. Tokens stay on individual
+requests; TLS, redirect, deadline and response-size policies are unchanged.
 
 Build dispatch uses bounded controllers with a separate preparation semaphore.
 A host reservation precedes Git preparation; `dispatchstarted` is committed with

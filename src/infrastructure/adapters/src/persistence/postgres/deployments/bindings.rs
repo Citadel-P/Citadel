@@ -20,6 +20,10 @@ pub struct PostgresDeploymentBindingResolver {
 }
 
 impl PostgresDeploymentBindingResolver {
+    pub fn with_resolver(pool: PgPool, secrets: PostgresSecretValueResolver) -> Self {
+        Self { pool, secrets }
+    }
+
     pub fn new(pool: PgPool, protector: Arc<dyn SecretProtector>) -> Result<Self, DeploymentError> {
         Ok(Self {
             pool: pool.clone(),
@@ -59,6 +63,13 @@ impl DeploymentBindingResolverPort for PostgresDeploymentBindingResolver {
 
             let mut effective = BTreeMap::new();
             for row in rows {
+                let name: String = row.try_get("name").map_err(storage)?;
+                effective.insert(name.to_ascii_lowercase(), row);
+            }
+            // Resolve only winning definitions: shadowed Secrets must not perform
+            // provider requests or prevent an authorized resource override.
+            let mut entries = Vec::with_capacity(effective.len());
+            for row in effective.into_values() {
                 let name: String = row.try_get("name").map_err(storage)?;
                 let kind: String = row.try_get("kind").map_err(storage)?;
                 let scope: String = row.try_get("scope").map_err(storage)?;
@@ -110,19 +121,14 @@ impl DeploymentBindingResolverPort for PostgresDeploymentBindingResolver {
                     secret_delivery_mode: delivery,
                     target_path,
                 };
-                effective.insert(
-                    name.to_ascii_lowercase(),
-                    ResolvedDeploymentBinding {
-                        name,
-                        value,
-                        secret,
-                        snapshot,
-                    },
-                );
+                entries.push(ResolvedDeploymentBinding {
+                    name,
+                    value,
+                    secret,
+                    snapshot,
+                });
             }
-            Ok(ResolvedDeploymentBindings {
-                entries: effective.into_values().collect(),
-            })
+            Ok(ResolvedDeploymentBindings { entries })
         })
     }
 }

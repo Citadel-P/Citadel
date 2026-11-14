@@ -491,3 +491,6 @@ async fn private_ca_is_required_preserved_on_retarget_and_checks_the_hostname() 
     stop.cancel();
     task.await.unwrap();
 }
+
+#[path = "agent_transport/registered.rs"]
+mod registered;

@@ -547,20 +547,34 @@ impl AgentClient {
         {
             return Ok(self.clone());
         }
-        let mut client = self.at_address(&address, agent_id)?;
         let endpoint = agent_endpoint(
             &address,
             self.operation_timeout,
             self.ca_certificate.as_deref(),
         )?;
-        client.channel = tokio::select! {
+        let channel = tokio::select! {
             () = cancellation.cancelled() => return Err(cancelled_error()),
             result = tokio::time::timeout(self.operation_timeout, endpoint.connect()) => {
                 result.map_err(|_| timeout_error("connecting to the Agent"))?
                     .map_err(|error| RuntimeCapabilityError::new(RuntimeErrorKind::Unavailable, format!("failed to connect to the Agent: {error}"), true))?
             }
         };
-        Ok(client)
+        citadel_runtime::runtime_metrics::RuntimeWork::AgentChannelCreated.units(1);
+        Ok(Self {
+            channel,
+            signer: self.signer.clone().for_agent(agent_id),
+            operation_timeout: self.operation_timeout,
+            address,
+            allow_insecure: self.allow_insecure,
+            ca_certificate: self.ca_certificate.clone(),
+        })
+    }
+
+    pub(crate) fn normalize_address(
+        &self,
+        address: &str,
+    ) -> Result<String, RuntimeCapabilityError> {
+        validate_address(address, self.allow_insecure)
     }
 
     /// Apply additional private CA trust and retain it when selecting another Platform.
@@ -568,6 +582,9 @@ impl AgentClient {
         mut self,
         ca: Option<std::sync::Arc<[u8]>>,
     ) -> Result<Self, RuntimeCapabilityError> {
+        if self.ca_certificate == ca {
+            return Ok(self);
+        }
         self.channel =
             agent_endpoint(&self.address, self.operation_timeout, ca.as_deref())?.connect_lazy();
         self.ca_certificate = ca;

@@ -91,6 +91,8 @@ RUN chmod +x install-server-deps.sh \
 RUN adduser -D -H -u 65532 -G root -h /app citadel \
     && mkdir -p /app/data && chown -R 65532:0 /app
 COPY --chmod=0444 src/infrastructure/scripts/generated/citadel.js /app/scripts/citadel.js
+# COPY also applies the mode to newly created parent directories.
+RUN chmod 0755 /app/scripts
 COPY --from=volume-helper-build /tmp/citadel-volume-helper /usr/local/bin/citadel-volume-helper
 COPY --chmod=0755 src/tools/container/docker-entrypoint.sh /usr/local/bin/citadel-entrypoint
 EXPOSE 8000 8001

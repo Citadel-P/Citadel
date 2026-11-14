@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Exercise the packaged binaries against disposable services and data.
 image="${1:-citadel-rust:local}"
+bash "$(dirname "${BASH_SOURCE[0]}")/test-script-sdk-image.sh" "$image"
 postgres_image=postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
 fixture="citadel-runtime-test-$$-$RANDOM"
 core="$fixture-core"

@@ -33,7 +33,7 @@ pub(crate) fn artifacts(
     Ok(Arc::new(fixture()?))
 }
 
-pub(crate) fn source() -> Arc<dyn ReleaseSource> {
+pub(crate) fn source() -> Result<Arc<dyn ReleaseSource>, UpdateError> {
     struct Catalog;
     impl ReleaseSource for Catalog {
         fn releases(&self, _: ReleaseChannel) -> BoxFuture<'_, Result<Vec<Release>, UpdateError>> {
@@ -46,7 +46,7 @@ pub(crate) fn source() -> Arc<dyn ReleaseSource> {
             })
         }
     }
-    Arc::new(Catalog)
+    Ok(Arc::new(Catalog))
 }
 
 pub(crate) fn sources() -> Result<Vec<UpgradeSource>, UpdateError> {

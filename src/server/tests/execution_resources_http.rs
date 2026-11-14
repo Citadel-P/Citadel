@@ -165,7 +165,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .with_pool_checker(Arc::new(
             citadel_adapters::connectors::agent::build_pool_checker::AgentBuildPoolChecker {
                 admission: build_store.clone(),
-                agent: None,
+                direct: citadel_adapters::connectors::routing::build_pools::BuildPoolRuntimeRegistry::new(pool.clone(), None),
                 edge: edge.clone(),
             },
         ))

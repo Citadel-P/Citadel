@@ -17,6 +17,7 @@ use citadel_activities::ActivityService;
 use citadel_adapters::connectors::agent::client::AgentClient;
 use citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore;
 use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
+use citadel_adapters::persistence::postgres::bindings::secret_resolver::PostgresSecretValueResolver;
 use citadel_adapters::persistence::postgres::connection as postgres_runtime;
 use citadel_adapters::persistence::postgres::deployments::PostgresDeploymentRepository;
 use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryPersistence;
@@ -49,12 +50,17 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 pub(super) struct RuntimeContext {
+    pub secret_values: PostgresSecretValueResolver,
     pub local_execution_authority: uuid::Uuid,
     pub local_heavy_work: citadel_runtime::IoBudget,
     pub image_cache: Arc<citadel_adapters::connectors::registries::digest_cache::ImageDigestCache>,
     pub pool: PgPool,
     pub docker: DockerClient,
     pub agent: Option<AgentClient>,
+    pub platform_targets:
+        Arc<citadel_adapters::connectors::routing::platforms::registry::PlatformRuntimeRegistry>,
+    pub build_pool_targets:
+        Arc<citadel_adapters::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     pub edge_registry: citadel_adapters::connectors::edge::EdgeRegistry,
     pub cancellation: CancellationToken,
     pub dynamic_tasks: citadel_runtime::DynamicTasks,
@@ -180,6 +186,7 @@ impl ServerComponents {
             registries,
             registry_connections,
             secrets,
+            secret_values,
             git_accounts,
             git_execution,
             search,
@@ -201,9 +208,11 @@ impl ServerComponents {
             edge_registry,
             edge_service,
             runtime_targets,
+            build_pool_targets,
             container_runtime,
         } = connectors::build(config, &pool, &docker)?;
         let runtime = RuntimeContext {
+            secret_values,
             local_execution_authority: uuid::Uuid::now_v7(),
             local_heavy_work: citadel_runtime::IoBudget::new(
                 2.try_into().expect("positive capacity"),
@@ -213,6 +222,8 @@ impl ServerComponents {
             pool: pool.clone(),
             docker: docker.clone(),
             agent: agent.clone(),
+            build_pool_targets: build_pool_targets.clone(),
+            platform_targets: runtime_targets.clone(),
             edge_registry: edge_registry.clone(),
             cancellation: cancellation.clone(),
             dynamic_tasks: dynamic_tasks.clone(),
@@ -225,14 +236,7 @@ impl ServerComponents {
             alert_deliveries,
         } = alerts::build(config, &runtime, &entitlements);
         let scripts = scripts::build(config, &runtime, &identity, &entitlements, &alert_store)?;
-        let backups = backups::build(
-            config,
-            &runtime,
-            &secret_protector,
-            &identity,
-            &git_execution,
-            &entitlements,
-        )?;
+        let backups = backups::build(config, &runtime, &identity, &git_execution, &entitlements)?;
         let copy_hub = realtime_hub.clone();
         let copies = Arc::new(citadel_resource_copies::CopyService::new(
             Arc::new(citadel_adapters::persistence::postgres::resource_copies::PostgresCopyRepository::new(pool.clone())),
@@ -243,7 +247,6 @@ impl ServerComponents {
         let builds = builds::build(
             config,
             &runtime,
-            &secret_protector,
             &git_execution,
             &entitlements,
             &alert_store,
@@ -334,16 +337,9 @@ impl ServerComponents {
             tokio::sync::mpsc::Receiver<citadel_updates::UpdateInstallCommand>,
         )> = None;
         let update_installation = installation.as_ref().map(|(service, _)| service.clone());
-        let agent_updates = updates::build_agents(
-            config,
-            &pool,
-            &docker,
-            agent.clone(),
-            edge_registry.clone(),
-            &platform_state,
-            entitlements.clone(),
-        )?;
-        let checker = updates::build(&pool, realtime_hub.clone());
+        let agent_updates =
+            updates::build_agents(config, &runtime, &platform_state, entitlements.clone())?;
+        let checker = updates::build(&pool, realtime_hub.clone())?;
         let agent_updates = agent_updates.with_core(checker.clone(), update_installation.clone());
         let checker = checker.with_agents(agent_updates.clone());
         let background_services = background::BackgroundServices {
@@ -351,6 +347,7 @@ impl ServerComponents {
             agent,
             volume_content,
             runtime_targets,
+            build_pool_targets,
             image_scanner,
             alert_deliveries,
             last_used_worker,

@@ -88,10 +88,10 @@ pub(super) fn build(
                     .with_runtime_router(container_runtime.runtime_router()),
             ),
             entitlements.clone(),
-            Arc::new(PostgresDeploymentBindingResolver::new(
+            Arc::new(PostgresDeploymentBindingResolver::with_resolver(
                 pool.clone(),
-                secret_protector.clone(),
-            )?),
+                runtime.secret_values.clone(),
+            )),
             cancellation.clone(),
         )
         .with_notifier(Arc::new(
@@ -118,10 +118,7 @@ pub(super) fn build(
             ),
             Arc::new(PostgresSwarmServiceRepository::new(pool.clone())),
             Arc::new(swarm_runtime.clone()),
-            Arc::new(PostgresSwarmServiceBindingResolver::new(
-            pool.clone(),
-            secret_protector.clone(),
-        )?),
+            Arc::new(PostgresSwarmServiceBindingResolver::with_resolver(pool.clone(), runtime.secret_values.clone())),
             cancellation.clone(),
         )
         .with_image_digests(Arc::new(swarm_runtime.clone()))
@@ -146,10 +143,10 @@ pub(super) fn build(
             )),
             Arc::new(PostgresStackRepository::new(pool.clone())),
             Arc::new(stack_runtime.clone()),
-            Arc::new(PostgresStackBindingResolver::new(
+            Arc::new(PostgresStackBindingResolver::with_resolver(
                 pool.clone(),
-                secret_protector.clone(),
-            )?),
+                runtime.secret_values.clone(),
+            )),
             Arc::new(
                 citadel_server::realtime::notifiers::StacksRealtimeNotifier::new(
                     realtime_hub.clone(),

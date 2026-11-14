@@ -9,8 +9,8 @@ pub(crate) fn artifacts(
     Ok(Arc::new(GithubReleaseArtifacts::new(process)?))
 }
 
-pub(crate) fn source() -> Arc<dyn ReleaseSource> {
-    Arc::new(GithubReleaseSource)
+pub(crate) fn source() -> Result<Arc<dyn ReleaseSource>, UpdateError> {
+    Ok(Arc::new(GithubReleaseSource::new()?))
 }
 
 pub(crate) fn sources() -> Result<Vec<UpgradeSource>, UpdateError> {

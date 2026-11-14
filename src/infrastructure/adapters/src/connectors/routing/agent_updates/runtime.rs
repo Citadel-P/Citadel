@@ -1,6 +1,6 @@
 use crate::{
     connectors::{
-        agent::{client::AgentClient, execution::AgentExecutionClient},
+        agent::execution::AgentExecutionClient,
         edge::{EdgeRegistry, EdgeTarget},
     },
     external::updates::GithubReleaseArtifacts,
@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub struct AgentUpdateRuntimeRouter {
     pub pool: sqlx::PgPool,
     pub platforms: super::super::platforms::runtime::PlatformRuntimeRouter,
-    pub agent: Option<AgentClient>,
+    pub pools: Arc<crate::connectors::routing::build_pools::BuildPoolRuntimeRegistry>,
     pub edge: EdgeRegistry,
     pub artifacts: GithubReleaseArtifacts,
     pub swarm_store: Arc<dyn NodeAgentSetupStore>,
@@ -47,14 +47,12 @@ impl AgentUpdateRuntimeRouter {
                         .map_err(error)?,
                 )),
                 citadel_builds::BuildPoolTarget::Inbound(endpoint) => {
-                    Ok(AgentExecutionClient::Direct(Arc::new(
-                        self.agent
-                            .as_ref()
-                            .ok_or_else(|| error("Signed Agent transport is not configured"))?
-                            .for_address(&endpoint, r.id, cancel)
+                    Ok(AgentExecutionClient::Direct(
+                        self.pools
+                            .resolve(r.id, &endpoint, cancel)
                             .await
                             .map_err(error)?,
-                    )))
+                    ))
                 }
             };
         }

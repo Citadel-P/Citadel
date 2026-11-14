@@ -2,6 +2,7 @@
 use citadel_activities::ActivityService;
 use citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore;
 use citadel_adapters::persistence::postgres::bindings::PostgresBindingRepository;
+use citadel_adapters::persistence::postgres::bindings::secret_resolver::PostgresSecretValueResolver;
 use citadel_adapters::persistence::postgres::git::accounts::PostgresGitAccountRepository;
 use citadel_adapters::persistence::postgres::git::repositories::PostgresGitRepositoryExecutionPersistence;
 use citadel_adapters::security::identity::crypto::AesGcmSecretProtector;
@@ -18,6 +19,7 @@ pub(super) struct CatalogComponents {
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,
     pub registry_connections: Arc<dyn citadel_registries::RegistryConnectionChecker>,
     pub secrets: Arc<SecretService>,
+    pub secret_values: PostgresSecretValueResolver,
     pub git_accounts: Arc<GitAccountService>,
     pub git_execution: Arc<GitRepositoryExecutionService>,
     pub search: Arc<citadel_adapters::persistence::postgres::discovery::search::PostgresGlobalSearchStore>,
@@ -45,14 +47,10 @@ pub(super) fn build(
         ),
     );
     let binding_store = Arc::new(PostgresBindingRepository::new(pool.clone()));
+    let secret_values = PostgresSecretValueResolver::new(pool.clone(), secret_protector.clone())?;
     let secrets = Arc::new(
         SecretService::new(binding_store, secret_protector.clone())
-            .with_secret_provider_tester(Arc::new(
-                citadel_adapters::persistence::postgres::bindings::secret_resolver::PostgresSecretValueResolver::new(
-                    pool.clone(),
-                    secret_protector.clone(),
-                )?,
-            )),
+            .with_secret_provider_tester(Arc::new(secret_values.clone())),
     );
     let git_accounts = Arc::new(GitAccountService::new(
         Arc::new(PostgresGitAccountRepository::new(pool.clone())),
@@ -105,6 +103,7 @@ pub(super) fn build(
             citadel_adapters::connectors::registries::browser::RegistryBrowser::new()?,
         ),
         secrets,
+        secret_values,
         git_accounts,
         git_execution,
         search,

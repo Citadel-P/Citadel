@@ -168,9 +168,21 @@ enum Command {
     },
 }
 
-pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
-    let command = cli.command.unwrap_or(Command::Serve);
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let command = Cli::parse().command.unwrap_or(Command::Serve);
+    runtime(&command)?.block_on(dispatch(command))
+}
+
+fn runtime(command: &Command) -> std::io::Result<tokio::runtime::Runtime> {
+    let mut runtime = if matches!(command, Command::Healthcheck { .. }) {
+        tokio::runtime::Builder::new_current_thread()
+    } else {
+        tokio::runtime::Builder::new_multi_thread()
+    };
+    runtime.enable_all().build()
+}
+
+async fn dispatch(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     if !matches!(&command, Command::Serve) {
         crate::logging::init_from_environment()?;
     }
@@ -457,9 +469,13 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::AgentSmoke { agent_id } => agent_smoke(Config::from_env()?, agent_id).await,
         Command::Healthcheck { url } => {
             let mut client = reqwest::Client::builder().timeout(Duration::from_secs(2));
+            let automatic = url.is_none();
             let url = match url {
                 Some(url) => url,
                 None => {
+                    client = client
+                        .no_proxy()
+                        .redirect(reqwest::redirect::Policy::none());
                     let port: u16 = std::env::var("CITADEL_HTTP_LISTEN_PORT")
                         .unwrap_or_else(|_| "8000".into())
                         .parse()?;
@@ -481,7 +497,11 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     )
                 }
             };
-            client.build()?.get(url).send().await?.error_for_status()?;
+            let response = client.build()?.get(url).send().await?.error_for_status()?;
+            // Custom URLs retain their existing proxy/redirect and success policy.
+            if automatic && response.status() != reqwest::StatusCode::OK {
+                return Err("Core health response is not healthy".into());
+            }
             Ok(())
         }
     }
@@ -663,4 +683,20 @@ async fn agent_smoke(config: Config, agent_id: Uuid) -> Result<(), Box<dyn std::
         }))?
     );
     Ok(())
+}
+
+#[test]
+fn runtime_flavor_preserves_multithreaded_serving() {
+    use tokio::runtime::RuntimeFlavor;
+    assert_eq!(
+        runtime(&Command::Serve).unwrap().handle().runtime_flavor(),
+        RuntimeFlavor::MultiThread
+    );
+    assert_eq!(
+        runtime(&Command::Healthcheck { url: None })
+            .unwrap()
+            .handle()
+            .runtime_flavor(),
+        RuntimeFlavor::CurrentThread
+    );
 }

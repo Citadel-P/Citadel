@@ -160,14 +160,11 @@ impl ImageService for Runtime {
                 architecture: target.architecture.clone(),
                 variant: target.variant.clone(),
             };
-            let observed = citadel_docker::image_metadata::inspect(
-                &r.image_name,
-                r.auth.as_deref(),
-                &target,
-                &self.shutdown,
-            )
-            .await
-            .map_err(runtime_error)?;
+            let observed = self
+                .docker
+                .inspect_image_metadata(&r.image_name, r.auth.as_deref(), &target, &self.shutdown)
+                .await
+                .map_err(runtime_error)?;
             return Ok(Response::new(DistributionInspectResponse {
                 config_digest: observed.config_digest,
                 manifest_digest: observed.manifest_digest,

@@ -62,26 +62,42 @@ fn hash(bytes: &[u8]) -> String {
     )
 }
 
-pub async fn inspect(
-    reference: &str,
-    auth: Option<&str>,
-    target: &ImagePlatform,
-    cancel: &CancellationToken,
-) -> Result<RegistryImageObservation, RuntimeCapabilityError> {
-    let client = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(30))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|_| failed())?;
-    let host = reference_host(reference);
-    let endpoint = if host == "docker.io" {
-        "registry-1.docker.io"
-    } else {
-        &host
-    };
-    let base = url::Url::parse(&format!("https://{endpoint}/")).map_err(|_| failed())?;
-    inspect_with_client(client, base, reference, auth, target, cancel).await
+impl crate::client::DockerClient {
+    // Separate from the daemon's Unix-socket transport. Clones share this pool,
+    // but every inspection creates its own credentials and bearer-token session.
+    fn registry_metadata_client(&self) -> Result<reqwest::Client, RuntimeCapabilityError> {
+        self.image_metadata_client
+            .get_or_init(|| {
+                reqwest::Client::builder()
+                    .connect_timeout(std::time::Duration::from_secs(5))
+                    .timeout(std::time::Duration::from_secs(30))
+                    .redirect(reqwest::redirect::Policy::none())
+                    .pool_idle_timeout(std::time::Duration::from_secs(90))
+                    .pool_max_idle_per_host(1)
+                    .build()
+            })
+            .as_ref()
+            .cloned()
+            .map_err(|_| failed())
+    }
+
+    pub async fn inspect_image_metadata(
+        &self,
+        reference: &str,
+        auth: Option<&str>,
+        target: &ImagePlatform,
+        cancel: &CancellationToken,
+    ) -> Result<RegistryImageObservation, RuntimeCapabilityError> {
+        let client = self.registry_metadata_client()?;
+        let host = reference_host(reference);
+        let endpoint = if host == "docker.io" {
+            "registry-1.docker.io"
+        } else {
+            &host
+        };
+        let base = url::Url::parse(&format!("https://{endpoint}/")).map_err(|_| failed())?;
+        inspect_with_client(client, base, reference, auth, target, cancel).await
+    }
 }
 async fn inspect_with_client(
     client: reqwest::Client,
@@ -351,9 +367,15 @@ mod tests {
         collections::BTreeMap,
         sync::{Arc, Mutex},
     };
+    #[derive(Debug)]
+    struct ObservedRequest {
+        peer: std::net::SocketAddr,
+        authorization: Option<String>,
+    }
     struct Fixture {
         base: url::Url,
         paths: Arc<Mutex<Vec<String>>>,
+        requests: Arc<Mutex<Vec<ObservedRequest>>>,
         task: tokio::task::JoinHandle<()>,
     }
     impl Drop for Fixture {
@@ -406,9 +428,48 @@ mod tests {
         }
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = url::Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
-        let app = Router::new().fallback(handle).with_state(state);
-        let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        (Fixture { base, paths, task }, config_digest)
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let observed = requests.clone();
+        let app =
+            Router::new()
+                .fallback(handle)
+                .with_state(state)
+                .layer(axum::middleware::from_fn(
+                    move |axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<
+                        std::net::SocketAddr,
+                    >,
+                          request: Request<Body>,
+                          next: axum::middleware::Next| {
+                        let observed = observed.clone();
+                        async move {
+                            observed.lock().unwrap().push(ObservedRequest {
+                                peer,
+                                authorization: request
+                                    .headers()
+                                    .get("authorization")
+                                    .map(|value| value.to_str().unwrap().to_owned()),
+                            });
+                            next.run(request).await
+                        }
+                    },
+                ));
+        let task = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .await
+            .unwrap()
+        });
+        (
+            Fixture {
+                base,
+                paths,
+                requests,
+                task,
+            },
+            config_digest,
+        )
     }
     fn target() -> ImagePlatform {
         ImagePlatform {
@@ -428,6 +489,66 @@ mod tests {
         )
         .await
     }
+    #[tokio::test]
+    async fn inspections_reuse_transport_across_clones_without_sharing_credentials() {
+        let docker = crate::client::DockerClient::new(
+            "/unused-docker.sock",
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap();
+        let clone = docker.clone();
+        assert!(docker.image_metadata_client.get().is_none());
+        let (fixture, config) = fixture(true, false, "").await;
+        let mut expected = Vec::new();
+        for (owner, credentials) in [
+            (&docker, Some("alice")),
+            (&clone, Some("bob")),
+            (&docker, None),
+        ] {
+            let auth = credentials.map(|user| base64::engine::general_purpose::STANDARD.encode(
+                serde_json::json!({"serveraddress":"docker.io","username":user,"password":"test-password"}).to_string()
+            ));
+            let result = inspect_with_client(
+                owner.registry_metadata_client().unwrap(),
+                fixture.base.clone(),
+                "nginx:ReleaseA",
+                auth.as_deref(),
+                &target(),
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.config_digest, config);
+            let header = credentials.map(|user| {
+                format!(
+                    "Basic {}",
+                    base64::engine::general_purpose::STANDARD
+                        .encode(format!("{user}:test-password"))
+                )
+            });
+            expected.extend([header.clone(), header]);
+        }
+        let requests = fixture.requests.lock().unwrap();
+        assert_eq!(
+            requests.len(),
+            6,
+            "each inspection still fetches fresh metadata"
+        );
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.peer == requests[0].peer),
+            "all inspections must reuse one TCP connection: {requests:?}"
+        );
+        assert_eq!(
+            requests
+                .iter()
+                .map(|request| request.authorization.clone())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
     #[tokio::test]
     async fn metadata_comparison_selects_host_config_not_changing_index_or_other_architecture() {
         let (a, config) = fixture(false, false, &format!("sha256:{}", "a".repeat(64))).await;
@@ -502,6 +623,7 @@ mod tests {
         let substitute = Fixture {
             base,
             paths: Default::default(),
+            requests: Default::default(),
             task,
         };
         assert!(
@@ -576,6 +698,7 @@ mod tests {
             let fixture = Fixture {
                 base,
                 paths: Arc::new(Mutex::new(Vec::new())),
+                requests: Default::default(),
                 task,
             };
             let error = inspect_with_client(

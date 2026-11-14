@@ -77,7 +77,8 @@ used by the feature being debugged, such as Docker CLI, Deno or Restic.
 Script execution uses the checked-in `src/infrastructure/scripts/generated/citadel.js`
 SDK in native Cargo runs. Development startup regenerates it with the API contracts;
 `openapi --check` checks it alongside
-the API artifacts. Container runtime stages package the SDK at `/app/scripts/citadel.js`.
+the API artifacts. Container runtime stages package the SDK at `/app/scripts/citadel.js`
+with mode `0444`; its parent directory uses `0755` so non-root runtimes can traverse it.
 Standalone binary distributions must keep `scripts/citadel.js` beside the executable.
 Each execution still uses its own private source, credentials and Deno cache.
 

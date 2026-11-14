@@ -56,6 +56,8 @@ pub(super) fn build(
                     runtime.edge_registry.clone(),
                     identity.clone(),
                     config.transport.edge_agent_public_url.scheme() == "https",
+                    runtime.platform_targets.clone(),
+                    runtime.build_pool_targets.clone(),
                 ),
             ),
             config.transport.public_url.to_string(),

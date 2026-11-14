@@ -10,8 +10,51 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+
+#[tokio::test]
+async fn sequential_checks_reuse_the_connection_and_read_fresh_responses() {
+    use axum::extract::ConnectInfo;
+    use std::{collections::HashSet, net::SocketAddr, sync::Mutex};
+    let peers = Arc::new(Mutex::new(HashSet::new()));
+    let observed = peers.clone();
+    let requests = Arc::new(AtomicUsize::new(0));
+    let count = requests.clone();
+    let app = Router::new().route("/", get(move |ConnectInfo(peer): ConnectInfo<SocketAddr>| {
+        observed.lock().unwrap().insert(peer);
+        let n = count.fetch_add(1, Ordering::SeqCst);
+        async move {
+            axum::Json(serde_json::json!({"tag_name":format!("v1.0.{n}"),"draft":false,"prerelease":false}))
+        }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+    let source = GithubReleaseSource::new().unwrap();
+    for n in 0..3 {
+        let releases = read_releases(&source.client, ReleaseChannel::Stable, &endpoint)
+            .await
+            .unwrap();
+        assert_eq!(releases[0].tag_name, format!("v1.0.{n}"));
+    }
+    server.abort();
+    let _ = server.await;
+    assert_eq!(
+        peers.lock().unwrap().len(),
+        1,
+        "checks should reuse one TCP connection"
+    );
+    assert_eq!(requests.load(Ordering::SeqCst), 3);
+}
 #[tokio::test]
 async fn bounds_responses_rejects_http_failures_and_sends_no_instance_data() {
+    let source = GithubReleaseSource::new().unwrap();
     let requests = Arc::new(AtomicUsize::new(0));
     let count = requests.clone();
     let app = Router::new().route("/", get(move |headers: HeaderMap, uri: axum::http::Uri, body: bytes::Bytes| {
@@ -40,7 +83,7 @@ async fn bounds_responses_rejects_http_failures_and_sends_no_instance_data() {
     let server = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    let releases = read_releases(ReleaseChannel::Stable, &endpoint)
+    let releases = read_releases(&source.client, ReleaseChannel::Stable, &endpoint)
         .await
         .unwrap();
     let update = citadel_updates::available_update("1.0.0", releases.into_iter().next().unwrap())
@@ -52,12 +95,12 @@ async fn bounds_responses_rejects_http_failures_and_sends_no_instance_data() {
     );
     for _ in 0..6 {
         assert!(
-            read_releases(ReleaseChannel::Stable, &endpoint)
+            read_releases(&source.client, ReleaseChannel::Stable, &endpoint)
                 .await
                 .is_err()
         );
     }
-    let releases = read_releases(ReleaseChannel::Stable, &endpoint)
+    let releases = read_releases(&source.client, ReleaseChannel::Stable, &endpoint)
         .await
         .unwrap();
     assert!(
@@ -72,6 +115,7 @@ async fn bounds_responses_rejects_http_failures_and_sends_no_instance_data() {
 
 #[tokio::test]
 async fn development_source_reads_release_lists_and_rejects_malformed_json() {
+    let source = GithubReleaseSource::new().unwrap();
     let requests = Arc::new(AtomicUsize::new(0));
     let count = requests.clone();
     let app = Router::new().route("/", get(move || {
@@ -89,7 +133,7 @@ async fn development_source_reads_release_lists_and_rejects_malformed_json() {
     let server = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    let releases = read_releases(ReleaseChannel::Development, &endpoint)
+    let releases = read_releases(&source.client, ReleaseChannel::Development, &endpoint)
         .await
         .unwrap();
     assert_eq!(
@@ -100,11 +144,11 @@ async fn development_source_reads_release_lists_and_rejects_malformed_json() {
         "0.1.4-dev.2"
     );
     assert!(
-        read_releases(ReleaseChannel::Development, &endpoint)
+        read_releases(&source.client, ReleaseChannel::Development, &endpoint)
             .await
             .is_err()
     );
-    let releases = read_releases(ReleaseChannel::Development, &endpoint)
+    let releases = read_releases(&source.client, ReleaseChannel::Development, &endpoint)
         .await
         .unwrap();
     assert!(

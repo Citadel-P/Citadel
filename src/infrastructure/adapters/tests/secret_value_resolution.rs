@@ -197,3 +197,8 @@ async fn internal_and_vault_kv_v2_secrets_resolve_without_disclosing_stored_toke
     server.abort();
     let _ = server.await;
 }
+
+#[path = "secret_value_resolution/bindings.rs"]
+mod bindings;
+#[path = "secret_value_resolution/transport.rs"]
+mod transport;

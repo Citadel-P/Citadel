@@ -18,15 +18,15 @@ pub struct NodeAgentRuntimeRouter {
     pub edge: EdgeRegistry,
 }
 mod setup;
-enum Target {
-    Local(DockerClient),
+enum Target<'a> {
+    Local(&'a DockerClient),
     Agent(Arc<AgentClient>),
     Edge(EdgeRuntime),
 }
-impl Target {
+impl Target<'_> {
     fn inventory(&self) -> &dyn PlatformInventoryPort {
         match self {
-            Self::Local(r) => r,
+            Self::Local(r) => *r,
             Self::Agent(r) => r.as_ref(),
             Self::Edge(r) => r,
         }
@@ -54,7 +54,7 @@ impl NodeAgentRuntimeRouter {
         &self,
         id: Uuid,
         cancel: &CancellationToken,
-    ) -> Result<Target, RuntimeCapabilityError> {
+    ) -> Result<Target<'_>, RuntimeCapabilityError> {
         use super::platforms::runtime::Runtime;
         let runtime = self
             .runtime
@@ -67,7 +67,7 @@ impl NodeAgentRuntimeRouter {
                 _ => failure("The configured manager is unavailable."),
             })?;
         Ok(match runtime {
-            Runtime::Local(docker) => Target::Local(docker.clone()),
+            Runtime::Local(docker) => Target::Local(docker),
             Runtime::Agent(agent) => Target::Agent(Arc::new(agent)),
             Runtime::Edge(edge) => Target::Edge(edge),
         })
