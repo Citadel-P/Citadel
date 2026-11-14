@@ -113,6 +113,12 @@ The page reads on mount and reconciles on reconnect, without periodic polling.
 Dedicated background connections are excluded. PostgreSQL settings remain read-only
 and deployment/provider-managed for both bundled and external databases.
 
+Shared HTTP transport composition initializes the schema-derived endpoint catalog
+before attaching setup middleware and accepting requests, including callers that
+construct routers without the CLI. Only endpoint metadata is retained; request-time
+setup policy reads the cached catalog without constructing schemas in the middleware
+stack. CLI commands that do not construct HTTP routers need no catalog initialization.
+
 The executable `app` module coordinates admission, serving and shutdown. `startup`
 owns the migration/settings-resolution sequence; `config/instance` maps deployment
 overrides and resolved choices into Server runtime options. Only promoted override names live in

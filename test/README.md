@@ -1637,6 +1637,10 @@ ties. These are disposable-fixture tests; do not execute cleanup plans with
 
 ### Instance settings
 
+The real-process Instance restart tests exercise the first setup-status request
+with the normal runtime stack settings, including endpoint-catalog initialization
+during HTTP transport composition before accepting requests.
+
 Database connections use the same saved/effective/running settings contract.
 Instance feature and configuration tests cover positive pool limits, omitted-field
 fallbacks and per-Core environment precedence. The `mfa_http` Instance settings

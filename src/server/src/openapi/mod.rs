@@ -221,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 438);
+        assert_eq!(operations(&full), 439);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -239,6 +239,12 @@ mod tests {
             assert_eq!(operation["security"], json!([{"Bearer": []}]));
             assert_eq!(operation["x-citadel-principal"], "human");
         }
+        let database_path = "/api/v1/instance/database-connections";
+        assert!(public["paths"].get(database_path).is_none());
+        let operation = &full["paths"][database_path]["get"];
+        assert_eq!(operation["operationId"], "getDatabaseConnections");
+        assert_eq!(operation["security"], json!([{"Bearer": []}]));
+        assert_eq!(operation["x-citadel-principal"], "human");
         assert_eq!(operations(&public), 316);
         for (path, method, operation_id) in [
             ("/api/v1/updates", "get", "getInstanceUpdates"),
