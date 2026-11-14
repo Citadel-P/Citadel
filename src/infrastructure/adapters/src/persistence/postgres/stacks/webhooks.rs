@@ -55,12 +55,12 @@ impl PostgresStackRepository {
             sqlx::query("INSERT INTO stackwebhookdeployqueue(id,stackid,gitrepositoryid,expectedstackreleaseid,expectedspecfingerprint,branch,dispatchedcommitsha,attempts,queuedat,availableat,status) VALUES($1,$2,$3,$4,$5,$6,$7,0,now(),now(),'Queued')")
                 .bind(Uuid::now_v7()).bind(expected.id).bind(git_repo_id).bind(expected.current_stack_release_id)
                 .bind(fingerprint).bind(branch).bind(commit).execute(&mut *tx).await.map_err(storage)?;
+            sqlx::query("SELECT pg_notify($1, '')")
+                .bind(citadel_runtime::RuntimeSignal::StackWebhooks.channel())
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
         }
-        sqlx::query("SELECT pg_notify($1, '')")
-            .bind(citadel_runtime::RuntimeSignal::StackWebhooks.channel())
-            .execute(&mut *tx)
-            .await
-            .map_err(storage)?;
         tx.commit().await.map_err(storage)
     }
 }

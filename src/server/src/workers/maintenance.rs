@@ -42,21 +42,12 @@ pub(crate) async fn run(
         let mut tick = super::schedule::interval("retention", retention_interval);
         loop {
             tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            let drain = async {
-                // Drain backlogs with short commits, at most 128 passes / ten seconds.
-                // A pass bounds row deletes and expires complete statistics partitions.
-                // Compaction has its own cadence; do not sweep retention per source-hour.
-                for _ in 0..128 {
-                    if store.cleanup(build_retention_days).await? == 0 {
-                        break;
-                    }
-                }
-                Ok::<_, MaintenanceError>(())
-            };
+            // Storage owns invocation-local family progress and short bounded batches.
+            let drain = store.cleanup(build_retention_days);
             tokio::select! {
                 () = token.cancelled() => break,
                 result = tokio::time::timeout(Duration::from_secs(10), drain) => match result {
-                    Ok(Ok(())) => {},
+                    Ok(Ok(_)) => {},
                     Ok(Err(error)) => tracing::warn!(%error, "Scheduled retention failed"),
                     Err(_) => tracing::info!("Retention budget exhausted; remaining rows wait for the next maintenance pass"),
                 }
@@ -102,15 +93,26 @@ const COMPACTION_PASSES: usize = 128;
 async fn compact_batch(store: &dyn MaintenanceStore) -> Result<bool, MaintenanceError> {
     let mut stalled = std::collections::BTreeSet::new();
     let mut progressed = false;
+    let mut paged_scan = false;
+    let mut physical_complete = false;
     for _ in 0..COMPACTION_PASSES {
         let pass = store.compact().await?;
         progressed |= pass.processed > 0;
-        if let Some(source) = pass.stalled_source {
-            if !stalled.insert(source) && pass.processed == 0 {
+        physical_complete |= !pass.scan_pending;
+        let repeated_stall = pass
+            .stalled_source
+            .is_some_and(|source| !stalled.insert(source));
+        if !physical_complete {
+            // An empty source page is not evidence that the full scan is idle.
+            paged_scan = true;
+        } else if pass.stalled_source.is_some() {
+            if repeated_stall && pass.processed == 0 {
                 return Ok(progressed);
             }
         } else if pass.processed == 0 {
-            return Ok(false);
+            // Earlier pages may still have additional source-hours. A direct
+            // no-work result without paging retains the normal idle cadence.
+            return Ok(progressed && paged_scan);
         }
         tokio::task::yield_now().await;
     }
@@ -188,6 +190,7 @@ mod tests {
                     Ok(citadel_runtime::maintenance::CompactionProgress {
                         processed: 1,
                         stalled_source: None,
+                        scan_pending: false,
                     })
                 } else {
                     Ok(citadel_runtime::maintenance::CompactionProgress::default())
@@ -326,6 +329,103 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn empty_physical_pages_do_not_end_the_scan_or_spin_after_completion() {
+        use citadel_runtime::maintenance::CompactionProgress as Progress;
+        let store = Store {
+            outcomes: Mutex::new(
+                [
+                    Progress {
+                        scan_pending: true,
+                        ..Default::default()
+                    },
+                    Progress {
+                        scan_pending: true,
+                        stalled_source: Some(1),
+                        ..Default::default()
+                    },
+                    Progress {
+                        scan_pending: true,
+                        stalled_source: Some(1),
+                        ..Default::default()
+                    },
+                    Progress {
+                        processed: 1,
+                        ..Default::default()
+                    },
+                    Progress::default(),
+                ]
+                .into(),
+            ),
+            ..Default::default()
+        };
+        assert!(compact_batch(&store).await.unwrap());
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 5);
+        assert!(!compact_batch(&store).await.unwrap());
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 6);
+        // A completed physical scan must stay complete for this batch while the
+        // host scan wraps, even if compact() starts another physical page.
+        let store = Store {
+            outcomes: Mutex::new(
+                [
+                    Progress {
+                        stalled_source: Some(1),
+                        ..Default::default()
+                    },
+                    Progress {
+                        scan_pending: true,
+                        stalled_source: Some(1),
+                        ..Default::default()
+                    },
+                ]
+                .into(),
+            ),
+            ..Default::default()
+        };
+        assert!(!compact_batch(&store).await.unwrap());
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn productive_scans_continue_past_empty_pages_until_backlog_drains() {
+        use citadel_runtime::maintenance::CompactionProgress as Progress;
+        let empty = Progress {
+            scan_pending: true,
+            ..Default::default()
+        };
+        let work = Progress {
+            processed: 1,
+            scan_pending: true,
+            ..Default::default()
+        };
+        // Discovery keeps productive scans pending across their empty final
+        // page. Each source has another hour behind the same empty first pages.
+        let store = Store {
+            outcomes: Mutex::new(
+                [
+                    empty,
+                    empty,
+                    work,
+                    empty,
+                    empty,
+                    empty,
+                    work,
+                    empty,
+                    empty,
+                    empty,
+                    empty,
+                    Progress::default(),
+                ]
+                .into(),
+            ),
+            ..Default::default()
+        };
+        assert!(compact_batch(&store).await.unwrap());
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 12);
+        assert!(store.outcomes.lock().unwrap().is_empty());
+        assert!(!compact_batch(&store).await.unwrap());
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn compaction_pass_limit_bounds_a_fast_backlog() {
         let store = Store {
             hours: Mutex::new(vec![1000]),
@@ -343,6 +443,7 @@ mod tests {
             let stalled = |source| Progress {
                 processed: 0,
                 stalled_source: Some(source),
+                scan_pending: false,
             };
             let store = Arc::new(Store {
                 outcomes: Mutex::new(
@@ -351,16 +452,19 @@ mod tests {
                         Progress {
                             processed: physical_progress,
                             stalled_source: Some(2),
+                            scan_pending: false,
                         },
                         stalled(1),
                         // Next batch reaches a corrected source, then a healthy source.
                         Progress {
                             processed: 1,
                             stalled_source: None,
+                            scan_pending: false,
                         },
                         Progress {
                             processed: 1,
                             stalled_source: None,
+                            scan_pending: false,
                         },
                     ]
                     .into(),
@@ -395,10 +499,12 @@ mod tests {
                     Progress {
                         processed: 0,
                         stalled_source: Some(1),
+                        scan_pending: false,
                     },
                     Progress {
                         processed: 1,
                         stalled_source: None,
+                        scan_pending: false,
                     },
                     Progress::default(),
                 ]

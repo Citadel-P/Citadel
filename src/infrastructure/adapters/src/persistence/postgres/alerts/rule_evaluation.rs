@@ -1,14 +1,31 @@
 use super::*;
 
+/// Locked rule parents are reusable only while this transaction is borrowed.
+/// Mutable per-resource state is always reread after its own advisory lock.
+pub(super) struct RuleEvaluation<'a, 'c> {
+    transaction: &'a mut Transaction<'c, Postgres>,
+    enabled: Option<std::collections::HashSet<Uuid>>,
+    pub(super) changed: bool,
+}
+impl<'a, 'c> RuleEvaluation<'a, 'c> {
+    pub(super) fn new(transaction: &'a mut Transaction<'c, Postgres>) -> Self {
+        Self {
+            transaction,
+            enabled: Some(Default::default()),
+            changed: false,
+        }
+    }
+}
+
 impl PostgresAlertRepository {
     pub(super) async fn process_rule_in(
         &self,
-        transaction: &mut Transaction<'_, Postgres>,
-        changed: &mut bool,
+        evaluation: &mut RuleEvaluation<'_, '_>,
         rule: &AlertRule,
         observation: &AlertObservation,
         receipt: Option<Uuid>,
     ) -> Result<Option<AlertEvent>, AlertError> {
+        let transaction = &mut *evaluation.transaction;
         let instance_update = super::instance_updates::is_instance_update(&observation.alert_type);
         if instance_update && !super::instance_updates::is_current(transaction, observation).await?
         {
@@ -19,19 +36,28 @@ impl PostgresAlertRepository {
         }
         // A snapshot can outlive a concurrent deletion. Hold the parent while
         // applying mutable state so deletion cannot race the foreign key writes.
-        let enabled: Option<String> =
-            sqlx::query_scalar("SELECT status FROM alertrules WHERE id=$1 FOR SHARE")
-                .bind(rule.id)
-                .fetch_optional(&mut **transaction)
-                .await
-                .map_err(storage)?;
-        let enabled = enabled
-            .as_deref()
-            .map(str::parse::<citadel_alerts::AlertRuleStatus>)
-            .transpose()
-            .map_err(AlertError::Storage)?;
-        if enabled != Some(citadel_alerts::AlertRuleStatus::Enabled) {
-            return Ok(None);
+        if !evaluation
+            .enabled
+            .as_ref()
+            .is_some_and(|parents| parents.contains(&rule.id))
+        {
+            let enabled: Option<String> =
+                sqlx::query_scalar("SELECT status FROM alertrules WHERE id=$1 FOR SHARE")
+                    .bind(rule.id)
+                    .fetch_optional(&mut **transaction)
+                    .await
+                    .map_err(storage)?;
+            let enabled = enabled
+                .as_deref()
+                .map(str::parse::<citadel_alerts::AlertRuleStatus>)
+                .transpose()
+                .map_err(AlertError::Storage)?;
+            if enabled != Some(citadel_alerts::AlertRuleStatus::Enabled) {
+                return Ok(None);
+            }
+            if let Some(parents) = &mut evaluation.enabled {
+                parents.insert(rule.id);
+            }
         }
         if let Some(id) = receipt {
             let inserted = sqlx::query("INSERT INTO alertobservationreceipts(observationid,ruleid) VALUES($1,$2) ON CONFLICT DO NOTHING")
@@ -106,7 +132,7 @@ impl PostgresAlertRepository {
                 .await
                 .map_err(storage)?;
             if resolved.rows_affected() > 0 {
-                *changed = true;
+                evaluation.changed = true;
             }
             return Ok(None);
         }
@@ -165,7 +191,7 @@ impl PostgresAlertRepository {
                 false
             };
             if superseded || refreshed {
-                *changed = true;
+                evaluation.changed = true;
             }
             return Ok(None);
         }
@@ -179,7 +205,7 @@ impl PostgresAlertRepository {
         .await
         .map_err(storage)?;
         enqueue_deliveries(transaction, id, rule.id).await?;
-        *changed = true;
+        evaluation.changed = true;
         let query = format!("{} WHERE event.id=$1", super::queries::EVENT_SELECT);
         let row = sqlx::query(AssertSqlSafe(query))
             .bind(id)
@@ -198,10 +224,16 @@ impl PostgresAlertRepository {
         receipt: Option<Uuid>,
     ) -> Result<Option<AlertEvent>, AlertError> {
         let mut tx = self.pool.begin().await.map_err(storage)?;
-        let mut changed = false;
+        // A one-rule transaction has nothing to reuse; avoid allocating a memo.
+        let mut evaluation = RuleEvaluation {
+            transaction: &mut tx,
+            enabled: None,
+            changed: false,
+        };
         let event = self
-            .process_rule_in(&mut tx, &mut changed, rule, observation, receipt)
+            .process_rule_in(&mut evaluation, rule, observation, receipt)
             .await?;
+        let changed = evaluation.changed;
         tx.commit().await.map_err(storage)?;
         if changed {
             self.changed();

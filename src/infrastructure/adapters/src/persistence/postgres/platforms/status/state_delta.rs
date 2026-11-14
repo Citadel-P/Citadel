@@ -3,7 +3,7 @@ use super::*;
 use citadel_platforms::containers::ContainerStatePatch;
 use citadel_platforms::jobs::{ContainerDeltaResult, ContainerStateDelta};
 use citadel_runtime::runtime_metrics::RuntimeWork;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 const MAX_DELTAS: usize = 256;
 
@@ -97,7 +97,7 @@ pub(crate) async fn container_state_deltas_in(
         .iter()
         .map(|id| super::super::runtime_index::hint(pool, platform, node, id))
         .collect();
-    let mut rows = sqlx::query(STATE_DELTAS)
+    let rows = sqlx::query(STATE_DELTAS)
         .bind(platform)
         .bind(node)
         .bind(&ids)
@@ -106,32 +106,32 @@ pub(crate) async fn container_state_deltas_in(
         .bind(&hints)
         .fetch_all(&mut **tx)
         .await?;
+    let mut rows: HashMap<String, _> = rows
+        .into_iter()
+        .map(|row| Ok((row.try_get("dockercontainerid")?, row)))
+        .collect::<Result<_>>()?;
     // An identity hint may lag another writer. Retry only those missing hints,
     // still checking platform/node/Docker ID in SQL; never enumerate siblings.
     let missing: Vec<_> = ids
         .iter()
         .enumerate()
-        .filter(|(i, id)| {
-            hints[*i].is_some()
-                && !rows
-                    .iter()
-                    .any(|r| r.get::<String, _>("dockercontainerid") == **id)
-        })
+        .filter(|(i, id)| hints[*i].is_some() && !rows.contains_key(id.as_str()))
         .map(|(i, _)| i)
         .collect();
     if !missing.is_empty() {
         RuntimeWork::RuntimeIdentityFallback.units(missing.len() as u64);
-        rows.extend(
-            sqlx::query(STATE_DELTAS)
-                .bind(platform)
-                .bind(node)
-                .bind(missing.iter().map(|&i| ids[i].clone()).collect::<Vec<_>>())
-                .bind(missing.iter().map(|&i| states[i]).collect::<Vec<_>>())
-                .bind(missing.iter().map(|&i| times[i]).collect::<Vec<_>>())
-                .bind(vec![None::<Uuid>; missing.len()])
-                .fetch_all(&mut **tx)
-                .await?,
-        );
+        let fallback = sqlx::query(STATE_DELTAS)
+            .bind(platform)
+            .bind(node)
+            .bind(missing.iter().map(|&i| ids[i].clone()).collect::<Vec<_>>())
+            .bind(missing.iter().map(|&i| states[i]).collect::<Vec<_>>())
+            .bind(missing.iter().map(|&i| times[i]).collect::<Vec<_>>())
+            .bind(vec![None::<Uuid>; missing.len()])
+            .fetch_all(&mut **tx)
+            .await?;
+        for row in fallback {
+            rows.insert(row.try_get("dockercontainerid")?, row);
+        }
     }
     let mut results = Vec::with_capacity(deltas.len());
     let mut stacks = BTreeSet::new();
@@ -139,10 +139,7 @@ pub(crate) async fn container_state_deltas_in(
     let mut drift = BTreeSet::new();
     let mut prune = false;
     for delta in deltas {
-        let Some(row) = rows
-            .iter()
-            .find(|r| r.get::<String, _>("dockercontainerid") == delta.docker_id)
-        else {
+        let Some(row) = rows.get(&delta.docker_id) else {
             RuntimeWork::ContainerStateDeltaUnknownIdentity.units(1);
             results.push(ContainerDeltaResult {
                 docker_id: delta.docker_id.clone(),
@@ -214,11 +211,13 @@ pub(crate) async fn container_state_deltas_in(
         });
     }
     // PostgreSQL notifications and parent writes share the state transaction.
-    for id in drift {
-        sqlx::query("SELECT pg_notify('citadel_stack_drift',$1)")
-            .bind(id.to_string())
-            .execute(&mut **tx)
-            .await?;
+    if !drift.is_empty() {
+        sqlx::query(
+            "SELECT pg_notify('citadel_stack_drift', id::text) FROM unnest($1::uuid[]) AS ids(id)",
+        )
+        .bind(drift.into_iter().collect::<Vec<_>>())
+        .execute(&mut **tx)
+        .await?;
     }
     if prune {
         sqlx::query("SELECT pg_notify('citadel_swarm_prune',$1)")

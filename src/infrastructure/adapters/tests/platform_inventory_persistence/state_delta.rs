@@ -778,3 +778,123 @@ async fn inspection_fence_and_standalone_finish_avoid_stale_state_and_parent_tab
         .await
         .unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn full_delta_batch_preserves_order_and_commit_fenced_distinct_notifications() {
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let stacks = [Uuid::now_v7(), Uuid::now_v7()];
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,volumecount,platformdescriptor,status) VALUES($1,$1::text,$1::text,'Local',1,0,1024,0,0,'{\"$type\":\"Docker\"}','Online')")
+        .bind(platform).execute(&pool).await.unwrap();
+    for stack in stacks {
+        sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate) VALUES($1,$1::text,$2,'WebEditor','{}','{}')")
+            .bind(stack).bind(citadel_identity::SYSTEM_ACTOR_ID).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO stackreleases(id,createdbyactorid,platformid,spec,stackid,status,version) VALUES($1,$2,$3,'{}',$1,'Healthy','1')")
+            .bind(stack).bind(citadel_identity::SYSTEM_ACTOR_ID).bind(platform).execute(&pool).await.unwrap();
+        sqlx::query("UPDATE stacks SET currentstackreleaseid=$1 WHERE id=$1")
+            .bind(stack)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query("INSERT INTO containers(id,platformid,dockercontainerid,dockerimageid,name,created,updated,state,ports,projectionobservedat,stackid) SELECT gen_random_uuid(),$1,'batch-'||i,'image','batch-'||i,1,10,'Running','[]',10,CASE WHEN i%2=0 THEN $2 ELSE $3 END FROM generate_series(0,255) i")
+        .bind(platform).bind(stacks[0]).bind(stacks[1]).execute(&pool).await.unwrap();
+    let mut listener = sqlx::postgres::PgListener::connect(&url).await.unwrap();
+    listener.listen("citadel_stack_drift").await.unwrap();
+    let mut deltas: Vec<_> = (0..256)
+        .rev()
+        .map(|i| ContainerStateDelta {
+            docker_id: format!("batch-{i}"),
+            state: State::Exited,
+            observed_at: 20,
+            observed_at_millis: 20000,
+        })
+        .collect();
+    let results = container_state_deltas_committed(&pool, platform, None, &deltas)
+        .await
+        .unwrap();
+    assert_eq!(results.len(), deltas.len());
+    for (result, delta) in results.iter().zip(&deltas) {
+        assert_eq!(result.docker_id, delta.docker_id);
+        assert!(result.accepted && result.changed);
+    }
+    let mut notified = std::collections::BTreeSet::new();
+    for _ in stacks {
+        let event = tokio::time::timeout(std::time::Duration::from_secs(2), listener.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        notified.insert(Uuid::parse_str(event.payload()).unwrap());
+    }
+    assert_eq!(notified, stacks.into_iter().collect());
+    // Replaying an unchanged batch must not notify any Stack.
+    let replay = container_state_deltas_committed(&pool, platform, None, &deltas)
+        .await
+        .unwrap();
+    assert!(
+        replay
+            .iter()
+            .all(|result| result.accepted && !result.changed)
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err()
+    );
+
+    // A failure at COMMIT must discard every batched notification and state write.
+    // Identifiers and the platform literal are generated fixture UUIDs only.
+    let reject = format!("reject_delta_{}", platform.simple());
+    let ddl = format!(
+        "CREATE FUNCTION {reject}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture commit rejection'; END $$; CREATE CONSTRAINT TRIGGER {reject} AFTER UPDATE ON containers DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.platformid = '{platform}'::uuid) EXECUTE FUNCTION {reject}();"
+    );
+    sqlx::raw_sql(sqlx::AssertSqlSafe(ddl.as_str()))
+        .execute(&pool)
+        .await
+        .unwrap();
+    for delta in &mut deltas {
+        delta.state = State::Paused;
+        delta.observed_at = 21;
+        delta.observed_at_millis = 21000;
+    }
+    assert!(
+        container_state_deltas_committed(&pool, platform, None, &deltas)
+            .await
+            .is_err()
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err()
+    );
+    let unchanged: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM containers WHERE platformid=$1 AND state='Exited' AND updated=20",
+    )
+    .bind(platform)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(unchanged, 256);
+    let ddl = format!("DROP TRIGGER {reject} ON containers; DROP FUNCTION {reject}();");
+    sqlx::raw_sql(sqlx::AssertSqlSafe(ddl.as_str()))
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM stacks WHERE id=ANY($1)")
+        .bind(&stacks[..])
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+}

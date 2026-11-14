@@ -32,11 +32,7 @@ async fn lock_scopes<'a>(
     tx: &mut Transaction<'_, Postgres>,
     scopes: impl Iterator<Item = &'a StatsScope>,
 ) -> Result<(), RuntimeCapabilityError> {
-    sqlx::query("SET LOCAL lock_timeout = '500ms'")
-        .execute(&mut **tx)
-        .await
-        .map_err(storage)?;
-    sqlx::query("SET LOCAL statement_timeout = '5s'")
+    sqlx::raw_sql("SET LOCAL lock_timeout = '500ms'; SET LOCAL statement_timeout = '5s'")
         .execute(&mut **tx)
         .await
         .map_err(storage)?;
@@ -145,12 +141,15 @@ impl StatsBatchStore<PlatformStatsSample> for PostgresStatsBatchStore {
                 .iter()
                 .map(|s| PlatformCapture::from(*s))
                 .collect();
-            let accepted: i64 = sqlx::query_scalar(include_str!("platform_batch.sql"))
-                .bind(Json(&captures))
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(storage)?;
-            if accepted > 0 {
+            let (accepted, host_changed): (i64, bool) =
+                sqlx::query_as(include_str!("platform_batch.sql"))
+                    .bind(Json(&captures))
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(storage)?;
+            // Admission includes node-only captures and unchanged host replays;
+            // only an actual host write creates new pending alert work.
+            if host_changed {
                 sqlx::query("SELECT pg_notify($1, '')")
                     .bind(citadel_runtime::RuntimeSignal::PlatformStats.channel())
                     .execute(&mut *tx)

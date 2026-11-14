@@ -150,7 +150,7 @@ async fn flush_pending(
     }
     let rows = sqlx::query("WITH samples AS (SELECT stats.platformid,stats.created,stats.cpuusage,stats.memoryusage,stats.diskusage,stats.diskusedbytes,stats.disktotalbytes FROM platformstats stats JOIN unnest($1::uuid[],$2::text[]) claimed(id,revision) ON stats.id=claimed.id AND stats.xmin::text=claimed.revision), medians AS (SELECT platformid,percentile_cont(0.5) WITHIN GROUP(ORDER BY cpuusage) AS cpuusage,percentile_cont(0.5) WITHIN GROUP(ORDER BY memoryusage) AS memoryusage FROM samples GROUP BY platformid), latest AS (SELECT DISTINCT ON(platformid) platformid,diskusage,diskusedbytes,disktotalbytes FROM samples ORDER BY platformid,created DESC) SELECT p.id,p.name,p.agentversion,m.cpuusage,m.memoryusage,l.diskusage,l.diskusedbytes,l.disktotalbytes FROM medians m JOIN platforms p ON p.id=m.platformid JOIN latest l ON l.platformid=m.platformid")
         .bind(&ids).bind(&revisions).fetch_all(&mut *tx).await?;
-    let mut changed = false;
+    let mut evaluation = super::rule_evaluation::RuleEvaluation::new(&mut tx);
     for row in rows {
         let platform = row.try_get("id")?;
         for observation in platform_metric_observations(platform, &sample(&row)?, core_version) {
@@ -161,12 +161,13 @@ async fn flush_pending(
             );
             for rule in resets.into_iter().chain(winner) {
                 alerts
-                    .process_rule_in(&mut tx, &mut changed, rule, &observation, None)
+                    .process_rule_in(&mut evaluation, rule, &observation, None)
                     .await
                     .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
             }
         }
     }
+    let changed = evaluation.changed;
     let acknowledged = sqlx::query("UPDATE platformstats stats SET alertpending=false FROM unnest($1::uuid[],$2::text[]) claimed(id,revision) WHERE stats.id=claimed.id AND stats.xmin::text=claimed.revision")
         .bind(&ids)
         .bind(&revisions)

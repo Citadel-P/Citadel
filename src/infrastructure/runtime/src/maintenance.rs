@@ -8,13 +8,17 @@ pub struct MaintenanceError(pub String);
 pub struct CompactionProgress {
     pub processed: u64,
     pub stalled_source: Option<i64>,
+    /// Physical discovery has unexamined sources, queued candidates, or a
+    /// productive completed scan whose remaining source-hours must be revisited.
+    pub scan_pending: bool,
 }
 
 pub trait MaintenanceStore: Send + Sync {
     fn reconcile(&self) -> BoxFuture<'_, Result<Vec<&'static str>, MaintenanceError>>;
     fn expire_leases(&self) -> BoxFuture<'_, Result<(), MaintenanceError>>;
-    /// One bounded container source-hour and one bounded host/node-hour.
+    /// At most one container source-hour and one host/node-hour, or bounded discovery.
     fn compact(&self) -> BoxFuture<'_, Result<CompactionProgress, MaintenanceError>>;
+    /// One retention tick, with bounded short batches and invocation-local progress.
     fn cleanup(
         &self,
         build_retention_days: Option<i32>,

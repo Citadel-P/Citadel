@@ -106,43 +106,101 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
     Ok(changed)
 }
 
-pub async fn cleanup(pool: &PgPool, build_retention_days: Option<i32>) -> Result<u64, sqlx::Error> {
-    let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Retention.start();
-    // Retention must run even when every runtime is offline; it is not inventory work.
-    let mut deleted = sqlx::query(HEALTH_RETENTION_SQL)
-        .execute(pool)
-        .await?
-        .rows_affected();
-    citadel_runtime::runtime_metrics::RuntimeWork::ContainerHealthRetention.units(deleted);
-    // Bound each transaction. Repeated scheduled batches drain backlogs while keeping
-    // locks short and retaining every active run and referenced build artifact.
-    for sql in STATS_RETENTION_SQL
+// Progress belongs to one scheduled invocation. Cancellation discards it; the next
+// tick discovers authoritative state again. Never remember tuple IDs between SQLs.
+struct RetentionSweep {
+    active: [bool; 5],
+    counters: bool,
+    builds: bool,
+    statistics: Option<super::platforms::statistics::maintenance::RetentionSweep>,
+}
+impl RetentionSweep {
+    fn new(days: Option<i32>) -> Self {
+        Self {
+            active: [true; 5],
+            counters: true,
+            builds: days.is_some_and(|d| d > 0),
+            statistics: None,
+        }
+    }
+    async fn batch(&mut self, pool: &PgPool, days: Option<i32>) -> Result<u64, sqlx::Error> {
+        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Retention.start();
+        let mut deleted = 0;
+        for (i, sql) in [
+            HEALTH_RETENTION_SQL,
+            STATS_RETENTION_SQL[0],
+            STATS_RETENTION_SQL[1],
+            ACTIVITY_RETENTION_SQL,
+            SCRIPT_RETENTION_SQL,
+        ]
         .into_iter()
-        .chain([ACTIVITY_RETENTION_SQL, SCRIPT_RETENTION_SQL])
-    {
-        deleted += sqlx::query(sql).execute(pool).await?.rows_affected();
+        .enumerate()
+        {
+            if !self.active[i] {
+                continue;
+            }
+            let count = sqlx::query(sql).execute(pool).await?.rows_affected();
+            self.active[i] = count > 0;
+            deleted += count;
+            if i == 0 {
+                citadel_runtime::runtime_metrics::RuntimeWork::ContainerHealthRetention
+                    .units(count);
+            }
+        }
+        if self.counters {
+            let mut tx = pool.begin().await?;
+            // Admission's advisory lock must precede the DELETE's fresh snapshot.
+            sqlx::query("SELECT pg_advisory_xact_lock(680224102)")
+                .execute(&mut *tx)
+                .await?;
+            let count = sqlx::query("WITH empty AS (SELECT c.containerid FROM containerhealthhistorycounters c WHERE NOT EXISTS(SELECT 1 FROM containerhealthtransitions h WHERE h.containerid=c.containerid) ORDER BY c.containerid LIMIT 500 FOR UPDATE OF c SKIP LOCKED) DELETE FROM containerhealthhistorycounters c USING empty WHERE c.containerid=empty.containerid")
+                .execute(&mut *tx).await?.rows_affected();
+            tx.commit().await?;
+            // Draining health rows can make additional counters eligible next pass.
+            self.counters = count > 0 || self.active[0];
+            deleted += count;
+        }
+        if self.builds {
+            let count = sqlx::query(BUILD_RETENTION_SQL)
+                .bind(days)
+                .execute(pool)
+                .await?
+                .rows_affected();
+            self.builds = count > 0;
+            deleted += count;
+        }
+        // Keep partition work after the independent families: a partition-lock
+        // timeout must not prevent their already-safe short commits.
+        if self.statistics.is_none() {
+            self.statistics =
+                Some(super::platforms::statistics::maintenance::prepare_retention(pool).await?);
+        }
+        if let Some(statistics) = &mut self.statistics {
+            deleted += statistics.batch(pool).await?;
+        }
+        citadel_runtime::runtime_metrics::RuntimeWork::Retention.units(deleted);
+        Ok(deleted)
     }
-    // Ordinals remain valid while any retained history exists, including deleted
-    // containers. Remove empty counters in bounded batches to avoid churn leaks.
-    let mut counters = pool.begin().await?;
-    // Match history admission's lock order. The DELETE needs a fresh snapshot
-    // after waiting for a writer; taking the lock inside its CTE is insufficient.
-    sqlx::query("SELECT pg_advisory_xact_lock(680224102)")
-        .execute(&mut *counters)
-        .await?;
-    sqlx::query("WITH empty AS (SELECT c.containerid FROM containerhealthhistorycounters c WHERE NOT EXISTS(SELECT 1 FROM containerhealthtransitions h WHERE h.containerid=c.containerid) ORDER BY c.containerid LIMIT 500 FOR UPDATE OF c SKIP LOCKED) DELETE FROM containerhealthhistorycounters c USING empty WHERE c.containerid=empty.containerid")
-        .execute(&mut *counters).await?;
-    counters.commit().await?;
-    if let Some(days) = build_retention_days.filter(|days| *days > 0) {
-        deleted += sqlx::query(BUILD_RETENTION_SQL)
-            .bind(days)
-            .execute(pool)
-            .await?
-            .rows_affected();
+}
+
+/// One pass for explicit maintenance callers and bounded-storage regression tests.
+pub async fn cleanup(pool: &PgPool, days: Option<i32>) -> Result<u64, sqlx::Error> {
+    RetentionSweep::new(days).batch(pool, days).await
+}
+
+/// One scheduled tick: round-robin short batches, without repeating exhausted families.
+async fn drain_cleanup(pool: &PgPool, days: Option<i32>) -> Result<u64, sqlx::Error> {
+    let mut sweep = RetentionSweep::new(days);
+    let mut total = 0;
+    for _ in 0..128 {
+        let count = sweep.batch(pool, days).await?;
+        total += count;
+        if count == 0 {
+            break;
+        }
+        tokio::task::yield_now().await;
     }
-    deleted += super::platforms::statistics::maintenance::retain(pool).await?;
-    citadel_runtime::runtime_metrics::RuntimeWork::Retention.units(deleted);
-    Ok(deleted)
+    Ok(total)
 }
 /// Compaction runs independently of the slower retention sweep under the same lease.
 pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
@@ -191,12 +249,14 @@ pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
 pub struct PostgresMaintenanceStore {
     pool: PgPool,
     platform_cursor: std::sync::atomic::AtomicI64,
+    physical_discovery: tokio::sync::Mutex<super::platforms::statistics::maintenance::Discovery>,
 }
 impl PostgresMaintenanceStore {
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool,
             platform_cursor: std::sync::atomic::AtomicI64::new(0),
+            physical_discovery: Default::default(),
         }
     }
 }
@@ -236,9 +296,12 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         >,
     > {
         Box::pin(async move {
-            let physical = super::platforms::statistics::maintenance::compact(&self.pool)
-                .await
-                .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
+            let (physical, scan_pending) = super::platforms::statistics::maintenance::compact_page(
+                &self.pool,
+                &self.physical_discovery,
+            )
+            .await
+            .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
             let platform = super::platforms::statistics::platform_maintenance::compact(
                 &self.pool,
                 &self.platform_cursor,
@@ -248,6 +311,7 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
             Ok(citadel_runtime::maintenance::CompactionProgress {
                 processed: physical + platform.processed,
                 stalled_source: platform.stalled_source,
+                scan_pending,
             })
         })
     }
@@ -259,7 +323,7 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         Result<u64, citadel_runtime::maintenance::MaintenanceError>,
     > {
         Box::pin(async move {
-            cleanup(&self.pool, days)
+            drain_cleanup(&self.pool, days)
                 .await
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })

@@ -1513,6 +1513,99 @@ shared buffers and already allocated database files may remain visible after
 execution work falls. Re-measure an equal deployment workload before claiming that
 the original production memory graph is fixed.
 
+### PostgreSQL maintenance workload follow-up
+
+The maintenance regression suite coordinates real partition expiry and compaction
+with an event-trigger gate, asserting both finish without reciprocal relation-lock
+waits and that expired raw data is removed. The worker tests also place multi-hour
+backlogs behind empty source pages, including an empty final page, to verify that
+productive scans continue within the unchanged 128-pass/five-second budget.
+
+
+The ignored `stats_batch_persistence::maintenance_work` tests cover a 100,000-row
+terminal Build history, all three active statuses, a 10,001-row Activity backlog,
+once-per-tick partition preparation, exhausted-family query counts, cancellation
+and next-tick recovery. Parent-analysis coverage checks that partition creation,
+expiry and empty compacted-day removal analyze only affected parents, retain
+inherited statistics, skip child analysis and perform no analysis on idle passes.
+Physical discovery uses 2,000 sources with 80,000 samples
+on the last source: custom/generic plans bound input to 64 identities and buffer
+touches, and execution verifies progress past empty pages and new work behind the
+cursor. `query_efficiency::swarm_freshness_seeks_sources_and_respects_future_samples_in_both_plans`
+covers dense unrelated raw/rollup history, missing/empty sources, future-only
+samples and either timestamp branch winning. Existing storage tests still cover
+late capture, lock waits, protected alerts, counter cleanup and default partitions.
+
+A separate PostgreSQL 18.6 probe with 560,000 rows, eight scalar columns and seven
+daily-sized partitions compared three alternating runs of recursive `ANALYZE`
+and `ANALYZE ONLY`. Parent-only analysis averaged 49 ms / 6,450 shared buffer
+accesses versus 314 ms / 13,326 for recursive analysis. This isolates skipped
+child analysis; targeting only changed parents provides a separate reduction.
+These fixture timings do not predict demo latency or resident memory savings.
+
+A disposable PostgreSQL 18.6 comparison (unchanged settings, JIT disabled) measured:
+
+| Probe | Before | After |
+| --- | --- | --- |
+| 100 idle Build claim SQL sequences, including transaction statements | 600 calls | 100 calls |
+| Physical discovery, full 2,000-source scan, 80,000 raw samples | 2,434,828 buffer touches | 6,458 across 32 bounded pages |
+| Swarm freshness, ten empty tasks against that unrelated raw history | 12,888 buffer touches | 823 |
+| Partition preparation for 10,001 expired Activities (four passes) | 48 calls by the previous call graph | 12 measured calls |
+
+Both custom and generic plans reproduced the physical and Swarm reductions.
+The old discovery took 29–32 seconds on this fixture; bounded pages totaled
+83–97 ms of execution time. Timings are machine-dependent; regression assertions
+use visited buffers, bounded rows and correct results instead. The idle sequence
+probe does not measure busy Build throughput; active claims add one indexed
+existence check and retain their full authoritative transaction.
+
+`test/performance/measure-cpu-refactor.py` now records PostgreSQL cgroup v1/v2
+CPU and memory counters alongside Core, including total, working set, non-cache,
+file, shmem and active/inactive file values. PostgreSQL is sampled every five
+seconds using a small `docker exec` probe, which adds measurement overhead.
+Statement deltas include buffer hits/reads/dirtied blocks, temporary writes and
+WAL bytes. `--maintenance-seconds 1200` adds aged/churned telemetry and Activity
+backlog after the ordinary scenarios, with before/after backlog counts. Keep
+fixture configuration identical across revisions. The default zero skips this
+long scenario. Swarm correctness/plans remain in the native tests above.
+
+For a local release-binary comparison, `--source /path/to/checkout` records the
+correct revision for `--binary`. `--stack-burst` additionally deploys and forcibly
+recreates four disposable Compose stacks through Core, checking that every apply
+finishes Healthy; it requires the Docker Compose CLI on Core's PATH. Core uses an
+isolated home/data directory and the same allocator setting as the product image.
+`--postgres-port` overrides the fixture's default localhost port of 55449.
+With `--idle-seconds 60 --stats-seconds 120 --stack-burst`, use
+`--maintenance-start-seconds 750 --maintenance-seconds 600` to seed aged data at
+the same process age in both runs and observe the normal 900-second retention
+cycle. The harness rejects an overrun of the requested seed time. Recreate the
+owned PostgreSQL and nested Docker fixtures between revisions; do not run the
+measurements alongside compilation. Core PSS/RSS peaks and end values complement
+the mean. PostgreSQL 18 `pg_stat_io` deltas measure buffered database I/O operations;
+they are not physical disk traffic. Per-device cgroup v2 I/O is recorded when
+available, otherwise that field is empty. Keep database/image settings identical
+and retain the environment metadata and raw captures outside the repository.
+
+These measurements establish less database work, not a particular RAM reduction.
+The 2026-11-14 local release comparison against `33db4867` completed all nine
+scenarios, including four Stack deployments/recreations and the normal retention
+cycle. It exposed two remaining issues: partition expiry and compaction acquire
+raw/rollup relation locks in conflicting orders (confirmed with a separate
+two-session blocking probe), and paged physical discovery ends useful compaction
+batches too early after a scan wraps. With 2,000 churned identities and four
+populated sources, baseline completed 93 source-hour compactions (5,332 rollups),
+while the pending changes completed 15 (900 rollups) in the same backlog window.
+Both retained 10,001 expired samples and 95,001 expired Activities after the
+partition-lock timeout. Lower CPU/WAL in that run therefore does not establish
+an equal-work improvement. Settled PostgreSQL non-cache memory was about
+213 versus 207 MiB; Core PSS was about 46 versus 52 MiB. Resolve the lock ordering
+and backlog throughput before treating these changes as deployment-validated.
+These are single-run local observations with sampler overhead, not production
+sizing guarantees; Core PSS excludes helper memory and container file cache.
+The conditional mature Build-retention JSON/reference candidate and host-minute
+sizing optimization remain separate investigations; their protection/sizing rules
+are unchanged in this follow-up.
+
 ### Swarm Platform I/O
 
 `stats_batch_persistence::swarm_platform_io_aggregates_nodes_without_losing_history_or_overwriting_host_gauges`
@@ -1786,3 +1879,70 @@ successive inspections use different credentials and then anonymous access. Each
 inspection must fetch fresh metadata. The suite also covers platform selection,
 immutable digest verification, credential origin validation and sanitized errors.
 These tests require neither a Docker daemon nor external registry access.
+
+### Recurring statistics hot-path follow-up
+
+`stats_batch_persistence::capture_work` covers committed host notifications,
+unchanged replays before and after acknowledgement, node-only captures and failed
+COMMIT notification/data rollback. Its custom/generic host-capture plans use a
+66 KB descriptor and mixed host, worker, manager, obsolete-session, wrong-address
+and sealed-history inputs. They retain last-input precedence and per-capture memory
+denominators while checking that the materialized projection excludes unused scope
+metadata and produces no temporary writes.
+
+`alert_persistence::platform_flush::shared_parent_validation_is_transaction_local_and_preserves_incident_state`
+uses a separate disposable database and 32 Platforms sharing one rule. It checks
+required-match counters, incident creation and resolution with reset counters,
+cancellation, locked parent protection against disable, and disabled/deleted rules
+behind a warm definition cache. When the disposable server preloads
+`pg_stat_statements`, it also verifies exactly one parent SELECT per successful
+flush, versus 32 required by the old per-observation call path. The existing cold
+one-connection/failed-acknowledgement test and Server concurrent-revision test
+cover atomic acknowledgement and pool ownership.
+
+A PostgreSQL 18.6 SQL probe compared identical captured parameters and settings
+(JIT off, 4 MiB work_mem) in newly opened sessions, then two warm repeats using
+custom/generic prepared plans. With 128 host captures and the large descriptor,
+the old query wrote 1,035 temporary blocks (8.09 MiB); the narrowed query wrote
+zero. At 512 captures the comparison was 4,142 blocks (32.36 MiB) versus zero.
+The 128-capture statement took approximately 75–93 ms before and 28–33 ms after.
+A single-capture input did not spill in either version. Backend memory-context
+snapshots taken on the same connection after rollback remained around 2.5–2.7 MB
+allocated: these measure retained contexts, not peak query memory or process RSS.
+Host argument bytes and durable row semantics are unchanged. The combined timeout
+setup removes one separately awaited exchange per writer transaction by construction;
+it still executes both SET statements. This probe measures capture SQL, not full
+collector/writer/alert cycle latency, network traffic, or Core/PG resident memory.
+
+A persistence-private container scope-envelope prototype was also compared, but
+was not adopted. At 128 samples, compact JSON fell from 44,453 to 28,492 bytes;
+at 2,048 it fell from 716,629 to 458,748. A one-sample input grew from 346 to 387
+bytes. Neither variant spilled; warm execution improvements were inconsistent,
+and the large custom-plan prototype was slower (192–203 ms versus 154–171 ms).
+This does not justify another production ingestion representation in this change.
+Full-cycle concurrency/load, alert latency and drop/retry measurements remain
+necessary before claiming production CPU or RAM savings. Pool lifetimes,
+prepared-statement policy, sampling cadence, retention and PostgreSQL settings
+are unchanged.
+
+### Workload persistence overhead regressions
+
+Against fresh disposable databases, run these adapter tests serially:
+
+```bash
+# CITADEL_PLATFORM_DATABASE_URL
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test platform_inventory_persistence state_delta:: -- --ignored --test-threads=1
+# CITADEL_EXECUTION_DATABASE_URL (fresh for each command)
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test stack_webhooks -- --ignored --test-threads=1
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test build_execution build_runs_claim_once_persist_results_cancel_and_recover -- --ignored --test-threads=1
+# CITADEL_UPDATE_TEST_DATABASE_URL, fresh and named citadel_update_test_*
+SQLX_OFFLINE=true cargo test --locked -p citadel-adapters --test instance_updates -- --ignored --test-threads=1
+```
+
+Lifecycle tests cover 256 ordered results, stale identity-hint recovery, distinct
+Stack notifications, no-op replay, and notification/state rollback on COMMIT failure.
+Webhook tests assert duplicates in both Queued and Processing states stay silent.
+Build tests exercise display projections, execution claims and atomic Activities.
+Update tests preserve drain snapshot/ownership checks and source recovery after
+batching constant transaction setup commands. These are correctness regressions;
+they do not establish production CPU or memory savings.

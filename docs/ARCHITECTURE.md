@@ -964,6 +964,9 @@ list, worker or lookup only needs a subset of the data.
 Reuse shared vocabulary where semantics match. Resource-specific state and
 validation stay with the feature. Decode persisted enum values and JSON into
 feature types at the repository boundary.
+Build Run display reads project only the fields consumed by the public run model;
+Activity recording uses its own smaller projection. Execution claims retain the
+argument, secret-reference and tag-template snapshots needed to run the build.
 
 Use `Repository` for durable business resources, `Store` for projections, samples
 or transient state, and `Reader` for read-only queries. Keep claims, row-version
@@ -989,6 +992,11 @@ Copy progress, backup coverage and Stack drift also share that LISTEN connection
 Each topic carries resource IDs through a bounded 256-event fanout; slow subscribers receive a
 resync indication. Copy and coverage readers refresh persisted state after a gap;
 Stack drift retains its bounded event batches and five-minute reconciliation.
+Container lifecycle batches index returned rows by Docker ID once, retaining input
+order and stale identity-hint retries. Distinct Stack drift notifications use one
+SQL statement within the state transaction; rollback discards the entire batch.
+Duplicate queued or processing Stack webhooks do not send new-work notifications;
+the durable retry and missed-wakeup fallback remains in place.
 Coverage collects up to 256 distinct platform IDs over 50 ms before loading each
 platform's affected resources once per batch. Unmanaged-container creation keeps
 its dedicated listener: its grace queue cannot reconstruct missed creation events
@@ -1224,6 +1232,10 @@ Interactive streams normally end with their caller. Durable operations use
 persisted claims and may continue after a browser disconnect. Recovery inspects
 and settles interrupted work; it must not blindly replay ambiguous mutations.
 PostgreSQL notifications are wakeups, while claims and queue rows remain authoritative.
+Build claims first check the existing active-status index for Queued, Preparing or
+Running work. A negative result skips the recovery/claim transaction; it is never
+cached. A positive result retains the full transaction and recovery fences.
+Committed notifications and the existing fallback handle an enqueue racing this check.
 
 Ordinary Direct Platform scripts, builds and updates reuse the existing Platform
 runtime registry. Registered Direct Build Pools have one composition-owned registry
@@ -1318,8 +1330,19 @@ collection and transport decoding allocate before admission. Existing collector
 concurrency/session ownership still bounds that additional work; allocator-retained
 pages, realtime subscribers and other Core services are outside this budget.
 
+Host/node capture admission carries only the required measurements and scalar
+manager node ID beyond session validation. Writer lock/statement timeouts are
+submitted together, before the existing separate lock and revalidation steps.
+Only actual host INSERT/UPDATE work emits the transactional PlatformStats hint;
+accepted node-only captures and unchanged host replays do not wake host alerts.
+Accepted/stale accounting still includes admissible no-op replays. Pending rows
+and periodic/reconnect fallback remain the durable alert recovery path.
+
 Metric-alert flushes prepare cached rules and live entitlements before taking the
-flush transaction. Evaluation, rule state, outbox changes and exact-`xmin`
+flush transaction. Successful enabled-rule parent checks are reused only within
+a context borrowing that transaction; its FOR SHARE locks remain held throughout.
+The first-parent lock order is unchanged. Each rule/resource advisory lock and
+subsequent mutable-state read still runs separately for every observation. Evaluation, rule state, outbox changes and exact-`xmin`
 acknowledgement then share that one transaction/connection. PostgreSQL notifications
 are transactional; in-process change callbacks run only after commit. A correction
 concurrent with evaluation remains pending. Once per minute, bounded diagnostics
@@ -1350,7 +1373,8 @@ schedules another batch after a full 60-second pause, measured from completion s
 slow work cannot trigger immediate catch-up ticks. Each iteration permits at most
 128 passes within five seconds, with a cancellation branch; a pass commits at most
 one container-source-hour and a prefix of one host/node-hour. Container candidates
-are ordered by oldest unsealed observation. Host/node candidates rotate through
+rotate through source-ID pages, starting at each source's oldest unsealed
+observation. Host/node candidates rotate through
 source IDs using one process-owned cursor; each starts at its oldest eligible
 observation. Restart resets the cursor without changing durable progress. Container
 sample deletion repeats the source and time bounds explicitly, allowing partition
@@ -1481,6 +1505,20 @@ physical child through the timestamp index and `FOR UPDATE SKIP LOCKED`.
 Statement-local `ctid` arrays target each child individually: tuple locations are
 not globally unique across partitions. Empty retired source/owner metadata is
 cleaned in bounded batches after its measurements expire.
+Physical compaction discovery advances through source-ID pages of at most 64 before
+probing history. Eligible candidates are reused within that bounded page; empty
+pages advance the scan too. Source-and-timestamp range seeks avoid scanning other
+sources on a miss. Selection remains advisory: bounds are reread under the Platform
+lock before committing raw deletion, summaries and watermarks. The cursor resumes
+across budget-limited batches and wraps after a completed scan, so newly eligible
+and earlier sources are revisited. A pending scan prevents an empty page from being
+mistaken for an idle installation. A productive scan continues into the next scan
+within the existing pass/time budget: completion alone is not evidence of an idle
+installation. Only a scan without progress permits the worker to stop on empty
+pages or repeated host/node stalls. Cancellation can discard a candidate, but the
+next complete scan rediscovers its authoritative state.
+Swarm task freshness uses the same source-scoped seek pattern for raw and rollup
+timestamps, retaining the requested upper time bound and null for absent samples.
 
 Platform history uses the same 24-hour raw window and seven-day retention.
 `platformhistorysources` identifies the connected host (empty node ID) or reporting
@@ -1532,8 +1570,21 @@ not perform a blocking raw-table rewrite or promise immediate filesystem shrinka
 
 Partition/compaction transactions use bounded
 lock and statement timeouts and roll back on cancellation. Parent partition locks
-are released before row cleanup/analysis; daily rotation also analyzes the
-partitioned parents because autovacuum handles their children.
+are released after each parent family, before acquiring another family's locks,
+row cleanup or analysis. This prevents expiry from holding summary-parent locks
+while waiting for a raw parent read by concurrent compaction. Each completed
+family's expiry remains committed if a later family fails or is cancelled.
+Partition creation/removal analyzes only
+the affected parents, with a separate bounded transaction per parent. PostgreSQL
+18 `ANALYZE ONLY` retains inherited statistics across the partitions without
+recursively reanalyzing children, whose statistics autovacuum maintains. An idle
+partition pass performs no analysis.
+Each retention tick inventories/prepares partitions once, then drains at most 128
+round-robin batches within the worker's ten-second budget. Exhausted families and
+physical children are skipped only for that invocation; later history deletion
+keeps dependent orphan cleanup eligible. Cancellation discards this local progress.
+The next tick rechecks every family from the database. Counter cleanup still takes
+the admission advisory lock before its fresh deletion snapshot.
 Locked rows are left for a later maintenance pass. Health transitions, Activities,
 Script/Build history, refresh-token expiry and expired copy reviews use the same
 statement-local locked-tuple deletion pattern with their existing cutoffs and batch

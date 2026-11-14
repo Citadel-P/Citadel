@@ -97,6 +97,7 @@ pub(crate) async fn compact(
             return Ok(CompactionProgress {
                 processed: 0,
                 stalled_source: Some(source),
+                ..Default::default()
             });
         }
         RuntimeWork::CompactionInput.units(observations as u64);
@@ -116,5 +117,6 @@ pub(crate) async fn compact(
     Ok(CompactionProgress {
         processed: progress,
         stalled_source: None,
+        ..Default::default()
     })
 }
