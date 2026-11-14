@@ -98,7 +98,7 @@ class AgentUpgradeTests(unittest.TestCase):
         self.fixture.agent_before = {kind: before for kind in ("direct", "edge")}
         self.fixture.agent_target = "target-digest"
         after = dict(json.loads(json.dumps(before)), Id="new", Config={"Image": "target-digest"})
-        helper = {"Mounts": [{"Source": "/run/user/1001/docker.sock"}], "State": {"ExitCode": 0}}
+        retained = {"helper": False, "source": False}
         targets = [{"id": kind, "name": f"fixture-{kind}-agent", "status": "Current"} for kind in ("direct", "edge")]
         self.fixture.core_before = ("core", "started", 0)
         core = {"Id": "core", "State": {"StartedAt": "started"}, "RestartCount": 0}
@@ -115,9 +115,11 @@ class AgentUpgradeTests(unittest.TestCase):
             nonlocal edge_checks
             result = after
             if args[0] == "ps":
-                return subprocess.CompletedProcess([], 0, b"helper\n", b"")
-            if args == ("inspect", "helper"):
-                result = helper
+                if "--filter" in args:
+                    output = b"helper\n" if retained["helper"] else b""
+                else:
+                    output = b"new\nold\n" if retained["source"] else b"new\n"
+                return subprocess.CompletedProcess([], 0, output, b"")
             if kind == "edge" and args == ("inspect", "citadel-agent"):
                 edge_checks += 1
                 if edge_checks % 2 == 1:
@@ -152,8 +154,15 @@ class AgentUpgradeTests(unittest.TestCase):
                     self.fixture.run_agents()
             edge_checks = 0
             after["NetworkSettings"]["Networks"] = before["NetworkSettings"]["Networks"]
-            helper["Mounts"][0]["Source"] = "/var/run/docker.sock"
-            with self.assertRaisesRegex(AssertionError, "wrong Docker socket"):
+            # Successful updates must remove both containers; rootless helper socket
+            # selection is exercised by the real fixture's isolated Edge daemon.
+            retained["helper"] = True
+            with self.assertRaisesRegex(AssertionError, "retained an updater helper"):
+                self.fixture.run_agents()
+            edge_checks = 0
+            retained["helper"] = False
+            retained["source"] = True
+            with self.assertRaisesRegex(AssertionError, "retained the previous Agent"):
                 self.fixture.run_agents()
 
     def test_port_checks_use_bound_endpoints_and_detect_changed_addresses_or_ports(self):

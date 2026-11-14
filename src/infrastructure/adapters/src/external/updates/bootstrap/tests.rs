@@ -178,6 +178,11 @@ async fn unsafe_ambiguous_and_changing_installations_never_write_registration() 
         "replicas",
         "rootless",
         "shared-volume",
+        "foreign-volume-project",
+        "wrong-volume-role",
+        "conflicting-volume-system",
+        "conflicting-volume-role",
+        "missing-volume-labels",
         "shared-network",
         "changed-daemon",
         "changed-inputs",
@@ -578,6 +583,20 @@ async fn explicit_refresh_updates_idle_input_fingerprint_but_preserves_identity_
         state.read::<serde_json::Value>("unresolved.json").unwrap(),
         json!({"preserve":true})
     );
+}
+
+#[tokio::test]
+async fn compose_owned_volumes_register_without_optional_citadel_labels() {
+    let mut fixture = Fixture::new();
+    fixture.runner.mode = "compose-volume-labels";
+    let registration = fixture.register().await.unwrap();
+    assert_eq!(fixture.register().await.unwrap(), registration);
+    assert_eq!(fixture.check().await.unwrap().registration, registration);
+    // Ownership drift is still refused after registration, not silently adopted.
+    fixture.runner.mode = "foreign-volume-project";
+    assert!(fixture.check().await.is_err());
+    fixture.runner.mode = "wrong-volume-role";
+    assert!(fixture.check().await.is_err());
 }
 
 #[tokio::test]

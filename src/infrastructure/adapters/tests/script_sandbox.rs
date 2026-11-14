@@ -13,12 +13,20 @@ use uuid::Uuid;
 
 struct Fixture {
     root: tempfile::TempDir,
+    sdk_root: tempfile::TempDir,
     tasks: DynamicTasks,
 }
 impl Fixture {
     fn new() -> Self {
+        let sdk_root = tempfile::tempdir().unwrap();
+        std::fs::copy(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/generated/citadel.js"),
+            sdk_root.path().join("citadel.js"),
+        )
+        .unwrap();
         Self {
             root: tempfile::tempdir().unwrap(),
+            sdk_root,
             tasks: DynamicTasks::new(CancellationToken::new()),
         }
     }
@@ -29,7 +37,10 @@ impl Fixture {
     ) -> ScriptSandbox {
         ScriptSandbox {
             process,
-            workspace: Arc::new(LocalScriptWorkspace::new(self.tasks.clone())),
+            workspace: Arc::new(LocalScriptWorkspace::with_sdk(
+                self.tasks.clone(),
+                self.sdk_root.path().join("citadel.js"),
+            )),
             deno_path: deno_path.into(),
             work_root: self.root.path().join("runs"),
             allow_net: None,
@@ -165,7 +176,15 @@ async fn actual_deno_cache_does_not_accumulate_across_repeated_or_concurrent_run
         Arc::new(citadel_processes::SystemProcess),
         std::env::var_os("CITADEL_DENO_PATH").unwrap(),
     );
-    let source = "const cache = Deno.env.get('DENO_DIR'); if (cache !== Deno.cwd() + '/deno-cache') throw Error('cache escaped run'); await Deno.mkdir(cache, {recursive:true}); await Deno.writeTextFile(cache + '/probe', 'generated'); console.log('ready');";
+    let mut probe = sandbox
+        .workspace
+        .prepare(&sandbox.work_root.join("probe"), "")
+        .await
+        .unwrap();
+    let sdk = probe.sdk().to_owned();
+    let sdk_before = std::fs::read(&sdk).unwrap();
+    probe.cleanup().await.unwrap();
+    let source = "import { createCitadelClient } from 'citadel:sdk'; if (typeof createCitadelClient !== 'function') throw Error('SDK missing'); const cache = Deno.env.get('DENO_DIR'); if (cache !== Deno.cwd() + '/deno-cache') throw Error('cache escaped run'); await Deno.mkdir(cache, {recursive:true}); await Deno.writeTextFile(cache + '/probe', 'generated'); console.log('ready');";
     let cancellation = CancellationToken::new();
     for _ in 0..3 {
         assert_eq!(
@@ -244,6 +263,7 @@ async fn actual_deno_cache_does_not_accumulate_across_repeated_or_concurrent_run
     })
     .await
     .expect("abandoned Deno child must be reaped");
+    assert_eq!(std::fs::read(sdk).unwrap(), sdk_before);
 }
 
 struct ChunkedOutput;
@@ -312,3 +332,6 @@ async fn long_progress_lines_preserve_split_utf8_and_redaction() {
 #[cfg(unix)]
 #[path = "script_sandbox/execution_cycles.rs"]
 mod execution_cycles;
+
+#[path = "script_sandbox/sdk.rs"]
+mod sdk;

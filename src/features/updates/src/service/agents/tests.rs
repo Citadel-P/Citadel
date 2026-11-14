@@ -24,6 +24,11 @@ struct Fixture {
     cancel_on_install: AtomicBool,
     cancel_on_verify: AtomicBool,
     resume_fails: AtomicBool,
+    cleanup_fails: AtomicBool,
+    success_save_fails: AtomicBool,
+    cleanup_save_fails: AtomicBool,
+    cancel_on_cleanup: AtomicBool,
+    cleanups: Mutex<Vec<String>>,
     claimed: Mutex<Option<DateTime<Utc>>>,
     reservation: Mutex<Option<Uuid>>,
     probes: Mutex<Vec<String>>,
@@ -141,6 +146,11 @@ impl Fixture {
             cancel_on_install: AtomicBool::new(false),
             cancel_on_verify: AtomicBool::new(false),
             resume_fails: AtomicBool::new(false),
+            cleanup_fails: AtomicBool::new(false),
+            success_save_fails: AtomicBool::new(false),
+            cleanup_save_fails: AtomicBool::new(false),
+            cancel_on_cleanup: AtomicBool::new(false),
+            cleanups: Mutex::new(vec![]),
             claimed: Mutex::new(None),
             reservation: Mutex::new(None),
             probes: Mutex::new(vec![]),
@@ -181,6 +191,7 @@ impl Fixture {
                     target: t.clone(),
                     phase: AgentUpdatePhase::Pending,
                     message: None,
+                    cleanup_completed: false,
                 })
                 .collect(),
             revision: 0,
@@ -198,6 +209,41 @@ impl AgentUpdateEntitlements for Fixture {
     }
 }
 impl AgentUpdateRuntime for Fixture {
+    fn cleanup<'a>(
+        &'a self,
+        target: &'a AgentUpdateTarget,
+        operation: Uuid,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        Box::pin(async move {
+            let saved = self.state.lock().unwrap().operation.clone().unwrap();
+            assert_eq!(saved.id, operation);
+            assert!(!saved.finished, "ownership must survive cleanup");
+            assert_eq!(
+                saved
+                    .targets
+                    .iter()
+                    .find(|t| t.target.id == target.id)
+                    .unwrap()
+                    .phase,
+                AgentUpdatePhase::Succeeded,
+                "success must be durable before deletion"
+            );
+            self.cleanups.lock().unwrap().push(target.id.clone());
+            if self.cancel_on_cleanup.load(Ordering::SeqCst) {
+                cancel.cancel();
+            }
+            if cancel.is_cancelled() {
+                Err(UpdateError::Cancelled)
+            } else if self.cleanup_fails.load(Ordering::SeqCst) {
+                Err(UpdateError::Unavailable(
+                    "Cleanup acknowledgement lost".into(),
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
     fn resume<'a>(
         &'a self,
         _: &'a AgentUpdateTarget,
@@ -506,6 +552,23 @@ impl AgentUpdateRepository for Fixture {
         op: &'a AgentUpdateOperation,
     ) -> BoxFuture<'a, Result<AgentUpdateOperation, UpdateError>> {
         Box::pin(async move {
+            if self.cleanup_save_fails.load(Ordering::SeqCst)
+                && op.targets.iter().any(|t| t.cleanup_completed)
+            {
+                return Err(UpdateError::Unavailable(
+                    "Cleanup acknowledgement commit failed".into(),
+                ));
+            }
+
+            if self.success_save_fails.load(Ordering::SeqCst)
+                && op
+                    .targets
+                    .iter()
+                    .any(|t| t.phase == AgentUpdatePhase::Succeeded)
+            {
+                return Err(UpdateError::Unavailable("Success commit failed".into()));
+            }
+
             let mut state = self.state.lock().unwrap();
             assert_eq!(state.operation.as_ref().unwrap().revision, op.revision);
             let mut op = op.clone();
@@ -1243,4 +1306,144 @@ async fn agent_failure_after_core_success_keeps_core_and_stops_remaining_agents(
             .message
             .is_some()
     );
+}
+
+#[tokio::test]
+async fn successful_update_cleanup_retries_after_restart_without_replacing_again() {
+    let f = Fixture::new();
+    f.targets.lock().unwrap().push(target("D", "0.1.1"));
+    let service = f.service();
+    let token = CancellationToken::new();
+    let review = service
+        .review(actor(), &["C".into(), "D".into()], &token)
+        .await
+        .unwrap();
+    let approved = service
+        .approve(actor(), review.id, Uuid::now_v7())
+        .await
+        .unwrap();
+    f.cleanup_fails.store(true, Ordering::SeqCst);
+    assert!(service.tick(&token).await.is_err());
+    let saved = service.operation(approved.id).await.unwrap();
+    assert!(!saved.finished);
+    assert_eq!(saved.targets[0].phase, AgentUpdatePhase::Succeeded);
+    assert!(!saved.targets[0].cleanup_completed);
+    assert!(
+        saved.targets[0]
+            .message
+            .as_ref()
+            .unwrap()
+            .contains("retry automatically")
+    );
+    assert_eq!(saved.targets[1].phase, AgentUpdatePhase::Pending);
+    assert!(
+        service
+            .approve(actor(), review.id, Uuid::now_v7())
+            .await
+            .is_err()
+    );
+    // Cleanup resumes using durable success; replacement verification may no longer
+    // find a helper and must not be called again.
+    f.cancel_on_verify.store(true, Ordering::SeqCst);
+    assert!(f.service().tick(&token).await.is_err());
+    assert!(!token.is_cancelled());
+    assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+    f.cleanup_fails.store(false, Ordering::SeqCst);
+    f.service().tick(&token).await.unwrap();
+    let saved = service.operation(approved.id).await.unwrap();
+    assert!(saved.finished);
+    assert!(
+        saved
+            .targets
+            .iter()
+            .all(|t| t.cleanup_completed && t.message.is_none())
+    );
+    assert_eq!(*f.installs.lock().unwrap(), ["C", "D"]);
+    assert_eq!(*f.cleanups.lock().unwrap(), ["C", "C", "C", "D"]);
+    // Crash after the cleanup acknowledgements commit but before operation finish:
+    // a now-offline completed Agent must not block finishing or repeat cleanup.
+    f.state.lock().unwrap().operation.as_mut().unwrap().finished = false;
+    f.cleanup_fails.store(true, Ordering::SeqCst);
+    f.service().tick(&token).await.unwrap();
+    assert!(service.operation(approved.id).await.unwrap().finished);
+    assert_eq!(*f.cleanups.lock().unwrap(), ["C", "C", "C", "D"]);
+}
+
+#[tokio::test]
+async fn failed_success_commit_preserves_update_evidence_until_reconciliation() {
+    let f = Fixture::new();
+    let service = f.service();
+    let token = CancellationToken::new();
+    let review = service
+        .review(actor(), &["C".into()], &token)
+        .await
+        .unwrap();
+    let approved = service
+        .approve(actor(), review.id, Uuid::now_v7())
+        .await
+        .unwrap();
+    f.success_save_fails.store(true, Ordering::SeqCst);
+    assert!(service.tick(&token).await.is_err());
+    let saved = service.operation(approved.id).await.unwrap();
+    assert_eq!(saved.targets[0].phase, AgentUpdatePhase::Updating);
+    assert!(!saved.finished);
+    assert!(f.cleanups.lock().unwrap().is_empty());
+    f.success_save_fails.store(false, Ordering::SeqCst);
+    f.service().tick(&token).await.unwrap();
+    assert!(service.operation(approved.id).await.unwrap().finished);
+    assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+    assert_eq!(*f.cleanups.lock().unwrap(), ["C"]);
+}
+
+#[tokio::test]
+async fn failed_rollout_retains_containers_for_recovery() {
+    let f = Fixture::new();
+    f.fail.store(true, Ordering::SeqCst);
+    let service = f.service();
+    let token = CancellationToken::new();
+    let review = service
+        .review(actor(), &["C".into()], &token)
+        .await
+        .unwrap();
+    let approved = service
+        .approve(actor(), review.id, Uuid::now_v7())
+        .await
+        .unwrap();
+    service.tick(&token).await.unwrap();
+    assert_eq!(
+        service.operation(approved.id).await.unwrap().targets[0].phase,
+        AgentUpdatePhase::Failed
+    );
+    assert!(f.cleanups.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn cleanup_interruption_before_acknowledgement_commit_preserves_durable_retry() {
+    for cancellation in [false, true] {
+        let f = Fixture::new();
+        let service = f.service();
+        let token = CancellationToken::new();
+        let review = service
+            .review(actor(), &["C".into()], &token)
+            .await
+            .unwrap();
+        let approved = service
+            .approve(actor(), review.id, Uuid::now_v7())
+            .await
+            .unwrap();
+        f.cleanup_save_fails.store(!cancellation, Ordering::SeqCst);
+        f.cancel_on_cleanup.store(cancellation, Ordering::SeqCst);
+        assert!(service.tick(&token).await.is_err());
+        let saved = service.operation(approved.id).await.unwrap();
+        assert!(!saved.finished);
+        assert_eq!(saved.targets[0].phase, AgentUpdatePhase::Succeeded);
+        assert!(!saved.targets[0].cleanup_completed);
+        f.cleanup_save_fails.store(false, Ordering::SeqCst);
+        f.cancel_on_cleanup.store(false, Ordering::SeqCst);
+        f.cancel_on_verify.store(true, Ordering::SeqCst);
+        f.service().tick(&CancellationToken::new()).await.unwrap();
+        assert!(service.operation(approved.id).await.unwrap().finished);
+        assert_eq!(*f.installs.lock().unwrap(), ["C"]);
+        assert_eq!(*f.cleanups.lock().unwrap(), ["C", "C"]);
+    }
 }

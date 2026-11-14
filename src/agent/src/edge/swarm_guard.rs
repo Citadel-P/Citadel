@@ -26,6 +26,16 @@ pub(super) async fn authorize(
 ) -> Result<(), Status> {
     let platform = Uuid::parse_str(&node.platform_id).map_err(|_| denied())?;
     match kind {
+        EdgeCommandKind::PlatformAgentUpdateDrain => {
+            let request: citadel_contracts::citadel::platforms::v1::AgentUpdateDrainRequest =
+                decode(payload)?;
+            if request.cleanup
+                || !request.source_container_id.is_empty()
+                || !request.source_image.is_empty()
+            {
+                return Err(denied());
+            }
+        }
         EdgeCommandKind::ContainerCreate => {
             let request: CreateContainerRequest = decode(payload)?;
             if policy::current_copy_helper(&request, platform) {

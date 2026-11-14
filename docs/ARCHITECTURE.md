@@ -222,8 +222,15 @@ unless helper evidence establishes replacement. Helper absence alone is never pr
 that a request was cancelled.
 After helper creation is attempted, settlement locates the owned helper. The authenticated
 replacement must match the operation label and the helper's exact command/image;
-the helper must have exited successfully before ownership is released. Retained
-exited helpers provide idempotent evidence after lost replies and Core restarts.
+the helper must have exited successfully before ownership is released. Exited
+helpers provide idempotent evidence after lost replies and Core restarts
+until Core persists the verified Succeeded target. Core then explicitly requests
+removal of the exact stopped source and helper, without force or volume removal,
+and persists `cleanupCompleted` in the existing operation JSON. The operation
+retains ownership until cleanup is acknowledged; retries after lost replies or
+restarts use durable success instead of re-verifying a deleted helper. Completed
+targets with acknowledged cleanup are not contacted again. Failed attempts retain
+their containers for inspection.
 An unresolved or failed helper keeps the operation owned for manual recovery;
 timeouts never establish that a Docker mutation was cancelled.
 Swarm cleanup uses the reviewed node IDs stored in the operation. Missing sessions
@@ -235,7 +242,7 @@ separate container from the verified target image. It preserves configuration,
 identity mounts and host ports, carries the source's standard or rootless Unix
 socket into the helper, and pins custom network attachments by ID while retaining
 aliases and gateway priorities. Dynamic addresses are reassigned; fixed addresses
-and legacy links require manual handover. It retains previous containers for recovery and
+and legacy links require manual handover. It retains previous containers during replacement and on failure, and
 requires authenticated reconnect with the expected image/version and changed
 container identity. Managed Swarm services reuse NodeAgentSetupService with a
 bounded node-local drain; Repair uses the stored approved digest. Mixed or stale
@@ -747,6 +754,15 @@ Demo/preview deployment removes the standard automatic state setting and bind
 from its generated base Compose input. CI retains ownership of the existing
 explicit host-state registration and guarded refresh; it never starts a second
 first-install registrar or moves existing recovery state.
+
+Before pulling images or replacing Core, deployment validates the selected state
+directory's ownership and private permissions and probes actual write access.
+Unregistered rootless targets use a dedicated directory under the deployment
+account's home when no sibling state directory exists; configured and interrupted
+state paths are preserved. Registration verifies each volume's Compose project
+and volume-role labels alongside its exact exclusive container mounts. Citadel
+system labels are optional on existing volumes but must agree when present;
+registration never relabels or recreates persistent volumes.
 
 Demo/preview release deployment transports the activation script from the same
 release checkout. Core and Agent pins are written into the captured private
@@ -1708,6 +1724,19 @@ Stack apply drops copied Compose text and parsed/resolved preparation data befor
 execution. The source bundle remains borrowed by the runtime until execution ends,
 then is released before completion retries; immutable release provenance and
 binding snapshots remain available. Staged release files keep their existing lifetime.
+
+Core and Agents load the same build-owned script SDK from `scripts/citadel.js`
+beside the executable; native Cargo development/tests use the generated asset in
+`src/infrastructure/scripts/generated/`. `xtask openapi` bundles the HTTP helpers
+with the existing handler-derived endpoint catalog and verifies it in CI. Agents
+consume the generated JavaScript without depending on Server. Development builds,
+debugger startup and `npm run dev` regenerate the SDK and frontend contracts through
+one serialized generation wrapper. Each run's source
+contains only its client context, `args`, `run` and user code. A private import map
+resolves `citadel:sdk` to the executor's asset, with read permission for that exact
+file and write permission only for the run workspace. The trusted bootstrap still
+dynamically imports user code under Deno's permission checks. SDK files are shared;
+authenticated clients, JavaScript processes and caches are not.
 
 Core and Agent Deno caches live inside each private run workspace and are removed
 with its generated source on completion, failure, timeout or cancellation. The

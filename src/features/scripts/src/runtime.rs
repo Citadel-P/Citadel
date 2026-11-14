@@ -24,7 +24,6 @@ pub struct ScriptRuntimeConfig {
     pub deno_path: OsString,
     pub work_root: PathBuf,
     pub internal_base_url: String,
-    pub endpoint_catalog_json: String,
     pub maximum_log_bytes: usize,
     pub stale_after: Duration,
 }

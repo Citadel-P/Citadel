@@ -52,8 +52,14 @@ impl ScriptSandbox {
             OsString::from("--no-config"),
             OsString::from("--no-lock"),
             OsString::from("--no-npm"),
-            OsString::from(format!("--allow-read={}", directory.display())),
+            OsString::from(format!(
+                "--allow-read={},{}",
+                directory.display(),
+                workspace.sdk().display()
+            )),
             OsString::from(format!("--allow-write={}", directory.display())),
+            OsString::from("--import-map"),
+            workspace.import_map().as_os_str().to_owned(),
             OsString::from("--allow-env=NO_COLOR,DENO_DIR"),
         ];
         let default_net = allow_net_authority(&input.base_url);

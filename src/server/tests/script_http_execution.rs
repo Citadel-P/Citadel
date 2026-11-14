@@ -95,7 +95,6 @@ async fn script_http_streams_executes_cancels_and_persists_real_process_results(
                 deno_path: std::env::var_os("CITADEL_DENO_PATH").unwrap(),
                 work_root: root.clone(),
                 internal_base_url: "http://127.0.0.1:8000".into(),
-                endpoint_catalog_json: "[]".into(),
                 maximum_log_bytes: 16 * 1024,
                 stale_after: Duration::from_secs(600),
             },
@@ -140,7 +139,7 @@ async fn script_http_streams_executes_cancels_and_persists_real_process_results(
     }
 
     queueing::verify(&app, &admin, &service, &store).await;
-    let action = create(&app, &admin, "console.log('first', args.message); console.log(__citadelToken); await new Promise(r=>setTimeout(r,1500)); console.log('last');", true, 10).await;
+    let action = create(&app, &admin, "const value: string = await Promise.resolve(args.message); if (!Object.isFrozen(run) || !run.id || !run.scriptId || !run.scriptName || !run.trigger || !run.queuedAt || typeof citadel.platforms.listPlatforms !== 'function' || citadel.api.listPlatforms !== citadel.platforms.listPlatforms) throw Error('Script bindings changed'); console.log('first', value); console.log(__citadelToken); await new Promise(r=>setTimeout(r,1500)); console.log('last');", true, 10).await;
     let id = Uuid::parse_str(action["id"].as_str().unwrap()).unwrap();
     let path = format!("/api/v1/scripts/{id}/run");
     for (principal, expected) in [

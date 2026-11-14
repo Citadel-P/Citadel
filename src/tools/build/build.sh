@@ -11,4 +11,4 @@ if [[ -z "${CITADEL_VERSION:-}" && -z "${CITADEL_INFORMATIONAL_VERSION:-}" ]]; t
 fi
 
 cargo build --locked -p citadel-server --bins "$@"
-cargo run --locked -p xtask -- openapi
+bash src/tools/build/generate-api.sh

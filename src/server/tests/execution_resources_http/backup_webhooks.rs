@@ -67,7 +67,6 @@ pub fn router(
             deno_path: "deno".into(),
             work_root: std::env::temp_dir(),
             internal_base_url: "http://127.0.0.1:8000".into(),
-            endpoint_catalog_json: "[]".into(),
             maximum_log_bytes: 1024,
             stale_after: std::time::Duration::from_secs(60),
         },

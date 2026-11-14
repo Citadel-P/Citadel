@@ -984,6 +984,14 @@ by default. Use `CITADEL_COMPOSE_PROFILE=dev` for faster unoptimized builds; use
 the default release profile for comparable CPU/I/O measurements.
 Native debugger tasks retain their development profile.
 
+Development builds, F5 and `npm run dev` regenerate OpenAPI, the shared script SDK
+and frontend models through `src/tools/build/generate-api.sh`. The wrapper serializes
+concurrent startup generators; failures prevent the dependent process from starting.
+Run `python3 -m unittest discover -s test/release -p test_api_generation.py -v`
+for disposable, stub-Cargo checks of serialization, failure propagation, lock release
+and the actual npm startup hook. CI's `openapi --check` and `api:verify` still check
+artifact freshness against the real Rust definitions.
+
 Cross-platform copy regression tests live in
 `src/server/tests/execution_resources_http/resource_copies/destinations.rs`.
 Run the `resource_copies::` filter with a disposable
@@ -1143,7 +1151,15 @@ CITADEL_DENO_PATH=/absolute/path/to/deno SQLX_OFFLINE=true cargo test --locked -
 These verify per-run Deno cache cleanup after repeated/concurrent execution,
 failure, timeout, cancellation and abandoned futures; split-token/UTF-8 log
 redaction; and tracked backup subprocess-cache cleanup through shutdown. Core
-and Agents use the same script sandbox. The real Deno test uses temporary inputs
+and Agents use the same script sandbox. The SDK tests also check API methods,
+query/path/body/error compatibility, concurrent client and run isolation, SDK write
+denial, and forbidden direct/transitive imports from other runs. Lifecycle checks
+leave the shared SDK unchanged. The HTTP execution fixture checks the generated
+wrapper's TypeScript, top-level await, `citadel`, `args` and `run` bindings.
+`cargo run --locked -p xtask -- openapi --check` verifies the bundled catalog against
+handler metadata. Core and Agent image smoke tests load the packaged SDK through
+the trusted bootstrap and check that scripts cannot overwrite it.
+The real Deno test uses temporary inputs
 and does not contact an external API.
 
 Use a disposable `CITADEL_EXECUTION_DATABASE_URL` for the adapter test
@@ -1209,14 +1225,15 @@ volumes, network and built images. Existing installations are untouched.
 
 Omit `--browser` for automated approval and verification of authenticated
 reconnection, target digest, changed container IDs, preserved identity mounts and
-ports, and retained source containers. It updates Direct first and verifies the
+ports, and removal of the previous Agent and updater helper without deleting
+identity volumes. It updates Direct first and verifies the
 unselected Edge container is unchanged, then updates Edge using the generated
 `edge-agent` label and mixed-case Edge mode. Edge's isolated daemon listens only
 at `/run/user/1001/docker.sock`; the Agent uses two custom networks with aliases.
-The runner verifies the helper uses that socket and replacement retains both
-network IDs and aliases. This exercises a rootless socket layout, not a genuinely
-unprivileged daemon or its host kernel configuration. Both must settle their exited helper
-before the operation finishes. This mode disconnects the outer test daemon
+Successful replacement requires the helper to use that socket; the runner also
+verifies both network IDs and aliases are preserved. This exercises a rootless socket layout, not a genuinely
+unprivileged daemon or its host kernel configuration. Both must settle their exited helper, persist verified success, and remove the
+source and helper before the operation finishes. This mode disconnects the outer test daemon
 from its network after loading prerequisites. Browser mode publishes only the UI
 on loopback and retains outbound connectivity. Neither mode exposes Docker or
 PostgreSQL on the host.
@@ -1231,6 +1248,10 @@ deduplication, stale reviews, request replay, sequential failure handling,
 interrupted-attempt reconciliation, Team scheduling and authorization rechecks.
 They also cover shutdown after dispatch, cancellation during verification and
 lost Swarm resume acknowledgements without releasing the claim or redispatching.
+Cleanup regressions verify persistence before deletion, retries after restart/lost
+acknowledgements, and no repeat cleanup after acknowledgement. Fake-daemon Agent
+tests exercise partial deletion, changed ownership, running/failed helpers, volume
+preservation, and rejection of standalone cleanup by Swarm-node sessions.
 
 ```bash
 SQLX_OFFLINE=true cargo test --locked -p citadel-updates service::agents
@@ -1654,6 +1675,10 @@ failures. Installer tests also cover automatic project/state defaults, waiting f
 administrator setup, timeout without registration, reuse without pulling existing
 images, and registered CI replacement guards. Demo tests cover captured release
 pins, automatic activation and preserving the deployed PostgreSQL image.
+They also verify that state creation/write failures stop deployment before image
+pulls, installer input changes or Core replacement, and preserve configured state.
+Bootstrap tests accept matching Compose-owned volumes without optional Citadel
+labels and reject missing ownership, foreign projects and conflicting roles.
 Existing adapter bootstrap tests own registration, database identity,
 mount and recovery-state validation. Updates frontend tests cover setup messaging
 even when Core has no available release and retain distinct external, unknown

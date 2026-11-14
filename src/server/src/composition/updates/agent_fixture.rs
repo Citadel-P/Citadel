@@ -63,6 +63,15 @@ impl AgentUpdateRuntime for Runtime {
         self.0.verify(target, release, operation, cancel)
     }
 
+    fn cleanup<'a>(
+        &'a self,
+        target: &'a AgentUpdateTarget,
+        operation: Uuid,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<(), UpdateError>> {
+        self.0.cleanup(target, operation, cancel)
+    }
+
     fn resume<'a>(
         &'a self,
         target: &'a AgentUpdateTarget,

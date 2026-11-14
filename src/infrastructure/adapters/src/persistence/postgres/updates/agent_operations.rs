@@ -318,6 +318,7 @@ pub(super) async fn claim(
                 target: target.clone(),
                 phase: AgentUpdatePhase::Pending,
                 message: None,
+                cleanup_completed: false,
             })
             .collect(),
         revision: 0,

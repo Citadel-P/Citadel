@@ -100,6 +100,16 @@ async fn script_scripts_are_private_and_cleanup_covers_abandonment() {
             .unwrap(),
         "const action = new URL('./script.ts', import.meta.url).href;\nawait import(action);\n"
     );
+    let sdk = workspace.sdk().to_owned();
+    let sdk_before = tokio::fs::read(&sdk).await.unwrap();
+    assert!(!sdk.starts_with(workspace.directory()));
+    let map: serde_json::Value =
+        serde_json::from_slice(&tokio::fs::read(workspace.import_map()).await.unwrap()).unwrap();
+    assert_eq!(
+        map["imports"]["citadel:sdk"],
+        url::Url::from_file_path(&sdk).unwrap().as_str()
+    );
+    assert!(!String::from_utf8_lossy(&sdk_before).contains("short-lived credential"));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -117,6 +127,7 @@ async fn script_scripts_are_private_and_cleanup_covers_abandonment() {
     drop(workspace);
     tasks.drain(Duration::from_secs(5)).await.unwrap();
     assert!(!run.exists());
+    assert_eq!(tokio::fs::read(sdk).await.unwrap(), sdk_before);
 }
 
 #[cfg(unix)]

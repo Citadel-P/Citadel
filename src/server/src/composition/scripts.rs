@@ -44,7 +44,6 @@ pub(super) fn build(
                 deno_path: config.execution.scripts.deno.clone(),
                 work_root: config.execution.scripts.work_root.clone(),
                 internal_base_url: config.execution.scripts.internal_base_url.clone(),
-                endpoint_catalog_json: citadel_server::script_endpoint_catalog_json(),
                 maximum_log_bytes: config.execution.scripts.maximum_log_bytes,
                 stale_after: Duration::from_secs(10 * 60),
             },

@@ -219,6 +219,13 @@ node is waiting to resume work; cleanup retries after the node reconnects.
 Standalone updates also wait for the owned helper to finish successfully. An
 uncertain helper outcome remains recovery-required and blocks another Core or
 Agent update; a timeout does not release that ownership.
+After a verified successful standalone update, Citadel automatically removes the
+stopped previous Agent and updater helper. Identity and data volumes are preserved.
+If cleanup is interrupted, the operation stays open and retries automatically after
+reconnect or a Core restart. Failed updates keep their containers for inspection.
+Containers retained by updates completed before automatic cleanup was introduced
+are not swept by name; inspect those completed operations before removing their
+stopped containers, preserving shared volumes.
 
 Central replacement supports recognized standalone Docker Agents using a writable
 local Docker socket at `/var/run/docker.sock` or `/run/user/<uid>/docker.sock` on

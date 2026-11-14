@@ -228,7 +228,7 @@ Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(citadel_runtime::
         let scripts=Arc::new(ScriptService::new(std::sync::Arc::new(citadel_processes::SystemProcess), std::sync::Arc::new(citadel_adapters::filesystem::script_workspace::LocalScriptWorkspace::new(citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()))),
         Arc::new(citadel_server::tasks::scripts::TrackedScriptTasks::new(script_tasks.clone())),
         script_shutdown.clone(),Arc::new(PostgresScriptRepository::new(pool.clone())),Arc::new(NoScript),ScriptRuntimeConfig{
-            deno_path:"deno".into(),work_root:root.join("scripts"),internal_base_url:"http://unused".into(),endpoint_catalog_json:"[]".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));
+            deno_path:"deno".into(),work_root:root.join("scripts"),internal_base_url:"http://unused".into(),maximum_log_bytes:1024,stale_after:Duration::from_secs(60)}));
         let app=webhooks_http::router(WebhooksHttpState{git:git.clone(),scripts,backups:None,builds:None,stacks:Some(stacks.clone()),services:None,alerts:None,audit:Some(Arc::new(PostgresActivityStore::new(pool.clone())))});
         let listener=tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
         let port=listener.local_addr().unwrap().port();

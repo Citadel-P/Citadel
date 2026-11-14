@@ -6,7 +6,7 @@ import "shared_models.proto";
 package citadel.platforms.v1;
 
 service PlatformService {
-    rpc SetAgentUpdateDrain (AgentUpdateDrainRequest) returns (google.protobuf.Empty);
+    rpc SetAgentUpdateDrain (AgentUpdateDrainRequest) returns (AgentUpdateDrainResponse);
     rpc GetAgentUpdateInfo (google.protobuf.Empty) returns (AgentUpdateInfo);
     rpc UpdateAgent (UpdateAgentRequest) returns (UpdateAgentResponse);
     rpc GetPlatformInfo (google.protobuf.Empty) returns (citadel.shared_models.v1.PlatformInfoResponse);
@@ -142,4 +142,11 @@ message AgentUpdateDrainRequest {
     // Standalone settlement: exact reviewed source, recoverable after a lost launch reply.
     string source_container_id = 3;
     string source_image = 4;
+    // Core has durably recorded verified success. Remove the exact stopped source/helper.
+    // Only valid with resume and standalone source identity; never removes volumes.
+    bool cleanup = 5;
+}
+message AgentUpdateDrainResponse {
+    // Explicit acknowledgement: an empty/default response never proves container removal.
+    bool cleanup_completed = 1;
 }

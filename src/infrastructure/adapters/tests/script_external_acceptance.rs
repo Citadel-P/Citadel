@@ -136,7 +136,6 @@ async fn real_script_execution_persists_results_and_retries_failure_notification
                 deno_path: deno,
                 work_root: root.clone(),
                 internal_base_url: format!("http://{address}"),
-                endpoint_catalog_json: "[]".into(),
                 maximum_log_bytes: 4096,
                 stale_after: Duration::from_secs(600),
             },

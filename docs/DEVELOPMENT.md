@@ -37,7 +37,7 @@ Open the checkout with `code .` from WSL, then press **Ctrl+Shift+B**.
 The default **Citadel: Run application (API + UI)** task:
 
 1. Creates `deploy/.env.development` if it does not exist.
-2. Builds Core locally and regenerates the API contracts and frontend client.
+2. Builds Core locally and regenerates the API contracts, script SDK and frontend client.
 3. Starts Core and PostgreSQL in Compose project `citadel-wsl`.
 4. Starts Vite after Core becomes healthy.
 
@@ -74,8 +74,17 @@ Do not run this alongside Ctrl+Shift+B: they share ports and Core allows only on
 background-job owner per database. Native execution also needs any external tools
 used by the feature being debugged, such as Docker CLI, Deno or Restic.
 
-F5 compiles Core; it does not regenerate API contracts. After an API change, run
-the [OpenAPI generator](#api-changes) before debugging the frontend.
+Script execution uses the checked-in `src/infrastructure/scripts/generated/citadel.js`
+SDK in native Cargo runs. Development startup regenerates it with the API contracts;
+`openapi --check` checks it alongside
+the API artifacts. Container runtime stages package the SDK at `/app/scripts/citadel.js`.
+Standalone binary distributions must keep `scripts/citadel.js` beside the executable.
+Each execution still uses its own private source, credentials and Deno cache.
+
+F5 regenerates API contracts, the script SDK and frontend models before compiling
+Core. `npm run dev` also regenerates them before starting Vite, including when run
+outside VS Code. Frontend development therefore needs the Rust toolchain and the
+frontend dependencies installed. Generation failures stop startup.
 
 ## Run individual processes
 
@@ -496,16 +505,29 @@ bash src/tools/build/build.sh
 
 ## API changes
 
-Change request/view/schema definitions in `src/server/`, then run:
+Change request/view/schema definitions in `src/server/`. The normal build script,
+Compose development startup, F5 debugger and `npm run dev` regenerate contracts
+automatically. Restart the development session after endpoint or SDK helper
+changes; this is startup generation, not a background watcher. Review and commit
+the generated changes with the source changes.
+
+To regenerate explicitly without starting the application, run:
 
 ```bash
-cargo run --locked -p xtask -- openapi
+bash src/tools/build/generate-api.sh
 ```
 
 This generates `schema/v1.json` and `schema/public-v1.json`, copies the full schema
 to `src/frontend/src/api/schema/swagger.json`, and runs the frontend's
-`api:generate` command. Install frontend dependencies first. The public schema
+`api:generate` command. It also generates `src/infrastructure/scripts/generated/citadel.js`
+from the SDK template and handler-derived endpoint catalog. Install frontend dependencies first. The public schema
 excludes internal endpoints; the frontend consumes the full schema.
+
+The wrapper serializes development generation in this checkout, including concurrent
+debugger and UI startup. It calls `cargo run --locked -p xtask -- openapi` with
+offline SQLx metadata and needs no running database. Plain `cargo build`/`cargo run`
+and direct `vite` invocation do not run this wrapper. CI still rejects stale
+artifacts; it does not regenerate and commit changes for developers.
 
 Verify committed artifacts with:
 

@@ -78,6 +78,15 @@ GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/docker-library/hello-worl
 ssh -V
 mkdir /tmp/runtime-fixture
 cat > /tmp/runtime-fixture/script.ts <<'TS'
+import { createCitadelClient } from 'citadel:sdk';
+const citadel = createCitadelClient({baseUrl: 'https://fixture.invalid', token: 'disposable'});
+if (typeof citadel.platforms.listPlatforms !== 'function') throw Error('SDK endpoint catalog missing');
+try {
+  await Deno.writeTextFile('/app/scripts/citadel.js', 'corrupted');
+  throw Error('SDK is writable by scripts');
+} catch (error) {
+  if (!(error instanceof Deno.errors.NotCapable)) throw error;
+}
 const message: string = 'runtime fixture';
 await Deno.writeTextFile('/tmp/runtime-fixture/payload', message);
 if (await Deno.readTextFile('/tmp/runtime-fixture/payload') !== message) throw new Error('File round trip failed');
@@ -88,8 +97,12 @@ try {
   if (!(error instanceof Deno.errors.NotCapable)) throw error;
 }
 TS
-deno run --no-prompt --allow-read=/tmp/runtime-fixture --allow-write=/tmp/runtime-fixture \
-  --allow-env=NO_COLOR,DENO_DIR /tmp/runtime-fixture/script.ts
+printf '%s\n' '{"imports":{"citadel:sdk":"file:///app/scripts/citadel.js"}}' > /tmp/runtime-fixture/imports.json
+printf '%s\n' "const action = new URL('./script.ts', import.meta.url).href; await import(action);" > /tmp/runtime-fixture/bootstrap.ts
+DENO_DIR=/tmp/runtime-fixture/deno-cache deno run --no-prompt --no-config --no-lock --no-npm --deny-import \
+  --import-map=/tmp/runtime-fixture/imports.json \
+  --allow-read=/tmp/runtime-fixture,/app/scripts/citadel.js --allow-write=/tmp/runtime-fixture \
+  --allow-env=NO_COLOR,DENO_DIR /tmp/runtime-fixture/bootstrap.ts
 export RESTIC_REPOSITORY=/tmp/restic-repository RESTIC_PASSWORD=runtime-test-only
 restic init >/dev/null
 restic backup --json /tmp/runtime-fixture/payload >/dev/null

@@ -132,7 +132,6 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             work_root: std::env::temp_dir()
                 .join(format!("citadel-scripts-http-{}", Uuid::now_v7())),
             internal_base_url: "http://127.0.0.1:8000".to_owned(),
-            endpoint_catalog_json: citadel_server::script_endpoint_catalog_json(),
             maximum_log_bytes: 64 * 1024,
             stale_after: std::time::Duration::from_secs(60),
         },

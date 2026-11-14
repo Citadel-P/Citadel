@@ -211,7 +211,8 @@ class DemoTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.directory = Path(self.temp.name)
+        self.directory = Path(self.temp.name) / 'installation'
+        self.directory.mkdir(mode=0o700)
         (self.directory / ".env").write_text("PG_PASSWORD=private\n")
         (self.directory / ".env").chmod(0o600)
         self.setup = remote.load_update_setup((ROOT / 'deploy/install/enable-updates.py').read_text())
@@ -233,10 +234,14 @@ class DemoTests(unittest.TestCase):
         with patch.object(remote.os, "geteuid", return_value=1101), \
              patch.object(remote.pwd, "getpwuid") as account, \
              patch.object(self.setup, "private_path", side_effect=lambda path, **kwargs: path), \
+             patch.object(self.setup, "prepare_state_directory") as prepare, \
              patch.object(remote.subprocess, "check_output", return_value=json.dumps(info)) as inspect, \
              patch.object(remote.subprocess, "run") as run:
             account.return_value.pw_name = "citadel-preview"
             remote.deploy(self.directory, self.payload)
+            self.assertEqual(self.setup.enable.call_args.args[0].state_directory,
+                             f'/home/citadel-preview/{self.directory.name}-update-state')
+            prepare.assert_called_once_with(Path(f'/home/citadel-preview/{self.directory.name}-update-state'))
             self.assertEqual(inspect.call_args.args[0][:3], ["docker", "--host", "unix:///run/user/1101/docker.sock"])
             for call in run.call_args_list:
                 self.assertEqual(call.args[0][:4], ["docker", "--host", "unix:///run/user/1101/docker.sock", "compose"])
@@ -300,14 +305,59 @@ class DemoTests(unittest.TestCase):
         self.assertTrue((self.directory / 'deployment-attempt.json').exists())
         self.assertFalse((self.directory / 'deployment.json').exists())
 
+    def test_unwritable_update_state_blocks_before_replacement(self):
+        original = (self.directory / '.env').read_bytes()
+        with patch.object(self.setup.tempfile, 'TemporaryFile', side_effect=PermissionError('fixture')), \
+             patch.object(remote.subprocess, 'run') as run, \
+             self.assertRaisesRegex(ValueError, 'Cannot create or write'):
+            remote.deploy(self.directory, self.payload)
+        run.assert_not_called()
+        self.setup.enable.assert_not_called()
+        self.assertEqual((self.directory / '.env').read_bytes(), original)
+        for name in ('docker-compose.yml', 'demo.override.yml', '.release.env', 'deployment-attempt.json', 'deployment.json'):
+            self.assertFalse((self.directory / name).exists(), name)
+
+    def test_cannot_create_update_state_blocks_before_replacement(self):
+        state = self.directory.with_name(self.directory.name + '-update-state')
+        original_mkdir = Path.mkdir
+        def denied(path, *args, **kwargs):
+            if path == state:
+                raise PermissionError('fixture parent is not writable')
+            return original_mkdir(path, *args, **kwargs)
+        with patch.object(Path, 'mkdir', denied), patch.object(remote.subprocess, 'run') as run, \
+             self.assertRaisesRegex(ValueError, 'Cannot create or write'):
+            remote.deploy(self.directory, self.payload)
+        run.assert_not_called()
+        self.setup.enable.assert_not_called()
+        self.assertFalse(state.exists())
+
     def test_registered_deployment_runs_inside_verified_replacement(self):
+        state = Path(self.temp.name) / 'configured-state'
+        state.mkdir(mode=0o700)
+        evidence = state / 'installation.json'
+        evidence.write_text('existing registration')
         with (self.directory / '.env').open('a') as output:
-            output.write('CITADEL_UPDATE_STATE_DIRECTORY=/private/state\n')
+            output.write(f'CITADEL_UPDATE_STATE_DIRECTORY={state}\n')
         self.setup.enable.side_effect = lambda args, replace: replace()
-        with patch.object(remote.subprocess, 'run'):
+        with patch.object(remote.subprocess, 'run'), \
+             patch.object(remote, 'rootless_target', return_value={'user': 'citadel-demo', 'uid': 1004}):
             remote.deploy(self.directory, self.payload)
         self.assertIsNotNone(self.setup.enable.call_args.kwargs['replace'])
-        self.assertIn('CITADEL_UPDATE_STATE_DIRECTORY=/private/state', (self.directory / '.env').read_text())
+        self.assertIn(f'CITADEL_UPDATE_STATE_DIRECTORY={state}', (self.directory / '.env').read_text())
+        self.assertEqual(evidence.read_text(), 'existing registration')
+        self.assertEqual(list(state.iterdir()), [evidence])
+
+    def test_rootless_deployment_preserves_interrupted_sibling_state(self):
+        state = self.directory.with_name(self.directory.name + '-update-state')
+        state.mkdir(mode=0o700)
+        evidence = state / 'installation.lock'
+        evidence.write_text('preserve')
+        with patch.object(remote.subprocess, 'run'), \
+             patch.object(remote, 'rootless_target', return_value={'user': 'citadel-demo', 'uid': 1004}):
+            remote.deploy(self.directory, self.payload)
+        self.assertIsNone(self.setup.enable.call_args.args[0].state_directory)
+        self.assertEqual(evidence.read_text(), 'preserve')
+        self.assertEqual(list(state.iterdir()), [evidence])
 
     def test_existing_postgres_image_is_preserved_and_only_core_is_replaced(self):
         (self.directory / 'docker-compose.yml').write_text('existing')

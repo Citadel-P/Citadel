@@ -150,11 +150,17 @@
       "problemMatcher": ["$rustc"]
     },
     {
+      "label": "Citadel: Prepare API contracts",
+      "dependsOn": ["Citadel: Prepare development environment", "Citadel: Generate OpenAPI spec"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
       "label": "Citadel: Generate OpenAPI spec",
-      "detail": "Exports the full/public OpenAPI documents and operation catalog without starting the API or database.",
+      "detail": "Regenerates OpenAPI, the script SDK and frontend models without starting the API or database.",
       "type": "process",
-      "command": "cargo",
-      "args": ["run", "--locked", "-p", "xtask", "--", "openapi"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/src/tools/build/generate-api.sh"],
       "options": {
         "cwd": "${workspaceFolder}",
         "env": {

@@ -204,6 +204,12 @@ def deploy(directory, payload):
         args = argparse.Namespace(directory=str(directory), project=settings.get("COMPOSE_PROJECT_NAME"),
                                   compose_file=[str(directory / "docker-compose.yml"), str(directory / "demo.override.yml")],
                                   state_directory=None, start=False)
+        if rootless and setup.SETTING not in settings:
+            sibling = directory.with_name(directory.name + '-update-state')
+            # Rootless deployments may own their installation but not /opt.
+            # Never bypass existing state, including an interrupted registration.
+            if not sibling.exists() and not sibling.is_symlink():
+                args.state_directory = f"/home/{rootless['user']}/{directory.name}-update-state"
         compose = [*docker, "compose", "--env-file", ".env",
                    "-f", "docker-compose.yml", "-f", "demo.override.yml"]
         env = {key: value for key, value in os.environ.items() if key in (
@@ -252,6 +258,8 @@ def deploy(directory, payload):
             else:
                 os.environ["DOCKER_HOST"] = "unix:///var/run/docker.sock"
             try:
+                state = setup.resolve_state_directory(directory, settings, args.state_directory)
+                setup.prepare_state_directory(state)
                 if setup.SETTING in settings:
                     # Download before stopping Core, so registry latency does not
                     # extend its replacement downtime.

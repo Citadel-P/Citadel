@@ -64,6 +64,7 @@ LABEL com.citadel.system="true" \
 COPY --from=glibc /usr/local/lib/glibc/ /usr/local/lib/glibc/
 COPY --from=glibc /etc/ld.so.cache /etc/ld.so.cache
 COPY --from=glibc /bin/deno /usr/local/bin/deno
+COPY --chmod=0444 src/infrastructure/scripts/generated/citadel.js /app/scripts/citadel.js
 RUN apk add --no-cache bash ca-certificates git openssh-client restic tini \
     && mkdir -p /lib64 \
     && for loader in /usr/local/lib/glibc/ld-linux-*.so.*; do \
