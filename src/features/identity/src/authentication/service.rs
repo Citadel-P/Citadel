@@ -25,6 +25,7 @@ pub struct IdentityService {
     refresh_token_lifetime: Duration,
     password_policy: PasswordPolicy,
     setup_policy: SetupPolicy,
+    shared_user_ids: std::collections::HashSet<Uuid>,
     setup_changes: tokio::sync::watch::Sender<()>,
     login_throttle: LoginThrottle,
     last_used_tracker: Arc<dyn ServiceAccountLastUsedTracker>,
@@ -55,6 +56,7 @@ impl IdentityService {
             refresh_token_lifetime,
             password_policy: PasswordPolicy::default(),
             setup_policy: SetupPolicy::default(),
+            shared_user_ids: Default::default(),
             setup_changes: tokio::sync::watch::channel(()).0,
             login_throttle: LoginThrottle::default(),
             last_used_tracker,
@@ -65,6 +67,25 @@ impl IdentityService {
     pub fn with_password_policy(mut self, policy: PasswordPolicy) -> Self {
         self.password_policy = policy;
         self
+    }
+
+    /// Deployment-owned restrictions for public, shared human accounts.
+    #[must_use]
+    pub fn with_shared_user_ids(mut self, user_ids: impl IntoIterator<Item = Uuid>) -> Self {
+        self.shared_user_ids = user_ids.into_iter().collect();
+        self
+    }
+
+    pub fn is_shared_user(&self, user_id: Uuid) -> bool {
+        self.shared_user_ids.contains(&user_id)
+    }
+
+    pub(crate) fn require_personal_security(&self, user_id: Uuid) -> Result<(), IdentityError> {
+        if self.is_shared_user(user_id) {
+            Err(IdentityError::Forbidden)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn password_policy(&self) -> PasswordPolicy {

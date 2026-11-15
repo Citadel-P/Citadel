@@ -12,6 +12,7 @@ pub struct ProfileResourceInfo {
 pub struct CurrentProfileAuthenticationDetails {
     pub r#type: CurrentProfileAuthenticationType,
     pub label: String,
+    pub is_shared_account: bool,
     pub can_change_password: bool,
     pub can_use_local_password_mfa: bool,
     pub oidc_provider_id: Option<Uuid>,

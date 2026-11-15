@@ -3,6 +3,7 @@ pub use citadel_instance::environment;
 pub mod execution;
 mod instance;
 mod keys;
+mod shared_users;
 
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -119,6 +120,7 @@ impl SecretBytes {
 
 #[derive(Debug, Clone)]
 pub struct IdentityConfig {
+    pub shared_user_ids: Vec<uuid::Uuid>,
     pub jwt_key_is_external: bool,
     pub encryption_key_is_external: bool,
     pub jwt_key: SecretBytes,
@@ -195,6 +197,7 @@ pub struct RealtimeConfig {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectiveConfig {
+    pub shared_user_ids: Vec<uuid::Uuid>,
     pub updates_enabled: bool,
     pub update_state_directory: Option<PathBuf>,
     pub password_minimum_length: usize,
@@ -383,6 +386,7 @@ impl Config {
             message: error.to_string(),
         })?;
         Ok(EffectiveConfig {
+            shared_user_ids: self.identity.shared_user_ids.clone(),
             updates_enabled: self.updates_enabled,
             update_state_directory: self.update_state_directory.clone(),
             service_account_limits: self.identity.service_account_limits,
@@ -826,6 +830,7 @@ fn identity_config_with_keys(
     })?;
     let mfa = mfa_config()?;
     Ok(IdentityConfig {
+        shared_user_ids: shared_users::from_env()?,
         jwt_key_is_external: env::var("CITADEL_JWT_KEY").is_ok_and(|v| !v.trim().is_empty()),
         encryption_key_is_external: env::var("CITADEL_SECRETS_ENCRYPTION_KEY")
             .is_ok_and(|v| !v.trim().is_empty()),

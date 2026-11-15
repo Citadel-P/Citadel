@@ -2968,6 +2968,7 @@ export type CreatedServiceAccountTokenView = ServiceAccountTokenView & {
 export interface CurrentProfileAuthenticationView {
   canChangePassword: boolean;
   canUseLocalPasswordMfa: boolean;
+  isSharedAccount: boolean;
   label: string;
   /** @format uuid */
   oidcProviderId: string | null;

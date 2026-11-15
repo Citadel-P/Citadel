@@ -75,7 +75,8 @@ impl MfaService {
             enabled,
             remaining_recovery_codes,
             policy,
-            can_disable: !Self::requires_mfa(&user, policy),
+            can_disable: !self.identity.is_shared_user(user.user_id)
+                && !Self::requires_mfa(&user, policy),
         })
     }
 
@@ -84,6 +85,8 @@ impl MfaService {
         principal: &ActorPrincipal,
         input: StartProfileMfaSetupInput,
     ) -> Result<ProfileMfaSetupDetails, IdentityError> {
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         validate_password_input(&input.password)?;
         let user = self
             .identity
@@ -109,6 +112,8 @@ impl MfaService {
         input: ConfirmProfileMfaSetupInput,
         refresh_token: Option<&str>,
     ) -> Result<(ProfileMfaRecoveryCodesDetails, Option<SessionTokens>), IdentityError> {
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         validate_totp_code(&input.code)?;
         let now = self.clock.now();
         let user = self
@@ -188,6 +193,7 @@ impl MfaService {
             .setup_session(setup_session_id, now)
             .await?
             .ok_or(IdentityError::Unauthenticated)?;
+        self.identity.require_personal_security(session.user_id)?;
         let user = self
             .identity
             .load_user_for_authentication(session.user_id)
@@ -217,6 +223,7 @@ impl MfaService {
             .setup_session(setup_session_id, now)
             .await?
             .ok_or(IdentityError::Unauthenticated)?;
+        self.identity.require_personal_security(session.user_id)?;
         let user = self
             .identity
             .load_user_for_authentication(session.user_id)
@@ -374,6 +381,8 @@ impl MfaService {
         input: DisableProfileMfaInput,
         refresh_token: Option<&str>,
     ) -> Result<(), IdentityError> {
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         validate_password_input(&input.password)?;
         validate_exactly_one(&input.code, &input.recovery_code)?;
         let user = self
@@ -424,6 +433,8 @@ impl MfaService {
         principal: &ActorPrincipal,
         input: RegenerateProfileMfaRecoveryCodesInput,
     ) -> Result<ProfileMfaRecoveryCodesDetails, IdentityError> {
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         validate_password_input(&input.password)?;
         validate_totp_code(&input.code)?;
         let user = self
@@ -560,6 +571,7 @@ impl MfaService {
         &self,
         user: &UserAuthentication,
     ) -> Result<(MfaSetupSession, TotpSetup), IdentityError> {
+        self.identity.require_personal_security(user.user_id)?;
         let now = self.clock.now();
         let expires_at = now + self.configuration.setup_lifetime;
         let setup = self

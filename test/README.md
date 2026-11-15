@@ -868,6 +868,16 @@ reduction/rename persistence, and stable License instance identity across restar
 after restart. All resources are uniquely named and removed in the script's `finally`
 block.
 
+The `mfa_http::shared_accounts` regression uses the same disposable identity database
+fixture. It verifies shared-user profile capabilities, HTTP rejection of password,
+name, MFA and session mutations, pending-enrollment rejection, session privacy,
+and continued login/preferences behavior. Run it with `CITADEL_IDENTITY_DATABASE_URL`
+pointing only at a disposable database:
+
+```bash
+SQLX_OFFLINE=true cargo test --locked -p citadel-server --test mfa_http shared_accounts -- --ignored --test-threads=1
+```
+
 The OIDC portion also runs a local signed-JWT issuer fixture. It validates the
 real discovery, token, and JWKS protocol adapter without relying on a public
 identity provider or storing provider tokens.

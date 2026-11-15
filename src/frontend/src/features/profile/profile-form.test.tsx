@@ -17,6 +17,7 @@ const profile: CurrentProfileView = {
   authentication: {
     type: CurrentProfileAuthenticationType.Local,
     label: 'Local account',
+    isSharedAccount: false,
     canChangePassword: false,
     canUseLocalPasswordMfa: false,
     oidcProviderId: null,
@@ -26,6 +27,30 @@ const profile: CurrentProfileView = {
   directRoles: [],
   teams: [],
 };
+
+it('keeps shared account sign-in settings read-only and explains the restriction', async () => {
+  server.use(
+    http.get('http://localhost/api/v1/profile/sessions', () =>
+      HttpResponse.json({ sessions: [], canRevokeOtherSessions: false }),
+    ),
+  );
+  const { user } = renderCitadel(
+    <ProfileForm
+      profile={{ ...profile, authentication: { ...profile.authentication, isSharedAccount: true } }}
+      formatDate={String}
+    />,
+  );
+  expect(screen.getByText(/This account is shared/)).toBeVisible();
+  const name = screen.getByRole('textbox', { name: 'Display Name' });
+  expect(name).toHaveAttribute('readonly');
+  await user.type(name, 'renamed');
+  expect(name).toHaveValue('admin');
+  expect(screen.queryByRole('button', { name: 'Change Password' })).not.toBeInTheDocument();
+  expect(screen.getByText('Two-factor authentication changes are disabled for this shared account.')).toBeVisible();
+  expect(screen.queryByText('Your password is managed by your identity provider.')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: /^Manage active sessions/ }));
+  expect(screen.getByRole('button', { name: 'Sign Out Others' })).toBeDisabled();
+});
 
 it('defaults dates to Relative and saves the Exact preference', async () => {
   const save = vi.fn();

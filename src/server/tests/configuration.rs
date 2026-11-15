@@ -684,3 +684,42 @@ fn early_admission_failure_identifies_the_phase_without_configuration_secrets() 
     assert!(!stderr.contains(&database));
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn shared_accounts_use_explicit_user_ids_and_invalid_configuration_fails_closed() {
+    let root = std::env::temp_dir().join(format!("citadel-shared-config-{}", uuid::Uuid::now_v7()));
+    let first = uuid::Uuid::now_v7();
+    let second = uuid::Uuid::now_v7();
+    let ids = format!(" {first}, {second} ");
+    for (overrides, expected) in [
+        (vec![], serde_json::json!([])),
+        (vec![("CITADEL_SHARED_USER_IDS", "")], serde_json::json!([])),
+        (
+            vec![("CITADEL_SHARED_USER_IDS", ids.as_str())],
+            serde_json::json!([first, second]),
+        ),
+    ] {
+        let output = run(&root, &overrides, &["print-effective-config"]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let config: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(config["sharedUserIds"], expected);
+    }
+    for invalid in [
+        "demo".to_owned(),
+        format!("{first},invalid"),
+        format!("{first},"),
+    ] {
+        let output = run(
+            &root,
+            &[("CITADEL_SHARED_USER_IDS", &invalid)],
+            &["print-effective-config"],
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("CITADEL_SHARED_USER_IDS"));
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
