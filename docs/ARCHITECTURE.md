@@ -1721,6 +1721,15 @@ claims and alert observations must not use that lossy policy.
 
 ## Authorization and secrets
 
+Identity also owns deployment-selected shared-account restrictions. Core supplies
+`CITADEL_SHARED_USER_IDS` as immutable user IDs when constructing Identity.
+Profile and MFA services reject self-service name, password and MFA changes and
+session revocation for those users before mutation. Profile capabilities expose
+the restriction, and session reads show only the caller's refresh session.
+Administrator recovery remains authorized through the existing User endpoints;
+shared public users must retain non-administrator, read-only roles. The policy
+does not bypass required MFA, erase existing credentials, or change session limits.
+
 Identity owns permission evaluation and its process-local cache. Permission
 mutations acquire the cache mutation fence **before** a database connection and
 publish invalidation through the commit path. Readers retain the matching fence

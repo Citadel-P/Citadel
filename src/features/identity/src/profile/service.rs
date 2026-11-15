@@ -39,6 +39,8 @@ impl ProfileService {
         request: UpdateCurrentProfile,
     ) -> Result<CurrentProfileDetails, IdentityError> {
         require_human(principal)?;
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         validate_name(&request.display_name)?;
         let user = self
             .store
@@ -178,6 +180,10 @@ impl ProfileService {
             current_session_id.filter(|id| records.iter().any(|session| session.id == *id));
         let mut sessions = records
             .into_iter()
+            .filter(|session| {
+                !self.identity.is_shared_user(principal.subject_id)
+                    || current_session_id == Some(session.id)
+            })
             .map(|session| map_session(session, current_session_id))
             .collect::<Vec<_>>();
         sessions.sort_by(|left, right| {
@@ -189,7 +195,8 @@ impl ProfileService {
         });
         Ok(UserSessionsDetails {
             sessions,
-            can_revoke_other_sessions: current_session_id.is_some(),
+            can_revoke_other_sessions: current_session_id.is_some()
+                && !self.identity.is_shared_user(principal.subject_id),
         })
     }
 
@@ -200,6 +207,8 @@ impl ProfileService {
         session_id: Uuid,
     ) -> Result<(), IdentityError> {
         require_human(principal)?;
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         let current_session_id = self
             .identity
             .resolve_current_session(principal.subject_id, refresh_token)
@@ -227,6 +236,8 @@ impl ProfileService {
         refresh_token: Option<&str>,
     ) -> Result<RevokeOtherProfileSessionsDetails, IdentityError> {
         require_human(principal)?;
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         let current_session_id = self
             .identity
             .resolve_current_session(principal.subject_id, refresh_token)
@@ -247,6 +258,8 @@ impl ProfileService {
         request: ChangeCurrentPassword,
     ) -> Result<(), IdentityError> {
         require_human(principal)?;
+        self.identity
+            .require_personal_security(principal.subject_id)?;
         if request.current_password.chars().count() > MAXIMUM_PASSWORD_CHARACTERS {
             return Err(current_password_incorrect());
         }
@@ -314,6 +327,7 @@ impl ProfileService {
         }
         let authorization = self.identity.authorization_snapshot(principal).await?;
         let is_oidc = record.oidc_provider_id.is_some();
+        let is_shared_account = self.identity.is_shared_user(record.id);
         Ok(CurrentProfileDetails {
             id: record.id,
             display_name: record.display_name,
@@ -335,8 +349,9 @@ impl ProfileService {
                 } else {
                     "Local account".to_owned()
                 },
-                can_change_password: !is_oidc,
-                can_use_local_password_mfa: record.has_local_password,
+                is_shared_account,
+                can_change_password: !is_oidc && !is_shared_account,
+                can_use_local_password_mfa: record.has_local_password && !is_shared_account,
                 oidc_provider_id: record.oidc_provider_id,
                 oidc_provider_name: record.oidc_provider_name,
             },

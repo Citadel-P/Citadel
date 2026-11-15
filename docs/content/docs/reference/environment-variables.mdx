@@ -51,6 +51,7 @@ in Updates. `RUST_LOG` module filters remain deployment managed.
 | `CITADEL_SECRETS_ENCRYPTION_KEY` | Optional | Explicit 32-byte base64 key; otherwise persisted in `citadel_data` |
 | <code id="citadel-mfa-policy" className="scroll-mt-24">CITADEL_MFA_POLICY</code> | Optional | Minimum installation MFA policy: `Optional`, `RequiredForAdministrators`, or `RequiredForAllUsers`; the UI can strengthen it |
 | <code id="citadel-passwords-minimum-length" className="scroll-mt-24">CITADEL_PASSWORDS_MINIMUM_LENGTH</code> | Optional | Minimum password length, default 15; accepts 8–128, with a fixed maximum password length of 128 |
+| `CITADEL_SHARED_USER_IDS` | Optional | For operators hosting public demos: comma-separated User UUIDs that block self-service sign-in changes and session revocation; empty by default; restart Core after changes |
 | <code id="citadel-http-openapi-enabled" className="scroll-mt-24">CITADEL_HTTP_OPENAPI_ENABLED</code> | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
 For explicit [PostgreSQL maintenance](/operations/upgrade-and-rollback#postgresql-engine-maintenance),

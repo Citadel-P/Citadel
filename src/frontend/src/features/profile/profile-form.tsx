@@ -91,7 +91,7 @@ export function ProfileForm({
 
   const handleSave = async (payload: ProfileFormValue) => {
     const displayName = payload.displayName.trim();
-    const profileChanged = displayName !== original.displayName;
+    const profileChanged = !profile.authentication.isSharedAccount && displayName !== original.displayName;
     const preferencesChanged =
       payload.timeZone !== original.timeZone ||
       payload.dateTimeFormat !== original.dateTimeFormat ||
@@ -134,18 +134,23 @@ export function ProfileForm({
                 key: 'displayName',
                 label: 'Display Name',
                 required: true,
-                description: 'Your display name must be unique.',
+                description: profile.authentication.isSharedAccount
+                  ? 'The sign-in name of this shared account is managed by the operator.'
+                  : 'Your display name must be unique.',
                 validate: (value) =>
                   !new RegExp(Constants.validNameIdentifier).test(value ?? '') ? 'Invalid name format' : null,
-                render: (value, set) => (
-                  <FieldInput value={value ?? ''} onChange={(displayName) => set({ displayName })} />
-                ),
+                render: (value, set) =>
+                  profile.authentication.isSharedAccount ? (
+                    <ReadOnlyValue label="Display Name" value={value} />
+                  ) : (
+                    <FieldInput value={value ?? ''} onChange={(displayName) => set({ displayName })} />
+                  ),
               }),
               defineField({
                 key: 'email',
                 label: 'Email',
                 description: 'Used to sign in and recover your account.',
-                render: (value) => <ReadOnlyValue value={value} />,
+                render: (value) => <ReadOnlyValue label="Email" value={value} />,
               }),
             ],
           }),
@@ -214,7 +219,9 @@ export function ProfileForm({
             id: 'security',
             label: 'Security',
             title: 'Security',
-            description: 'Your password and active browser sessions.',
+            description: profile.authentication.isSharedAccount
+              ? 'This account is shared. Its sign-in name, password and two-factor authentication are managed by the operator.'
+              : 'Your password and active browser sessions.',
             items: [
               defineField({
                 key: 'passwordCommands',
@@ -222,7 +229,9 @@ export function ProfileForm({
                 ignoreFormDisabled: true,
                 description: profile.authentication.canChangePassword
                   ? 'Changing your password signs out other Citadel sessions.'
-                  : 'Your password is managed by your identity provider.',
+                  : profile.authentication.isSharedAccount
+                    ? 'Password changes are disabled to keep this shared account available to everyone.'
+                    : 'Your password is managed by your identity provider.',
                 render: () =>
                   profile.authentication.canChangePassword ? (
                     <PasswordCommand />
@@ -240,13 +249,22 @@ export function ProfileForm({
                 ),
                 ignoreFormDisabled: true,
                 description: 'Protect local-password sign-in with an authenticator app and recovery codes.',
-                render: () => <ProfileMfaCommand canUseLocalPassword={profile.authentication.canUseLocalPasswordMfa} />,
+                render: () =>
+                  profile.authentication.isSharedAccount ? (
+                    <p className="text-sm text-muted-foreground">
+                      Two-factor authentication changes are disabled for this shared account.
+                    </p>
+                  ) : (
+                    <ProfileMfaCommand canUseLocalPassword={profile.authentication.canUseLocalPasswordMfa} />
+                  ),
               }),
               defineField({
                 key: 'sessionCommands',
                 label: 'Active Sessions',
                 ignoreFormDisabled: true,
-                description: 'Browser sessions that can still refresh your access.',
+                description: profile.authentication.isSharedAccount
+                  ? 'Only your current browser session is shown. Other visitors’ sessions cannot be managed.'
+                  : 'Browser sessions that can still refresh your access.',
                 render: () => <SessionsCommand formatDate={formatDate} />,
               }),
             ],
@@ -254,7 +272,7 @@ export function ProfileForm({
         ],
       }),
     }),
-    [formatDate, profile.authentication.canUseLocalPasswordMfa, profile.authentication.canChangePassword],
+    [formatDate, profile.authentication],
   );
 
   return (
@@ -275,10 +293,10 @@ export function ProfileForm({
   );
 }
 
-function ReadOnlyValue({ value }: { value?: string | null }) {
+function ReadOnlyValue({ label, value }: { label: string; value?: string | null }) {
   return (
     <Input
-      aria-label="Email"
+      aria-label={label}
       readOnly
       value={value || '-'}
       className="max-w-100 max-h-9 bg-muted/30 text-muted-foreground"

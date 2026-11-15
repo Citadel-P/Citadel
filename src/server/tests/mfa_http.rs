@@ -48,6 +48,9 @@ const MFA_SETUP_COOKIE: &str = "citadel_mfa_setup";
 const REFRESH_COOKIE: &str = "refresh_token";
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 
+#[path = "mfa_http/shared_accounts.rs"]
+mod shared_accounts;
+
 #[derive(Debug, Default)]
 struct DeterministicTotp;
 
@@ -516,6 +519,11 @@ fn router_with_instance(
     policy: MfaPolicy,
     instance: Arc<citadel_instance::InstanceService>,
 ) -> Router {
+    let profiles = Arc::new(citadel_identity::ProfileService::new(
+        Arc::new(citadel_adapters::persistence::postgres::identity::profile::repository::PostgresProfileRepository::new(pool.clone())),
+        identity.clone(),
+        Arc::new(SystemClock),
+    ));
     let key = [8_u8; 32];
     let mfa = Arc::new(MfaService::new(
         Arc::new(PostgresMfaStore::new(pool)),
@@ -538,6 +546,9 @@ fn router_with_instance(
         readiness: Arc::new(Readiness::default()),
         secure_cookies: false,
     })
+    .merge(citadel_server::api::routes::profile::router(
+        citadel_server::api::routes::profile::ProfileHttpState { profiles },
+    ))
     .merge(citadel_server::api::routes::instance::router(
         citadel_server::api::routes::instance::InstanceHttpState { instance },
     ))

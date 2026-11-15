@@ -7202,6 +7202,9 @@
           "canUseLocalPasswordMfa": {
             "type": "boolean"
           },
+          "isSharedAccount": {
+            "type": "boolean"
+          },
           "label": {
             "type": "string"
           },
@@ -7225,6 +7228,7 @@
         "required": [
           "type",
           "label",
+          "isSharedAccount",
           "canChangePassword",
           "canUseLocalPasswordMfa",
           "oidcProviderId",

@@ -146,6 +146,7 @@ Useful settings:
 | `CITADEL_DOCKER_SOCKET`, `DOCKER_HOST` | Must select the same Docker daemon in development |
 | `CITADEL_GIT_KNOWN_HOSTS_PATH` | Verified SSH host keys; defaults to `<CITADEL_DATA_ROOT>/git-known-hosts` |
 | `CITADEL_PASSWORDS_MINIMUM_LENGTH` | Defaults to 15; accepts 8–128 for newly set passwords |
+| `CITADEL_SHARED_USER_IDS` | Comma-separated user UUIDs with shared-account self-service restrictions; empty by default; requires Core restart |
 
 Inspect non-secret effective configuration without connecting to PostgreSQL:
 

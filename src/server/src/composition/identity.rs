@@ -76,6 +76,7 @@ pub(super) fn build(
             chrono::Duration::from_std(config.identity.refresh_token_lifetime)?,
         )
         .with_password_policy(config.identity.password_policy)
+        .with_shared_user_ids(config.identity.shared_user_ids.iter().copied())
         .with_setup_policy(citadel_identity::SetupPolicy {
             update_checks_allowed: config.updates_enabled,
             minimum_mfa_policy: config.identity.mfa.policy,

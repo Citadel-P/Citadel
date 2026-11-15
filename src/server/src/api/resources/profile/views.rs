@@ -56,6 +56,7 @@ impl From<citadel_identity::ProfileResourceInfo> for ProfileResourceInfo {
 pub struct CurrentProfileAuthenticationView {
     pub r#type: CurrentProfileAuthenticationType,
     pub label: String,
+    pub is_shared_account: bool,
     pub can_change_password: bool,
     pub can_use_local_password_mfa: bool,
     #[schema(required = true)]
@@ -71,6 +72,7 @@ impl From<CurrentProfileAuthenticationView>
         Self {
             r#type: value.r#type.into(),
             label: value.label,
+            is_shared_account: value.is_shared_account,
             can_change_password: value.can_change_password,
             can_use_local_password_mfa: value.can_use_local_password_mfa,
             oidc_provider_id: value.oidc_provider_id,
@@ -86,6 +88,7 @@ impl From<citadel_identity::CurrentProfileAuthenticationDetails>
         Self {
             r#type: value.r#type.into(),
             label: value.label,
+            is_shared_account: value.is_shared_account,
             can_change_password: value.can_change_password,
             can_use_local_password_mfa: value.can_use_local_password_mfa,
             oidc_provider_id: value.oidc_provider_id,
