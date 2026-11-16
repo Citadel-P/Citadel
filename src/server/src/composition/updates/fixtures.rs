@@ -1,6 +1,6 @@
 //! Compiled only into test executables, never selectable by a production setting.
 use citadel_updates::{
-    Release, ReleaseArtifactSource, ReleaseChannel, ReleaseSource, UpdateError, UpgradeSource,
+    Release, ReleaseArtifactSource, ReleaseChannel, ReleaseSource, UpdateError,
     VerifiedReleaseArtifact,
 };
 use futures_util::future::BoxFuture;
@@ -11,7 +11,6 @@ use tokio_util::sync::CancellationToken;
 #[derive(Deserialize)]
 struct Fixture {
     target: Artifact,
-    sources: Vec<UpgradeSource>,
 }
 
 #[derive(Deserialize)]
@@ -47,10 +46,6 @@ pub(crate) fn source() -> Result<Arc<dyn ReleaseSource>, UpdateError> {
         }
     }
     Ok(Arc::new(Catalog))
-}
-
-pub(crate) fn sources() -> Result<Vec<UpgradeSource>, UpdateError> {
-    Ok(fixture()?.sources)
 }
 
 impl ReleaseArtifactSource for Fixture {

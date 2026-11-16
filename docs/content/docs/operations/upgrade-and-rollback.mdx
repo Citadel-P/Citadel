@@ -286,7 +286,7 @@ and verify the connection before removing retained containers. Recreating an Age
 alone does not clear an unresolved update's ownership; keep its evidence for
 operator recovery.
 
-## Install a qualified update
+## Install an update
 
 A registered, supported Docker Compose installation can offer **Review and update**
 for an available release. This opens a review that verifies the installation and release before
@@ -299,8 +299,9 @@ state outside that data directory, owned by the rootless daemon user. Run regist
 as `0:0` **inside a container on that daemon**; this maps to its unprivileged host user.
 Follow the [registration instructions](https://github.com/Citadel-P/Citadel/blob/main/docs/DEVELOPMENT.md)
 using the existing Compose project and ordered files. Enabling the setting alone does
-not create a registration. The target release must explicitly support your installed
-version, database catalog, architecture and connected Agent versions.
+not create a registration. Citadel checks the release signature, architecture,
+migration history and protocol compatibility automatically. No per-version upgrade
+source list needs configuring.
 
 Select **Update and restart** to approve the reviewed version. Citadel waits for
 active work, creates a recovery checkpoint and replaces Core. Running managed
@@ -317,9 +318,9 @@ browser does not cancel an approved update.
 If verification or cleanup fails, an error toast appears and the recovery banner
 stays visible. Citadel retains maintenance and recovery state.
 Preserve the checkpoint and logs for operator recovery. It does not automatically
-roll back a migrated database. Until a release transition has been qualified, use
-the manual procedure below; an available release notice alone does not establish
-installation eligibility.
+roll back a migrated database. Use the manual procedure below for unsupported
+installations. Older updaters that require an explicit source-version list also
+need a manual update once to adopt automatic compatibility checks.
 
 ### Recover an interrupted preparation
 

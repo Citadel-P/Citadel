@@ -166,6 +166,8 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
                     .ok_or_else(super::super::docker::failed)?
                     .into(),
                 agent_versions: agents,
+                migration_catalog: citadel_database::MIGRATION_MANIFEST_JSON.into(),
+                agent_protocol: citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION,
             })
         })
     }

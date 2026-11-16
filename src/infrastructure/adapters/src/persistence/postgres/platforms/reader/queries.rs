@@ -70,6 +70,8 @@ impl PlatformReader for PostgresPlatformReader {
     fn container_health_history(
         &self,
         container: Uuid,
+        window: citadel_platforms::StatsWindow,
+        now: i64,
     ) -> BoxFuture<
         '_,
         Result<
@@ -81,6 +83,8 @@ impl PlatformReader for PostgresPlatformReader {
             &self.pool,
             &self.history,
             container,
+            window,
+            now,
         ))
     }
     fn container_owner_names<'a>(

@@ -6,6 +6,18 @@ use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+fn catalog() -> String {
+    serde_json::json!({"migrations": [{"id": "0001", "sha256": "a".repeat(64)}]}).to_string()
+}
+
+fn catalog_hash() -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(catalog().as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+}
+
 #[derive(Default)]
 pub(in crate::service) struct State {
     pub(in crate::service) released: bool,
@@ -16,6 +28,7 @@ pub(in crate::service) struct State {
     database_drift: bool,
     database_blocked: bool,
     pub(in crate::service) agent_drift: bool,
+    pub(in crate::service) incompatible_agent_protocol: bool,
     fail_ack: bool,
     helper_failed: bool,
     fail_grant: bool,
@@ -36,7 +49,7 @@ impl Fixture {
             version: "0.1.1".into(),
             image: format!("{CORE_IMAGE}@sha256:{}", "a".repeat(64)),
             architecture: "amd64".into(),
-            catalog_sha256: "b".repeat(64),
+            catalog_sha256: catalog_hash(),
         };
         Self {
             state: Default::default(),
@@ -69,6 +82,8 @@ impl Fixture {
             configuration_sha256: self.plan.configuration_sha256.clone(),
             checkpoint_directory: self.plan.checkpoint_directory.clone(),
             agent_versions: vec![],
+            migration_catalog: catalog(),
+            agent_protocol: 2,
         }
     }
     pub(in crate::service) fn service(
@@ -281,6 +296,10 @@ impl UpdateInstallationRuntime for Fixture {
             if state.drift {
                 source.configuration_sha256 = "f".repeat(64);
             }
+            if state.incompatible_agent_protocol {
+                source.agent_protocol = 1;
+                source.agent_versions = vec!["0.1.1".into()];
+            }
             if state.agent_drift {
                 source.agent_versions = vec!["0.1.3".into()];
             }
@@ -429,18 +448,14 @@ impl ReleaseInspectionRuntime for Fixture {
         Box::pin(async {
             self.state.lock().unwrap().events.push("inspect");
             Ok(UpgradeDescriptor {
-                schema_version: 1,
+                schema_version: 2,
                 product: "citadel".into(),
                 target_version: self.plan.target.version.clone(),
                 target_catalog_sha256: self.plan.target.catalog_sha256.clone(),
                 installer_format: INSTALLER_FORMAT,
                 update_protocol: UPDATE_PROTOCOL,
-                sources: vec![UpgradeSource {
-                    version: self.plan.source.version.clone(),
-                    catalog_sha256: self.plan.source.catalog_sha256.clone(),
-                    architectures: vec!["amd64".into()],
-                    agent_versions: vec![],
-                }],
+                migration_catalog: catalog(),
+                agent_protocol: 2,
             })
         })
     }

@@ -215,7 +215,7 @@ fn compose_check_rejects_invalid_local_inputs_without_starting_core() {
 }
 
 #[test]
-fn build_upgrade_descriptor_needs_no_database_and_qualifies_no_transitions() {
+fn build_upgrade_descriptor_needs_no_database_and_embeds_compatibility_metadata() {
     let output = Command::new(env!("CARGO_BIN_EXE_citadel-server"))
         .env_clear()
         .env("CITADEL_UPDATE_CHECKS_ENABLED", "false")
@@ -229,7 +229,7 @@ fn build_upgrade_descriptor_needs_no_database_and_qualifies_no_transitions() {
     );
     let descriptor: citadel_updates::UpgradeDescriptor =
         serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(descriptor.schema_version, 1);
+    assert_eq!(descriptor.schema_version, 2);
     assert_eq!(descriptor.product, "citadel");
     assert_eq!(descriptor.target_version, env!("CITADEL_BUILD_VERSION"));
     assert_eq!(
@@ -241,7 +241,14 @@ fn build_upgrade_descriptor_needs_no_database_and_qualifies_no_transitions() {
         citadel_updates::INSTALLER_FORMAT
     );
     assert_eq!(descriptor.update_protocol, citadel_updates::UPDATE_PROTOCOL);
-    assert!(descriptor.sources.is_empty());
+    assert_eq!(
+        descriptor.migration_catalog,
+        citadel_database::MIGRATION_MANIFEST_JSON
+    );
+    assert_eq!(
+        descriptor.agent_protocol,
+        citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION
+    );
 }
 
 #[test]

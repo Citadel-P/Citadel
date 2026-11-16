@@ -54,9 +54,9 @@ OCI archive. When Docker's containerd image store reports a manifest digest as t
 image ID, acceptance exports that immutable image ID and hashes the actual config
 bytes; matching labels alone cannot establish artifact identity.
 
-New candidate evidence also records Core's `upgrade-descriptor-json` output.
+Candidate evidence records Core's `upgrade-descriptor-json` output.
 Acceptance runs it without network access on each architecture and compares its
-version, migration-catalog digest, installer/update protocols and source list with
+version, migration catalog and digest, installer/update/Agent protocols with
 the tagged build contract. Promotion rejects missing or mismatched evidence.
 The catalog digest covers the exact embedded `migrations.json` bytes; Core first
 validates the SQL checksums referenced by that catalog. It does not describe the
@@ -76,17 +76,22 @@ test-only executable shares Core's lifecycle but substitutes its release catalog
 it is marked unpublishable and never replaces the accepted candidate archive.
 This validates lifecycle behavior without needing to publish a test release.
 
-`src/server/upgrade-sources.json` owns the source list embedded in the target
-image and compared by release tooling. It currently remains empty: the local
-lifecycle regression does not qualify arbitrary earlier published versions.
-Declare an intended source version, catalog, architecture and Agent compatibility
-before building its target candidate, and qualify that actual transition before
-publication. Do not rebuild accepted artifacts to add eligibility afterward.
+Upgrade compatibility is automatic: the signed descriptor embeds the build's
+migration catalog and Agent protocol, with no release-version allowlist. Review
+requires a newer release in the same channel and architecture, matching installer
+and update protocols, and an unchanged migration prefix. Registered Agents require
+the target to retain the source Core's Agent protocol. The helper repeats these
+checks before shutdown, and target startup validates the live migration journal
+before applying migrations. Existing signature, checkpoint and recovery gates remain.
+
+An installed updater that requires the former source allowlist needs a manual
+upgrade to the current updater; see the [upgrade guide](content/docs/operations/upgrade-and-rollback.mdx).
+Published images and their embedded metadata are immutable.
 
 ## Retention and retries
 
 **Thirty-day Actions retention is not a durable recovery policy.** Actions artifacts
-remain 30-day transfer/fallback copies. For new releases, the workflow first reserves
+remain 30-day transfer/fallback copies. The workflow first reserves
 an internal draft named `citadel-recovery/vVERSION`, binding the tagged revision,
 and original Actions run. It never publishes this draft or
 creates an internal Git tag. It uses the existing repository and GitHub token;

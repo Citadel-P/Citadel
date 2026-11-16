@@ -32,32 +32,15 @@ Each existing GHCR package must grant the workflow repository Write access under
 does not establish package access. Both Skopeo and Docker are authenticated so
 image transfer and Cosign signing can access private packages.
 
-Rust caches retain workspace crates as well as dependencies, with separate caches
-for checks, tests, and each candidate architecture. Database regressions use the
-same workspace feature resolution as the unit tests to reuse their compiled
-executables. Clippy checks all workspace targets, replacing the separate
-`cargo check` pass. Host Cargo jobs use the runner's available CPU count instead
-of the two-job limit used for interactive development. The first run with new
-cache keys will populate those caches; later runs can reuse them. Parallel jobs
-reduce elapsed time but may consume more
-total runner minutes, especially when an early check fails.
+Rust and Docker compilation caches are separated by job, architecture and build
+configuration. Docker Cargo cache mounts are retained explicitly; layer caching
+alone is insufficient. Cache hits still run Cargo and all checks. Clippy covers
+all workspace targets, and database tests use the unit-test feature resolution.
 
-Candidate jobs also persist Docker's Cargo cache mounts explicitly; the Docker
-layer cache alone does not retain them. Registry sources, release compilation,
-and the volume helper are restored into the same Buildx builder used for both
-images. Compatibility-test compilation has a separate retained directory and
-continues to run inside the pinned Rust builder. Both caches are separated by
-architecture and build configuration, restore compatible earlier commits, and
-save a new snapshot for each commit. Cache misses rebuild normally; cache hits
-still run Cargo and all packaged tests. The first run populates these caches.
-
-Agent jobs reclaim unused SDK space on disposable GitHub-hosted runners before building
-both production images. The cleanup is skipped on self-hosted runners. Database
-fixtures must use unique Docker service IDs and bootstrap token hashes because
-most regression suites share one database and the production schema enforces
-uniqueness. Platform HTTP tests use an isolated database per fixture.
-Resource Copy HTTP regressions use a separate fresh execution database so their
-authorized catalog reads do not encounter partial rows from inventory fixtures.
+Disposable GitHub-hosted runners reclaim unused SDK space; self-hosted runners do
+not. Shared database fixtures require unique Docker service IDs and bootstrap-token
+hashes. Platform HTTP uses child databases; Resource Copy HTTP uses a separate fresh
+execution database to avoid unrelated partial inventory rows.
 
 Agent compatibility executables are compiled in `Dockerfile.agent`'s pinned `rust-source`
 stage, then run inside the tested Agent image. Host-built binaries can require a
@@ -89,11 +72,10 @@ publication to the configured docs URL.
 
 ## Release deployment checks
 
-The release tests cover deployment after successful publication, selection of one
-release channel per target, exact Core and paired Agent digests, stale aliases,
-legacy state migration, failed-attempt ordering, and HTTPS health verification.
-The installation Compose file starts Core and PostgreSQL; the paired Agent digest
-configures Core's Agent provisioning image, rather than starting an Agent service.
+Deployment consumes the completed release's exact Core and paired Agent digests.
+Compose starts Core and PostgreSQL; the Agent digest configures provisioning rather
+than adding an Agent service. Alias ownership, attempt ordering and HTTPS health
+checks guard activation.
 
 Publication and demo deployment share the `citadel-product-publication` concurrency
 group through the public health check. GitHub's `queue: max` retains up to 100
@@ -103,8 +85,7 @@ order. Separate repository toggles enable the two targets:
 `CITADEL_PREVIEW_DEPLOY_ENABLED` selects development deployment to the `preview`
 environment, while `CITADEL_DEMO_DEPLOY_ENABLED` selects stable deployment to the
 `demo` environment. Each job has a fixed channel and waits for its corresponding
-publication job. Connection settings and SSH secrets are scoped to each environment;
-the previous shared `CITADEL_DEMO_CHANNEL` selector is retired.
+publication job. Connection settings and SSH secrets are scoped to each environment.
 
 The targets use separate Compose projects, host ports, databases, networks, volumes,
 and deployment state. The deployment helper also supports operator-provisioned
@@ -118,8 +99,7 @@ Core and PostgreSQL have no container memory or swap caps
 by default on either target (`0` means unlimited). CPU ceilings remain independent.
 Operators can tune these values in each server-owned `.env` through
 `CITADEL_CORE_MEMORY_LIMIT`, `CITADEL_DATABASE_MEMORY_LIMIT`, `CITADEL_CORE_CPUS`,
-and `CITADEL_DATABASE_CPUS`. Compose rendering tests verify target separation and
-unlimited default memory and CPU settings without starting containers.
+and `CITADEL_DATABASE_CPUS`. Compose rendering checks preserve target separation and these defaults.
 
 Release notes use checksum-pinned git-cliff, without a separate release service.
 Public releases contain a manifest and checksums; accepted binaries, documentation
@@ -135,7 +115,7 @@ On Linux amd64, install the pinned notes tool with
 with `python3 -m unittest discover -s test/release -v`. The suite needs no VPS or
 publication access. Changelog tests use real temporary Git histories and the pinned
 binary; they skip locally if it is absent. CI installs it before the existing test
-step. No additional test job is introduced. Actionlint 1.7.12 does not
+step. Actionlint 1.7.12 does not
 recognize the newer [`concurrency.queue` setting](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency);
 validate that setting against GitHub's schema when using this version, and retain
 all other workflow diagnostics.
@@ -150,28 +130,13 @@ checks complement the existing Rust, frontend unit, and Agent acceptance jobs.
 
 ## Run documentation checks locally
 
-From the repository root, with Node.js 24:
+Follow the [documentation commands](README.md#validation), using Node.js 24 and
+`NEXT_PUBLIC_DOCS_URL=http://localhost:3000`. Run type generation and builds
+sequentially because both write `docs/.next`. Rebuild with a `/Citadel` URL suffix
+and repeat the static smoke test to check Pages subpath hosting.
 
-```bash
-npm ci --prefix docs
-export NEXT_PUBLIC_DOCS_URL=http://localhost:3000
-npm run test:config --prefix docs
-npm run validate --prefix docs
-npm run lint --prefix docs
-npm run types:check --prefix docs
-npm run build --prefix docs
-npm run test:static --prefix docs
-npm run build:api --prefix docs
-npm run test:api --prefix docs
-```
-
-Run type generation and the Next.js build sequentially because both write to
-`docs/.next`. To check a project Pages deployment, rebuild with
-`NEXT_PUBLIC_DOCS_URL=http://localhost:3000/Citadel` and repeat the static smoke check.
-
-For Rust, use the pinned toolchain and prerequisites in the workflows. Keep all
-formatting, lint, generated-artifact, database, and Agent checks enabled. Regenerate
-API artifacts with `cargo run --locked -p xtask -- openapi`; never hand-edit them.
+Rust/frontend commands and generation requirements are in
+[Development](DEVELOPMENT.md#checks) and [Tests](../test/README.md).
 
 ## License and release compliance
 

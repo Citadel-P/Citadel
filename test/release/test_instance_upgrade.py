@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import importlib.util
 import io
 import json
@@ -16,27 +17,20 @@ spec.loader.exec_module(upgrade)
 
 class PublishedUpgradeTests(unittest.TestCase):
     def setUp(self):
-        self.source = dict(targetVersion='0.1.1', targetCatalogSha256='a' * 64)
-        self.target = dict(descriptor=dict(sources=[dict(
-            version='0.1.1', catalogSha256='a' * 64, architectures=['amd64'])]))
+        catalog = json.dumps(dict(migrations=[dict(id='0001', sha256='a' * 64)]))
+        self.source = dict(schemaVersion=2, targetVersion='0.1.1', migrationCatalog=catalog,
+                           targetCatalogSha256=hashlib.sha256(catalog.encode()).hexdigest(),
+                           updateProtocol=1, installerFormat=1)
+        self.target = dict(descriptor=copy.deepcopy(self.source))
 
-    def test_empty_ambiguous_and_mismatched_sources_are_rejected(self):
+    def test_migration_and_protocol_mismatches_are_rejected(self):
         upgrade.require_eligible(self.source, self.target, 'amd64')
-        for change in ['empty', 'duplicate', 'version', 'catalog', 'architecture']:
-            with self.subTest(change=change):
+        for field, value in [('schemaVersion', 1), ('migrationCatalog', '{}'),
+                             ('targetCatalogSha256', 'b' * 64), ('updateProtocol', 2), ('installerFormat', 2)]:
+            with self.subTest(field=field):
                 target = copy.deepcopy(self.target)
-                source = target['descriptor']['sources'][0]
-                if change == 'empty':
-                    target['descriptor']['sources'] = []
-                elif change == 'duplicate':
-                    target['descriptor']['sources'].append(copy.deepcopy(source))
-                elif change == 'version':
-                    source['version'] = '0.1.0'
-                elif change == 'catalog':
-                    source['catalogSha256'] = 'b' * 64
-                else:
-                    source['architectures'] = ['arm64']
-                with self.assertRaisesRegex(AssertionError, 'does not allow'):
+                target['descriptor'][field] = value
+                with self.assertRaises(AssertionError):
                     upgrade.require_eligible(self.source, target, 'amd64')
 
     def test_ineligible_pair_stops_before_installation_or_approval(self):
@@ -44,9 +38,9 @@ class PublishedUpgradeTests(unittest.TestCase):
             fixture = upgrade.UpgradeFixture('ghcr.io/citadel-p/citadel@sha256:' + 'b' * 64, Path(directory))
             with patch.object(fixture, 'json_command', side_effect=[
                 [{'Architecture': 'amd64'}], self.source, {'image': fixture.core},
-                {'descriptor': {'sources': []}},
+                {'descriptor': {'schemaVersion': 1}},
             ]), patch.object(fixture, 'execute') as execute, patch.object(fixture, 'http') as http:
-                with self.assertRaisesRegex(AssertionError, 'does not allow'):
+                with self.assertRaisesRegex(AssertionError, 'compatibility metadata'):
                     fixture.run_transition('0.1.2')
                 execute.assert_not_called()
                 http.assert_not_called()
@@ -179,7 +173,7 @@ class LocalUpgradeTests(unittest.TestCase):
                     [], 0, json.dumps(artifact).encode(), b'')) as compile_binary, \
                     patch.object(local.registration, 'run', return_value=subprocess.CompletedProcess(
                         [], 0, json.dumps(dict(version=local.SOURCE, qualificationBuild=True)).encode(), b'')) as docker:
-                local.build('runtime', local.SOURCE, root, 'a' * 64, source_root=source)
+                local.build('runtime', local.SOURCE, root, source_root=source)
             builder = docker.call_args_list[0].args[0]
             self.assertEqual(builder[builder.index('--file') + 1], str(source / 'Dockerfile'))
             self.assertEqual(builder[-1], str(source))
@@ -187,7 +181,7 @@ class LocalUpgradeTests(unittest.TestCase):
                           compile_binary.call_args.args[0])
             self.assertEqual((root / local.SOURCE / 'citadel-server').read_bytes(), b'source build')
             descriptor = json.loads((root / local.SOURCE / 'upgrade-fixture.json').read_text())
-            self.assertEqual(descriptor['sources'][0]['catalogSha256'], 'a' * 64)
+            self.assertEqual(set(descriptor), {'target'})
 
     def test_browser_publishes_only_loopback_ui_and_retains_its_own_network(self):
         with tempfile.TemporaryDirectory() as directory:

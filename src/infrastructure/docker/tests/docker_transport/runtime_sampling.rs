@@ -39,7 +39,9 @@ async fn health_is_ping_only_and_sampling_discovers_once_with_slow_metadata() {
                 "/version" => r#"{"Version":"27","ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
                 "/v1.49/info" => r#"{"ID":"daemon","NCPU":2,"MemTotal":1024}"#,
                 "/v1.49/containers/json" => {
-                    r#"[{"Id":"running","State":"running"},{"Id":"stopped","State":"exited"}]"#
+                    assert!(request.contains("all=true"));
+                    assert!(!request.contains("size=true"));
+                    r#"[{"Id":"running","State":"running","Names":["/application"],"Labels":{"keep":"inventory"},"Mounts":[{"Type":"volume","Name":"data"}],"FutureDaemonField":{"nested":[1,2,3]}},{"Id":"stopped","State":"exited"},{"Id":"paused","State":"paused"},{"State":"created"},{"State":"restarting"},{"State":"removing"},{"State":"dead"},{"State":null},{}]"#
                 }
                 "/v1.49/containers/running/stats" => r#"{"read":"2026-09-19T00:00:00Z"}"#,
                 "/v1.49/volumes" => r#"{"Volumes":[]}"#,
@@ -86,9 +88,10 @@ async fn health_is_ping_only_and_sampling_discovers_once_with_slow_metadata() {
             (
                 platform.container_count,
                 platform.containers_running,
-                platform.containers_stopped
+                platform.containers_stopped,
+                platform.containers_paused
             ),
-            (2, 1, 1)
+            (9, 1, 1, 1)
         );
     }
     {
@@ -147,7 +150,120 @@ async fn health_is_ping_only_and_sampling_discovers_once_with_slow_metadata() {
         );
         assert_eq!(calls["/v1.49/containers/json"], 4);
     }
+    // The same daemon document remains available to full inventory consumers.
+    let inventory = docker
+        .list_container_models(Some(true), None, None, None)
+        .await
+        .unwrap();
+    assert_eq!(inventory[0].names.as_ref().unwrap(), &["/application"]);
+    assert_eq!(inventory[0].labels.as_ref().unwrap()["keep"], "inventory");
+    assert_eq!(
+        inventory[0].mounts.as_ref().unwrap()[0].name.as_deref(),
+        Some("data")
+    );
+    assert_eq!(
+        inventory[0].additional_properties["FutureDaemonField"]["nested"][2],
+        3
+    );
     stop.cancel();
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
+async fn sampling_discovery_bounds_responses_and_preserves_daemon_errors() {
+    for (response, expected) in [
+        (
+            "HTTP/1.1 200 OK\r\nContent-Length: 16777217\r\nConnection: close\r\n\r\n",
+            "exceeded",
+        ),
+        (
+            "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 7\r\nConnection: close\r\n\r\noffline",
+            "offline",
+        ),
+        (
+            "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nConnection: close\r\n\r\n[",
+            "invalid JSON",
+        ),
+    ] {
+        let path = temp_socket();
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let (request, _) = read_terminal_request(&mut socket).await;
+            assert!(request.starts_with("GET /version "));
+            let body = r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#;
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let (request, _) = read_terminal_request(&mut socket).await;
+            assert!(request.starts_with("GET /v1.49/containers/json?all=true "));
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+        let docker = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+        let mut sampler = LocalDockerSampler::new(docker, 2);
+        let error = sampler
+            .sample(&CancellationToken::new())
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains(expected), "{error}");
+        server.await.unwrap();
+        std::fs::remove_file(path).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn sampling_cancels_inflight_discovery() {
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let cancel = CancellationToken::new();
+    let stop = cancel.clone();
+    let (started, waiting) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let _ = read_terminal_request(&mut socket).await;
+        let body = r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#;
+        socket
+            .write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let (request, _) = read_terminal_request(&mut socket).await;
+        assert!(request.starts_with("GET /v1.49/containers/json?all=true "));
+        started.send(()).unwrap();
+        stop.cancelled().await;
+    });
+    let docker = DockerClient::new(&path, Duration::from_secs(30)).unwrap();
+    let token = cancel.clone();
+    let collecting =
+        tokio::spawn(async move { LocalDockerSampler::new(docker, 2).sample(&token).await });
+    tokio::time::timeout(Duration::from_secs(2), waiting)
+        .await
+        .unwrap()
+        .unwrap();
+    cancel.cancel();
+    let result = tokio::time::timeout(Duration::from_secs(2), collecting)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(result, Err(error) if error.kind == citadel_platforms::RuntimeErrorKind::Cancelled)
+    );
     server.await.unwrap();
     std::fs::remove_file(path).unwrap();
 }

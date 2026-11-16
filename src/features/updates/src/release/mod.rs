@@ -5,8 +5,8 @@ mod selection;
 
 pub use channel::ReleaseChannel;
 pub use descriptor::{
-    CORE_IMAGE, INSTALLER_FORMAT, OFFICIAL_REPOSITORY, ReleaseNotice, UpgradeDescriptor,
-    UpgradeSource, is_sha256, official_image_digest, release_version,
+    CORE_IMAGE, INSTALLER_FORMAT, OFFICIAL_REPOSITORY, ReleaseNotice, UpgradeDescriptor, is_sha256,
+    official_image_digest, release_version,
 };
 pub use publication::{
     PublicationIdentity, PublicationSignaturePolicy, PublishedImage, PublishedReleaseManifest,

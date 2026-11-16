@@ -166,6 +166,8 @@ impl UpdateInstallService {
         target.descriptor.validate_transition(
             &source.source,
             &target.identity,
+            &source.migration_catalog,
+            source.agent_protocol,
             &source.agent_versions,
         )?;
         let now = chrono::Utc::now();

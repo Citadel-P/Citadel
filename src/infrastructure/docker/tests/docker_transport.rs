@@ -1139,3 +1139,6 @@ mod image_usage;
 
 #[path = "docker_transport/endpoints.rs"]
 mod endpoints;
+
+#[path = "docker_transport/health_inspection.rs"]
+mod health_inspection;

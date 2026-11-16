@@ -1,5 +1,25 @@
 use super::*;
 
+fn check_platform_history_sort_work(node: &serde_json::Value, max_rows: usize) -> bool {
+    let mut has_window =
+        node["Node Type"] == "WindowAgg" && node["Actual Loops"].as_f64().unwrap_or_default() > 0.;
+    if let Some(children) = node["Plans"].as_array() {
+        for child in children {
+            has_window |= check_platform_history_sort_work(child, max_rows);
+        }
+    }
+    if matches!(
+        node["Node Type"].as_str(),
+        Some("Sort" | "Incremental Sort")
+    ) {
+        assert!(
+            node["Actual Rows"].as_f64().unwrap_or_default() <= max_rows as f64,
+            "platform history must sort bounded chunks and their endpoints, not the entire window: {node}"
+        );
+    }
+    has_window
+}
+
 #[tokio::test]
 #[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
 async fn platform_history_bounds_temporary_writes_without_losing_counter_totals() {
@@ -70,19 +90,19 @@ async fn platform_history_bounds_temporary_writes_without_losing_counter_totals(
                     .unwrap();
             let temporary_bytes =
                 plan[0]["Plan"]["Temp Written Blocks"].as_i64().unwrap() * block_size;
-            // Bound real spill volume rather than machine-dependent latency. With 432,050
-            // raw observations with full-length Docker IDs at 4 MiB work_mem, both
-            // paths fit below 112 MiB. The old generic mixed-history hash
-            // aggregate wrote about 240 MiB for this fixture.
-            assert!(
-                temporary_bytes < 112 * 1024 * 1024,
-                "mixed={mixed}, mode={mode}, temporary writes={temporary_bytes}: {plan}"
-            );
+            // Fifty containers and an isolated summary must not force all raw
+            // observations through a whole-window sort. The former allowance
+            // was 112 MiB; both paths now fit without temporary writes.
+            assert_eq!(temporary_bytes, 0, "mixed={mixed}, mode={mode}: {plan}");
             let rows = sqlx::query(sqlx::AssertSqlSafe(execute.clone()))
                 .fetch_all(&mut *tx)
                 .await
                 .unwrap();
             assert_eq!(rows.len(), 1441);
+            assert!(check_platform_history_sort_work(
+                &plan[0]["Plan"],
+                if mixed { 6000 } else { 5000 }
+            ));
             assert_eq!(
                 rows.iter()
                     .map(|r| r.get::<Option<f64>, _>("rxbytesdelta").unwrap_or_default())

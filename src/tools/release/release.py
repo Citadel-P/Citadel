@@ -667,10 +667,10 @@ def expected_upgrade_descriptor(metadata):
     # Hash the exact bytes embedded by citadel-database. SQL/catalog integrity is
     # checked independently by the binary before it emits the descriptor.
     catalog = ROOT / "src/infrastructure/database/generated/migrations.json"
-    return dict(schemaVersion=1, product="citadel", targetVersion=metadata["displayVersion"],
+    return dict(schemaVersion=2, product="citadel", targetVersion=metadata["displayVersion"],
                 targetCatalogSha256=version.sha256(catalog),
                 installerFormat=POLICY["installerFormat"], updateProtocol=POLICY["updateProtocol"],
-                sources=json.loads((ROOT / "src/server/upgrade-sources.json").read_text()))
+                migrationCatalog=catalog.read_bytes().decode("utf-8"), agentProtocol=POLICY["protocolVersion"])
 
 
 def validate_evidence(directory, metadata):

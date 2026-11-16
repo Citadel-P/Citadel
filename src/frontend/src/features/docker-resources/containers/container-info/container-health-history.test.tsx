@@ -1,8 +1,23 @@
-import { cloneElement, type ReactElement } from 'react';
+import { cloneElement, useState, type ComponentProps, type ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ContainerHealthStatus as Status, type ContainerHealthTransitionView } from '@/api/generated/api.types';
-import { ContainerHealthHistory } from './container-health-history';
+import { ContainerHealthHistory as HistoryView } from './container-health-history';
+
+import { resolveStatsRange, type StatsRange } from '@/lib/stats-range';
+
+function ContainerHealthHistory({
+  now,
+  ...props
+}: Omit<ComponentProps<typeof HistoryView>, 'range'> & { now: number }) {
+  const [selection, setSelection] = useState<StatsRange>({ kind: 'relative', minutes: 60 });
+  return (
+    <HistoryView
+      {...props}
+      range={{ selection, setSelection, bounds: resolveStatsRange(selection, Math.floor(now / 1000)) }}
+    />
+  );
+}
 
 vi.mock('recharts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('recharts')>()),

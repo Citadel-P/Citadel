@@ -371,7 +371,7 @@ class ArtifactTests(unittest.TestCase):
         original = copy.deepcopy(evidence)
         file=self.root/'evidence-arm64.json'
         for descriptor in [None, dict(original['upgradeDescriptor'], targetCatalogSha256='a'*64),
-                           dict(original['upgradeDescriptor'], sources=[{'version':'1.2.2'}])]:
+                           dict(original['upgradeDescriptor'], migrationCatalog='{}')]:
             evidence['upgradeDescriptor'] = descriptor
             file.write_text(json.dumps(evidence))
             with self.assertRaisesRegex(ValueError, 'upgrade descriptor'):

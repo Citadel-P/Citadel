@@ -9,16 +9,14 @@ in `ContainerStatMessage`. Both Direct and Edge map the same Docker block-device
 byte totals. Absent counters stay unknown, including on platforms that do not
 report block I/O; they are not interpreted as zero. Core calculates historical
 rates and period totals from captured samples, using each container's own baseline.
-No operations or Swarm-node permissions are added for these metrics. Core also
-aggregates node-scoped container counters into Swarm Platform network and disk-I/O
+Core also aggregates node-scoped container counters into Swarm Platform network and disk-I/O
 history. Node captures retain their authenticated scope and session fencing;
 they do not update the connected manager's CPU, memory, disk-capacity or metadata.
 
 Container statistics also carry optional `memoryActiveCache` (field 9), the
 active filesystem-cache component within the existing Docker working set.
 Direct and Edge preserve absence; Core does not infer zero or subtract shared
-memory from Docker's general `file` counter. Operations, authentication, node
-allowlists and session fencing are unchanged.
+memory from Docker's general `file` counter.
 
 ## Transports
 
@@ -38,7 +36,7 @@ external-tool implementations; Core owns persisted resource and user state.
 Container log streaming reports a deleted, dead, or removing container as
 `NotFound` over both Direct and Edge. Core uses that typed result to retire a
 replaced Stack member's log stream while retaining the Stack subscription.
-Other log errors keep their existing classification; no wire fields change.
+Other log errors retain their typed classification.
 
 Image pulls use `PullImageResponse` on both transports, including progress and
 Docker error details. They finish on successful stream completion (Direct) or
@@ -62,8 +60,7 @@ return its configuration and manifest digests. Requests without it retain the
 existing top-level distribution descriptor behavior. Image inspection identifies
 the digest type so Core compares images correctly across Docker image stores.
 Checks read metadata only. Missing comparison fields from older Agents yield an
-unavailable comparison in Core. No operation numbers or Swarm-node allowlists
-change; node-local registry checks remain unavailable.
+unavailable comparison in Core. Node-local registry checks remain unavailable.
 
 ## Central Agent replacement
 
@@ -131,18 +128,14 @@ it does not turn them into completed failures or cause another replacement.
 Network list responses include attached endpoints in the additive shared
 `Network.containers` field (17). Local and Agent runtimes derive these from the
 container inventory already fetched for usage counts; configured networks without
-an endpoint are not reported as attachments. Core still filters relationships and
-endpoint details by actor permissions. Direct and Edge share this mapping and the
-existing operation numbers, cancellation bounds, and Swarm-node allowlists.
-Older Agents omit these endpoints, so workload maps can show incomplete evidence
-until the Agent is updated; network inspection remains available.
+an endpoint are not reported as attachments. Core filters relationships and endpoint
+details by actor permissions. Direct and Edge share this mapping.
 
 Swarm service inventory includes explicit network selections and networks reported
 in Docker's service virtual IPs, including ingress, even with zero running tasks.
 Local, Direct and Edge use the same mapping; these are service memberships, not
 container attachments. Editable/adopted service definitions retain only explicit
-network selections. The existing `network_ids` field carries this observation;
-no protocol fields or operation permissions change.
+network selections. The `network_ids` field carries this observation.
 
 ## Deployment profiles
 
@@ -230,7 +223,6 @@ An idle terminal has no input or output for 15 minutes; resize does not count as
 activity. Cleanup remains tracked during shutdown and never stops the application
 container. This does not change the signed Exec messages, operation numbers, or
 Swarm-node allowlists. It requires `/bin/sh`, `sleep`, and Linux procfs in the target image.
-Existing Agent versions must be upgraded to gain this cleanup and idle timeout.
 
 Non-interactive `ExecBinary` uses the same identity-checked process-session cleanup
 on cancellation, stream drop and shutdown. It preserves binary stdout/stderr,
@@ -245,7 +237,7 @@ terminates itself after 10 seconds. Approval failures after identity is known
 use the normal cleanup path. Descendant identities are collected before signals
 are sent, so a parent exiting during cleanup does not abandon the remaining
 captured children. Docker outages can still prevent cleanup of an approved
-command; upgraded Agents are required for this behavior.
+command.
 
 ## Edge lifecycle and limits
 
@@ -578,39 +570,12 @@ and redaction; list, realtime summary, and retained health history omit this
 sensitive detail. `healthMetadataObserved` distinguishes absent metadata from a
 confirmed absent check on older Agents.
 
-The browser uses the existing `container-info` stream for current health. Retained
-history loads through `GET /api/v1/containers/{id}/health-history`, independently of
-realtime availability. The on-demand `container-health:<container UUID>` group sends
-`ContainerHealthHistoryChanged` (`resourceId` only), including on join and reconnect.
-The browser refreshes the HTTP query on these notifications. If a request is already
-in flight, notifications share one follow-up read after it completes, covering the
-fetch/subscription gap without parallel requests. Failed reads expose a retry action
-and retain any previously loaded observations. The group requires the owning
-Platform's Read permission, matching the HTTP
-history endpoint; workload-only access to container-info does not grant this read.
-Committed container invalidations notify subscribers; statistics do not.
-Neither stream performs Docker inspection or includes probe commands/output.
-Explicit probe details remain an Inspect-authorized HTTP read on user request.
-
-Core stores actual periodic health observations for enabled checks at most once
-per UTC minute, in addition to immediate transitions. NoCheck, Disabled, and
-Unknown configurations do not generate periodic samples; current observations
-and configuration/lifecycle transitions remain persisted. The browser skips the
-history query and group for a currently confirmed NoCheck or Disabled status. Statistics, unchanged replay timestamps,
-and stale or future observations cannot generate periodic samples. Retention is
-seven days, up to 10,080 samples and 200 transitions per container, with the
-existing shared 100,000-record installation cap. This uses an additive Core
-migration and requires no Agent wire change. Earlier transitions are preserved;
-no periodic samples are backfilled.
-
-History snapshots keep the latest hour and retained transitions exact. Older
-samples are grouped into five-minute buckets for the latest day and thirty-minute
-buckets before that, partitioned by state, check configuration, health result,
-OOM and exit evidence. Each entry includes `sampleCount` and `firstObservedAt`
-(Unix seconds); `observedAt` is the latest actual observation in the group. These
-bounds describe observations, not continuous coverage. No healthy grouping can
-absorb an unhealthy sample. Grouping occurs in the persistence reader before HTTP
-or realtime serialization; range changes in the browser need no additional reads.
+Core owns retained history, aggregation, retention and HTTP/realtime authorization;
+these are not Agent protocol fields. Lists and history omit probe commands/output;
+explicit probe details require Inspect permission. See
+[container monitoring](content/docs/resources/docker/containers.md) for user behavior
+and [the persistence reader](../src/infrastructure/adapters/src/persistence/postgres/platforms/reader/container_health_history.sql)
+for history ranges and grouping.
 
 ### Container process snapshots
 

@@ -12275,7 +12275,7 @@ export class Api<
      * @summary Get bounded Container health and lifecycle transitions
      * @request GET:/api/v1/containers/{id}/health-history
      * @secure
-     * @response `200` `(ContainerHealthTransitionView)[]` Up to 200 transitions within seven days; history may have gaps
+     * @response `200` `(ContainerHealthTransitionView)[]` Retained transitions and grouped observations in the requested range; defaults to 24 hours, at most seven days; history may have gaps
      * @response `400` `ProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -12284,10 +12284,33 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      * @response `default` `ProblemDetails` Request failed
      */
-    getContainerHealthHistory: (id: string, params: RequestParams = {}) =>
+    getContainerHealthHistory: (
+      id: string,
+      query?: {
+        hours?: StatsHours;
+        /**
+         * Relative range: 15, 60, 360, 1440 or 10080 minutes
+         * @format int32
+         * @min 0
+         */
+        minutes?: number;
+        /**
+         * Inclusive start in Unix seconds within retained history
+         * @format int64
+         */
+        from?: number;
+        /**
+         * Inclusive end in Unix seconds; defaults to now with from
+         * @format int64
+         */
+        to?: number;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<ContainerHealthTransitionView[], ProblemDetails>({
         path: `/api/v1/containers/${id}/health-history`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,

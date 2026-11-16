@@ -20,9 +20,9 @@ class CandidateIdentityTests(unittest.TestCase):
         with patch.object(candidates.release.version, 'run', return_value=json.dumps(descriptor)) as run:
             self.assertEqual(candidates.check_upgrade_descriptor('core-candidate', metadata), descriptor)
             run.assert_called_once_with('docker', 'run', '--rm', '--network=none', 'core-candidate', 'upgrade-descriptor-json')
-        for field, value in [('schemaVersion', 2), ('product', 'other'), ('targetVersion', '1.2.4'),
+        for field, value in [('schemaVersion', 3), ('product', 'other'), ('targetVersion', '1.2.4'),
                              ('targetCatalogSha256', 'a'*64), ('installerFormat', 2), ('updateProtocol', 2),
-                             ('sources', [{'version':'1.2.2'}])]:
+                             ('migrationCatalog', '{}'), ('agentProtocol', 999)]:
             with self.subTest(field=field), patch.object(candidates.release.version, 'run',
                     return_value=json.dumps(dict(descriptor, **{field:value}))):
                 with self.assertRaisesRegex(ValueError, 'upgrade descriptor'):

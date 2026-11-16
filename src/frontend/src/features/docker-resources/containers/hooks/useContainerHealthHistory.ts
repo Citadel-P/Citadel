@@ -1,25 +1,23 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
+import type { StatsRangeState } from '@/hooks/useStatsRange';
 import type { RealtimeConnection } from '@/lib/realtime-connection';
 
-export function useContainerHealthHistory(resourceId: string, enabled = true) {
+export function useContainerHealthHistory(resourceId: string, range: StatsRangeState['query'], enabled = true) {
   const queryClient = useQueryClient();
-  const query = useRead(
-    'getContainerHealthHistory',
-    { id: resourceId },
-    {
-      enabled: !!resourceId && enabled,
-      meta: { suppressErrorToast: true },
-    },
-  );
+  const readArgs = useMemo(() => ({ id: resourceId, query: range }), [resourceId, range]);
+  const query = useRead('getContainerHealthHistory', readArgs, {
+    enabled: !!resourceId && enabled,
+    meta: { suppressErrorToast: true },
+  });
   const receive = useCallback(
     async (notification: { resourceId: string }) => {
       if (notification.resourceId !== resourceId || !enabled) return;
       const filter = {
         queryKey: ['getContainerHealthHistory', { id: resourceId }],
-        exact: true,
+        exact: false,
         type: 'active' as const,
       };
       // An in-flight response can predate this notification. Let it finish, then

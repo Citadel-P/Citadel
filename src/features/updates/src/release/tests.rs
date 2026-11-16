@@ -1,91 +1,131 @@
 use super::*;
 use crate::CoreIdentity;
 
+fn catalog(count: usize) -> String {
+    serde_json::json!({"migrations": (1..=count).map(|i|
+        serde_json::json!({"id": format!("{i:04}"), "sha256": format!("{i:064x}")}))
+        .collect::<Vec<_>>()})
+    .to_string()
+}
+
+fn digest(catalog: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(catalog.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+}
+
 fn identities() -> (CoreIdentity, CoreIdentity, UpgradeDescriptor) {
     let source = CoreIdentity {
         version: "0.1.1".into(),
         image: format!("{CORE_IMAGE}@sha256:{}", "a".repeat(64)),
-        catalog_sha256: "b".repeat(64),
+        catalog_sha256: digest(&catalog(1)),
         architecture: "amd64".into(),
     };
     let target = CoreIdentity {
         version: "0.1.2".into(),
         image: format!("{CORE_IMAGE}@sha256:{}", "c".repeat(64)),
-        catalog_sha256: "d".repeat(64),
+        catalog_sha256: digest(&catalog(2)),
         architecture: "amd64".into(),
     };
     let descriptor = UpgradeDescriptor {
-        schema_version: 1,
+        schema_version: 2,
         product: "citadel".into(),
         target_version: target.version.clone(),
         target_catalog_sha256: target.catalog_sha256.clone(),
         installer_format: 1,
         update_protocol: 1,
-        sources: vec![UpgradeSource {
-            version: source.version.clone(),
-            catalog_sha256: source.catalog_sha256.clone(),
-            architectures: vec!["amd64".into()],
-            agent_versions: vec![],
-        }],
+        migration_catalog: catalog(2),
+        agent_protocol: 2,
     };
     (source, target, descriptor)
 }
 
 #[test]
-fn an_exact_source_catalog_and_architecture_are_required() {
-    let (source, target, descriptor) = identities();
-    assert!(
-        descriptor
-            .validate_transition(&source, &target, &[])
-            .is_ok()
-    );
-    for altered in [
-        CoreIdentity {
-            catalog_sha256: "e".repeat(64),
-            ..source.clone()
-        },
-        CoreIdentity {
-            version: "0.1.0".into(),
-            ..source.clone()
-        },
-        CoreIdentity {
-            architecture: "arm64".into(),
-            ..source.clone()
-        },
-    ] {
+fn newer_versions_use_migration_history_without_a_version_allowlist() {
+    let (mut source, target, descriptor) = identities();
+    for version in ["0.1.0", "0.1.1"] {
+        source.version = version.into();
         assert!(
             descriptor
-                .validate_transition(&altered, &target, &[])
+                .validate_transition(&source, &target, &catalog(1), 2, &[])
+                .is_ok()
+        );
+    }
+    source.catalog_sha256 = digest(&catalog(2));
+    assert!(
+        descriptor
+            .validate_transition(&source, &target, &catalog(2), 2, &[])
+            .is_ok()
+    );
+}
+
+#[test]
+fn altered_removed_reordered_or_unbound_migrations_are_rejected() {
+    let (mut source, target, descriptor) = identities();
+    let mut changed: serde_json::Value = serde_json::from_str(&catalog(1)).unwrap();
+    changed["migrations"][0]["sha256"] = "f".repeat(64).into();
+    for catalog in [
+        changed.to_string(),
+        catalog(3),
+        r#"{"migrations":[]}"#.into(),
+    ] {
+        source.catalog_sha256 = digest(&catalog);
+        assert!(
+            descriptor
+                .validate_transition(&source, &target, &catalog, 2, &[])
                 .is_err()
         );
     }
-    let mut duplicated = descriptor.clone();
-    duplicated.sources.push(duplicated.sources[0].clone());
+    let mut reordered: serde_json::Value = serde_json::from_str(&catalog(2)).unwrap();
+    reordered["migrations"].as_array_mut().unwrap().reverse();
+    let catalog = reordered.to_string();
+    source.catalog_sha256 = digest(&catalog);
     assert!(
-        duplicated
-            .validate_transition(&source, &target, &[])
+        descriptor
+            .validate_transition(&source, &target, &catalog, 2, &[])
+            .is_err()
+    );
+    source.catalog_sha256 = "f".repeat(64);
+    assert!(
+        descriptor
+            .validate_transition(&source, &target, &self::catalog(1), 2, &[])
+            .is_err()
+    );
+    source.catalog_sha256 = digest(&self::catalog(1));
+    source.architecture = "arm64".into();
+    assert!(
+        descriptor
+            .validate_transition(&source, &target, &self::catalog(1), 2, &[])
             .is_err()
     );
 }
 
 #[test]
-fn unknown_agent_transitions_remain_unavailable() {
-    let (source, target, mut descriptor) = identities();
+fn registered_agents_require_the_same_protocol_not_a_release_version_list() {
+    let (source, target, descriptor) = identities();
+    for agents in [vec![], vec!["0.1.0".into(), "0.1.1".into()]] {
+        assert!(
+            descriptor
+                .validate_transition(&source, &target, &catalog(1), 2, &agents)
+                .is_ok()
+        );
+    }
     assert!(
         descriptor
-            .validate_transition(&source, &target, &["0.1.1".into()])
+            .validate_transition(&source, &target, &catalog(1), 1, &["0.1.1".into()])
             .is_err()
     );
-    descriptor.sources[0].agent_versions.push("0.1.1".into());
     assert!(
         descriptor
-            .validate_transition(&source, &target, &["0.1.1".into()])
+            .validate_transition(&source, &target, &catalog(1), 2, &["unknown".into()])
+            .is_err()
+    );
+    assert!(
+        descriptor
+            .validate_transition(&source, &target, &catalog(1), 1, &[])
             .is_ok()
-    );
-    assert!(
-        descriptor
-            .validate_transition(&source, &target, &["0.1.1".into(), "unknown".into()])
-            .is_err()
     );
 }
 
@@ -105,6 +145,8 @@ fn moving_tags_foreign_images_channel_switches_and_downgrades_are_rejected() {
                         image,
                         ..target.clone()
                     },
+                    &catalog(1),
+                    2,
                     &[]
                 )
                 .is_err()
@@ -121,6 +163,8 @@ fn moving_tags_foreign_images_channel_switches_and_downgrades_are_rejected() {
                         version: version.into(),
                         ..target.clone()
                     },
+                    &catalog(1),
+                    2,
                     &[]
                 )
                 .is_err()
@@ -133,7 +177,7 @@ fn unknown_descriptor_versions_and_unbound_catalogs_are_rejected() {
     let (source, target, descriptor) = identities();
     for changed in [
         UpgradeDescriptor {
-            schema_version: 2,
+            schema_version: 3,
             ..descriptor.clone()
         },
         UpgradeDescriptor {
@@ -149,6 +193,10 @@ fn unknown_descriptor_versions_and_unbound_catalogs_are_rejected() {
             ..descriptor.clone()
         },
     ] {
-        assert!(changed.validate_transition(&source, &target, &[]).is_err());
+        assert!(
+            changed
+                .validate_transition(&source, &target, &catalog(1), 2, &[])
+                .is_err()
+        );
     }
 }

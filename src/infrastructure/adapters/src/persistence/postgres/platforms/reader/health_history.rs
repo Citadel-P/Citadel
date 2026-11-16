@@ -5,6 +5,8 @@ pub(super) async fn read(
     pool: &PgPool,
     admission: &Admission,
     container: Uuid,
+    window: citadel_platforms::StatsWindow,
+    now: i64,
 ) -> Result<Vec<citadel_platforms::container_health::ContainerHealthTransition>, AuthorizedReadError>
 {
     let mut read = admission
@@ -13,6 +15,9 @@ pub(super) async fn read(
         .map_err(AuthorizedReadError::Runtime)?;
     let rows = sqlx::query(include_str!("container_health_history.sql"))
         .bind(container)
+        .bind(window.since(now))
+        .bind(window.until(now))
+        .bind(now)
         .fetch_all(read.connection())
         .await
         .map_err(crate::persistence::postgres::platforms::history_admission::storage)

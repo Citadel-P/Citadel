@@ -1110,3 +1110,86 @@ async fn workload_history_survives_replacement_and_keeps_service_replica_and_own
     f.pool.close().await;
     std::fs::remove_file(f.docker_socket).unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn health_history_uses_statistics_ranges_and_authorization() {
+    let f = fixture().await;
+    let container: Uuid =
+        sqlx::query_scalar("SELECT id FROM containers WHERE platformid=$1 LIMIT 1")
+            .bind(f.platform_id)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    sqlx::query("DELETE FROM containerhealthtransitions WHERE containerid=$1")
+        .bind(container)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let now = Utc::now().timestamp();
+    for minutes in [5_i64, 30, 120, 1500, 8640] {
+        sqlx::query("INSERT INTO containerhealthtransitions(containerid,platformid,dockercontainerid,observedat,state,origin) VALUES($1,$2,'fixture',$3,'Running','Sample')")
+            .bind(container).bind(f.platform_id).bind(now-minutes*60).execute(&f.pool).await.unwrap();
+    }
+    let path = format!("/api/v1/containers/{container}/health-history");
+    let denied = super::lookup::subject(&f).await;
+    assert_eq!(
+        send(&f, &path, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        send(&f, &path, Some(denied)).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    for invalid in [
+        "minutes=30".to_owned(),
+        "hours=24&minutes=60".to_owned(),
+        "to=1".to_owned(),
+        format!("from={now}&to={now}"),
+        format!("from={}&to={now}", now - 8 * 86400),
+    ] {
+        assert_eq!(
+            send(
+                &f,
+                &format!("{path}?{invalid}"),
+                Some(f.administrator.clone())
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    for (query, count) in [
+        ("minutes=15".to_owned(), 1),
+        ("minutes=60".to_owned(), 2),
+        ("minutes=360".to_owned(), 3),
+        ("minutes=1440".to_owned(), 3),
+        ("minutes=10080".to_owned(), 5),
+        (String::new(), 3),
+        (
+            format!("from={}&to={}", now - 30 * 3600, now - 24 * 3600),
+            1,
+        ),
+    ] {
+        let response = send(
+            &f,
+            &format!("{path}?{query}"),
+            Some(f.administrator.clone()),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK, "{query}");
+        let body = json_body(response).await;
+        assert_eq!(
+            body.as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["sampleCount"].as_i64().unwrap())
+                .sum::<i64>(),
+            count,
+            "{query}: {body}"
+        );
+    }
+    f.docker_server.abort();
+    f.pool.close().await;
+    std::fs::remove_file(f.docker_socket).unwrap();
+}

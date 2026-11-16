@@ -3,6 +3,7 @@ use sqlx::{Connection, PgConnection};
 use uuid::Uuid;
 
 mod build_attempts;
+mod coarse_history;
 mod container_io;
 mod health_retention;
 mod instance_settings;

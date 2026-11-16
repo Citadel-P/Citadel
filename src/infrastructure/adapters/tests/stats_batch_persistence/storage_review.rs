@@ -8,7 +8,8 @@ async fn measurement_bytes(pool: &PgPool, raw: bool) -> i64 {
         // Partitioned parents have no physical heap; never add child indexes twice.
         "SELECT coalesce(sum(pg_total_relation_size(relid)),0)::bigint+pg_total_relation_size('platformhistorysources') FROM (
             SELECT relid FROM pg_partition_tree('platformgaugerollups') WHERE isleaf
-            UNION ALL SELECT relid FROM pg_partition_tree('platformiorollups') WHERE isleaf) parts"
+            UNION ALL SELECT relid FROM pg_partition_tree('platformiorollups') WHERE isleaf
+            UNION ALL SELECT relid FROM pg_partition_tree('platformiocoarserollups') WHERE isleaf) parts"
     };
     sqlx::query_scalar(sql).fetch_one(pool).await.unwrap()
 }
@@ -45,13 +46,24 @@ async fn platform_compaction_storage_gate_reduces_dense_history_and_keeps_unsuit
             .bind(scope.platform_id).execute(&pool).await.unwrap();
         let raw = measurement_bytes(&pool, true).await - empty_raw;
         let before = platform_history(&pool, scope.platform_id, start, start + 3600, 300).await;
-        for _ in 0..3 {
-            citadel_adapters::persistence::postgres::maintenance::compact(&pool)
+        // Two source-hours plus eight optional coarse blocks. Include the new
+        // tier's complete physical cost before checking the storage benefit.
+        for _ in 0..12 {
+            if citadel_adapters::persistence::postgres::maintenance::compact(&pool)
                 .await
-                .unwrap();
+                .unwrap()
+                == 0
+            {
+                break;
+            }
         }
         let summary = measurement_bytes(&pool, false).await - empty_summary;
         let counts:(i64,i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM platformstats),(SELECT count(*) FROM platformnodeiostats),(SELECT count(*) FROM platformiorollups)").fetch_one(&pool).await.unwrap();
+        let coarse: i64 = sqlx::query_scalar("SELECT count(*) FROM platformiocoarserollups")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(coarse, if suitable { containers * 8 } else { 0 });
         eprintln!(
             "native storage {name}: original heap/TOAST/index bytes={raw}, replacement bytes={summary}, rows={counts:?}"
         );

@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "fc67e676e80dc7a3f371d4b72d7a5ad7ce3482f4754fe2a46c56e3a3d0c6ba21"
+    "sha256": "c1c3bff0d5726851b7a604e5bcbe26364abae5829d7c21dc30d80a7bdd739339"
   },
   "migrations": [
     {
@@ -50,6 +50,14 @@
       "name": "memory_breakdown",
       "file": "0006_memory_breakdown.sql",
       "sha256": "15a17bbb964ef3299bdc6911aaf4cb42aee596a1aef1b78a7fdd7e623d3d2a2b",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0007",
+      "name": "platform_coarse_history",
+      "file": "0007_platform_coarse_history.sql",
+      "sha256": "c5aa9f7a9b2fd33582d5a25d8b107208c46ca9ce468afffd972133cd602b68ee",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

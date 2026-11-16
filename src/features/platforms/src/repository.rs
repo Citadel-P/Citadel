@@ -26,6 +26,8 @@ pub trait PlatformReader: Send + Sync {
     fn container_health_history(
         &self,
         container: Uuid,
+        window: crate::StatsWindow,
+        now: i64,
     ) -> BoxFuture<
         '_,
         Result<Vec<crate::container_health::ContainerHealthTransition>, AuthorizedReadError>,

@@ -10,4 +10,6 @@ pub struct InstallationSnapshot {
     pub configuration_sha256: String,
     pub checkpoint_directory: String,
     pub agent_versions: Vec<String>,
+    pub migration_catalog: String,
+    pub agent_protocol: i32,
 }

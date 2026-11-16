@@ -14,7 +14,9 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, RwLock};
 
 mod binary_exec;
+mod health;
 mod owned_exec;
+mod sampling;
 mod terminal;
 pub use binary_exec::{DockerExecError, DockerExecEvent, DockerExecStream};
 

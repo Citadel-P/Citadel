@@ -159,7 +159,13 @@ async fn health_and_statistics_share_admission_without_blocking_ordinary_reads()
     for _ in 0..2 {
         let reader = reader.clone();
         reads.push(tokio::spawn(async move {
-            reader.container_health_history(Uuid::now_v7()).await
+            reader
+                .container_health_history(
+                    Uuid::now_v7(),
+                    citadel_platforms::StatsWindow::new(168).unwrap(),
+                    chrono::Utc::now().timestamp(),
+                )
+                .await
         }));
     }
     tokio::time::timeout(Duration::from_secs(2), async {
@@ -214,7 +220,11 @@ async fn health_and_statistics_share_admission_without_blocking_ordinary_reads()
     .unwrap();
     assert!(
         reader
-            .container_health_history(Uuid::now_v7())
+            .container_health_history(
+                Uuid::now_v7(),
+                citadel_platforms::StatsWindow::new(168).unwrap(),
+                chrono::Utc::now().timestamp()
+            )
             .await
             .unwrap()
             .is_empty()

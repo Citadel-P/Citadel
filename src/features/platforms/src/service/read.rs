@@ -101,8 +101,12 @@ impl PlatformReadService {
     pub async fn container_health_history(
         &self,
         container: Uuid,
+        window: crate::StatsWindow,
+        now: i64,
     ) -> Result<Vec<crate::container_health::ContainerHealthTransition>, AuthorizedReadError> {
-        self.store.container_health_history(container).await
+        self.store
+            .container_health_history(container, window, now)
+            .await
     }
     pub async fn container_owner_names(
         &self,
