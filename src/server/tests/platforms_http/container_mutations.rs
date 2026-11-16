@@ -1204,7 +1204,7 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
                 })
                 .await
                 .unwrap();
-            let unconfirmed = unconfirmed.lock().unwrap();
+            let unconfirmed = unconfirmed.into_inner().unwrap();
             assert_eq!(unconfirmed.len(), 1);
             assert!(!unconfirmed[0].operation_id.is_nil());
             assert_eq!(unconfirmed[0].targets.len(), ids.len());
@@ -1214,7 +1214,6 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
                     .iter()
                     .all(|target| target.platform_id == f.platform_id && ids.contains(&target.id))
             );
-            drop(unconfirmed);
             assert_eq!(
                 calls.load(Ordering::SeqCst),
                 20,

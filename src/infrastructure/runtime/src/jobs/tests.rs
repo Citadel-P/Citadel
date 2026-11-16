@@ -155,15 +155,16 @@ async fn unchanged_waiting_metadata_does_not_emit_fake_progress() {
 async fn interrupted_owned_work_stays_failed_until_an_actual_recovery() {
     let catalog = JobCatalog::new(uuid::Uuid::now_v7());
     let job = catalog.register("sessions", "Other", JobOwnership::TargetSession);
-    let task = job
+    let result = job
         .scope(async {
             tokio::spawn(scope_owned(async {
                 let _iteration = JobHandle::iteration();
                 panic!("private transport details");
             }))
+            .await
         })
         .await;
-    assert!(task.await.unwrap_err().is_panic());
+    assert!(result.unwrap_err().is_panic());
     job.waiting("Awaiting session retry", None);
     let failed = catalog.snapshot().jobs.remove(0);
     assert_eq!(failed.state, JobState::Unavailable);
