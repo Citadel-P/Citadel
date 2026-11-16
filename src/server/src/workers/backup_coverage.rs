@@ -7,7 +7,12 @@ pub(crate) async fn realtime_updates(
     token: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
     loop {
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.policy("Backup coverage changes", None);
+            job.waiting("Listening for backup coverage changes", None);
+        }
         let next = tokio::select! {()=token.cancelled()=>return Ok(()),next=source.next()=>next};
+        let mut observation = citadel_runtime::jobs::JobHandle::iteration();
         match next {
             Ok(change) => {
                 if let Some(hub) = &realtime {
@@ -15,12 +20,18 @@ pub(crate) async fn realtime_updates(
                 }
             }
             Err(error) => {
+                if let Some(i) = observation.take() {
+                    i.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                }
                 tracing::warn!(%error,"Backup coverage listener reconnecting");
                 if let Some(hub) = &realtime {
                     hub.publish_backup_coverage(None);
                 }
                 tokio::select! {()=token.cancelled()=>return Ok(()),_=tokio::time::sleep(std::time::Duration::from_secs(2))=>{}}
             }
+        }
+        if let Some(i) = observation {
+            i.finish(citadel_runtime::jobs::JobOutcome::Completed, None);
         }
     }
 }

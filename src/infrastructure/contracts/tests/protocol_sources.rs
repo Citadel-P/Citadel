@@ -9,6 +9,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
     // Agent update settlement adds source identity fields and runtime image evidence.
     // Post-commit cleanup adds request field 5 and an explicit response acknowledgement;
     // empty/default responses never prove deletion and ordinary settlement remains unchanged.
+    // Volume system classification adds field 14; existing field numbers are unchanged.
     let sources = [
         (
             "script_service.proto",
@@ -23,7 +24,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "shared_models.proto",
             include_str!("../proto/shared_models.proto"),
-            "60ee6c196a2dfcee865ba96f4d758da7b445d2cb5618e36fbe90db5454da29f1",
+            "3df9c2f861431bcf7dac2c20cb4932ff100c05989dc36206b3474011ca9305b9",
         ),
         (
             "platform_service.proto",

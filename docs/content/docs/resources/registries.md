@@ -38,8 +38,6 @@ The registry form supports:
 
 DockerHub uses `docker.io` as the registry host. GitHub uses `ghcr.io` and displays the selected namespace as part of the host. Custom registries require you to enter the registry host.
 
-Azure, AWS, and GitLab registry configuration types exist in the backend model, but they are not currently exposed in the registry form.
-
 Builds currently use DockerHub, GitHub Container Registry, and Custom registries for pushes.
 
 ## Basic Setup

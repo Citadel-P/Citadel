@@ -24,6 +24,12 @@ pub(crate) async fn event_resource_refresh(
     receivers: EventRefreshReceivers,
     worker: EventRefreshWorker,
 ) -> Result<(), std::convert::Infallible> {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.policy(
+            "Resource changes; independent bounded collection and retry lanes",
+            None,
+        );
+    }
     let store = worker.store.clone();
     let refresh = run_refresh_workers(
         &cancellation,

@@ -58,9 +58,6 @@ docker restart citadel-agent
 docker restart edge-agent
 ```
 
-Existing Agent containers must be recreated once with a current generated
-installation command before Citadel can classify and protect them.
-
 Use `docker compose down` only when intentionally stopping the complete
 installation. The System label is a safety boundary in Citadel, not a
 replacement for restricting access to the Docker host.

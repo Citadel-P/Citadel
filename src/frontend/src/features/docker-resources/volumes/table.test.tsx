@@ -2,13 +2,24 @@ import { screen, within } from '@testing-library/react';
 import { renderCitadel } from '@/test/render-citadel';
 import { BackupCoverageStatus, type VolumeView } from '@/api/generated/api.types';
 import { VolumesTable } from './table';
+import { VolumeComponents } from './index';
+import { RegularResourceView } from '@/pages/regular-resource';
+
+const data = vi.hoisted(() => ({ items: [] as VolumeView[] }));
+vi.mock('./hooks/useVolumesGroup', () => ({
+  useVolumesGroup: () => ({ volumes: { volumes: data.items }, isLoading: false }),
+}));
 
 vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPlatform: { id: 'platform' } }) }));
 
-vi.mock('./volume-browser-sheet', () => ({ VolumeBrowserSheet: () => null }));
+vi.mock('./volume-browser-sheet', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./volume-browser-sheet')>()),
+  VolumeBrowserSheet: () => null,
+}));
 
 const volume = (name: string, status?: BackupCoverageStatus): VolumeView => ({
   id: name,
+  isSystem: false,
   capabilities: null,
   clusterVolume: null,
   contentAccessAllowed: true,
@@ -28,6 +39,71 @@ const volume = (name: string, status?: BackupCoverageStatus): VolumeView => ({
   inUse: true,
   containers: [],
   backupCoverage: status ? { status, policyCount: 0, policies: [], canConfigure: true, reasons: [] } : undefined,
+});
+
+it('marks daemon-classified system volumes without inferring ownership from names or content access', () => {
+  renderCitadel(
+    <VolumesTable
+      items={[
+        { ...volume('core-data'), isSystem: true },
+        { ...volume('postgres-data'), isSystem: true, contentAccessAllowed: false },
+        volume('citadel-data'),
+        { ...volume('ordinary-data'), contentAccessAllowed: false },
+      ]}
+      actions={{}}
+      isLoading={false}
+    />,
+  );
+  for (const name of ['core-data', 'postgres-data']) {
+    expect(within(screen.getByText(name).closest('tr')!).getByLabelText('Citadel system volume')).toBeVisible();
+  }
+  for (const name of ['citadel-data', 'ordinary-data']) {
+    expect(
+      within(screen.getByText(name).closest('tr')!).queryByLabelText('Citadel system volume'),
+    ).not.toBeInTheDocument();
+  }
+});
+
+it('filters volume backup coverage in the shared toolbar and follows new snapshots', async () => {
+  data.items = [
+    volume('protected-data', BackupCoverageStatus.Protected),
+    volume('unprotected-data', BackupCoverageStatus.Unprotected),
+    volume('unknown-data'),
+  ];
+  const view = () => (
+    <RegularResourceView
+      type="Volume"
+      Components={{ ...VolumeComponents, DropdownActions: {}, GroupActions: undefined }}
+      showTaskSheet={false}
+    />
+  );
+  const { user, rerender } = renderCitadel(view(), { route: '/platforms/platform/volumes' });
+  expect(screen.getByPlaceholderText('Search volumes…')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Add Volume' })).toBeVisible();
+  expect(
+    within(screen.getByRole('region', { name: 'Volumes filters' })).getByRole('button', { name: 'Backup Filter' }),
+  ).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Backup Filter' }));
+  await user.click(screen.getByRole('option', { name: 'Protected' }));
+  expect(screen.getByText('protected-data')).toBeVisible();
+  expect(screen.queryByText('unprotected-data')).not.toBeInTheDocument();
+  expect(screen.queryByText('unknown-data')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('option', { name: 'Coverage unavailable' }));
+  await user.keyboard('{Escape}');
+  expect(screen.getByText('unknown-data')).toBeVisible();
+
+  data.items = data.items.map((item) =>
+    item.name === 'protected-data' ? volume(item.name, BackupCoverageStatus.Failed) : item,
+  );
+  rerender(view());
+  expect(screen.queryByText('protected-data')).not.toBeInTheDocument();
+  expect(screen.getByText('unknown-data')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Remove Coverage unavailable backup filter' }));
+  expect(screen.getByText('No volumes match the current filters.')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Remove Protected backup filter' }));
+  expect(screen.getByText('protected-data')).toBeVisible();
+  expect(screen.getByText('unprotected-data')).toBeVisible();
+  expect(screen.getByText('unknown-data')).toBeVisible();
 });
 
 it('shows shared backup status labels and colors, including unavailable coverage', () => {

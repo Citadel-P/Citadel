@@ -1204,6 +1204,9 @@
               "null"
             ]
           },
+          "resourceType": {
+            "$ref": "#/components/schemas/AlertResourceType"
+          },
           "severity": {
             "$ref": "#/components/schemas/AlertSeverity"
           },
@@ -1227,6 +1230,7 @@
           "name",
           "description",
           "type",
+          "resourceType",
           "severity",
           "cooldownSeconds",
           "requiredMatches",
@@ -24551,6 +24555,9 @@
           "isStale": {
             "type": "boolean"
           },
+          "isSystem": {
+            "type": "boolean"
+          },
           "labels": {
             "additionalProperties": {
               "type": "string"
@@ -24611,6 +24618,7 @@
           }
         },
         "required": [
+          "isSystem",
           "contentAccessAllowed",
           "id",
           "name",

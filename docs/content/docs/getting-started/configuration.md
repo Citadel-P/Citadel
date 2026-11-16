@@ -107,28 +107,12 @@ and save them in `citadel_data`. `CITADEL_JWT_ISSUER` and `CITADEL_JWT_AUDIENCE`
 follow the public URL when not explicitly configured. Back up the data volume
 with PostgreSQL so these keys remain available during recovery.
 
-Statistics buffering has a shared 64 MiB accounting budget and an 8 MiB estimated
-batch limit. A capture that cannot fit is dropped as a whole and reported in Core's
-runtime metrics and logs; increasing the sample-count batch setting does not bypass
-these byte limits. Sampling continues after a rejected capture. These limits do not
-cap PostgreSQL memory or change the memory figures shown for containers.
-
-Core uses at most three PostgreSQL query connections by default to reduce
-per-session memory. Dedicated notification and background-job lease connections
-are separate. Administrators can change **Maximum query connections per Core** in
-**Administration → Instance → Config → Database connections**, then restart Core.
-Additional sessions allow more concurrent queries but can retain more database memory.
-An explicit `CITADEL_DATABASE_MAX_CONNECTIONS` environment variable takes precedence
-and makes this field deployment-managed. The saved value is an installation-wide
-default; an environment override applies to the individual Core process.
-
-The section also shows a snapshot of this Core's open, borrowed and idle query
-connections, and the connected PostgreSQL server's configured shared-buffer budget.
-These are not cluster-wide counts or current memory measurements. Dedicated background
-connections and other database clients consume additional connection capacity.
-The snapshot does not poll. If the server setting cannot be read, it shows **Unavailable**.
-For external PostgreSQL, your database administrator or provider manages server
-settings and restarts; Citadel does not change them from this page.
+Manage database connections in **Administration → Instance → Config → Database
+connections**. Core defaults to three query connections; increasing the limit
+allows more concurrent queries but can increase PostgreSQL memory use. Restart
+Core after saving. `CITADEL_DATABASE_MAX_CONNECTIONS` overrides the saved value
+for that Core. See [Instance settings](/operations/instance-settings#database-connections)
+for connection counts and database buffer settings.
 
 The packaged Compose files start PostgreSQL with `shared_buffers=64MB`. This is
 the database page-buffer budget, not a total memory limit; query sessions and the
@@ -140,57 +124,35 @@ container with Compose and briefly interrupts database access; preserve its data
 volume. Updating only the Core image does not change an existing Compose file or
 the running PostgreSQL buffer setting.
 
-Statistics and container health history reads share two slots per Core (one with a one-connection query
-pool) and a five-second database statement timeout. Busy or timed-out reads return
-an error; retry, or choose a shorter statistics history range.
-
 For additional options, use the [environment variable reference](/reference/environment-variables).
 Unattended administrator setup is explained in
 [first-run setup](/getting-started/first-run-setup).
 
 ## Allow update checks
 
-Update checks are **on by default**. Choose **Check for Citadel updates** during
-first-run setup or change it in **Administration → Updates → Config** as an
-administrator and select **Save**. This choice applies to the whole installation
-and takes effect without restarting Core.
+Update checks are **on by default**. Administrators can change the saved choice
+and frequency in **Administration → Updates → Config**, without restarting Core.
+Choose **Every 6 hours** (default), **Every 12 hours**, or **Daily**. **Check now**
+performs a single check even when automatic checks are off.
 
-To prohibit release checks through deployment configuration, set this in `.env`
-and [apply the setting change](#apply-a-setting-change):
+Checks find releases for the installed channel and do not install them. Open
+**Updates** to review release notes and the last check result. Failed checks show
+an error and retain the last successful result until another successful check
+or a Core restart.
+
+To prohibit both automatic and manual checks, set this in `.env` and
+[apply the setting change](#apply-a-setting-change):
 
 ```dotenv
 CITADEL_UPDATE_CHECKS_ENABLED=false
 ```
 
-After setup completes, Core checks Citadel's public GitHub release information
-when automatic checks are enabled. In **Administration → Updates → Config**, choose
-**Every 6 hours** (the default), **Every 12 hours**, or **Daily**, then select **Save**.
-The frequency is saved for the installation and takes effect without restarting
-Core. The next check is based on the last completed attempt, including manual
-checks; restarting Core preserves the schedule. Administrators see a small dot beside the sidebar version and a
-notice on Home when a newer release in the installed channel is available.
-Stable installations track stable releases; development versions (`-dev.N`)
-track development releases. Both notifications open **Administration → Updates**, where
-you can read release notes, see the last successful check, and open the
-[upgrade guide](/operations/upgrade-and-rollback).
-Checks do not install updates. With `CITADEL_UPDATE_CHECKS_ENABLED=false`, the UI
-control is disabled and explains that server configuration prevents checks. When
-the variable is true or unset, the saved installation choice controls checks.
-**Check now** performs a single check even when automatic checks are off, provided
-server configuration permits checks. Failed checks retain the last successful
-result and show an error. **Activities** records each discovered release once
-and changes to the check setting. Agents and Edge Agents do not make these requests.
-
-**No telemetry is collected by Citadel through update checks.** Requests send no
-installed version, instance identifiers, configuration, credentials, or usage
-data. Version comparison happens inside Core. GitHub receives normal HTTPS
-connection information, including your server's outbound IP address. The browser
-reads Core's cached result initially, then refreshes it when Core sends a realtime
-change notification or the realtime connection reconnects. Opening release notes or the guide visits the linked website.
-
-Checks require outbound HTTPS to `api.github.com`. A failed or rate-limited
-request does not interrupt Citadel; the last successful result is kept until the
-next successful check or a Core restart.
+Checks start after first-run setup and require outbound HTTPS to `api.github.com`.
+They send no installed version, instance identifiers, credentials, configuration,
+or usage data. GitHub receives normal connection information, including the
+server's outbound IP address. Opening release notes visits the linked website.
+See [upgrade and rollback](/operations/upgrade-and-rollback) for installation
+and scheduling options.
 
 ## Apply a setting change
 

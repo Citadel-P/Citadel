@@ -50,8 +50,7 @@ The **Stats** tab shows container CPU and memory usage, Docker storage filesyste
 capacity, **Network Usage**, and **Disk I/O**. Network and disk I/O offer
 **Accumulated** bytes and **Throughput** in bytes per second. Their summary totals
 cover the selected period in either view. Both default to **Accumulated** and
-remember your selection separately in your browser's localStorage, shared with
-container statistics.
+remember your selection in this browser, shared with container statistics.
 
 Traffic is calculated from changes in each container's counters before adding
 containers together. Restarting, replacing, or removing a container does not
@@ -60,6 +59,4 @@ network interfaces or all disk activity on the host. Disk I/O differs from
 **Disk Usage**, which measures filesystem capacity.
 
 At least two observations of a container are needed to measure traffic. Missing
-block-I/O counters remain unavailable. Older platform samples that do not contain
-individual container counters cannot supply these totals or rates; new samples
-populate the charts. Unobserved activity before a counter reset cannot be recovered.
+block-I/O counters remain unavailable. Readings without individual container counters cannot supply these totals or rates. Unobserved activity before a counter reset cannot be recovered.

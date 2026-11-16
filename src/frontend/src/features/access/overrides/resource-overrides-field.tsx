@@ -251,7 +251,7 @@ const ResourceLinkCell = ({
 };
 
 const ResourceActionsCell = ({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) => (
-  <TableCell>
+  <TableCell className="w-px pr-6 text-right">
     <div className="flex items-center justify-end gap-1">
       <Button variant="ghost" size="icon" onClick={onEdit}>
         <Pencil className="size-4 text-muted-foreground" />
@@ -384,7 +384,7 @@ export const ResourceOverridesField = ({
               <TableHead>Resource</TableHead>
               <TableHead className="w-32">Level</TableHead>
               <TableHead className="flex-1">Capabilities</TableHead>
-              <TableHead className="text-center w-28">Action</TableHead>
+              <TableHead className="w-px pr-6 text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

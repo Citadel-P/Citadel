@@ -1,16 +1,55 @@
 //! Noncritical recurring work starts after one period plus a stable subsecond offset.
 use std::time::Duration;
 
-pub(crate) fn interval(name: &str, period: Duration) -> tokio::time::Interval {
+pub(crate) fn interval(name: &str, period: Duration) -> ObservedInterval {
     let offset = name.bytes().fold(0_u64, |hash, byte| {
         hash.wrapping_mul(31).wrapping_add(u64::from(byte))
     }) % 997;
-    let mut tick = tokio::time::interval_at(
-        tokio::time::Instant::now() + period + Duration::from_millis(offset),
-        period,
-    );
+    let first = tokio::time::Instant::now() + period + Duration::from_millis(offset);
+    let mut tick = tokio::time::interval_at(first, period);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    tick
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy(format!("Every {} seconds", period.as_secs_f64()), None);
+    }
+    ObservedInterval {
+        inner: tick,
+        job,
+        next: Some(first),
+    }
+}
+
+pub(crate) struct ObservedInterval {
+    inner: tokio::time::Interval,
+    next: Option<tokio::time::Instant>,
+    job: Option<citadel_runtime::jobs::JobHandle>,
+}
+impl ObservedInterval {
+    pub fn without_observation(mut self) -> Self {
+        self.job = None;
+        self
+    }
+    pub fn next_deadline(&self) -> Option<tokio::time::Instant> {
+        self.next
+    }
+
+    pub async fn tick(&mut self) -> tokio::time::Instant {
+        if let Some(job) = &self.job {
+            job.waiting("Scheduled check", self.next);
+        }
+        let tick = self.inner.tick().await;
+        let next = tick + self.inner.period();
+        self.next = (next >= tokio::time::Instant::now()).then_some(next);
+        tick
+    }
+    pub fn set_missed_tick_behavior(&mut self, behavior: tokio::time::MissedTickBehavior) {
+        self.inner.set_missed_tick_behavior(behavior);
+    }
+    pub fn reset_after(&mut self, delay: Duration) {
+        let next = tokio::time::Instant::now() + delay;
+        self.inner.reset_at(next);
+        self.next = Some(next);
+    }
 }
 
 #[cfg(test)]

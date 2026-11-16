@@ -221,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 439);
+        assert_eq!(operations(&full), 441);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -243,6 +243,18 @@ mod tests {
         assert!(public["paths"].get(database_path).is_none());
         let operation = &full["paths"][database_path]["get"];
         assert_eq!(operation["operationId"], "getDatabaseConnections");
+        assert_eq!(operation["security"], json!([{"Bearer": []}]));
+        assert_eq!(operation["x-citadel-principal"], "human");
+        let jobs_path = "/api/v1/instance/jobs";
+        assert!(public["paths"].get(jobs_path).is_none());
+        let operation = &full["paths"][jobs_path]["get"];
+        assert_eq!(operation["operationId"], "getInstanceJobs");
+        assert_eq!(operation["security"], json!([{"Bearer": []}]));
+        assert_eq!(operation["x-citadel-principal"], "human");
+        let history_path = "/api/v1/instance/jobs/history";
+        assert!(public["paths"].get(history_path).is_none());
+        let operation = &full["paths"][history_path]["get"];
+        assert_eq!(operation["operationId"], "getInstanceJobHistory");
         assert_eq!(operation["security"], json!([{"Bearer": []}]));
         assert_eq!(operation["x-citadel-principal"], "human");
         assert_eq!(operations(&public), 316);

@@ -12,7 +12,7 @@ pub async fn run_agents(
             return Ok(());
         }
         // Let a claimed attempt settle; shutdown never detaches its cleanup.
-        let delay = match service.poll(&cancellation).await {
+        let delay = match citadel_runtime::jobs::observe(service.poll(&cancellation)).await {
             Ok(delay) => delay,
             Err(error) => {
                 tracing::warn!(%error,"Agent update worker could not finish its current check");

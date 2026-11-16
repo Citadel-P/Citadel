@@ -139,15 +139,6 @@ and output image; the pool supplies the execution host.
 If a build cannot start, check the pool's connection and Docker capability status,
 then see [Build Project troubleshooting](/resources/builds#troubleshooting).
 
-Citadel automatically includes `CITADEL_AGENT_ID` in each Direct Agent install
-command. This UUID identifies the Platform or dedicated Build Pool independently
-of its network address. Keep it when restarting the Agent or changing its address;
-use a separate setup command for each Platform or Build Pool. Requests signed for
-a different ID are rejected, even when Agents have identical addresses on separate
-networks. Edge Agents use enrollment and do not need this setting.
-
-For an existing Platform, copy the command from its Agent Setup section. For an
-inbound Build Pool, save the pool first, then open its configuration to copy the
-command. API clients may obtain a generated `agentId` from
-`GET /api/v1/platforms/agent/setup` and submit it with Direct Platform creation.
-Existing Platform and Build Pool IDs are preserved.
+Keep the identity settings from the generated setup command when restarting an
+Agent or changing its address. Use a separate setup command for each Platform
+or Build Pool.

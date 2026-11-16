@@ -40,11 +40,21 @@ pub async fn run(
     scans: IoBudget,
     stats: super::statistics::StatsIngress,
 ) -> Result<(), std::convert::Infallible> {
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy(
+            "Edge session observations; scoped inventory recovery and statistics",
+            None,
+        );
+    }
     let mut active = HashMap::new();
     let mut tasks = JoinSet::new();
     let mut tick = tokio::time::interval(Duration::from_secs(2));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
+        if let Some(job) = &job {
+            job.waiting("Awaiting Edge session observations", None);
+        }
         tokio::select! {
             () = cancellation.cancelled() => break,
             result = tasks.join_next_with_id(), if !tasks.is_empty() => {
@@ -63,7 +73,7 @@ pub async fn run(
                     let session_id = session.id;
                     let stores=stores.clone(); let realtime=realtime.clone(); let settings=settings.clone(); let scans=scans.clone(); let cancellation=cancellation.child_token();
                     let stats = stats.clone();
-                    let task = tasks.spawn(async move {
+                    let task = tasks.spawn(citadel_runtime::jobs::scope_owned(async move {
                         tokio::select! {
                             ()=cancellation.cancelled()=>{},
                             ()=session.closed()=>{},
@@ -71,7 +81,7 @@ pub async fn run(
                                 if let Err(error)=result { tracing::warn!(%error,platform_id=%session.target.platform_id,"Edge inventory synchronization interrupted"); }
                             }
                         }
-                    });
+                    }));
                     active.insert(task.id(), session_id);
                 }
             }
@@ -91,13 +101,11 @@ async fn monitor(
     stats: super::statistics::StatsIngress,
     cancellation: &CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let ids = stores
-        .projections
-        .invalidate_container_health(
-            session.target.platform_id,
-            session.target.node_id.as_deref(),
-        )
-        .await?;
+    let ids = citadel_runtime::jobs::observe(stores.projections.invalidate_container_health(
+        session.target.platform_id,
+        session.target.node_id.as_deref(),
+    ))
+    .await?;
     if let Some(hub) = &realtime {
         for id in ids {
             hub.publish_container_observation(session.target.platform_id, "healthGap", id);
@@ -143,7 +151,10 @@ async fn observe_stats(
     let runtime = EdgeRuntime {
         session: session.clone(),
     };
-    let mut stream = runtime.stream_container_stats(interval, cancellation)?;
+    let mut stream = citadel_runtime::jobs::observe(async {
+        runtime.stream_container_stats(interval, cancellation)
+    })
+    .await?;
     let mut disk = super::disk::LatestPlatformStats::new(interval);
     let mut disk_updates = if session.target.node_id.is_none() {
         super::disk::samples(runtime, interval, cancellation.clone())
@@ -159,10 +170,19 @@ async fn observe_stats(
         let Some(stats) = stats else {
             break;
         };
-        let stats = stats?;
-        if session.is_closed() {
+        if cancellation.is_cancelled() || session.is_closed() {
             return Ok(());
         }
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
+        let stats = match stats {
+            Ok(stats) => stats,
+            Err(error) => {
+                if let Some(observation) = observation {
+                    observation.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                }
+                return Err(error.into());
+            }
+        };
         let scope = citadel_platforms::stats_ingestion::StatsScope {
             platform_id: session.target.platform_id,
             node_id: session.target.node_id.clone(),
@@ -178,6 +198,16 @@ async fn observe_stats(
         {
             return Ok(());
         }
+        if let Some(observation) = observation {
+            observation.finish(citadel_runtime::jobs::JobOutcome::Completed, None);
+        }
+    }
+    if cancellation.is_cancelled() || session.is_closed() {
+        return Ok(());
+    }
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.begin()
+            .finish(citadel_runtime::jobs::JobOutcome::Failed, None);
     }
     Err("Edge statistics stream ended.".into())
 }
@@ -191,21 +221,26 @@ async fn observe_events(
     refreshes: super::platforms::scoped_reconciler::EventRefreshSender,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let platform_id = session.target.platform_id;
-    let mut platform_type = stores
-        .edge
-        .session_platform_kind(platform_id, session.agent_id, session.connected_at)
-        .await?;
+    let mut platform_type = citadel_runtime::jobs::observe(stores.edge.session_platform_kind(
+        platform_id,
+        session.agent_id,
+        session.connected_at,
+    ))
+    .await?;
     // Workers do not expose manager-only Swarm inventory APIs.
     if session.target.node_id.is_some() {
         platform_type = citadel_platforms::PlatformKind::Docker;
     }
     let store = stores.edge;
-    let mut events = session.command(
-        EdgeCommandKind::PlatformDaemonEventsStream,
-        vec![],
-        OBSERVATION_STREAM_TIMEOUT,
-        true,
-    )?;
+    let mut events = citadel_runtime::jobs::observe(async {
+        session.command(
+            EdgeCommandKind::PlatformDaemonEventsStream,
+            vec![],
+            OBSERVATION_STREAM_TIMEOUT,
+            true,
+        )
+    })
+    .await?;
     use citadel_platforms::jobs::{RecoveryReason, RuntimeRecoveryCoordinator};
     let request = |refresh| super::platforms::event_refresh::ScopedEventRequest {
         platform_id,
@@ -271,7 +306,16 @@ async fn observe_events(
         if cancellation.is_cancelled() || session.is_closed() {
             return Ok(());
         }
-        let (event, observed) = event?;
+        let (event, observed) = match event {
+            Ok(event) => event,
+            Err(error) => {
+                if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                    job.begin()
+                        .finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                }
+                return Err(error);
+            }
+        };
         if edge_state_event(&event) {
             use super::container_batch;
             let Some((batch, carry)) = container_batch::gather(
@@ -307,9 +351,10 @@ async fn observe_events(
                     }
                 })
                 .collect();
-            let unavailable = match store
-                .persist_container_state_deltas(&session, &deltas)
-                .await
+            let unavailable = match citadel_runtime::jobs::observe(
+                store.persist_container_state_deltas(&session, &deltas),
+            )
+            .await
             {
                 Ok(results) => {
                     container_batch::publish(realtime.as_ref(), platform_id, &results);
@@ -332,9 +377,10 @@ async fn observe_events(
         }
         let mut outcome = DeltaOutcome::Unavailable;
         if matches!(event.kind, RuntimeEventKind::Container(_)) {
-            match store
-                .persist_container_event_at(&session, &event, observed)
-                .await
+            match citadel_runtime::jobs::observe(
+                store.persist_container_event_at(&session, &event, observed),
+            )
+            .await
             {
                 Ok(updated) => {
                     if updated.accepted()
@@ -358,7 +404,9 @@ async fn observe_events(
             }
         }
         if let Some(delta) = &event.resource {
-            match store.persist_resource_event(&session, &event).await {
+            match citadel_runtime::jobs::observe(store.persist_resource_event(&session, &event))
+                .await
+            {
                 Ok(updated) => {
                     if updated.accepted() {
                         outcome = DeltaOutcome::Applied;

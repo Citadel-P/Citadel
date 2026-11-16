@@ -71,7 +71,13 @@ pub(crate) async fn platform_health_monitor(
         (citadel_platforms::ConnectorKind, HealthState),
     >::new();
     loop {
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.policy("Every 5 seconds; probes bounded to 2 seconds each", None);
+            job.waiting("Next health cycle", None);
+        }
         tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=ticker.tick()=>{} }
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
+        let mut cycle_failed = false;
         let targets = registry.snapshot().await;
         let edge_ids: Vec<_> = targets
             .iter()
@@ -88,6 +94,7 @@ pub(crate) async fn platform_health_monitor(
             match result {
                 Ok(rows) => rows.into_iter().collect(),
                 Err(error) => {
+                    cycle_failed = true;
                     tracing::warn!(%error,"Edge health lookup failed");
                     std::collections::HashMap::new()
                 }
@@ -148,6 +155,18 @@ pub(crate) async fn platform_health_monitor(
             {
                 return Ok(());
             }
+        }
+        if let Some(i) = observation {
+            i.finish(
+                if cycle_failed {
+                    citadel_runtime::jobs::JobOutcome::Failed
+                } else if targets.is_empty() {
+                    citadel_runtime::jobs::JobOutcome::NoWork
+                } else {
+                    citadel_runtime::jobs::JobOutcome::Productive
+                },
+                (!cycle_failed).then_some((targets.len() as u64, "target checks")),
+            );
         }
     }
 }

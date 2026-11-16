@@ -291,7 +291,14 @@ pub async fn run_license_transition_monitor(
     let mut wake = hub.subscribe();
     loop {
         let now = chrono::Utc::now();
-        let delay = match monitor.check_once().await {
+        let delay = match citadel_runtime::jobs::observe_work(monitor.check_once(), |check| {
+            Some((
+                u64::from(check.persistence == LicenseValidationPersistence::Transitioned),
+                "license transitions",
+            ))
+        })
+        .await
+        {
             Ok(check) => {
                 if check.persistence == LicenseValidationPersistence::Transitioned {
                     // Persistence commits before check_once returns, so the notification can
@@ -352,6 +359,13 @@ pub async fn run_license_transition_monitor(
                 license_transition_delay(now, None)
             }
         };
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.policy("License change or next validity boundary", None);
+            job.waiting(
+                "License change or boundary check",
+                Some(Instant::now() + delay),
+            );
+        }
         tokio::select! {
             () = cancellation.cancelled() => return Ok(()),
             () = tokio::time::sleep(delay) => {}

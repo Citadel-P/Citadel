@@ -1,7 +1,8 @@
 import { ServerCog } from 'lucide-react';
 import type { TabbedResourceComponents } from '@/pages/types';
-import { InstanceStatus } from './status';
+import { BackToTop } from '@/components/custom/back-to-top';
 import { InstanceRestartButton } from './restart';
+import { InstanceJobs } from './jobs';
 import { InstanceActivities } from './activities';
 import { InstanceSettingsForm } from './settings';
 
@@ -10,16 +11,16 @@ export const InstanceComponents: TabbedResourceComponents = {
   access: 'administrator',
   showTaskSheet: true,
   tabsVariant: 'bordered',
-  SubHeader: InstanceStatus,
+  SubHeader: BackToTop,
   header: {
-    subtitle: 'Configure security, monitoring and Core execution defaults.',
+    subtitle: 'Configuration and runtime diagnostics for this Core.',
     variant: 'plain',
     showSearch: false,
     showAdd: false,
-    Actions: InstanceRestartButton,
   },
   Tabs: [
-    { label: 'Config', slug: 'config', Content: InstanceSettingsForm },
+    { label: 'Config', slug: 'config', Content: InstanceSettingsForm, Header: { Extra: InstanceRestartButton } },
+    { label: 'Jobs', slug: 'jobs', Content: InstanceJobs },
     { label: 'Activities', slug: 'activities', Content: InstanceActivities },
   ],
 };

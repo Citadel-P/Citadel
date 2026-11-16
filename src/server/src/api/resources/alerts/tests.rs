@@ -13,6 +13,35 @@ fn rule_input() -> Value {
 }
 
 #[test]
+fn rule_responses_expose_resource_classification_without_changing_write_inputs() {
+    for kind in citadel_alerts::AlertType::ALL {
+        let rule = citadel_alerts::AlertRule {
+            id: Uuid::now_v7(),
+            name: "A user-defined name".into(),
+            description: None,
+            alert_type: kind.to_string(),
+            severity: citadel_alerts::AlertSeverity::Warning,
+            cooldown_seconds: None,
+            required_matches: None,
+            threshold: None,
+            status: AlertRuleStatus::Enabled,
+            channel_ids: vec![],
+            limited_to: vec![],
+            quiet_hours: vec![],
+            audit: citadel_primitives::AuditMetadata {
+                created_by_actor_id: citadel_primitives::ActorId::new(Uuid::now_v7()),
+                created_at: chrono::Utc::now(),
+            },
+        };
+        let view = AlertRuleView::try_from(rule).unwrap();
+        let json = serde_json::to_value(view).unwrap();
+        assert_eq!(json["resourceType"], kind.resource_type().as_str());
+        assert_eq!(json["type"], kind.as_str());
+    }
+    assert!(serde_json::from_value::<AlertRuleInput>(rule_input()).is_ok());
+}
+
+#[test]
 fn typed_rule_round_trips_configuration_and_evaluates_overnight_quiet_hours() {
     let request: AlertRuleInput = serde_json::from_value(rule_input()).unwrap();
     let mut config: citadel_alerts::AlertRuleConfiguration = request.into();

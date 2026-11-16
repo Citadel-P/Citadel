@@ -24,8 +24,14 @@ async fn failing_containers_do_not_delay_images_or_other_platforms_and_shutdown_
     let worker_cancel = cancel.clone();
     let writes = committed.clone();
     let reads = calls.clone();
+    let catalog = citadel_runtime::jobs::JobCatalog::new(uuid::Uuid::now_v7());
+    let job = catalog.register(
+        "event-resource-refresh",
+        "Platform",
+        citadel_runtime::jobs::JobOwnership::Coordinator,
+    );
     let worker = tokio::spawn(async move {
-        run_refresh_workers(
+        job.scope(run_refresh_workers(
             &worker_cancel,
             receivers,
             Duration::from_secs(10),
@@ -43,7 +49,7 @@ async fn failing_containers_do_not_delay_images_or_other_platforms_and_shutdown_
                 writes.lock().unwrap().push(key);
                 async { Ok::<_, &str>(true) }
             },
-        )
+        ))
         .await;
     });
     sender.send(failing, &cancel).await.unwrap();
@@ -59,6 +65,17 @@ async fn failing_containers_do_not_delay_images_or_other_platforms_and_shutdown_
     assert!(committed.lock().unwrap().contains(&image));
     assert!(committed.lock().unwrap().contains(&healthy));
     assert!(!committed.lock().unwrap().contains(&failing));
+    assert_eq!(
+        catalog.snapshot().jobs[0]
+            .last_problem
+            .as_ref()
+            .unwrap()
+            .target
+            .as_ref()
+            .unwrap()
+            .resource_id,
+        failing.platform_id
+    );
     assert_eq!(
         calls
             .lock()
@@ -150,29 +167,44 @@ async fn stalled_container_read_keeps_image_lane_live_and_cancellation_drops_the
         }
     }
     let (drop_count, commits, token) = (dropped.clone(), writes.clone(), cancel.clone());
+    let catalog = citadel_runtime::jobs::JobCatalog::new(uuid::Uuid::now_v7());
+    let job = catalog.register(
+        "event-resource-refresh",
+        citadel_primitives::JobCategory::Platform,
+        citadel_runtime::jobs::JobOwnership::Coordinator,
+    );
     let worker = tokio::spawn(async move {
-        run_refresh_workers(
-            &token,
-            receivers,
-            Duration::from_secs(10),
-            |key| {
-                let drop_count = drop_count.clone();
-                async move {
-                    if key == container {
-                        let _guard = ReadGuard(drop_count);
-                        std::future::pending::<()>().await;
+        job.scope(async {
+            run_refresh_workers(
+                &token,
+                receivers,
+                Duration::from_secs(10),
+                |key| {
+                    let drop_count = drop_count.clone();
+                    async move {
+                        if key == container {
+                            let _guard = ReadGuard(drop_count);
+                            std::future::pending::<()>().await;
+                        }
+                        Ok::<_, &str>(Some(()))
                     }
-                    Ok::<_, &str>(Some(()))
-                }
-            },
-            |key, ()| {
-                assert_eq!(key, image);
-                commits.fetch_add(1, Ordering::SeqCst);
-                async { Ok::<_, &str>(true) }
-            },
-        )
-        .await;
+                },
+                |key, ()| {
+                    assert_eq!(key, image);
+                    commits.fetch_add(1, Ordering::SeqCst);
+                    async { Ok::<_, &str>(true) }
+                },
+            )
+            .await;
+        })
+        .await
     });
+    tokio::task::yield_now().await;
+    assert_eq!(
+        catalog.snapshot().jobs[0].state,
+        citadel_runtime::jobs::JobState::Waiting
+    );
+    assert_eq!(catalog.snapshot().jobs[0].iterations, 0);
     sender.send(container, &cancel).await.unwrap();
     sender.send(image, &cancel).await.unwrap();
     tokio::task::yield_now().await;
@@ -182,9 +214,20 @@ async fn stalled_container_read_keeps_image_lane_live_and_cancellation_drops_the
     }
     assert_eq!(writes.load(Ordering::SeqCst), 1);
     assert_eq!(dropped.load(Ordering::SeqCst), 0);
+    let running = catalog.snapshot().jobs.remove(0);
+    assert_eq!(running.state, citadel_runtime::jobs::JobState::Running);
+    assert_eq!(running.active_iterations, 1);
+    assert_eq!(running.iterations, 1);
     cancel.cancel();
     worker.await.unwrap();
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    let stopped = catalog.snapshot().jobs.remove(0);
+    assert_eq!(stopped.active_iterations, 0);
+    assert_eq!(
+        stopped.last_outcome,
+        Some(citadel_runtime::jobs::JobOutcome::Cancelled)
+    );
+    assert_eq!(stopped.failures, 0);
 }
 
 #[tokio::test(start_paused = true)]

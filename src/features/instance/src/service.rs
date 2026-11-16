@@ -8,16 +8,77 @@ use std::sync::Arc;
 
 pub struct InstanceService {
     repository: Arc<dyn InstanceRepository>,
+    jobs: Option<Arc<dyn crate::InstanceJobsReader>>,
+    job_history: Option<Arc<dyn crate::JobHistoryRepository>>,
     restart: Option<Arc<crate::InstanceRestartService>>,
     clock: Arc<dyn Clock>,
     installation_policy: InstallationPolicy,
     installation_changes: tokio::sync::watch::Sender<()>,
 }
 impl InstanceService {
+    pub fn with_job_history(mut self, repository: Arc<dyn crate::JobHistoryRepository>) -> Self {
+        self.job_history = Some(repository);
+        self
+    }
+    pub async fn job_history(
+        &self,
+        principal: &ActorPrincipal,
+        job: Option<&str>,
+        hours: u32,
+    ) -> Result<crate::JobHistory, InstanceError> {
+        if !principal.is_administrator() {
+            return Err(InstanceError::Forbidden);
+        }
+        if !(1..=168).contains(&hours)
+            || job.is_some_and(|v| {
+                v.len() > 128 || !v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            })
+        {
+            return Err(InstanceError::Validation(
+                "Choose a job and a history range between 1 and 168 hours.".into(),
+            ));
+        }
+        self.job_history
+            .as_ref()
+            .ok_or_else(|| InstanceError::Conflict("Job history is unavailable.".into()))?
+            .read(job, hours)
+            .await
+    }
+
+    #[must_use]
+    pub fn with_jobs(mut self, reader: Arc<dyn crate::InstanceJobsReader>) -> Self {
+        self.jobs = Some(reader);
+        self
+    }
+
+    pub fn jobs(&self, principal: &ActorPrincipal) -> Result<crate::JobsSnapshot, InstanceError> {
+        if !principal.is_administrator() {
+            return Err(InstanceError::Forbidden);
+        }
+        self.jobs
+            .as_ref()
+            .map(|r| r.snapshot())
+            .ok_or_else(|| InstanceError::Conflict("Jobs diagnostics are unavailable.".into()))
+    }
+    pub fn job_changes(
+        &self,
+        principal: &ActorPrincipal,
+    ) -> Result<tokio::sync::watch::Receiver<u64>, InstanceError> {
+        if !principal.is_administrator() {
+            return Err(InstanceError::Forbidden);
+        }
+        self.jobs
+            .as_ref()
+            .map(|r| r.changes())
+            .ok_or_else(|| InstanceError::Conflict("Jobs diagnostics are unavailable.".into()))
+    }
+
     #[must_use]
     pub fn new(repository: Arc<dyn InstanceRepository>, clock: Arc<dyn Clock>) -> Self {
         Self {
             repository,
+            jobs: None,
+            job_history: None,
             restart: None,
             clock,
             installation_policy: Default::default(),

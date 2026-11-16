@@ -19,7 +19,7 @@ pub(super) async fn verify_automatic_apply(
     applied.store(false, Ordering::Release);
     digests.same_content.store(true, Ordering::Relaxed);
     service
-        .run_scheduled_update_checks(&CancellationToken::new())
+        .run_scheduled_update_checks(&CancellationToken::new(), |_| {})
         .await
         .unwrap();
     let current = store
@@ -42,10 +42,14 @@ pub(super) async fn verify_automatic_apply(
     );
     digests.same_content.store(false, Ordering::Relaxed);
     digests.content_unavailable.store(true, Ordering::Relaxed);
+    let problems = std::sync::Mutex::new(Vec::new());
     service
-        .run_scheduled_update_checks(&CancellationToken::new())
+        .run_scheduled_update_checks(&CancellationToken::new(), |id| {
+            problems.lock().unwrap().push(id)
+        })
         .await
         .unwrap();
+    assert_eq!(*problems.lock().unwrap(), vec![id]);
     let failed = store
         .get_authorized(admin.actor_id, true, id)
         .await
@@ -66,10 +70,17 @@ pub(super) async fn verify_automatic_apply(
         sqlx::query("UPDATE deployments SET spec=jsonb_set(jsonb_set(spec::jsonb,'{UpdateBehavior}','\"AutoDeploy\"'::jsonb),'{Image,ResolvedDigest}',to_jsonb($2::text))::json WHERE id=$1")
             .bind(id).bind(format!("sha256:{}", "a".repeat(64))).execute(pool).await.unwrap();
         fail.store(should_fail, Ordering::Release);
+        problems.lock().unwrap().clear();
         service
-            .run_scheduled_update_checks(&CancellationToken::new())
+            .run_scheduled_update_checks(&CancellationToken::new(), |id| {
+                problems.lock().unwrap().push(id)
+            })
             .await
             .unwrap();
+        assert_eq!(
+            *problems.lock().unwrap(),
+            if should_fail { vec![id] } else { vec![] }
+        );
         let current = store
             .get_authorized(admin.actor_id, true, id)
             .await
@@ -287,7 +298,7 @@ pub(super) async fn verify(
     let calls = digests.calls.load(Ordering::Relaxed);
     entitlement.0.store(false, Ordering::Relaxed);
     service
-        .run_scheduled_update_checks(&CancellationToken::new())
+        .run_scheduled_update_checks(&CancellationToken::new(), |_| {})
         .await
         .unwrap();
     assert_eq!(
@@ -297,7 +308,7 @@ pub(super) async fn verify(
     );
     entitlement.0.store(true, Ordering::Relaxed);
     service
-        .run_scheduled_update_checks(&CancellationToken::new())
+        .run_scheduled_update_checks(&CancellationToken::new(), |_| {})
         .await
         .unwrap();
     assert_eq!(digests.calls.load(Ordering::Relaxed), calls + 2);

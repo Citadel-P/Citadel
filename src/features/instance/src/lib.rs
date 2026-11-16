@@ -3,6 +3,17 @@
 mod commands;
 pub mod environment;
 mod error;
+mod job_history;
+mod jobs;
+pub use job_history::{
+    JobDiagnosticCapture, JobDiagnosticSource, JobHistory, JobHistoryBatch, JobHistoryBucket,
+    JobHistoryEvent, JobHistoryMaintenance, JobHistoryRecord, JobHistoryRepository,
+    JobHistorySession, history_buckets,
+};
+pub use jobs::{
+    InstanceJobsReader, JobOutcome, JobOwnership, JobProblem, JobState, JobStatus, JobTarget,
+    JobsSnapshot,
+};
 mod model;
 mod read_models;
 mod repository;

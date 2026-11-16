@@ -155,3 +155,21 @@ enum_schema!(
     citadel_primitives::UpdateBehavior,
     [Disabled, Notify, AutoDeploy]
 );
+
+/// Describe the shared vocabulary directly, without a second variant list.
+pub struct JobCategorySchema;
+impl utoipa::ToSchema for JobCategorySchema {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "JobCategory".into()
+    }
+}
+impl utoipa::PartialSchema for JobCategorySchema {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        utoipa::openapi::schema::ObjectBuilder::new()
+            .schema_type(utoipa::openapi::schema::Type::String)
+            .enum_values(Some(citadel_primitives::JobCategory::ALL.iter().map(
+                |category| serde_json::to_value(category).expect("closed vocabulary serializes"),
+            )))
+            .into()
+    }
+}

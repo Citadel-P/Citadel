@@ -115,3 +115,76 @@ describe('DataTable styling', () => {
     expect(screen.getAllByRole('row')[1]).toHaveClass('even:bg-muted/15');
   });
 });
+
+describe('DataTable saved expansion', () => {
+  beforeEach(() => localStorage.clear());
+
+  const data = [{ id: 'parent', name: 'Stack', children: [{ id: 'child', name: 'Container' }] }];
+  const view = (key = 'containers-expanded:one', rows = data) => (
+    <DataTable
+      columns={columns}
+      data={rows}
+      isLoading={false}
+      getSubRows={(row) => row.children}
+      expansionStorageKey={key}
+    />
+  );
+
+  it('restores expansion after remounting without restoring selection, and remembers collapse', () => {
+    const first = render(view());
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Stack' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Container' }));
+    first.unmount();
+
+    const second = render(view());
+    expect(screen.getByText('Container')).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Select Container' })).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Stack' }));
+    second.unmount();
+
+    render(view());
+    expect(screen.queryByText('Container')).not.toBeInTheDocument();
+  });
+
+  it('preserves expansion through filtered snapshots and keeps storage keys isolated', () => {
+    const { rerender } = render(view());
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Stack' }));
+    rerender(view('containers-expanded:one', []));
+    rerender(view());
+    expect(screen.getByText('Container')).toBeVisible();
+    rerender(view('containers-expanded:two'));
+    expect(screen.queryByText('Container')).not.toBeInTheDocument();
+    rerender(view('alert-rules-expanded'));
+    expect(screen.queryByText('Container')).not.toBeInTheDocument();
+    rerender(view());
+    expect(screen.getByText('Container')).toBeVisible();
+  });
+
+  it.each(['{invalid', 'null', '[]', '"expanded"', '{"parent":"true"}'])(
+    'ignores malformed stored expansion: %s',
+    (stored) => {
+      localStorage.setItem('containers-expanded:one', stored);
+      render(view());
+      expect(screen.queryByText('Container')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Expand Stack' }));
+      expect(screen.getByText('Container')).toBeVisible();
+    },
+  );
+
+  it('still expands when storage access is blocked', () => {
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('Storage disabled');
+    });
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage disabled');
+    });
+    try {
+      render(view());
+      fireEvent.click(screen.getByRole('button', { name: 'Expand Stack' }));
+      expect(screen.getByText('Container')).toBeVisible();
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
+  });
+});

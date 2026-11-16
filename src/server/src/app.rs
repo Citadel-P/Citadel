@@ -91,8 +91,10 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
     .await??;
     #[cfg(target_os = "linux")]
     if let Some(setup) = automatic_setup {
-        supervisor.spawn(
+        supervisor.spawn_scoped(
             "automatic-update-setup",
+            citadel_primitives::JobCategory::Updates,
+            citadel_runtime::jobs::JobOwnership::ProcessLocal,
             citadel_server::workers::updates::run_automatic_setup(
                 crate::composition::updates::registration(
                     setup,
@@ -108,11 +110,15 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
     // the advisory lease remains held through worker/dynamic-task cleanup.
     let (lease_return, lease_retained) = tokio::sync::oneshot::channel();
     let lease_cancel = cancellation.clone();
-    supervisor.spawn("core-job-lease", async move {
-        let connection = startup::watch_job_lease(job_lease, lease_cancel).await?;
-        let _ = lease_return.send(connection);
-        Ok::<_, sqlx::Error>(())
-    });
+    supervisor.spawn(
+        "core-job-lease",
+        citadel_primitives::JobCategory::Core,
+        async move {
+            let connection = startup::watch_job_lease(job_lease, lease_cancel).await?;
+            let _ = lease_return.send(connection);
+            Ok::<_, sqlx::Error>(())
+        },
+    );
     let api::Routers {
         http: app,
         edge: edge_app,

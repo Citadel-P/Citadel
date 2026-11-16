@@ -120,6 +120,17 @@ function View() {
   );
 }
 
+it('remembers expanded stacks when returning to Containers', async () => {
+  data.items = data.items.map((item) => ({ ...item, stack: 'wordpress', stackId: 'stack-wordpress' }));
+  const first = renderCitadel(<View />, { route: '/containers' });
+  await first.user.click(screen.getByRole('button', { name: 'Expand stack' }));
+  expect(screen.getByRole('link', { name: 'wordpress-web' })).toBeVisible();
+  first.unmount();
+  renderCitadel(<View />, { route: '/containers' });
+  expect(screen.getByRole('link', { name: 'wordpress-web' })).toBeVisible();
+  expect(localStorage.getItem('containers-expanded:platform')).toContain('stack:stack-wordpress');
+});
+
 it('keeps separate filters and columns without overview counters', async () => {
   renderCitadel(<View />, { route: '/containers?overview=stopped' });
   const toolbar = within(screen.getByRole('region', { name: 'Containers filters' }));

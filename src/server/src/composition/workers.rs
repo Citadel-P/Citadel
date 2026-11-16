@@ -95,16 +95,20 @@ pub async fn register(
     let coverage_listener = citadel_adapters::persistence::postgres::backups::coverage::changes::PostgresCoverageChanges::from_notifications(&dependencies.pool, notifications.scoped(ScopedTopic::Coverage));
     let copy_listener = citadel_adapters::persistence::postgres::resource_copies::changes::PostgresCopyChanges::from_notifications(notifications.scoped(ScopedTopic::Copies));
     let drift_listener = notifications.scoped(ScopedTopic::StackDrift);
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "backup-coverage-realtime",
+        citadel_primitives::JobCategory::Backup,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         crate::workers::backup_coverage::realtime_updates(
             Box::new(coverage_listener),
             dependencies.realtime.clone(),
             cancellation.child_token(),
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "resource-copy-realtime",
+        citadel_primitives::JobCategory::ResourceCopy,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         crate::workers::resource_copies::realtime_updates(
             Box::new(copy_listener),
             dependencies.realtime.clone(),
@@ -113,22 +117,27 @@ pub async fn register(
     );
     supervisor.spawn(
         "resource-copies",
+        citadel_primitives::JobCategory::ResourceCopy,
         crate::workers::resource_copies::run(
             cancellation.child_token(),
             dependencies.copies.clone(),
             notifications.copy_work(),
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "connection-realtime-updates",
+        citadel_primitives::JobCategory::Core,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         crate::workers::connection_events::realtime_updates(
             notifications.connections.subscribe(),
             dependencies.realtime.clone(),
             cancellation.child_token(),
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "database-notifications",
+        citadel_primitives::JobCategory::Core,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         notifications
             .clone()
             .run(Box::new(target_listener), cancellation.child_token()),
@@ -158,10 +167,13 @@ pub async fn register(
     } = dependencies;
     supervisor.spawn(
         "inventory-image-updates",
+        citadel_primitives::JobCategory::Image,
         crate::workers::image_updates::run(cancellation.child_token(), image_updates),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "alert-configuration-cache",
+        citadel_primitives::JobCategory::Alert,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         alerts.clone().watch_configuration(
             notifications.subscribe(RuntimeSignal::AlertRules),
             cancellation.child_token(),
@@ -194,8 +206,10 @@ pub async fn register(
         settings.stats_batch_size,
         settings.stats_flush_interval,
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "platform-targets",
+        citadel_primitives::JobCategory::Platform,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         targets.clone().run(
             cancellation.child_token(),
             notifications.subscribe(citadel_runtime::RuntimeSignal::Targets),
@@ -203,6 +217,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "job-alert-observations",
+        citadel_primitives::JobCategory::Alert,
         crate::workers::alerts::observations(
             cancellation.child_token(),
             job_alerts,
@@ -211,10 +226,12 @@ pub async fn register(
     );
     supervisor.spawn(
         "volume-helper-recovery",
+        citadel_primitives::JobCategory::Volume,
         crate::workers::volume_helpers::reconcile(cancellation.child_token(), volume_content),
     );
     supervisor.spawn(
         "container-operation-reconciliation",
+        citadel_primitives::JobCategory::Container,
         crate::workers::containers::reconcile(
             cancellation.child_token(),
             containers.clone(),
@@ -223,6 +240,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "swarm-task-pruning",
+        citadel_primitives::JobCategory::SwarmService,
         crate::workers::pruning::run(
             admission.clone(),
             cancellation.child_token(),
@@ -233,6 +251,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "stack-event-drift",
+        citadel_primitives::JobCategory::Stack,
         crate::workers::stacks::event_drift(
             admission.clone(),
             cancellation.child_token(),
@@ -243,6 +262,7 @@ pub async fn register(
     let git_completed = git.subscribe_completion();
     supervisor.spawn(
         "git-repository-sync",
+        citadel_primitives::JobCategory::GitRepository,
         crate::workers::git::git_repository_sync(
             admission.clone(),
             cancellation.child_token(),
@@ -252,6 +272,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "scripts-runs",
+        citadel_primitives::JobCategory::Script,
         crate::workers::scripts::script_runs(
             admission.clone(),
             cancellation.child_token(),
@@ -261,10 +282,12 @@ pub async fn register(
     );
     supervisor.spawn(
         "scripts-cleanup",
+        citadel_primitives::JobCategory::Script,
         crate::workers::scripts::script_cleanup(cancellation.child_token(), Arc::clone(&scripts)),
     );
     supervisor.spawn(
         "scripts-scheduler",
+        citadel_primitives::JobCategory::Script,
         crate::workers::scripts::script_scheduler(
             admission.clone(),
             cancellation.child_token(),
@@ -273,6 +296,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "platform-threshold-alerts",
+        citadel_primitives::JobCategory::Alert,
         crate::workers::stats_alerts::run(
             cancellation.child_token(),
             metric_alerts,
@@ -283,6 +307,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "alert-deliveries",
+        citadel_primitives::JobCategory::Alert,
         crate::workers::alerts::deliveries(
             admission.clone(),
             cancellation.child_token(),
@@ -292,6 +317,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "build-runs",
+        citadel_primitives::JobCategory::Build,
         crate::workers::builds::build_runs(
             admission.clone(),
             cancellation.child_token(),
@@ -301,7 +327,7 @@ pub async fn register(
         ),
     );
     supervisor.spawn(
-        "build-consumers",
+        "build-consumers", citadel_primitives::JobCategory::Build,
         crate::workers::builds::build_consumers(
             admission.clone(),
             cancellation.child_token(),
@@ -323,10 +349,12 @@ pub async fn register(
     );
     supervisor.spawn(
         "build-cleanup",
+        citadel_primitives::JobCategory::Build,
         crate::workers::builds::cleanup_reservations(cancellation.child_token(), builds.clone()),
     );
     supervisor.spawn(
         "build-pool-health",
+        citadel_primitives::JobCategory::Build,
         crate::workers::builds::pool_health(
             cancellation.child_token(),
             builds,
@@ -336,10 +364,12 @@ pub async fn register(
     );
     supervisor.spawn(
         "backup-cleanup",
+        citadel_primitives::JobCategory::Backup,
         crate::workers::backups::cleanup_reservations(cancellation.child_token(), backups.clone()),
     );
     supervisor.spawn(
         "backup-runs",
+        citadel_primitives::JobCategory::Backup,
         crate::workers::backups::backup_runs(
             admission.clone(),
             cancellation.child_token(),
@@ -350,6 +380,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "backup-restore-runs",
+        citadel_primitives::JobCategory::Backup,
         crate::workers::backups::restore_runs(
             admission.clone(),
             cancellation.child_token(),
@@ -360,6 +391,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "backup-policy-scheduler",
+        citadel_primitives::JobCategory::Backup,
         crate::workers::backups::policy_scheduler(
             admission.clone(),
             cancellation.child_token(),
@@ -369,6 +401,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "deployment-apply-reconciliation",
+        citadel_primitives::JobCategory::Deployment,
         crate::workers::deployments::deployment_apply_reconciliation(
             cancellation.child_token(),
             Arc::clone(&deployments),
@@ -377,6 +410,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "deployment-image-updates",
+        citadel_primitives::JobCategory::Deployment,
         crate::workers::deployments::image_updates(
             admission.clone(),
             cancellation.child_token(),
@@ -385,6 +419,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "swarm-service-operation-reconciliation",
+        citadel_primitives::JobCategory::SwarmService,
         crate::workers::swarm_services::swarm_service_operation_reconciliation(
             cancellation.child_token(),
             Arc::clone(&swarm_services),
@@ -393,6 +428,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "swarm-service-active-operations",
+        citadel_primitives::JobCategory::SwarmService,
         crate::workers::swarm_services::observe_active_operations(
             cancellation.child_token(),
             Arc::clone(&swarm_services),
@@ -401,6 +437,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "swarm-service-image-updates",
+        citadel_primitives::JobCategory::SwarmService,
         crate::workers::swarm_services::swarm_service_image_updates(
             admission.clone(),
             cancellation.child_token(),
@@ -409,6 +446,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "stack-operation-reconciliation",
+        citadel_primitives::JobCategory::Stack,
         crate::workers::stacks::stack_operation_reconciliation(
             cancellation.child_token(),
             Arc::clone(&stacks),
@@ -417,6 +455,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "stack-drift-monitor",
+        citadel_primitives::JobCategory::Stack,
         crate::workers::stacks::stack_drift_monitor(
             admission.clone(),
             cancellation.child_token(),
@@ -425,6 +464,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "stack-webhooks",
+        citadel_primitives::JobCategory::Stack,
         crate::workers::stacks::stack_webhooks(
             admission.clone(),
             cancellation.child_token(),
@@ -434,6 +474,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "stack-updates",
+        citadel_primitives::JobCategory::Stack,
         crate::workers::stacks::stack_updates(
             admission.clone(),
             cancellation.child_token(),
@@ -443,6 +484,7 @@ pub async fn register(
     );
     supervisor.spawn(
         "unmanaged-container-alerts",
+        citadel_primitives::JobCategory::Alert,
         crate::workers::unmanaged::run(
             cancellation.child_token(),
             container_reader,
@@ -450,15 +492,13 @@ pub async fn register(
             Box::new(unmanaged_listener),
         ),
     );
-    supervisor.spawn(
-        "maintenance",
-        crate::workers::maintenance::run(
-            cancellation.child_token(),
-            maintenance,
-            realtime.clone(),
-            settings.build_retention_days,
-            settings.retention_interval,
-        ),
+    crate::workers::maintenance::register(
+        supervisor,
+        cancellation.child_token(),
+        maintenance,
+        realtime.clone(),
+        settings.build_retention_days,
+        settings.retention_interval,
     );
     let (sender, receiver) = bounded_channel(settings.queue_capacity, QueueOverflowPolicy::Wait);
     let (local_reconcile_sender, local_reconcile_receiver) =
@@ -472,8 +512,10 @@ pub async fn register(
         full: agent_overflow.clone(),
     };
     let (health_transitions, health_receiver) = bounded_channel(256, QueueOverflowPolicy::Wait);
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "platform-health-monitor",
+        citadel_primitives::JobCategory::Platform,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         platform_health_monitor(
             cancellation.child_token(),
             HealthWorker {
@@ -486,8 +528,10 @@ pub async fn register(
     );
     // Lifecycle and missed-commit recovery are independent of probe scheduling.
     let (event_refresh_sender, event_refresh_receiver) = event_refresh_channels(256);
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "platform-lifecycle-coordinator",
+        citadel_primitives::JobCategory::Platform,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         platform_lifecycle(
             cancellation.child_token(),
             health_receiver,
@@ -500,8 +544,10 @@ pub async fn register(
             },
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "platform-deployment-catch-up",
+        citadel_primitives::JobCategory::Deployment,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         deployment_catch_up(
             cancellation.child_token(),
             targets.clone(),
@@ -509,8 +555,10 @@ pub async fn register(
             realtime.clone(),
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "docker-event-source",
+        citadel_primitives::JobCategory::Container,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         event_source(
             cancellation.child_token(),
             docker.clone(),
@@ -519,8 +567,10 @@ pub async fn register(
         ),
     );
     if let Some(agent) = agent.clone() {
-        supervisor.spawn(
+        supervisor.spawn_scoped(
             "agent-subscriptions",
+            citadel_primitives::JobCategory::Platform,
+            citadel_runtime::jobs::JobOwnership::TargetSession,
             agent_subscriptions(
                 cancellation.child_token(),
                 agent,
@@ -535,8 +585,10 @@ pub async fn register(
             ),
         );
     }
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "event-resource-refresh",
+        citadel_primitives::JobCategory::Platform,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         event_resource_refresh(
             cancellation.child_token(),
             event_refresh_receiver,
@@ -551,8 +603,10 @@ pub async fn register(
             },
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "docker-event-consumer",
+        citadel_primitives::JobCategory::Container,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         event_consumer(
             cancellation.child_token(),
             receiver,
@@ -568,8 +622,10 @@ pub async fn register(
             },
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "platform-inventory-reconciliation",
+        citadel_primitives::JobCategory::Platform,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         inventory_reconciliation(
             cancellation.child_token(),
             InventoryReconciliationWorker {
@@ -581,8 +637,10 @@ pub async fn register(
             },
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "local-container-stats",
+        citadel_primitives::JobCategory::Container,
+        citadel_runtime::jobs::JobOwnership::TargetSession,
         local_container_stats(
             cancellation.child_token(),
             docker,

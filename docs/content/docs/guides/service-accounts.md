@@ -242,8 +242,8 @@ read the protected source and use the configured repository.
 This requires the **Custom access control** capability. Scheduled and
 webhook-triggered backups also require **Automated Operations**.
 
-Manual backups use the authenticated caller. Backups requested from an
-Script use that Action run's identity.
+Manual backups use the authenticated caller. Backups requested from a
+Script use that run's identity.
 
 See [Backups](/resources/backups) for source, repository, scheduling, and restore
 behavior.
@@ -296,4 +296,3 @@ the lost token and create a replacement.
 
 Review **Used by** on the Service Account. Replace or disable each active
 run-as reference, then archive the account again.
-

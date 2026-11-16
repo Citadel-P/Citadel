@@ -15,6 +15,14 @@ pub(crate) async fn agent_subscriptions(
     let mut ticker = tokio::time::interval(Duration::from_secs(5));
     let mut ensure = context.targets.subscription_wakes();
     loop {
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.active_operations(active.len());
+            job.policy(
+                "Target changes, session input and subscription safety check",
+                None,
+            );
+            job.waiting("Waiting for target or session input", None);
+        }
         tokio::select! {
             biased;
             () = cancellation.cancelled() => break,
@@ -58,7 +66,7 @@ pub(crate) async fn agent_subscriptions(
                 let base = base.clone();
                 let context = context.clone();
                 let sender = sender.clone();
-                let task = tasks.spawn(async move {
+                let task = tasks.spawn(citadel_runtime::jobs::scope_owned(async move {
                     // Endpoint failures stay inside this platform's retry loop.
                     loop {
                         let events = agent_event_source(
@@ -85,7 +93,7 @@ pub(crate) async fn agent_subscriptions(
                             break;
                         }
                     }
-                });
+                }));
                 active.insert(id, (address, owned_token, task.id()));
             }
         }

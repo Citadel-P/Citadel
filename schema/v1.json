@@ -1514,6 +1514,9 @@
               "null"
             ]
           },
+          "resourceType": {
+            "$ref": "#/components/schemas/AlertResourceType"
+          },
           "severity": {
             "$ref": "#/components/schemas/AlertSeverity"
           },
@@ -1537,6 +1540,7 @@
           "name",
           "description",
           "type",
+          "resourceType",
           "severity",
           "cooldownSeconds",
           "requiredMatches",
@@ -12137,6 +12141,654 @@
         "required": [
           "name",
           "value"
+        ],
+        "type": "object"
+      },
+      "JobCategory": {
+        "enum": [
+          "Alert",
+          "Build",
+          "Backup",
+          "Script",
+          "GitRepository",
+          "Deployment",
+          "SwarmService",
+          "Stack",
+          "Image",
+          "ResourceCopy",
+          "Volume",
+          "Container",
+          "Updates",
+          "Platform",
+          "Maintenance",
+          "Core",
+          "Other"
+        ],
+        "type": "string"
+      },
+      "JobHistoryBucketView": {
+        "properties": {
+          "at": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "backlog": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "backlogIsLowerBound": {
+            "type": "boolean"
+          },
+          "bootId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "elapsedMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "failures": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "gap": {
+            "type": "boolean"
+          },
+          "iterations": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "noWork": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "noWorkMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "productive": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "productiveMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "resolutionMs": {
+            "description": "Width of this completion window: five minutes or one hour.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "through": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "units": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "bootId",
+          "jobId",
+          "at",
+          "through",
+          "resolutionMs",
+          "iterations",
+          "productive",
+          "noWork",
+          "failures",
+          "elapsedMs",
+          "productiveMs",
+          "noWorkMs",
+          "backlogIsLowerBound",
+          "gap"
+        ],
+        "type": "object"
+      },
+      "JobHistoryEventView": {
+        "properties": {
+          "at": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "problem": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/JobProblemView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sequence": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "jobId",
+          "at",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "JobHistoryRecordView": {
+        "properties": {
+          "bootId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/JobHistoryEventView"
+          }
+        },
+        "required": [
+          "bootId",
+          "event"
+        ],
+        "type": "object"
+      },
+      "JobHistorySessionView": {
+        "properties": {
+          "coreId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "heartbeatAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lostEvents": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/JobsSnapshotView"
+          },
+          "stoppedAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "coreId",
+          "version",
+          "snapshot",
+          "heartbeatAt",
+          "lostEvents"
+        ],
+        "type": "object"
+      },
+      "JobHistoryView": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/JobHistoryBucketView"
+            },
+            "type": "array"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/JobHistoryRecordView"
+            },
+            "type": "array"
+          },
+          "observedAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/JobHistorySessionView"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "observedAt",
+          "sessions",
+          "events",
+          "buckets",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "JobOutcomeView": {
+        "enum": [
+          "completed",
+          "productive",
+          "noWork",
+          "budgetExhausted",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ],
+        "type": "string"
+      },
+      "JobOwnershipView": {
+        "enum": [
+          "processLocal",
+          "coordinator",
+          "targetSession"
+        ],
+        "type": "string"
+      },
+      "JobProblemView": {
+        "properties": {
+          "at": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "target": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/JobTargetView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "at",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "JobStateView": {
+        "enum": [
+          "disabled",
+          "notStarted",
+          "waiting",
+          "running",
+          "backingOff",
+          "stopped",
+          "unavailable"
+        ],
+        "type": "string"
+      },
+      "JobStatusView": {
+        "properties": {
+          "activeIterations": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "activeOperations": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "backlog": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "backlogIsLowerBound": {
+            "type": "boolean"
+          },
+          "budgetExhaustions": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "budgetMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "completedUnits": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "currentStartedAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "failures": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "iterations": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lastCompletedAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastCompletedUnits": {
+            "description": "Work from the last measured check, not the lifetime counter.",
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastDurationMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastFailedUnits": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastFailureAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastOutcome": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/JobOutcomeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastProblem": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/JobProblemView",
+                "description": "Historical report; subsequent scheduler success does not prove this problem resolved."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastProgressAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastStartedAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastSuccessAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lastUnit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxDurationMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nextCheck": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "noWork": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "noWorkDurationMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ownership": {
+            "$ref": "#/components/schemas/JobOwnershipView"
+          },
+          "productive": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "productiveDurationMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/JobCategory"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobStateView"
+          },
+          "totalDurationMs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "trigger": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waitingFor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "resourceType",
+          "ownership",
+          "state",
+          "activeIterations",
+          "iterations",
+          "productive",
+          "noWork",
+          "failures",
+          "budgetExhaustions",
+          "totalDurationMs",
+          "productiveDurationMs",
+          "noWorkDurationMs",
+          "maxDurationMs",
+          "backlogIsLowerBound"
+        ],
+        "type": "object"
+      },
+      "JobTargetView": {
+        "properties": {
+          "containerId": {
+            "description": "Persisted container identity within the Platform target, when known.",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operationId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          }
+        },
+        "required": [
+          "resourceType",
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "JobsSnapshotView": {
+        "properties": {
+          "bootId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "historyRevision": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobStatusView"
+            },
+            "type": "array"
+          },
+          "observedAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "revision": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "startedAt": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bootId",
+          "startedAt",
+          "observedAt",
+          "revision",
+          "historyRevision",
+          "jobs"
         ],
         "type": "object"
       },
@@ -29981,6 +30633,9 @@
           "isStale": {
             "type": "boolean"
           },
+          "isSystem": {
+            "type": "boolean"
+          },
           "labels": {
             "additionalProperties": {
               "type": "string"
@@ -30041,6 +30696,7 @@
           }
         },
         "required": [
+          "isSystem",
           "contentAccessAllowed",
           "id",
           "name",
@@ -51367,6 +52023,205 @@
           }
         ],
         "summary": "Get this Core's database connection snapshot (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false
+      }
+    },
+    "/api/v1/instance/jobs": {
+      "get": {
+        "operationId": "getInstanceJobs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobsSnapshotView"
+                }
+              }
+            },
+            "description": "Process-local job observations"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get this Core's background jobs (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false
+      }
+    },
+    "/api/v1/instance/jobs/history": {
+      "get": {
+        "operationId": "getInstanceJobHistory",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "job",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "hours",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobHistoryView"
+                }
+              }
+            },
+            "description": "Bounded history across Core sessions"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get retained job diagnostics (administrator)",
         "tags": [
           "Instance"
         ],

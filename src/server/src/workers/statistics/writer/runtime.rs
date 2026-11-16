@@ -22,6 +22,17 @@ pub async fn run<T: Send + Sync + 'static>(
         expires: Instant,
         delay: Duration,
     }
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy(
+            format!(
+                "Batch of {} samples or {} seconds after input",
+                settings.batch_size,
+                settings.flush_interval.as_secs_f64()
+            ),
+            Some(Duration::from_secs(10)),
+        );
+    }
     let limit = settings.batch_size.max(1);
     // Retain at most four batches in addition to the bounded producer queue.
     // Telemetry older than two minutes is explicitly expired, never retried forever.
@@ -118,6 +129,7 @@ pub async fn run<T: Send + Sync + 'static>(
                 .drain(..)
                 .map(|row| (row.value, (row.lease, row.encoded)))
                 .unzip();
+            let iteration = citadel_runtime::jobs::JobHandle::iteration();
             let result = tokio::select! {
                 biased;
                 () = cancel.cancelled(), if shutdown.is_none() => None,
@@ -137,6 +149,20 @@ pub async fn run<T: Send + Sync + 'static>(
                 pending.insert(index, work);
                 continue;
             };
+            if let Some(iteration) = iteration {
+                let (outcome, count) = match &result {
+                    Ok(value) => (
+                        if value.persisted == 0 {
+                            citadel_runtime::jobs::JobOutcome::NoWork
+                        } else {
+                            citadel_runtime::jobs::JobOutcome::Productive
+                        },
+                        Some((value.persisted as u64, "samples")),
+                    ),
+                    Err(_) => (citadel_runtime::jobs::JobOutcome::Failed, None),
+                };
+                iteration.finish(outcome, count);
+            }
             match result {
                 Ok(outcome) => {
                     flush.success();
@@ -230,6 +256,17 @@ pub async fn run<T: Send + Sync + 'static>(
             .filter(|p| seen.insert(p.key))
             .map(|p| p.at.min(p.expires))
             .min();
+        if let Some(job) = &job {
+            job.backlog((retained + receiver.len()) as u64, false);
+            job.waiting(
+                if retained == 0 {
+                    "Waiting for input"
+                } else {
+                    "Batch deadline or retry"
+                },
+                deadline.into_iter().chain(next_retry).min(),
+            );
+        }
         tokio::select! {
             biased;
             ()=cancel.cancelled(), if shutdown.is_none()=>{},

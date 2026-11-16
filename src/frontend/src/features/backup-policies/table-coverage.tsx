@@ -6,11 +6,11 @@ import { Shield, ShieldAlert, ShieldCheck, ShieldOff } from 'lucide-react';
 import { ResourceFilterChip, ResourceFilterDropdown } from '@/components/custom/resource-filter';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
-import { backupSummaryStatus } from './coverage';
+import { backupSummaryStatus, type BackupCoverageState } from './coverage';
 import { ResourceBackupIndicator } from './resource-backup-indicator';
 import { ResourceBackupSource } from './resource-backup-summary';
 
-type CoveredResource = { backupCoverage?: ResourceBackupSummaryView | null };
+type CoveredResource = { backupCoverage?: BackupCoverageState | null };
 
 const statuses = [
   { value: 'Protected', label: 'Protected', Icon: ShieldCheck, color: 'text-emerald-600 dark:text-emerald-400' },

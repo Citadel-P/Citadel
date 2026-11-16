@@ -338,6 +338,7 @@ message VolumeResponse {
   repeated ContainerVolumeResult containers = 12;
   // Absent on older Agents: Core must deny generic content access.
   optional bool contentAccessAllowed = 13;
+  bool isSystem = 14;
 }
 
 message UsageDataMessage {

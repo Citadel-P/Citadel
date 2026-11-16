@@ -36,9 +36,30 @@ pub async fn policy_scheduler(
                 return Ok(());
             };
             if options.enabled
-                && let Err(error) = service.queue_due_scheduled(chrono::Utc::now()).await
+                && let Err(error) = citadel_runtime::jobs::observe_work(
+                    service.queue_due_scheduled(chrono::Utc::now()),
+                    |count| Some((*count as u64, "queued operations")),
+                )
+                .await
             {
                 tracing::error!(%error, "Backup Policy scheduler iteration failed");
+            }
+        }
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.policy(
+                format!(
+                    "{} seconds after completion",
+                    options.schedule_interval.as_secs_f64()
+                ),
+                None,
+            );
+            if options.enabled {
+                job.waiting(
+                    "Next backup schedule check",
+                    Some(tokio::time::Instant::now() + options.schedule_interval),
+                );
+            } else {
+                job.disabled("Backup scheduling disabled in Core configuration");
             }
         }
         tokio::select! {
@@ -76,6 +97,9 @@ async fn dispatch_runs(
         }
         // Only this dispatcher polls its queue. The claim carries a shared
         // tracking permit, including while completion persistence is retried.
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.active_operations(controllers.len());
+        }
         if controllers.len() < options.tracking_slots {
             // Copy children belong to an already committed parent, which remains
             // a durable drain blocker. Continue only those when admission closes.
@@ -90,11 +114,21 @@ async fn dispatch_runs(
             let claim = {
                 let _iteration = family.start();
                 if restores && permit.is_none() {
-                    service.claim_copy_restore(&cancellation).await
+                    citadel_runtime::jobs::observe_work(
+                        service.claim_copy_restore(&cancellation),
+                        |v| Some((u64::from(v.is_some()), "claims")),
+                    )
+                    .await
                 } else if restores {
-                    service.claim_restore(&cancellation).await
+                    citadel_runtime::jobs::observe_work(service.claim_restore(&cancellation), |v| {
+                        Some((u64::from(v.is_some()), "claims"))
+                    })
+                    .await
                 } else {
-                    service.claim_backup(&cancellation).await
+                    citadel_runtime::jobs::observe_work(service.claim_backup(&cancellation), |v| {
+                        Some((u64::from(v.is_some()), "claims"))
+                    })
+                    .await
                 }
             };
             match claim {
@@ -148,7 +182,8 @@ pub async fn cleanup_reservations(
 ) -> Result<(), BackupError> {
     let mut cursor = None;
     while !cancellation.is_cancelled() {
-        match service.reconcile_cleanup(cursor, &cancellation).await {
+        match citadel_runtime::jobs::observe(service.reconcile_cleanup(cursor, &cancellation)).await
+        {
             Ok(next) => cursor = next,
             Err(error) => tracing::warn!(%error, "Backup cleanup reconciliation failed"),
         }

@@ -268,6 +268,7 @@ impl TryFrom<wire::Volume> for DockerVolume {
     type Error = DockerError;
     fn try_from(v: wire::Volume) -> Result<Self, Self::Error> {
         Ok(Self {
+            is_system: false,
             content_access_allowed: None,
             name: v.name,
             driver: v.driver,

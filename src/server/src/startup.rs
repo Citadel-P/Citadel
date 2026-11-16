@@ -185,6 +185,10 @@ pub async fn watch_job_lease(
     lease: CoreJobLease,
     token: tokio_util::sync::CancellationToken,
 ) -> Result<CoreJobLease, sqlx::Error> {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.policy("Dedicated database lease watch", None);
+        job.waiting("Monitoring exclusive Core lease", None);
+    }
     lease.watch(token).await
 }
 

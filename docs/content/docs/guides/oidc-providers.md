@@ -362,9 +362,5 @@ Do not enter the authorization endpoint or token endpoint as the issuer URL. Ent
 - Disable providers that are no longer trusted.
 - Use HTTPS for Citadel and the OIDC provider.
 
-
-OIDC login must finish in the browser that started it. Each pending flow uses its
-own HttpOnly, SameSite=Lax correlation cookie (Secure for HTTPS deployments), so
-multiple tabs can authenticate independently. Missing or mismatched cookies reject
-the callback before code exchange or session creation. A failed login does not
-replace an existing refresh cookie.
+Complete OIDC sign-in in the browser that started it, with cookies enabled. If
+the callback fails, start sign-in again from Citadel.

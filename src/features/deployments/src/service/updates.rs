@@ -128,6 +128,7 @@ impl DeploymentService {
     pub async fn run_scheduled_update_checks(
         &self,
         cancellation: &CancellationToken,
+        on_problem: impl Fn(Uuid) + Send + Sync,
     ) -> Result<(), DeploymentError> {
         // Detection/Notify is available in Community. Gate only automatic Apply.
         let actor = ActorId::new(Uuid::from_u128(1));
@@ -163,6 +164,15 @@ impl DeploymentService {
                         .await?;
                     if checked.spec != before.spec || checked.platform_id != before.platform_id {
                         return Ok(());
+                    }
+                    if checked
+                        .auto_update_state
+                        .as_ref()
+                        .is_some_and(|state| state.status == AutoUpdateStatus::Failed)
+                        && !cancellation.is_cancelled()
+                        && !self.shutdown.is_cancelled()
+                    {
+                        on_problem(id);
                     }
                     if !checked
                         .auto_update_state
@@ -212,11 +222,20 @@ impl DeploymentService {
                         },
                     )
                     .await;
+                    if matches!(applied, Ok(false))
+                        && !cancellation.is_cancelled()
+                        && !self.shutdown.is_cancelled()
+                    {
+                        on_problem(id);
+                    }
                     applied?;
                     Ok::<_, DeploymentError>(())
                 }
                 .await;
                 if let Err(error) = result {
+                    if !cancellation.is_cancelled() && !self.shutdown.is_cancelled() {
+                        on_problem(id);
+                    }
                     tracing::warn!(%id, %error, "Deployment image update check failed");
                 }
             }

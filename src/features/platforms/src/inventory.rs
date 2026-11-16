@@ -43,6 +43,8 @@ pub struct RuntimeNetworkSummary {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RuntimeVolumeSummary {
+    #[serde(default)]
+    pub is_system: bool,
     /// Fresh owner-daemon storage policy; absent on older Agents/projections.
     #[serde(default)]
     pub content_access_allowed: Option<bool>,

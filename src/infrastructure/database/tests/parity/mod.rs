@@ -7,6 +7,7 @@ mod coarse_history;
 mod container_io;
 mod health_retention;
 mod instance_settings;
+mod job_history;
 mod memory_breakdown;
 mod query_indexes;
 mod statistics_storage;

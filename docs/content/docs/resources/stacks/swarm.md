@@ -62,7 +62,7 @@ the same deployment checks. It does not restore application data. An unpinned
 Git source can resolve to a newer branch commit; see the
 [Git rollback limitations](/resources/stacks/git#rollback) before using it.
 Citadel records owned Secret and Config IDs after a healthy deployment, but
-the current Rust rollback path does not restore those recorded IDs or manage
+rollback does not restore those recorded IDs or manage
 a configurable retention window for them. Keep required Docker Secrets and
 Configs available and review their references before rollback.
 
@@ -73,8 +73,7 @@ record is removed only after runtime cleanup is confirmed, so a retry resumes
 from Docker's observed state.
 
 Native Docker Secrets and Configs can be referenced in the Compose definition.
-Citadel's **Mounted file** binding option is not connected to the current Rust
-Stack deployment path. Use supported Compose secret references or
+Citadel's **Mounted file** binding option is not currently supported for Stack deployment. Use supported Compose secret references or
 environment-variable bindings; see
 [secret delivery modes](/guides/variables-and-secrets#delivery-mode).
 

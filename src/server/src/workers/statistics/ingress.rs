@@ -39,6 +39,7 @@ pub fn register(
     };
     supervisor.spawn(
         "container-stats-writer",
+        citadel_primitives::JobCategory::Container,
         writer::run(
             container_queue,
             stores.0,
@@ -51,6 +52,7 @@ pub fn register(
     );
     supervisor.spawn(
         "platform-stats-writer",
+        citadel_primitives::JobCategory::Platform,
         writer::run(
             platform_queue,
             stores.1,

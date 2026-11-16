@@ -44,22 +44,9 @@ management flows; the limits below explain what can be adopted.
 
 ## What Adoption Changes
 
-Adoption creates a Citadel resource and links it to the existing Docker
-container or Compose project.
-
-Adoption does not:
-
-- restart or stop containers
-- recreate containers
-- run Docker Compose
-- pull images
-- rename containers
-- change Docker labels
-- change networks or volumes
-- apply the generated configuration
-
-The existing workload keeps running while you review and save its Citadel
-configuration.
+Adoption saves a Citadel configuration and links it to the running workload.
+It does not restart, recreate, rename, relabel, or deploy Docker resources.
+Review the configuration before a later deployment can apply it.
 
 ## Adopt A Standalone Container
 
@@ -226,11 +213,9 @@ Docker does not retain the original Compose source, interpolation inputs, or
 repository revision, so Citadel never reconstructs them from running Services.
 The selected source is validated with the normal Swarm compatibility checks.
 
-Import reserves the existing Platform and namespace identity and links every
-current Service in one database transaction. It does not run `docker stack
-deploy`, relabel a Service, restart a Task, or change a Docker resource. If the
-namespace changes while the review is open, the import is rejected and no
-partial Stack or ownership link is kept.
+Import links the complete namespace without changing its running Services. If
+the namespace changes during review, import is rejected; review it again before
+retrying.
 
 The first later **Deploy** targets the reserved namespace and establishes normal
 Citadel ownership labels. Review that deployment carefully: the selected Compose

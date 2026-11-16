@@ -112,99 +112,20 @@ The Agent version should be updated together with Citadel Core when build protoc
 
 ## Self-managed Build Pool Agent
 
-A self-managed Build Pool uses the same Citadel Agent runtime, but it is dedicated to builds instead of being configured as a general Docker platform.
-
-Use this when you want builds to run on a separate builder host or in a separate local Agent container.
+A Build Pool runs builds on a dedicated host without registering it as an
+application Platform. Save the pool, then use its generated setup command.
 
 ### Inbound build Agent
 
-Use inbound mode when Citadel Core can reach the builder host over the network.
-
-Save the Build Pool first, then open its configuration and copy its Agent Setup
-command. Citadel fills in the ID and public key automatically. For a dedicated
-builder, adjust the container name and published port as needed. The equivalent
-manual template is:
-
-```bash
-docker run -d \
-  --name citadel-agent-build \
-  --restart=always \
-  -p 9001:9000 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -e CITADEL_CORE_PUBLIC_KEY="..." \
-  -e CITADEL_AGENT_ID="<generated-agent-id>" \
-  AGENT_IMAGE
-```
-
-Use these settings when creating the Build Pool:
-
-```text
-Build Pools -> Add Build Pool
-Provider: Self-managed VM / Static VM
-Connection mode: Inbound Agent endpoint
-Endpoint: http://<builder-host>:9001
-```
-
-On Docker Desktop, if Core runs in Docker on the same host as the build Agent, use:
-
-```text
-http://host.docker.internal:9001
-```
-
-On native Linux, add a host-gateway mapping to the **Core** service and recreate
-Core with the overlay:
-
-```yaml
-services:
-  server:
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-```
-
-Alternatively, attach Core and the Agent to a shared Docker network and use
-`http://citadel-agent-build:9000`. Port **9001** is the published host port;
-**9000** is the Agent's container port. See [Compose networking](https://docs.docker.com/compose/how-tos/networking/).
+Choose **Inbound Agent endpoint** when Core can reach the builder. See
+[inbound Build Pool setup](/resources/build-pools#inbound-agent-endpoint) for
+installation and networking examples.
 
 ### Edge build Agent
 
-Use edge mode when the builder host must not expose an inbound port to Citadel Core.
-
-Create the Build Pool in Citadel first:
-
-```text
-Build Pools -> Add Build Pool
-Provider: Self-managed VM / Static VM
-Connection mode: Edge Agent
-```
-
-Save the pool, then use the pool's **Edge Agent enrollment** section to generate the Docker command. Run that generated command on the builder host. It will look similar to:
-
-```bash
-docker run -d \
-  --name edge-build-agent \
-  --restart=always \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v edge_build_agent_data:/app/data \
-  -e CITADEL_AGENT_MODE="edge" \
-  -e CITADEL_EDGE_AGENT_PROFILE="edge-build-agent" \
-  -e CITADEL_CORE_URL="http://<citadel-core-host>:8001" \
-  -e CITADEL_EDGE_ENROLLMENT_TOKEN="..." \
-  -e CITADEL_EDGE_AGENT_KEY_PATH="/app/data/edge-build-agent.key" \
-  -e CITADEL_EDGE_IDENTITY_PATH="/app/data/edge-build-agent.identity.json" \
-  AGENT_IMAGE
-```
-
-The Edge build Agent is scoped directly to the Build Pool. It is not an Edge Agent platform, and it does not require a Platform resource to exist.
-
-The generated command is authoritative. It includes the correct container name, data volume, token, identity path, and `CITADEL_CORE_URL`.
-
-Use the generated gRPC address. Core listens on container port `8001`; the optional
-[Edge overlay](/getting-started/configuration#edge-agent-access) publishes it
-on host loopback port `18001`. Remote build Agents need
-a reachable, secured address; they cannot use that local-only binding. The browser
-host port `18000` is separate.
-
-Before selecting the pool in a build project, click **Test** on the Build Pool. A ready result confirms the Agent is connected, advertises build capabilities, and can reach Docker.
+Choose **Edge Agent** when the builder must connect outbound. Generate its
+enrollment command from the saved pool, preserving the identity data volume.
+See [Edge Build Pool setup](/resources/build-pools#edge-agent).
 
 ## Create the platform
 
@@ -577,15 +498,6 @@ Copy the latest installation command from the platform setup section and recreat
 For the supported direct TLS setup and private-CA trust, see
 [TLS and secure Agent transport](/operations/tls-and-secure-agent-transport).
 
-Citadel automatically includes `CITADEL_AGENT_ID` in each Direct Agent install
-command. This UUID identifies the Platform or dedicated Build Pool independently
-of its network address. Keep it when restarting the Agent or changing its address;
-use a separate setup command for each Platform or Build Pool. Requests signed for
-a different ID are rejected, even when Agents have identical addresses on separate
-networks. Edge Agents use enrollment and do not need this setting.
-
-For an existing Platform, copy the command from its Agent Setup section. For an
-inbound Build Pool, save the pool first, then open its configuration to copy the
-command. API clients may obtain a generated `agentId` from
-`GET /api/v1/platforms/agent/setup` and submit it with Direct Platform creation.
-Existing Platform and Build Pool IDs are preserved.
+Keep `CITADEL_AGENT_ID` from the generated command when restarting an Agent or
+changing its address. Use a separate setup command for each Platform or Build
+Pool. Edge Agents use enrollment instead.

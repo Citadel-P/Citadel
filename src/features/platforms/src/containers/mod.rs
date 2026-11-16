@@ -604,6 +604,7 @@ impl ContainerMutationService {
     pub async fn reconcile(
         &self,
         cancellation: &CancellationToken,
+        on_unconfirmed: impl Fn(&ContainerClaim) + Send + Sync,
     ) -> Result<(), RuntimeCapabilityError> {
         for claim in self.store.stale().await? {
             if cancellation.is_cancelled() {
@@ -626,10 +627,15 @@ impl ContainerMutationService {
                 Ok::<_, RuntimeCapabilityError>(())
             };
             // A disconnected node is not evidence that its containers have stopped or disappeared.
-            if !matches!(
+            let confirmed = matches!(
                 tokio::time::timeout(CONTAINER_OPERATION_TIMEOUT, work).await,
                 Ok(Ok(()))
-            ) && !cancellation.is_cancelled()
+            );
+            if !confirmed && !cancellation.is_cancelled() {
+                on_unconfirmed(&claim);
+            }
+            if !confirmed
+                && !cancellation.is_cancelled()
                 && chrono::Utc::now()
                     .timestamp()
                     .saturating_sub(claim.started_at)

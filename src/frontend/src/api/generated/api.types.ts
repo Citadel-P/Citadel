@@ -547,6 +547,52 @@ export enum LicenseCapability {
   ElasticBuildExecution = "ElasticBuildExecution",
 }
 
+export enum JobStateView {
+  Disabled = "disabled",
+  NotStarted = "notStarted",
+  Waiting = "waiting",
+  Running = "running",
+  BackingOff = "backingOff",
+  Stopped = "stopped",
+  Unavailable = "unavailable",
+}
+
+export enum JobOwnershipView {
+  ProcessLocal = "processLocal",
+  Coordinator = "coordinator",
+  TargetSession = "targetSession",
+}
+
+export enum JobOutcomeView {
+  Completed = "completed",
+  Productive = "productive",
+  NoWork = "noWork",
+  BudgetExhausted = "budgetExhausted",
+  Failed = "failed",
+  Cancelled = "cancelled",
+  Interrupted = "interrupted",
+}
+
+export enum JobCategory {
+  Alert = "Alert",
+  Build = "Build",
+  Backup = "Backup",
+  Script = "Script",
+  GitRepository = "GitRepository",
+  Deployment = "Deployment",
+  SwarmService = "SwarmService",
+  Stack = "Stack",
+  Image = "Image",
+  ResourceCopy = "ResourceCopy",
+  Volume = "Volume",
+  Container = "Container",
+  Updates = "Updates",
+  Platform = "Platform",
+  Maintenance = "Maintenance",
+  Core = "Core",
+  Other = "Other",
+}
+
 export enum ImageWorkloadKind {
   Deployment = "Deployment",
   Stack = "Stack",
@@ -1549,6 +1595,7 @@ export interface AlertRuleView {
   quietHours: AlertQuietHour[];
   /** @format int32 */
   requiredMatches: number | null;
+  resourceType: AlertResourceType;
   severity: AlertSeverity;
   status: AlertRuleStatus;
   /** @format double */
@@ -4293,6 +4340,319 @@ export interface InstanceRestartView {
 export interface InternalSecretInput {
   name: string;
   value: string;
+}
+
+export interface JobHistoryBucketView {
+  /**
+   * @format int64
+   * @min 0
+   */
+  at: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  backlog?: number | null;
+  backlogIsLowerBound: boolean;
+  /** @format uuid */
+  bootId: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  elapsedMs: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  failures: number;
+  gap: boolean;
+  /**
+   * @format int64
+   * @min 0
+   */
+  iterations: number;
+  jobId: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  noWork: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  noWorkMs: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  productive: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  productiveMs: number;
+  /**
+   * Width of this completion window: five minutes or one hour.
+   * @format int64
+   * @min 0
+   */
+  resolutionMs: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  through: number;
+  unit?: string | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  units?: number | null;
+}
+
+export interface JobHistoryEventView {
+  /**
+   * @format int64
+   * @min 0
+   */
+  at: number;
+  jobId: string;
+  kind: string;
+  problem?: JobProblemView | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  sequence: number;
+}
+
+export interface JobHistoryRecordView {
+  /** @format uuid */
+  bootId: string;
+  event: JobHistoryEventView;
+}
+
+export interface JobHistorySessionView {
+  /** @format uuid */
+  coreId: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  heartbeatAt: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lostEvents: number;
+  snapshot: JobsSnapshotView;
+  /**
+   * @format int64
+   * @min 0
+   */
+  stoppedAt?: number | null;
+  version: string;
+}
+
+export interface JobHistoryView {
+  buckets: JobHistoryBucketView[];
+  events: JobHistoryRecordView[];
+  /**
+   * @format int64
+   * @min 0
+   */
+  observedAt: number;
+  sessions: JobHistorySessionView[];
+  truncated: boolean;
+}
+
+export interface JobProblemView {
+  /**
+   * @format int64
+   * @min 0
+   */
+  at: number;
+  summary: string;
+  target?: JobTargetView | null;
+}
+
+export interface JobStatusView {
+  /**
+   * @format int64
+   * @min 0
+   */
+  activeIterations: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  activeOperations?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  backlog?: number | null;
+  backlogIsLowerBound: boolean;
+  /**
+   * @format int64
+   * @min 0
+   */
+  budgetExhaustions: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  budgetMs?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  completedUnits?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  currentStartedAt?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  failures: number;
+  id: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  iterations: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lastCompletedAt?: number | null;
+  /**
+   * Work from the last measured check, not the lifetime counter.
+   * @format int64
+   * @min 0
+   */
+  lastCompletedUnits?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lastDurationMs?: number | null;
+  lastError?: string | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lastFailedUnits?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lastFailureAt?: number | null;
+  lastOutcome?: JobOutcomeView | null;
+  /** Historical report; subsequent scheduler success does not prove this problem resolved. */
+  lastProblem?: JobProblemView | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lastProgressAt?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lastStartedAt?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  lastSuccessAt?: number | null;
+  lastUnit?: string | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  maxDurationMs: number;
+  name: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  nextCheck?: number | null;
+  /**
+   * @format int64
+   * @min 0
+   */
+  noWork: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  noWorkDurationMs: number;
+  ownership: JobOwnershipView;
+  /**
+   * @format int64
+   * @min 0
+   */
+  productive: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  productiveDurationMs: number;
+  resourceType: JobCategory;
+  state: JobStateView;
+  /**
+   * @format int64
+   * @min 0
+   */
+  totalDurationMs: number;
+  trigger?: string | null;
+  unit?: string | null;
+  waitingFor?: string | null;
+}
+
+export interface JobTargetView {
+  /**
+   * Persisted container identity within the Platform target, when known.
+   * @format uuid
+   */
+  containerId?: string | null;
+  /** @format uuid */
+  operationId?: string | null;
+  /** @format uuid */
+  resourceId: string;
+  resourceType: ResourceType;
+}
+
+export interface JobsSnapshotView {
+  /** @format uuid */
+  bootId: string;
+  /**
+   * @format int64
+   * @min 0
+   */
+  historyRevision: number;
+  jobs: JobStatusView[];
+  /**
+   * @format int64
+   * @min 0
+   */
+  observedAt: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  revision: number;
+  /**
+   * @format int64
+   * @min 0
+   */
+  startedAt: number;
 }
 
 export interface KubernetesPlatformDescriptor {
@@ -8663,6 +9023,7 @@ export interface VolumeView {
   id: string;
   inUse: boolean;
   isStale: boolean;
+  isSystem: boolean;
   labels: Record<string, string>;
   mountpoint: string;
   name: string;
@@ -14312,6 +14673,67 @@ export class Api<
       this.request<DatabaseConnectionsView, ProblemDetails>({
         path: `/api/v1/instance/database-connections`,
         method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetInstanceJobs
+     * @summary Get this Core's background jobs (administrator)
+     * @request GET:/api/v1/instance/jobs
+     * @secure
+     * @response `200` `JobsSnapshotView` Process-local job observations
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceJobs: (params: RequestParams = {}) =>
+      this.request<JobsSnapshotView, ProblemDetails>({
+        path: `/api/v1/instance/jobs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetInstanceJobHistory
+     * @summary Get retained job diagnostics (administrator)
+     * @request GET:/api/v1/instance/jobs/history
+     * @secure
+     * @response `200` `JobHistoryView` Bounded history across Core sessions
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceJobHistory: (
+      query?: {
+        job?: string | null;
+        /**
+         * @format int32
+         * @min 0
+         */
+        hours?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<JobHistoryView, ProblemDetails>({
+        path: `/api/v1/instance/jobs/history`,
+        method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,

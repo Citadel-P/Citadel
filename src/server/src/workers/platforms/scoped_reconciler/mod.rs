@@ -140,6 +140,9 @@ pub(crate) async fn run_refresh_workers<S, E, C, CF, P, PF>(
     P: Fn(ScopedEventRequest, S) -> PF,
     PF: Future<Output = Result<bool, E>>,
 {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.waiting("Awaiting resource changes or reconciliation retries", None);
+    }
     let dirty = &receivers.dirty;
     tokio::join!(
         run_scope(
@@ -222,6 +225,15 @@ async fn run_scope<S, E, C, CF, P, PF>(
             let generation = Arc::new(AtomicU64::new(0));
             dirty.lock().unwrap().insert(request, generation.clone());
             reads.push(async move {
+                let observation = citadel_runtime::jobs::JobHandle::iteration().map(|i| i.failure_context(
+                    "Platform inventory could not be refreshed. Displayed resources may be out of date.",
+                    citadel_runtime::jobs::JobTarget {
+                        resource_type: "Platform".into(),
+                        resource_id: request.platform_id,
+                        operation_id: None,
+                        container_id: None,
+                    },
+                ));
                 let collected = collect(request).await;
                 let result = if generation.load(Ordering::Relaxed) != 0 {
                     Ok(false)
@@ -232,6 +244,9 @@ async fn run_scope<S, E, C, CF, P, PF>(
                         Err(error) => Err(error),
                     }
                 };
+                if let Some(observation) = observation {
+                    observation.result(&result);
+                }
                 (request, result)
             });
             continue;

@@ -17,6 +17,7 @@ pub(crate) async fn local_container_stats(
             () = cancellation.cancelled() => return Ok(()),
             _ = ticker.tick() => {}
         }
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
         let _cycle = citadel_runtime::runtime_metrics::RuntimeWork::LocalStats.start();
         let Some(target) = context
             .targets
@@ -26,9 +27,26 @@ pub(crate) async fn local_container_stats(
             .find(|target| target.connector_type == citadel_platforms::ConnectorKind::Local)
             .cloned()
         else {
+            if let Some(i) = observation {
+                i.finish(
+                    citadel_runtime::jobs::JobOutcome::NoWork,
+                    Some((0, "samples")),
+                );
+            }
             continue;
         };
         let platform_id = target.id;
+        let observation = observation.map(|i| {
+            i.failure_context(
+            "Container measurements could not all be collected. Monitoring data may be incomplete.",
+            citadel_runtime::jobs::JobTarget {
+                resource_type: "Platform".into(),
+                resource_id: platform_id,
+                operation_id: None,
+                container_id: None,
+            },
+        )
+        });
         let scope = citadel_platforms::stats_ingestion::StatsScope {
             platform_id,
             node_id: None,
@@ -48,6 +66,9 @@ pub(crate) async fn local_container_stats(
                 if cancellation.is_cancelled() {
                     return Ok(());
                 }
+                if let Some(i) = observation {
+                    i.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                }
                 tracing::warn!(%error, "Local statistics collection failed");
                 continue;
             }
@@ -62,9 +83,18 @@ pub(crate) async fn local_container_stats(
                 "some local container statistics samples failed"
             );
         }
+        let observation = observation.map(|i| i.failed_units(batch.failed_samples as u64));
         if batch.stats.is_empty() && batch.failed_samples != 0 {
+            if let Some(i) = observation {
+                i.finish(
+                    citadel_runtime::jobs::JobOutcome::Failed,
+                    Some((0, "samples")),
+                );
+            }
             continue;
         }
+        let count = batch.stats.len() as u64;
+        let failed = batch.failed_samples != 0;
         let stats = batch.stats;
         let disk = sample.platform;
         if !context
@@ -75,6 +105,18 @@ pub(crate) async fn local_container_stats(
             return Ok(());
         }
         context.metrics.local_stats_sampled();
+        if let Some(i) = observation {
+            i.finish(
+                if failed {
+                    citadel_runtime::jobs::JobOutcome::Failed
+                } else if count == 0 {
+                    citadel_runtime::jobs::JobOutcome::NoWork
+                } else {
+                    citadel_runtime::jobs::JobOutcome::Productive
+                },
+                Some((count, "samples")),
+            );
+        }
     }
 }
 
@@ -147,6 +189,8 @@ pub(crate) async fn agent_container_stats(
             };
             match next {
                 Some(Ok(stats)) => {
+                    let observation = citadel_runtime::jobs::JobHandle::iteration();
+                    let sample_count = stats.len() as u64;
                     let _iteration = RuntimeWork::AgentStats.start();
                     RuntimeWork::AgentStats.units(stats.len() as u64);
                     let scope = citadel_platforms::stats_ingestion::StatsScope {
@@ -164,6 +208,16 @@ pub(crate) async fn agent_container_stats(
                         .await
                     {
                         return Ok(());
+                    }
+                    if let Some(i) = observation {
+                        i.finish(
+                            if sample_count == 0 {
+                                citadel_runtime::jobs::JobOutcome::NoWork
+                            } else {
+                                citadel_runtime::jobs::JobOutcome::Productive
+                            },
+                            Some((sample_count, "samples")),
+                        );
                     }
                     context.metrics.agent_stats_sampled();
                 }

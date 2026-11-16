@@ -27,7 +27,6 @@ a mixed Service. Hiding **Health** in **Columns** also hides and pauses its filt
 Large detail lists show up to 200 containers, with failures first; counts still
 cover all current tasks. Health does not change Apply completion or rollout rules.
 
-
 ## Manage A Swarm Service
 
 Open Citadel's **Swarm Services** page, create a Service, and choose a Docker
@@ -75,9 +74,6 @@ need to change between replicated and global mode.
 
 ### Duplicate
 
-Copy availability is included when the resource list loads and refreshed with
-resource updates. Opening **Duplicate** does not fetch the resource details.
-
 The same **Duplicate** options are available on the resource page, in each list
 row's action menu, and in the bottom action bar when one Swarm Service is selected.
 Choosing **Configuration + data** from the list opens the copy wizard on the
@@ -112,13 +108,10 @@ require Platform write access for both configuration and execution. Review the
 source preview and discovery warnings. Tmpfs, nested mounts, system/runtime paths,
 and writable layers remain excluded. See [Backups](/resources/backups).
 
-Use **Backup Filter** at the right of the resource header to filter by backup status.
-The resource table displays a **Backup** column. Hover over its shield to see
-the same coverage card as on the resource page. Manual-only or disabled policies
-show amber, even after a successful manual run. Green requires an active schedule,
-a ready repository, and a successful available backup for all eligible storage.
-See [Backup coverage](/resources/backups#coverage-on-resource-pages) for all
-status meanings and scheduling requirements.
+Use **Backup Filter** to find resources by coverage status. Open the **Backup**
+shield for policy details. See [Backup coverage](/resources/backups#coverage-on-resource-pages)
+for status meanings; a successful manual backup alone does not mean scheduled
+protection is active.
 
 ## Scale A Replicated Service To Zero
 

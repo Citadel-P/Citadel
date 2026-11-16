@@ -37,3 +37,13 @@ impl From<PatchInstallationSettingsRequest> for citadel_instance::PatchInstallat
 pub struct RestartInstanceRequest {
     pub boot_id: uuid::Uuid,
 }
+
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+pub struct JobHistoryQuery {
+    pub job: Option<String>,
+    #[serde(default = "history_hours")]
+    pub hours: u32,
+}
+fn history_hours() -> u32 {
+    24
+}

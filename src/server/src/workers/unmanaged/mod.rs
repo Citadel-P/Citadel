@@ -16,6 +16,13 @@ pub(crate) async fn run(
     alerts: Arc<dyn AlertEventSink>,
     mut listener: Box<dyn NotificationSource>,
 ) -> Result<(), std::convert::Infallible> {
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy(
+            "Container creation events; grace deadlines and retries",
+            None,
+        );
+    }
     let mut pending = HashMap::<Request, Instant>::new();
     loop {
         if token.is_cancelled() {
@@ -30,6 +37,14 @@ pub(crate) async fn run(
         )
         .await
         {
+            if let Some(job) = &job {
+                job.begin()
+                    .finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                job.waiting(
+                    "Reconnecting container alert notifications",
+                    Some(Instant::now() + Duration::from_secs(2)),
+                );
+            }
             tracing::warn!(%error, "Unmanaged container alert listener failed");
         }
         tokio::select! { ()=token.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_secs(2))=>{} }
@@ -45,6 +60,13 @@ async fn listen(
 ) -> Result<(), NotificationError> {
     loop {
         let deadline = pending.values().copied().min();
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.waiting(
+                "Awaiting container events or grace/retry deadlines",
+                deadline,
+            );
+            job.backlog(pending.len() as u64, false);
+        }
         tokio::select! {
             ()=token.cancelled()=>return Ok(()),
             notification=listener.recv()=> {
@@ -62,7 +84,7 @@ async fn listen(
             }=> {
                 let due: Vec<_> = pending.iter().filter(|(_, due)| **due <= Instant::now()).map(|(request,_)|request.clone()).take(256).collect();
                 for request in due {
-                    match observe(store, alerts, &request).await {
+                    match citadel_runtime::jobs::observe(observe(store, alerts, &request)).await {
                         Ok(())=>{pending.remove(&request);},
                         Err(error)=>{ tracing::warn!(%error, "Unmanaged container Alert evaluation failed"); pending.insert(request, Instant::now()+Duration::from_secs(30)); }
                     }

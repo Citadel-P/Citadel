@@ -4,6 +4,7 @@ use uuid::Uuid;
 /// Validated topic shape. Authorization remains the feature reader's responsibility.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Topic {
+    InstanceJobs,
     Platforms,
     Deployments,
     Stacks,
@@ -67,6 +68,7 @@ impl Topic {
         }
         let parts: Vec<_> = name.split(':').collect();
         Some(match parts.as_slice() {
+            ["instance-jobs"] => Self::InstanceJobs,
             ["platforms"] => Self::Platforms,
             ["deployments"] => Self::Deployments,
             ["stacks"] => Self::Stacks,
@@ -134,6 +136,7 @@ impl Topic {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::InstanceJobs => "instance-jobs",
             Self::Platforms => "platforms",
             Self::Deployments => "deployments",
             Self::Stacks => "stacks",

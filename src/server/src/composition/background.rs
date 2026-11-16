@@ -63,19 +63,22 @@ pub async fn spawn_all(
         license_transition_monitor,
         license_realtime_hub,
     } = services;
-    let mut supervisor = TaskSupervisor::new(cancellation.clone());
+    let mut supervisor = TaskSupervisor::new(cancellation.clone()).with_jobs(state.jobs.clone());
     supervisor.spawn(
         "agent-updates",
+        citadel_primitives::JobCategory::Updates,
         workers::updates::run_agents(state.agent_updates.clone(), cancellation.child_token()),
     );
     if let Some((service, receiver)) = update_installation {
         supervisor.spawn(
             "update-installer",
+            citadel_primitives::JobCategory::Updates,
             workers::updates::run_installation(service, receiver, cancellation.child_token()),
         );
     }
     supervisor.spawn(
         "update-checker",
+        citadel_primitives::JobCategory::Updates,
         citadel_server::workers::updates::run(
             state.updates.clone(),
             state.instance.clone(),
@@ -83,12 +86,16 @@ pub async fn spawn_all(
             cancellation.child_token(),
         ),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "service-account-last-used",
+        citadel_primitives::JobCategory::Core,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         last_used_worker.run(cancellation.child_token()),
     );
-    supervisor.spawn(
+    supervisor.spawn_scoped(
         "license-transition-monitor",
+        citadel_primitives::JobCategory::Core,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
         license_realtime::run_license_transition_monitor(
             cancellation.child_token(),
             license_transition_monitor,
@@ -141,8 +148,8 @@ pub async fn spawn_all(
     )
     .await?;
 
-    supervisor.spawn(
-        "edge-platform-inventory",
+    supervisor.spawn_scoped(
+        "edge-platform-inventory", citadel_primitives::JobCategory::Platform, citadel_runtime::jobs::JobOwnership::TargetSession,
         workers::edge::run(
             cancellation.child_token(),
             edge_registry.clone(),
@@ -161,6 +168,7 @@ pub async fn spawn_all(
     );
     supervisor.spawn(
         "image-scanner",
+        citadel_primitives::JobCategory::Image,
         workers::image_scanning::run(
             state.admission.clone(),
             cancellation.child_token(),
@@ -168,6 +176,42 @@ pub async fn spawn_all(
             deployments.clone(),
             stacks.clone(),
             swarm_services.clone(),
+        ),
+    );
+    let core_id = citadel_adapters::external::instance_jobs::diagnostic_core_id(
+        &config.execution.backups.core_data_path,
+    )
+    .unwrap_or_else(|_| {
+        tracing::warn!("Core diagnostic identity unavailable; using a startup-specific identity");
+        state.jobs.snapshot().boot_id
+    });
+    supervisor.spawn_scoped(
+        "job-diagnostics",
+        citadel_primitives::JobCategory::Core,
+        citadel_runtime::jobs::JobOwnership::ProcessLocal,
+        workers::job_history::run(
+            Arc::new(
+                citadel_adapters::external::instance_jobs::RuntimeInstanceJobs(state.jobs.clone()),
+            ),
+            Arc::new(
+                citadel_adapters::persistence::postgres::instance::PostgresJobHistory(pool.clone()),
+            ),
+            core_id,
+            env!("CITADEL_BUILD_VERSION").into(),
+            cancellation.child_token(),
+        ),
+    );
+    supervisor.spawn(
+        "job-history-maintenance",
+        citadel_primitives::JobCategory::Maintenance,
+        workers::job_history::run_maintenance(
+            Arc::new(
+                citadel_adapters::persistence::postgres::instance::PostgresJobHistory(pool.clone()),
+            ),
+            Arc::new(
+                citadel_adapters::external::instance_jobs::RuntimeInstanceJobs(state.jobs.clone()),
+            ),
+            cancellation.child_token(),
         ),
     );
     Ok(supervisor)

@@ -17,7 +17,10 @@ pub async fn build_consumers(
             };
 
             let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::BuildCompletion.start();
-            service.process_batch(&cancellation).await
+            citadel_runtime::jobs::observe_work(service.process_batch(&cancellation), |count| {
+                Some((*count as u64, "completions"))
+            })
+            .await
         };
         match result {
             Ok(count) if count > 0 => continue,
@@ -35,7 +38,8 @@ pub async fn cleanup_reservations(
 ) -> Result<(), BuildError> {
     let mut cursor = None;
     while !cancellation.is_cancelled() {
-        match service.reconcile_cleanup(cursor, &cancellation).await {
+        match citadel_runtime::jobs::observe(service.reconcile_cleanup(cursor, &cancellation)).await
+        {
             Ok(next) => cursor = next,
             Err(_) => {
                 tracing::warn!("Build cleanup reconciliation could not read pending reservations")
@@ -63,10 +67,12 @@ pub async fn pool_health(
         if let Err(error) = refreshed {
             tracing::warn!(%error, "Direct Build Pool connection reconciliation failed");
         }
-        if let Err(error) = edge.expire_connections().await {
+        if let Err(error) = citadel_runtime::jobs::observe(edge.expire_connections()).await {
             tracing::warn!(%error, "Build Pool connection reconciliation failed");
         }
-        if let Err(error) = service.monitor_pool_health(&cancellation).await {
+        if let Err(error) =
+            citadel_runtime::jobs::observe(service.monitor_pool_health(&cancellation)).await
+        {
             tracing::error!(%error,"Build Pool health monitoring failed");
         }
         tokio::select! {()=cancellation.cancelled()=>break,()=tokio::time::sleep(Duration::from_secs(30))=>{}}
@@ -90,6 +96,9 @@ pub async fn build_runs(
             }
             let mut preparation_busy = false;
             let mut fallback = Duration::from_secs(30);
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.active_operations(controllers.len());
+            }
             if controllers.len() < tracking_slots {
                 let Some(permit) = admission.enter("Builds", &cancellation).await else {
                     break;
@@ -97,18 +106,34 @@ pub async fn build_runs(
                 if let Some(preparation) = service.try_preparation() {
                     // Complete this short durable claim even if shutdown arrives.
                     // A returned claim is always handed to an owned controller.
-                    if let Some(claim) = service.claim_next().await? {
+                    if let Some(claim) =
+                        citadel_runtime::jobs::observe_work(service.claim_next(), |v| {
+                            Some((u64::from(v.is_some()), "claims"))
+                        })
+                        .await?
+                    {
                         citadel_runtime::runtime_metrics::RuntimeWork::BuildPreparation.units(1);
                         let service = service.clone();
                         let cancellation = cancellation.clone();
+                        let job = citadel_runtime::jobs::JobHandle::current();
+                        let target = citadel_runtime::jobs::JobTarget {
+                            resource_type: "Build".into(),
+                            resource_id: claim.run.build_project_id,
+                            operation_id: Some(claim.run.id),
+                            container_id: None,
+                        };
                         controllers.spawn(async move {
                             let _admission = permit;
                             let _tracking =
                                 citadel_runtime::runtime_metrics::RuntimeWork::BuildTracking
                                     .start();
-                            service
+                            let result = service
                                 .execute_claim(claim, preparation, &cancellation)
-                                .await
+                                .await;
+                            if result.is_err() && let Some(job) = job {
+                                job.report_problem("The build controller reported an error. Open the run for its recorded outcome.", target);
+                            }
+                            result
                         });
                         continue;
                     }

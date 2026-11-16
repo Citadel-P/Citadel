@@ -19,7 +19,11 @@ pub async fn run(
             if cursor.is_none() {
                 wake.borrow_and_update();
             }
-            let result = service.process_current_queue(&cancel, &mut cursor).await;
+            let result = citadel_runtime::jobs::observe_work(
+                service.process_current_queue(&cancel, &mut cursor),
+                |worked| Some((u64::from(*worked), "productive queue passes")),
+            )
+            .await;
             let failed = match result {
                 Ok(worked) => {
                     if worked {
@@ -49,7 +53,8 @@ pub async fn run(
                 wake.borrow_and_update();
                 completions.borrow_and_update();
             }
-            let result = service.process(&cancel, &mut cursor).await;
+            let result =
+                citadel_runtime::jobs::observe(service.process(&cancel, &mut cursor)).await;
             let failed = match result {
                 Ok(_) => false,
                 Err(error) => {
@@ -97,11 +102,31 @@ pub async fn realtime_updates(
     realtime: Option<crate::realtime::RealtimeHub>,
     token: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy(
+            "Resource copy change notifications; reconnect after 2 seconds",
+            None,
+        );
+    }
     loop {
+        if let Some(job) = &job {
+            job.waiting("Awaiting resource copy changes", None);
+        }
         let next = tokio::select! { ()=token.cancelled()=>return Ok(()), next=source.next()=>next };
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
         let id = match next {
             Ok(id) => id,
             Err(error) => {
+                if let Some(observation) = observation {
+                    observation.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                }
+                if let Some(job) = &job {
+                    job.waiting(
+                        "Reconnecting resource copy notifications",
+                        Some(tokio::time::Instant::now() + std::time::Duration::from_secs(2)),
+                    );
+                }
                 tracing::warn!(%error, "Resource copy listener reconnecting");
                 if let Some(hub) = &realtime {
                     hub.publish_resource_change(
@@ -116,6 +141,9 @@ pub async fn realtime_updates(
         };
         if let Some(hub) = &realtime {
             hub.publish_resource_change("ResourceCopy", id.unwrap_or_default(), "progressChanged");
+        }
+        if let Some(observation) = observation {
+            observation.finish(citadel_runtime::jobs::JobOutcome::Completed, None);
         }
     }
 }

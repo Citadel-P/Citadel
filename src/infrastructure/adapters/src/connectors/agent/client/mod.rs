@@ -2363,6 +2363,7 @@ pub(crate) fn map_volume(
     volume: citadel_contracts::citadel::shared_models::v1::VolumeResponse,
 ) -> RuntimeVolumeSummary {
     RuntimeVolumeSummary {
+        is_system: volume.is_system,
         content_access_allowed: volume.content_access_allowed,
         name: volume.name,
         in_use: volume.in_use,
@@ -3087,6 +3088,7 @@ mod tests {
     #[test]
     fn volume_mapping_preserves_usage_and_status() {
         let mapped = map_volume(VolumeResponse {
+            is_system: true,
             content_access_allowed: Some(false),
             name: "data".to_owned(),
             in_use: true,
@@ -3106,6 +3108,7 @@ mod tests {
             ..Default::default()
         });
 
+        assert!(mapped.is_system);
         assert_eq!(mapped.content_access_allowed, Some(false));
         assert_eq!(
             map_volume(VolumeResponse::default()).content_access_allowed,

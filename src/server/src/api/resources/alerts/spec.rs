@@ -75,6 +75,25 @@ pub enum AlertResourceType {
     Updates,
     SwarmService,
 }
+impl From<citadel_alerts::AlertResourceType> for AlertResourceType {
+    fn from(value: citadel_alerts::AlertResourceType) -> Self {
+        match value {
+            citadel_alerts::AlertResourceType::Platform => Self::Platform,
+            citadel_alerts::AlertResourceType::Deployment => Self::Deployment,
+            citadel_alerts::AlertResourceType::Stack => Self::Stack,
+            citadel_alerts::AlertResourceType::GitRepository => Self::GitRepository,
+            citadel_alerts::AlertResourceType::Webhook => Self::Webhook,
+            citadel_alerts::AlertResourceType::Script => Self::Script,
+            citadel_alerts::AlertResourceType::Build => Self::Build,
+            citadel_alerts::AlertResourceType::BuildAgentPool => Self::BuildAgentPool,
+            citadel_alerts::AlertResourceType::BackupPolicy => Self::BackupPolicy,
+            citadel_alerts::AlertResourceType::License => Self::License,
+            citadel_alerts::AlertResourceType::Updates => Self::Updates,
+            citadel_alerts::AlertResourceType::SwarmService => Self::SwarmService,
+        }
+    }
+}
+
 impl AlertResourceType {
     pub const fn as_str(self) -> &'static str {
         match self {

@@ -26,7 +26,10 @@ pub(crate) async fn swarm_service_image_updates(
         else {
             return Ok(());
         };
-        if let Err(error) = services.run_scheduled_update_checks(&cancellation).await {
+        if let Err(error) =
+            citadel_runtime::jobs::observe(services.run_scheduled_update_checks(&cancellation))
+                .await
+        {
             if cancellation.is_cancelled() {
                 return Ok(());
             }
@@ -44,9 +47,11 @@ pub(crate) async fn swarm_service_operation_reconciliation(
         super::recovery::RecoveryWake::new("service-recovery", signals, Duration::from_secs(65));
     while wake.next(&cancellation).await {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::ServiceRecovery.start();
-        match services
-            .reconcile_stale_operations(OBSERVABLE_AFTER, MAXIMUM_BATCH)
-            .await
+        match citadel_runtime::jobs::observe_work(
+            services.reconcile_stale_operations(OBSERVABLE_AFTER, MAXIMUM_BATCH),
+            |count| Some((*count as u64, "operations")),
+        )
+        .await
         {
             Ok(count) if count > 0 => {
                 tracing::info!(count, "reconciled managed Swarm Service operations");
@@ -72,9 +77,10 @@ pub(crate) async fn observe_active_operations(
     let mut cycle_has_work = false;
     while wake.next(&cancellation).await {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::ServiceObservation.start();
-        match services
-            .observe_active_operations(cursor, MAXIMUM_BATCH)
-            .await
+        match citadel_runtime::jobs::observe(
+            services.observe_active_operations(cursor, MAXIMUM_BATCH),
+        )
+        .await
         {
             Ok((next, count)) => {
                 cycle_has_work |= count > 0;

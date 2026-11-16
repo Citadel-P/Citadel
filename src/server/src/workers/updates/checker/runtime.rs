@@ -62,6 +62,9 @@ pub(super) async fn run_enabled(
         }
         let schedule = *enabled.borrow_and_update();
         if !schedule.enabled {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.disabled("Automatic update checks disabled");
+            }
             service.clear_notice();
             tokio::select! {
                 biased;
@@ -69,6 +72,15 @@ pub(super) async fn run_enabled(
                 result = enabled.changed() => if result.is_err() { return Ok(()); },
             }
             continue;
+        }
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.policy(
+                format!(
+                    "Every {} hours; anchored to persisted attempt",
+                    schedule.interval_hours
+                ),
+                None,
+            );
         }
         if service.available().is_none() {
             tokio::select! {
@@ -104,6 +116,12 @@ pub(super) async fn run_enabled(
             }
         };
         if !delay.is_zero() {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.waiting(
+                    "Next scheduled update check or configuration change",
+                    Some(tokio::time::Instant::now() + delay),
+                );
+            }
             tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Ok(()),
@@ -112,6 +130,7 @@ pub(super) async fn run_enabled(
             }
             continue;
         }
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
         let attempt_token = cancellation.child_token();
         let attempt = service.check_scheduled(
             ReleaseCheckPolicy {
@@ -136,6 +155,18 @@ pub(super) async fn run_enabled(
             },
             result = &mut attempt => result,
         };
+        if let Some(i) = observation {
+            i.finish(
+                if matches!(&result, Err(UpdateError::Cancelled)) {
+                    citadel_runtime::jobs::JobOutcome::Cancelled
+                } else if result.is_err() {
+                    citadel_runtime::jobs::JobOutcome::Failed
+                } else {
+                    citadel_runtime::jobs::JobOutcome::Completed
+                },
+                None,
+            );
+        }
         let retry = result.is_err();
         if let Err(error) = result
             && !matches!(error, UpdateError::Cancelled)

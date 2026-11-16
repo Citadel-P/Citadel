@@ -50,7 +50,6 @@ a mixed Stack. Hiding **Health** in **Columns** pauses its filter without cleari
 your selection. Large detail lists show up to 200 containers, prioritizing
 failures; summary counts include all current members.
 
-
 ## Interrupted commands
 
 On Unix, cancelling or interrupting a Stack command stops its CLI or hook process
@@ -108,9 +107,6 @@ shows a warning. Use **Check for updates** to retry the check without redeployin
 
 ## Duplicate
 
-Copy availability is included when the resource list loads and refreshed with
-resource updates. Opening **Duplicate** does not fetch the resource details.
-
 The same **Duplicate** options are available on the resource page, in each list
 row's action menu, and in the bottom action bar when one Stack is selected.
 Choosing **Configuration + data** from the list opens the copy wizard on the
@@ -158,13 +154,10 @@ are included in the same policy using actual host paths and exact Nodes.
 Host data requires Platform write access for both configuration and execution. Tmpfs, nested mounts, and
 container writable layers remain excluded.
 
-Use **Backup Filter** at the right of the resource header to filter by backup status.
-The resource table displays a **Backup** column. Hover over its shield to see
-the same coverage card as on the resource page. Manual-only or disabled policies
-show amber, even after a successful manual run. Green requires an active schedule,
-a ready repository, and a successful available backup for all eligible storage.
-See [Backup coverage](/resources/backups#coverage-on-resource-pages) for all
-status meanings and scheduling requirements.
+Use **Backup Filter** to find resources by coverage status. Open the **Backup**
+shield for policy details. See [Backup coverage](/resources/backups#coverage-on-resource-pages)
+for status meanings; a successful manual backup alone does not mean scheduled
+protection is active.
 
 ## Get started
 

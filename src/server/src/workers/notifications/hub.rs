@@ -40,7 +40,12 @@ impl DatabaseNotificationHub {
         token: CancellationToken,
     ) -> Result<(), std::convert::Infallible> {
         loop {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.policy("Database notifications", None);
+                job.waiting("Listening for committed changes", None);
+            }
             let result = tokio::select! { ()=token.cancelled()=>return Ok(()), result=listener.recv()=>result };
+            let mut observation = citadel_runtime::jobs::JobHandle::iteration();
             match result {
                 Ok(RuntimeNotification::Connection(event)) => self
                     .connections
@@ -74,10 +79,16 @@ impl DatabaseNotificationHub {
                 }
                 Ok(_) => {}
                 Err(error) => {
+                    if let Some(i) = observation.take() {
+                        i.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                    }
                     citadel_runtime::runtime_metrics::RuntimeWork::NotificationReconnect.units(1);
                     tracing::warn!(%error, "Database notification hub reconnecting; fallback timers remain active");
                     tokio::select! { ()=token.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_secs(2))=>{} }
                 }
+            }
+            if let Some(i) = observation {
+                i.finish(citadel_runtime::jobs::JobOutcome::Completed, None);
             }
         }
     }
@@ -90,6 +101,17 @@ pub(crate) async fn wait(
     token: &CancellationToken,
     fallback: Duration,
 ) {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.trigger(format!(
+            "Event or fallback after {} seconds",
+            fallback.as_secs_f64()
+        ));
+        job.waiting(
+            "Event or fallback check",
+            Some(tokio::time::Instant::now() + fallback),
+        );
+    }
+
     tokio::select! {
         () = token.cancelled() => {},
         _ = tokio::time::sleep(fallback) => {},

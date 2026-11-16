@@ -170,8 +170,22 @@ async fn run_transitions<E, A, AF>(
     A: Fn(Progress) -> AF,
     AF: Future<Output = (Progress, Result<(), E>)>,
 {
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy(
+            "Confirmed health transitions; retry and offline alert deadlines",
+            None,
+        );
+    }
     let mut pending = BTreeMap::<uuid::Uuid, Pending>::new();
     loop {
+        if let Some(job) = &job {
+            job.waiting(
+                "Awaiting health transitions or retry deadlines",
+                pending.values().map(|entry| entry.due).min(),
+            );
+            job.backlog(pending.len() as u64, false);
+        }
         if pending.is_empty() {
             let Some(transition) = receiver.recv(cancel).await else {
                 return;
@@ -197,6 +211,7 @@ async fn run_transitions<E, A, AF>(
             }
         }
         let entry = pending.remove(&id).unwrap();
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
         let work = apply(entry.progress);
         tokio::pin!(work);
         let (progress, result) = loop {
@@ -210,6 +225,9 @@ async fn run_transitions<E, A, AF>(
                 }
             }
         };
+        if let Some(observation) = observation {
+            observation.result(&result);
+        }
         // Repeated delivery of the same confirmed state must not reset step
         // progress or schedule a second plan after an in-flight effect finishes.
         if pending
@@ -252,7 +270,7 @@ pub(crate) async fn deployment_catch_up(
             let _work = RuntimeWork::LifecycleDeploymentRecovery.start();
             let result = tokio::select! {
                 () = cancel.cancelled() => return Ok(()),
-                result = store.reconcile_deployments(target.id) => result,
+                result = citadel_runtime::jobs::observe_work(store.reconcile_deployments(target.id), |changed| Some((*changed as u64, "deployments"))) => result,
             };
             match result {
                 Ok(changed) if changed > 0 => {

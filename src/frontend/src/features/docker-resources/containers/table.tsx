@@ -100,6 +100,7 @@ export const ContainersTable = ({
 
   return (
     <DataTable
+      expansionStorageKey={currentPlatform?.id ? `containers-expanded:${currentPlatform.id}` : undefined}
       columns={cols}
       data={rows}
       isLoading={isLoading}

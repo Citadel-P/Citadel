@@ -19,6 +19,7 @@ impl DockerClient {
             .await?;
         let policy = StorageProtection::from_containers(&containers);
         for volume in volumes {
+            volume.is_system = policy.is_system(volume);
             volume.content_access_allowed = Some(policy.allows(volume));
         }
         Ok(())
@@ -98,6 +99,18 @@ impl StorageProtection {
         policy
     }
 
+    fn is_system(&self, volume: &DockerVolume) -> bool {
+        volume
+            .labels
+            .get("com.citadel.system")
+            .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+            || volume
+                .labels
+                .get("com.citadel.system-role")
+                .is_some_and(|v| !v.is_empty())
+            || self.volumes.contains(&volume.name)
+    }
+
     fn allows(&self, volume: &DockerVolume) -> bool {
         // Driver options can alias any host directory (including '/', Docker's
         // data root or Core's bind-mounted keys). Plugin backing stores cannot be
@@ -105,15 +118,7 @@ impl StorageProtection {
         !self.incomplete
             && volume.driver == "local"
             && volume.options.is_empty()
-            && !volume
-                .labels
-                .get("com.citadel.system")
-                .is_some_and(|v| v.eq_ignore_ascii_case("true"))
-            && !volume
-                .labels
-                .get("com.citadel.system-role")
-                .is_some_and(|v| !v.is_empty())
-            && !self.volumes.contains(&volume.name)
+            && !self.is_system(volume)
             && (self.bind_sources.is_empty()
                 || (std::path::Path::new(&volume.mountpoint).is_absolute()
                     && !self.bind_sources.iter().any(|source| {
@@ -165,6 +170,8 @@ mod tests {
             }))
             .unwrap();
             let policy = StorageProtection::from_containers(&[container]);
+            assert!(policy.is_system(&volume("custom-secrets")));
+            assert!(!policy.is_system(&volume("workload")));
             assert!(!policy.allows(&volume("custom-secrets")));
             assert!(policy.allows(&volume("workload")));
             assert!(
@@ -182,13 +189,20 @@ mod tests {
                 "Mounts":[{"Type":"volume", "Name":"workload"}]
             }))
             .unwrap();
-            assert!(StorageProtection::from_containers(&[container]).allows(&volume("workload")));
+            let policy = StorageProtection::from_containers(&[container]);
+            assert!(policy.allows(&volume("workload")));
+            assert!(!policy.is_system(&volume("workload")));
         }
         let mut detached = volume("detached");
         detached
             .labels
             .insert("com.citadel.system".into(), "TRUE".into());
+        assert!(StorageProtection::default().is_system(&detached));
         assert!(!StorageProtection::default().allows(&detached));
+        let mut plugin = volume("customer-data");
+        plugin.driver = "plugin".into();
+        assert!(!StorageProtection::default().allows(&plugin));
+        assert!(!StorageProtection::default().is_system(&plugin));
     }
 
     #[test]

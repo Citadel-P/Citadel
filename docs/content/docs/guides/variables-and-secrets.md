@@ -206,25 +206,8 @@ Path: apps/api/prod
 
 Do not enter `secret/apps/api/prod` as the secret path, because Citadel already adds the provider mount path.
 
-Citadel reads:
-
-```text
-GET https://vault.example.com/v1/secret/data/apps/api/prod
-```
-
-and uses this value from the KV v2 response:
-
-```text
-response.data.data["stripe_api_key"]
-```
-
-If you set `Version` to `3`, Citadel reads:
-
-```text
-GET https://vault.example.com/v1/secret/data/apps/api/prod?version=3
-```
-
-Leave version empty to use the latest version from the provider.
+Set **Version** to pin a particular secret version, or leave it empty to use
+the latest version from the provider.
 
 ### Use The External Secret
 
@@ -277,8 +260,8 @@ services:
 
 ### Mounted File
 
-The Stack binding editor exposes **Mounted file**, but the current Rust Stack
-deployment path does not deliver these bindings. A referenced secret using
+The Stack binding editor exposes **Mounted file**, but Citadel does not currently
+deliver these bindings. A referenced secret using
 this mode fails deployment with an environment-variable delivery error;
 an unreferenced binding does not create a file mount.
 
@@ -408,14 +391,6 @@ Use the stack `Config` tab to reference keys in compose content, for example `${
 
 ### Secret use authorization
 
-A secret UUID does not grant permission to use it. Citadel persists the scope in
-which a secret was created and checks that scope when attaching and resolving it.
-Global secrets remain available for intended inheritance. Secrets created for an
-existing resource can be used only in that resource or through an authorized copy.
-Secrets created before a new Build or Backup Repository exists are owned by their
-creator; attachment establishes the destination grant atomically.
-
-The upgrade preserves existing resource-bound uses. Previously unbound internal
-secrets have no provable owner and receive no implicit global grant; recreate them
-in the intended scope if needed. Existing references cannot establish that their
-original attachment was authorized, so review suspicious pre-upgrade bindings.
+Global secrets can be inherited by multiple resources. Resource-specific secrets
+can be used only by their owning resource or through an authorized copy. Creating
+or knowing a secret's identifier does not grant access to use it elsewhere.

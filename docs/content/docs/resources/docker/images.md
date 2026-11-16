@@ -7,14 +7,8 @@ Open a **Platform**, then **Images** to view images available on its Docker host
 A [Registry](/resources/registries) supplies images; this page shows the
 copies stored on the host.
 
-The compact table groups the image name and primary tag in the **Image** column,
-keeping the usage/processing indicator beside the name.
-Select **+N** to see additional tags. **Update status**, **Used by**, and **Size**
-remain visible; Swarm platforms also show **Node**. Use **Columns** beside
-**Pull Image** in the page toolbar to show the
-optional **ID**, **Registry**, and **Created** columns. The copyable image ID is
-hidden by default. These choices are remembered in
-your browser.
+Use **Columns** to choose the image details shown in the list. Your choices are
+remembered in this browser. On Swarm, check the **Node** before acting on an image.
 
 ## Pull an image
 
@@ -27,9 +21,7 @@ selected Registry.
 3. Select **Pull image** and follow the operation's progress.
 4. When it finishes, find the image in the Platform's image list.
 
-Quiet periods during a pull do not add log entries; Citadel sends keepalive data
-to keep the progress connection active. Closing the pull sheet or losing its
-connection cancels the manual pull request. Docker may already have downloaded
+Closing the pull sheet or losing its connection cancels the manual pull request. Docker may already have downloaded
 some or all of the image, so refresh inventory before retrying.
 
 Pulling downloads an image; it does not start a container or update an existing
@@ -77,17 +69,9 @@ a previously selected matching Registry, or a single matching configured Registr
 with none configured they try anonymously. Ambiguous Registry choices require a
 manual check. Untagged, digest-pinned, and Swarm node-local images are excluded.
 
-Results are saved before the Images list and image details are notified. When a
-pull moves a tag to a new image ID, the new image gets its own check; the previous
-image does not inherit the new result. This follows observed Docker inventory,
-regardless of which workload initiated the pull. Scheduled checks only inspect
-metadata; they never pull an image or redeploy a workload.
-
-A successful manual pull invalidates cached comparisons for the observed image,
-even when Docker keeps the same image ID. Citadel refreshes an existing comparison
-for the pulled tag before the progress stream finishes. If that check cannot run,
-the background scan can retry it; a failed metadata check does not undo or fail
-the completed pull.
+After a pull, Citadel checks the downloaded image again. If the metadata check
+fails, the pull remains successful and the background scan can retry the check.
+Scheduled checks never pull images or redeploy workloads.
 
 A tag on a locally built image is not proof that it exists in a Registry. For
 example, `citadel-agent:local` resolves to `docker.io/library/citadel-agent:local`.
@@ -132,8 +116,7 @@ fails, the sheet lets you select Registry credentials and retry, or open Registr
 settings to configure them. Retries are explicit; Citadel does not retry a failed
 pull automatically.
 
-Local, Direct, and Edge standalone hosts support metadata checks. Older Agents
-without the comparison metadata show **Cannot determine**. Registry metadata
+Local, Direct, and Edge standalone hosts support metadata checks. Missing comparison metadata shows **Cannot determine**. Registry metadata
 reads require verified HTTPS; registries that need insecure HTTP, unsupported
 authentication redirects, or ambiguous platform metadata cannot be compared.
 Swarm-node image inspection and usage remain available, but node-local checks and
@@ -141,22 +124,11 @@ contextual pulls are unavailable under the current Agent restrictions.
 
 ## Find image references
 
-The **Used by** column summarizes known container, Deployment, Stack, and managed
-Swarm Service references in workloads you can read. The list response includes
-these summaries; opening the table does not issue a separate request per image.
-**None found** means no known references were found. When coverage is partial,
-hover over or focus the usage link to see the coverage explanation.
-In image details, **Workloads using this image** combines the existing container
-table with managed owners and saved Local image, tag, and digest references.
-Workload links use Citadel's recorded ownership. On Swarm, observed containers are scoped to the selected Node.
-Container states refresh when Citadel receives lifecycle updates. Deployments,
-Stacks, and Swarm Services each have a separate table using the Containers table
-layout. Workload tables and headings are shown only when they have matching
-entries on the current page. Each name has a status indicator from the recorded
-workload status (current release status for Stacks and health for Swarm Services),
-with reference and observation details in the remaining columns. Use the reload
-icon at the right of the **Workloads using this image** heading to refresh
-references.
+The **Used by** column summarizes known containers and managed workloads you can
+read. **None found** means no known references were found; partial coverage is
+marked. Open **Workloads using this image** in image details for the references,
+and use its reload action to refresh them. On Swarm, observed containers belong
+to the selected Node.
 
 Use **More references** in image details to continue through large inventories.
 A page without matches can still offer more references to check;
@@ -174,9 +146,7 @@ Select the image, choose **Delete**, and type the requested confirmation.
 For a single image, enter its name (or its ID if no name is available).
 For bulk deletion, the dialog lists the selected images and asks you to enter
 **Delete**. Click the bold confirmation text to copy it.
-Delete is disabled for images used by containers. Opening the confirmation
-dialog does not make an additional usage-check request.
-Keep images needed by an offline recovery procedure. Removing a local image does
+Delete is disabled for images used by containers. Keep images needed by an offline recovery procedure. Removing a local image does
 not remove it from its Registry.
 
 Deletion from the list and image details is non-forced and does not prune untagged
@@ -188,8 +158,6 @@ with force or automatically remove all tags.
 The backend checks live container usage when deletion is submitted.
 Saved Local image Deployment dependencies also block non-forced deletion, even
 when you cannot read the owning Deployment; hidden workload names are not exposed.
-Configuration saves and deletion claims coordinate on the same image so a new
-Local image dependency cannot be saved while deletion is processing.
 
 Deletion can still be rejected if image usage or permissions have changed.
 Resolve the reported error before retrying. Pulling a newer image moves its tags in the

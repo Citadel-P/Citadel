@@ -47,7 +47,9 @@ pub(crate) async fn stack_updates(
         }
         // Git checks consume newly synchronized refs; image scans run every two
         // hours. Both query bounded keyset pages, without retaining an inventory.
-        if let Err(error) = stacks.run_update_checks(images, &cancellation).await {
+        if let Err(error) =
+            citadel_runtime::jobs::observe(stacks.run_update_checks(images, &cancellation)).await
+        {
             tracing::warn!(%error,"Stack update monitoring failed");
         }
     }
@@ -69,7 +71,10 @@ pub(crate) async fn stack_webhooks(
             };
 
             let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackWebhooks.start();
-            stacks.process_webhooks().await
+            citadel_runtime::jobs::observe_work(stacks.process_webhooks(), |count| {
+                Some((*count as u64, "webhooks"))
+            })
+            .await
         };
         match processed {
             Ok(count) if count > 0 => {
@@ -96,9 +101,11 @@ pub(crate) async fn stack_operation_reconciliation(
     let mut wake = super::recovery::RecoveryWake::new("stack-recovery", signals, OBSERVABLE_AFTER);
     while wake.next(&cancellation).await {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackRecovery.start();
-        match stacks
-            .reconcile_stale_operations(OBSERVABLE_AFTER, MAXIMUM_BATCH)
-            .await
+        match citadel_runtime::jobs::observe_work(
+            stacks.reconcile_stale_operations(OBSERVABLE_AFTER, MAXIMUM_BATCH),
+            |count| Some((*count as u64, "operations")),
+        )
+        .await
         {
             Ok(count) if count > 0 => tracing::info!(count, "reconciled Stack operations"),
             Ok(_) => {}
@@ -127,8 +134,21 @@ pub(crate) async fn stack_drift_monitor(
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackDrift.start();
         let mut cursor = None;
         loop {
+            let observation = citadel_runtime::jobs::JobHandle::iteration();
             match stacks.monitor_drift(cursor, DRIFT_MONITOR_BATCH).await {
                 Ok(result) => {
+                    if let Some(i) = observation {
+                        i.finish(
+                            if !result.failures.is_empty() {
+                                citadel_runtime::jobs::JobOutcome::Failed
+                            } else if result.checked == 0 {
+                                citadel_runtime::jobs::JobOutcome::NoWork
+                            } else {
+                                citadel_runtime::jobs::JobOutcome::Productive
+                            },
+                            Some((result.checked as u64, "stack checks")),
+                        );
+                    }
                     cursor = result.next_cursor;
                     if result.reconciled > 0 {
                         tracing::info!(
@@ -139,6 +159,7 @@ pub(crate) async fn stack_drift_monitor(
                     }
                     let last_page = result.checked < DRIFT_MONITOR_BATCH as usize;
                     for failure in result.failures {
+                        report_drift_problem(failure.stack_id);
                         tracing::warn!(
                             stack_id = %failure.stack_id,
                             error = %failure.message,
@@ -150,6 +171,9 @@ pub(crate) async fn stack_drift_monitor(
                     }
                 }
                 Err(error) => {
+                    if let Some(i) = observation {
+                        i.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                    }
                     tracing::warn!(%error, "Stack drift monitor query failed");
                     break;
                 }
@@ -169,6 +193,10 @@ pub(crate) async fn event_drift(
     loop {
         let result = async {
             loop {
+                if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                    job.policy("Stack lifecycle events", None);
+                    job.waiting("Listening for Stack lifecycle events", None);
+                }
                 let Some(pending) = receive_drift_batch(listener.as_mut(), &cancellation).await?
                 else {
                     return Ok::<(), NotificationError>(());
@@ -178,7 +206,10 @@ pub(crate) async fn event_drift(
                     return Ok(());
                 };
                 for id in pending {
-                    if let Err(error) = stacks.monitor_container_event(id).await {
+                    if let Err(error) =
+                        citadel_runtime::jobs::observe(stacks.monitor_container_event(id)).await
+                    {
+                        report_drift_problem(id);
                         tracing::warn!(%error, %id, "Event-triggered Stack drift repair failed");
                     }
                 }
@@ -192,6 +223,20 @@ pub(crate) async fn event_drift(
             tracing::warn!(%error, "Stack drift event listener failed");
         }
         tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_secs(2))=>{} }
+    }
+}
+
+fn report_drift_problem(id: uuid::Uuid) {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.report_problem(
+            "Stack drift checking or repair reported a problem. Open the stack for its current status.",
+            citadel_runtime::jobs::JobTarget {
+                resource_type: "Stack".into(),
+                resource_id: id,
+                operation_id: None,
+                container_id: None,
+            },
+        );
     }
 }
 

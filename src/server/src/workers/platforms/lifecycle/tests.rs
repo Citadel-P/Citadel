@@ -87,20 +87,29 @@ async fn failed_effect_retains_progress_without_repeating_recovery() {
     let plans = Arc::new(AtomicUsize::new(0));
     let attempts = Arc::new(AtomicUsize::new(0));
     let (recoveries, effects, token) = (plans.clone(), attempts.clone(), cancel.clone());
+    let catalog = citadel_runtime::jobs::JobCatalog::new(uuid::Uuid::now_v7());
+    let job = catalog.register(
+        "platform-lifecycle-coordinator",
+        citadel_primitives::JobCategory::Platform,
+        citadel_runtime::jobs::JobOwnership::Coordinator,
+    );
     let worker = tokio::spawn(async move {
-        run_transitions(&token, receiver, |mut progress| {
-            if !progress.recovery_requested {
-                recoveries.fetch_add(1, Ordering::SeqCst);
-                progress.recovery_requested = true;
-            }
-            let result = if effects.fetch_add(1, Ordering::SeqCst) == 0 {
-                Err("alert failed")
-            } else {
-                Ok(())
-            };
-            async move { (progress, result) }
+        job.scope(async {
+            run_transitions(&token, receiver, |mut progress| {
+                if !progress.recovery_requested {
+                    recoveries.fetch_add(1, Ordering::SeqCst);
+                    progress.recovery_requested = true;
+                }
+                let result = if effects.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Err("alert failed")
+                } else {
+                    Ok(())
+                };
+                async move { (progress, result) }
+            })
+            .await;
         })
-        .await;
+        .await
     });
     sender
         .send(transition(&target(), true), &cancel)
@@ -109,10 +118,22 @@ async fn failed_effect_retains_progress_without_repeating_recovery() {
         .unwrap();
     settle().await;
     assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    let failed = catalog.snapshot().jobs.remove(0);
+    assert_eq!(failed.state, citadel_runtime::jobs::JobState::BackingOff);
+    assert_eq!(failed.backlog, Some(1));
+    assert!(failed.next_check.is_some());
     tokio::time::advance(RETRY).await;
     settle().await;
     assert_eq!(attempts.load(Ordering::SeqCst), 2);
     assert_eq!(plans.load(Ordering::SeqCst), 1);
+    let recovered = catalog.snapshot().jobs.remove(0);
+    assert_eq!(recovered.state, citadel_runtime::jobs::JobState::Waiting);
+    assert_eq!(
+        recovered.last_outcome,
+        Some(citadel_runtime::jobs::JobOutcome::Completed)
+    );
+    assert_eq!(recovered.failures, 1);
+    assert_eq!(recovered.backlog, Some(0));
     cancel.cancel();
     worker.await.unwrap();
 }

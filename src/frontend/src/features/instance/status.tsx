@@ -1,7 +1,6 @@
 import { useMutationState } from '@tanstack/react-query';
 import type { UseMutateVariables } from '@/api/types';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { BackToTop } from '@/components/custom/back-to-top';
 import { useRead } from '@/lib/hooks';
 
 export function InstanceStatus() {
@@ -20,7 +19,6 @@ export function InstanceStatus() {
 
   return (
     <>
-      <BackToTop />
       {settings && (
         <div className="space-y-4">
           {!settings.restartRequired && (

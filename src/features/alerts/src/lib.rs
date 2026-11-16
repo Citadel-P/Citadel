@@ -26,7 +26,7 @@ pub use runtime::{
     AlertDelivery, AlertDeliveryClaim, AlertEntitlements, AlertEventSink, AlertObservation,
 };
 pub use service::AlertDeliveryService;
-pub use vocabulary::{AlertSeverity, AlertType};
+pub use vocabulary::{AlertResourceType, AlertSeverity, AlertType};
 #[cfg(test)]
 mod tests;
 

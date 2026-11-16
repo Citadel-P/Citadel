@@ -48,6 +48,7 @@ pub struct AlertRuleView {
     #[serde(rename = "type")]
     #[schema(value_type = crate::api::resources::schema_models::alerts::AlertTypeSchema)]
     pub alert_type: AlertType,
+    pub resource_type: AlertResourceType,
     #[schema(value_type = crate::api::resources::schema_models::alerts::AlertSeveritySchema)]
     pub severity: AlertSeverity,
     #[schema(required = true)]
@@ -69,12 +70,14 @@ impl TryFrom<citadel_alerts::AlertRule> for AlertRuleView {
     type Error = citadel_alerts::AlertError;
 
     fn try_from(value: citadel_alerts::AlertRule) -> Result<Self, Self::Error> {
+        let alert_type: AlertType = decode(value.alert_type.into())?;
         Ok(Self {
             capabilities: None,
             id: value.id,
             name: value.name,
             description: value.description,
-            alert_type: decode(value.alert_type.into())?,
+            alert_type,
+            resource_type: alert_type.resource_type().into(),
             severity: value.severity,
             cooldown_seconds: value.cooldown_seconds,
             required_matches: value.required_matches,

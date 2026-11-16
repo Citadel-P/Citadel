@@ -35,3 +35,6 @@ pub mod json_keys;
 pub mod normalization;
 
 pub mod health;
+
+mod jobs;
+pub use jobs::JobCategory;

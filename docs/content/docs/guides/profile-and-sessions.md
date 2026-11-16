@@ -10,10 +10,8 @@ need administrator access. Administrators manage other accounts through
 ## Update your profile
 
 Under **Profile**, change **Display Name** and save. The name must be unique.
-Email is read-only. The header shows your authentication method, direct Roles,
-and Team memberships. Roles and Teams show the first item and the number of
-additional items; hover, focus, or tap the summary to view the full list.
-Contact an administrator for access or account changes.
+Email is read-only. You can also review your authentication method, Roles, and
+Team memberships. Contact an administrator for access or account changes.
 
 Under **Preferences**, choose a time zone and clock format, then save.
 These affect personal display, including profile and session timestamps; a job's
@@ -28,32 +26,12 @@ log timestamps and scheduled execution times remain precise.
 
 ## Instance settings
 
-Administrators also see **Instance settings** in Profile. The **Two-factor
-authentication policy** applies to everyone in the installation and saves
-automatically. It is Optional by default. Administrators can require MFA for
-administrators or all local-password users, subject to the minimum set by server
-configuration. Users can enable MFA in **Profile → Security**.
+Administrators manage installation-wide controls through
+[Instance settings](/operations/instance-settings). Release checks and update
+schedules are under **Administration → Updates → Config**; see
+[upgrade and rollback](/operations/upgrade-and-rollback).
 
-Open **Administration → Updates → Config** for **Available updates**, **Scheduled updates**,
-and **Release checks** in one settings form. Available updates shows the installed
-Core version and Agent status independently. **Check now** discovers releases without
-installing them. Manual review and approval never change scheduled membership or
-save unrelated settings.
-
-Team administrators can schedule Core, selected Agents, or both. Core is excluded
-by default. Core updates first; selected Agents follow only after Core verification
-and cleanup. The interface temporarily disconnects during a Core restart. Use the
-standard cron and time-zone fields, then **Save**. **Next run** describes the saved
-schedule. Disabled schedules keep their settings visible with disabled controls. Enable the schedule to edit them.
-
-Release checks contact GitHub without telemetry. Turning off automatic discovery
-does not disable an installation schedule, which verifies a release when due.
-Server configuration can prohibit both. The info icon at the right of the tabs
-shows the Core version, release channel, last successful check, and Agent versions.
-
-MFA policy changes apply to subsequent local-password sign-ins and do not revoke
-existing browser sessions. Instance settings remain separate from personal
-preferences and are available only to administrators.
+These controls are separate from personal preferences.
 
 ## Change your password
 
@@ -81,22 +59,15 @@ Under **Security → Active Sessions**, expand **Manage active sessions** to rev
 the browser/device description,
 IP address, last-seen time, and expiration. **Current** identifies this browser
 session. Shared networks or proxies can make several sessions show the same IP.
-The section is collapsed by default.
-The list loads once when the profile opens, and the heading shows the loaded
-session count while collapsed. Reopening the section reuses the cached list.
-Select **Refresh** in the expanded panel's header to check for new sessions. Password, MFA,
-and session revocation changes also refresh the list.
+Select **Refresh** to check for new sessions.
 
 - Select **Revoke** for a session you no longer use and confirm.
 - Select **Sign Out Others** to revoke other active sessions while retaining
   the current one.
 - Use the account menu's sign-out action to leave the current session.
 
-Revocation invalidates both the refresh session and its browser access tokens.
-Affected realtime connections close when the revocation commits; other active
-sessions can reconnect. Password changes and MFA resets apply the same revocation
-rules. Revoking a Citadel session does not sign you out of an upstream OIDC
-provider; manage that provider's sessions separately when needed.
+Revoking a session signs that browser out of Citadel. It does not sign you out
+of an upstream OIDC provider; manage that provider's sessions separately.
 
 **Sign Out Others** is disabled when there are no other sessions to revoke.
 If other sessions are listed but the action is unavailable, sign in again so

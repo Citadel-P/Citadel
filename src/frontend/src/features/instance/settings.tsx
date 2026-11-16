@@ -19,6 +19,7 @@ import { MfaPolicyControl } from './mfa-policy';
 import { useUpdateInstallationSettings } from '@/hooks/use-installation-settings';
 import { instanceSections } from './fields';
 import { DatabaseConnectionsSnapshot } from './database-connections';
+import { InstanceStatus } from './status';
 
 type InstanceFormValue = InstanceConfigurationView & { mfaPolicy: MfaPolicy };
 
@@ -219,7 +220,10 @@ export function InstanceSettingsForm() {
 
   return (
     <div className="space-y-4">
+      <InstanceStatus />
       <FormShell
+        draftKey="instance:configuration"
+        draftVersion={JSON.stringify([1, settings.minimumMfaPolicy, settings.deploymentOverrides])}
         schema={schema}
         original={original}
         update={update}

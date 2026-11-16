@@ -94,6 +94,16 @@ impl ServiceAccountLastUsedWorker {
         let mut ticker = tokio::time::interval(self.flush_interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.policy(
+                    format!(
+                        "Usage input or {} second flush check",
+                        self.flush_interval.as_secs_f64()
+                    ),
+                    None,
+                );
+                job.waiting("Waiting for usage input or flush check", None);
+            }
             tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Ok(()),
@@ -132,10 +142,11 @@ impl ServiceAccountLastUsedWorker {
             .collect::<Vec<_>>();
 
         for (credential_id, candidate) in due {
-            match self
-                .store
-                .update_service_account_last_used(credential_id, candidate)
-                .await
+            match citadel_runtime::jobs::observe(
+                self.store
+                    .update_service_account_last_used(credential_id, candidate),
+            )
+            .await
             {
                 Ok(()) => {
                     if let Some(state) = states.get_mut(&credential_id) {

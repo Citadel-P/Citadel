@@ -476,7 +476,6 @@ budgets. `/ready` dependency probes use the normal limits and allow at most four
 concurrent checks; excess concurrent probes receive HTTP 503 without querying
 PostgreSQL or Docker.
 
-
 ## Browser security headers
 
 Core adds `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
@@ -486,27 +485,15 @@ omits these browser headers and the report-only CSP below. Both listeners retain
 HSTS in direct TLS mode. Embedding Citadel in an iframe is intentionally
 blocked. Streaming bodies and WebSocket upgrades are not buffered or rewritten.
 
-The initial `Content-Security-Policy-Report-Only` policy reports violations in browser
-developer tools; it **does not block** scripts, workers or connections. No reporting
-endpoint is configured, so violation details are not uploaded to a collector.
-Monaco's bundled workers are allowed through `worker-src 'self' blob:`. Inline
-styles remain allowed for Monaco, charts, Radix positioning and terminal rendering.
-`connect-src` includes the page's own origin, `CITADEL_PUBLIC_URL`, and that URL's
-explicit `ws://` or `wss://` equivalent for realtime, logs and terminal sessions.
-Configure the public URL to match the externally reachable API.
-
-This is observation, not an enforced XSS protection policy. For example, the current
-inline theme bootstrap can produce a script violation while still running normally.
-Before enforcing CSP, check Monaco editing and JSON/YAML diagnostics, live logs,
-terminal input, reconnects, and light/dark themes in a production frontend build.
-Resolve unexpected violations rather than adding broad script or connection allowances.
+The `Content-Security-Policy-Report-Only` header reports browser violations but
+**does not block** scripts or connections. No reporting endpoint is configured.
+Do not treat it as an enforced XSS protection policy. If you add an enforced CSP,
+verify editors, charts, logs, terminals, sign-in, and reconnects before deployment.
 See [MDN's CSP guide](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP).
 
-Vite development headers are unchanged. If a separate host serves the frontend,
-configure these headers there too: API response headers do not protect a document
-served by another server. For a separately built frontend using `VITE_API_BASE_URL`,
-include its API origin and WebSocket equivalent in that host's policy. Reverse proxies
-should preserve Core's headers; any existing enforced proxy CSP still applies.
+Reverse proxies should preserve Core's headers. A separately hosted frontend
+needs its own response headers and CSP allowing its API and WebSocket origins;
+headers on API responses do not protect a page served by another host.
 
 In `ReverseProxy` mode, Core does not emit `Strict-Transport-Security`. Configure
 HSTS at the HTTPS reverse proxy or CDN. The Nginx guides set

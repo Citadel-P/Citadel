@@ -157,11 +157,7 @@ operation. These locks renew during execution; expiry alone never permits a
 second operation to use storage whose cleanup is uncertain. A source-contention
 retry retains the resolved source plan.
 
-Core-local builds, backup helpers and system-backup staging share two local
-heavy-work slots. Edge contexts have a separate 32 MiB transfer budget, charged
-for raw and encoded payloads; output has its own 32 MiB budget. Control commands
-retain independent headroom. These are bounded implementation limits, not extra
-configuration knobs.
+Core-local builds and backup work share two heavy-work slots.
 
 More slots do not make one job faster or provide CPU/memory isolation. Increase
 capacity only when the executing hosts have spare resources. Lowering a pool
@@ -178,21 +174,11 @@ does not cancel its run.
 
 After changing Core variables, recreate Core with `docker compose up -d server`,
 retaining the project's overlay options. Set Agent capacities on each Agent and
-recreate it to apply them. The old lifecycle-wide build/backup worker variables
-are no longer read.
+recreate it to apply them.
 
-Core also
-persists remote build reservations per Docker daemon, so aliases do not multiply
-capacity. Failed or interrupted execution retains its reservation unless the
-same Agent confirms cleanup. Core stores that evidence before releasing capacity
-with the final run result; restarting an Agent is not cleanup evidence. Core also
-rechecks terminal reservations in batches of 16, with five-second Agent checks
-and 30 seconds between batches. Confirmed cleanup releases capacity without
-retrying the build or changing its outcome. Unreachable Agents, changed Agent
-identities and uncertain execution remain held. Administrators can resolve terminal
-holds from the build run sheet after verifying cleanup and restarting the original
-Agent on the same Docker daemon. Their acknowledgment is audited without retrying
-the build. These reconciliation bounds are not additional `.env` settings.
+If a failed or interrupted build retains capacity, inspect its run details and
+verify cleanup on the original Agent. Restarting an Agent alone does not release
+an uncertain operation. See [Builds](/resources/builds) for recovery.
 
 ## HTTP listeners and runtime limits
 
@@ -223,10 +209,6 @@ the packaged image sets `CITADEL_STATIC_ROOT=/app/wwwroot` and accepts an overri
 | `CITADEL_REALTIME_SUBSCRIBE_TIMEOUT_SECONDS` / `CITADEL_REALTIME_SEND_TIMEOUT_SECONDS` | `5` / `2` seconds |
 | `CITADEL_REALTIME_AUTH_RECHECK_SECONDS` | `30` seconds |
 | `CITADEL_REALTIME_SNAPSHOT_LIMIT` | `1024` |
-
-In the development overlay, `CITADEL_DEV_DOCKER_SOCKET` selects the host socket
-mount source; Core and the entrypoint both use `/var/run/docker.sock` inside the
-container. The launcher derives this source from its native `CITADEL_DOCKER_SOCKET`.
 
 ## Identity and bootstrap
 

@@ -6,6 +6,8 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
+const DRAIN_BUDGET: Duration = Duration::from_secs(5);
+
 pub(crate) async fn run(
     cancel: CancellationToken,
     store: Arc<dyn PlatformAlertBatchStore>,
@@ -13,6 +15,9 @@ pub(crate) async fn run(
     batch_size: i64,
     mut signals: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.budget(DRAIN_BUDGET);
+    }
     let mut diagnostics_at = Instant::now();
     let mut last_progress = None::<Instant>;
     let mut last_failure_report = None::<Instant>;
@@ -31,6 +36,9 @@ pub(crate) async fn run(
             };
             match backlog {
                 Ok(Ok(backlog)) => {
+                    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                        job.backlog(backlog.pending as u64, backlog.capped);
+                    }
                     RuntimeWork::AlertBacklog.queued(backlog.pending);
                     RuntimeWork::AlertBacklog.buffered(usize::from(backlog.blocks_compaction));
                     let age = backlog
@@ -58,9 +66,12 @@ pub(crate) async fn run(
                 ),
             }
         }
+        let iteration = citadel_runtime::jobs::JobHandle::iteration();
+        let mut processed = 0_u64;
         let drain = async {
             for _ in 0..10 {
                 let count = store.flush_pending(batch_size).await?;
+                processed += count as u64;
                 if count > 0 {
                     last_progress = Some(Instant::now());
                     RuntimeWork::AlertProgress.success();
@@ -75,9 +86,10 @@ pub(crate) async fn run(
         };
         tokio::select! {
             () = cancel.cancelled() => return Ok(()),
-            result = tokio::time::timeout(Duration::from_secs(5), drain) => match result {
-                Ok(Ok(())) => {},
+            result = tokio::time::timeout(DRAIN_BUDGET, drain) => match result {
+                Ok(Ok(())) => { if let Some(i) = iteration { i.finish(if processed == 0 { citadel_runtime::jobs::JobOutcome::NoWork } else { citadel_runtime::jobs::JobOutcome::Productive }, Some((processed, "observations"))); } },
                 result => {
+                    if let Some(i) = iteration { i.finish(if result.is_err() { citadel_runtime::jobs::JobOutcome::BudgetExhausted } else { citadel_runtime::jobs::JobOutcome::Failed }, Some((processed, "observations"))); }
                     RuntimeWork::AlertFlush.failures(1);
                     if last_failure_report.is_none_or(|at| at.elapsed() >= Duration::from_secs(60)) {
                         last_failure_report = Some(Instant::now());

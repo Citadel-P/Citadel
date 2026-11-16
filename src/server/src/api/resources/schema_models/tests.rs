@@ -110,3 +110,48 @@ fn registry_browser_schema_matches_public_casing_not_upstream_casing() {
     assert!(wire.get("htmlUrl").is_some());
     assert!(wire.get("html_url").is_none());
 }
+
+#[test]
+fn job_category_schema_uses_the_shared_serialized_vocabulary() {
+    let document = serde_json::to_value(crate::openapi::document(false)).unwrap();
+    let schemas = &document["components"]["schemas"];
+    assert_eq!(
+        schemas["JobCategory"]["enum"],
+        json!(citadel_primitives::JobCategory::ALL)
+    );
+    assert_eq!(
+        schemas["JobStatusView"]["properties"]["resourceType"]["$ref"],
+        "#/components/schemas/JobCategory"
+    );
+    assert!(schemas.get("JobResourceTypeView").is_none());
+}
+
+#[test]
+fn shared_categories_survive_runtime_feature_and_http_boundaries() {
+    use citadel_instance::InstanceJobsReader;
+    use citadel_primitives::JobCategory;
+    use citadel_runtime::jobs::{JobCatalog, JobOwnership};
+    let catalog = JobCatalog::new(Uuid::now_v7());
+    for category in JobCategory::ALL {
+        catalog.register(category.as_str(), *category, JobOwnership::Coordinator);
+    }
+    let reader = citadel_adapters::external::instance_jobs::RuntimeInstanceJobs(catalog);
+    let snapshot = reader.snapshot();
+    for job in &snapshot.jobs {
+        assert_eq!(job.resource_type.as_str(), job.id);
+    }
+    let view = crate::api::resources::instance::jobs::JobsSnapshotView::from(snapshot);
+    let wire = serde_json::to_value(view).unwrap();
+    for job in wire["jobs"].as_array().unwrap() {
+        assert_eq!(job["resourceType"], job["id"]);
+    }
+
+    let catalog = JobCatalog::new(Uuid::now_v7());
+    catalog.register(
+        "custom-worker",
+        "custom-category",
+        JobOwnership::Coordinator,
+    );
+    let reader = citadel_adapters::external::instance_jobs::RuntimeInstanceJobs(catalog);
+    assert_eq!(reader.snapshot().jobs[0].resource_type, JobCategory::Other);
+}

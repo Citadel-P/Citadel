@@ -34,6 +34,9 @@ impl Group {
         self.topic.reference()
     }
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if matches!(self.topic(), Topic::InstanceJobs) {
+            return false;
+        }
         if let Topic::ContainerProcesses(id) = self.topic() {
             if let Some(patches) = event.payload["containerPatches"].as_array() {
                 return patches.iter().any(|patch| {

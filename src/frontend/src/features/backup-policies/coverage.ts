@@ -53,7 +53,9 @@ export function backupConfigurationIssue(policies: BackupPolicyReference[]) {
   return undefined;
 }
 
-export function backupSummaryStatus(coverage?: ResourceBackupSummaryView | null): BackupCoverageStatus | 'Unavailable' {
+export type BackupCoverageState = { status?: BackupCoverageStatus | null; unavailable?: boolean };
+
+export function backupSummaryStatus(coverage?: BackupCoverageState | null): BackupCoverageStatus | 'Unavailable' {
   if (!coverage || coverage.unavailable) return 'Unavailable';
   return coverage.status ?? 'Unavailable';
 }
