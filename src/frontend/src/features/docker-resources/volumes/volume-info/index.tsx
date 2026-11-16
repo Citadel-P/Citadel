@@ -1,5 +1,6 @@
 import { AlertMessage } from '@/components/custom/alert-message';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { SystemBadge } from '@/components/custom/system-badge';
 import { HardDrive } from 'lucide-react';
 import { DetailSection, DetailMetadata } from '@/components/custom/resource-detail';
 import { VolumeView } from '@/api/generated/api.types';
@@ -24,6 +25,7 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<VolumeView> = {
         label={resource.inUse ? 'In use' : 'Unused'}
       />
     ),
+    NameSuffix: ({ resource }) => (resource.isSystem ? <SystemBadge description="Citadel system volume" /> : null),
     ActionButtons: ({ resource }) => {
       return <GenericActionBarButtons resource={resource} actions={Object.values(VolumeInfoActions)} />;
     },

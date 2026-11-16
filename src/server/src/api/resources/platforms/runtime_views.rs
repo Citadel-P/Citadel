@@ -82,6 +82,7 @@ pub(crate) fn map_volume(
     capabilities.can_browse &= volume.content_access_allowed == Some(true);
     capabilities.can_download &= volume.content_access_allowed == Some(true);
     Ok(VolumeView {
+        is_system: volume.is_system,
         content_access_allowed: volume.content_access_allowed,
         backup_coverage: None,
         id: volume.name.clone(),

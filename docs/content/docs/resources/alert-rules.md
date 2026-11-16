@@ -12,6 +12,17 @@ requires Write permission; configuration controls are disabled for read-only use
 
 Notifications are delivered through notification channels. The Citadel server image includes notification delivery support, so normal Docker installs do not need any extra notification service.
 
+## Browse rules
+
+Rules are grouped automatically by **Alert Type**; **Applies to** limits which
+specific resources a rule covers. Expand a group to see its rules. Filter by
+severity or channel beside **Add Rule**, or search by name or ID.
+Group counts describe enabled/disabled configuration, not active incidents, and
+retain the group's totals when filters narrow its rows. Select individual rules
+or use a group checkbox to select all its matching rules, including collapsed
+children. Bulk actions apply to rules only. Expanded groups are remembered in this
+browser when you return to the page; selected rules are not.
+
 ## Receive your first notification
 
 1. Open **Configuration → Alert Rules**.
@@ -55,30 +66,16 @@ availability, resource pressure, and Build Pool availability, Citadel can resolv
 the incident when it observes recovery. A historical failed operation can still
 need manual resolution after a successful retry.
 
-For Stack and Deployment **update available** alerts, Citadel resolves the matching
-event automatically after it verifies that the advertised image digest or Git
-commit is applied. Stack image alerts require every service listed in that event
-to match. Failed updates, incomplete image updates, and alerts for a newer pending
-target remain open. The resolver is **System**, with the note “Update applied successfully.”;
-the workload activity retains the user who performed the update. Resolved events
-remain in history, and manual resolution is still available.
+Stack and Deployment **update available** alerts resolve when Citadel verifies
+that the advertised image or Git commit has been applied. Stack image alerts
+require every listed service to match. Failed or incomplete updates remain open.
 
-When a different image digest, set of Stack image updates, or Git commit becomes
-available for the same rule and resource, Citadel closes the older update alerts
-as **System** when the replacement passes the rule's cooldown and other conditions.
-The resolution note says “Superseded by a newer available update” and includes the
-replacement alert ID. This means the pending target changed; it does not mean an
-update was installed. The replacement and the closures are saved together.
-
-Repeated detection of the same open target keeps its alert and acknowledgment,
-without another notification. On an eligible recheck, older open targets are also
-closed if the matching alert already exists. Separate failed-operation alerts
-remain open. Manually resolving an update alert does not suppress future detection
-of an update that is still pending.
-
-Processed update observations retain their latest observation time even when
-they repeat an open target or are suppressed by cooldown. Older delayed observations
-cannot supersede that newer evidence. Rechecks do not restart the cooldown timer.
+A newer pending target can supersede an older update alert. **Superseded by a newer
+available update** means the target changed, not that an update was installed.
+Repeated detection of the same open target preserves its acknowledgment without
+sending another notification. Resolving an alert manually does not suppress a
+future alert for an update that is still pending. Separate failed-operation alerts
+may still need manual resolution.
 
 Use [Platform monitoring](/operations/platform-monitoring) to investigate
 capacity alerts and [Troubleshooting](/operations/troubleshooting) for

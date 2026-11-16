@@ -21,7 +21,7 @@ pub async fn run(
             return Ok(());
         };
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::ImageScan.start();
-        match scanner.run_cycle(&cancel).await {
+        match citadel_runtime::jobs::observe(scanner.run_cycle(&cancel)).await {
             Ok(count) => tracing::debug!(count, "Registry image scan completed"),
             Err(error) => {
                 tracing::warn!(%error,"Registry image scan failed");
@@ -32,13 +32,23 @@ pub async fn run(
             first = false;
             // Initial consumers wait for the scanner's first complete pass;
             // subsequent checks retain their independent two-hour cadence.
-            if let Err(error) = deployments.run_scheduled_update_checks(&cancel).await {
+            if let Err(error) =
+                citadel_runtime::jobs::observe(deployments.run_scheduled_update_checks(
+                    &cancel,
+                    super::deployments::report_update_problem,
+                ))
+                .await
+            {
                 tracing::warn!(%error,"Initial Deployment update check failed");
             }
-            if let Err(error) = stacks.run_update_checks(true, &cancel).await {
+            if let Err(error) =
+                citadel_runtime::jobs::observe(stacks.run_update_checks(true, &cancel)).await
+            {
                 tracing::warn!(%error,"Initial Stack update check failed");
             }
-            if let Err(error) = services.run_scheduled_update_checks(&cancel).await {
+            if let Err(error) =
+                citadel_runtime::jobs::observe(services.run_scheduled_update_checks(&cancel)).await
+            {
                 tracing::warn!(%error,"Initial Service update check failed");
             }
         }

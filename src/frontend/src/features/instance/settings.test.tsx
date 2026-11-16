@@ -8,8 +8,15 @@ import { InstanceComponents } from './index';
 import { ResourceView } from '@/pages/resource-view';
 import { instanceSections } from './fields';
 import { instanceSettings as initial } from '@/test/factories/instance';
+import { Routes, Route } from 'react-router';
+import { AppContext } from '@/lib/context/app-context';
+import { RealtimeContext } from '@/lib/context/realtime-context';
+import { scopedDraftKey } from '@/lib/form-drafts';
 
 const url = 'http://localhost/api/v1/installation/settings';
+const token = `header.${btoa(JSON.stringify({ sub: 'instance-admin' }))}.signature`;
+const draftKey = scopedDraftKey('instance:configuration', token, 'http://localhost')!;
+const draftAuth = { auth: { accessToken: token } };
 
 function InstanceSettingsWithStatus() {
   return (
@@ -27,6 +34,57 @@ beforeEach(() => {
       HttpResponse.json({ maximum: 3, open: 2, idle: 1, borrowed: 1, sharedBuffersBytes: 67108864 }),
     ),
   );
+});
+
+it('shows settings notices and the tab-bar restart action only on Config', async () => {
+  server.use(
+    http.get(url, () => HttpResponse.json(initial())),
+    http.get('http://localhost/api/v1/profile', () => HttpResponse.json({ authorization: { isAdministrator: true } })),
+    http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('http://localhost/api/v1/instance/restart', () =>
+      HttpResponse.json({ available: true, pending: false, bootId: 'boot' }),
+    ),
+    http.get('http://localhost/api/v1/instance/jobs', () =>
+      HttpResponse.json({ bootId: 'boot', revision: 1, observedAt: 1, startedAt: 1, jobs: [] }),
+    ),
+    http.get('http://localhost/api/v1/activities', () =>
+      HttpResponse.json({ pagedResult: { items: [], totalCount: 0, page: 1, pageSize: 25 } }),
+    ),
+  );
+  const { user } = renderCitadel(
+    <AppContext.Provider
+      value={{
+        isLoading: false,
+        currentPlatform: undefined,
+        platforms: [],
+        applicationInfo: undefined,
+        unresolvedAlertCount: 0,
+        liveAlertEvents: {},
+        receivedAlertEventIds: [],
+      }}>
+      <RealtimeContext.Provider value={{ liveConnectionState: 'disconnected', retryConnection: async () => {} }}>
+        <Routes>
+          <Route
+            path="/instance/:tab"
+            element={<ResourceView Components={InstanceComponents} type="Instance" showTaskSheet={false} />}
+          />
+        </Routes>
+      </RealtimeContext.Provider>
+    </AppContext.Provider>,
+    { route: '/instance/config' },
+  );
+  const notice = 'MFA changes apply on save. Restart Core to apply other saved settings.';
+  expect(await screen.findByText(notice)).toBeVisible();
+  const tabBar = screen.getByRole('tablist').parentElement!;
+  expect(tabBar).toContainElement(screen.getByRole('button', { name: 'Restart Core' }));
+  for (const tab of ['Jobs', 'Activities']) {
+    await user.click(screen.getByRole('tab', { name: tab }));
+    expect(screen.queryByText(notice)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restart Core' })).not.toBeInTheDocument();
+  }
+  await user.click(screen.getByRole('tab', { name: 'Config' }));
+  expect(await screen.findByText(notice)).toBeVisible();
+  expect(tabBar).toContainElement(screen.getByRole('button', { name: 'Restart Core' }));
 });
 
 it('keeps MFA as a draft, resets it, and saves it with other changed fields in one request', async () => {
@@ -50,13 +108,15 @@ it('keeps MFA as a draft, resets it, and saves it with other changed fields in o
       return HttpResponse.json(settings);
     }),
   );
-  const { user } = renderCitadel(<InstanceSettingsWithStatus />);
+  const { user } = renderCitadel(<InstanceSettingsWithStatus />, draftAuth);
   const policy = await screen.findByRole('combobox', { name: 'Two-factor authentication policy' });
   await user.click(policy);
   await user.click(screen.getByRole('option', { name: 'Required for administrators' }));
   expect(policy).toHaveTextContent('Required for administrators');
   expect(save).not.toHaveBeenCalled();
+  expect(localStorage.getItem(draftKey)).not.toBeNull();
   await user.click(screen.getAllByRole('button', { name: 'Reset' })[0]);
+  expect(localStorage.getItem(draftKey)).toBeNull();
   expect(policy).toHaveTextContent('Optional');
   expect(save).not.toHaveBeenCalled();
   await user.click(policy);
@@ -74,6 +134,52 @@ it('keeps MFA as a draft, resets it, and saves it with other changed fields in o
   );
   await waitFor(() => expect(policy).toBeEnabled());
   expect(policy).toHaveTextContent('Required for administrators');
+  expect(localStorage.getItem(draftKey)).toBeNull();
+});
+
+it('restores unsaved configuration and MFA after reload without saving to the server', async () => {
+  const save = vi.fn();
+  server.use(
+    http.get(url, () => HttpResponse.json(initial())),
+    http.patch(url, () => {
+      save();
+      return HttpResponse.json(initial());
+    }),
+  );
+  const first = renderCitadel(<InstanceSettingsForm />, draftAuth);
+  const minimum = await screen.findByRole('spinbutton', { name: 'Minimum password length (characters)' });
+  fireEvent.change(minimum, { target: { value: '20' } });
+  await first.user.click(screen.getByRole('combobox', { name: 'Two-factor authentication policy' }));
+  await first.user.click(screen.getByRole('option', { name: 'Required for administrators' }));
+  first.unmount();
+
+  const restored = renderCitadel(<InstanceSettingsForm />, draftAuth);
+  await waitFor(() =>
+    expect(screen.getByRole('spinbutton', { name: 'Minimum password length (characters)' })).toHaveValue(20),
+  );
+  expect(screen.getByRole('combobox', { name: 'Two-factor authentication policy' })).toHaveTextContent(
+    'Required for administrators',
+  );
+  expect(save).not.toHaveBeenCalled();
+  await restored.user.click(screen.getByRole('button', { name: 'Discard draft' }));
+  expect(screen.getByRole('spinbutton', { name: 'Minimum password length (characters)' })).toHaveValue(15);
+  expect(localStorage.getItem(draftKey)).toBeNull();
+});
+
+it('discards an old configuration draft when deployment overrides change', async () => {
+  let settings = initial();
+  server.use(http.get(url, () => HttpResponse.json(settings)));
+  const first = renderCitadel(<InstanceSettingsForm />, draftAuth);
+  fireEvent.change(await screen.findByRole('spinbutton', { name: 'Minimum password length (characters)' }), {
+    target: { value: '20' },
+  });
+  expect(localStorage.getItem(draftKey)).not.toBeNull();
+  first.unmount();
+  settings = { ...settings, deploymentOverrides: { ...settings.deploymentOverrides, passwordMinimumLength: 15 } };
+  renderCitadel(<InstanceSettingsForm />, draftAuth);
+  expect(await screen.findByLabelText('Minimum password length (characters)')).toHaveTextContent('15');
+  await waitFor(() => expect(localStorage.getItem(draftKey)).toBeNull());
+  expect(screen.queryByRole('button', { name: 'Discard draft' })).not.toBeInTheDocument();
 });
 
 it('retains the MFA draft after a failed save and resets to the saved policy', async () => {

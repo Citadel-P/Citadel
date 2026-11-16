@@ -768,7 +768,7 @@ const QuietHoursTable = ({
       },
       {
         id: 'actions',
-        header: () => <div className="text-center">Actions</div>,
+        header: () => <span>Actions</span>,
         cell: ({ row }) => {
           const index = row.original.index;
           return (

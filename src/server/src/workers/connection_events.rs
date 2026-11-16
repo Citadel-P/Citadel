@@ -37,6 +37,10 @@ pub(crate) async fn realtime_updates(
     cancellation: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
     loop {
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.policy("Connection changes", None);
+            job.waiting("Listening for connection changes", None);
+        }
         let event = tokio::select! {
             () = cancellation.cancelled() => return Ok(()),
             event = events.recv() => event,
@@ -47,6 +51,7 @@ pub(crate) async fn realtime_updates(
             Err(broadcast::error::RecvError::Closed) => return Ok(()),
         };
         let Some(realtime) = &realtime else { continue };
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
         match notification {
             ConnectionNotification::Changed(event) => {
                 let resource = match event.resource {
@@ -65,6 +70,12 @@ pub(crate) async fn realtime_updates(
                     );
                 }
             }
+        }
+        if let Some(i) = observation {
+            i.finish(
+                citadel_runtime::jobs::JobOutcome::Productive,
+                Some((1, "notifications")),
+            );
         }
     }
 }

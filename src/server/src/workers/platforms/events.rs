@@ -7,6 +7,10 @@ pub(crate) async fn event_source(
     metrics: Arc<Metrics>,
 ) -> Result<(), DockerError> {
     let _task = metrics.task_guard();
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy("Docker event stream; bounded reconnect backoff", None);
+    }
     let mut retry = Duration::from_millis(250);
     let mut since = None;
     let filters = std::collections::HashMap::from([(
@@ -34,7 +38,7 @@ pub(crate) async fn event_source(
         }
         let stream = tokio::select! {
             () = cancellation.cancelled() => return Ok(()),
-            result = docker.events(since, Some(&filters)) => result,
+            result = citadel_runtime::jobs::observe(docker.events(since, Some(&filters))) => result,
         };
         let mut stream = match stream {
             Ok(stream) => {
@@ -64,6 +68,12 @@ pub(crate) async fn event_source(
             Err(error) => {
                 metrics.stream_reconnected();
                 tracing::warn!(%error, "Docker event stream connection failed");
+                if let Some(job) = &job {
+                    job.waiting(
+                        "Reconnecting Docker events",
+                        Some(tokio::time::Instant::now() + retry),
+                    );
+                }
                 tokio::select! {
                     () = cancellation.cancelled() => return Ok(()),
                     () = tokio::time::sleep(retry) => {}
@@ -75,10 +85,17 @@ pub(crate) async fn event_source(
 
         let connected_at = tokio::time::Instant::now();
         loop {
+            if let Some(job) = &job {
+                job.waiting("Listening for Docker events", None);
+            }
             let event = tokio::select! {
                 () = cancellation.cancelled() => return Ok(()),
                 event = stream.next() => event,
             };
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
+            let observation = citadel_runtime::jobs::JobHandle::iteration();
             match event {
                 Some(Ok(event)) => {
                     RuntimeWork::DockerRawEvent.units(1);
@@ -91,6 +108,9 @@ pub(crate) async fn event_source(
                     let Some(kind) = citadel_docker::client::events::normalize(&event) else {
                         if event.resource_type == "container" {
                             RuntimeWork::ContainerEventIgnored.units(1);
+                        }
+                        if let Some(observation) = observation {
+                            observation.finish(citadel_runtime::jobs::JobOutcome::NoWork, None);
                         }
                         continue;
                     };
@@ -119,13 +139,25 @@ pub(crate) async fn event_source(
                         return Ok(());
                     }
                     metrics.event_enqueued();
+                    if let Some(observation) = observation {
+                        observation.finish(
+                            citadel_runtime::jobs::JobOutcome::Productive,
+                            Some((1, "events")),
+                        );
+                    }
                 }
                 Some(Err(error)) => {
                     metrics.stream_reconnected();
                     tracing::warn!(%error, "Docker event stream interrupted");
+                    if let Some(observation) = observation {
+                        observation.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                    }
                     break;
                 }
                 None => {
+                    if let Some(observation) = observation {
+                        observation.finish(citadel_runtime::jobs::JobOutcome::Failed, None);
+                    }
                     metrics.stream_reconnected();
                     break;
                 }
@@ -159,6 +191,12 @@ pub(crate) async fn event_source(
         // EOF and decode failures must back off too, even after HTTP 200.
         if connected_at.elapsed() >= Duration::from_secs(30) {
             retry = Duration::from_millis(250);
+        }
+        if let Some(job) = &job {
+            job.waiting(
+                "Reconnecting Docker events",
+                Some(tokio::time::Instant::now() + retry),
+            );
         }
         if wait_to_reconnect(&cancellation, retry).await {
             return Ok(());
@@ -332,6 +370,10 @@ pub(crate) async fn event_consumer(
         agent_reconciliation,
     } = worker;
     let _task = metrics.task_guard();
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy("Inventory events; coalesced container state batches", None);
+    }
     let stream = futures_util::stream::unfold(receiver, |mut receiver| {
         let cancellation = &cancellation;
         async move {
@@ -345,6 +387,9 @@ pub(crate) async fn event_consumer(
     tokio::pin!(stream);
     let mut pending = None;
     loop {
+        if let Some(job) = &job {
+            job.waiting("Awaiting inventory events", None);
+        }
         let event = match if pending.is_some() {
             pending.take()
         } else {
@@ -353,6 +398,7 @@ pub(crate) async fn event_consumer(
             Some(event) => event,
             None => return Ok(()),
         };
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
         if state_event(&event) {
             let Some((batch, carry)) = super::super::container_batch::gather(
                 event,
@@ -368,7 +414,7 @@ pub(crate) async fn event_consumer(
             for event in &batch {
                 record_consumed(&metrics, event);
             }
-            apply_state_batch(
+            let succeeded = apply_state_batch(
                 batch,
                 store.as_ref(),
                 realtime.as_ref(),
@@ -377,10 +423,24 @@ pub(crate) async fn event_consumer(
                 &cancellation,
             )
             .await;
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
+            if let Some(observation) = observation {
+                observation.finish(
+                    if succeeded {
+                        citadel_runtime::jobs::JobOutcome::Completed
+                    } else {
+                        citadel_runtime::jobs::JobOutcome::Failed
+                    },
+                    None,
+                );
+            }
             continue;
         }
         record_consumed(&metrics, &event);
         if event.stream_recovered {
+            let mut failed = false;
             for target in targets.snapshot().await.iter() {
                 let matches = event.platform_id.map_or_else(
                     || target.connector_type == citadel_platforms::ConnectorKind::Local,
@@ -399,14 +459,29 @@ pub(crate) async fn event_consumer(
                             }
                         }
                         Err(error) => {
+                            failed = true;
                             tracing::warn!(%error, "Failed to invalidate health after event stream gap")
                         }
                     }
                 }
             }
             queue_stream_recovery(&event, &local_reconciliation, &agent_reconciliation);
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
+            if let Some(observation) = observation {
+                observation.finish(
+                    if failed {
+                        citadel_runtime::jobs::JobOutcome::Failed
+                    } else {
+                        citadel_runtime::jobs::JobOutcome::Completed
+                    },
+                    None,
+                );
+            }
             continue;
         }
+        let mut failed = false;
         let outcome = match apply_container_event(
             &event,
             &docker,
@@ -420,12 +495,26 @@ pub(crate) async fn event_consumer(
             Ok(true) => DeltaOutcome::Applied,
             Ok(false) => DeltaOutcome::Unavailable,
             Err(error) => {
+                failed = true;
                 RuntimeWork::ContainerEventApply.failures(1);
                 tracing::warn!(%error, "Container event update failed; requesting only its resource scope");
                 DeltaOutcome::Unavailable
             }
         };
         request_event_refresh(&event, outcome, &targets, &event_refresh, &cancellation).await;
+        if cancellation.is_cancelled() {
+            return Ok(());
+        }
+        if let Some(observation) = observation {
+            observation.finish(
+                if failed {
+                    citadel_runtime::jobs::JobOutcome::Failed
+                } else {
+                    citadel_runtime::jobs::JobOutcome::Completed
+                },
+                None,
+            );
+        }
     }
 }
 
@@ -458,7 +547,7 @@ async fn apply_state_batch(
     targets: &PlatformRuntimeRegistry,
     sender: &EventRefreshSender,
     cancellation: &CancellationToken,
-) {
+) -> bool {
     use super::super::container_batch;
     use citadel_platforms::jobs::ContainerStateDelta;
     let source = batch[0].source;
@@ -488,6 +577,7 @@ async fn apply_state_batch(
             }
         })
         .collect();
+    let mut succeeded = true;
     let snapshot = targets.snapshot().await;
     for target in snapshot.iter().filter(|target| match source {
         ReconciliationTrigger::LocalEvent => {
@@ -508,6 +598,7 @@ async fn apply_state_batch(
                 results.iter().any(|r| !r.accepted)
             }
             Err(error) => {
+                succeeded = false;
                 RuntimeWork::ContainerEventApply.failures(1);
                 tracing::warn!(%error, platform_id=%target.id, "Container state batch failed; requesting container scope");
                 true
@@ -522,6 +613,7 @@ async fn apply_state_batch(
         )
         .await;
     }
+    succeeded
 }
 
 pub(crate) async fn apply_container_event(

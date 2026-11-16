@@ -42,20 +42,20 @@ pub(crate) async fn run(
             return Ok(());
         };
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Pruning.start();
-        let candidates = store.pruning_candidates().await;
+        let candidates = citadel_runtime::jobs::observe(store.pruning_candidates()).await;
         match candidates {
             Ok(ids) => {
                 for id in ids {
                     if token.is_cancelled() {
                         return Ok(());
                     }
-                    if let Err(error) = containers
-                        .execute_background(
+                    if let Err(error) =
+                        citadel_runtime::jobs::observe(containers.execute_background(
                             citadel_primitives::ActorId::new(citadel_identity::SYSTEM_ACTOR_ID),
                             vec![id.to_string()],
                             ContainerAction::Delete(DeleteContainerOptions::default()),
                             token.child_token(),
-                        )
+                        ))
                         .await
                     {
                         tracing::warn!(%error, %id, "Historical Swarm task pruning failed");

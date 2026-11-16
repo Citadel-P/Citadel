@@ -18,6 +18,7 @@ use std::sync::Arc;
 // during delivery of one invalidation, after each reader checks authorization.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
+    pub instance: Option<Arc<citadel_instance::InstanceService>>,
     pub admission: citadel_runtime::admission::AdmissionGate,
     pub image_store: Arc<dyn citadel_platforms::image_mutations::ImageMutationStore>,
     pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
@@ -419,6 +420,10 @@ impl ApplicationGroupReader {
         e: Option<&PublishedRuntimeEvent>,
         lease: Option<&crate::realtime::AuthorizationLease>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
+        if matches!(g.topic(), Topic::InstanceJobs) {
+            self.jobs_service(p)?;
+            return Ok(GroupSnapshot::default());
+        }
         if matches!(
             g.topic(),
             Topic::ContainerExec { .. } | Topic::SwarmTaskExec { .. }
@@ -1587,7 +1592,12 @@ impl GroupReadPort for ApplicationGroupReader {
         g: &'a Group,
         cancel: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<'a, Result<Option<GroupStream>, RealtimeReadError>> {
-        Box::pin(self.logs(p, g, cancel))
+        Box::pin(async move {
+            if matches!(g.topic(), Topic::InstanceJobs) {
+                return self.jobs_stream(p, cancel).map(Some);
+            }
+            self.logs(p, g, cancel).await
+        })
     }
     fn invocation_group<'a>(
         &'a self,
@@ -1595,7 +1605,16 @@ impl GroupReadPort for ApplicationGroupReader {
         target: &'a str,
         args: &'a [Value],
     ) -> BoxFuture<'a, Result<Option<Group>, RealtimeReadError>> {
-        Box::pin(self.log_invocation(p, target, args))
+        Box::pin(async move {
+            if target == "StartInstanceJobs" {
+                if !args.is_empty() {
+                    return Err(RealtimeReadError::Authorization);
+                }
+                self.jobs_service(p)?;
+                return Ok(Group::parse("instance-jobs"));
+            }
+            self.log_invocation(p, target, args).await
+        })
     }
     fn read<'a>(
         &'a self,

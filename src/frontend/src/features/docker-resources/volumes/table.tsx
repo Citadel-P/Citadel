@@ -18,14 +18,17 @@ import { ResourceBackupIndicator } from '@/features/backup-policies/resource-bac
 import { useAppContext } from '@/lib/context/app-context';
 import { VolumeBrowserSheet } from './volume-browser-sheet';
 import { createNodeResourceColumn } from '@/components/custom/node-resource-column';
+import { SystemBadge } from '@/components/custom/system-badge';
 
 export const VolumesTable = ({
   items,
   actions,
   isLoading,
+  isFiltered,
 }: {
   items: VolumeView[];
   isLoading: boolean;
+  isFiltered?: boolean;
   actions: Record<
     string,
     React.FC<{ resource: VolumeView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
@@ -43,7 +46,17 @@ export const VolumesTable = ({
 
   return (
     <>
-      <DataTable columns={cols} data={items} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable
+        columns={cols}
+        data={items}
+        isLoading={isLoading}
+        onSelectionChange={setSelectedResources}
+        emptyState={
+          isFiltered
+            ? { title: 'No volumes match the current filters.', description: 'Adjust the search and filters.' }
+            : undefined
+        }
+      />
       <VolumeBrowserSheet
         open={!!browsingVolume}
         onOpenChange={(open) => !open && setBrowsingVolume(null)}
@@ -226,6 +239,11 @@ const VolumeNameRow = ({ volume }: { volume: VolumeView }) => {
         aria-label="Show volume details">
         {truncate(volume.id ?? '', 32, 'right')}
       </span>
+      {volume.isSystem && (
+        <span className="ml-2">
+          <SystemBadge description="Citadel system volume" />
+        </span>
+      )}
     </div>
   );
 };

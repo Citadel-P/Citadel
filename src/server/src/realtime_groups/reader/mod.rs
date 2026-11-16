@@ -1,5 +1,6 @@
 mod access;
 mod application;
+mod jobs;
 mod logs;
 mod platform_stats;
 mod processes;
@@ -20,3 +21,6 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
+
+#[cfg(test)]
+mod jobs_tests;

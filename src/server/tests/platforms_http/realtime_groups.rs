@@ -24,6 +24,7 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
+        instance: None,
         admission: citadel_runtime::admission::AdmissionGate::default(),
         image_store: f.lookup_state.platforms.image_store.clone(),
         image_updates: f.lookup_state.platforms.image_updates.clone(),
@@ -1025,6 +1026,114 @@ async fn invoke_args(socket: &mut Socket, target: &str, args: Value) -> Value {
     let result = receive(socket).await;
     assert_eq!(result["kind"], "completion");
     result
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn jobs_stream_starts_after_join_updates_and_rejoins_over_websocket() {
+    use citadel_runtime::jobs::{JobCatalog, JobOutcome, JobOwnership};
+    let f = fixture().await;
+    let catalog = JobCatalog::new(Uuid::now_v7());
+    let job = catalog.register("fixture-job", "Other", JobOwnership::Coordinator);
+    let mut reader = reader(&f);
+    reader.instance = Some(Arc::new(
+        citadel_instance::InstanceService::new(
+            Arc::new(
+                citadel_adapters::persistence::postgres::instance::PostgresInstanceRepository::new(
+                    f.pool.clone(),
+                ),
+            ),
+            Arc::new(SystemClock),
+        )
+        .with_jobs(Arc::new(
+            citadel_adapters::external::instance_jobs::RuntimeInstanceJobs(catalog),
+        )),
+    ));
+    let mut denied = f.administrator.clone();
+    denied.roles.clear();
+    assert!(
+        reader
+            .invocation_group(&denied, "StartInstanceJobs", &[])
+            .await
+            .is_err()
+    );
+    assert!(
+        reader
+            .invocation_group(
+                &f.administrator,
+                "StartInstanceJobs",
+                &[json!("unexpected")]
+            )
+            .await
+            .is_err()
+    );
+    let cancellation = CancellationToken::new();
+    let _guard = cancellation.clone().drop_guard();
+    let service = RealtimeService::new(
+        &RealtimeConfig {
+            queue_capacity: 32,
+            max_connections: 4,
+            subscribe_timeout: StdDuration::from_secs(5),
+            send_timeout: StdDuration::from_secs(2),
+            authorization_recheck_interval: StdDuration::from_secs(30),
+            snapshot_limit: 1000,
+        },
+        Arc::new(IdentityRealtimeReader::new(
+            f.lookup_state.platforms.identity.clone(),
+            f.lookup_state.platforms.platforms.clone(),
+        )),
+        Arc::new(Metrics::default()),
+        cancellation.clone(),
+    )
+    .with_groups(Arc::new(reader));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shutdown = cancellation.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, service.router())
+            .with_graceful_shutdown(shutdown.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let access_token = token(&f, &f.administrator).await;
+    // A fresh connection must join, start and receive the current state each time.
+    for completed in 0..2 {
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://{address}/api/v1/realtime"))
+                .await
+                .unwrap();
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":access_token}).to_string().into())).await.unwrap();
+        assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+        assert!(
+            invoke_args(&mut socket, "StartInstanceJobs", json!([])).await["error"].is_string()
+        );
+        assert!(invoke(&mut socket, "JoinGroup", "instance-jobs").await["error"].is_null());
+        assert!(invoke_args(&mut socket, "StartInstanceJobs", json!([])).await["error"].is_null());
+        let initial = receive(&mut socket).await;
+        assert_eq!(initial["target"], "InstanceJobsUpdated");
+        assert_eq!(initial["arguments"][0]["jobs"][0]["iterations"], completed);
+        // Starting twice must not create a second producer.
+        assert!(invoke_args(&mut socket, "StartInstanceJobs", json!([])).await["error"].is_null());
+        job.begin()
+            .finish(JobOutcome::Productive, Some((1, "rows")));
+        let changed = receive(&mut socket).await;
+        assert_eq!(changed["target"], "InstanceJobsUpdated");
+        assert_eq!(
+            changed["arguments"][0]["jobs"][0]["iterations"],
+            completed + 1
+        );
+        assert!(invoke(&mut socket, "LeaveGroup", "instance-jobs").await["error"].is_null());
+        job.waiting("Awaiting next check", None);
+        assert!(
+            tokio::time::timeout(StdDuration::from_millis(1100), socket.next())
+                .await
+                .is_err()
+        );
+        socket.close(None).await.unwrap();
+    }
+    cancellation.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
 }
 
 #[tokio::test]

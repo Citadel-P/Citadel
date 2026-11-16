@@ -53,22 +53,15 @@ service. See [commercial plans and partner scenarios](https://github.com/Citadel
 for examples and separately negotiated permissions. A Team key alone is not
 a hosting or reseller agreement.
 
-The official project welcomes Community fixes and reserves paid-feature and
-licensing changes for maintainer review. Review approval alone does not waive
-ELv2. See [CONTRIBUTING.md](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/CONTRIBUTING.md).
-
 Third-party material retains its own licenses. Known bundled-data notices
 include [Unicode-3.0](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/src/features/alerts/LICENSE.unicode)
 and [MIT](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/src/features/identity/src/authentication/common-passwords.LICENSE).
 Official Core and Agent images carry the root license and these known notices;
 they are not a complete inventory of third-party obligations.
 
-The sign-in/setup screens identify Citadel's authors and source license. The
-source repository and README provide the full license terms, and both Core and
-Agent images include them at `/app/LICENSE`. Third-party license obligations
-still apply. This update does not revoke rights already
-granted for earlier copies; see the [legal distribution checklist](https://github.com/Citadel-P/Citadel/blob/d42c63cf3a340078ede7530f07ab36d416a0f0f2/docs/LEGAL-RELEASE-CHECKLIST.md)
-for ownership, earlier public snapshots and release review.
+Core and Agent images include the source license at `/app/LICENSE`. Third-party
+license obligations still apply. Rights already granted for earlier copies are
+not revoked.
 
 ## Edition Comparison
 
@@ -111,27 +104,10 @@ Citadel enforces signed capabilities, not the edition name by itself. The
 edition identifies the commercial package, while the capability list in the
 installed license determines which paid workflows are enabled.
 
-| Installed license | Required capability included | Result |
-| --- | --- | --- |
-| Team | Yes | The workflow is enabled |
-| Team | No | The workflow remains unavailable |
-| Enterprise | Yes | The workflow is enabled |
-| Enterprise | No | The workflow remains unavailable |
-
-Enterprise is recognized by the license format and can carry the currently
-shipped Team capabilities. It does not automatically inherit capabilities that
-are absent from its signed capability list.
-
-All paid capabilities implemented in the current release are Team
-capabilities. Citadel therefore shows `Team` on current locked-feature
-indicators. The lock and edition label explain the normal minimum subscription;
-they are not the authorization check. The License page remains the authority
-for the capabilities included in a particular installed license.
-
-Citadel will show an `Enterprise` indicator only after a concrete
-Enterprise-only feature, capability, backend enforcement boundary, downgrade
-behavior, and tests have been implemented. There are no Enterprise-only runtime
-checks in the current release.
+The License page lists the capabilities included in your installed key. A Team
+or Enterprise label alone does not enable capabilities absent from that list.
+Current paid workflows use Team capabilities; Enterprise-only features are not
+currently available.
 
 ## Choosing Or Changing An Edition
 
@@ -162,18 +138,8 @@ limit the number of platforms or managed resource records.
 
 ### Move From Team To Enterprise
 
-Enterprise is not currently generally available. Once released, it will be
-appropriate for organizations that need capabilities such as:
-
-- automated identity provisioning and deprovisioning
-- organization-wide access and deployment policy
-- approval workflows, change windows, and separation of duties
-- immutable audit delivery or formal compliance reporting
-- a highly available Citadel control plane
-- validated upgrades, production SLAs, and incident response
-
-Do not select Enterprise today based on these requirements; they are product
-direction until the corresponding Citadel features are released.
+Enterprise is not currently generally available. Do not rely on planned identity,
+governance, or high-availability features when choosing an edition.
 
 ### Move From Team To Community
 
@@ -199,13 +165,8 @@ paid configuration.
 
 ### Move From Enterprise To Team
 
-This transition applies only after Enterprise is released. It will be
-appropriate when an organization no longer needs Enterprise identity,
-governance, high-availability, compliance, or support assurances.
-
-Team capabilities included in the replacement license remain active.
-Enterprise-only workflows will follow the same non-destructive pause and
-recovery rules documented for other license transitions.
+The capabilities included in the replacement license determine which paid
+workflows remain available. Review them before replacing the key.
 
 ## Editions
 
@@ -525,4 +486,3 @@ Citadel intentionally returns the same Unauthorized response for invalid and
 license-suspended machine credentials. An administrator can see the exact
 license state from **Administration > License** and inspect retained accounts under
 **Administration > Access > Service Accounts**.
-

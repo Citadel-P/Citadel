@@ -123,6 +123,21 @@ Uncached negative queue hints may skip idle recovery transactions, never the
 transactional ownership checks when work exists. Dispatchers own bounded execution
 tasks and retain admission through cleanup and completion persistence.
 
+Instance owns Jobs diagnostic models and ports; Runtime maintains bounded,
+process-local observations; the PostgreSQL adapter owns retained history. Core
+owns reporting, retention and compaction under the existing background-job lease.
+Diagnostics are best effort and never control execution, claims or recovery.
+Missing observations mean unknown state, and a successful check does not prove
+that the underlying operation succeeded.
+
+Diagnostic writes are batched and idempotent; storage, maintenance and reads remain
+bounded. Core identity and boot identity distinguish instances and counter resets.
+Runtime work never waits for diagnostic storage.
+
+The administrator-only Jobs page uses the existing authorized realtime lifecycle.
+Live observations do not trigger database reads; committed history changes
+invalidate history reads. Resource links retain destination-page authorization.
+
 ### Execution and recovery
 
 Build, Backup, Restore and Script attempts use persisted ownership and concurrency

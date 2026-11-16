@@ -134,12 +134,10 @@ cannot be restored.
 
 ### Copy a workload with data
 
-On a Deployment, Stack or managed Swarm Service page, open **Duplicate**. Citadel
-includes copy availability in the resource details and refreshes it through realtime
-updates when configuration, backup availability or access changes. Opening the menu
-does not request a copy preview. **Configuration + data** is disabled when copying
-is unavailable, with the reason shown under the option. A backup policy is not
-required to copy current data. **Configuration only** remains available.
+On a Deployment, Stack, or managed Swarm Service, open **Duplicate**.
+**Configuration + data** shows an explanation when unavailable. Copying current
+data does not require a backup policy. Use **Configuration only** when you only
+need settings.
 
 Choose **Configuration + data** to open the three-step wizard:
 
@@ -224,12 +222,6 @@ Platform selector because its copied volumes belong to that Platform; create ano
 copy to choose a different destination. Ordinary configuration-only drafts remain
 movable. Changing Platform or node placement
 does not move storage and blocks Apply.
-
-Current-data volume jobs run one at a time. Other copies can still finalize or clean
-up while a current-data copy is running. If recording a completed job fails
-because the database is temporarily unavailable, Citadel retries the result write
-without copying the data again. A claim whose database acknowledgement was lost
-is marked interrupted before another job starts.
 
 If Core exits before an active restore or current-data job records its result,
 startup recovery marks that job interrupted and fails the copy without creating a destination
@@ -470,9 +462,8 @@ coverage without creating a duplicate policy for a shared volume. Creating a pol
 opens its edit page, where you can run the backup immediately. Saving later changes
 keeps you on that page. Use the **Back to Deployment**, **Back to Stack**,
 **Back to Swarm Service**, **Back to Container**, or **Back to Volumes** link to return when ready.
-Coverage updates through
-the resource's live connection when policies, runs, repositories, or inventory
-change; opening the resource does not poll backup source previews.
+Coverage updates automatically when policies, runs, repositories, or inventory
+change.
 
 A Swarm Stack without applied service inventory shows an explanation to apply
 the Stack and synchronize inventory first. Coverage uses the applied namespace
@@ -672,7 +663,7 @@ Common uses:
 - run a backup before scheduled maintenance
 - let an external scheduler trigger a policy without using Citadel's cron schedule
 
-After the policy is saved, copy the listener URL from the Webhook section into the external provider. Citadel validates the configured provider signature or token when a secret is set, then queues a normal backup run.
+After the policy is saved, copy the listener URL from the Webhook section into the external provider. Citadel validates the required provider signature or token, then queues a normal backup run.
 
 Webhook runs use the policy's **Run As** User or Service Account and appear in
 the same run history as manual and scheduled runs. The webhook secret
@@ -690,9 +681,7 @@ When retention is enabled, Citadel runs restic retention after the backup comple
 Enable **Alert on failure** on a policy to record a **Backup Run Failed** alert
 when a **scheduled or webhook run** fails, times out, is interrupted, or is
 rejected. Manual runs do not trigger failure alerts. Deliberate cancellation and
-successful runs do not trigger them either. Failure observations are
-saved with the terminal run result and processed durably without duplicate alerts
-for repeated processing of the same run.
+successful runs do not trigger them either. Each failed run produces at most one incident.
 
 The built-in **Backup Run Failed** rule creates in-app alerts. Assign active
 channels to the enabled rule in **Alert Rules** to receive notifications. Alerts

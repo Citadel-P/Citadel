@@ -162,6 +162,10 @@ impl PlatformRuntimeRegistry {
         let mut tick = tokio::time::interval(Duration::from_secs(60));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.policy("Target changes or 60 second safety check", None);
+                job.waiting("Waiting for target changes or safety check", None);
+            }
             tokio::select! {
                 () = cancellation.cancelled() => return Ok(()),
                 _ = tick.tick() => {},
@@ -172,7 +176,7 @@ impl PlatformRuntimeRegistry {
             // Watch coalesces arbitrarily many mutations into one refresh.
             tokio::select! { ()=cancellation.cancelled()=>return Ok(()), _=tokio::time::sleep(Duration::from_millis(100))=>{} }
             updates.borrow_and_update();
-            let result = tokio::select! { ()=cancellation.cancelled()=>return Ok(()), result=self.refresh()=>result };
+            let result = tokio::select! { ()=cancellation.cancelled()=>return Ok(()), result=citadel_runtime::jobs::observe(self.refresh())=>result };
             if let Err(error) = result {
                 tracing::warn!(%error, "Platform target refresh failed; retaining last snapshot");
             }

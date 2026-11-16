@@ -13,6 +13,13 @@ pub(crate) async fn inventory_reconciliation(
     cancellation: CancellationToken,
     mut worker: InventoryReconciliationWorker,
 ) -> Result<(), std::convert::Infallible> {
+    let job = citadel_runtime::jobs::JobHandle::current();
+    if let Some(job) = &job {
+        job.policy(
+            "Target changes and reconnects; 60s health refresh and 6h safety pass",
+            None,
+        );
+    }
     let safety = Duration::from_secs(6 * 3600);
     let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + safety, safety);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -24,6 +31,7 @@ pub(crate) async fn inventory_reconciliation(
     let mut agent_ids = std::collections::BTreeSet::new();
     let mut all_agents = true;
     loop {
+        let observation = citadel_runtime::jobs::JobHandle::iteration();
         // Scoped ingress already debounces. Forward reconnects immediately so
         // their dirty generation invalidates an in-flight metadata read.
         if matches!(scope, Some(ReconciliationTrigger::LocalEvent)) {
@@ -82,7 +90,16 @@ pub(crate) async fn inventory_reconciliation(
                 }
             }
         }
+        if let Some(observation) = observation {
+            observation.finish(citadel_runtime::jobs::JobOutcome::Completed, None);
+        }
         loop {
+            if let Some(job) = &job {
+                job.waiting(
+                    "Awaiting target changes, reconnects or scheduled refresh",
+                    None,
+                );
+            }
             tokio::select! {
               biased;
               () = cancellation.cancelled() => return Ok(()),
@@ -102,9 +119,11 @@ pub(crate) async fn inventory_reconciliation(
                   break;
               }
               _ = health_tick.tick() => {
+                  let observation = citadel_runtime::jobs::JobHandle::iteration();
                   for target in worker.targets.snapshot().await.iter().filter(|t| matches!(t.connector_type, citadel_platforms::ConnectorKind::Local | citadel_platforms::ConnectorKind::Agent)) {
                       if worker.refreshes.send(ScopedEventRequest {platform_id: target.id, refresh: EventRefresh::Resource(citadel_platforms::jobs::ReconciliationScope::Containers)}, &cancellation).await.is_err() { return Ok(()); }
                   }
+                  if let Some(observation) = observation { observation.finish(citadel_runtime::jobs::JobOutcome::Completed, None); }
               }
               _ = ticker.tick() => { scope = None; reason = RecoveryReason::Safety; break; }
               _ = changes.changed() => { scope = None; reason = RecoveryReason::Bootstrap; break; }

@@ -508,6 +508,9 @@ pub struct VolumeListResponse {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct DockerVolume {
+    /// Computed from system labels and owner-daemon container mounts.
+    #[serde(skip)]
+    pub is_system: bool,
     /// Computed locally, never accepted from the Docker wire response.
     #[serde(skip)]
     pub content_access_allowed: Option<bool>,

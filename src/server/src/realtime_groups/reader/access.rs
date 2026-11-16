@@ -8,6 +8,10 @@ impl ApplicationGroupReader {
         g: &Group,
         lease: &crate::realtime::AuthorizationLease,
     ) -> Result<(), RealtimeReadError> {
+        if matches!(g.topic(), Topic::InstanceJobs) {
+            self.jobs_service(p)?;
+            return Ok(());
+        }
         use Topic::*;
         let actor = p.actor_id;
         let admin = p.is_administrator();
@@ -15,6 +19,7 @@ impl ApplicationGroupReader {
         let mut permission_id = id;
         let mut specific = None;
         let kind = match g.topic() {
+            InstanceJobs => return Ok(()),
             ContainerExec { .. } | SwarmTaskExec { .. } => {
                 self.terminal_target(p, g).await?;
                 return Ok(());

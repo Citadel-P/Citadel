@@ -1,182 +1,208 @@
+import { useCallback, useMemo } from 'react';
+import { Link } from 'react-router';
+import type { StockFeatures, ColumnDef, Row } from '@tanstack/react-table';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
-import { AlertRuleListItem } from '@/api/generated/api.types';
+import { AlertRuleStatus, AlertType, type AlertRuleListItem } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { StockFeatures, ColumnDef } from '@tanstack/react-table';
-import { useMemo } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
 import { StateBadge } from '@/components/custom/state-badge';
-import { Activity, Clock, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StateIndicator } from '@/components/custom/state-indicator';
-import { useNavigate } from 'react-router';
-import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import type { ActionData } from '@/pages/types';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAlertRuleFilters } from './filters';
+import { groupRules, isRuleRow, resourceLabel, type RuleTableRow } from './presentation';
 
+type RuleActions = Record<
+  string,
+  React.FC<{ resource: AlertRuleListItem; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+>;
 const EMPTY_ROWS: AlertRuleListItem[] = [];
 
-export const AlertRulesTable = ({
+export function AlertRulesTable({
   actions,
-  items,
+  items = EMPTY_ROWS,
   isLoading,
 }: {
   items: AlertRuleListItem[];
   isLoading: boolean;
-  actions: Record<
-    string,
-    React.FC<{ resource: AlertRuleListItem; onAction?: (actionKey: string, actionData?: ActionData) => void }>
-  >;
-}) => {
-  const [_, setSelectedResources] = useSelectedResources<AlertRuleListItem>('AlertRule');
+  actions: RuleActions;
+}) {
+  const [, setSelected] = useSelectedResources<AlertRuleListItem>('AlertRule');
+  const { value: filters } = useAlertRuleFilters();
+  const rows = useMemo(() => groupRules(items, filters), [items, filters]);
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
-
+  const getSubRows = useCallback((row: RuleTableRow) => (row.kind === 'group' ? row.rules : undefined), []);
+  const onSelectionChange = useCallback(
+    (rows: RuleTableRow[]) => setSelected(rows.filter(isRuleRow).map((row) => row.rule)),
+    [setSelected],
+  );
   return (
-    <DataTable
+    <DataTable<RuleTableRow>
+      expansionStorageKey="alert-rules-expanded"
       columns={cols}
-      data={items ?? EMPTY_ROWS}
+      data={rows}
       isLoading={isLoading}
-      onSelectionChange={setSelectedResources}
+      getSubRows={getSubRows}
+      getRowClassName={(row) =>
+        row.depth > 0 ? 'bg-muted/30 even:bg-muted/30 hover:bg-muted/50 data-[state=selected]:bg-muted/60' : undefined
+      }
+      enableRowSelection={isRuleRow}
+      enableSubRowSelection={true}
+      onSelectionChange={onSelectionChange}
+      emptyState={{ title: items.length ? 'No rules match your filters.' : 'No alert rules.' }}
     />
   );
-};
+}
 
-const columns = (
-  actions: Record<
-    string,
-    React.FC<{ resource: AlertRuleListItem; onAction?: (actionKey: string, actionData?: ActionData) => void }>
-  >,
-): ColumnDef<StockFeatures, AlertRuleListItem>[] => {
-  const cols: ColumnDef<StockFeatures, AlertRuleListItem>[] = [
+function columns(actions: RuleActions): ColumnDef<StockFeatures, RuleTableRow>[] {
+  return [
     {
       id: 'select',
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label="Select all rules"
         />
       ),
       cell: ({ row }) => (
         <Checkbox
-          checked={row.getIsSelected()}
+          checked={
+            isRuleRow(row.original)
+              ? row.getIsSelected()
+              : row.getIsAllSubRowsSelected() || (row.getIsSomeSelected() && 'indeterminate')
+          }
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select alert rule"
+          aria-label={
+            isRuleRow(row.original)
+              ? `Select ${row.original.rule.name}`
+              : `Select ${resourceLabel(row.original.resourceType)} rules`
+          }
         />
       ),
       enableSorting: false,
       enableHiding: false,
     },
     {
-      accessorKey: 'name',
+      id: 'name',
+      accessorFn: (row) => (isRuleRow(row) ? row.rule.name : resourceLabel(row.resourceType)),
       header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-      cell: ({ row }) => <RuleNameRow alertRule={row.original} />,
-      sortFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
+      cell: ({ row }) => <RuleNameCell row={row} />,
     },
     {
-      accessorKey: 'severity',
+      id: 'severity',
+      accessorFn: (row) => (isRuleRow(row) ? row.rule.severity : ''),
       header: ({ column }) => <SortableCell cellName="Severity" column={column} />,
-      cell: ({ row }) => <StateBadge value={row.original.severity} kind="alertSeverity" />,
-      sortFn: (rowA: any, rowB: any): number => rowA.original?.severity?.localeCompare(rowB.original?.severity),
+      cell: ({ row }) =>
+        isRuleRow(row.original) ? <StateBadge value={row.original.rule.severity} kind="alertSeverity" /> : null,
     },
     {
-      accessorKey: 'conditions',
-      header: ({ column }) => <SortableCell cellName="Conditions" column={column} />,
-      cell: ({ row }) => <RuleConditionCell rule={row.original} />,
-      sortFn: (rowA: any, rowB: any): number => rowA.original?.threshold?.localeCompare(rowB.original?.threshold),
+      id: 'conditions',
+      header: 'Conditions',
+      enableSorting: false,
+      cell: ({ row }) =>
+        isRuleRow(row.original) ? (
+          <RuleConditionCell rule={row.original.rule} />
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            {row.original.enabled} enabled · {row.original.total - row.original.enabled} disabled
+          </span>
+        ),
     },
     {
-      accessorKey: 'channels',
-      header: ({ column }) => <SortableCell cellName="Channels" column={column} />,
-      cell: ({ row }) => <ChannelsCell rule={row.original} />,
+      id: 'channels',
+      header: 'Channels',
+      enableSorting: false,
+      cell: ({ row }) => (isRuleRow(row.original) ? <ChannelsCell rule={row.original.rule} /> : null),
     },
     {
       id: 'actions',
-      cell: ({ row }) => <RowActionMenu resource={row.original as any} actions={actions} />,
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      cell: ({ row }) =>
+        isRuleRow(row.original) ? <RowActionMenu resource={row.original.rule} actions={actions} /> : null,
     },
   ];
+}
 
-  return cols;
-};
+function RuleNameCell({ row }: { row: Row<StockFeatures, RuleTableRow> }) {
+  const item = row.original;
+  if (isRuleRow(item))
+    return (
+      <div className="flex min-w-0 items-center gap-2 pl-7">
+        <StateIndicator value={item.rule.status} />
+        <Link className="table-link block truncate font-normal" to={`/alert-rules/edit/${item.rule.id}/`}>
+          {item.rule.name}
+        </Link>
+      </div>
+    );
+  const state =
+    item.enabled === item.total ? AlertRuleStatus.Enabled : item.enabled === 0 ? AlertRuleStatus.Disabled : 'Mixed';
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <button
+        type="button"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+        aria-label={`${row.getIsExpanded() ? 'Collapse' : 'Expand'} ${resourceLabel(item.resourceType)} rules`}
+        aria-expanded={row.getIsExpanded()}
+        onClick={row.getToggleExpandedHandler()}>
+        {row.getIsExpanded() ? (
+          <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
+        )}
+      </button>
+      <StateIndicator value={state} tooltip={`${item.enabled} enabled · ${item.total - item.enabled} disabled`} />
+      <button
+        type="button"
+        className="truncate cursor-pointer text-left text-sm font-medium text-foreground hover:underline"
+        aria-label={`${resourceLabel(item.resourceType)} rules`}
+        aria-expanded={row.getIsExpanded()}
+        onClick={row.getToggleExpandedHandler()}>
+        {resourceLabel(item.resourceType)}
+      </button>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+        {item.rules.length === item.total ? item.total : `${item.rules.length}/${item.total}`}{' '}
+        {item.total === 1 ? 'rule' : 'rules'}
+      </span>
+    </div>
+  );
+}
 
 function RuleConditionCell({ rule }: { rule: AlertRuleListItem }) {
   return (
-    <div className="py-3">
-      <div className="flex flex-col gap-1.5">
-        {rule.threshold ? (
-          <div className="flex items-center gap-2 ">
-            <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-medium text-xs">
-              &ge; {rule.threshold}%<span className="text-muted-foreground font-normal mx-1">for</span>
-              {rule.requiredMatches}x
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Zap className="h-3.5 w-3.5" />
-            <span className="text-xs">Event Trigger</span>
-          </div>
-        )}
-        {rule.cooldownSeconds && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs">{rule.cooldownSeconds}s cooldown</span>
-          </div>
-        )}
-      </div>
-    </div>
+    <span className="text-xs text-muted-foreground">
+      {rule.type === AlertType.BuildAgentPoolUnavailable
+        ? `Unavailable ≥ ${rule.threshold ?? 90}s`
+        : rule.threshold != null
+          ? `≥ ${rule.threshold}%${rule.requiredMatches != null ? ` for ${rule.requiredMatches} matches` : ''}`
+          : 'Event trigger'}
+      {rule.cooldownSeconds != null && rule.cooldownSeconds > 0 ? ` · ${rule.cooldownSeconds}s cooldown` : ''}
+    </span>
   );
 }
 
 function ChannelsCell({ rule }: { rule: AlertRuleListItem }) {
+  if (!rule.channels.length) return <span className="text-xs text-muted-foreground">No channels</span>;
   return (
-    <div className="flex -space-x-2">
-      {rule.channels.map((c, i) => (
-        <div
-          key={i}
-          className={cn(
-            'h-8 w-8 rounded-full border-2 border-background flex items-center justify-center text-white text-xs font-normal shadow-sm relative z-10 transition-transform hover:scale-110 hover:z-20 cursor-help',
-            c.alertDestination === 'Slack'
-              ? 'bg-[#4A154B]'
-              : c.alertDestination === 'Discord'
-                ? 'bg-[#5865F2]'
-                : c.alertDestination === 'Generic'
-                  ? 'bg-blue-600'
-                  : 'bg-zinc-900',
-          )}
-          title={`${c.alertDestination}: ${c.name}`}>
-          {c.alertDestination[0]}
-        </div>
-      ))}
-      {rule.channels.length === 0 && (
-        <span className="text-xs text-muted-foreground italic py-1 px-2 ">No channels</span>
-      )}
-    </div>
+    <Tooltip>
+      <TooltipTrigger type="button" className="inline-block max-w-48 truncate align-middle text-xs font-normal">
+        {rule.channels[0].name}
+        {rule.channels.length > 1 ? ` +${rule.channels.length - 1}` : ''}
+      </TooltipTrigger>
+      <TooltipContent>
+        <ul>
+          {rule.channels.map((channel) => (
+            <li key={channel.id}>
+              {channel.name} · {channel.alertDestination}
+              {!channel.isActive ? ' · Disabled' : ''}
+            </li>
+          ))}
+        </ul>
+      </TooltipContent>
+    </Tooltip>
   );
 }
-
-const RuleNameRow = ({ alertRule }: { alertRule: AlertRuleListItem }) => {
-  const navigate = useNavigate();
-  function onClick() {
-    navigate(`/alert-rules/edit/${alertRule.id}/`);
-  }
-  return (
-    <div className="flex items-center whitespace-nowrap">
-      <div className="flex items-center">
-        <StateIndicator value={alertRule.status} />
-      </div>
-      <span
-        className="cursor-pointer hover:underline"
-        onClick={onClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            onClick();
-          }
-        }}
-        tabIndex={0}
-        role="button"
-        aria-label="Show alert rule details">
-        {alertRule.name}
-      </span>
-    </div>
-  );
-};

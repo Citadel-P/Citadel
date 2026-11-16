@@ -20,12 +20,8 @@ Enter:
 3. A password meeting the configured length requirement (15 to 128 characters by default).
 4. The same password again.
 
-The password field shows a character count and an estimated strength. The estimate
-uses a lightweight check of length, variety, and repetition in your browser. It
-is advisory and does not check breached-password lists or a comprehensive dictionary;
-the configured length limits still apply. Longer, uncommon passphrases can help you choose a stronger password.
-Repetitive passwords with small variations are rated conservatively; adding a
-symbol or space does not automatically make them strong.
+The password-strength estimate is advisory and does not check breached-password
+lists. Use a long, unique password and store it in a password manager.
 
 **MFA is optional by default.** You and other users can enable it later in
 **Profile → Security → Two-factor authentication**. If the server requires MFA,
@@ -40,12 +36,11 @@ See [update checks and privacy](/getting-started/configuration#allow-update-chec
 Select **Create administrator**. Citadel creates the account with the built-in
 Admin role and signs you in. Setup cannot be opened again after it succeeds.
 
-After creating the account, [enable in-app updates](/operations/upgrade-and-rollback#enable-in-app-updates)
-on the Docker host to finish setting up the supported Compose installation.
-This verifies installation ownership and briefly restarts Core; creating an account
-or enabling release checks alone does not grant the updater installation access.
+With the supplied Compose installation, Core automatically registers in-app
+updates after account creation. Check **Administration → Updates** for its status;
+see [update setup](/operations/upgrade-and-rollback#enable-in-app-updates) if
+registration cannot finish.
 
-The password should be unique to Citadel and stored in a password manager.
 After setup, use [Profile](/guides/profile-and-sessions) for personal settings,
 password changes, and active browser sessions.
 
@@ -66,7 +61,7 @@ TLS, and Edge overlays used by your installation, then reload the setup page.
 
 Two-factor authentication is optional by default. It can be enabled later from
 **Profile → Security**. Administrators can change the installation-wide policy
-in **Administration → Instance**; MFA changes save when selected.
+in **Administration → Instance → Config**; MFA changes apply on save.
 
 To enforce a minimum policy through deployment configuration, set:
 

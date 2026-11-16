@@ -24,10 +24,16 @@ impl PostgresAlertRepository {
     ) -> Result<(), std::convert::Infallible> {
         self.invalidate_configuration();
         loop {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.policy("Alert rule changes", None);
+                job.waiting("Listening for alert configuration changes", None);
+            }
             tokio::select! {
                 () = cancel.cancelled() => return Ok(()),
                 result = wake.changed() => {
+                    let observation = citadel_runtime::jobs::JobHandle::iteration();
                     self.invalidate_configuration();
+                    if let Some(i) = observation { i.finish(citadel_runtime::jobs::JobOutcome::Productive, Some((1, "invalidations"))); }
                     if result.is_err() { return Ok(()); }
                 }
             }

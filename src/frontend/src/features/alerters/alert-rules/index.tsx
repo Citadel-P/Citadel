@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionWithDialog } from '@/components/custom/action-with-dialog';
 import { AlertRulesTable } from './table';
+import { AlertRuleFilters } from './filters';
 import { useMutate, useRead } from '@/lib/hooks';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -353,6 +354,16 @@ function AlertNotificationChannels() {
   );
 }
 
+function AlertRuleToolbar() {
+  const { data } = useRead('listAlertRules');
+  return (
+    <>
+      <AlertRuleFilters items={data?.data.alertRules ?? EMPTY_ALERT_RULES} />
+      <AddAlertRuleButton />
+    </>
+  );
+}
+
 function AddAlertRuleButton() {
   const navigate = useNavigate();
   const { data } = useRead('listAlertRules');
@@ -406,7 +417,8 @@ export const AlertRuleComponents: RequiredComponents = {
     subtitle: 'Manage conditions and thresholds.',
     showSearch: true,
     showAdd: false,
-    Extra: AddAlertRuleButton,
+    activeFilterParams: ['channel', 'severity'],
+    Extra: AlertRuleToolbar,
   },
   useData(): ResourceDataHookResult<AlertRuleView> {
     const { data, isLoading, error, refetch, isFetching } = useRead('listAlertRules');

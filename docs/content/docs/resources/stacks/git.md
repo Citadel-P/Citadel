@@ -306,7 +306,7 @@ For the shared listener model, authentication options, URL shape, and troublesho
 
 For Git stacks, webhook deploy still validates:
 
-- provider authentication, if a secret is configured
+- provider authentication with the configured secret
 - repository identity
 - branch filter
 - stack is Git-backed
@@ -334,7 +334,7 @@ Citadel accepts GitHub `X-Hub-Signature-256` signatures and the GitHub-compatibl
 
 Rollback reloads the selected healthy release's saved Stack configuration,
 including its repository, branch, Compose paths, and any explicit **Commit**.
-The current Rust implementation does not automatically use the deployed commit
+Rollback does not automatically use the deployed commit
 recorded in release source metadata. If the selected release was tracking a
 branch with **Commit** empty, rollback can deploy that branch's current head.
 

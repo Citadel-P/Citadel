@@ -1,3 +1,4 @@
+use crate::api::resources::instance::requests::JobHistoryQuery;
 use crate::{
     api::{
         error::{ApiError, error_response, no_store},
@@ -41,6 +42,8 @@ fn settings_routes() -> utoipa_axum::router::OpenApiRouter<InstanceHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(get_installation_settings))
         .normalized_routes(utoipa_axum::routes!(get_database_connections))
+        .normalized_routes(utoipa_axum::routes!(get_jobs))
+        .normalized_routes(utoipa_axum::routes!(get_job_history))
         .normalized_routes(utoipa_axum::routes!(patch_installation_settings))
 }
 
@@ -220,6 +223,54 @@ async fn restart_instance(
     };
     match service.request(&principal, request.boot_id).await {
         Ok(()) => no_store(axum::http::StatusCode::ACCEPTED.into_response()),
+        Err(error) => error_response(error, &headers),
+    }
+}
+
+#[utoipa::path(get, path = "/api/v1/instance/jobs", operation_id = "getInstanceJobs", tag = "Instance",
+    summary = "Get this Core's background jobs (administrator)",
+    responses((status = 200, description = "Process-local job observations", body = crate::api::resources::instance::jobs::JobsSnapshotView), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false))))]
+async fn get_jobs(
+    State(state): State<InstanceHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    match state.instance.jobs(&principal) {
+        Ok(value) => no_store(
+            Json(crate::api::resources::instance::jobs::JobsSnapshotView::from(value))
+                .into_response(),
+        ),
+        Err(error) => error_response(error, &headers),
+    }
+}
+
+#[utoipa::path(get, path = "/api/v1/instance/jobs/history", operation_id = "getInstanceJobHistory", tag = "Instance",
+    params(JobHistoryQuery),
+    summary = "Get retained job diagnostics (administrator)",
+    responses((status = 200, description = "Bounded history across Core sessions", body = crate::api::resources::instance::job_history::JobHistoryView), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false))))]
+async fn get_job_history(
+    State(state): State<InstanceHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    axum::extract::Query(query): axum::extract::Query<JobHistoryQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    match state
+        .instance
+        .job_history(&principal, query.job.as_deref(), query.hours)
+        .await
+    {
+        Ok(history) => no_store(
+            Json(crate::api::resources::instance::job_history::JobHistoryView::from(history))
+                .into_response(),
+        ),
         Err(error) => error_response(error, &headers),
     }
 }

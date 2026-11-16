@@ -174,6 +174,8 @@ export const foundationOperations = {
   getHealth: { method: 'GET', path: '/health' },
   getImageUsage: { method: 'GET', path: '/api/v1/images/{platformId}/{imageId}/usage' },
   getInstallationSettings: { method: 'GET', path: '/api/v1/installation/settings' },
+  getInstanceJobHistory: { method: 'GET', path: '/api/v1/instance/jobs/history' },
+  getInstanceJobs: { method: 'GET', path: '/api/v1/instance/jobs' },
   getInstanceRestart: { method: 'GET', path: '/api/v1/instance/restart' },
   getInstanceUpdateOperation: { method: 'GET', path: '/api/v1/updates/operations/{id}' },
   getInstanceUpdates: { method: 'GET', path: '/api/v1/updates' },

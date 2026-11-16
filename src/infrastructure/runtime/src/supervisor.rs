@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SupervisedTaskError {
@@ -30,6 +31,7 @@ pub enum SupervisedTaskError {
 
 pub struct TaskSupervisor {
     cancellation: CancellationToken,
+    jobs: Option<crate::jobs::JobCatalog>,
     tasks: JoinSet<(&'static str, Result<(), TaskFailure>)>,
 }
 
@@ -38,17 +40,70 @@ impl TaskSupervisor {
     pub fn new(cancellation: CancellationToken) -> Self {
         Self {
             cancellation,
+            jobs: None,
             tasks: JoinSet::new(),
         }
     }
 
-    pub fn spawn<F, E>(&mut self, name: &'static str, task: F)
-    where
+    pub fn spawn<F, E>(
+        &mut self,
+        name: &'static str,
+        resource_type: impl Into<&'static str>,
+        task: F,
+    ) where
         F: Future<Output = Result<(), E>> + Send + 'static,
         E: Into<TaskFailure> + Send + 'static,
     {
-        self.tasks
-            .spawn(async move { (name, task.await.map_err(Into::into)) });
+        self.spawn_scoped(
+            name,
+            resource_type,
+            crate::jobs::JobOwnership::Coordinator,
+            task,
+        );
+    }
+
+    pub fn spawn_scoped<F, E>(
+        &mut self,
+        name: &'static str,
+        resource_type: impl Into<&'static str>,
+        ownership: crate::jobs::JobOwnership,
+        task: F,
+    ) where
+        F: Future<Output = Result<(), E>> + Send + 'static,
+        E: Into<TaskFailure> + Send + 'static,
+    {
+        let job = self
+            .jobs
+            .as_ref()
+            .map(|catalog| catalog.register(name, resource_type, ownership));
+        let cancellation = self.cancellation.clone();
+        self.tasks.spawn(async move {
+            if let Some(job) = job {
+                job.started();
+                let mut guard = ObservedTask {
+                    job: job.clone(),
+                    cancellation,
+                    finished: false,
+                };
+                let result = job
+                    .scope(task.instrument(tracing::info_span!("background_job", job = name)))
+                    .await
+                    .map_err(Into::into);
+                guard
+                    .job
+                    .stopped(result.is_err() || !guard.cancellation.is_cancelled());
+                guard.finished = true;
+                (name, result)
+            } else {
+                (name, task.await.map_err(Into::into))
+            }
+        });
+    }
+
+    #[must_use]
+    pub fn with_jobs(mut self, jobs: crate::jobs::JobCatalog) -> Self {
+        self.jobs = Some(jobs);
+        self
     }
 
     pub async fn wait_for_exit(&mut self) -> Result<(), SupervisedTaskError> {
@@ -97,6 +152,19 @@ impl TaskSupervisor {
     }
 }
 
+struct ObservedTask {
+    job: crate::jobs::JobHandle,
+    cancellation: CancellationToken,
+    finished: bool,
+}
+impl Drop for ObservedTask {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.job.stopped(!self.cancellation.is_cancelled());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn task_failures_preserve_the_original_error_source() {
         let mut supervisor = TaskSupervisor::new(CancellationToken::new());
-        supervisor.spawn("io", async {
+        supervisor.spawn("io", "Other", async {
             Err::<(), _>(std::io::Error::other("disk unavailable"))
         });
         let error = supervisor.wait_for_exit().await.unwrap_err();
@@ -125,7 +193,7 @@ mod tests {
         let observed = Arc::new(AtomicBool::new(false));
         let mut supervisor = TaskSupervisor::new(cancellation.clone());
         let task_observed = Arc::clone(&observed);
-        supervisor.spawn("fixture", async move {
+        supervisor.spawn("fixture", "Other", async move {
             cancellation.cancelled().await;
             task_observed.store(true, Ordering::Release);
             Ok::<_, std::convert::Infallible>(())
@@ -146,8 +214,8 @@ mod tests {
         let mut supervisor = TaskSupervisor::new(cancellation.clone());
         let cleaned = Arc::new(AtomicBool::new(false));
         let observed = cleaned.clone();
-        supervisor.spawn("failed", async { Err::<(), _>("failure") });
-        supervisor.spawn("cleanup", async move {
+        supervisor.spawn("failed", "Other", async { Err::<(), _>("failure") });
+        supervisor.spawn("cleanup", "Other", async move {
             cancellation.cancelled().await;
             tokio::time::sleep(Duration::from_millis(20)).await;
             observed.store(true, Ordering::Release);
@@ -166,6 +234,7 @@ mod tests {
         let mut supervisor = TaskSupervisor::new(CancellationToken::new());
         supervisor.spawn(
             "never",
+            "Other",
             std::future::pending::<Result<(), std::convert::Infallible>>(),
         );
         let started = tokio::time::Instant::now();
@@ -180,7 +249,9 @@ mod tests {
     async fn supervisor_observes_an_unexpected_task_exit() {
         let cancellation = CancellationToken::new();
         let mut supervisor = TaskSupervisor::new(cancellation);
-        supervisor.spawn("fixture", async { Ok::<_, std::convert::Infallible>(()) });
+        supervisor.spawn("fixture", "Other", async {
+            Ok::<_, std::convert::Infallible>(())
+        });
 
         assert!(matches!(
             supervisor.wait_for_exit().await,

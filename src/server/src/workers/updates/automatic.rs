@@ -10,6 +10,13 @@ pub async fn run_automatic_setup(
     realtime: Option<crate::realtime::RealtimeHub>,
     cancellation: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.policy(
+            "One-time setup after initialization; up to 6 attempts",
+            None,
+        );
+        job.waiting("Waiting for instance initialization", None);
+    }
     let mut changes = identity.setup_changes();
     loop {
         let initialized = tokio::select! {
@@ -32,12 +39,15 @@ pub async fn run_automatic_setup(
         if cancellation.is_cancelled() {
             return Ok(());
         }
-        match registration.register(&cancellation).await {
+        match citadel_runtime::jobs::observe(registration.register(&cancellation)).await {
             Ok(()) => {
                 crate::realtime::notifiers::UpdatesRealtimeNotifier::new(realtime).changed();
                 tracing::info!(
                     "Automatic setup completed; Core and PostgreSQL in-app updates are configured"
                 );
+                if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                    job.waiting("Setup complete; no further work", None);
+                }
                 cancellation.cancelled().await;
                 return Ok(());
             }

@@ -24,3 +24,5 @@ pub mod maintenance;
 pub mod database_health;
 
 pub mod admission;
+
+pub mod jobs;

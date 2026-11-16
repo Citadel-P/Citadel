@@ -198,11 +198,8 @@ Citadel reports that limitation in the quorum tooltip.
 Treat stale data as diagnostic only; do not assume it is safe to act on
 outside Citadel.
 
-Citadel uses Docker daemon events for prompt refreshes after Service, Node,
-Network, Secret, or Config changes. A bounded reconciliation also runs every
-30 minutes to recover from missed events, reconnects, and partial event data.
-Multiple events for one Platform are coalesced so they do not create an
-unbounded queue of refresh jobs.
+Inventory updates after Docker events and is reconciled periodically. If it is
+stale, restore connectivity and use **Refresh inventory**.
 
 ## Manage Nodes
 

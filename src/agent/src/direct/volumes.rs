@@ -123,6 +123,7 @@ pub(super) fn volume(value: DockerVolume) -> VolumeResponse {
         ref_count: Some(data["RefCount"].as_i64().unwrap_or(-1)),
     });
     VolumeResponse {
+        is_system: value.is_system,
         content_access_allowed: value.content_access_allowed,
         name: value.name,
         driver: value.driver,
@@ -212,6 +213,16 @@ fn cluster(value: &Value) -> ClusterVolumeMessage {
 
 #[cfg(test)]
 mod status_tests {
+    #[test]
+    fn system_classification_is_preserved_in_the_agent_contract() {
+        let mapped = super::volume(super::DockerVolume {
+            is_system: true,
+            ..Default::default()
+        });
+        assert!(mapped.is_system);
+        assert!(mapped.labels.is_empty());
+    }
+
     #[test]
     fn null_status_is_empty_in_the_agent_contract() {
         let volume: super::DockerVolume = serde_json::from_value(

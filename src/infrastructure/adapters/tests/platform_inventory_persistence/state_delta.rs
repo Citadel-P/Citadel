@@ -496,13 +496,19 @@ async fn operation_finish_and_stale_recovery_create_parent_activities_once() {
         Arc::new(ExitedRuntime),
         Arc::new(Tasks),
     );
-    service.reconcile(&CancellationToken::new()).await.unwrap();
+    service
+        .reconcile(&CancellationToken::new(), |_| {})
+        .await
+        .unwrap();
     let first: Vec<(Uuid, String)> = sqlx::query_as("SELECT resourceid,eventtype FROM activityevents WHERE resourceid=ANY($1) ORDER BY resourceid,eventtype")
         .bind(vec![stale_stack, stale_deployment]).fetch_all(&pool).await.unwrap();
     assert_eq!(first.len(), 2);
     assert!(first.iter().any(|(_, kind)| kind == "StackStopped"));
     assert!(first.iter().any(|(_, kind)| kind == "DeploymentStopped"));
-    service.reconcile(&CancellationToken::new()).await.unwrap();
+    service
+        .reconcile(&CancellationToken::new(), |_| {})
+        .await
+        .unwrap();
     let after: i64 =
         sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=ANY($1)")
             .bind(vec![stale_stack, stale_deployment])

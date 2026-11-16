@@ -65,7 +65,7 @@ modules for required fixtures and explicit opt-ins.
 | Area | Primary test targets / location |
 | --- | --- |
 | Identity, roles and authorization | Adapters: `identity_access`, `authorized_read`, `authorization_cache`, `secret_use_authorization`; Server: `users_http`, `roles_http`, `mfa_http`, `service_accounts_http` |
-| Instance configuration | Server: `configuration`, `mfa_http`; database migration parity |
+| Instance configuration and job diagnostics | Server: `configuration`, `mfa_http`, Jobs/realtime unit tests; Adapters: `job_history_persistence` (fresh statistics fixture; retention, compaction and seven-day workload audit); database migration parity |
 | Platform inventory, health and reads | Adapters: `platform_inventory_persistence`, `container_inspection`; Server: `platforms_http`, `platform_creation_http` |
 | Statistics, retention and query work | Adapters: `stats_batch_persistence`, `maintenance_retention`, `connection_pool`, `idle_worker_queries` |
 | Resource metadata | Adapters: `resource_metadata_persistence`; Server: `resources_http`, `registries_http` |
@@ -101,6 +101,10 @@ by the selected suite, pointing to **disposable** databases:
 | Agent job acceptance | `CITADEL_AGENT_TEST_DATABASE_URL` |
 | Token safety | `CITADEL_TOKEN_SAFETY_DATABASE_URL` |
 | Checkpoint restore source / target | `CITADEL_CHECKPOINT_DATABASE_URL` / `CITADEL_CHECKPOINT_TARGET_DATABASE_URL` |
+
+The seven-day `job_history_persistence` audit requires a disposable PostgreSQL
+server started with `-c shared_preload_libraries=pg_stat_statements` and permission
+to create that extension. Run this fixture serially; it resets statement statistics.
 
 Platform HTTP, migration/bootstrap and statistics cases that create child
 databases need `CREATE DATABASE` permission on a disposable PostgreSQL server.

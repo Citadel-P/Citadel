@@ -7,6 +7,9 @@ Open a **Platform**, then **Volumes** to see Docker-managed storage. Named volum
 persist independently of a container. Bind mounts instead use paths on the host;
 they are not available in the volume browser.
 
+A shield beside the name identifies Citadel system storage. Use **Backup Filter**
+to find volumes by backup status.
+
 ## Create and attach a volume
 
 1. On an online Platform, select **Add Volume**.
@@ -32,13 +35,10 @@ must provide a usable connection to that Node.
 
 1. Select the volume and choose **Browse**.
 2. Open directories and use the breadcrumbs to navigate.
-3. Use a file's download button to save its contents, or a directory's download
-   button to save a `.tar` archive.
+3. Hover over a file or folder to reveal its download action. Files download
+   individually; folders download as `.tar` archives.
 
 ![Volume browser with expanded image and document folders, file sizes, and a download action](/screenshots/volume-browser.png)
-
-Expand a folder to inspect its contents. Hover over a file or folder to reveal
-its download action.
 
 Browsing is read-only: it does not upload, edit, rename, or delete files. You can
 download a selected file or subdirectory, but not the volume root. Symbolic links
@@ -50,55 +50,31 @@ snapshots and retention, configure a [backup policy](/resources/backups).
 
 ## Protected storage
 
-Citadel blocks browsing, individual downloads and directory archives for its own
-system storage, including for administrators. The owning Docker daemon checks the
-named volumes mounted by Citadel Core, database and Agent containers, including
-stopped containers, and rejects volumes overlapping system bind mounts. Custom
-volume names do not bypass this protection. This check
-runs again before every content request; UI capabilities alone never authorize it.
+Browsing and downloads are disabled for Citadel's system storage, including for
+administrators. The browser supports **local** volumes without driver options;
+custom storage drivers and options are not supported. You can still inspect
+volume metadata.
 
-Read-only host telemetry mounts at `/host`, including mirrored Docker data-root
-mounts used by rootless installations, do not make application volumes system
-storage. Core and database data volumes remain protected.
+If Citadel cannot verify that a volume is safe to browse, file access stays
+disabled. Grant **Browse** and **Download** only to trusted users: application
+volumes can contain credentials and other sensitive data.
 
-The generic browser supports plain **local** volumes without driver options.
-Volumes with custom drivers or options are excluded because they can alias host
-paths or backing storage that Citadel cannot safely verify. Metadata inspection
-remains available. Dedicated backup and recovery operations are unchanged.
-
-Core requires an explicit storage-safety result from the owning Agent before
-enabling browsing. If that result is unavailable, browsing stays disabled.
-The same rule applies to direct Agents, Edge Agents and Swarm Node Agents.
-
-The installation Compose files label Citadel's data volumes with
-`com.citadel.system: "true"`. For existing or custom installations, apply this
-label through your Docker provisioning process so protection also survives
-removal of the last system container. Docker does not update existing volume
-labels merely because Compose changes; do not delete a volume to relabel it.
-Keep existing system containers until a planned data migration can preserve the
-labels. Mount-based protection already applies while those containers exist.
-
-Grant **Browse** and **Download** only to trusted operators: ordinary workload
-volumes can also contain application credentials. Container terminals, arbitrary
-mounts, Docker socket access, deployments and backup exports require their own
-trusted permissions. This browser restriction does not turn Docker administration
-into an isolated tenant security boundary.
+For custom installations, label Citadel data volumes with `com.citadel.system: "true"`
+when provisioning them so they remain identified as system storage after their
+containers are removed. Changing Compose does not relabel existing volumes;
+never delete a data volume just to change its labels.
 
 ## Backup status
 
-The **Backup** column shows coverage from policies you can access and updates
-when backup configuration or runs change. If the manager daemon is unavailable,
-the table retains its last inventory while coverage for persisted worker volumes
-can still update. **Protected** requires an enabled
-schedule and an available successful backup; a policy with no schedule needs
-attention. **Unavailable** means coverage could not be determined. See
-[backup coverage](/resources/backups) for configuration and status details.
+The **Backup** column shows coverage from policies you can access:
 
-Hover or focus the shield to open the same backup card used on workload and
-container pages. It shows accessible policies, schedule warnings, and the last
-successful backup. When permitted, use **Configure backup** or open an existing
-policy. The form preserves the volume's platform and Swarm Node; **Back to Volumes**
-returns you to the list after configuration.
+- **Protected** requires an enabled schedule and an available successful backup.
+- A policy without a schedule needs attention.
+- **Unavailable** means coverage could not be determined.
+
+Hover or focus the icon in the **Backup** column to see policies, schedule warnings,
+and the last successful backup. Use **Configure backup** when available, or open
+an existing policy. See [backup coverage](/resources/backups) for details.
 
 ## Inspect and remove a volume
 
@@ -114,10 +90,7 @@ attachments before treating it as unused.
 
 | Symptom | What to check |
 | --- | --- |
-| **Browse** is disabled or access is denied | Your volume-content permissions, Platform status, and the selected Swarm Node's coverage |
+| **Browse** is disabled or access is denied | Check the storage limits above, your volume-content permissions, Platform status, and the selected Swarm Node's coverage |
 | The browser cannot start | The target Docker host must be able to run Citadel's volume helper and obtain its image; inspect the returned error |
 | A file has disappeared | Refresh the directory; the application may have moved or deleted it |
 | A path cannot be downloaded | Select a regular file or subdirectory, rather than the volume root or a symbolic link |
-
-For remote workload backups, use an S3-compatible repository as described in
-[backup repositories](/resources/backups#backup-repositories).

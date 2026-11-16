@@ -31,7 +31,9 @@ synchronization. Review any configured commands before saving or synchronizing.
 
 A Git account represents credentials for one Git host or domain.
 
-Saved credentials are write-only, including for administrators. Configuration reads return the saved username and credential presence indicators, including for existing accounts. Omitting a credential on update preserves it; supplying a replacement rotates it. Required passwords, tokens and private keys cannot be cleared while keeping their authentication type. An SSH passphrase can be explicitly cleared with `null`.
+Saved credentials cannot be revealed, including by administrators. Leave a
+credential unchanged to keep it, or supply a replacement to rotate it. The selected
+authentication type must have its required credentials.
 
 Create an account from the Repositories page, in the **Git Accounts** section, and choose:
 
@@ -80,15 +82,7 @@ Citadel keeps a local cache for each repository under:
 /app/data/repos/{repository-id}
 ```
 
-Repository sync updates that cache and records branch refs that Git stacks can select.
-Every scheduled sync still fetches the remote. If the fetched commit and checked-out
-branch already match and the working tree is clean, Citadel skips checkout and reset.
-Changed commits, branch changes, and dirty tracked files use the normal checkout/reset
-path. Successful unchanged syncs still update their timestamp and notify waiting consumers.
-Citadel also uses the normal path when Git index flags can hide file changes or the
-bounded cleanliness checks cannot inspect the complete output.
-When index flags hide changes, Citadel rebuilds the cached index from the current
-commit before checkout/reset so those flags cannot preserve modified or missing files.
+Repository sync refreshes the cache and the branches available to Git Stacks.
 
 Available sync modes:
 
@@ -99,11 +93,8 @@ Creating a repository queues an initial sync. Editing the repository URL, defaul
 
 Repository webhooks are separate from sync mode. A repository can be manual-only and still accept provider webhooks, or it can use interval polling and webhooks together.
 
-Git Stack update monitoring uses the repository's synchronized branch refs.
-A completed sync wakes the Stack checks; stacks sharing a repository do not
-start their own periodic fetches. A five-minute reconciliation checks stored
-refs if a notification was missed. Explicit Stack update checks, Apply, and
-Build runs can still request a fresh synchronization.
+Git Stacks monitor the repository's synchronized branches. Explicit Stack
+checks, deployments, and Build runs can also request fresh source.
 
 Successful background syncs (scheduled checks, webhooks, and Stack/Build cache
 refreshes) do not create activity entries, even when the commit changes.

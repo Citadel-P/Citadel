@@ -134,9 +134,11 @@ pub(crate) async fn run<S, E, C, CF, P, PF>(
                 }
                 let generation = entry.generation;
                 tasks.push(async move {
+                    let observation = citadel_runtime::jobs::JobHandle::iteration();
                     let request = ScopedEventRequest { platform_id: id, refresh: EventRefresh::Swarm };
                     let result = collect(request).await;
                     if shared.state.lock().unwrap().pending.get(&id).is_some_and(|entry| entry.generation != generation) {
+                        if let Some(observation) = observation { observation.finish(citadel_runtime::jobs::JobOutcome::Completed, None); }
                         return (id, generation, Outcome::Superseded);
                     }
                     let result = match result {
@@ -144,6 +146,7 @@ pub(crate) async fn run<S, E, C, CF, P, PF>(
                         Ok(None) => Ok(true),
                         Err(error) => Err(error),
                     };
+                    if let Some(observation) = observation { observation.result(&result); }
                     let outcome = match result {
                         Ok(true) => Outcome::Committed,
                         Ok(false) => Outcome::Superseded,

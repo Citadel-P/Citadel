@@ -562,6 +562,7 @@ impl TryFrom<citadel_platforms::NetworkDetails> for NetworkView {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeView {
+    pub is_system: bool,
     #[schema(required = true)]
     pub content_access_allowed: Option<bool>,
     pub backup_coverage: Option<BackupCoverageView>,
@@ -595,6 +596,14 @@ impl TryFrom<citadel_platforms::VolumeDetails> for VolumeView {
     type Error = serde_json::Error;
     fn try_from(value: citadel_platforms::VolumeDetails) -> Result<Self, Self::Error> {
         Ok(Self {
+            is_system: value
+                .labels
+                .get("com.citadel.system")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+                || value
+                    .labels
+                    .get("com.citadel.system-role")
+                    .is_some_and(|v| !v.is_empty()),
             content_access_allowed: None,
             backup_coverage: None,
             id: value.id,

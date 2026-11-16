@@ -6,6 +6,7 @@ type UseRealtimeGroupOpts = {
   groupName?: string | readonly string[];
   setupEventListeners: (hub: RealtimeConnection) => void;
   removeEventListeners?: (hub: RealtimeConnection) => void;
+  onSubscriptionError?: (error: unknown) => void;
   onJoinedGroup?: (hub: RealtimeConnection) => void;
   skip?: boolean;
   enabled?: boolean;
@@ -16,6 +17,7 @@ export const useRealtimeGroup = ({
   setupEventListeners,
   removeEventListeners,
   onJoinedGroup,
+  onSubscriptionError,
   skip,
   enabled = true,
 }: UseRealtimeGroupOpts) => {
@@ -28,12 +30,14 @@ export const useRealtimeGroup = ({
   const [isConnected, setIsConnected] = useState(false);
 
   const onJoinedRef = useRef(onJoinedGroup);
+  const onErrorRef = useRef(onSubscriptionError);
 
   const lastStateRef = useRef({ isLoading: false, isConnected: false });
 
   useEffect(() => {
     onJoinedRef.current = onJoinedGroup;
-  }, [onJoinedGroup]);
+    onErrorRef.current = onSubscriptionError;
+  }, [onJoinedGroup, onSubscriptionError]);
 
   const state = connectionState;
 
@@ -104,6 +108,7 @@ export const useRealtimeGroup = ({
 
         onJoinedRef.current?.(connection);
       } catch (err) {
+        if (!disposed) onErrorRef.current?.(err);
         console.error('[Realtime] join failed', err);
         await leaveJoinedGroups();
         removeListeners();

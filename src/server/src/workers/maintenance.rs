@@ -4,6 +4,41 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
+pub(crate) fn register(
+    supervisor: &mut citadel_runtime::TaskSupervisor,
+    token: CancellationToken,
+    store: Arc<dyn MaintenanceStore>,
+    realtime: Option<RealtimeHub>,
+    build_retention_days: Option<i32>,
+    retention_interval: Duration,
+) {
+    supervisor.spawn(
+        "operation-recovery",
+        citadel_primitives::JobCategory::Maintenance,
+        recovery(token.clone(), store.clone(), realtime),
+    );
+    supervisor.spawn(
+        "lease-expiry",
+        citadel_primitives::JobCategory::Maintenance,
+        expiry(token.clone(), store.clone()),
+    );
+    supervisor.spawn(
+        "history-retention",
+        citadel_primitives::JobCategory::Maintenance,
+        retention(
+            token.clone(),
+            store.clone(),
+            build_retention_days,
+            retention_interval,
+        ),
+    );
+    supervisor.spawn(
+        "statistics-compaction",
+        citadel_primitives::JobCategory::Maintenance,
+        compaction(token, store),
+    );
+}
+#[cfg(test)]
 pub(crate) async fn run(
     token: CancellationToken,
     store: Arc<dyn MaintenanceStore>,
@@ -11,77 +46,125 @@ pub(crate) async fn run(
     build_retention_days: Option<i32>,
     retention_interval: Duration,
 ) -> Result<(), std::convert::Infallible> {
-    // Startup recovery already ran under the exclusive Core lease. Historical
-    // retention is independent: its transactions cannot delay operation recovery.
-    let recovery = async {
-        let mut tick = super::schedule::interval("recovery", super::recovery::FALLBACK);
-        loop {
-            tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            match store.reconcile().await {
-                Ok(changed) => {
-                    if let Some(hub) = &realtime {
-                        for resource in changed {
-                            hub.publish_resource_change(resource, uuid::Uuid::nil(), "reconciled");
-                        }
-                    }
-                }
-                Err(error) => tracing::warn!(%error, "Resource reconciliation failed"),
-            }
-        }
-    };
-    let expiry = async {
-        let mut tick = super::schedule::interval("lease-expiry", Duration::from_secs(30));
-        loop {
-            tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            if let Err(error) = store.expire_leases().await {
-                tracing::warn!(%error, "Lease expiry failed");
-            }
-        }
-    };
-    let retention = async {
-        let mut tick = super::schedule::interval("retention", retention_interval);
-        loop {
-            tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            // Storage owns invocation-local family progress and short bounded batches.
-            let drain = store.cleanup(build_retention_days);
-            tokio::select! {
-                () = token.cancelled() => break,
-                result = tokio::time::timeout(Duration::from_secs(10), drain) => match result {
-                    Ok(Ok(_)) => {},
-                    Ok(Err(error)) => tracing::warn!(%error, "Scheduled retention failed"),
-                    Err(_) => tracing::info!("Retention budget exhausted; remaining rows wait for the next maintenance pass"),
-                }
-            }
-        }
-    };
-    let compaction = async {
-        let mut tick = super::schedule::interval("statistics-compaction", COMPACTION_IDLE_INTERVAL);
-        loop {
-            tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
-            let delay = tokio::select! {
-                ()=token.cancelled()=>break,
-                result=tokio::time::timeout(COMPACTION_BUDGET,compact_batch(store.as_ref())) => match result {
-                    Ok(Ok(false)) => COMPACTION_IDLE_INTERVAL,
-                    Ok(Ok(true)) => COMPACTION_BACKLOG_INTERVAL,
-                    Ok(Err(error)) => {
-                        tracing::warn!(%error,"Statistics compaction failed");
-                        COMPACTION_IDLE_INTERVAL
-                    },
-                    Err(_) => {
-                        tracing::debug!("Compaction budget exhausted; remaining history waits for the next pass");
-                        COMPACTION_BACKLOG_INTERVAL
-                    },
-                }
-            };
-            // Pause after work completes, including after a timeout. Never catch up
-            // missed ticks with another immediate batch.
-            tick.reset_after(delay);
-        }
-    };
-    tokio::join!(recovery, expiry, retention, compaction);
+    let _ = tokio::join!(
+        recovery(token.clone(), store.clone(), realtime),
+        expiry(token.clone(), store.clone()),
+        retention(
+            token.clone(),
+            store.clone(),
+            build_retention_days,
+            retention_interval
+        ),
+        compaction(token, store)
+    );
     Ok(())
 }
-
+async fn recovery(
+    token: CancellationToken,
+    store: Arc<dyn MaintenanceStore>,
+    realtime: Option<RealtimeHub>,
+) -> Result<(), std::convert::Infallible> {
+    let mut tick = super::schedule::interval("recovery", super::recovery::FALLBACK);
+    loop {
+        tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
+        match citadel_runtime::jobs::observe_work(store.reconcile(), |v| {
+            Some((v.len() as u64, "resource kinds"))
+        })
+        .await
+        {
+            Ok(changed) => {
+                if let Some(hub) = &realtime {
+                    for resource in changed {
+                        hub.publish_resource_change(resource, uuid::Uuid::nil(), "reconciled");
+                    }
+                }
+            }
+            Err(error) => tracing::warn!(%error, "Resource reconciliation failed"),
+        }
+    }
+    Ok(())
+}
+async fn expiry(
+    token: CancellationToken,
+    store: Arc<dyn MaintenanceStore>,
+) -> Result<(), std::convert::Infallible> {
+    let mut tick = super::schedule::interval("lease-expiry", Duration::from_secs(30));
+    loop {
+        tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
+        if let Err(error) = citadel_runtime::jobs::observe(store.expire_leases()).await {
+            tracing::warn!(%error, "Lease expiry failed");
+        }
+    }
+    Ok(())
+}
+async fn retention(
+    token: CancellationToken,
+    store: Arc<dyn MaintenanceStore>,
+    build_retention_days: Option<i32>,
+    retention_interval: Duration,
+) -> Result<(), std::convert::Infallible> {
+    let mut tick = super::schedule::interval("retention", retention_interval);
+    loop {
+        tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
+        // Storage owns invocation-local family progress and short bounded batches.
+        let iteration = citadel_runtime::jobs::JobHandle::iteration();
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.budget(Duration::from_secs(10));
+        }
+        let drain = store.cleanup(build_retention_days);
+        tokio::select! {
+            () = token.cancelled() => break,
+            result = tokio::time::timeout(Duration::from_secs(10), drain) => match result {
+                Ok(Ok(count)) => { if let Some(i) = iteration { i.finish(if count == 0 { citadel_runtime::jobs::JobOutcome::NoWork } else { citadel_runtime::jobs::JobOutcome::Productive }, Some((count, "rows"))); } },
+                Ok(Err(error)) => { if let Some(i) = iteration { i.finish(citadel_runtime::jobs::JobOutcome::Failed, None); } tracing::warn!(%error, "Scheduled retention failed"); },
+                Err(_) => { if let Some(i) = iteration { i.finish(citadel_runtime::jobs::JobOutcome::BudgetExhausted, None); } tracing::info!("Retention budget exhausted; remaining rows wait for the next maintenance pass"); },
+            }
+        }
+    }
+    Ok(())
+}
+async fn compaction(
+    token: CancellationToken,
+    store: Arc<dyn MaintenanceStore>,
+) -> Result<(), std::convert::Infallible> {
+    let mut tick = super::schedule::interval("statistics-compaction", COMPACTION_IDLE_INTERVAL);
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.policy(
+            format!(
+                "After completion: {}s when caught up / {}s with work remaining",
+                COMPACTION_IDLE_INTERVAL.as_secs(),
+                COMPACTION_BACKLOG_INTERVAL.as_secs()
+            ),
+            Some(COMPACTION_BUDGET),
+        );
+    }
+    loop {
+        tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
+        let iteration = citadel_runtime::jobs::JobHandle::iteration();
+        let mut productive_passes = 0;
+        let delay = tokio::select! {
+            ()=token.cancelled()=>break,
+            result=tokio::time::timeout(COMPACTION_BUDGET,compact_batch_observed(store.as_ref(), &mut productive_passes)) => match result {
+                Ok(Ok(false)) => { if let Some(i) = iteration { i.finish(if productive_passes > 0 { citadel_runtime::jobs::JobOutcome::Productive } else { citadel_runtime::jobs::JobOutcome::NoWork }, None); } COMPACTION_IDLE_INTERVAL },
+                Ok(Ok(true)) => { if let Some(i) = iteration { i.finish(citadel_runtime::jobs::JobOutcome::BudgetExhausted, None); } COMPACTION_BACKLOG_INTERVAL },
+                Ok(Err(error)) => {
+                    if let Some(i) = iteration { i.finish(citadel_runtime::jobs::JobOutcome::Failed, None); }
+                    tracing::warn!(%error,"Statistics compaction failed");
+                    COMPACTION_IDLE_INTERVAL
+                },
+                Err(_) => {
+                    if let Some(i) = iteration { i.finish(citadel_runtime::jobs::JobOutcome::BudgetExhausted, None); }
+                    tracing::debug!("Compaction budget exhausted; remaining history waits for the next pass");
+                    COMPACTION_BACKLOG_INTERVAL
+                },
+            }
+        };
+        // Pause after work completes, including after a timeout. Never catch up
+        // missed ticks with another immediate batch.
+        tick.reset_after(delay);
+    }
+    Ok(())
+}
 // Idle installations check infrequently; backlog gets bounded batches separated
 // by a full minute of rest. Actual throughput depends on database cost.
 const COMPACTION_IDLE_INTERVAL: Duration = Duration::from_secs(300);
@@ -90,13 +173,27 @@ const COMPACTION_BUDGET: Duration = Duration::from_secs(5);
 const COMPACTION_PASSES: usize = 128;
 
 // True means useful work may remain; stop when a stalled-source scan wraps.
+#[cfg(test)]
 async fn compact_batch(store: &dyn MaintenanceStore) -> Result<bool, MaintenanceError> {
+    compact_batch_observed(store, &mut 0).await
+}
+async fn compact_batch_observed(
+    store: &dyn MaintenanceStore,
+    productive_passes: &mut u64,
+) -> Result<bool, MaintenanceError> {
     let mut stalled = std::collections::BTreeSet::new();
     let mut progressed = false;
     let mut paged_scan = false;
     let mut physical_complete = false;
     for _ in 0..COMPACTION_PASSES {
         let pass = store.compact().await?;
+        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+            job.progress(
+                u64::from(pass.processed > 0),
+                "productive compaction passes",
+            );
+        }
+        *productive_passes += u64::from(pass.processed > 0);
         progressed |= pass.processed > 0;
         physical_complete |= !pass.scan_pending;
         let repeated_stall = pass
@@ -196,6 +293,61 @@ mod tests {
                     Ok(citadel_runtime::maintenance::CompactionProgress::default())
                 }
             })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn registered_maintenance_jobs_report_real_policy_and_budget_without_failure() {
+        for stall in [false, true] {
+            let catalog = citadel_runtime::jobs::JobCatalog::new(uuid::Uuid::now_v7());
+            let token = CancellationToken::new();
+            let mut owner =
+                citadel_runtime::TaskSupervisor::new(token.clone()).with_jobs(catalog.clone());
+            register(
+                &mut owner,
+                token,
+                Arc::new(Store {
+                    stall,
+                    ..Default::default()
+                }),
+                None,
+                None,
+                Duration::from_secs(900),
+            );
+            tokio::time::sleep(Duration::from_secs(307)).await;
+            let snapshot = catalog.snapshot();
+            assert_eq!(snapshot.jobs.len(), 4);
+            let job = snapshot
+                .jobs
+                .iter()
+                .find(|job| job.id == "statistics-compaction")
+                .unwrap();
+            assert_eq!(job.budget_ms, Some(COMPACTION_BUDGET.as_millis() as u64));
+            assert!(
+                job.trigger
+                    .as_deref()
+                    .unwrap()
+                    .contains(&COMPACTION_IDLE_INTERVAL.as_secs().to_string())
+            );
+            assert_eq!(job.failures, 0);
+            assert_eq!(job.budget_exhaustions, u64::from(stall));
+            assert_eq!(
+                job.last_outcome,
+                Some(if stall {
+                    citadel_runtime::jobs::JobOutcome::BudgetExhausted
+                } else {
+                    citadel_runtime::jobs::JobOutcome::NoWork
+                })
+            );
+            assert!(job.next_check.is_some());
+            owner.shutdown(Duration::from_secs(1)).await.unwrap();
+            assert!(
+                catalog
+                    .snapshot()
+                    .jobs
+                    .iter()
+                    .all(|job| job.state == citadel_runtime::jobs::JobState::Stopped)
+            );
         }
     }
 

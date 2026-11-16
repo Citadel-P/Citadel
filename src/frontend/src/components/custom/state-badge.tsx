@@ -4,11 +4,23 @@ import { ReactNode } from 'react';
 import { LoaderCircle } from 'lucide-react';
 
 export type StateBadgeKind =
-  'activity' | 'alertEvent' | 'alertSeverity' | 'default' | 'container' | 'health' | 'run' | 'swarmNode' | 'swarmTask';
+  | 'activity'
+  | 'alertEvent'
+  | 'alertSeverity'
+  | 'default'
+  | 'container'
+  | 'health'
+  | 'job'
+  | 'run'
+  | 'swarmNode'
+  | 'swarmTask';
 
 const styles = {
   danger: 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300',
   info: 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+  unknown:
+    'border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
+  pending: 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300',
   muted: 'border-border bg-muted/40 text-muted-foreground',
   neutral: 'border-border bg-muted/40 text-muted-foreground',
   success: 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-300',
@@ -97,6 +109,14 @@ const getStateStyle = (value: StateBadgeValue, kind: StateBadgeKind) => {
   if (value === null || value === undefined || value === '') return styles.muted;
   if (kind === 'default' && typeof value === 'boolean') return value ? styles.success : styles.muted;
   const normalized = normalize(value);
+  if (kind === 'job') {
+    if (normalized === 'failed') return styles.danger;
+    if (normalized === 'backingoff') return styles.warning;
+    if (normalized === 'running') return styles.info;
+    if (normalized === 'unavailable') return styles.unknown;
+    if (normalized === 'notstarted') return styles.pending;
+    return styles.muted;
+  }
   if (kind === 'health') {
     if (normalized === 'healthy') return styles.success;
     if (normalized === 'starting') return styles.warning;

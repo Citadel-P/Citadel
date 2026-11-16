@@ -24,6 +24,7 @@ fn volume_storage_policy_restricts_even_administrator_capabilities() {
     for allowed in [Some(true), Some(false), None] {
         let view = map_volume(
             RuntimeVolumeSummary {
+                is_system: true,
                 content_access_allowed: allowed,
                 ..Default::default()
             },
@@ -35,6 +36,7 @@ fn volume_storage_policy_restricts_even_administrator_capabilities() {
             },
         )
         .unwrap();
+        assert!(view.is_system);
         let capabilities = view.capabilities.unwrap();
         assert_eq!(capabilities.can_browse, allowed == Some(true));
         assert_eq!(capabilities.can_download, allowed == Some(true));

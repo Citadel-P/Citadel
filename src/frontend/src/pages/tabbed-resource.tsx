@@ -109,7 +109,7 @@ export const TabbedResourceView = <T,>({ Components, type, tab, showTaskSheet = 
             className={cn(
               'flex flex-col sm:flex-row justify-between gap-2',
               Components.tabsVariant === 'bordered' && 'rounded-lg border bg-card',
-              Components.TabActions && 'flex-row items-center',
+              (Components.TabActions || tabHeader.Extra) && 'flex-row items-center',
             )}>
             {/* Tabs */}
             <TabsList

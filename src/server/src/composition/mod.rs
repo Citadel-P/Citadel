@@ -88,6 +88,7 @@ pub struct ServerComponents {
     pub realtime_hub: Option<RealtimeHub>,
     pub identity: Arc<IdentityService>,
     pub instance: Arc<citadel_instance::InstanceService>,
+    pub jobs: citadel_runtime::jobs::JobCatalog,
     pub licenses: Arc<LicenseService>,
     pub entitlements: Arc<PostgresLicenseEntitlementService>,
     pub mfa: Arc<MfaService>,
@@ -139,7 +140,7 @@ impl ServerComponents {
         config: &Config,
     ) -> Result<(Self, background::BackgroundServices), Box<dyn std::error::Error>> {
         let pool = connect_database(config).await?;
-        let instance = instance::build(config, &pool);
+        let (instance, jobs) = instance::build(config, &pool);
         let restart = crate::restart::RestartControl::new(instance.restart().cloned());
         let database_health = Arc::new(postgres_runtime::PostgresDatabaseHealth(pool.clone()));
         let git_repositories: Arc<dyn citadel_git::GitRepositoryPersistence> =
@@ -292,6 +293,7 @@ impl ServerComponents {
             )
             .with_groups(Arc::new(
                 citadel_server::realtime_groups::ApplicationGroupReader {
+                    instance: Some(instance.clone()),
                     admission: admission.clone(),
                     image_store: platform_state.image_store.clone(),
                     image_updates: platform_state.image_updates.clone(),
@@ -363,6 +365,7 @@ impl ServerComponents {
                 backup_coverage,
                 edge_service,
                 instance,
+                jobs,
                 restart,
                 updates: checker,
                 agent_updates,

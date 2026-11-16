@@ -39,6 +39,8 @@ type StateValue =
   | ScriptRunStatus;
 
 type StateIndicatorKind =
+  | 'alertSeverity'
+  | 'job'
   | 'scriptRun'
   | 'backupRun'
   | 'backupRestore'
@@ -255,6 +257,31 @@ export const getSwarmNodeIndicatorValue = ({
 };
 
 const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIndicatorKind) => {
+  if (kind === 'alertSeverity') {
+    return {
+      colorClass: value === 'Critical' ? 'bg-red-500' : value === 'Warning' ? 'bg-orange-500' : 'bg-blue-500',
+      tooltip: String(value),
+    };
+  }
+  if (kind === 'job') {
+    const state = String(value);
+    return {
+      colorClass:
+        (
+          {
+            failed: 'bg-red-500',
+            backingOff: 'bg-orange-500',
+            running: 'bg-blue-500',
+            unavailable: 'bg-violet-400',
+            notStarted: 'bg-slate-500',
+          } as Record<string, string>
+        )[state] ?? 'bg-gray-400',
+      tooltip: state
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .toLowerCase()
+        .replace(/^./, (c) => c.toUpperCase()),
+    };
+  }
   // Boolean-based statuses
   if (typeof value === 'boolean') {
     return {
@@ -384,6 +411,7 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean, kind?: StateIn
 };
 
 const iconColors: Record<string, string> = {
+  'bg-slate-500': 'text-slate-500',
   'bg-blue-400': 'text-blue-400',
   'bg-blue-500': 'text-blue-500',
   'bg-gray-400': 'text-gray-400',
@@ -423,7 +451,11 @@ export const StateIndicator = memo(
     const { colorClass, tooltip: defaultTooltip } = getStatusStyle(value, enableLabel, kind);
     if (variant === 'badge') {
       const badgeKind: StateBadgeKind =
-        kind === 'container' || kind === 'swarmTask' || kind === 'swarmNode'
+        kind === 'container' ||
+        kind === 'swarmTask' ||
+        kind === 'swarmNode' ||
+        kind === 'job' ||
+        kind === 'alertSeverity'
           ? kind
           : kind === 'buildRun' || kind === 'scriptRun' || kind === 'backupRun' || kind === 'backupRestore'
             ? 'run'
@@ -440,12 +472,12 @@ export const StateIndicator = memo(
         />
       );
     }
-    if (isProcessing) return <LoaderCircle className={cn('mr-1 h-3 w-3 animate-spin', className)} />;
+    if (isProcessing) return <LoaderCircle className={cn('mr-2 h-3 w-3 animate-spin', className)} />;
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className={cn(colorClass, 'mr-2 h-2 w-2 shrink-0 rounded-full', className)} />
+            <div className={cn(colorClass, 'mr-3 h-2 w-2 shrink-0 rounded-full', className)} />
           </TooltipTrigger>
           <TooltipContent>{tooltip ?? <span>{defaultTooltip}</span>}</TooltipContent>
         </Tooltip>

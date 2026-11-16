@@ -141,27 +141,15 @@ The browser's default host port is `18000`; it is not the Edge gRPC endpoint.
 
 ## Enrollment
 
-On first start, the agent:
-
-1. Generates an agent key pair.
-2. Connects to Citadel Core.
-3. Sends the enrollment token and public key.
-4. Receives an agent identity from Citadel.
-5. Stores the identity and private key in the configured data paths.
-
-After enrollment, the enrollment token is no longer needed.
-
-If the token expires before the agent connects, generate a new token from the platform page and restart the agent with the new token.
+On first start, the Agent enrolls using the generated token and saves its key and
+identity in the data volume. The token is no longer needed after enrollment.
+If it expires before use, generate a replacement and recreate the Agent with it.
 
 ## Reconnects
 
-After enrollment, the agent reconnects with its saved identity.
-
-Citadel verifies reconnects with a cryptographic challenge. The agent signs the challenge with its private key, and Citadel verifies it with the public key saved during enrollment.
-
-Because of this, the data volume is important. If the agent loses its key or identity file, Citadel will not recognize it as the same enrolled agent.
-
-Reconnects use exponential backoff with jitter. Short network interruptions should recover automatically without re-enrollment.
+The Agent reconnects automatically using its saved identity after a short network
+interruption. Preserve its data volume: losing the key or identity requires
+re-enrollment.
 
 ## Platform status
 
@@ -206,18 +194,9 @@ and restart actions on individual Tasks are not available.
 
 ## Docker operations
 
-When you use an Edge Agent platform, Citadel routes supported Docker operations over the agent's active connection.
-
-For example:
-
-1. You open containers for the platform.
-2. Citadel sends a containers command over the Edge Agent stream.
-3. The agent runs the Docker operation locally.
-4. The agent streams the result back to Citadel.
-
-The Edge Agent does not give Citadel shell access to the host. It only handles the supported agent commands.
-
-Supported operations include platform status, container list/logs/stats/inspect/create/start/stop/restart/delete/exec, image list/inspect/pull/build/push/delete, build-host checks, volume list/inspect/create/delete, network list/inspect/create/delete, stack apply, and deployment apply.
+Citadel sends supported Docker operations over the Agent's existing connection.
+The Agent performs them on its Docker host. See the resource guides for available
+operations and permissions.
 
 ## Rotate enrollment
 

@@ -304,22 +304,10 @@ console.log(`Triggered by ${args.repository?.full_name} on ${branch}`);
 
 The Runs tab shows recent script runs.
 
-The table groups status and trigger under **Run**, and duration and exit code
-under **Result**, alongside the queued time. Select a run's colored play control
-to open its details and logs. Green indicates success; red indicates a failed,
-timed-out, or rejected run. Active runs retain a separate cancellation action.
-
-The log sheet summarizes the trigger and status below its title. A compact row
-shows who triggered the run, when it was queued, and its duration. The run-as
-account appears only when it differs from the initiator; nonzero exit codes are
-shown for troubleshooting. Labels and values stay together on one line, with
-items wrapping on smaller screens.
-Scheduled and webhook triggers are identified separately from the run-as account.
-Actor names are available to administrators; otherwise, or if an actor lookup is
-unavailable, the sheet shows an abbreviated actor ID with the full ID on hover.
-Queued runs show **Not started**, and running runs show **In progress** until a
-duration is recorded. Failure messages and pending-cleanup information appear
-above the logs. The script log sheet has no floating timestamp or wrapping controls.
+Select a run to see its result, trigger, execution identity, duration, and logs.
+Failures and **Cleanup pending** notices appear above the logs. Scheduled and
+webhook triggers are separate from the account whose permissions the run uses.
+Use the cancellation action to stop an active run.
 
 Run statuses:
 
@@ -344,22 +332,8 @@ Citadel caps logs and redacts obvious sensitive values such as bearer tokens and
 
 The Activities tab shows audit history for the script.
 
-Activity events include:
-
-- created
-- updated
-- renamed
-- deleted
-- enabled or disabled
-- run queued
-- run started
-- run succeeded
-- run failed
-- run timed out
-- run cancelled
-- run rejected
-
-Updated script events show a Monaco diff of the old and new script values.
+It records configuration changes and run outcomes. Open a configuration-change
+activity to compare the old and new values.
 
 ## Permissions
 
@@ -384,7 +358,7 @@ and license capabilities when the Script calls Citadel APIs.
 | Editor selecting a Service Account | Needs **Use** permission on that account |
 
 An administrator clicking Run does not make the script administrative when its
-Run-as identity has narrower permissions. Conversely, Execute access to an
+Run-as identity has narrower permissions. Conversely, Execute access to a
 Script allows a caller to invoke its saved operation under that identity.
 
 Manual and API-triggered run history distinguishes the identity that requested

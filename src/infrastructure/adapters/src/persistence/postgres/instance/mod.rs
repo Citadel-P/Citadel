@@ -1,5 +1,7 @@
 mod authorization;
 mod database;
+mod job_history;
+pub use job_history::PostgresJobHistory;
 mod repository;
 mod restart;
 mod settings;

@@ -8,7 +8,7 @@ pub(crate) const FALLBACK: Duration = Duration::from_secs(5 * 60);
 
 pub(crate) struct ActiveWake {
     signals: watch::Receiver<()>,
-    ticker: tokio::time::Interval,
+    ticker: super::schedule::ObservedInterval,
     pub active: bool,
     startup: bool,
     closed: bool,
@@ -18,7 +18,7 @@ impl ActiveWake {
     pub fn new(signals: watch::Receiver<()>) -> Self {
         Self {
             signals,
-            ticker: super::schedule::interval("service-observer", FALLBACK),
+            ticker: super::schedule::interval("service-observer", FALLBACK).without_observation(),
             active: false,
             startup: true,
             closed: false,
@@ -33,6 +33,20 @@ impl ActiveWake {
             return true;
         }
         loop {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.policy(
+                    format!(
+                        "On event; 5 seconds while active; {} seconds safety check",
+                        FALLBACK.as_secs()
+                    ),
+                    None,
+                );
+                let active = self.active.then(|| Instant::now() + Duration::from_secs(5));
+                job.waiting(
+                    "Event or active/safety check",
+                    active.into_iter().chain(self.ticker.next_deadline()).min(),
+                );
+            }
             tokio::select! {
                 biased;
                 () = token.cancelled() => return false,
@@ -49,7 +63,7 @@ impl ActiveWake {
 
 pub(crate) struct RecoveryWake {
     signals: watch::Receiver<()>,
-    ticker: tokio::time::Interval,
+    ticker: super::schedule::ObservedInterval,
     delay: Duration,
     pending: Option<Instant>,
     startup: bool,
@@ -60,7 +74,7 @@ impl RecoveryWake {
     pub fn new(name: &str, signals: watch::Receiver<()>, delay: Duration) -> Self {
         Self {
             signals,
-            ticker: super::schedule::interval(name, FALLBACK),
+            ticker: super::schedule::interval(name, FALLBACK).without_observation(),
             delay,
             pending: None,
             startup: true,
@@ -76,6 +90,23 @@ impl RecoveryWake {
             return true;
         }
         loop {
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.policy(
+                    format!(
+                        "On event after {} seconds; {} seconds independent safety check",
+                        self.delay.as_secs(),
+                        FALLBACK.as_secs()
+                    ),
+                    None,
+                );
+                job.waiting(
+                    "Deferred event or safety check",
+                    self.pending
+                        .into_iter()
+                        .chain(self.ticker.next_deadline())
+                        .min(),
+                );
+            }
             tokio::select! {
                 biased;
                 () = token.cancelled() => return false,

@@ -30,15 +30,7 @@ to six hours, one-minute buckets up to one day, five-minute buckets up to three
 days, and 15-minute buckets for longer ranges. These averages can smooth brief
 spikes; narrow the range for finer detail.
 
-Statistics API endpoints accept `minutes=15|60|360|1440|10080`, or inclusive Unix
-second bounds `from` and `to`. Omitting `to` uses the current time. Existing
-`hours=24|48|72` requests remain supported, and omitting all range parameters
-keeps the API's 24-hour default. Do not combine range formats.
-
-Current usage values remain instantaneous. Live observations accumulate into
-averages without discarding samples when a Stats tab stays open. Saved history takes precedence
-in overlapping buckets; the bucket already in progress when the tab opens stays
-at its saved average until history is reloaded. Subsequent buckets update live.
+Current usage values are instantaneous; history charts show averages.
 
 ## Container network and disk I/O
 
@@ -49,7 +41,7 @@ selected period, including when viewing throughput.
 
 **Disk I/O** offers the same views for block-device reads and writes. Both charts
 default to **Accumulated**. Each chart's view selection is saved separately in
-your browser's localStorage and shared across container and Platform statistics.
+your browser and shared across container and Platform statistics.
 This measures device I/O reported by Docker, rather
 than disk space used. Cached file reads may not generate device reads, and network
 filesystems may not appear in these counters.
@@ -144,17 +136,9 @@ counter. Shared memory and tmpfs are not subtracted as filesystem cache.
 Missing or inconsistent counters do not produce a fabricated breakdown. Windows
 containers can report a working set without a Linux cache breakdown.
 
-Earlier samples keep their working-set and inactive-cache readings. They have no
-active-cache measurement, so Breakdown leaves gaps and offers Working set to
-view them. Buckets or service totals with incomplete breakdown coverage also
-remain unavailable. No historical data is rewritten.
-
-The containers table keeps **working set / memory limit** as its Memory value.
-Hover, focus, or click the value to open a breakdown card showing memory excluding
-file cache, active file cache, and inactive file cache. Click pins the card;
-Escape dismisses it. Missing breakdown readings appear as unavailable, including
-stack summaries when a member lacks the required reading. Expanded stack children
-use a subtle background tint and indentation to distinguish them from other rows.
+Open the Memory value in a container table for a breakdown. Missing or incomplete
+cache readings appear as unavailable, including Stack totals when a member lacks
+the required reading.
 
 ## Disk Usage
 

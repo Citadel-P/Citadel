@@ -19,6 +19,9 @@ pub async fn script_runs(
             while let Some(result) = controllers.try_join_next() {
                 controller_result(result)?;
             }
+            if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+                job.active_operations(controllers.len());
+            }
             if controllers.len() < capacity {
                 let Some(permit) = admission.enter("Scripts", &cancellation).await else {
                     break;
@@ -28,7 +31,11 @@ pub async fn script_runs(
                         citadel_runtime::runtime_metrics::RuntimeWork::ScriptClaim.start();
                     // Finish the durable claim even if shutdown arrives. Never drop
                     // a committed run between claiming and assigning its controller.
-                    service.claim_execution(remote_first).await
+                    citadel_runtime::jobs::observe_work(
+                        service.claim_execution(remote_first),
+                        |v| Some((u64::from(v.is_some()), "claims")),
+                    )
+                    .await
                 };
                 match claim {
                     Ok(Some(execution)) => {

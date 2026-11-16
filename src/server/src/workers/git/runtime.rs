@@ -27,14 +27,17 @@ pub(crate) async fn git_repository_sync(
             return Ok(());
         };
         let iteration = citadel_runtime::runtime_metrics::RuntimeWork::GitSync.start();
-        let execution = service.process_one(&cancellation);
+        let execution =
+            citadel_runtime::jobs::observe_work(service.process_one(&cancellation), |worked| {
+                Some((u64::from(*worked), "operations"))
+            });
         tokio::pin!(execution);
         let result = loop {
             tokio::select! {
                 result = &mut execution => break result,
                 _ = schedule.tick(), if !cancellation.is_cancelled() => {
                     if let Some(_schedule) = admission.try_enter("Git schedules")
-                        && let Err(error) = service.enqueue_due(100).await {
+                        && let Err(error) = citadel_runtime::jobs::observe(service.enqueue_due(100)).await {
                         tracing::warn!(%error, "failed to enqueue due Git repository synchronizations");
                     }
                 }
@@ -49,7 +52,7 @@ pub(crate) async fn git_repository_sync(
                     () = super::super::notifications::wait(&mut wake, &cancellation, IDLE_DELAY) => {},
                     _ = schedule.tick() => {
                         if let Some(_schedule) = admission.try_enter("Git schedules")
-                        && let Err(error) = service.enqueue_due(100).await {
+                        && let Err(error) = citadel_runtime::jobs::observe(service.enqueue_due(100)).await {
                             tracing::warn!(%error, "failed to enqueue due Git repository synchronizations");
                         }
                     }

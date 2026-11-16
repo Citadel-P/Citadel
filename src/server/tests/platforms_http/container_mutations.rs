@@ -815,7 +815,10 @@ async fn container_claims_are_atomic_parent_aware_and_recovered_without_replayin
             ),
         ),
     );
-    service.reconcile(&CancellationToken::new()).await.unwrap();
+    service
+        .reconcile(&CancellationToken::new(), |_| {})
+        .await
+        .unwrap();
     assert!(
         runtime.calls.lock().await.is_empty(),
         "recovery must inspect, never replay stop/restart/delete"
@@ -1048,6 +1051,7 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
         assert_eq!(ids.len(), 20);
         let calls = Arc::new(AtomicUsize::new(0));
         let inspections = Arc::new(AtomicUsize::new(0));
+        let unavailable = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let active = Arc::new(AtomicUsize::new(0));
         let peak = Arc::new(AtomicUsize::new(0));
         let stopped = Arc::new(Mutex::new(std::collections::BTreeSet::<String>::new()));
@@ -1056,6 +1060,7 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
         let server = tokio::spawn({
             let calls = calls.clone();
             let inspections = inspections.clone();
+            let unavailable = unavailable.clone();
             let active = active.clone();
             let peak = peak.clone();
             let stopped = stopped.clone();
@@ -1065,7 +1070,7 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
                     tokio::select! {
                         accepted=listener.accept()=> {
                             let (mut socket,_)=accepted.unwrap();
-                            let calls=calls.clone(); let inspections=inspections.clone(); let active=active.clone(); let peak=peak.clone(); let stopped=stopped.clone();
+                            let calls=calls.clone(); let inspections=inspections.clone(); let active=active.clone(); let peak=peak.clone(); let stopped=stopped.clone(); let unavailable=unavailable.clone();
                             tasks.spawn(async move {
                                 let mut data=Vec::new(); let mut buf=[0;4096];
                                 while !data.windows(4).any(|w|w==b"\r\n\r\n") { let n=socket.read(&mut buf).await.unwrap(); if n==0 { return; } data.extend_from_slice(&buf[..n]); }
@@ -1088,7 +1093,8 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
                                         assert!(url.ends_with("/json"),"no resource list: {line}");
                                         inspections.fetch_add(1,Ordering::SeqCst);
                                         let state=if stopped.lock().await.contains(&id) {"exited"} else {"running"};
-                                        (200,json!({"Id":id,"State":{"Status":state}}))
+                                        if unavailable.load(Ordering::SeqCst) { (503,json!({"message":"deliberate observation failure"})) }
+                                        else { (200,json!({"Id":id,"State":{"Status":state}})) }
                                     }
                                 };
                                 let body=if status==204 {String::new()} else {body.to_string()};
@@ -1147,7 +1153,10 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
                 .execute(&f.pool)
                 .await
                 .unwrap();
-            service.reconcile(&CancellationToken::new()).await.unwrap();
+            service
+                .reconcile(&CancellationToken::new(), |_| {})
+                .await
+                .unwrap();
             assert_eq!(calls.load(Ordering::SeqCst), CONTAINER_IO_CONCURRENCY);
             assert_eq!(inspections.load(Ordering::SeqCst), 20);
             assert_eq!(
@@ -1187,7 +1196,24 @@ async fn twenty_local_stops_are_bounded_and_partial_failure_recovers_without_rep
                 .execute(&f.pool)
                 .await
                 .unwrap();
-            service.reconcile(&CancellationToken::new()).await.unwrap();
+            unavailable.store(true, Ordering::SeqCst);
+            let unconfirmed = std::sync::Mutex::new(Vec::new());
+            service
+                .reconcile(&CancellationToken::new(), |claim| {
+                    unconfirmed.lock().unwrap().push(claim.clone())
+                })
+                .await
+                .unwrap();
+            let unconfirmed = unconfirmed.into_inner().unwrap();
+            assert_eq!(unconfirmed.len(), 1);
+            assert!(!unconfirmed[0].operation_id.is_nil());
+            assert_eq!(unconfirmed[0].targets.len(), ids.len());
+            assert!(
+                unconfirmed[0]
+                    .targets
+                    .iter()
+                    .all(|target| target.platform_id == f.platform_id && ids.contains(&target.id))
+            );
             assert_eq!(
                 calls.load(Ordering::SeqCst),
                 20,

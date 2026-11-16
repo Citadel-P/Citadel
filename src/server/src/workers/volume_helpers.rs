@@ -18,7 +18,7 @@ pub(crate) async fn reconcile(
             tokio::select! { ()=cancellation.cancelled()=>break,_=tick.tick()=>{} }
         }
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::VolumeRecovery.start();
-        match volumes.reap_expired(after, &cancellation).await {
+        match citadel_runtime::jobs::observe(volumes.reap_expired(after, &cancellation)).await {
             Ok(next) => after = next,
             Err(error) => tracing::warn!(%error,"Volume helper recovery failed"),
         }

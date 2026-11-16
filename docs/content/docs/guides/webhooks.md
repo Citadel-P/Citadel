@@ -309,16 +309,9 @@ Service webhook deliveries that queue work or need attention create `SwarmServic
 
 ## Activities, Runs, And Alerts
 
-All supported webhook targets use the same delivery activity policy:
-
-- `GitRepoWebhookReceived`
-- `StackWebhookReceived`
-- `SwarmServiceWebhookReceived`
-- `BuildWebhookReceived`
-- `ScriptWebhookReceived`
-- `BackupPolicyWebhookReceived`
-
-Activities can include request id, provider event type, delivery id, branch, commit SHA, repository name, dispatch status, and no-op reason.
+Open the target resource's **Activities** for delivery outcomes and its run or
+operation history for execution results. A delivery activity can include the
+provider, delivery ID, branch, commit, dispatch status, and reason for skipping.
 
 Routine no-ops do not create activities: unchanged commits or images, unrelated
 paths, filtered branches, and unsupported provider events. Their HTTP response
@@ -339,8 +332,7 @@ Every delivery activity uses the same severity rules:
   Unrecognized skip reasons also produce warnings.
 - **Failure**: authentication, validation, synchronization, or dispatch failed.
 
-The activity summary shows the outcome reason. These classifications apply to new
-activities; existing activity records retain their recorded severity.
+The activity summary shows the outcome reason.
 
 Webhook alerts are reserved for failures that need attention:
 
@@ -406,10 +398,6 @@ Provider cannot reach Citadel:
 
 ### Saved webhook credentials
 
-Read, configuration and realtime responses expose `hasSecret`, never the saved
-secret. The editor displays a newly generated or entered secret so you can copy it
-to the sender before saving. To obtain another value later, rotate the secret and
-update the sender. Omitted secret fields preserve the saved value; clearing a secret
-while its webhook remains enabled is rejected.
-
-For full Swarm service specification updates, an omitted or null webhook secret preserves the saved credential. Remove the webhook with `webhook: null` to clear it, or supply a replacement secret to rotate it. Stack and other resource patches preserve omitted secret fields; explicit null clears them. Enabled webhooks cannot have an empty secret.
+Saved webhook secrets cannot be revealed. Copy a newly generated secret to the
+sender before saving. To replace it later, rotate the secret and update the sender.
+An enabled webhook must have a nonempty secret.

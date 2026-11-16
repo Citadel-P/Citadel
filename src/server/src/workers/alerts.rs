@@ -18,7 +18,10 @@ pub async fn deliveries(
             let Some(_admission) = admission.enter("Alert deliveries", &cancellation).await else {
                 return Ok(());
             };
-            service.process_one(&cancellation).await
+            citadel_runtime::jobs::observe_work(service.process_one(&cancellation), |worked| {
+                Some((u64::from(*worked), "deliveries"))
+            })
+            .await
         };
         let failed = match result {
             Ok(true) => continue,
@@ -68,6 +71,19 @@ async fn wait_for_work(
     cancellation: &CancellationToken,
     timeout: Duration,
 ) {
+    if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
+        job.policy(
+            format!(
+                "Event or next due delivery; at most {} seconds",
+                timeout.as_secs_f64()
+            ),
+            None,
+        );
+        job.waiting(
+            "Event or delivery deadline",
+            Some(tokio::time::Instant::now() + timeout),
+        );
+    }
     tokio::select! {
         () = cancellation.cancelled() => {},
         _ = tokio::time::sleep(timeout) => {},
@@ -88,7 +104,7 @@ pub(crate) async fn observations(
         if cancel.is_cancelled() {
             return Ok(());
         }
-        let result = tokio::select! { () = cancel.cancelled() => return Ok(()), result = alerts.process_pending_observation(owner) => result };
+        let result = tokio::select! { () = cancel.cancelled() => return Ok(()), result = citadel_runtime::jobs::observe_work(alerts.process_pending_observation(owner), |worked| Some((u64::from(*worked), "observations"))) => result };
         match result {
             Ok(true) => continue,
             Ok(false) => {}

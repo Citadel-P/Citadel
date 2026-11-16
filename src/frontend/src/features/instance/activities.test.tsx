@@ -24,7 +24,7 @@ it('scopes history to settings changes by every administrator, independent of gl
   expect(query.get('EventType')).toBeNull();
   expect(query.get('ResourceId')).toBeNull();
   expect(query.get('Page')).toBe('1');
-  expect(InstanceComponents.Tabs.map((tab) => tab.slug)).toEqual(['config', 'activities']);
+  expect(InstanceComponents.Tabs.map((tab) => tab.slug)).toEqual(['config', 'jobs', 'activities']);
   expect(InstanceComponents.showTaskSheet).toBe(true);
 });
 

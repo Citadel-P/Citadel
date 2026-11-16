@@ -30,7 +30,6 @@ unexpected exits; restarting the container supersedes the previous stop intent.
 Use **Health Filter** to find failures or missing coverage. Hiding **Health** in
 **Columns** also hides and pauses its filter, preserving your selection.
 
-
 ## Run one container
 
 You need an online Docker Standalone Platform and an image name.
@@ -252,9 +251,6 @@ If a platform is disconnected, deploy and runtime actions can fail because Citad
 
 ## Duplicate
 
-Copy availability is included when the resource list loads and refreshed with
-resource updates. Opening **Duplicate** does not fetch the resource details.
-
 The **Duplicate** menu is available on the detail page, in each list row's action
 menu, and in the bottom action bar when one Deployment is selected. It offers
 **Configuration only** and **Configuration + data**. Configuration only opens a
@@ -332,13 +328,10 @@ The protected count covers listed storage targets, not all application state.
 
 For backup setup and restore behavior, see [Backups](/resources/backups).
 
-Use **Backup Filter** at the right of the resource header to filter by backup status.
-The resource table displays a **Backup** column. Hover over its shield to see
-the same coverage card as on the resource page. Manual-only or disabled policies
-show amber, even after a successful manual run. Green requires an active schedule,
-a ready repository, and a successful available backup for all eligible storage.
-See [Backup coverage](/resources/backups#coverage-on-resource-pages) for all
-status meanings and scheduling requirements.
+Use **Backup Filter** to find resources by coverage status. Open the **Backup**
+shield for policy details. See [Backup coverage](/resources/backups#coverage-on-resource-pages)
+for status meanings; a successful manual backup alone does not mean scheduled
+protection is active.
 
 ## Diagnose a Failed Deployment
 

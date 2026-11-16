@@ -223,9 +223,6 @@ After a verified successful standalone update, Citadel automatically removes the
 stopped previous Agent and updater helper. Identity and data volumes are preserved.
 If cleanup is interrupted, the operation stays open and retries automatically after
 reconnect or a Core restart. Failed updates keep their containers for inspection.
-Containers retained by updates completed before automatic cleanup was introduced
-are not swept by name; inspect those completed operations before removing their
-stopped containers, preserving shared volumes.
 
 Central replacement supports recognized standalone Docker Agents using a writable
 local Docker socket at `/var/run/docker.sock` or `/run/user/<uid>/docker.sock` on
@@ -300,8 +297,7 @@ as `0:0` **inside a container on that daemon**; this maps to its unprivileged ho
 Follow the [registration instructions](https://github.com/Citadel-P/Citadel/blob/main/docs/DEVELOPMENT.md)
 using the existing Compose project and ordered files. Enabling the setting alone does
 not create a registration. Citadel checks the release signature, architecture,
-migration history and protocol compatibility automatically. No per-version upgrade
-source list needs configuring.
+migration history and protocol compatibility automatically.
 
 Select **Update and restart** to approve the reviewed version. Citadel waits for
 active work, creates a recovery checkpoint and replaces Core. Running managed
@@ -319,8 +315,7 @@ If verification or cleanup fails, an error toast appears and the recovery banner
 stays visible. Citadel retains maintenance and recovery state.
 Preserve the checkpoint and logs for operator recovery. It does not automatically
 roll back a migrated database. Use the manual procedure below for unsupported
-installations. Older updaters that require an explicit source-version list also
-need a manual update once to adopt automatic compatibility checks.
+installations.
 
 ### Recover an interrupted preparation
 

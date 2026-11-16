@@ -39,6 +39,44 @@ PlatformCpuHigh,
 }
 
 impl AlertType {
+    /// The resource family this rule observes, independent of its name or scope.
+    pub const fn resource_type(self) -> AlertResourceType {
+        match self {
+            Self::PlatformCpuHigh
+            | Self::PlatformRamHigh
+            | Self::PlatformDiskHigh
+            | Self::PlatformUnreachable
+            | Self::PlatformVersionMismatch
+            | Self::UnmanagedContainerCreated => AlertResourceType::Platform,
+            Self::DeploymentImageUpdateAvailable
+            | Self::DeploymentAutoDeployFailed
+            | Self::DeploymentAutoUpdated
+            | Self::DeploymentConfigurationResolutionFailed => AlertResourceType::Deployment,
+            Self::SwarmServiceOperationFailed => AlertResourceType::SwarmService,
+            Self::StackImageUpdateAvailable
+            | Self::StackAutoDeployFailed
+            | Self::StackAutoUpdated
+            | Self::StackServiceAutoDeployFailed
+            | Self::StackServiceAutoUpdated
+            | Self::StackDriftDetected
+            | Self::StackDriftAutoReconciled
+            | Self::StackGitUpdateAvailable
+            | Self::StackGitAutoUpdated
+            | Self::StackGitAutoDeployFailed
+            | Self::StackConfigurationResolutionFailed => AlertResourceType::Stack,
+            Self::WebhookAuthenticationFailed
+            | Self::WebhookDispatchFailed
+            | Self::WebhookGitRepoSyncFailed
+            | Self::WebhookStackGitDeployFailed => AlertResourceType::Webhook,
+            Self::ScriptRunFailed => AlertResourceType::Script,
+            Self::BuildRunFailed => AlertResourceType::Build,
+            Self::BuildAgentPoolUnavailable => AlertResourceType::BuildAgentPool,
+            Self::BackupRunFailed => AlertResourceType::BackupPolicy,
+            Self::LicenseEnteredGracePeriod | Self::LicenseExpired => AlertResourceType::License,
+            Self::CoreUpdateAvailable | Self::AgentUpdatesAvailable => AlertResourceType::Updates,
+        }
+    }
+
     pub const fn is_threshold(self) -> bool {
         matches!(
             self,
@@ -51,9 +89,51 @@ citadel_primitives::status_enum! {
     pub enum AlertSeverity { Info, Warning, Critical }
 }
 
+citadel_primitives::status_enum! {
+    pub enum AlertResourceType {
+        Platform, Deployment, Stack, GitRepository, Webhook, Script, Build,
+        BuildAgentPool, BackupPolicy, License, Updates, SwarmService
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cross_resource_alerts_belong_to_their_observed_resource() {
+        for (kind, resource) in [
+            (
+                AlertType::BuildAgentPoolUnavailable,
+                AlertResourceType::BuildAgentPool,
+            ),
+            (AlertType::BuildRunFailed, AlertResourceType::Build),
+            (AlertType::BackupRunFailed, AlertResourceType::BackupPolicy),
+            (
+                AlertType::StackServiceAutoDeployFailed,
+                AlertResourceType::Stack,
+            ),
+            (
+                AlertType::StackGitAutoDeployFailed,
+                AlertResourceType::Stack,
+            ),
+            (
+                AlertType::WebhookStackGitDeployFailed,
+                AlertResourceType::Webhook,
+            ),
+            (
+                AlertType::UnmanagedContainerCreated,
+                AlertResourceType::Platform,
+            ),
+            (AlertType::AgentUpdatesAvailable, AlertResourceType::Updates),
+            (
+                AlertType::SwarmServiceOperationFailed,
+                AlertResourceType::SwarmService,
+            ),
+        ] {
+            assert_eq!(kind.resource_type(), resource);
+        }
+    }
 
     #[test]
     fn known_alert_kinds_and_severities_roundtrip_exactly() {

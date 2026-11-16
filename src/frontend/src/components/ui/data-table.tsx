@@ -18,6 +18,7 @@ import {
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { cn } from '@/lib/utils';
 import { TableSkeletonRows } from './table-skeleton';
 
@@ -39,6 +40,8 @@ interface DataTableProps<TData extends Identifiable> {
   isLoading: boolean;
   getRowId?: (row: TData) => string;
   getRowClassName?: (row: Row<StockFeatures, TData>) => string | undefined;
+  columnClassNames?: Record<string, string>;
+  expansionStorageKey?: string;
   getSubRows?: (row: TData) => TData[] | undefined;
   enableRowSelection?: (row: TData) => boolean;
   enableSubRowSelection?: boolean;
@@ -55,6 +58,8 @@ export function DataTable<TData extends Identifiable>({
   getRowId,
   getSubRows,
   getRowClassName,
+  columnClassNames,
+  expansionStorageKey,
   enableRowSelection,
   enableSubRowSelection,
   onSelectionChange,
@@ -62,7 +67,7 @@ export function DataTable<TData extends Identifiable>({
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [expanded, setExpanded] = useLocalStorage<ExpandedState>(expansionStorageKey, {}, normalizeExpandedRows);
   const lastSelectionRef = useRef<{ ids?: string; rows?: TData[] }>({});
   const onSelectionChangeRef = useRef(onSelectionChange);
 
@@ -86,6 +91,16 @@ export function DataTable<TData extends Identifiable>({
   });
 
   const selectedModelRows = table.getSelectedRowModel().flatRows;
+  const visibleColumns = table.getVisibleLeafColumns();
+  const selectionIndex = visibleColumns.findIndex((column) => column.id === 'select');
+  const afterSelection = selectionIndex >= 0 ? visibleColumns[selectionIndex + 1]?.id : undefined;
+  const columnClassName = (id: string) =>
+    cn(
+      id === 'select' && 'w-px pr-0',
+      id === afterSelection && 'pl-5',
+      id === 'actions' && 'w-px pr-6 text-right',
+      columnClassNames?.[id],
+    );
 
   useLayoutEffect(() => {
     onSelectionChangeRef.current = onSelectionChange;
@@ -120,7 +135,7 @@ export function DataTable<TData extends Identifiable>({
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
                 return (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className={columnClassName(header.column.id)}>
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 );
@@ -136,7 +151,9 @@ export function DataTable<TData extends Identifiable>({
                 data-state={row.getIsSelected() && 'selected'}
                 className={cn('group/rowid', getRowClassName?.(row))}>
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                  <TableCell key={cell.id} className={columnClassName(cell.column.id)}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
                 ))}
               </TableRow>
             ))
@@ -158,4 +175,12 @@ export function DataTable<TData extends Identifiable>({
       </Table>
     </div>
   );
+}
+
+function normalizeExpandedRows(value: unknown): ExpandedState {
+  if (value === true) return true;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value).filter(([, expanded]) => expanded === true));
+  }
+  return {};
 }

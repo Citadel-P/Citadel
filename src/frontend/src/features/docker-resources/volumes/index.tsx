@@ -1,17 +1,22 @@
 import { HardDrive } from 'lucide-react';
 import { VolumesTable } from './table';
-import { RequiredComponents, RequiredFormComponents, ResourceDataHookResult } from '@/pages/types';
+import { RegularResourceComponents, RequiredFormComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { VolumeDropdownActions, VolumeGroupActions } from './actions';
 import { useVolumesGroup } from './hooks/useVolumesGroup';
 import VolumeForm from './form';
+import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 
 const EMPTY_VOLUMES: never[] = [];
 
-export const VolumeComponents: RequiredComponents = {
+export const VolumeComponents: RegularResourceComponents = {
   Icon: HardDrive,
-  Content: ({ items, actions, isLoading }) => {
-    return <VolumesTable items={items} actions={actions} isLoading={isLoading} />;
+  Content: VolumesTable,
+  header: {
+    showSearch: true,
+    showAdd: true,
+    activeFilterParams: ['backupStatus'],
+    Extra: BackupStatusFilter,
   },
   DropdownActions: VolumeDropdownActions,
   GroupActions: ({ items }) => {
@@ -20,7 +25,8 @@ export const VolumeComponents: RequiredComponents = {
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { volumes, capabilities, isLoading, error, refetch, isFetching } = useVolumesGroup(platformId);
-    return { error, refetch, isFetching, items: volumes?.volumes ?? EMPTY_VOLUMES, isLoading, capabilities };
+    const items = useBackupStatusFilter(volumes?.volumes ?? EMPTY_VOLUMES);
+    return { error, refetch, isFetching, items, isLoading, capabilities };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

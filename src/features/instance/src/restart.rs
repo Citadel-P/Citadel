@@ -28,6 +28,10 @@ impl InstanceRestartService {
             changes: tokio::sync::watch::channel(()).0,
         }
     }
+    pub fn boot_id(&self) -> Uuid {
+        self.boot_id
+    }
+
     pub async fn status(&self, principal: &ActorPrincipal) -> Result<RestartStatus, InstanceError> {
         Self::authorize(principal)?;
         Ok(RestartStatus {

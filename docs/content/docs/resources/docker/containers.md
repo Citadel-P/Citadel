@@ -20,7 +20,8 @@ the list. Active health and backup filters appear as removable chips.
 **Columns** lets you show IDs or hide Image, Health, CPU, Memory, and Ports, and
 remembers your choices in this browser. Image and Health are visible by default.
 Hiding Health also hides and pauses its filter; showing the column restores your
-filter selection. Expand a stack row to see its containers.
+filter selection. Expand a stack row to see its containers. Expanded stacks are
+remembered in this browser separately for each Platform; selected rows are not.
 
 ## Inspect a container
 
@@ -83,10 +84,7 @@ status meanings and scheduling requirements.
 The **Health** column and **Health Filter** distinguish **Healthy**, **Unhealthy**,
 **Starting**, **No check**, **Disabled**, **Not running**, and **Unknown**. Running
 means the container process is active; it does not mean its health check passes.
-The table shows a compact health icon: green for Healthy, a warning color for
-Starting, and red for Unhealthy. No check, Disabled, Not running, and Unknown use
-neutral icons; they do not indicate successful checks. The Health column is
-visible by default and can be hidden through **Columns**.
+No check, Disabled, Not running, and Unknown do not indicate successful checks.
 
 Stack rows summarize their accessible, current containers before search and table
 filters. Any failing check makes the summary **Unhealthy**; otherwise, checks
@@ -103,42 +101,21 @@ its health history and probe details, using the same dialog as the Stacks page.
 The selector includes accessible containers hidden by table filters. Opening
 health details does not change which containers are selected for group actions.
 
-Hover over or focus the **Health** icon in the table or the labeled health status
-in **Container overview** for the same card with status, check times, and
-consecutive failures. Click to keep the card open. Select **View details** to open a dialog with a
-chart of health observations, including repeated Healthy results. The chart opens
-on the last hour and uses the same time-range picker as Stats: **15 minutes**,
-**1 hour**, **6 hours**, **24 hours**, **48 hours**, **7 days**, **Today**, and
-**Yesterday**. Calendar ranges use local time. Each dot
-shows an observation by time and health state. Older periodic observations are
-grouped by time and state, with failures kept separate from healthy results.
-Hover over a dot for the same tooltip card used by Stats, showing its time, state,
-group count, and available diagnostic details, including OOM and exit information.
-Select a dot or focus it with the keyboard to open its details below the chart.
-Use **Clear observation selection** to dismiss them. Nearby observations with the
-same health and container state share a marker when space is limited; its hover
-card shows their count and time span. Failures and different exit or OOM results
-remain separate. Choose a shorter range to see more detail, and use arrow keys to
-navigate markers. Changing the range uses the loaded history without
-extra HTTP requests.
-Chart and detail timestamps use local time. Gaps and grouped results do not
-establish continuous health or uptime.
+Open the **Health** card and select **View details** for health history. Choose
+a range from 15 minutes to seven days, or Today/Yesterday in local time. Select a
+chart marker for its state, time, and available exit or OOM information. Older or
+closely spaced observations may be grouped; choose a shorter range for more detail.
+Gaps and grouped results do not establish continuous health or uptime.
 
 ![Container health details showing a healthy current result and a recent failure followed by recovery](/screenshots/container-health-details.png)
 
 This example shows a recovered container: the current check is healthy, while
 the history preserves the earlier unhealthy observations.
 
-History loads when details open, even if the realtime connection is unavailable.
-Realtime notifications refresh saved history as observations change and after
-reconnecting. If a read fails, use **Retry**; any previously loaded observations
-remain visible. Current health continues to update through the realtime connection.
-Expand **Probe details** to fetch Docker's
-recent results and effective check configuration on demand, with Inspect permission.
-This section starts collapsed; opening it loads a snapshot that is not continuously refreshed.
-Viewing health never runs a
-probe or restarts a container. Docker and
-Swarm continue to apply their own configured behavior.
+History updates automatically. If a read fails, use **Retry**; previously loaded
+observations remain visible. Expand **Probe details** for a snapshot of Docker's
+recent results and check configuration, which requires Inspect permission.
+Viewing health does not run a probe or restart a container.
 
 Citadel refreshes health in the background. Disconnected, stale, or unsupported
 observations show **Unknown**; evidence older than three minutes is not current.
@@ -152,9 +129,7 @@ a grayed-out history chart, without loading history. Their current configuration
 still updates automatically; configuration and state changes remain recorded. History retains up to 10,080 periodic samples and 200
 changes per container for seven days, subject to a shared limit of 100,000 records
 across the installation. Busy installations can therefore retain less than seven
-days. Collection outages and retention can leave gaps. Periodic history starts
-when this version of Core is running; earlier samples cannot be reconstructed.
-Recent probe output comes from Docker on demand and is not stored in this history.
+days. Collection outages and retention can leave gaps. Recent probe output comes from Docker on demand and is not stored in this history.
 
 ## Read logs
 
@@ -167,12 +142,9 @@ empty, check whether the application writes to standard output or standard error
 and whether its Docker logging driver supports reading logs. Files written only
 inside the container do not automatically appear here.
 
-Each connection loads the last 100 lines per container, then follows new output.
-The browser keeps up to 5,000 displayed lines for each of eight recently viewed
-log groups. Reopening a view or reconnecting merges replayed history with that
-cache using Docker timestamps and message occurrence counts, so replay does not
-multiply cached lines. Repeated messages in the source remain visible. Reloading
-the page clears this in-memory history; **Clear** clears the current view.
+The viewer loads the last 100 lines per container and follows new output. It
+keeps up to 5,000 displayed lines for each of eight recently viewed log groups.
+Reloading the page clears this browser history; **Clear** clears the current view.
 
 For several services together, use the Stack's logs. If multiple live views stop
 updating, check the [browser connection](/operations/troubleshooting#live-updates-stop).
@@ -199,11 +171,6 @@ output**; resizing the terminal does not reset this timeout. A silent command ca
 therefore reach the timeout. Use a managed workload for work that must continue
 after disconnecting. Processes deliberately detached into another session are
 outside terminal cleanup.
-
-A command starts only after Citadel has confirmed ownership of its process.
-If startup confirmation is lost, the waiting launcher terminates itself after
-10 seconds without running the command. Temporary output backpressure pauses
-reading rather than terminating a healthy terminal.
 
 Cleanup of an approved command requires a reachable Docker daemon. Core and Agent shutdown allow bounded
 cleanup time; a daemon outage or abrupt process/host failure can prevent cleanup.
@@ -246,13 +213,9 @@ Inspect target. For a Swarm Service, choose a running Task in **Processes** to v
 that Task's container on its owning Node. Workload access alone does not grant
 Platform Read or Inspect permission.
 
-The initial snapshot loads through HTTP. While expanded, the list updates through
-realtime on the existing statistics interval (`CITADEL_STATS_POLL_INTERVAL_SECONDS`).
-Closing the section stops process reads. Reopening within 30 seconds of the latest
-snapshot reuses it without another HTTP request. Snapshots stay in memory for up to
-five minutes after closing; older snapshots refresh when reopened.
-If a snapshot cannot be loaded, **Retry**
-requests it again. Reconnecting fetches a fresh snapshot. Stopped containers show an
-empty state. Process history is not stored, and snapshots are limited to 1,024 rows.
+The list updates while expanded and stops collecting when closed. Use **Retry**
+if a snapshot fails. Stopped containers show an empty state. Process history is
+not stored, and snapshots are limited to 1,024 rows.
+
 This uses Docker's process-list API on Linux, including Local, Direct and Edge
 connections and the owning node of Swarm containers.

@@ -8,6 +8,7 @@ pub(crate) mod containers;
 pub(crate) mod deployments;
 pub mod edge;
 pub(crate) mod git;
+pub mod job_history;
 pub(crate) mod platforms;
 pub(crate) mod scripts;
 pub(crate) mod stacks;

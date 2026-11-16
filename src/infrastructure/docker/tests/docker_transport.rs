@@ -80,6 +80,8 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
         .unwrap();
     assert_eq!(volumes[0].usage_data.as_ref().unwrap()["Size"], 4096);
     assert!(volumes[0].in_use);
+    assert!(volumes[0].is_system);
+    assert!(!volumes[1].is_system);
     assert_eq!(volumes[0].content_access_allowed, Some(false));
     assert_eq!(volumes[1].content_access_allowed, Some(true));
     assert_eq!(volumes[1].usage_data.as_ref().unwrap()["Size"], 0);
@@ -89,6 +91,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
         citadel_platforms::VolumeObservationPort::inspect_volume(&client, "data", &cancel)
             .await
             .unwrap();
+    assert!(inspected.is_system);
     assert_eq!(inspected.content_access_allowed, Some(false));
     assert_eq!(inspected.usage_data.unwrap()["Size"], 8192);
     assert_eq!(inspected.containers[0]["state"], "Running");
