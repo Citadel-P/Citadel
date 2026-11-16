@@ -8,6 +8,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
+fn catalog() -> String {
+    serde_json::json!({"migrations": [{"id": "0001", "sha256": "a".repeat(64)}]}).to_string()
+}
+
 struct Ports {
     calls: Mutex<Vec<&'static str>>,
     reject_signature: bool,
@@ -26,13 +30,20 @@ impl Ports {
             cancel_after_signature: false,
             cancel_during_inspection: false,
             descriptor: UpgradeDescriptor {
-                schema_version: 1,
+                schema_version: 2,
                 product: "citadel".into(),
                 target_version: "1.2.3".into(),
-                target_catalog_sha256: "a".repeat(64),
+                target_catalog_sha256: {
+                    use sha2::{Digest, Sha256};
+                    Sha256::digest(catalog().as_bytes())
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect::<String>()
+                },
                 installer_format: INSTALLER_FORMAT,
                 update_protocol: UPDATE_PROTOCOL,
-                sources: vec![],
+                migration_catalog: catalog(),
+                agent_protocol: 2,
             },
         }
     }
@@ -86,7 +97,7 @@ async fn inspect(ports: Arc<Ports>) -> Result<InspectedRelease, UpdateError> {
 }
 
 #[tokio::test]
-async fn verifies_before_execution_and_preserves_empty_eligibility() {
+async fn verifies_before_execution_and_allows_compatible_newer_release() {
     let ports = Arc::new(Ports::new());
     let inspected = inspect(ports.clone()).await.unwrap();
     assert_eq!(
@@ -95,7 +106,6 @@ async fn verifies_before_execution_and_preserves_empty_eligibility() {
     );
     assert_eq!(inspected.identity.version, "1.2.3");
     assert_eq!(inspected.identity.architecture, "amd64");
-    assert!(inspected.descriptor.sources.is_empty());
     let source = CoreIdentity {
         version: "1.2.2".into(),
         ..inspected.identity.clone()
@@ -103,8 +113,8 @@ async fn verifies_before_execution_and_preserves_empty_eligibility() {
     assert!(
         inspected
             .descriptor
-            .validate_transition(&source, &inspected.identity, &[])
-            .is_err()
+            .validate_transition(&source, &inspected.identity, &catalog(), 2, &[])
+            .is_ok()
     );
 }
 

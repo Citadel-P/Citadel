@@ -36275,6 +36275,45 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "hours",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/StatsHours"
+            }
+          },
+          {
+            "description": "Relative range: 15, 60, 360, 1440 or 10080 minutes",
+            "in": "query",
+            "name": "minutes",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive start in Unix seconds within retained history",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Inclusive end in Unix seconds; defaults to now with from",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -36289,7 +36328,7 @@
                 }
               }
             },
-            "description": "Up to 200 transitions within seven days; history may have gaps"
+            "description": "Retained transitions and grouped observations in the requested range; defaults to 24 hours, at most seven days; history may have gaps"
           },
           "400": {
             "content": {

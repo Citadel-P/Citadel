@@ -129,11 +129,13 @@ pub(crate) async fn prepare_retention(pool: &PgPool) -> Result<RetentionSweep, s
     let mut progress = 0;
     let mut partial = Vec::new();
     let mut changed_parents = std::collections::BTreeSet::new();
+    let mut sparse_days = Vec::new();
     for parent in [
         "statisticssamples",
         "statisticsrollups",
         "platformgaugerollups",
         "platformiorollups",
+        "platformiocoarserollups",
     ] {
         // Compaction reads raw history before writing summaries. Never hold a
         // summary parent lock while acquiring another family's partition locks.
@@ -208,6 +210,7 @@ pub(crate) async fn prepare_retention(pool: &PgPool) -> Result<RetentionSweep, s
                             continue;
                         }
                     }
+                    sparse_days.push(n);
                 }
                 if n * 86_400 >= cutoff {
                     continue;
@@ -232,6 +235,7 @@ pub(crate) async fn prepare_retention(pool: &PgPool) -> Result<RetentionSweep, s
             .await?;
         tx.commit().await?;
     }
+    progress += super::reclamation::reclaim(pool, &sparse_days).await?;
     Ok(RetentionSweep {
         cutoff,
         partial,

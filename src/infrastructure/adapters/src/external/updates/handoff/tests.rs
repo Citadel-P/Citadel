@@ -55,7 +55,7 @@ impl Runner {
         let source = CoreIdentity {
             version: "0.1.1".into(),
             image: format!("ghcr.io/citadel-p/citadel@sha256:{}", "a".repeat(64)),
-            catalog_sha256: "b".repeat(64),
+            catalog_sha256: citadel_database::MigrationRunner::catalog_sha256().unwrap(),
             architecture: "amd64".into(),
         };
         let operation = UpdateOperation::approve(

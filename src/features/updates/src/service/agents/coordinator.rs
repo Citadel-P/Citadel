@@ -96,6 +96,29 @@ impl AgentUpdateService {
             }
             return Ok(());
         }
+        if let Some(release) = self
+            .repository
+            .state()
+            .await?
+            .release
+            .filter(|release| release.version == self.core_version)
+            && targets
+                .iter()
+                .all(|target| target.eligibility(Some(&release)) == AgentUpdateEligibility::Current)
+        {
+            if cancellation.is_cancelled() {
+                return Err(UpdateError::Cancelled);
+            }
+            // Already-current Agents need an observation, not another artifact
+            // download and verifier process. Retain the previously verified
+            // release; any non-current target still takes the verification path.
+            self.repository.save_release(None, None).await?;
+            self.notifier.changed();
+            self.repository
+                .observe_agent_availability(&release, &targets, observed_at)
+                .await?;
+            return Ok(());
+        }
         let release = self.runtime.release(&self.core_version, cancellation).await;
         match release {
             Ok(release) if release.version == self.core_version => {

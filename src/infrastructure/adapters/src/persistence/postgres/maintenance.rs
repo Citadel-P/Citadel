@@ -211,7 +211,12 @@ pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
             &std::sync::atomic::AtomicI64::new(0),
         )
         .await?
-        .processed)
+        .processed
+        + super::platforms::statistics::platform_coarse::compact(
+            pool,
+            &std::sync::atomic::AtomicI64::new(0),
+        )
+        .await?)
 }
 
 /// Refresh tokens have a separate expiry cadence. Backup leases are ownership
@@ -249,6 +254,7 @@ pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
 pub struct PostgresMaintenanceStore {
     pool: PgPool,
     platform_cursor: std::sync::atomic::AtomicI64,
+    coarse_cursor: std::sync::atomic::AtomicI64,
     physical_discovery: tokio::sync::Mutex<super::platforms::statistics::maintenance::Discovery>,
 }
 impl PostgresMaintenanceStore {
@@ -256,6 +262,7 @@ impl PostgresMaintenanceStore {
         Self {
             pool,
             platform_cursor: std::sync::atomic::AtomicI64::new(0),
+            coarse_cursor: std::sync::atomic::AtomicI64::new(0),
             physical_discovery: Default::default(),
         }
     }
@@ -308,8 +315,14 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
             )
             .await
             .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
+            let coarse = super::platforms::statistics::platform_coarse::compact(
+                &self.pool,
+                &self.coarse_cursor,
+            )
+            .await
+            .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
             Ok(citadel_runtime::maintenance::CompactionProgress {
-                processed: physical + platform.processed,
+                processed: physical + platform.processed + coarse,
                 stalled_source: platform.stalled_source,
                 scan_pending,
             })

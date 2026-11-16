@@ -64,10 +64,9 @@ impl LocalDockerSampler {
         }
         let containers = tokio::select! {
             () = cancellation.cancelled() => return Err(super::runtime::cancelled_error()),
-            result = self.docker.list_container_models(Some(true), None, None, None) => result.map_err(normalize_docker_error)?,
+            result = self.docker.list_sampling_containers() => result.map_err(normalize_docker_error)?,
         };
-        // Sampling consumes only identity and running state. Avoid serializing ports,
-        // sorting/copying labels, and mapping ownership for every statistics tick.
+        // Sampling parses only identity and state, skipping inventory metadata allocations.
         use citadel_docker_api::models::container_summary::State;
         let mut counts = ContainerCounts {
             total: containers.len() as i64,

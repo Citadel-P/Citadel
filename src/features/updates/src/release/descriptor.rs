@@ -1,6 +1,7 @@
 use crate::{CoreIdentity, UPDATE_PROTOCOL, UpdateError};
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 pub const OFFICIAL_REPOSITORY: &str = "Citadel-P/Citadel";
 pub const CORE_IMAGE: &str = "ghcr.io/citadel-p/citadel";
@@ -17,17 +18,46 @@ pub struct UpgradeDescriptor {
     pub target_catalog_sha256: String,
     pub installer_format: u32,
     pub update_protocol: u32,
-    pub sources: Vec<UpgradeSource>,
+    pub migration_catalog: String,
+    pub agent_protocol: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct UpgradeSource {
-    pub version: String,
-    pub catalog_sha256: String,
-    pub architectures: Vec<String>,
-    /// Explicitly qualified transition versions; empty means Core-only.
-    pub agent_versions: Vec<String>,
+#[derive(Deserialize, PartialEq, Eq)]
+struct Migration {
+    id: String,
+    sha256: String,
+}
+
+fn migrations(catalog: &str, digest: &str) -> Result<Vec<Migration>, UpdateError> {
+    #[derive(Deserialize)]
+    struct Catalog {
+        migrations: Vec<Migration>,
+    }
+    let invalid = || UpdateError::Unavailable("Invalid or inconsistent migration catalog.".into());
+    if catalog.len() > 128 * 1024
+        || Sha256::digest(catalog.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+            != digest
+    {
+        return Err(invalid());
+    }
+    let catalog: Catalog = serde_json::from_str(catalog).map_err(|_| invalid())?;
+    if catalog.migrations.is_empty()
+        || catalog.migrations.len() > 1024
+        || catalog
+            .migrations
+            .iter()
+            .any(|m| m.id.is_empty() || !is_sha256(&m.sha256))
+        || catalog
+            .migrations
+            .windows(2)
+            .any(|pair| pair[0].id >= pair[1].id)
+    {
+        return Err(invalid());
+    }
+    Ok(catalog.migrations)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,10 +100,9 @@ pub fn release_version(value: &str) -> Result<Version, UpdateError> {
 
 impl UpgradeDescriptor {
     /// Validate the target identity independently of any proposed source.
-    /// An empty source list is valid metadata but authorizes no transition.
     pub fn validate_target(&self, target: &CoreIdentity) -> Result<(), UpdateError> {
         release_version(&target.version)?;
-        if self.schema_version != 1
+        if self.schema_version != 2
             || self.product != "citadel"
             || self.update_protocol != UPDATE_PROTOCOL
             || self.installer_format != INSTALLER_FORMAT
@@ -82,12 +111,13 @@ impl UpgradeDescriptor {
             || !is_sha256(&target.catalog_sha256)
             || !official_image_digest(&target.image)
             || !matches!(target.architecture.as_str(), "amd64" | "arm64")
-            || self.sources.len() > 64
+            || self.agent_protocol <= 0
         {
             return Err(UpdateError::Unavailable(
                 "The verified image has an unsupported or inconsistent upgrade descriptor.".into(),
             ));
         }
+        migrations(&self.migration_catalog, &self.target_catalog_sha256)?;
         Ok(())
     }
 
@@ -95,6 +125,8 @@ impl UpgradeDescriptor {
         &self,
         source: &CoreIdentity,
         target: &CoreIdentity,
+        source_catalog: &str,
+        source_agent_protocol: i32,
         agents: &[String],
     ) -> Result<(), UpdateError> {
         self.validate_target(target)?;
@@ -110,26 +142,19 @@ impl UpgradeDescriptor {
                 "This release does not support the selected installation transition.".into(),
             ));
         }
-        let candidates = self
-            .sources
-            .iter()
-            .filter(|s| {
-                s.version == source.version
-                    && s.catalog_sha256 == source.catalog_sha256
-                    && s.architectures.contains(&source.architecture)
-            })
-            .collect::<Vec<_>>();
-        if candidates.len() != 1 {
+        let source_migrations = migrations(source_catalog, &source.catalog_sha256)?;
+        let target_migrations = migrations(&self.migration_catalog, &target.catalog_sha256)?;
+        if !target_migrations.starts_with(&source_migrations) {
             return Err(UpdateError::Unavailable(
-                "The installed release and database catalog have no verified upgrade path.".into(),
+                "The release does not preserve the installed database migration history.".into(),
             ));
         }
-        if agents
-            .iter()
-            .any(|v| !candidates[0].agent_versions.contains(v))
+        if !agents.is_empty()
+            && (self.agent_protocol != source_agent_protocol
+                || agents.iter().any(|v| release_version(v).is_err()))
         {
             return Err(UpdateError::Unavailable(
-                "An Agent requires a coordinated upgrade that this release does not support."
+                "Registered Agents require a compatible Agent protocol before Core can update."
                     .into(),
             ));
         }

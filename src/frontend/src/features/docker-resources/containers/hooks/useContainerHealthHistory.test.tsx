@@ -19,8 +19,8 @@ vi.mock('@/hooks/useRealtimeGroup', () => ({
 beforeEach(() => {
   realtime.connected = true;
 });
-function Probe({ id = 'one', enabled = true }: { id?: string; enabled?: boolean }) {
-  const history = useContainerHealthHistory(id, enabled);
+function Probe({ id = 'one', enabled = true, minutes = 60 }: { id?: string; enabled?: boolean; minutes?: number }) {
+  const history = useContainerHealthHistory(id, { hours: undefined, minutes, from: undefined, to: undefined }, enabled);
   return (
     <>
       <pre data-testid="history">{JSON.stringify(history)}</pre>
@@ -175,4 +175,24 @@ it('reports failed HTTP reads, supports retry, and retains data after a failed r
   await act(async () => subscribe().receive({ resourceId: 'one' }));
   await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('"isError":true'));
   expect(screen.getByTestId('history')).toHaveTextContent('Healthy');
+});
+
+it('keys requests by range and refreshes only active ranges for the selected container', async () => {
+  const requested: string[] = [];
+  server.use(
+    http.get(endpoint, ({ request }) => {
+      const minutes = new URL(request.url).searchParams.get('minutes')!;
+      requested.push(minutes);
+      return HttpResponse.json(entries(`range-${minutes}`));
+    }),
+  );
+  const { rerender } = renderCitadel(<Probe minutes={15} />);
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('range-15'));
+  rerender(<Probe minutes={360} />);
+  expect(screen.getByTestId('history')).not.toHaveTextContent('range-15');
+  await waitFor(() => expect(screen.getByTestId('history')).toHaveTextContent('range-360'));
+  await act(async () => subscribe().receive({ resourceId: 'one' }));
+  expect(requested).toEqual(['15', '360', '360']);
+  await act(async () => subscribe().receive({ resourceId: 'other' }));
+  expect(requested).toHaveLength(3);
 });

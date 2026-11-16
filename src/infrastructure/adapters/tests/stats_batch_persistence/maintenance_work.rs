@@ -95,7 +95,8 @@ async fn retention_prepares_once_skips_exhausted_families_and_restarts_after_can
     .unwrap();
     for (family, count) in counts {
         let expected = match family.as_str() {
-            "partition" => 12,
+            // Five history families, each prepared once for today and two ahead.
+            "partition" => 15,
             "activityevents" => 4,
             _ => 1,
         };

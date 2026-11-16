@@ -36,7 +36,7 @@ class LifecycleBuildTests(unittest.TestCase):
         return subprocess.CompletedProcess(args, 0, json.dumps(self.identity).encode(), b'')
 
     def build(self):
-        return runner.build('runtime:local', runner.SOURCE, self.directory, 'a' * 64,
+        return runner.build('runtime:local', runner.SOURCE, self.directory,
                             source_root=self.source)
 
     def test_pinned_builder_uses_selected_checkout_and_maps_its_artifact(self):

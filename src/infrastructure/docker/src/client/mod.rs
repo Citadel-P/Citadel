@@ -27,3 +27,6 @@ mod local_sampler;
 pub use local_sampler::{LocalDockerSample, LocalDockerSampler};
 
 pub mod deployments;
+
+mod health_inspection;
+pub use health_inspection::ContainerHealthInspection;

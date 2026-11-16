@@ -118,6 +118,95 @@ async fn empty_agent_inventory_can_resolve_alerts_for_the_previous_core_release(
     );
 }
 
+#[tokio::test]
+async fn current_agents_reuse_verified_release_without_relaunching_verification() {
+    let fixture = Fixture::new();
+    *fixture.targets.lock().unwrap() = vec![target("A", "0.1.2"), target("B", "0.1.2")];
+    fixture.state.lock().unwrap().check_error = Some("Previous check failed.".into());
+    let release = fixture.state.lock().unwrap().release.clone();
+    let token = CancellationToken::new();
+
+    // A new service has no in-process verifier cache. Persisted evidence suffices
+    // only for observing Agents which already run the current Core version.
+    for _ in 0..2 {
+        fixture.service().check(&token).await.unwrap();
+    }
+    assert_eq!(fixture.release_checks.load(Ordering::SeqCst), 0);
+    assert_eq!(fixture.state.lock().unwrap().release, release);
+    assert!(fixture.state.lock().unwrap().check_error.is_none());
+    assert_eq!(
+        *fixture.availability_observations.lock().unwrap(),
+        vec![vec!["A".to_owned(), "B".to_owned()]; 2]
+    );
+
+    // A later registration that actually needs an update resumes verification.
+    fixture.targets.lock().unwrap().push(target("C", "0.1.1"));
+    fixture.service().check(&token).await.unwrap();
+    assert_eq!(fixture.release_checks.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.availability_observations.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn noncurrent_or_unverified_agents_still_require_release_verification() {
+    for case in [
+        "older",
+        "newer",
+        "unknown",
+        "invalid",
+        "offline",
+        "missing-release",
+        "different-release",
+    ] {
+        let fixture = Fixture::new();
+        let mut agent = target("A", "0.1.2");
+        match case {
+            "older" => agent.installed_version = Some("0.1.1".into()),
+            "newer" => agent.installed_version = Some("0.1.3".into()),
+            "unknown" => agent.installed_version = None,
+            "invalid" => agent.installed_version = Some("invalid".into()),
+            "offline" => agent.connected = false,
+            "missing-release" => fixture.state.lock().unwrap().release = None,
+            "different-release" => {
+                fixture
+                    .state
+                    .lock()
+                    .unwrap()
+                    .release
+                    .as_mut()
+                    .unwrap()
+                    .version = "0.1.1".into();
+            }
+            _ => unreachable!(),
+        }
+        *fixture.targets.lock().unwrap() = vec![agent];
+        fixture
+            .service()
+            .check(&CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(fixture.release_checks.load(Ordering::SeqCst), 1, "{case}");
+        assert_eq!(
+            fixture.state.lock().unwrap().check_error.is_some(),
+            matches!(case, "missing-release" | "different-release"),
+            "{case}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn cancelled_current_agent_check_does_not_publish_or_verify() {
+    let fixture = Fixture::new();
+    *fixture.targets.lock().unwrap() = vec![target("A", "0.1.2")];
+    let token = CancellationToken::new();
+    token.cancel();
+    assert!(matches!(
+        fixture.service().check(&token).await,
+        Err(UpdateError::Cancelled)
+    ));
+    assert_eq!(fixture.release_checks.load(Ordering::SeqCst), 0);
+    assert!(fixture.availability_observations.lock().unwrap().is_empty());
+}
+
 impl Fixture {
     fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -1206,7 +1295,7 @@ async fn combined_schedule_resumes_after_verified_core_cleanup_without_replaying
 #[tokio::test]
 async fn blocked_core_transition_stops_combined_occurrence_before_mutation() {
     let (f, core, service, _, _receiver) = scheduled_core_fixture();
-    core.state.lock().unwrap().agent_drift = true;
+    core.state.lock().unwrap().incompatible_agent_protocol = true;
     assert!(service.tick(&CancellationToken::new()).await.is_err());
     assert!(core.state.lock().unwrap().operation.is_none());
     assert!(f.state.lock().unwrap().operation.is_none());

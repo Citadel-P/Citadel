@@ -44,39 +44,13 @@ also remain streamed; “finite” alone does not make buffering appropriate.
 The shared-client fixture proves that ordinary finite JSON and text/plain responses
 work with injection. Endpoint-specific fixtures verify the production adapter.
 
-## topLevelApiClient comparison
+## Client construction
 
-Both shapes were generated from the identical pinned v1.49 input with Generator
-7.25.0 and reqwest-trait. Models, method signatures, buffered-body behavior and
-mockable API traits are identical. With `false`, each tag client holds one Arc to
-Configuration. With `true`, ApiClient eagerly constructs 15 boxed trait objects,
-each holding a clone of that same Arc; it adds no extra connection pools itself.
-
-Choose **false**: the adapter can construct only required tag handles, error/model
-mapping is unchanged, tests can still substitute per-tag traits, and ownership is
-visible without an aggregate object's allocations. Both retain async_trait's boxed
-future boundary. Neither shape removes the need for handwritten streaming.
-
-An isolated Linux x86_64 construction smoke test used the pinned Rust toolchain and
-workspace release settings (opt-level z, thin LTO, one codegen unit, abort, stripped).
-Each binary explicitly built Configuration around a Reqwest client, constructed
-either SystemApiClient or ApiClient, and passed it through `black_box`. Dependencies
-were warm; these single compile timings ran alongside workspace validation and are
-not a stable performance benchmark.
-
-| Measurement | false / SystemApiClient | true / aggregate ApiClient |
-|---|---:|---:|
-| `apis/mod.rs` bytes before rustfmt | 3,580 | 8,218 |
-| Inline client size | 8 bytes | 240 bytes, plus 15 heap boxes |
-| Configuration Arc references including caller | 2 | 16 |
-| Stripped construction-test executable | 814,600 bytes | 2,835,328 bytes |
-| Warm-dependency release build | 56.39 s | 62.89 s |
-| Compiler peak RSS | 898,840 KiB | 903,860 KiB |
-
-This measures the generated boundary in isolation, not the Citadel server binary
-or request latency. Runtime impact must be measured with the production adapters.
-The spike uses JSON booleans for `topLevelApiClient`; a string-valued CLI property
-can be treated as truthy by the template even when its text is `false`.
+Use `topLevelApiClient=false` so adapters construct only the required tag clients
+around a shared `Arc<Configuration>`. The aggregate client eagerly allocates every
+tag client without adding transport capabilities or removing the need for streaming.
+Use a JSON boolean in generator configuration: a string-valued CLI property can be
+interpreted as truthy even when its text is `false`.
 
 ## Production operation classification
 
@@ -87,7 +61,8 @@ operations needed by current callers.
 |---|---|
 | SystemInfo, SystemDataUsage | Generated; storage enrichment and the existing cache remain adapter semantics |
 | SystemVersion, SystemPing | Handwritten bounded unversioned negotiation/health handshake |
-| ContainerList, ContainerCreate, ContainerDelete, ContainerStart, ContainerStop, ContainerRestart, ContainerPause, ContainerUnpause | Generated; state changes still accept idempotent HTTP 304 |
+| ContainerList | Generated for inventory; bounded ID/state projection for statistics discovery, retaining the generated state enum |
+| ContainerCreate, ContainerDelete, ContainerStart, ContainerStop, ContainerRestart, ContainerPause, ContainerUnpause | Generated; state changes still accept idempotent HTTP 304 |
 | ContainerInspect, ImageInspect | Generated for typed semantic reads; bounded raw JSON for UI inspection documents |
 | ContainerStats | Generated for finite snapshots; handwritten incremental stream with the existing frame projection |
 | ContainerLogs, ServiceLogs, SystemEvents, ImageCreate | Handwritten incremental framing, cancellation and 1 MiB line bounds |

@@ -20,9 +20,9 @@ pub use read_models::{
 pub use release::{
     CORE_IMAGE, INSTALLER_FORMAT, OFFICIAL_REPOSITORY, PublicationIdentity,
     PublicationSignaturePolicy, PublishedImage, PublishedReleaseManifest, RELEASE_OIDC_ISSUER,
-    Release, ReleaseChannel, ReleaseNotice, UpgradeDescriptor, UpgradeSource,
-    VerifiedReleaseArtifact, available_update, development_update, is_development, is_sha256,
-    official_image_digest, release_signing_identity, release_version,
+    Release, ReleaseChannel, ReleaseNotice, UpgradeDescriptor, VerifiedReleaseArtifact,
+    available_update, development_update, is_development, is_sha256, official_image_digest,
+    release_signing_identity, release_version,
 };
 pub use repository::{
     ReleaseCheckRepository, UpdateActor, UpdateDrainRepository, UpdateRepository,

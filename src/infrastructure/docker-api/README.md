@@ -69,7 +69,7 @@ documented in the [official Rust generator reference](https://openapi-generator.
 
 ## Adapter integration
 
-`adapters/src/connectors/docker/finite.rs` calls the generated traits for the operations Citadel
+`src/infrastructure/docker/src/client/finite.rs` calls the generated traits for the operations Citadel
 actually uses. One version-keyed `Arc<Configuration>` reuses the DockerClient's
 Unix Reqwest pool; short-lived tag handles clone that Arc, never construct a pool.
 `mapping.rs` normalizes optional protocol values into existing adapter snapshots in
@@ -94,7 +94,7 @@ already loaded (never the host daemon):
 ```sh
 CITADEL_DOCKER_FIXTURE_TCP=127.0.0.1:52379 \
 CITADEL_DOCKER_FIXTURE_IMAGE=alpine@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0 \
-cargo test --locked -p citadel-adapters --test docker_live_transport -- --ignored
+cargo test --locked -p citadel-docker --test docker_live_transport -- --ignored
 ```
 
 The fixture creates/deletes its own container, volume, network, service, secret and

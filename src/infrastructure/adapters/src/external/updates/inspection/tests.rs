@@ -71,13 +71,14 @@ fn output(value: impl Into<Vec<u8>>) -> ProcessOutput {
 }
 fn descriptor() -> UpgradeDescriptor {
     UpgradeDescriptor {
-        schema_version: 1,
+        schema_version: 2,
         product: "citadel".into(),
         target_version: "1.2.3".into(),
-        target_catalog_sha256: "d".repeat(64),
+        target_catalog_sha256: citadel_database::MigrationRunner::catalog_sha256().unwrap(),
         installer_format: citadel_updates::INSTALLER_FORMAT,
         update_protocol: citadel_updates::UPDATE_PROTOCOL,
-        sources: vec![],
+        migration_catalog: citadel_database::MIGRATION_MANIFEST_JSON.into(),
+        agent_protocol: citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION,
     }
 }
 

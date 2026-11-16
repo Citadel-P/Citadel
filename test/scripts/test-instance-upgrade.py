@@ -2,9 +2,10 @@
 """Exercise an eligible published Core transition on a disposable Docker daemon.
 
 Uses real signatures, review/approval, replacement and checkpoint restore. It does
-not authorize a transition or supply a bypass for an empty embedded source list.
+not bypass migration, signature or protocol compatibility checks.
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -288,11 +289,20 @@ class UpgradeFixture(registration.Fixture):
 
 
 def require_eligible(source, target, architecture):
-    candidates = [s for s in target["descriptor"]["sources"]
-                  if s["version"] == source["targetVersion"]
-                  and s["catalogSha256"] == source["targetCatalogSha256"]
-                  and architecture in s["architectures"]]
-    require(len(candidates) == 1, "Signed target does not allow this source/catalog/architecture; nothing was installed")
+    descriptor = target["descriptor"]
+    require(source.get("schemaVersion") == descriptor.get("schemaVersion") == 2,
+            "This fixture requires automatic catalog compatibility metadata")
+    def migrations(value):
+        catalog = value["migrationCatalog"]
+        require(hashlib.sha256(catalog.encode()).hexdigest() == value["targetCatalogSha256"],
+                "Catalog does not match its signed descriptor")
+        return [(m["id"], m["sha256"]) for m in json.loads(catalog)["migrations"]]
+    before, after = migrations(source), migrations(descriptor)
+    require(before and after[:len(before)] == before
+            and source["updateProtocol"] == descriptor["updateProtocol"]
+            and source["installerFormat"] == descriptor["installerFormat"]
+            and architecture in ["amd64", "arm64"],
+            "Target does not preserve source migrations/protocols; nothing was installed")
 
 
 def database_state(container):

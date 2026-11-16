@@ -3323,10 +3323,31 @@ async fn backup_coverage_uses_persisted_mounts_and_preserves_observation_fences(
     let store = PostgresInventoryProjectionStore::new(pool.clone());
     store.persist(&inventory).await.unwrap();
     let reader = PostgresVolumeCoverageReader(pool.clone());
-    let read = reader
-        .snapshot(ActorId::new(actor), true, &[platform], None)
+    // Empty-policy coverage still needs inventory, but must not touch history.
+    let mut history_lock = pool.begin().await.unwrap();
+    sqlx::query("LOCK TABLE backupruns, backuprunitems IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *history_lock)
         .await
         .unwrap();
+    let read = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        reader.snapshot(ActorId::new(actor), true, &[platform], None),
+    )
+    .await
+    .expect("empty-policy coverage waited for backup history")
+    .unwrap();
+    assert!(read.policies.is_empty());
+    assert!(read.successes.is_empty());
+    let restricted = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        reader.snapshot(ActorId::new(actor), false, &[platform], None),
+    )
+    .await
+    .expect("restricted empty-policy coverage waited for backup history")
+    .unwrap();
+    assert!(restricted.policies.is_empty());
+    assert_eq!(restricted.containers.len(), read.containers.len());
+    history_lock.rollback().await.unwrap();
     use citadel_backups::coverage::CoverageSelection;
     let selected = CoverageSelection {
         container_keys: vec![(

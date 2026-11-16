@@ -93,6 +93,11 @@ impl CoverageReader for PostgresVolumeCoverageReader {
                     });
                 }
             }
+            // Preserve inventory and its completeness even without visible policies.
+            // No run or successful-history lookup can contribute in that case.
+            if snapshot.policies.is_empty() {
+                return Ok(snapshot);
+            }
             let targets = selected_targets(&snapshot, selection);
             let mut relevant = std::collections::BTreeSet::new();
             for platform in platforms {

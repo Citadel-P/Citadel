@@ -91,12 +91,12 @@ impl container_service_server::ContainerService for Runtime {
             if observe_health {
                 let document = tokio::select! {
                     biased; () = self.shutdown.cancelled() => return Err(Status::cancelled("Agent shutting down")),
-                    result = self.docker.inspect_container_document(&c.id) => result.ok()
-                        .filter(|doc| doc["Id"].as_str() == Some(c.id.as_str())),
+                    result = self.docker.inspect_container_health(&c.id) => result.ok()
+                        .filter(|doc| doc.id.as_deref() == Some(c.id.as_str())),
                 };
                 if let Some(doc) = document {
-                    c.state = super::container_mapping::state(doc["State"]["Status"].as_str().unwrap_or("unknown"));
-                    c.health_observation = Some(citadel_docker::container_health_wire::to_wire(citadel_docker::client::container_health::observation(&doc)));
+                    c.state = super::container_mapping::state(&doc.state);
+                    c.health_observation = Some(citadel_docker::container_health_wire::to_wire(doc.health));
                 }
             }
             if metadata_only {

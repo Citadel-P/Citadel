@@ -1,3 +1,4 @@
+import { useStatsRange } from '@/hooks/useStatsRange';
 import { useState } from 'react';
 import { ChevronDown, Terminal } from 'lucide-react';
 import { useRead } from '@/lib/hooks';
@@ -31,7 +32,8 @@ export function ContainerHealth({ resource }: { resource: ContainerDetailsView }
       refetchOnReconnect: false,
     },
   );
-  const history = useContainerHealthHistory(resource.resourceId, !inactiveMessage);
+  const range = useStatsRange();
+  const history = useContainerHealthHistory(resource.resourceId, range.query, !inactiveMessage);
   const document = object(inspection.data?.data);
   const check = object(object(document.config).healthcheck);
   const health = object(object(document.state).health);
@@ -49,7 +51,7 @@ export function ContainerHealth({ resource }: { resource: ContainerDetailsView }
 
       <ContainerHealthHistory
         entries={history.entries ?? []}
-        now={now}
+        range={range}
         isConnected={history.isConnected}
         isLoading={history.isLoading}
         isError={history.isError}

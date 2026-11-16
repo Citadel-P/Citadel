@@ -201,14 +201,14 @@ async fn dispatch(command: Command) -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::UpgradeDescriptorJson => {
             let descriptor = citadel_updates::UpgradeDescriptor {
-                schema_version: 1,
+                schema_version: 2,
                 product: "citadel".into(),
                 target_version: env!("CITADEL_BUILD_VERSION").into(),
                 target_catalog_sha256: MigrationRunner::catalog_sha256()?,
                 installer_format: citadel_updates::INSTALLER_FORMAT,
                 update_protocol: citadel_updates::UPDATE_PROTOCOL,
-                // Release-owned source metadata is embedded in the signed image.
-                sources: crate::composition::updates::releases::sources()?,
+                migration_catalog: citadel_database::MIGRATION_MANIFEST_JSON.into(),
+                agent_protocol: citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION,
             };
             println!("{}", serde_json::to_string(&descriptor)?);
             Ok(())

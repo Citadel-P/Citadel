@@ -95,7 +95,11 @@ async fn health_transitions_are_bounded_deduplicated_and_fenced() {
     let reader = PostgresPlatformReader::new(pool.clone());
     assert_eq!(
         reader
-            .container_health_history(container)
+            .container_health_history(
+                container,
+                citadel_platforms::StatsWindow::new(168).unwrap(),
+                chrono::Utc::now().timestamp()
+            )
             .await
             .unwrap()
             .len(),
@@ -104,7 +108,11 @@ async fn health_transitions_are_bounded_deduplicated_and_fenced() {
     sqlx::query("UPDATE containerhealthtransitions SET recordedat=now()-interval '8 days' WHERE containerid=$1").bind(container).execute(&pool).await.unwrap();
     assert!(
         reader
-            .container_health_history(container)
+            .container_health_history(
+                container,
+                citadel_platforms::StatsWindow::new(168).unwrap(),
+                chrono::Utc::now().timestamp()
+            )
             .await
             .unwrap()
             .is_empty()
@@ -160,7 +168,14 @@ async fn periodic_health_samples_preserve_failures_and_use_actual_inspection_tim
             .unwrap();
     }
     let reader = PostgresPlatformReader::new(pool.clone());
-    let entries = reader.container_health_history(container).await.unwrap();
+    let entries = reader
+        .container_health_history(
+            container,
+            citadel_platforms::StatsWindow::new(168).unwrap(),
+            chrono::Utc::now().timestamp(),
+        )
+        .await
+        .unwrap();
     assert_eq!(
         entries.len(),
         2,
@@ -210,7 +225,11 @@ async fn periodic_health_samples_preserve_failures_and_use_actual_inspection_tim
     }
     assert_eq!(
         reader
-            .container_health_history(container)
+            .container_health_history(
+                container,
+                citadel_platforms::StatsWindow::new(168).unwrap(),
+                chrono::Utc::now().timestamp()
+            )
             .await
             .unwrap()
             .len(),
@@ -230,7 +249,14 @@ async fn periodic_health_samples_preserve_failures_and_use_actual_inspection_tim
         evidence["observedAt"] = json!((bucket + offset) * 1000);
         sqlx::query("INSERT INTO containerhealthtransitions(containerid,platformid,dockercontainerid,observedat,state,health,origin) VALUES($1,$2,'sample-id',$3,'Running',$4,'Sample')").bind(container).bind(platform).bind(bucket+offset).bind(evidence).execute(&pool).await.unwrap();
     }
-    let entries = reader.container_health_history(container).await.unwrap();
+    let entries = reader
+        .container_health_history(
+            container,
+            citadel_platforms::StatsWindow::new(168).unwrap(),
+            chrono::Utc::now().timestamp(),
+        )
+        .await
+        .unwrap();
     assert_eq!(entries.len(), 6);
     let group = entries
         .iter()
@@ -307,4 +333,136 @@ async fn compose_service_identity_uses_inventory_labels_and_clears_removed_label
         value, None,
         "do not retain or guess a removed Compose identity"
     );
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn health_history_filters_before_grouping_without_temporary_writes() {
+    use sqlx::Row;
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&url)
+        .await
+        .unwrap();
+    let platform = Uuid::now_v7();
+    let container = Uuid::now_v7();
+    let now = Utc::now().timestamp() / 60 * 60;
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,volumecount,platformdescriptor,status) VALUES($1,$1::text,$1::text,'Local',1,0,1024,0,0,'{\"$type\":\"Docker\"}','Online')")
+        .bind(platform).execute(&pool).await.unwrap();
+    // One week for five ordinary containers. Batch fixtures to avoid repeatedly
+    // updating one counter through a long chain in a single seeding transaction.
+    for id in [
+        container,
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+    ] {
+        for start in (0..10080).step_by(480) {
+            sqlx::query("INSERT INTO containerhealthtransitions(containerid,platformid,dockercontainerid,observedat,state,health,origin)
+                SELECT $1,$2,'history-fixture',$3-n*60,'Running',jsonb_build_object(
+                'configuration','Enabled','result',CASE WHEN n%101=0 THEN 'Unhealthy' ELSE 'Healthy' END,
+                'observedAt',($3::bigint-n*60)*1000,'lastCheckAt','2026-01-01T00:00:00Z',
+                'failingStreak',0,'exitCode',0,'oomKilled',false,'restartCount',0,
+                'startedAt','2026-01-01T00:00:00Z','finishedAt',NULL),'Sample'
+                FROM generate_series($4::integer,$4::integer+479)n")
+                .bind(id).bind(platform).bind(now).bind(start).execute(&pool).await.unwrap();
+        }
+    }
+    sqlx::raw_sql("ANALYZE containerhealthtransitions")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let sql = include_str!(
+        "../../src/persistence/postgres/platforms/reader/container_health_history.sql"
+    );
+    let reader = PostgresPlatformReader::new(pool.clone());
+    for mode in ["force_custom_plan", "force_generic_plan"] {
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::raw_sql(sqlx::AssertSqlSafe(format!("SET LOCAL work_mem='4MB'; SET LOCAL jit=off; SET LOCAL plan_cache_mode={mode}; PREPARE health_range(uuid,bigint,bigint,bigint) AS {sql}")))
+            .execute(&mut *tx).await.unwrap();
+        for minutes in [15, 60, 360, 1440, 10080] {
+            let from = now - i64::from(minutes) * 60;
+            let execute = format!("EXECUTE health_range('{container}',{from},{now},{now})");
+            let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "EXPLAIN(ANALYZE,BUFFERS,TIMING OFF,FORMAT JSON) {execute}"
+            )))
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+            assert_eq!(
+                plan[0]["Plan"]["Temp Written Blocks"], 0,
+                "{mode}, {minutes}: {plan}"
+            );
+            let rows = sqlx::query(sqlx::AssertSqlSafe(execute))
+                .fetch_all(&mut *tx)
+                .await
+                .unwrap();
+            assert_eq!(
+                rows.iter()
+                    .map(|r| r.get::<i64, _>("samplecount"))
+                    .sum::<i64>(),
+                i64::from(minutes + 1).min(10080)
+            );
+            assert!(
+                rows.iter()
+                    .all(|r| r.get::<i64, _>("firstobservedat") >= from
+                        && r.get::<i64, _>("observedat") <= now)
+            );
+        }
+        sqlx::query("DEALLOCATE health_range")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        tx.rollback().await.unwrap();
+    }
+    // A partial older five-minute bucket must not count evidence outside the range.
+    let from = now - 2 * 3600 + 17;
+    let until = from + 143;
+    let rows = reader
+        .container_health_history(
+            container,
+            citadel_platforms::StatsWindow::between(from, until, now).unwrap(),
+            now,
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.iter().map(|r| r.sample_count).sum::<i64>(), 2);
+    assert!(
+        rows.iter()
+            .all(|r| r.first_observed_at >= from && r.observed_at <= until)
+    );
+    // Equal timestamps choose the newest identity, while a later insertion with
+    // an older observation must not replace the latest representative payload.
+    for (offset, restarts) in [(1_i64, 11), (1, 22), (0, 33)] {
+        sqlx::query("INSERT INTO containerhealthtransitions(containerid,platformid,dockercontainerid,observedat,state,health,origin) VALUES($1,$2,'history-fixture',$3,'Running',$4,'Sample')")
+            .bind(container).bind(platform).bind(from + offset)
+            .bind(json!({"configuration":"Enabled","result":"Healthy","observedAt":(from+offset)*1000,"restartCount":restarts}))
+            .execute(&pool).await.unwrap();
+    }
+    let rows = reader
+        .container_health_history(
+            container,
+            citadel_platforms::StatsWindow::between(from, from + 1, now).unwrap(),
+            now,
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        (
+            rows[0].first_observed_at,
+            rows[0].observed_at,
+            rows[0].sample_count
+        ),
+        (from, from + 1, 3)
+    );
+    assert_eq!(rows[0].health.as_ref().unwrap().restart_count, Some(22));
+    sqlx::query("DELETE FROM platforms WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
 }

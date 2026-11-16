@@ -1,5 +1,6 @@
 vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () => String }));
 
+import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContainerHealth } from './container-health';
@@ -29,7 +30,7 @@ describe('health details permissions and unavailable evidence', () => {
     (status) => {
       const current = { ...resource, health: { status, observedAt: Date.now(), reason: '' } };
       const view = render(<ContainerHealth resource={current} />);
-      expect(history).toHaveBeenLastCalledWith('persisted', false);
+      expect(history).toHaveBeenLastCalledWith('persisted', expect.objectContaining({ minutes: 60 }), false);
       expect(screen.getByRole('figure', { name: 'Health history' })).toHaveAttribute('aria-disabled', 'true');
       expect(screen.queryByRole('combobox', { name: 'Time range' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Probe details' })).not.toBeInTheDocument();
@@ -41,11 +42,11 @@ describe('health details permissions and unavailable evidence', () => {
           resource={{ ...current, health: { ...current.health, status: ContainerHealthStatus.Healthy } }}
         />,
       );
-      expect(history).toHaveBeenLastCalledWith('persisted', true);
+      expect(history).toHaveBeenLastCalledWith('persisted', expect.objectContaining({ minutes: 60 }), true);
       expect(screen.getByRole('combobox', { name: 'Time range' })).toBeVisible();
       expect(screen.getByRole('button', { name: 'Probe details' })).toBeVisible();
       view.rerender(<ContainerHealth resource={current} />);
-      expect(history).toHaveBeenLastCalledWith('persisted', false);
+      expect(history).toHaveBeenLastCalledWith('persisted', expect.objectContaining({ minutes: 60 }), false);
     },
   );
   it('keeps inspection disabled for a read-only viewer while showing retained history', () => {
@@ -112,4 +113,13 @@ describe('health details permissions and unavailable evidence', () => {
     fireEvent.click(trigger);
     expect(screen.getByText('Connection refused')).toBeInTheDocument();
   });
+});
+
+it('passes the shared range selection to the health-history request', async () => {
+  const user = userEvent.setup();
+  render(<ContainerHealth resource={resource} />);
+  expect(history).toHaveBeenLastCalledWith('persisted', expect.objectContaining({ minutes: 60 }), true);
+  await user.click(screen.getByRole('combobox', { name: 'Time range' }));
+  await user.click(screen.getByRole('option', { name: '6 hours' }));
+  expect(history).toHaveBeenLastCalledWith('persisted', expect.objectContaining({ minutes: 360 }), true);
 });

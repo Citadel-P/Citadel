@@ -1987,6 +1987,10 @@ async fn maintain_statistics(pool: &PgPool) -> Result<u64, sqlx::Error> {
     Ok(retained + citadel_adapters::persistence::postgres::maintenance::compact(pool).await?)
 }
 
+#[path = "stats_batch_persistence/coarse_history.rs"]
+mod coarse_history;
+#[path = "stats_batch_persistence/history_plans.rs"]
+mod history_plans;
 #[path = "stats_batch_persistence/query_efficiency.rs"]
 mod query_efficiency;
 #[path = "stats_batch_persistence/storage_review.rs"]
@@ -2005,3 +2009,5 @@ mod memory_breakdown;
 mod capture_work;
 #[path = "stats_batch_persistence/maintenance_work.rs"]
 mod maintenance_work;
+#[path = "stats_batch_persistence/reclamation.rs"]
+mod reclamation;

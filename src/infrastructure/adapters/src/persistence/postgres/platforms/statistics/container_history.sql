@@ -7,13 +7,16 @@ WITH sources AS MATERIALIZED (
     -- OFFSET 0 keeps this as a parameterized per-source scan. Pulling the join
     -- above the scan can read unrelated sources or overestimate enough to JIT
     -- compile an otherwise small interactive query.
+    -- Equal range bounds favor the composite source/time index in both scans.
+    -- With few sources, equality can make a generic plan scan the timestamp
+    -- index and discard other sources, including when this source has no rows.
     SELECT s.* FROM sources src CROSS JOIN LATERAL (
-        SELECT * FROM statisticssamples WHERE sourceid=src.id
+        SELECT * FROM statisticssamples WHERE sourceid>=src.id AND sourceid<=src.id
             AND created>=$2 AND created<=$4 OFFSET 0
     ) s
 ), summaries AS MATERIALIZED (
     SELECT s.* FROM sources src CROSS JOIN LATERAL (
-        SELECT * FROM statisticsrollups WHERE sourceid=src.id
+        SELECT * FROM statisticsrollups WHERE sourceid>=src.id AND sourceid<=src.id
             AND created>=$2 AND created<=$4 AND lastcreated<=$4 OFFSET 0
     ) s
 ), gauge_parts AS (
@@ -76,8 +79,12 @@ WITH sources AS MATERIALIZED (
         SUM(writedelta)/NULLIF(SUM(writeduration),0) AS blockwritebytespersecond
     FROM contributions GROUP BY sourceid,bucket
 )
-SELECT src.containerid,g.created,g.cpuusage,g.memoryactive,g.memoryactivecache,g.memorycache,g.memorylimit,g.rxbytes,g.txbytes,
-    g.blockreadbytes,g.blockwritebytes,io.rxbytesdelta,io.txbytesdelta,io.blockreadbytesdelta,io.blockwritebytesdelta,
-    io.rxbytespersecond,io.txbytespersecond,io.blockreadbytespersecond,io.blockwritebytespersecond
-FROM gauges g JOIN io USING(sourceid,bucket) JOIN sources src ON src.id=g.sourceid
-ORDER BY g.created,src.containerid LIMIT 65537
+SELECT src.containerid,h.created,h.cpuusage,h.memoryactive,h.memoryactivecache,h.memorycache,h.memorylimit,h.rxbytes,h.txbytes,
+    h.blockreadbytes,h.blockwritebytes,h.rxbytesdelta,h.txbytesdelta,h.blockreadbytesdelta,h.blockwritebytesdelta,
+    h.rxbytespersecond,h.txbytespersecond,h.blockreadbytespersecond,h.blockwritebytespersecond
+-- Resolve projection identity after combining the already source-bounded aggregates.
+-- Pulling this join between them can underestimate buckets and repeatedly execute
+-- either aggregate in a nested loop, especially after a sparse raw day shrinks.
+FROM (SELECT * FROM gauges JOIN io USING(sourceid,bucket) OFFSET 0) h
+JOIN sources src ON src.id=h.sourceid
+ORDER BY h.created,src.containerid LIMIT 65537

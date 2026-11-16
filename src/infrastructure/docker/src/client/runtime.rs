@@ -120,13 +120,12 @@ impl citadel_platforms::ContainerInventoryPort for DockerClient {
                 |mut container| async move {
                     let document = tokio::select! {
                         biased; () = cancellation.cancelled() => return Err(cancelled_error()),
-                        result = self.inspect_container_document(&container.id) => result.ok()
-                            .filter(|doc| doc["Id"].as_str() == Some(container.id.as_str())),
+                        result = self.inspect_container_health(&container.id) => result.ok()
+                            .filter(|doc| doc.id.as_deref() == Some(container.id.as_str())),
                     };
                     if let Some(doc) = document {
-                        container.state =
-                            doc["State"]["Status"].as_str().unwrap_or("unknown").into();
-                        container.health = Some(super::container_health::observation(&doc));
+                        container.state = doc.state;
+                        container.health = Some(doc.health);
                     }
                     Ok(container)
                 },

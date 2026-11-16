@@ -120,16 +120,18 @@ pub(super) async fn get_container(
 #[utoipa::path(
     get, path = "/api/v1/containers/{id}/health-history", operation_id = "getContainerHealthHistory",
     tag = "Containers", summary = "Get bounded Container health and lifecycle transitions",
-    responses((status = 200, description = "Up to 200 transitions within seven days; history may have gaps", body = Vec<crate::api::resources::platforms::health_views::ContainerHealthTransitionView>), crate::openapi::errors::ResourceErrors),
-    params(("id" = Uuid, Path)), security(("Bearer" = [])),
+    responses((status = 200, description = "Retained transitions and grouped observations in the requested range; defaults to 24 hours, at most seven days; history may have gaps", body = Vec<crate::api::resources::platforms::health_views::ContainerHealthTransitionView>), crate::openapi::errors::ResourceErrors),
+    params(("id" = Uuid, Path), ("hours" = Option<crate::api::resources::platforms::operation_views::StatsHours>, Query), ("minutes" = Option<u32>, Query, description = "Relative range: 15, 60, 360, 1440 or 10080 minutes"), ("from" = Option<i64>, Query, description = "Inclusive start in Unix seconds within retained history"), ("to" = Option<i64>, Query, description = "Inclusive end in Unix seconds; defaults to now with from")), security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 pub(super) async fn container_health_history(
     State(state): State<PlatformsHttpState>,
     AuthenticatedActor(principal): AuthenticatedActor,
     ApiPath(id): ApiPath<Uuid>,
+    query: Result<Query<Hours>, QueryRejection>,
     headers: HeaderMap,
 ) -> HttpResult {
+    let window = window(query, &headers)?;
     let container = required(
         state
             .platforms
@@ -142,7 +144,7 @@ pub(super) async fn container_health_history(
     let history = api_result(
         state
             .platforms
-            .container_health_history(id)
+            .container_health_history(id, window, chrono::Utc::now().timestamp())
             .await
             .map_err(platform_error),
         &headers,

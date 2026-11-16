@@ -29,7 +29,7 @@ SOURCE = "0.1.1-dev.9001"
 TARGET = "0.1.1-dev.9002"
 
 
-def build(base, version, directory, catalog, frontend=None, source_root=None):
+def build(base, version, directory, frontend=None, source_root=None):
     """Build the test-only executable with Core's runtime-compatible toolchain."""
     print(f"Building private lifecycle fixture {version}", flush=True)
     build_root = source_root or registration.ROOT
@@ -74,9 +74,7 @@ def build(base, version, directory, catalog, frontend=None, source_root=None):
     shutil.copy2(executable, context / "citadel-server")
     if frontend:
         shutil.copytree(frontend, context / "wwwroot")
-    fixture = dict(target=dict(version=TARGET, image="ghcr.io/citadel-p/citadel@sha256:" + "0" * 64),
-                   sources=[dict(version=SOURCE, catalogSha256=catalog,
-                                 architectures=["amd64", "arm64"], agentVersions=[])])
+    fixture = dict(target=dict(version=TARGET, image="ghcr.io/citadel-p/citadel@sha256:" + "0" * 64))
     (context / "upgrade-fixture.json").write_text(json.dumps(fixture))
     (context / "Dockerfile").write_text(
         f"FROM {base}\nCOPY --chmod=755 citadel-server /app/citadel-server\n"
@@ -360,7 +358,7 @@ class LocalUpgrade(upgrade.UpgradeFixture):
             time.sleep(1)
         target = self.publish_private(target, "target")
         # Only the private source image needs the final target digest. The target
-        # descriptor carries the source version/catalog, avoiding circular hashes.
+        # descriptor carries its own migration catalog, avoiding circular hashes.
         self.execute("mkdir", "-p", "/opt/fixture-build")
         config = json.loads(self.docker("run", "--rm", "--network=none", "--entrypoint=cat",
                                        self.core, "/app/upgrade-fixture.json").stdout)
@@ -405,8 +403,6 @@ def main():
     def interrupted(*_):
         raise KeyboardInterrupt()
     signal.signal(signal.SIGTERM, interrupted)
-    import hashlib
-    catalog = hashlib.sha256((source_root / "src/infrastructure/database/generated/migrations.json").read_bytes()).hexdigest()
     images = {}
     with tempfile.TemporaryDirectory(prefix="citadel-local-upgrade-") as temporary:
         directory = Path(temporary)
@@ -419,7 +415,7 @@ def main():
                     cwd=registration.ROOT, env=dict(os.environ, VITE_API_BASE_URL=""), check=True)
                 frontend = registration.ROOT / "src/frontend/dist"
             for version in [TARGET, SOURCE]:
-                images[version] = build(args.runtime_image, version, directory, catalog, frontend,
+                images[version] = build(args.runtime_image, version, directory, frontend,
                                         source_root if version == SOURCE else registration.ROOT)
             if args.browser:
                 fixture = LocalUpgrade(images[SOURCE], directory, rootless=args.rootless)

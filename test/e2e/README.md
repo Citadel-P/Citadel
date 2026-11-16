@@ -54,20 +54,10 @@ suite deliberately exercises a real network interruption. Both runtime suites
 create disposable resources whose names start with `e2e-runtime-` and remove them
 after each test.
 
-The nightly workload-health test uses real passing/failing Docker checks and an
-unchecked container. It verifies parent assessment, live dialog updates, container
-selection, disabled history, narrow-screen layout, and that chart interactions
-neither fetch inspection/history over HTTP nor restart the workload.
-
-The resource-copy test uses the real three-step wizard, restores a selected
-snapshot, applies the resulting Stack, and verifies independent volume contents.
-It also pauses the isolated Docker daemon and kills the fixture Core after a
-restore is claimed. After restart it checks that the copy fails safely, keeps the
-same restore IDs, and never creates a partially restored workload. This test
-requires control of the disposable Compose project; never point it at a shared
-or production server. Its resource names start with `e2e-copy-`. Cleanup removes
-only this fixture's operation history from the disposable database, allowing
-subsequent tests to register the same Docker daemon.
+Runtime tests deliberately interrupt the fixture daemon/Core and exercise restores.
+They require control of their disposable Compose project; never target a shared or
+production server. Resource-copy cleanup removes only fixture operation history.
+Individual scenarios are documented in the test files.
 
 The visual suite covers the authenticated shell and resource table, collapsed
 desktop sidebar, Stack FormBuilder, global search results, and a completed task
@@ -138,10 +128,3 @@ base URL before starting the environment:
 $env:CITADEL_E2E_PORT = "18001"
 $env:CITADEL_E2E_BASE_URL = "http://127.0.0.1:18001"
 ```
-
-The nightly `network-map.spec.ts` fixture verifies table-only lazy loading, the inline connection sheet, Stack
-ownership/group expansion, workload focus across two networks, endpoint aliases,
-maximize/restore selection preservation, keyboard focus restoration, readonly
-behavior and realtime detach. It captures light/dark/mobile
-screenshots from the actual application. Run it with the disposable Compose
-project described above; never point its cleanup helpers at a personal platform.

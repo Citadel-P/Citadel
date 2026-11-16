@@ -1,14 +1,14 @@
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { History } from 'lucide-react';
 import type { ContainerHealthTransitionView } from '@/api/generated/api.types';
 import { StatsRangePicker } from '@/components/custom/stats-range-picker';
 import { Button } from '@/components/ui/button';
-import { resolveStatsRange, type StatsRange } from '@/lib/stats-range';
+import type { StatsRangeState } from '@/hooks/useStatsRange';
 import { ContainerHealthEvents } from './container-health-events';
 
 export function ContainerHealthHistory({
   entries,
-  now,
+  range,
   isConnected = true,
   isLoading = false,
   isError = false,
@@ -16,7 +16,7 @@ export function ContainerHealthHistory({
   disabledReason,
 }: {
   entries: ContainerHealthTransitionView[];
-  now: number;
+  range: Pick<StatsRangeState, 'selection' | 'setSelection' | 'bounds'>;
   isConnected?: boolean;
   isLoading?: boolean;
   isError?: boolean;
@@ -25,8 +25,7 @@ export function ContainerHealthHistory({
 }) {
   const captionId = useId();
   const titleId = useId();
-  const [selection, setSelection] = useState<StatsRange>({ kind: 'relative', minutes: 60 });
-  const bounds = resolveStatsRange(selection, Math.floor(now / 1000));
+  const { bounds } = range;
   const records = entries
     .filter((entry) => entry.observedAt >= bounds.from && entry.observedAt <= bounds.to)
     .sort((a, b) => b.observedAt - a.observedAt);
@@ -86,7 +85,7 @@ export function ContainerHealthHistory({
             · Local time
           </p>
         </div>
-        <StatsRangePicker range={{ selection, setSelection }} showLabel={false} />
+        <StatsRangePicker range={range} showLabel={false} />
       </div>
       {!isConnected && (
         <p role="status" className="border-b bg-muted/20 px-4 py-2 text-xs text-muted-foreground">

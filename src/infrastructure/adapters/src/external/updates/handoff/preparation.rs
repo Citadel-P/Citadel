@@ -67,9 +67,13 @@ impl OwnedUpdateHelper {
             if target.identity != plan.target {
                 return Err(conflict());
             }
-            target
-                .descriptor
-                .validate_transition(&plan.source, &plan.target, &agents)?;
+            target.descriptor.validate_transition(
+                &plan.source,
+                &plan.target,
+                citadel_database::MIGRATION_MANIFEST_JSON,
+                citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION,
+                &agents,
+            )?;
             (
                 Some(target.descriptor),
                 inputs
@@ -161,6 +165,8 @@ impl ExecutionJournal {
             (None, Some(descriptor)) => descriptor.validate_transition(
                 &plan.source,
                 &plan.target,
+                citadel_database::MIGRATION_MANIFEST_JSON,
+                citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION,
                 &receipt.agent_versions,
             )?,
             _ => return Err(conflict()),
@@ -175,18 +181,14 @@ pub(super) fn record_fixture(state: &super::super::JournalDirectory, intent: &He
     let mut execution = ExecutionJournal::read(state, intent.operation.id).unwrap();
     execution.prepared = Some(PreparedTarget {
         descriptor: Some(UpgradeDescriptor {
-            schema_version: 1,
+            schema_version: 2,
             product: "citadel".into(),
             target_version: plan.target.version.clone(),
             target_catalog_sha256: plan.target.catalog_sha256.clone(),
             installer_format: citadel_updates::INSTALLER_FORMAT,
             update_protocol: citadel_updates::UPDATE_PROTOCOL,
-            sources: vec![citadel_updates::UpgradeSource {
-                version: plan.source.version.clone(),
-                catalog_sha256: plan.source.catalog_sha256.clone(),
-                architectures: vec![plan.source.architecture.clone()],
-                agent_versions: vec![],
-            }],
+            migration_catalog: citadel_database::MIGRATION_MANIFEST_JSON.into(),
+            agent_protocol: citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION,
         }),
         configuration: CheckedCoreReplacement {
             source_configuration_sha256: plan.configuration_sha256.clone(),

@@ -5,7 +5,6 @@ Use --browser to leave review/approval to the user; otherwise verify both rollou
 Only the test Core substitutes the release catalog. Agents use production binaries.
 """
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
@@ -286,9 +285,7 @@ def main():
                 subprocess.run(["npm", "run", "build:image", "--prefix", "src/frontend"],
                     cwd=registration.ROOT, env=dict(os.environ, VITE_API_BASE_URL=""), check=True)
                 frontend = registration.ROOT / "src/frontend/dist"
-            catalog = hashlib.sha256((registration.ROOT /
-                "src/infrastructure/database/generated/migrations.json").read_bytes()).hexdigest()
-            images.append(local.build(args.runtime_image, local.TARGET, directory, catalog, frontend))
+            images.append(local.build(args.runtime_image, local.TARGET, directory, frontend))
             for version in (local.SOURCE, local.TARGET):
                 images.append(build_agent(args.agent_runtime_image, version, directory))
             fixture = AgentUpgrade(images[0], directory)
