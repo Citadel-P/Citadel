@@ -183,7 +183,6 @@ async fn compact_batch_observed(
 ) -> Result<bool, MaintenanceError> {
     let mut stalled = std::collections::BTreeSet::new();
     let mut progressed = false;
-    let mut paged_scan = false;
     let mut physical_complete = false;
     for _ in 0..COMPACTION_PASSES {
         let pass = store.compact().await?;
@@ -199,17 +198,16 @@ async fn compact_batch_observed(
         let repeated_stall = pass
             .stalled_source
             .is_some_and(|source| !stalled.insert(source));
-        if !physical_complete {
-            // An empty source page is not evidence that the full scan is idle.
-            paged_scan = true;
-        } else if pass.stalled_source.is_some() {
-            if repeated_stall && pass.processed == 0 {
-                return Ok(progressed);
+        if physical_complete {
+            if pass.stalled_source.is_some() {
+                if repeated_stall && pass.processed == 0 {
+                    return Ok(progressed);
+                }
+            } else if pass.processed == 0 && !pass.scan_pending {
+                // Discovery keeps productive scans pending until an idle sweep.
+                // Earlier progress is completed work, not a remaining backlog.
+                return Ok(false);
             }
-        } else if pass.processed == 0 {
-            // Earlier pages may still have additional source-hours. A direct
-            // no-work result without paging retains the normal idle cadence.
-            return Ok(progressed && paged_scan);
         }
         tokio::task::yield_now().await;
     }
@@ -349,6 +347,59 @@ mod tests {
                     .all(|job| job.state == citadel_runtime::jobs::JobState::Stopped)
             );
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn drained_paged_work_reports_success_and_returns_to_idle_cadence() {
+        use citadel_runtime::maintenance::CompactionProgress as Progress;
+        let catalog = citadel_runtime::jobs::JobCatalog::new(uuid::Uuid::now_v7());
+        let token = CancellationToken::new();
+        let store = Arc::new(Store {
+            outcomes: Mutex::new(
+                [
+                    Progress {
+                        processed: 1,
+                        scan_pending: true,
+                        ..Default::default()
+                    },
+                    Progress {
+                        scan_pending: true,
+                        ..Default::default()
+                    },
+                    Progress::default(),
+                ]
+                .into(),
+            ),
+            ..Default::default()
+        });
+        let mut owner =
+            citadel_runtime::TaskSupervisor::new(token.clone()).with_jobs(catalog.clone());
+        register(
+            &mut owner,
+            token,
+            store.clone(),
+            None,
+            None,
+            Duration::from_secs(900),
+        );
+        tokio::time::sleep(Duration::from_secs(302)).await;
+        let snapshot = catalog.snapshot();
+        let job = snapshot
+            .jobs
+            .iter()
+            .find(|job| job.id == "statistics-compaction")
+            .unwrap();
+        assert_eq!(job.budget_exhaustions, 0);
+        assert_eq!(
+            job.last_outcome,
+            Some(citadel_runtime::jobs::JobOutcome::Productive)
+        );
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 3);
+        tokio::time::sleep(Duration::from_secs(295)).await;
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 3);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 4);
+        owner.shutdown(Duration::from_secs(1)).await.unwrap();
     }
 
     #[tokio::test(start_paused = true)]
@@ -510,7 +561,7 @@ mod tests {
             ),
             ..Default::default()
         };
-        assert!(compact_batch(&store).await.unwrap());
+        assert!(!compact_batch(&store).await.unwrap());
         assert_eq!(store.compactions.load(Ordering::SeqCst), 5);
         assert!(!compact_batch(&store).await.unwrap());
         assert_eq!(store.compactions.load(Ordering::SeqCst), 6);
@@ -571,10 +622,40 @@ mod tests {
             ),
             ..Default::default()
         };
-        assert!(compact_batch(&store).await.unwrap());
+        assert!(!compact_batch(&store).await.unwrap());
         assert_eq!(store.compactions.load(Ordering::SeqCst), 12);
         assert!(store.outcomes.lock().unwrap().is_empty());
         assert!(!compact_batch(&store).await.unwrap());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_new_pending_scan_is_not_skipped_after_an_earlier_scan_completed() {
+        use citadel_runtime::maintenance::CompactionProgress as Progress;
+        let store = Store {
+            outcomes: Mutex::new(
+                [
+                    Progress {
+                        processed: 1,
+                        ..Default::default()
+                    },
+                    Progress {
+                        scan_pending: true,
+                        ..Default::default()
+                    },
+                    Progress {
+                        processed: 1,
+                        scan_pending: true,
+                        ..Default::default()
+                    },
+                    Progress::default(),
+                ]
+                .into(),
+            ),
+            ..Default::default()
+        };
+        assert!(!compact_batch(&store).await.unwrap());
+        assert_eq!(store.compactions.load(Ordering::SeqCst), 4);
+        assert!(store.outcomes.lock().unwrap().is_empty());
     }
 
     #[tokio::test(start_paused = true)]

@@ -378,9 +378,9 @@ mod tests {
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
             [
-                "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"
+                "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009"
             ],
-            "the catalog includes platform coarse history and job diagnostics"
+            "the catalog includes the job-history index optimization"
         );
         assert_eq!(
             manifest["0001"].sha256,
