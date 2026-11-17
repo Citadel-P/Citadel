@@ -3283,3 +3283,7 @@ CREATE INDEX jobdiagnosticbuckets_bucket ON jobdiagnosticbuckets(bucket);
 CREATE INDEX jobdiagnosticbuckets_job ON jobdiagnosticbuckets(jobid, bucket DESC);
 CREATE INDEX jobdiagnosticbuckets_pending ON jobdiagnosticbuckets(bucket)
     WHERE resolutionms = 300000;
+
+-- History reads are scoped to retained boot IDs and a job. The primary key
+-- already indexes that scope; the extra job/time index amplifies checkpoint WAL.
+DROP INDEX jobdiagnosticbuckets_job;

@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "573f098388cb77bdda5365097ea147ac1a674da0340861499a1186cf34c6d2e1"
+    "sha256": "5add74a3a9dd5eb378a2c00f78aaf64c8b7c1b4bb0beddfc394121b8aeada5b7"
   },
   "migrations": [
     {
@@ -66,6 +66,14 @@
       "name": "job_diagnostics",
       "file": "0008_job_diagnostics.sql",
       "sha256": "c56ec9b89e579d4e7049afb79c4c359c11c8a88ddf8533a9bb25208aab08c921",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0009",
+      "name": "job_history_write_overhead",
+      "file": "0009_job_history_write_overhead.sql",
+      "sha256": "9a6fafe12608dfa9508af378209936c7c9c07eafad1812a99c7dd933ad5eaf2b",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }
