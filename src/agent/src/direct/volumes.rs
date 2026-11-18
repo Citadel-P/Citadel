@@ -24,8 +24,13 @@ impl volume_service_server::VolumeService for Runtime {
                 .await
                 .map_err(docker_error)?;
             return Ok(Response::new(ListVolumesResponse {
-                names,
-                ..Default::default()
+                volumes: names
+                    .into_iter()
+                    .map(|name| VolumeResponse {
+                        name,
+                        ..Default::default()
+                    })
+                    .collect(),
             }));
         }
         let volumes = self
@@ -35,7 +40,6 @@ impl volume_service_server::VolumeService for Runtime {
             .map_err(docker_error)?;
         Ok(Response::new(ListVolumesResponse {
             volumes: volumes.into_iter().map(volume).collect(),
-            ..Default::default()
         }))
     }
     async fn inspect(

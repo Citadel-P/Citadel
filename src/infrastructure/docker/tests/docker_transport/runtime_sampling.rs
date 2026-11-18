@@ -284,6 +284,7 @@ async fn periodic_cpu_pairs_only_readings_from_the_same_run() {
                 .split_whitespace()
                 .nth(1)
                 .unwrap();
+            let mut status_code = "200 OK";
             let body = match path {
                 "/version" => serde_json::json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"}),
                 "/v1.49/containers/json?all=true" => {
@@ -302,6 +303,9 @@ async fn periodic_cpu_pairs_only_readings_from_the_same_run() {
                 p if p.starts_with("/v1.49/containers/job/stats?") => {
                     let single = p.ends_with("one-shot=true");
                     reads.push(single);
+                    if discovery == 6 && single {
+                        status_code = "503 Service Unavailable";
+                    }
                     let tick = reads.len() as u64;
                     serde_json::json!({"id":"job","read":format!("2026-10-01T00:00:{tick:02}Z"),
                       "cpu_stats":{"cpu_usage":{"total_usage":tick*10},"system_cpu_usage":tick*100,"online_cpus":1},
@@ -317,14 +321,14 @@ async fn periodic_cpu_pairs_only_readings_from_the_same_run() {
             socket
                 .write_all(
                     format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        "HTTP/1.1 {status_code}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                         body.len()
                     )
                     .as_bytes(),
                 )
                 .await
                 .unwrap();
-            if discovery == 6 && path.starts_with("/v1.49/containers/job/stats?") {
+            if discovery == 8 && path.starts_with("/v1.49/containers/job/stats?") {
                 return reads;
             }
         }
@@ -332,21 +336,29 @@ async fn periodic_cpu_pairs_only_readings_from_the_same_run() {
     let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
     let mut sampler = LocalDockerSampler::new(client.clone(), 2);
     let stop = CancellationToken::new();
-    for expected in [Some(20.), Some(10.), Some(20.), None, Some(20.), Some(20.)]
-        .into_iter()
-        .enumerate()
+    for (i, cpu) in [
+        Some(20.),
+        Some(10.),
+        Some(20.),
+        None,
+        Some(20.),
+        Some(20.),
+        None,
+        Some(20.),
+    ]
+    .into_iter()
+    .enumerate()
     {
-        let (i, cpu) = expected;
         if i == 5 {
             client.invalidate_daemon().await;
         }
         let batch = sampler.sample(&stop).await.unwrap().containers;
-        assert_eq!(batch.failed_samples, 0);
+        assert_eq!(batch.failed_samples, usize::from(i == 6));
         assert_eq!(batch.stats.first().map(|s| s.cpu_usage), cpu);
     }
     assert_eq!(
         server.await.unwrap(),
-        [false, true, true, false, true, false, false]
+        [false, true, true, false, true, false, false, true, false]
     );
     std::fs::remove_file(path).unwrap();
 }

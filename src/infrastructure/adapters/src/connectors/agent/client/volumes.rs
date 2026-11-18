@@ -62,7 +62,15 @@ impl citadel_platforms::VolumeInventoryPort for AgentClient {
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
-        Box::pin(async move { Ok(self.volume_list(true, cancellation).await?.names) })
+        Box::pin(async move {
+            Ok(self
+                .volume_list(true, cancellation)
+                .await?
+                .volumes
+                .into_iter()
+                .map(|v| v.name)
+                .collect())
+        })
     }
     fn list_volumes<'a>(
         &'a self,

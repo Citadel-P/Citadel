@@ -54,7 +54,7 @@ impl WarmSample {
     }
 }
 
-// Docker's "Up ..." status is rounded for display. Use only a conservative lower
+// Docker formats "Up ..." with go-units HumanDuration. Use only a conservative lower
 // bound. Unknown formats take the ordinary two-reading path.
 fn minimum_uptime(status: &str) -> Option<Duration> {
     let age = status.strip_prefix("Up ")?.split(" (").next()?;
@@ -64,25 +64,22 @@ fn minimum_uptime(status: &str) -> Option<Duration> {
         _ => {
             let (count, unit) = age.split_once(' ')?;
             let count = count.parse::<u64>().ok()?;
-            match unit {
-                "second" | "seconds" => count,
-                "minute" | "minutes" => count.checked_mul(60)?,
-                // Docker rounds hours before converting them to days/weeks/months.
-                "hour" | "hours" | "day" | "days" | "week" | "weeks" | "month" | "months"
-                | "year" | "years" => {
-                    let hours = match unit {
-                        "hour" | "hours" => 1,
-                        "day" | "days" => 24,
-                        "week" | "weeks" => 168,
-                        "month" | "months" => 720,
-                        _ => 8760,
-                    };
-                    count
-                        .checked_mul(hours)?
-                        .checked_sub(1)?
-                        .checked_mul(3600)?
-                }
+            let seconds_per_unit = match unit {
+                "second" | "seconds" => 1,
+                "minute" | "minutes" => 60,
+                "hour" | "hours" => 3600,
+                "day" | "days" => 86400,
+                "week" | "weeks" => 7 * 86400,
+                "month" | "months" => 30 * 86400,
+                "year" | "years" => 365 * 86400,
                 _ => return None,
+            };
+            // Docker rounds hours before converting them to larger units.
+            let seconds = count.checked_mul(seconds_per_unit)?;
+            if seconds_per_unit >= 3600 {
+                seconds.saturating_sub(3600)
+            } else {
+                seconds
             }
         }
     };

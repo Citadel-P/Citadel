@@ -321,7 +321,7 @@ impl citadel_platforms::VolumeInventoryPort for EdgeRuntime {
                 cancellation,
             )
             .await?;
-            Ok(response.names)
+            Ok(response.volumes.into_iter().map(|v| v.name).collect())
         })
     }
 

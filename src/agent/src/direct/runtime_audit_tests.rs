@@ -501,8 +501,15 @@ async fn name_only_volume_list_keeps_filters_without_usage_or_protection_reads()
     .await
     .unwrap()
     .into_inner();
-    assert_eq!(response.names, ["backup"]);
-    assert!(response.volumes.is_empty());
+    assert_eq!(
+        response.volumes,
+        [
+            citadel_contracts::citadel::shared_models::v1::VolumeResponse {
+                name: "backup".into(),
+                ..Default::default()
+            }
+        ]
+    );
     {
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 2);

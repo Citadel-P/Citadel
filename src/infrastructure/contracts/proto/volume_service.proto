@@ -15,11 +15,11 @@ message ListVolumesRequest {
   google.protobuf.BoolValue dangling = 1;
   google.protobuf.StringValue driver = 2;
   google.protobuf.StringValue name = 3;
+  // Return only the name in each volume entry.
   bool names_only = 4;
 }
 message ListVolumesResponse {
   repeated citadel.shared_models.v1.VolumeResponse volumes = 1;
-  repeated string names = 2;
 }
 
 message InspectVolumeRequest {
