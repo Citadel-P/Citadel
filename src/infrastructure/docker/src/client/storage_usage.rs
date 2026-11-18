@@ -34,20 +34,6 @@ struct VolumeUsage {
 struct VolumeSize {
     size: Option<i64>,
 }
-impl From<citadel_docker_api::models::SystemDataUsageResponse> for DataUsage {
-    fn from(v: citadel_docker_api::models::SystemDataUsageResponse) -> Self {
-        Self {
-            layers_size: v.layers_size,
-            volumes: v.volumes.map(|vs| {
-                vs.into_iter()
-                    .map(|v| VolumeUsage {
-                        usage_data: v.usage_data.flatten().map(|u| VolumeSize { size: u.size }),
-                    })
-                    .collect()
-            }),
-        }
-    }
-}
 impl DataUsage {
     fn totals(self) -> Usage {
         Usage {
@@ -70,12 +56,14 @@ impl DockerClient {
         {
             // Preserve the last successful totals on a transient error.
             // Cancellation drops this future before advancing the retry deadline.
+            let _timer = citadel_runtime::runtime_metrics::RuntimeWork::DockerStorage.start();
             match self
-                .system_data_usage(vec!["image".into(), "volume".into()])
+                .sampling_bytes("/system/df?type=image&type=volume")
                 .await
+                .and_then(|bytes| serde_json::from_slice::<DataUsage>(&bytes).map_err(Into::into))
             {
                 Ok(usage) => {
-                    cache.usage = DataUsage::from(usage).totals();
+                    cache.usage = usage.totals();
                     cache.succeeded = Some(Instant::now());
                 }
                 Err(error) => tracing::debug!(%error, "Docker storage usage unavailable"),
@@ -121,33 +109,18 @@ impl DockerClient {
         counts: super::runtime::ContainerCounts,
     ) -> Result<RuntimePlatformStats, RuntimeCapabilityError> {
         // Slow metadata is sequential: one external request at a time, independent of stats fan-out.
-        let images = self.list_images().await;
-        let networks = self.list_networks().await;
-        let volumes = self.volumes().await;
+        let (image_count, network_count, volume_count) = self
+            .sampling_inventory_counts()
+            .await
+            .map_err(super::runtime::normalize_docker_error)?;
         let usage = self.storage_totals().await;
         let disk = self.read_host_disk(&info.docker_root_dir).await;
         Ok(RuntimePlatformStats {
             image_used_bytes: usage.images,
             volume_used_bytes: usage.volumes,
-            image_count: i64::try_from(
-                images
-                    .map_err(super::runtime::normalize_docker_error)?
-                    .len(),
-            )
-            .unwrap_or(i64::MAX),
-            network_count: i32::try_from(
-                networks
-                    .map_err(super::runtime::normalize_docker_error)?
-                    .len(),
-            )
-            .unwrap_or(i32::MAX),
-            volume_count: i32::try_from(
-                volumes
-                    .map_err(super::runtime::normalize_docker_error)?
-                    .volumes
-                    .len(),
-            )
-            .unwrap_or(i32::MAX),
+            image_count,
+            network_count,
+            volume_count,
             mem_total: i64::try_from(info.memory_total).unwrap_or(i64::MAX),
             container_count: counts.total,
             containers_running: counts.running,

@@ -5,6 +5,7 @@ use std::fs;
 
 mod build_output;
 mod containers;
+pub(crate) use containers::container_metadata_request;
 mod scripts;
 pub(crate) use build_output::{BuildStreamSummary, consume_image_build_stream};
 #[cfg(test)]
@@ -1857,33 +1858,26 @@ impl citadel_platforms::ContainerInventoryPort for AgentClient {
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
-        self.list_containers_with_health(cancellation, false)
+        self.list_container_metadata(container_metadata_request(false), cancellation)
     }
     fn observe_containers<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
-        self.list_containers_with_health(cancellation, true)
+        self.list_container_metadata(container_metadata_request(true), cancellation)
     }
 }
 impl AgentClient {
-    fn list_containers_with_health<'a>(
+    pub(crate) fn list_container_metadata<'a>(
         &'a self,
+        request: ListContainersRequest,
         cancellation: &'a CancellationToken,
-        observe_health: bool,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
         async move {
             let response = self
                 .retry_unary(cancellation, || async {
                     let request = self.signer.sign(
-                        ListContainersRequest {
-                            observe_health,
-                            metadata_only: true,
-                            all: Some(true),
-                            limit: None,
-                            size: Some(false),
-                            filters: Default::default(),
-                        },
+                        request.clone(),
                         LIST_CONTAINERS_METHOD,
                         Some(self.operation_timeout),
                     )?;
@@ -2047,36 +2041,6 @@ impl citadel_platforms::NetworkObservationPort for AgentClient {
                 })
                 .await?;
             Ok(map_network_inspect(response))
-        }
-        .boxed()
-    }
-}
-
-impl citadel_platforms::VolumeInventoryPort for AgentClient {
-    fn list_volumes<'a>(
-        &'a self,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<Vec<RuntimeVolumeSummary>, RuntimeCapabilityError>> {
-        async move {
-            let response = self
-                .retry_unary(cancellation, || async {
-                    let request = self.signer.sign(
-                        ListVolumesRequest {
-                            dangling: None,
-                            driver: None,
-                            name: None,
-                        },
-                        LIST_VOLUMES_METHOD,
-                        Some(self.operation_timeout),
-                    )?;
-                    self.volume_client()
-                        .list(request)
-                        .await
-                        .map(|value| value.into_inner())
-                        .map_err(normalize_status)
-                })
-                .await?;
-            Ok(response.volumes.into_iter().map(map_volume).collect())
         }
         .boxed()
     }

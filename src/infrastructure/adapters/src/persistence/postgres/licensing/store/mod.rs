@@ -15,6 +15,10 @@ use citadel_deployments::{DeploymentEntitlementPort, DeploymentError};
 use citadel_identity::{EntitlementService, SYSTEM_ACTOR_ID};
 use citadel_licensing::{LicenseChange, LicenseError};
 mod activity;
+mod source;
+
+pub(crate) use source::get_or_create_identity;
+use source::load_installed;
 
 use citadel_licensing::{
     CitadelInstanceIdentity, InstalledLicense, LicenseCapability, LicenseStatus,
@@ -25,9 +29,7 @@ use citadel_primitives::ActorId;
 
 use futures_util::future::BoxFuture;
 
-use sqlx::{PgPool, Postgres, Row, Transaction};
-
-use uuid::Uuid;
+use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::persistence::postgres::activities::store::insert_activity;
 
@@ -48,16 +50,7 @@ impl PostgresLicenseStore {
 
 impl LicenseStore for PostgresLicenseStore {
     fn load(&self, now: DateTime<Utc>) -> BoxFuture<'_, Result<LicenseSource, LicenseError>> {
-        Box::pin(async move {
-            let mut transaction = self.pool.begin().await.map_err(storage)?;
-            let identity = get_or_create_identity(&mut transaction, now).await?;
-            let installed = load_installed(&mut transaction, false).await?;
-            transaction.commit().await.map_err(storage)?;
-            Ok(LicenseSource {
-                identity,
-                installed,
-            })
-        })
+        Box::pin(source::load_source(&self.pool, now))
     }
 
     fn install<'a>(
@@ -356,64 +349,6 @@ impl citadel_alerts::AlertEntitlements for PostgresLicenseEntitlementService {
                 .map_err(|error| citadel_alerts::AlertError::Storage(error.to_string()))
         })
     }
-}
-
-pub(crate) async fn get_or_create_identity(
-    transaction: &mut Transaction<'_, Postgres>,
-    now: DateTime<Utc>,
-) -> Result<CitadelInstanceIdentity, LicenseError> {
-    let candidate = Uuid::now_v7();
-    sqlx::query(
-        "INSERT INTO citadelinstanceidentity (id, instanceid, createdat) VALUES (1, $1, $2) ON CONFLICT (id) DO NOTHING",
-    )
-    .bind(candidate)
-    .bind(now)
-    .execute(&mut **transaction)
-    .await
-    .map_err(storage)?;
-    let row = sqlx::query(
-        "SELECT instanceid, createdat FROM citadelinstanceidentity WHERE id = 1 LIMIT 1",
-    )
-    .fetch_one(&mut **transaction)
-    .await
-    .map_err(storage)?;
-    Ok(CitadelInstanceIdentity {
-        instance_id: row.try_get("instanceid").map_err(storage)?,
-        created_at: row.try_get("createdat").map_err(storage)?,
-    })
-}
-
-async fn load_installed(
-    transaction: &mut Transaction<'_, Postgres>,
-    locked: bool,
-) -> Result<Option<InstalledLicense>, LicenseError> {
-    let suffix = if locked { " FOR UPDATE" } else { "" };
-    let query = format!(
-        "SELECT rawlicense, fingerprint, installedat, installedbyactorid, lastvalidatedat, lastvalidationstatus, lastvalidationerrorcode FROM installedlicenses WHERE id = 1{suffix}"
-    );
-    let row = sqlx::query(sqlx::AssertSqlSafe(query.as_str()))
-        .fetch_optional(&mut **transaction)
-        .await
-        .map_err(storage)?;
-    row.map(|row| {
-        let last_validation_status: Option<String> =
-            row.try_get("lastvalidationstatus").map_err(storage)?;
-        Ok(InstalledLicense {
-            raw_license: row.try_get("rawlicense").map_err(storage)?,
-            fingerprint: row.try_get("fingerprint").map_err(storage)?,
-            installed_at: row.try_get("installedat").map_err(storage)?,
-            installed_by_actor_id: row
-                .try_get::<Option<Uuid>, _>("installedbyactorid")
-                .map_err(storage)?
-                .map(ActorId::new),
-            last_validated_at: row.try_get("lastvalidatedat").map_err(storage)?,
-            last_validation_status: last_validation_status
-                .as_deref()
-                .and_then(LicenseStatus::from_database_str),
-            last_validation_error_code: row.try_get("lastvalidationerrorcode").map_err(storage)?,
-        })
-    })
-    .transpose()
 }
 
 async fn lock_license_mutations(

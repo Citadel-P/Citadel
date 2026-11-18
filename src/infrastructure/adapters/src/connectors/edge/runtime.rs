@@ -97,32 +97,26 @@ impl citadel_platforms::ContainerInventoryPort for EdgeRuntime {
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
-        self.list_containers_with_health(cancellation, false)
+        self.list_container_metadata(agent::container_metadata_request(false), cancellation)
     }
     fn observe_containers<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
-        self.list_containers_with_health(cancellation, true)
+        self.list_container_metadata(agent::container_metadata_request(true), cancellation)
     }
 }
 impl EdgeRuntime {
-    fn list_containers_with_health<'a>(
+    pub(crate) fn list_container_metadata<'a>(
         &'a self,
+        request: ListContainersRequest,
         cancellation: &'a CancellationToken,
-        observe_health: bool,
     ) -> BoxFuture<'a, Result<Vec<RuntimeContainerSummary>, RuntimeCapabilityError>> {
         Box::pin(async move {
             let response: ListContainersResponse = unary(
                 &self.session,
                 EdgeCommandKind::ContainerList,
-                ListContainersRequest {
-                    observe_health,
-                    metadata_only: true,
-                    all: Some(true),
-                    size: Some(false),
-                    ..Default::default()
-                },
+                request,
                 cancellation,
             )
             .await?;
@@ -312,6 +306,25 @@ impl citadel_platforms::NetworkInventoryPort for EdgeRuntime {
 }
 
 impl citadel_platforms::VolumeInventoryPort for EdgeRuntime {
+    fn list_volume_names<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            let response: ListVolumesResponse = unary(
+                &self.session,
+                EdgeCommandKind::VolumeList,
+                ListVolumesRequest {
+                    names_only: true,
+                    ..Default::default()
+                },
+                cancellation,
+            )
+            .await?;
+            Ok(response.names)
+        })
+    }
+
     list!(
         list_volumes,
         RuntimeVolumeSummary,

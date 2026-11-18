@@ -49,6 +49,7 @@ async fn fixture_with_metadata_delay(
             "/version"=>serde_json::json!({"Version":"27","ApiVersion":"1.49","MinAPIVersion":"1.41"}),
             "/v1.49/info"=>serde_json::json!({"ID":"daemon","NCPU":2,"MemTotal":1024,"Driver":"overlay2","OperatingSystem":"fixture"}),
             "/v1.49/containers/json"=>serde_json::Value::Array((0..6).map(|i|serde_json::json!({"Id":format!("c{i}"),"State":"running","ImageID":"sha256:image"})).collect()),
+            "/v1.49/volumes" if req.uri().query().is_some() => serde_json::json!({"Volumes":[{"Name":"backup","Driver":"local"}]}),
             "/v1.49/volumes"=>serde_json::json!({"Volumes":[]}),
             "/v1.49/system/df"=>serde_json::json!({"LayersSize":0,"Volumes":[]}),
             "/v1.49/images/json"|"/v1.49/networks"=>serde_json::json!([]),
@@ -479,6 +480,36 @@ async fn health_collection_is_explicit_read_only_and_does_not_sample_stats() {
             .iter()
             .any(|p| p.contains("/stats") || p.contains("/exec") || p.contains("/restart"))
     );
+    runtime.shutdown.cancel();
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn name_only_volume_list_keeps_filters_without_usage_or_protection_reads() {
+    use citadel_contracts::citadel::volumes::v1::{
+        ListVolumesRequest, volume_service_server::VolumeService,
+    };
+    let (runtime, calls, server) = fixture(Default::default()).await;
+    let response = VolumeService::list(
+        &runtime,
+        Request::new(ListVolumesRequest {
+            names_only: true,
+            name: Some("backup".into()),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap()
+    .into_inner();
+    assert_eq!(response.names, ["backup"]);
+    assert!(response.volumes.is_empty());
+    {
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0], "/version");
+        assert!(calls[1].starts_with("/v1.49/volumes?filters="));
+        assert!(calls[1].contains("backup"));
+    }
     runtime.shutdown.cancel();
     server.await.unwrap();
 }

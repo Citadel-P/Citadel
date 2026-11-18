@@ -1,9 +1,20 @@
 use super::*;
 
+pub(super) fn rule_resource_key(rule: &AlertRule, observation: &AlertObservation) -> String {
+    format!("{}:{}", rule.id, observation.resource_id)
+}
+
+pub(super) fn incident_key(rule: &AlertRule, observation: &AlertObservation) -> String {
+    format!(
+        "{}:{}:{}",
+        rule.id, observation.resource_id, observation.deduplication_component
+    )
+}
+
 /// Locked rule parents are reusable only while this transaction is borrowed.
 /// Mutable per-resource state is always reread after its own advisory lock.
 pub(super) struct RuleEvaluation<'a, 'c> {
-    transaction: &'a mut Transaction<'c, Postgres>,
+    pub(super) transaction: &'a mut Transaction<'c, Postgres>,
     enabled: Option<std::collections::HashSet<Uuid>>,
     pub(super) changed: bool,
 }
@@ -66,7 +77,7 @@ impl PostgresAlertRepository {
                 return Ok(None);
             }
         }
-        let lock_key = format!("{}:{}", rule.id, observation.resource_id);
+        let lock_key = rule_resource_key(rule, observation);
         sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
             .bind(lock_key)
             .execute(&mut **transaction)
@@ -106,10 +117,7 @@ impl PostgresAlertRepository {
         if update_available && last_observed.is_some_and(|last| observation.observed_at < last) {
             return Ok(None);
         }
-        let deduplication_key = format!(
-            "{}:{}:{}",
-            rule.id, observation.resource_id, observation.deduplication_component
-        );
+        let deduplication_key = incident_key(rule, observation);
         if !observation_matches(rule, observation) {
             // The rule/resource advisory lock fences this state read. Healthy
             // repeats need no new tuple/WAL when their counter is already zero.

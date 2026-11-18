@@ -9,7 +9,7 @@ use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use futures_util::{FutureExt, StreamExt, stream};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -117,24 +117,71 @@ impl ImageUpdateService {
         after: Uuid,
         cancel: &CancellationToken,
     ) -> Result<ImageUpdateBatch, RuntimeCapabilityError> {
+        if cancel.is_cancelled() {
+            return Err(failure(
+                RuntimeErrorKind::Cancelled,
+                "Image sweep cancelled.",
+            ));
+        }
         let candidates = self.store.candidates(after).await?;
         let next = candidates.last().map(|c| c.id);
+        if candidates.is_empty() {
+            return Ok(ImageUpdateBatch {
+                next,
+                checked: 0,
+                failed: 0,
+            });
+        }
         let actor = ActorId::new(Uuid::from_u128(1));
         let registries = self.resolver.registries(actor, true).await?;
-        let tasks: Vec<_> = candidates
+        let registry_ids: Vec<_> = registries
             .iter()
-            .map(|candidate| self.check_candidate(candidate, &registries, cancel).boxed())
+            .map(|r| r.id)
+            .chain([Uuid::nil()])
             .collect();
-        let mut pending = stream::iter(tasks).buffer_unordered(2);
+        let mut platforms = BTreeMap::<_, Vec<_>>::new();
+        for candidate in candidates {
+            platforms
+                .entry(candidate.platform)
+                .or_default()
+                .push(candidate);
+        }
         let mut checked = 0;
         let mut failed = 0;
-        while let Some(result) = tokio::select! {
-            biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
-            result = pending.next() => result,
-        } {
-            match result {
-                Ok(count) => checked += count,
-                Err(_) => failed += 1,
+        for (platform, candidates) in platforms {
+            let images: Vec<_> = candidates.iter().map(|c| c.image.clone()).collect();
+            let rows = tokio::select! {
+                biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
+                rows = self.store.load(platform, &images, &registry_ids) => rows,
+            };
+            let Ok(rows) = rows else {
+                failed += candidates.len();
+                continue;
+            };
+            let mut observations = BTreeMap::<_, Vec<_>>::new();
+            for row in rows {
+                observations.entry(row.image.clone()).or_default().push(row);
+            }
+            let tasks: Vec<_> = candidates
+                .iter()
+                .map(|candidate| {
+                    let previous = observations
+                        .get(&candidate.image)
+                        .map(Vec::as_slice)
+                        .unwrap_or_default();
+                    self.check_candidate(candidate, &registries, previous, cancel)
+                        .boxed()
+                })
+                .collect();
+            let mut pending = stream::iter(tasks).buffer_unordered(2);
+            while let Some(result) = tokio::select! {
+                biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
+                result = pending.next() => result,
+            } {
+                match result {
+                    Ok(count) => checked += count,
+                    Err(_) => failed += 1,
+                }
             }
         }
         Ok(ImageUpdateBatch {
@@ -148,21 +195,9 @@ impl ImageUpdateService {
         &self,
         candidate: &ImageUpdateCandidate,
         registries: &[ImageUpdateRegistry],
+        previous: &[StoredImageUpdate],
         cancel: &CancellationToken,
     ) -> Result<usize, RuntimeCapabilityError> {
-        let registry_ids: Vec<_> = registries
-            .iter()
-            .map(|r| r.id)
-            .chain([Uuid::nil()])
-            .collect();
-        let previous = self
-            .store
-            .load(
-                candidate.platform,
-                std::slice::from_ref(&candidate.image),
-                &registry_ids,
-            )
-            .await?;
         let mut checked = 0;
         for reference in candidate.tags.iter().filter(|tag| eligible(tag)) {
             if cancel.is_cancelled() {
@@ -172,7 +207,7 @@ impl ImageUpdateService {
                 ));
             }
             let Some(registry) =
-                scheduled_registry(candidate.registry_id, reference, registries, &previous)
+                scheduled_registry(candidate.registry_id, reference, registries, previous)
             else {
                 continue;
             };

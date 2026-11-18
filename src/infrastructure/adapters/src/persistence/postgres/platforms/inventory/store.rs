@@ -666,6 +666,19 @@ pub(super) async fn persist_container_set(
     } else {
         "(dockercontainerid, platformid) WHERE dockernodeid IS NULL"
     };
+    // Fresh inspections advance the watermark and feed health history. Only a change
+    // in inventory or health meaning advances the resource's optimistic revision.
+    let inventory_changed = r#"(containers.name, containers.dockerimageid, containers.state, containers.stack,
+           containers.issystem, containers.systemrole, containers.hascitadelownershiplabels,
+           containers.isswarmtask, containers.mounts, containers.ports::jsonb, containers.stackid, containers.deploymentid,
+           containers.projectionstalesince, containers.projectionstalereason, containers.imageid, (containers.health - ARRAY['observedAt','lastCheckAt']), containers.composeservicename, containers.composereplicanumber)
+          IS DISTINCT FROM
+          (EXCLUDED.name, EXCLUDED.dockerimageid, EXCLUDED.state, EXCLUDED.stack,
+           EXCLUDED.issystem, EXCLUDED.systemrole, EXCLUDED.hascitadelownershiplabels,
+           EXCLUDED.isswarmtask, EXCLUDED.mounts, EXCLUDED.ports::jsonb,
+           CASE WHEN containers.deploymentid IS NULL THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
+           CASE WHEN containers.stackid IS NULL THEN COALESCE(containers.deploymentid, EXCLUDED.deploymentid) ELSE containers.deploymentid END,
+           NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid), (EXCLUDED.health - ARRAY['observedAt','lastCheckAt']), EXCLUDED.composeservicename, EXCLUDED.composereplicanumber)"#;
     let mut changed: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         r#"
 WITH incoming AS (
@@ -713,7 +726,6 @@ WITH incoming AS (
         dockerimageid = EXCLUDED.dockerimageid,
         imageid = COALESCE(EXCLUDED.imageid, containers.imageid),
         state = EXCLUDED.state,
-        updated = EXCLUDED.updated,
         stack = EXCLUDED.stack,
         issystem = EXCLUDED.issystem,
         systemrole = EXCLUDED.systemrole,
@@ -731,20 +743,15 @@ WITH incoming AS (
         projectionobservedat = EXCLUDED.projectionobservedat,
         projectionstalesince = NULL,
         projectionstalereason = NULL,
-        rowversion = containers.rowversion + 1
+        (updated, rowversion) = (SELECT
+            CASE WHEN changed THEN EXCLUDED.updated ELSE containers.updated END,
+            containers.rowversion + changed::integer
+            FROM (SELECT {inventory_changed} AS changed) AS revision)
     WHERE COALESCE(containers.projectionobservedat, 0) <= EXCLUDED.projectionobservedat
-      AND (containers.name, containers.dockerimageid, containers.state, containers.stack,
-           containers.issystem, containers.systemrole, containers.hascitadelownershiplabels,
-           containers.isswarmtask, containers.mounts, containers.ports::jsonb, containers.stackid, containers.deploymentid,
-           containers.projectionstalesince, containers.projectionstalereason, containers.imageid, containers.health, containers.composeservicename, containers.composereplicanumber)
-          IS DISTINCT FROM
-          (EXCLUDED.name, EXCLUDED.dockerimageid, EXCLUDED.state, EXCLUDED.stack,
-           EXCLUDED.issystem, EXCLUDED.systemrole, EXCLUDED.hascitadelownershiplabels,
-           EXCLUDED.isswarmtask, EXCLUDED.mounts, EXCLUDED.ports::jsonb,
-           CASE WHEN containers.deploymentid IS NULL THEN COALESCE(containers.stackid, EXCLUDED.stackid) ELSE containers.stackid END,
-           CASE WHEN containers.stackid IS NULL THEN COALESCE(containers.deploymentid, EXCLUDED.deploymentid) ELSE containers.deploymentid END,
-           NULL::bigint, NULL::text, COALESCE(EXCLUDED.imageid, containers.imageid), EXCLUDED.health, EXCLUDED.composeservicename, EXCLUDED.composereplicanumber)
-    RETURNING dockercontainerid
+      AND (containers.projectionobservedat IS DISTINCT FROM EXCLUDED.projectionobservedat
+           OR containers.health IS DISTINCT FROM EXCLUDED.health OR {inventory_changed})
+    RETURNING OLD.id IS NULL OR OLD.rowversion IS DISTINCT FROM NEW.rowversion
+        OR OLD.health IS DISTINCT FROM NEW.health AS publish
 ), deleted AS (
 DELETE FROM containers container
 WHERE $5::boolean AND container.platformid = $1
@@ -753,7 +760,7 @@ WHERE $5::boolean AND container.platformid = $1
   AND NOT EXISTS (SELECT 1 FROM incoming WHERE incoming.id = container.dockercontainerid)
 RETURNING dockercontainerid
 )
-SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
+SELECT EXISTS(SELECT 1 FROM upserted WHERE publish) OR EXISTS(SELECT 1 FROM deleted)
 "#
     )))
     .bind(platform_id)
@@ -764,10 +771,6 @@ SELECT EXISTS(SELECT 1 FROM upserted) OR EXISTS(SELECT 1 FROM deleted)
     .fetch_one(&mut **transaction)
     .await
     .map_err(storage)?;
-    // Watermarks are causal bookkeeping, not semantic revisions. Advance even on a no-op.
-    sqlx::query("UPDATE containers SET projectionobservedat=$4 WHERE platformid=$1 AND dockernodeid IS NOT DISTINCT FROM $2 AND dockercontainerid=ANY($3) AND COALESCE(projectionobservedat,0)<$4")
-        .bind(platform_id).bind(node_id).bind(&incoming_ids).bind(observed)
-        .execute(&mut **transaction).await.map_err(storage)?;
     if complete && node_id.is_none() {
         // Publish counts with the committed manager/standalone inventory rather
         // than waiting for a statistics sample. Read persisted rows so newer

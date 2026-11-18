@@ -593,3 +593,67 @@ async fn swarm_freshness_seeks_sources_and_respects_future_samples_in_both_plans
     assert_eq!(tasks.iter().filter(|t| t.created.is_some()).count(), 2);
     close_storage_fixture(pool, database).await;
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
+async fn container_capture_avoids_a_full_inventory_scan_for_each_sample() {
+    let (pool, database) = storage_fixture().await;
+    let mut samples = Vec::new();
+    for count in [15, 5] {
+        let scope = platform(&pool).await;
+        for id in 0..count {
+            let docker_id = id.to_string();
+            add_container(&pool, &scope, &docker_id).await;
+            for tick in 0..6 {
+                samples.push(container(&scope, &docker_id, 10 * tick, 1.0));
+            }
+        }
+    }
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::raw_sql("ANALYZE containers; ANALYZE platforms; SET LOCAL jit=off;")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query(concat!(
+        "PREPARE capture_batch(jsonb) AS ",
+        include_str!("../../src/persistence/postgres/platforms/statistics/container_batch.sql"),
+        include_str!("../../src/persistence/postgres/platforms/statistics/capture.sql")
+    ))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query("SELECT set_config('citadel.fixture_samples',$1,true)")
+        .bind(serde_json::to_string(&samples).unwrap())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    for mode in ["force_generic_plan", "force_custom_plan"] {
+        sqlx::query("SELECT set_config('plan_cache_mode',$1,true)")
+            .bind(mode)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let plan: serde_json::Value = sqlx::query_scalar(
+            "EXPLAIN (ANALYZE,TIMING OFF,FORMAT JSON) EXECUTE capture_batch(current_setting('citadel.fixture_samples')::jsonb)")
+            .fetch_one(&mut *tx).await.unwrap();
+        let mut nodes = vec![&plan[0]["Plan"]];
+        while let Some(node) = nodes.pop() {
+            if node["Node Type"] == "Seq Scan" && node["Relation Name"] == "containers" {
+                assert!(
+                    node["Actual Loops"].as_f64().unwrap() <= 2.,
+                    "{mode}: {node}"
+                );
+            }
+            if let Some(children) = node["Plans"].as_array() {
+                nodes.extend(children);
+            }
+        }
+    }
+    let saved: i64 = sqlx::query_scalar("SELECT count(*) FROM statisticssamples")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert_eq!(saved, 120);
+    tx.rollback().await.unwrap();
+    close_storage_fixture(pool, database).await;
+}

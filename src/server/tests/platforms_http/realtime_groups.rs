@@ -109,6 +109,16 @@ async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
     let f = fixture().await;
     let id: Uuid = sqlx::query_scalar("UPDATE containers SET dockernodeid=NULL,dockercontainerid=$2 WHERE platformid=$1 RETURNING id")
         .bind(f.platform_id).bind(&docker_id).fetch_one(&f.pool).await.unwrap();
+    let deployment = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdbyactorid) VALUES($1,$2,$3,'{}','Healthy',$4)")
+        .bind(deployment).bind(format!("terminal-{deployment}")).bind(f.platform_id)
+        .bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE containers SET deploymentid=$2 WHERE id=$1")
+        .bind(id)
+        .bind(deployment)
+        .execute(&f.pool)
+        .await
+        .unwrap();
     let mut reader = reader(&f);
     let terminal_tasks = citadel_runtime::DynamicTasks::new(CancellationToken::new());
     let docker = DockerClient::new(&docker_socket, StdDuration::from_secs(5))
@@ -156,20 +166,34 @@ async fn local_terminal_browser_sequence_streams_output_and_reconnects() {
             .unwrap();
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &f.administrator).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
-    for (reference, shell) in [(id.to_string(), "bash"), (docker_id[..12].to_owned(), "sh")] {
+    for (reference, owner, start, resize, send, shell) in [
+        (
+            id.to_string(),
+            id,
+            "StartExecProcess",
+            "ResizeExec",
+            "SendExecInput",
+            "bash",
+        ),
+        (
+            docker_id[..12].to_owned(),
+            deployment,
+            "StartDeploymentExecProcess",
+            "ResizeDeploymentExec",
+            "SendDeploymentExecInput",
+            "sh",
+        ),
+    ] {
         let group = format!("container-exec:{reference}:browser-session");
         let mut output = Vec::new();
         for (target, args) in [
             ("JoinGroup", json!([group])),
+            (start, json!([owner, "browser-session", shell])),
+            (resize, json!([owner, "browser-session", 100, 30])),
             (
-                "StartExecProcess",
-                json!([reference, "browser-session", shell]),
-            ),
-            ("ResizeExec", json!([reference, "browser-session", 100, 30])),
-            (
-                "SendExecInput",
+                send,
                 json!([
-                    reference,
+                    owner,
                     "browser-session",
                     "printf 'citadel-%s\\n' terminal-ok\n"
                         .bytes()

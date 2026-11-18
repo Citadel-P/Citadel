@@ -20,20 +20,16 @@ pub async fn sample_running_container_stats<S>(
     cancellation: &CancellationToken,
 ) -> Result<ContainerStatsBatch, RuntimeCapabilityError>
 where
-    S: ContainerStatsPort + Clone + 'static,
+    S: ContainerStatsPort + ?Sized,
 {
     let samples = stream::iter(
         containers
             .into_iter()
             .filter(|container| container.state == "running")
-            .map(|container| {
-                let source = source.clone();
-                let cancellation = cancellation.clone();
-                async move {
-                    source
-                        .sample_container_stats(&container.id, &cancellation)
-                        .await
-                }
+            .map(|container| async move {
+                source
+                    .sample_container_stats(&container.id, cancellation)
+                    .await
             }),
     )
     .buffer_unordered(concurrency.clamp(1, 32))

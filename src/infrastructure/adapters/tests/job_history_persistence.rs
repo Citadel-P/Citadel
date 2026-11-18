@@ -330,8 +330,18 @@ async fn compaction_preserves_totals_retries_gaps_and_protects_mutable_hours() {
         through: hour + 30_000,
         ..template
     }];
+    // Another job with the same boot/hour is compacted in this transaction.
+    batch.buckets.push(citadel_instance::JobHistoryBucket {
+        job_id: "other".into(),
+        iterations: 42,
+        ..batch.buckets[0].clone()
+    });
     store.persist(&batch).await.unwrap();
-    assert_eq!(store.maintain().await.unwrap(), 1);
+    assert_eq!(store.maintain().await.unwrap(), 2);
+    let other = store.read(Some("other"), 168).await.unwrap();
+    assert_eq!(other.buckets.len(), 1);
+    assert_eq!(other.buckets[0].iterations, 42);
+    assert_eq!(other.buckets[0].resolution_ms, 3_600_000);
     let history = store.read(Some("audit"), 168).await.unwrap();
     assert_eq!(
         history
@@ -397,7 +407,10 @@ async fn seven_day_job_history_compaction_audit() {
     let mut passes = 0;
     while store.maintain().await.unwrap() != 0 {
         passes += 1;
-        assert!(passes < 10_000, "maintenance must converge");
+        assert!(
+            passes < 600,
+            "compact each eligible hour in bounded batches of jobs"
+        );
     }
     let elapsed = started.elapsed();
     let wal_bytes: f64 = sqlx::query_scalar("SELECT coalesce(sum(wal_bytes),0)::float8 FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database())")

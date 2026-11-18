@@ -53,6 +53,15 @@ impl DeploymentRepository for PostgresDeploymentRepository {
     > {
         self.list_authorized_impl(actor_id, administrator, filter)
     }
+    fn running_terminal_container(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        deployment_id: Uuid,
+    ) -> BoxFuture<'_, Result<Option<String>, DeploymentError>> {
+        self.running_terminal_container_impl(actor_id, administrator, deployment_id)
+    }
+
     fn get_authorized<'a>(
         &'a self,
         actor_id: ActorId,

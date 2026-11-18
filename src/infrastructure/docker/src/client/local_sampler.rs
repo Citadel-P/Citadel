@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct LocalDockerSampler {
     docker: DockerClient,
+    cpu: super::periodic_cpu::CpuBaselines,
     concurrency: usize,
     refreshed: Option<Instant>,
     metadata: Option<(Instant, RuntimePlatformStats)>,
@@ -36,6 +37,7 @@ impl LocalDockerSampler {
     pub fn new(docker: DockerClient, concurrency: usize) -> Self {
         Self {
             docker,
+            cpu: Default::default(),
             concurrency: concurrency.clamp(1, 32),
             refreshed: None,
             metadata: None,
@@ -56,33 +58,52 @@ impl LocalDockerSampler {
         let captured_at = chrono::Utc::now().timestamp();
         let generation = self.docker.daemon_generation();
         if self.generation != generation {
+            self.cpu.clear();
             self.refresh.abort_all();
             while self.refresh.join_next().await.is_some() {}
             self.refreshed = None;
             self.metadata = None;
             self.generation = generation;
         }
+        // Read known targets first, then use the one discovery list to verify
+        // lifetime continuity and find new, restarted and stopped containers.
+        let mut warm = super::periodic_cpu::warm_samples(
+            &self.docker,
+            std::mem::take(&mut self.cpu),
+            self.concurrency,
+            cancellation,
+        )
+        .await?;
+        let mut verified = Vec::with_capacity(warm.len());
+        let mut next = super::periodic_cpu::CpuBaselines::with_capacity(warm.len());
         let containers = tokio::select! {
             () = cancellation.cancelled() => return Err(super::runtime::cancelled_error()),
             result = self.docker.list_sampling_containers() => result.map_err(normalize_docker_error)?,
         };
-        // Sampling parses only identity and state, skipping inventory metadata allocations.
+        // Discovery retains only identity, state and the uptime used to validate CPU deltas.
         use citadel_docker_api::models::container_summary::State;
         let mut counts = ContainerCounts {
             total: containers.len() as i64,
             ..Default::default()
         };
-        let mut targets = Vec::with_capacity(containers.len());
+        let mut targets = Vec::new();
+        let mut failed_samples = 0;
         for container in containers {
             match container.state {
                 Some(State::Running) => {
                     counts.running += 1;
-                    {
-                        targets.push(citadel_platforms::RuntimeContainerSummary {
-                            id: container.id.unwrap_or_default(),
+                    let id = container.id.unwrap_or_default();
+                    match warm.remove(&id) {
+                        Some(Ok(sample)) if sample.continuous(container.status.as_deref()) => {
+                            next.insert(id, sample.reading);
+                            verified.push(sample.stat);
+                        }
+                        Some(Err(_)) => failed_samples += 1,
+                        _ => targets.push(citadel_platforms::RuntimeContainerSummary {
+                            id,
                             state: "running".into(),
                             ..Default::default()
-                        });
+                        }),
                     }
                 }
                 Some(State::Paused) => counts.paused += 1,
@@ -90,9 +111,22 @@ impl LocalDockerSampler {
                 _ => {}
             }
         }
-        let batch =
-            sample_running_container_stats(&self.docker, targets, self.concurrency, cancellation)
-                .await?;
+        let cold = super::periodic_cpu::ColdSamples {
+            docker: &self.docker,
+            next: std::sync::Mutex::new(next),
+        };
+        let mut batch =
+            sample_running_container_stats(&cold, targets, self.concurrency, cancellation).await?;
+        if generation != self.docker.daemon_generation() {
+            return Err(RuntimeCapabilityError::new(
+                citadel_platforms::RuntimeErrorKind::Unavailable,
+                "Docker daemon changed during statistics collection",
+                true,
+            ));
+        }
+        self.cpu = cold.next.into_inner().expect("CPU baselines poisoned");
+        batch.stats.extend(verified);
+        batch.failed_samples += failed_samples;
         // One owned slow refresh. JoinSet aborts it when the sampler is dropped.
         // Publish fast telemetry without waiting for metadata I/O.
         self.collect_metadata();

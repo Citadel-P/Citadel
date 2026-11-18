@@ -41,6 +41,34 @@ ORDER BY d.createdat DESC, d.name, d.id"#
         })
     }
 
+    pub(super) fn running_terminal_container_impl(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        deployment_id: Uuid,
+    ) -> BoxFuture<'_, Result<Option<String>, DeploymentError>> {
+        Box::pin(async move {
+            let query = format!(
+                r#"{AUTHORIZED_CTES}
+                SELECT c.dockercontainerid FROM deployments d
+                JOIN containers c ON c.deploymentid = d.id AND c.platformid = d.platformid
+                LEFT JOIN global_permission g ON TRUE
+                LEFT JOIN resource_permissions r ON r.resourceid = d.id
+                WHERE d.id = $3 AND lower(c.state) = 'running'
+                  AND ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(r.level_mask,0)) = ANY($4))
+                ORDER BY c.name, c.id LIMIT 1"#
+            );
+            sqlx::query_scalar(AssertSqlSafe(query.as_str()))
+                .bind(actor_id.value())
+                .bind(administrator)
+                .bind(deployment_id)
+                .bind(ReadDeployment::REQUIREMENT.level.accepted_database_levels())
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)
+        })
+    }
+
     pub(super) fn get_authorized_impl<'a>(
         &'a self,
         actor_id: ActorId,

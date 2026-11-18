@@ -109,10 +109,7 @@ pub(crate) async fn lookup_platform_resources(
     let names = async {
         let runtime = state.runtime.inventory(platform_id, &cancellation).await?;
         if kind == citadel_discovery::LookupResourceType::Volume {
-            runtime
-                .list_volumes(&cancellation)
-                .await
-                .map(|values| values.into_iter().map(|v| v.name).collect::<Vec<_>>())
+            runtime.list_volume_names(&cancellation).await
         } else {
             runtime
                 .list_networks(&cancellation)

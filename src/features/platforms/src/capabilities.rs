@@ -97,6 +97,20 @@ pub trait NetworkObservationPort: Send + Sync {
 }
 
 pub trait VolumeInventoryPort: Send + Sync {
+    fn list_volume_names<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            Ok(self
+                .list_volumes(cancellation)
+                .await?
+                .into_iter()
+                .map(|volume| volume.name)
+                .collect())
+        })
+    }
+
     fn list_volumes<'a>(
         &'a self,
         cancellation: &'a CancellationToken,

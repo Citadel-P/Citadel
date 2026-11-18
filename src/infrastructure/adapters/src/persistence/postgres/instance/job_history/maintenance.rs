@@ -24,14 +24,14 @@ impl JobHistoryMaintenance for PostgresJobHistory {
             changed += sqlx::query("DELETE FROM jobdiagnosticsessions WHERE bootid IN (SELECT s.bootid FROM jobdiagnosticsessions s WHERE heartbeat<$1 AND NOT EXISTS(SELECT 1 FROM jobdiagnosticevents e WHERE e.bootid=s.bootid) AND NOT EXISTS(SELECT 1 FROM jobdiagnosticbuckets b WHERE b.bootid=s.bootid) LIMIT 16 FOR UPDATE OF s SKIP LOCKED)")
                 .bind(retained).execute(&mut *tx).await.map_err(storage)?.rows_affected();
 
-            let candidate: Option<(Uuid, String, i64)> =
+            let candidate: Option<(Uuid, i64, Vec<String>)> =
                 sqlx::query_as(include_str!("compaction_candidate.sql"))
                     .bind(retained / 3_600_000 * 3_600_000)
                     .bind(cutoff)
                     .fetch_optional(&mut *tx)
                     .await
                     .map_err(storage)?;
-            if let Some((boot, job, hour)) = candidate {
+            if let Some((boot, hour, jobs)) = candidate {
                 // Reporter checkpoints and this compactor serialize on the session.
                 // Its most recent checkpoint hour remains mutable even after an outage.
                 let checkpoint: Option<(i64, Option<i64>)> = sqlx::query_as("SELECT (snapshot->>'observedAt')::bigint,stopped FROM jobdiagnosticsessions WHERE bootid=$1 FOR UPDATE")
@@ -39,15 +39,32 @@ impl JobHistoryMaintenance for PostgresJobHistory {
                 if checkpoint.is_some_and(|(at, stopped)| {
                     stopped.is_some() || at / 3_600_000 * 3_600_000 >= hour + 3_600_000
                 }) {
-                    let rows: Vec<sqlx::types::Json<JobHistoryBucket>> = sqlx::query_scalar("SELECT data FROM jobdiagnosticbuckets WHERE bootid=$1 AND jobid=$2 AND bucket >= $3 AND bucket < $3+3600000 AND resolutionms=300000 ORDER BY bucket")
-                        .bind(boot).bind(&job).bind(hour).fetch_all(&mut *tx).await.map_err(storage)?;
+                    // Delete and summarize in the same transaction. Returning the deleted
+                    // windows avoids reading each job/hour twice.
+                    let rows: Vec<sqlx::types::Json<JobHistoryBucket>> = sqlx::query_scalar(
+                        "WITH removed AS (
+                            DELETE FROM jobdiagnosticbuckets
+                            WHERE bootid=$1 AND jobid=ANY($2) AND bucket >= $3
+                              AND bucket < $3+3600000 AND resolutionms=300000
+                            RETURNING jobid,bucket,data
+                         ) SELECT data FROM removed ORDER BY jobid,bucket",
+                    )
+                    .bind(boot)
+                    .bind(&jobs)
+                    .bind(hour)
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(storage)?;
                     if !rows.is_empty() {
-                        let summary = rollup(rows.iter().map(|r| &r.0), hour as u64);
-                        let removed = sqlx::query("DELETE FROM jobdiagnosticbuckets WHERE bootid=$1 AND jobid=$2 AND bucket >= $3 AND bucket < $3+3600000 AND resolutionms=300000")
-                            .bind(boot).bind(&job).bind(hour).execute(&mut *tx).await.map_err(storage)?.rows_affected();
-                        sqlx::query("INSERT INTO jobdiagnosticbuckets(bootid,jobid,bucket,resolutionms,data) VALUES($1,$2,$3,3600000,$4)")
-                            .bind(boot).bind(&job).bind(hour).bind(sqlx::types::Json(summary)).execute(&mut *tx).await.map_err(storage)?;
-                        changed += removed;
+                        let summaries: Vec<_> = rows
+                            .chunk_by(|a, b| a.job_id == b.job_id)
+                            .map(|group| rollup(group.iter().map(|r| &r.0), hour as u64))
+                            .collect();
+                        sqlx::query("INSERT INTO jobdiagnosticbuckets(bootid,jobid,bucket,resolutionms,data)
+                                     SELECT $1,v->>'jobId',$2,3600000,v FROM jsonb_array_elements($3) AS v")
+                            .bind(boot).bind(hour).bind(sqlx::types::Json(summaries))
+                            .execute(&mut *tx).await.map_err(storage)?;
+                        changed += rows.len() as u64;
                     }
                 }
             }

@@ -150,22 +150,44 @@ async fn flush_pending(
     }
     let rows = sqlx::query("WITH samples AS (SELECT stats.platformid,stats.created,stats.cpuusage,stats.memoryusage,stats.diskusage,stats.diskusedbytes,stats.disktotalbytes FROM platformstats stats JOIN unnest($1::uuid[],$2::text[]) claimed(id,revision) ON stats.id=claimed.id AND stats.xmin::text=claimed.revision), medians AS (SELECT platformid,percentile_cont(0.5) WITHIN GROUP(ORDER BY cpuusage) AS cpuusage,percentile_cont(0.5) WITHIN GROUP(ORDER BY memoryusage) AS memoryusage FROM samples GROUP BY platformid), latest AS (SELECT DISTINCT ON(platformid) platformid,diskusage,diskusedbytes,disktotalbytes FROM samples ORDER BY platformid,created DESC) SELECT p.id,p.name,p.agentversion,m.cpuusage,m.memoryusage,l.diskusage,l.diskusedbytes,l.disktotalbytes FROM medians m JOIN platforms p ON p.id=m.platformid JOIN latest l ON l.platformid=m.platformid")
         .bind(&ids).bind(&revisions).fetch_all(&mut *tx).await?;
-    let mut evaluation = super::rule_evaluation::RuleEvaluation::new(&mut tx);
+    let mut observations = Vec::new();
     for row in rows {
         let platform = row.try_get("id")?;
-        for observation in platform_metric_observations(platform, &sample(&row)?, core_version) {
-            let (resets, winner) = citadel_alerts::rules::evaluation::select_observation_rules(
-                &rules[observation.alert_type.as_str()],
-                &observation,
-                advanced,
-            );
-            for rule in resets.into_iter().chain(winner) {
+        observations.extend(platform_metric_observations(
+            platform,
+            &sample(&row)?,
+            core_version,
+        ));
+    }
+    const RESET_BATCH_SIZE: usize = 512;
+    let mut evaluation = super::rule_evaluation::RuleEvaluation::new(&mut tx);
+    let mut healthy = Vec::new();
+    for observation in &observations {
+        let (resets, winner) = citadel_alerts::rules::evaluation::select_observation_rules(
+            &rules[observation.alert_type.as_str()],
+            observation,
+            advanced,
+        );
+        for rule in resets {
+            healthy.push((rule, observation));
+            if healthy.len() == RESET_BATCH_SIZE {
                 alerts
-                    .process_rule_in(&mut evaluation, rule, &observation, None)
-                    .await
-                    .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+                    .process_metric_resets(&mut evaluation, &healthy)
+                    .await?;
+                healthy.clear();
             }
         }
+        if let Some(rule) = winner {
+            alerts
+                .process_rule_in(&mut evaluation, rule, observation, None)
+                .await
+                .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        }
+    }
+    if !healthy.is_empty() {
+        alerts
+            .process_metric_resets(&mut evaluation, &healthy)
+            .await?;
     }
     let changed = evaluation.changed;
     let acknowledged = sqlx::query("UPDATE platformstats stats SET alertpending=false FROM unnest($1::uuid[],$2::text[]) claimed(id,revision) WHERE stats.id=claimed.id AND stats.xmin::text=claimed.revision")

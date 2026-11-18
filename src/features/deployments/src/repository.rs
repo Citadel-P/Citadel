@@ -69,6 +69,13 @@ pub trait DeploymentRepository: Send + Sync {
         filter: &'a DeploymentFilter,
     ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<crate::Deployment>>, DeploymentError>>;
 
+    fn running_terminal_container(
+        &self,
+        actor_id: ActorId,
+        administrator: bool,
+        deployment_id: Uuid,
+    ) -> BoxFuture<'_, Result<Option<String>, DeploymentError>>;
+
     fn get_authorized<'a>(
         &'a self,
         actor_id: ActorId,
