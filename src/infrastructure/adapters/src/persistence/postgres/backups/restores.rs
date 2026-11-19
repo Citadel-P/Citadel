@@ -251,11 +251,10 @@ SELECT restore.* FROM backuprestoreruns restore
 JOIN backupruns backup ON backup.id=restore.backuprunid
 WHERE ($4::uuid IS NULL OR restore.backuprunid=$4)
   AND ($5::uuid IS NULL OR backup.backuppolicyid=$5)
-  AND ($6 OR (SELECT allowed FROM global_access) OR EXISTS (
-      SELECT 1 FROM actor_scope scope
+  AND ($6 OR (SELECT allowed FROM global_access) OR backup.backuppolicyid IN (
+      SELECT access.resourceid FROM actor_scope scope
       JOIN resourceaccesses access ON access.actorid=scope.actorid
-      WHERE access.resourcetype=$2 AND access.resourceid=backup.backuppolicyid
-        AND access.permissionlevel = ANY($3)
+      WHERE access.resourcetype=$2 AND access.permissionlevel = ANY($3)
   ))
 ORDER BY restore.queuedat DESC,restore.id DESC LIMIT $7"#
             );

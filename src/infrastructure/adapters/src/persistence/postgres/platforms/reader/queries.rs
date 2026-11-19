@@ -96,13 +96,16 @@ impl PlatformReader for PostgresPlatformReader {
         Box::pin(async move {
             let mut names = BTreeMap::new();
             for batch in containers.chunks(500) {
-                let rows = sqlx::query(include_str!("container_owner_names.sql"))
-                    .bind(actor.value())
-                    .bind(administrator)
-                    .bind(batch)
-                    .fetch_all(&self.pool)
-                    .await
-                    .map_err(storage)?;
+                let rows = sqlx::query(concat!(
+                    include_str!("../workload_read_grants.sql"),
+                    include_str!("container_owner_names.sql")
+                ))
+                .bind(actor.value())
+                .bind(administrator)
+                .bind(batch)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
                 for row in rows {
                     names.insert(
                         row.try_get("id").map_err(storage)?,

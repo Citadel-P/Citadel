@@ -1,15 +1,4 @@
-WITH actor_scope AS (
-    SELECT id actorid FROM actors WHERE id=$1 AND isenabled
-    UNION SELECT team.actorid FROM actorteammemberships membership
-    JOIN teams team ON team.id=membership.teamid
-    JOIN actors a ON a.id=team.actorid AND a.isenabled WHERE membership.memberactorid=$1
-), grants AS (
-    SELECT p.resourcetype kind,NULL::uuid resourceid,p.permissionlevel
-    FROM actor_scope scope JOIN actorroles ar ON ar.actorid=scope.actorid
-    JOIN permissions p ON p.roleid=ar.roleid
-    UNION ALL SELECT a.resourcetype,a.resourceid,a.permissionlevel
-    FROM actor_scope scope JOIN resourceaccesses a ON a.actorid=scope.actorid
-), owners AS (
+owners AS (
     SELECT c.id,1 kind,d.id ownerid,d.name
     FROM containers c JOIN deployments d ON d.id=c.deploymentid AND d.platformid=c.platformid
     WHERE c.id=ANY($3)
@@ -36,6 +25,7 @@ WITH actor_scope AS (
     WHERE c.id=ANY($3)
 )
 SELECT id,array_agg(DISTINCT name ORDER BY name) names FROM owners o
-WHERE $2 OR EXISTS (SELECT 1 FROM grants g WHERE g.kind=o.kind
-    AND (g.resourceid IS NULL OR g.resourceid=o.ownerid) AND g.permissionlevel IN (1,2,4))
+WHERE $2
+   OR o.kind IN (SELECT kind FROM readable_types)
+   OR (o.kind, o.ownerid) IN (SELECT kind, resourceid FROM readable_resources)
 GROUP BY id

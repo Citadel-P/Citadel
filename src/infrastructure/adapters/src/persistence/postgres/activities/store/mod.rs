@@ -43,31 +43,32 @@ WITH actor_scope AS (
 ), filtered_activities AS (
     SELECT activity.*
     FROM activityevents activity
+    CROSS JOIN LATERAL (VALUES (CASE activity.resourcetype
+        WHEN 'Platform' THEN 0
+        WHEN 'Deployment' THEN 1
+        WHEN 'Stack' THEN 2
+        WHEN 'Registry' THEN 3
+        WHEN 'GitRepository' THEN 4
+        WHEN 'AlertRule' THEN 6
+        WHEN 'Script' THEN 13
+        WHEN 'BackupPolicy' THEN 16
+        WHEN 'Volume' THEN 0
+        WHEN 'Build' THEN 18
+        WHEN 'BuildAgentPool' THEN 19
+        WHEN 'SwarmService' THEN 20
+        WHEN 'ServiceAccount' THEN 21
+    END)) AS permission(resourcetype)
     WHERE ($2::uuid IS NULL OR activity.resourceid = $2)
       AND ($3::text IS NULL OR activity.resourcetype = $3)
       AND ($4::text IS NULL OR activity.eventtype = $4)
       AND ($6::text IS NULL OR activity.status = $6)
       AND (
           $5::boolean
-          OR EXISTS (
-              SELECT 1
-              FROM authorized_resources authorized
-              WHERE authorized.resourcetype = CASE activity.resourcetype
-                  WHEN 'Platform' THEN 0
-                  WHEN 'Deployment' THEN 1
-                  WHEN 'Stack' THEN 2
-                  WHEN 'Registry' THEN 3
-                  WHEN 'GitRepository' THEN 4
-                  WHEN 'AlertRule' THEN 6
-                  WHEN 'Script' THEN 13
-                  WHEN 'BackupPolicy' THEN 16
-                  WHEN 'Volume' THEN 0
-                  WHEN 'Build' THEN 18
-                  WHEN 'BuildAgentPool' THEN 19
-                  WHEN 'SwarmService' THEN 20
-                  WHEN 'ServiceAccount' THEN 21
-              END
-                AND (authorized.resourceid IS NULL OR authorized.resourceid = activity.resourceid)
+          OR permission.resourcetype IN (
+              SELECT resourcetype FROM authorized_resources WHERE resourceid IS NULL
+          )
+          OR (permission.resourcetype, activity.resourceid) IN (
+              SELECT resourcetype, resourceid FROM authorized_resources WHERE resourceid IS NOT NULL
           )
       )
 )

@@ -50,6 +50,7 @@ struct ActorEntry {
     loaded: Option<Arc<ActorScope>>,
 }
 struct ActorScope {
+    has_resource_grants: bool,
     actors: Vec<Uuid>,
     snapshot: AuthorizationSnapshot,
     expires: Instant,

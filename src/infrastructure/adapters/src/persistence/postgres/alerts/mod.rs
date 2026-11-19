@@ -1,14 +1,14 @@
 pub use repository::PostgresAlertRepository;
 mod repository;
 mod rows;
+use crate::persistence::postgres::authorization::AUTHORIZED_BY_LEVELS_CTE as AUTHORIZED_CTE;
 use rows::*;
 mod activity;
 use activity::*;
-mod queries;
-use queries::*;
 mod channels;
 mod delivery;
 mod events;
+mod queries;
 mod rules;
 use std::collections::HashMap;
 

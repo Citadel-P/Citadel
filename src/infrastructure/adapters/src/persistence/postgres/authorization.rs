@@ -1,26 +1,14 @@
 pub(crate) const READ_MASK: i32 = 1 | 2 | 4;
 
-pub(crate) const AUTHORIZED_CTE: &str = r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), global_access AS (
-    SELECT EXISTS (
-        SELECT 1 FROM actor_scope scope
-        JOIN actorroles assignment ON assignment.actorid = scope.actorid
-        JOIN permissions permission ON permission.roleid = assignment.roleid
-        WHERE permission.resourcetype = $2
-          AND (permission.permissionlevel & $3) <> 0
-    ) AS allowed
-)
-"#;
+pub(crate) const AUTHORIZED_CTE: &str = concat!(
+    include_str!("catalog_role_levels.sql"),
+    ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE (permissionlevel & $3) <> 0) AS allowed)\n"
+);
+
+pub(crate) const AUTHORIZED_BY_LEVELS_CTE: &str = concat!(
+    include_str!("catalog_role_levels.sql"),
+    ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE permissionlevel = ANY($3)) AS allowed)\n"
+);
 
 pub(crate) fn authorized_catalog_query(
     table: &str,

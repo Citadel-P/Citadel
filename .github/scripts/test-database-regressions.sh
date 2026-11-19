@@ -96,6 +96,10 @@ for selection in \
     run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
   )
 done
+# The platform flush test creates its own child database from the execution fixture.
+test_name=platform_flush::shared_parent_validation_is_transaction_local_and_preserves_incident_state
+run_cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+run_cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --test-threads=1
 docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_alert_updates
 (
   export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_alert_updates"
@@ -138,6 +142,14 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_stats_his
 (
   export CITADEL_STATISTICS_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_stats_history"
   run_cargo test --locked -p citadel-adapters --test stats_batch_persistence -- --ignored --test-threads=1
+)
+
+docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_job_history
+(
+  export CITADEL_STATISTICS_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_job_history"
+  test_name=compaction_preserves_totals_retries_gaps_and_protects_mutable_hours
+  run_cargo test --locked -p citadel-adapters --test job_history_persistence "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+  run_cargo test --locked -p citadel-adapters --test job_history_persistence "$test_name" -- --ignored --exact --test-threads=1
 )
 
 # Retention plans execute DELETE only against dedicated disposable fixtures.

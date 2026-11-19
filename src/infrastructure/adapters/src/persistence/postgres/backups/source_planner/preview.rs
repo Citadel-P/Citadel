@@ -186,7 +186,7 @@ impl PostgresBackupSourcePlanner {
         // latest Failed run yields false. Never expose an inaccessible policy.
         let query = format!(
             "{} {}",
-            crate::persistence::postgres::backups::AUTHORIZED_CTE,
+            crate::persistence::postgres::authorization::AUTHORIZED_BY_LEVELS_CTE,
             r#"
 , policies AS (
 SELECT p.id,COALESCE(p.source->>'VolumeName',p.source->>'volumeName',p.source->>'HostPath',p.source->>'hostPath') AS volumename,

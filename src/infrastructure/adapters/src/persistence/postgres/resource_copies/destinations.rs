@@ -19,7 +19,7 @@ impl PostgresCopyRepository {
                 SELECT 1 FROM actor_scope s JOIN resourceaccesses a ON a.actorid=s.actorid
                 WHERE a.resourcetype=$2 AND a.resourceid=p.id AND a.permissionlevel=ANY($3)))
             ORDER BY p.name,p.id LIMIT 1001"#,
-            super::super::backups::AUTHORIZED_CTE
+            super::super::authorization::AUTHORIZED_BY_LEVELS_CTE
         );
         let platforms = sqlx::query(AssertSqlSafe(sql.as_str()))
             .bind(actor.value())

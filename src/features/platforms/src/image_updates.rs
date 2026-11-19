@@ -7,7 +7,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
-use futures_util::{FutureExt, StreamExt, stream};
+use futures_util::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
@@ -139,49 +139,52 @@ impl ImageUpdateService {
             .map(|r| r.id)
             .chain([Uuid::nil()])
             .collect();
-        let mut platforms = BTreeMap::<_, Vec<_>>::new();
-        for candidate in candidates {
-            platforms
+        let mut images_by_platform = BTreeMap::<_, Vec<_>>::new();
+        for candidate in &candidates {
+            images_by_platform
                 .entry(candidate.platform)
                 .or_default()
-                .push(candidate);
+                .push(candidate.image.clone());
         }
-        let mut checked = 0;
         let mut failed = 0;
-        for (platform, candidates) in platforms {
-            let images: Vec<_> = candidates.iter().map(|c| c.image.clone()).collect();
+        let mut observations = BTreeMap::new();
+        for (platform, images) in images_by_platform {
             let rows = tokio::select! {
                 biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
                 rows = self.store.load(platform, &images, &registry_ids) => rows,
             };
             let Ok(rows) = rows else {
-                failed += candidates.len();
+                failed += images.len();
                 continue;
             };
-            let mut observations = BTreeMap::<_, Vec<_>>::new();
+            let mut by_image = BTreeMap::<_, Vec<_>>::new();
             for row in rows {
-                observations.entry(row.image.clone()).or_default().push(row);
+                by_image.entry(row.image.clone()).or_default().push(row);
             }
-            let tasks: Vec<_> = candidates
-                .iter()
-                .map(|candidate| {
-                    let previous = observations
-                        .get(&candidate.image)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default();
-                    self.check_candidate(candidate, &registries, previous, cancel)
-                        .boxed()
-                })
-                .collect();
-            let mut pending = stream::iter(tasks).buffer_unordered(2);
-            while let Some(result) = tokio::select! {
-                biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
-                result = pending.next() => result,
-            } {
-                match result {
-                    Ok(count) => checked += count,
-                    Err(_) => failed += 1,
-                }
+            observations.insert(platform, by_image);
+        }
+
+        let tasks = candidates.into_iter().filter_map(|candidate| {
+            let by_image = observations.get(&candidate.platform)?;
+            let previous = by_image
+                .get(&candidate.image)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            let registries = &registries;
+            Some(async move {
+                self.check_candidate(&candidate, registries, previous, cancel)
+                    .await
+            })
+        });
+        let mut pending = stream::iter(tasks).buffer_unordered(2);
+        let mut checked = 0;
+        while let Some(result) = tokio::select! {
+            biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
+            result = pending.next() => result,
+        } {
+            match result {
+                Ok(count) => checked += count,
+                Err(_) => failed += 1,
             }
         }
         Ok(ImageUpdateBatch {
