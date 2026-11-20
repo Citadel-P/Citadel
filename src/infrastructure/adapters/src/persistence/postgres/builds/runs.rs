@@ -1,4 +1,5 @@
 use super::*;
+use crate::persistence::postgres::authorization::authorized_run_history_query;
 
 impl PostgresBuildRepository {
     pub(super) fn enqueue_run<'a>(
@@ -288,17 +289,11 @@ impl PostgresBuildRepository {
         limit: usize,
     ) -> BoxFuture<'a, Result<Vec<BuildRun>, BuildError>> {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_CTE}
-SELECT {RUN_COLUMNS} FROM buildruns run
-WHERE ($4::uuid IS NULL OR run.buildprojectid=$4)
-  AND ($5 OR (SELECT allowed FROM global_access) OR EXISTS (
-      SELECT 1 FROM actor_scope scope
-      JOIN resourceaccesses access ON access.actorid=scope.actorid
-      WHERE access.resourcetype=$2 AND access.resourceid=run.buildprojectid
-        AND access.permissionlevel = ANY($3)
-  ))
-ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
+            let query = authorized_run_history_query(
+                "buildruns",
+                "buildprojectid",
+                RUN_COLUMNS,
+                project_id.is_some(),
             );
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())

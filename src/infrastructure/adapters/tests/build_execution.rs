@@ -4,6 +4,8 @@ mod admission;
 mod attempts;
 #[path = "build_execution/completion.rs"]
 mod completion;
+#[path = "build_execution/history.rs"]
+mod history;
 #[path = "build_execution/operator_recovery.rs"]
 mod operator_recovery;
 use chrono::{Duration, Utc};

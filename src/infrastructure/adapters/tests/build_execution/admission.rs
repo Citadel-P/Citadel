@@ -25,6 +25,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         assert_eq!(claim.run.id, run.id);
         claims.push(claim);
     }
+    super::history::verify_access(pool, &claims).await;
     let host = BuildExecutorCapacity {
         daemon_id: format!("fixture-{}", Uuid::now_v7()),
         authority_id: Uuid::now_v7(),

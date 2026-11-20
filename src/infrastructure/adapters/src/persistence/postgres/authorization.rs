@@ -30,3 +30,38 @@ FROM {table} resource WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS
 ORDER BY resource.name,resource.id -- {alias}"#
     )
 }
+
+/// Build and backup history inherit access from the project or policy that owns the run.
+pub(super) fn authorized_run_history_query(
+    table: &'static str,
+    parent_column: &'static str,
+    columns: &'static str,
+    single_parent: bool,
+) -> String {
+    let parent = format!("run.{parent_column}");
+    let access_target = if single_parent { "$4" } else { &parent };
+    let can_read = format!(
+        r#"$5 OR (SELECT allowed FROM global_access) OR EXISTS (
+    SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
+    WHERE access.resourcetype=$2 AND access.resourceid={access_target}
+      AND access.permissionlevel=ANY($3)
+)"#
+    );
+    if single_parent {
+        // An empty or singleton index key lets a generic prepared plan skip
+        // denied history and read allowed runs in parent-index order.
+        format!(
+            r#"{AUTHORIZED_BY_LEVELS_CTE}
+SELECT {columns} FROM {table} run
+WHERE {parent}=ANY(ARRAY(SELECT $4::uuid WHERE {can_read}))
+ORDER BY {parent},run.queuedat DESC,run.id DESC LIMIT $6"#
+        )
+    } else {
+        format!(
+            r#"{AUTHORIZED_BY_LEVELS_CTE}
+SELECT {columns} FROM {table} run
+WHERE $4::uuid IS NULL AND ({can_read})
+ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
+        )
+    }
+}
