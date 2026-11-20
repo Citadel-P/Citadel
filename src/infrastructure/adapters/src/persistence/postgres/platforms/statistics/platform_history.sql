@@ -2,18 +2,22 @@
 -- Fine summaries remain available at range boundaries and wherever raw data remains.
 -- Keep observations bounded before sorting; only endpoints carry counter baselines
 -- across chunks. All tiers and chunk boundaries share this query snapshot.
-WITH coarse_coverage AS MATERIALIZED (
-    SELECT DISTINCT sourceid,created/900 AS block FROM platformiocoarserollups
-    WHERE sourceid=ANY(ARRAY(SELECT id FROM platformhistorysources WHERE platformid=$1))
-        AND $3>=900 AND $3%900=0
-        AND created>= (($2+899)/900)*900 AND created<(($4+1)/900)*900
-), effective_rollups AS NOT MATERIALIZED (
-    SELECT r.* FROM platformiorollups r
-    WHERE NOT EXISTS(SELECT 1 FROM coarse_coverage c WHERE c.sourceid=r.sourceid AND c.block=r.created/900)
-    UNION ALL
-    SELECT r.* FROM platformiocoarserollups r
-    WHERE $3>=900 AND $3%900=0
-        AND r.created>= (($2+899)/900)*900 AND r.created<(($4+1)/900)*900
+WITH sources AS MATERIALIZED (
+    SELECT id,nodeid FROM platformhistorysources WHERE platformid=$1
+), covered AS MATERIALIZED (
+    SELECT r.sourceid,range_agg(int8range(block,block+900,'[)')) AS spans
+    FROM (
+        SELECT DISTINCT r.sourceid,r.created/900*900 AS block
+        FROM platformiocoarserollups r
+        WHERE r.sourceid=ANY(ARRAY(SELECT id FROM sources))
+          AND $3>=900 AND $3%900=0
+          AND r.created>=(($2+899)/900)*900 AND r.created<(($4+1)/900)*900
+    ) r GROUP BY r.sourceid
+), fine_ranges AS MATERIALIZED (
+    SELECT src.id AS sourceid,src.nodeid,lower(span) AS lo,upper(span)-1 AS hi
+    FROM sources src LEFT JOIN covered c ON c.sourceid=src.id
+    CROSS JOIN LATERAL unnest(int8multirange(int8range($2,$4,'[]'))
+        - COALESCE(c.spans,'{}'::int8multirange)) span
 ), history AS NOT MATERIALIZED (
     SELECT created,cpuusage,memoryusage,rxbytes,txbytes,diskusedbytes,disktotalbytes,diskusage,
         1 AS samplecount,ARRAY[(diskusedbytes IS NOT NULL)::integer,(disktotalbytes IS NOT NULL)::integer,(diskusage IS NOT NULL)::integer] AS diskcounts
@@ -33,11 +37,12 @@ WITH coarse_coverage AS MATERIALIZED (
         SUM(diskusage*diskcounts[3])/NULLIF(SUM(diskcounts[3]),0) AS diskusage
     FROM history GROUP BY created/$3
 ), has_summaries AS MATERIALIZED (
-    SELECT EXISTS(
-        SELECT 1 FROM effective_rollups r JOIN platformhistorysources src ON src.id=r.sourceid
-        WHERE r.sourceid=ANY(ARRAY(SELECT id FROM platformhistorysources WHERE platformid=$1))
-        AND src.platformid=$1 AND r.created>=$2 AND r.created<=$4 AND r.lastcreated<=$4
-    ) AS present
+    SELECT CASE WHEN $4-$2<=3600 THEN EXISTS(SELECT FROM covered) OR EXISTS(
+        SELECT FROM fine_ranges f CROSS JOIN LATERAL (
+            SELECT FROM platformiorollups r WHERE r.sourceid=f.sourceid
+              AND r.created BETWEEN f.lo AND f.hi AND r.lastcreated<=$4 LIMIT 1
+        ) hit
+    ) ELSE FALSE END AS present
 ), captures AS NOT MATERIALIZED (
     SELECT created,''::text COLLATE "C" AS nodeid,containerio FROM platformstats
     WHERE platformid=$1 AND created>=$2 AND created<=$4
@@ -78,10 +83,14 @@ WITH coarse_coverage AS MATERIALIZED (
     FROM raw_deltas GROUP BY nodeid,"containerId",bucket
 ), chunk_ranges AS MATERIALIZED (
     SELECT GREATEST($2,b*span.width) AS since,LEAST($4,(b+1)*span.width-1) AS until,
-        EXISTS(SELECT 1 FROM effective_rollups r JOIN platformhistorysources src ON src.id=r.sourceid
-            WHERE r.sourceid=ANY(ARRAY(SELECT id FROM platformhistorysources WHERE platformid=$1))
-                AND src.platformid=$1 AND r.created>=GREATEST($2,b*span.width)
-                AND r.created<=LEAST($4,(b+1)*span.width-1) AND r.lastcreated<=$4) AS summarized
+        (EXISTS(SELECT FROM covered WHERE spans && int8multirange(int8range(b*span.width,(b+1)*span.width,'[)')))
+         OR EXISTS(
+            SELECT FROM fine_ranges f CROSS JOIN LATERAL (
+                SELECT FROM platformiorollups r WHERE r.sourceid=f.sourceid
+                  AND r.created BETWEEN GREATEST(f.lo,b*span.width) AND LEAST(f.hi,(b+1)*span.width-1)
+                  AND r.lastcreated<=$4 LIMIT 1
+            ) hit WHERE f.lo<(b+1)*span.width AND f.hi>=b*span.width
+         )) AS summarized
     FROM (SELECT GREATEST(900/$3,1)*$3 AS width) span
     CROSS JOIN LATERAL generate_series($2/span.width,$4/span.width) b
     WHERE $4-$2>3600 OR (SELECT present FROM has_summaries)
@@ -182,15 +191,26 @@ WITH coarse_coverage AS MATERIALIZED (
             SELECT created,nodeid,containerio FROM platformnodeiostats
             WHERE platformid=$1 AND created>=GREATEST($2,b*$3) AND created<=LEAST($4,(b+1)*$3-1)
         ), summaries AS NOT MATERIALIZED (
-            SELECT r.created,r.created/$3 AS bucket,r.lastcreated,src.nodeid,r.containerid,
+            SELECT r.created,r.created/$3 AS bucket,r.lastcreated,r.nodeid,r.containerid,
                 r.firstcounters[1],r.firstcounters[2],r.firstcounters[3],r.firstcounters[4],
                 r.lastcounters[1],r.lastcounters[2],r.lastcounters[3],r.lastcounters[4],
                 r.counterdeltas[1],r.counterdeltas[2],r.counterdeltas[3],r.counterdeltas[4],
                 r.counterdurations[1],r.counterdurations[2],r.counterdurations[3],r.counterdurations[4],
                 r.blockreadbytes,r.blockwritebytes,r.readcount,r.writecount
-            FROM effective_rollups r JOIN platformhistorysources src ON src.id=r.sourceid
-            WHERE r.sourceid=ANY(ARRAY(SELECT id FROM platformhistorysources WHERE platformid=$1))
-            AND src.platformid=$1 AND r.created>=GREATEST($2,b*$3) AND r.created<=LEAST($4,(b+1)*$3-1) AND r.lastcreated<=$4
+            FROM (
+                SELECT f.nodeid,r.* FROM fine_ranges f CROSS JOIN LATERAL (
+                    SELECT * FROM platformiorollups r WHERE r.sourceid=f.sourceid
+                      AND r.created BETWEEN GREATEST(f.lo,b*$3) AND LEAST(f.hi,(b+1)*$3-1)
+                      AND r.lastcreated<=$4 OFFSET 0
+                ) r WHERE f.lo<(b+1)*$3 AND f.hi>=b*$3
+                UNION ALL
+                SELECT src.nodeid,r.* FROM sources src CROSS JOIN LATERAL (
+                    SELECT * FROM platformiocoarserollups r WHERE r.sourceid=src.id
+                      AND r.created>=GREATEST((($2+899)/900)*900,b*$3)
+                      AND r.created<LEAST((($4+1)/900)*900,(b+1)*$3)
+                      AND r.lastcreated<=$4 OFFSET 0
+                ) r WHERE $3>=900 AND $3%900=0
+            ) r
         ), mixed_raw AS NOT MATERIALIZED (
             SELECT h.created,h.nodeid,c."containerId" COLLATE "C" AS containerid,
                 c."rxBytes" AS rx,c."txBytes" AS tx,c."blockReadBytes" AS read,c."blockWriteBytes" AS write

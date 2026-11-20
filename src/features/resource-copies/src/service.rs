@@ -33,50 +33,75 @@ impl CopyService {
         kind: CopyKind,
         id: Uuid,
     ) -> Result<CopyEligibility, CopyError> {
-        let source = match self.store.source(actor, kind, id).await {
-            Ok(source) => source,
-            Err(CopyError::NotFound) => {
-                return Ok(CopyEligibility::unavailable(
-                    "Copying data requires access to the source, its bindings and target platform, and permission to create this resource.",
-                ));
-            }
-            Err(error) => return Err(error),
-        };
-        let volumes = match planning::storage(&source, &mut source.spec.clone()) {
-            Ok(volumes) => volumes,
-            Err(CopyError::Validation(reason)) => return Ok(CopyEligibility::unavailable(reason)),
-            Err(error) => return Err(error),
-        };
-        if volumes.is_empty() {
-            return Ok(CopyEligibility::unavailable(
-                "No named volumes configured. Use Configuration only for this resource.",
-            ));
-        }
-        if volumes.len() > 100 {
-            return Ok(CopyEligibility::unavailable(
-                "A copy supports at most 100 volumes.",
-            ));
-        }
-        if !self
-            .store
-            .current_data_allowed(actor, source.platform_id)
+        self.eligibilities(actor, kind, &[id])
             .await?
-        {
-            let snapshots = self.store.snapshots(actor, &source).await?;
-            if !volumes.iter().all(|(volume, node)| {
-                snapshots
-                    .iter()
-                    .any(|s| &s.volume == volume && &s.docker_node_id == node)
-            }) {
-                return Ok(CopyEligibility::unavailable(
-                    "Copying current data requires the Platform Download capability. Alternatively, each volume needs an available backup you can restore.",
-                ));
-            }
+            .remove(&id)
+            .ok_or(CopyError::NotFound)
+    }
+    pub async fn eligibilities(
+        &self,
+        actor: ActorId,
+        kind: CopyKind,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, CopyEligibility>, CopyError> {
+        use std::collections::{HashMap, HashSet};
+        let mut hints = HashMap::with_capacity(ids.len());
+        if ids.is_empty() {
+            return Ok(hints);
         }
-        Ok(CopyEligibility {
+        let sources = match self.store.eligibility_sources(actor, kind, ids).await {
+            Err(CopyError::NotFound) => Vec::new(),
+            result => result?,
+        };
+        let mut pending = Vec::new();
+        let available = || CopyEligibility {
             status: CopyEligibilityStatus::Available,
             reason: None,
-        })
+        };
+        for mut source in sources {
+            tokio::task::yield_now().await;
+            let hint =
+                match planning::storage(source.id, &source.name, source.swarm, &mut source.spec) {
+                    Err(CopyError::Validation(reason)) => CopyEligibility::unavailable(reason),
+                    Err(error) => return Err(error),
+                    Ok(volumes) if volumes.is_empty() => CopyEligibility::unavailable(
+                        "No named volumes configured. Use Configuration only for this resource.",
+                    ),
+                    Ok(volumes) if volumes.len() > 100 => {
+                        CopyEligibility::unavailable("A copy supports at most 100 volumes.")
+                    }
+                    Ok(volumes) if !source.current_data_allowed => {
+                        pending.push((source.id, source.platform_id, volumes));
+                        continue;
+                    }
+                    Ok(_) => available(),
+                };
+            hints.insert(source.id, hint);
+        }
+        if !pending.is_empty() {
+            let platforms: HashSet<_> = pending.iter().map(|(_, platform, _)| *platform).collect();
+            let platforms: Vec<_> = platforms.into_iter().collect();
+            let backups = self.store.restorable_volumes(actor, &platforms).await?;
+            for (id, platform, volumes) in pending {
+                let hint = if volumes
+                    .into_iter()
+                    .all(|(volume, node)| backups.contains(&(platform, volume, node)))
+                {
+                    available()
+                } else {
+                    CopyEligibility::unavailable(
+                        "Copying current data requires the Platform Download capability. Alternatively, each volume needs an available backup you can restore.",
+                    )
+                };
+                hints.insert(id, hint);
+            }
+        }
+        for &id in ids {
+            hints.entry(id).or_insert_with(|| CopyEligibility::unavailable(
+                "Copying data requires access to the source, its bindings and target platform, and permission to create this resource.",
+            ));
+        }
+        Ok(hints)
     }
     pub async fn targets(
         &self,

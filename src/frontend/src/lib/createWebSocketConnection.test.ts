@@ -125,3 +125,23 @@ it('bounds invocation lifetime and pending requests without a global timeout inc
   await f.connection.stop();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('backs off across short successful handshakes and resets after sustained connectivity', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  let socket = await connect(f);
+  for (const base of [0, 2000, 5000, 10000, 30000, 30000, 0]) {
+    const before = f.sockets.length;
+    if (before === 7) await vi.advanceTimersByTimeAsync(30000);
+    socket.emit('close', new Event('close'));
+    const minimum = Math.max(0, base * 0.75 - 1);
+    await vi.advanceTimersByTimeAsync(minimum);
+    if (base) expect(f.sockets).toHaveLength(before);
+    await vi.advanceTimersByTimeAsync(base - minimum);
+    expect(f.sockets).toHaveLength(before + 1);
+    socket = f.sockets.at(-1)!;
+    socket.emit('open', new Event('open'));
+    socket.message({ protocolVersion: 1, kind: 'subscribed' });
+  }
+  await f.connection.stop();
+});

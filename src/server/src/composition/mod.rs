@@ -293,6 +293,8 @@ impl ServerComponents {
             )
             .with_groups(Arc::new(
                 citadel_server::realtime_groups::ApplicationGroupReader {
+                    snapshot_limit: realtime_config.snapshot_limit,
+                    snapshot_timeout: realtime_config.subscribe_timeout,
                     instance: Some(instance.clone()),
                     admission: admission.clone(),
                     image_store: platform_state.image_store.clone(),

@@ -79,19 +79,7 @@ impl PostgresCopyRepository {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-        let spec = match kind {
-            CopyKind::Deployment => CopySpec::Deployment(Box::new(
-                citadel_deployments::DeploymentSpec::from_storage_value(raw)
-                    .map_err(storage_error)?,
-            )),
-            CopyKind::Stack => CopySpec::Stack(Box::new(
-                citadel_stacks::StackSpec::from_storage_value(raw).map_err(storage_error)?,
-            )),
-            CopyKind::SwarmService => CopySpec::SwarmService(Box::new(
-                citadel_swarm_services::SwarmServiceSpec::from_storage_value(raw)
-                    .map_err(storage_error)?,
-            )),
-        };
+        let spec = decode_spec(kind, raw)?;
         Ok(CopySource {
             kind,
             id,
@@ -105,11 +93,22 @@ impl PostgresCopyRepository {
             spec,
         })
     }
-    pub(super) async fn list_snapshots(
+    async fn authorized_snapshots(
         &self,
         actor: ActorId,
-        source: &CopySource,
-    ) -> Result<Vec<CopySnapshot>, CopyError> {
+        platforms: &[Uuid],
+        review: bool,
+    ) -> Result<Vec<sqlx::postgres::PgRow>, CopyError> {
+        let (fields, order) = if review {
+            ("run.id runid,run.backuppolicyid,run.backuprepositoryid,run.policynamesnapshot,
+              item.id itemid,item.volumename,repository.type repositorytype,item.dockernodeid,item.completedat",
+             "ORDER BY item.completedat DESC NULLS LAST,item.id DESC")
+        } else {
+            (
+                "DISTINCT run.backuppolicyid,item.platformid,item.volumename,item.dockernodeid",
+                "",
+            )
+        };
         let access = self.access(actor).await?;
         // Keep the same bounded, Read-authorized catalog as Backup Runs, but
         // fetch only restorable snapshot metadata on the source platform.
@@ -126,29 +125,34 @@ impl PostgresCopyRepository {
             ))
             ORDER BY run.queuedat DESC,run.id DESC LIMIT 1000
         )
-        SELECT run.id runid,run.backuppolicyid,run.backuprepositoryid,
-               run.policynamesnapshot,item.id itemid,item.volumename,repository.type repositorytype,
-               item.dockernodeid,item.completedat
+        SELECT {fields}
         FROM authorized_runs run
         JOIN backuprunitems item ON item.backuprunid=run.id
         JOIN backuprepositories repository ON repository.id=run.backuprepositoryid
         WHERE run.status IN ('Succeeded','SucceededWithWarnings')
           AND run.snapshotavailability='Available' AND repository.archivedat IS NULL
-          AND item.platformid=$5 AND item.hostpath IS NULL
+          AND item.platformid=ANY($5) AND item.hostpath IS NULL
           AND item.status='Succeeded' AND item.resticsnapshotid IS NOT NULL
-        ORDER BY item.completedat DESC NULLS LAST,item.id DESC"#,
+        {order}"#,
             super::super::authorization::AUTHORIZED_BY_LEVELS_CTE
         );
-        let mut tx = self.pool.begin().await.map_err(storage_error)?;
+        let mut tx = if review {
+            self.pool.begin().await.map_err(storage_error)?
+        } else {
+            self.begin_hint_read().await?
+        };
         let rows = sqlx::query(AssertSqlSafe(query.as_str()))
             .bind(actor.value())
             .bind(ResourceType::BackupPolicy as i32)
             .bind(PermissionLevel::Read.accepted_database_levels())
             .bind(access.administrator)
-            .bind(source.platform_id)
+            .bind(platforms)
             .fetch_all(&mut *tx)
             .await
             .map_err(storage_error)?;
+        if access.administrator {
+            return Ok(rows);
+        }
         let policy_ids = rows
             .iter()
             .map(|row| row.try_get::<Uuid, _>("backuppolicyid"))
@@ -167,24 +171,51 @@ impl PostgresCopyRepository {
             )
             .await
             .map_err(storage_error)?;
-        let mut snapshots = Vec::new();
-        for row in rows {
-            let policy_id = row.try_get("backuppolicyid").map_err(storage_error)?;
-            if !access.administrator
-                && !permissions
-                    .get(&policy_id)
+        let restore = PermissionRequirement {
+            resource_type: ResourceType::BackupPolicy,
+            level: PermissionLevel::Execute,
+            specific: Some(SpecificPermission::Restore),
+        };
+        Ok(rows
+            .into_iter()
+            .filter(|row| {
+                permissions
+                    .get(&row.get::<Uuid, _>("backuppolicyid"))
                     .copied()
                     .flatten()
-                    .is_some_and(|grant| {
-                        grant.allows(PermissionRequirement {
-                            resource_type: ResourceType::BackupPolicy,
-                            level: PermissionLevel::Execute,
-                            specific: Some(SpecificPermission::Restore),
-                        })
-                    })
-            {
-                continue;
-            }
+                    .is_some_and(|grant| grant.allows(restore))
+            })
+            .collect())
+    }
+
+    pub(super) async fn read_restorable_volumes(
+        &self,
+        actor: ActorId,
+        platforms: &[Uuid],
+    ) -> Result<RestorableVolumes, CopyError> {
+        Ok(self
+            .authorized_snapshots(actor, platforms, false)
+            .await?
+            .into_iter()
+            .map(|row| {
+                (
+                    row.get("platformid"),
+                    row.get("volumename"),
+                    row.get("dockernodeid"),
+                )
+            })
+            .collect())
+    }
+    pub(super) async fn list_snapshots(
+        &self,
+        actor: ActorId,
+        source: &CopySource,
+    ) -> Result<Vec<CopySnapshot>, CopyError> {
+        let rows = self
+            .authorized_snapshots(actor, &[source.platform_id], true)
+            .await?;
+        let mut snapshots = Vec::with_capacity(rows.len());
+        for row in rows {
             snapshots.push(CopySnapshot {
                 supports_cross_platform_restore: row
                     .try_get::<String, _>("repositorytype")
@@ -192,7 +223,7 @@ impl PostgresCopyRepository {
                     == "S3Compatible",
                 backup_run_id: row.try_get("runid").map_err(storage_error)?,
                 backup_run_item_id: row.try_get("itemid").map_err(storage_error)?,
-                policy_id,
+                policy_id: row.get("backuppolicyid"),
                 policy_name: row.try_get("policynamesnapshot").map_err(storage_error)?,
                 repository_id: row.try_get("backuprepositoryid").map_err(storage_error)?,
                 volume: row.try_get("volumename").map_err(storage_error)?,
@@ -219,4 +250,19 @@ impl PostgresCopyRepository {
         self.verify_target(tx, access, plan).await?;
         Ok(())
     }
+}
+
+pub(super) fn decode_spec(kind: CopyKind, raw: Value) -> Result<CopySpec, CopyError> {
+    Ok(match kind {
+        CopyKind::Deployment => CopySpec::Deployment(Box::new(
+            citadel_deployments::DeploymentSpec::from_storage_value(raw).map_err(storage_error)?,
+        )),
+        CopyKind::Stack => CopySpec::Stack(Box::new(
+            citadel_stacks::StackSpec::from_storage_value(raw).map_err(storage_error)?,
+        )),
+        CopyKind::SwarmService => CopySpec::SwarmService(Box::new(
+            citadel_swarm_services::SwarmServiceSpec::from_storage_value(raw)
+                .map_err(storage_error)?,
+        )),
+    })
 }

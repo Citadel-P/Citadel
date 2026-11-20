@@ -170,6 +170,11 @@ impl platform_service_server::PlatformService for Runtime {
                     generation = docker.daemon_generation();
                 }
                 let sample = tokio::select! { ()=cancel.cancelled()=>break, value=sampler.sample(interval, &cancel)=>value.map_err(runtime_error) }?;
+                if sample.containers.failed_samples > 0 {
+                    // A partial sum would look like a real drop in host usage.
+                    tokio::select! { ()=cancel.cancelled()=>break, ()=tokio::time::sleep(interval)=>{} }
+                    continue;
+                }
                 if sample.platform.is_none() {
                     tokio::select! { ()=cancel.cancelled()=>break, ()=metadata_changed.notified()=>{}, ()=tokio::time::sleep(interval)=>{} }
                     continue;

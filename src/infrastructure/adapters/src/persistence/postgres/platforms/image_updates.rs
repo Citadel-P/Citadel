@@ -12,7 +12,7 @@ impl ImageUpdateStore for PostgresImageUpdateStore {
         after: Uuid,
     ) -> BoxFuture<'_, Result<Vec<ImageUpdateCandidate>, RuntimeCapabilityError>> {
         Box::pin(async move {
-            let rows = sqlx::query("SELECT i.id,i.platformid,i.dockerimageid,i.tags,i.registryid FROM images i JOIN platforms p ON p.id=i.platformid WHERE i.id>$1 AND p.status='Online' AND p.platformdescriptor->>'$type' IN ('Docker','DockerStandalone') AND i.controlstate='Idle' AND json_array_length(i.tags)>0 ORDER BY i.id LIMIT 100")
+            let rows = sqlx::query("SELECT i.id,i.platformid,i.dockerimageid,i.tags,i.registryid,i.checkrevision,(SELECT generation FROM imageupdateregistrygeneration) generation FROM images i JOIN platforms p ON p.id=i.platformid WHERE (i.checkregistrygeneration,i.nextupdatecheck) <= ((SELECT generation FROM imageupdateregistrygeneration),now()) AND i.id>$1 AND p.status='Online' AND p.platformdescriptor->>'$type' IN ('Docker','DockerStandalone') AND i.controlstate='Idle' AND json_array_length(i.tags)>0 ORDER BY i.id LIMIT 100")
                 .bind(after).fetch_all(&self.0).await.map_err(storage)?;
             rows.into_iter()
                 .map(|r| {
@@ -21,11 +21,26 @@ impl ImageUpdateStore for PostgresImageUpdateStore {
                         platform: r.get("platformid"),
                         image: r.get("dockerimageid"),
                         registry_id: r.get("registryid"),
+                        check_revision: r.get("checkrevision"),
+                        registry_generation: r.get("generation"),
                         tags: serde_json::from_value(r.get("tags"))
                             .map_err(|_| failure("Invalid image inventory tags."))?,
                     })
                 })
                 .collect()
+        })
+    }
+    fn schedule(
+        &self,
+        id: Uuid,
+        registry_generation: i64,
+        check_revision: i64,
+        due: chrono::DateTime<chrono::Utc>,
+    ) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
+        Box::pin(async move {
+            sqlx::query("UPDATE images SET checkregistrygeneration=$2,nextupdatecheck=$4 WHERE id=$1 AND checkrevision=$3")
+                .bind(id).bind(registry_generation).bind(check_revision).bind(due).execute(&self.0).await.map_err(storage)?;
+            Ok(())
         })
     }
     fn load<'a>(

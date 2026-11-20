@@ -11,6 +11,8 @@ pub struct ImageUpdateCandidate {
     pub platform: Uuid,
     pub image: String,
     pub tags: Vec<String>,
+    pub registry_generation: i64,
+    pub check_revision: i64,
     pub registry_id: Option<Uuid>,
 }
 #[derive(Clone)]
@@ -25,6 +27,13 @@ pub trait ImageUpdateStore: Send + Sync {
         &self,
         after: Uuid,
     ) -> BoxFuture<'_, Result<Vec<ImageUpdateCandidate>, RuntimeCapabilityError>>;
+    fn schedule(
+        &self,
+        id: Uuid,
+        registry_generation: i64,
+        check_revision: i64,
+        due: chrono::DateTime<chrono::Utc>,
+    ) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>>;
     fn load<'a>(
         &'a self,
         platform: Uuid,

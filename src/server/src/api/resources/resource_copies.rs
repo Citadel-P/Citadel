@@ -7,7 +7,8 @@ use super::{
 use chrono::{DateTime, Utc};
 use citadel_primitives::ActorId;
 use citadel_resource_copies::{CopyEligibility, CopyEligibilityStatus, CopyKind, CopyService};
-use futures_util::{StreamExt, stream};
+use std::collections::HashMap;
+use tokio::time::{Duration, Instant};
 use uuid::Uuid;
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
@@ -128,69 +129,85 @@ pub struct ResourceCopyEligibility {
     pub reason: Option<String>,
 }
 
+fn unknown() -> CopyEligibility {
+    CopyEligibility {
+        status: CopyEligibilityStatus::Unknown,
+        reason: Some(
+            "Copy availability could not be checked. Refresh the resource to try again.".into(),
+        ),
+    }
+}
+
+async fn hints(
+    service: &CopyService,
+    actor: ActorId,
+    kind: CopyKind,
+    ids: &[Uuid],
+    deadline: Option<Instant>,
+) -> HashMap<Uuid, CopyEligibility> {
+    // One budget for the entire optional enrichment inside the snapshot deadline.
+    let limit = Instant::now() + Duration::from_millis(750);
+    let until = deadline.unwrap_or(limit).min(limit);
+    if until <= Instant::now() {
+        return HashMap::new();
+    }
+    match tokio::time::timeout_at(until, service.eligibilities(actor, kind, ids)).await {
+        Ok(Ok(values)) => values,
+        _ => HashMap::new(),
+    }
+}
+
 pub async fn eligibility(
     service: &CopyService,
     actor: ActorId,
     kind: CopyKind,
     id: Uuid,
+    deadline: Option<Instant>,
 ) -> CopyEligibility {
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        service.eligibility(actor, kind, id),
-    )
-    .await
-    {
-        Ok(Ok(value)) => value,
-        result => {
-            tracing::warn!(?kind, %id, ?result, "Unable to read resource copy eligibility");
-            CopyEligibility {
-                status: CopyEligibilityStatus::Unknown,
-                reason: Some(
-                    "Copy availability could not be checked. Refresh the resource to try again."
-                        .into(),
-                ),
-            }
-        }
-    }
+    hints(service, actor, kind, &[id], deadline)
+        .await
+        .remove(&id)
+        .unwrap_or_else(unknown)
 }
 
-// Enrich authorized list rows in place, preserving their order.
-// Each resource reuses the detail check with at most four concurrent reads.
 pub async fn enrich_deployments(
     service: &CopyService,
     actor: ActorId,
     views: &mut [DeploymentView],
+    deadline: Option<Instant>,
 ) {
-    stream::iter(views)
-        .for_each_concurrent(4, |view| async move {
-            view.copy_eligibility =
-                Some(eligibility(service, actor, CopyKind::Deployment, view.id).await);
-        })
-        .await;
+    let ids: Vec<_> = views.iter().map(|v| v.id).collect();
+    let mut values = hints(service, actor, CopyKind::Deployment, &ids, deadline).await;
+    for view in views {
+        view.copy_eligibility = Some(values.remove(&view.id).unwrap_or_else(unknown));
+    }
 }
 
-pub async fn enrich_stacks(service: &CopyService, actor: ActorId, views: &mut [StackView]) {
-    stream::iter(views)
-        .for_each_concurrent(4, |view| async move {
-            view.copy_eligibility =
-                Some(eligibility(service, actor, CopyKind::Stack, view.id).await);
-        })
-        .await;
+pub async fn enrich_stacks(
+    service: &CopyService,
+    actor: ActorId,
+    views: &mut [StackView],
+    deadline: Option<Instant>,
+) {
+    let ids: Vec<_> = views.iter().map(|v| v.id).collect();
+    let mut values = hints(service, actor, CopyKind::Stack, &ids, deadline).await;
+    for view in views {
+        view.copy_eligibility = Some(values.remove(&view.id).unwrap_or_else(unknown));
+    }
 }
 
 pub async fn enrich_swarm_services(
     service: &CopyService,
     actor: ActorId,
     views: &mut [ManagedSwarmServiceView],
+    deadline: Option<Instant>,
 ) {
-    stream::iter(views)
-        .for_each_concurrent(4, |view| async move {
-            view.copy_eligibility =
-                Some(eligibility(service, actor, CopyKind::SwarmService, view.id).await);
-        })
-        .await;
+    let ids: Vec<_> = views.iter().map(|v| v.id).collect();
+    let mut values = hints(service, actor, CopyKind::SwarmService, &ids, deadline).await;
+    for view in views {
+        view.copy_eligibility = Some(values.remove(&view.id).unwrap_or_else(unknown));
+    }
 }
-
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub enum ResourceCopyDataMode {
     CurrentData,

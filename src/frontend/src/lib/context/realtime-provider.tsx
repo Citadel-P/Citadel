@@ -1,4 +1,9 @@
-import { RealtimeConnection, RealtimeConnectionState, RealtimeConnectionFactory } from '../realtime-connection';
+import {
+  GROUP_CAPACITY_ERROR,
+  RealtimeConnection,
+  RealtimeConnectionState,
+  RealtimeConnectionFactory,
+} from '../realtime-connection';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthContext } from '@/features/auth/auth-context';
@@ -17,7 +22,7 @@ type RealtimeProviderProps = {
 };
 
 type GroupState = {
-  state: 'pending' | 'joining' | 'joined';
+  state: 'pending' | 'joining' | 'joined' | 'capacity';
   references: number;
   joinPromise?: Promise<unknown>;
 };
@@ -38,6 +43,7 @@ const liveBackedQueryKeys = new Set([
   'getInstanceRestart',
   'getDatabaseConnections',
   'getActivity',
+  'getAlertEvent',
   'getProfileMfaStatus',
   'getBackupRepository',
   'getBuildRun',
@@ -154,6 +160,13 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
         setLiveConnectionState('connecting');
       }
 
+      conn.on('RealtimeGroupCapacity', (name: string) => {
+        const group = groupStates.current.get(name);
+        if (group && activeConnectionRef.current === conn) {
+          groupStates.current.set(name, { ...group, state: 'capacity', joinPromise: undefined });
+        }
+      });
+
       conn.on('ApplicationInfoChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdates'] });
@@ -211,6 +224,10 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
         } catch (err) {
           const current = groupStates.current.get(groupName);
           if (current?.joinPromise === joinPromise) {
+            if (err instanceof Error && err.message === GROUP_CAPACITY_ERROR) {
+              groupStates.current.set(groupName, { ...current, state: 'capacity', joinPromise: undefined });
+              return;
+            }
             groupStates.current.set(groupName, {
               ...current,
               state: 'pending',
@@ -538,6 +555,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
       const group = groupStates.current.get(groupName);
       if (group) {
+        if (group.state === 'capacity') throw new Error(GROUP_CAPACITY_ERROR);
         groupStates.current.set(groupName, { ...group, references: group.references + 1 });
         await group.joinPromise;
         return;

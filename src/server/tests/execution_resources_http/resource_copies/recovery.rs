@@ -87,6 +87,21 @@ impl CopyRepository for FaultyStore {
     ) -> BoxFuture<'_, Result<CopySource, CopyError>> {
         self.inner.source(actor, kind, id)
     }
+    fn eligibility_sources<'a>(
+        &'a self,
+        actor: ActorId,
+        kind: CopyKind,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<Vec<CopyEligibilitySource>, CopyError>> {
+        self.inner.eligibility_sources(actor, kind, ids)
+    }
+    fn restorable_volumes<'a>(
+        &'a self,
+        actor: ActorId,
+        platforms: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<RestorableVolumes, CopyError>> {
+        self.inner.restorable_volumes(actor, platforms)
+    }
     fn snapshots<'a>(
         &'a self,
         actor: ActorId,

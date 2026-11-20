@@ -84,17 +84,12 @@ impl SharedSampler {
             return Ok(sample);
         }
         let sample = state.sampler.sample(cancel).await?;
-        // Never turn failed/partial observations into cached successful zeroes.
-        if sample.containers.failed_samples == 0
-            && self.epoch.load(Ordering::Acquire) == epoch
+        // Both streams consume the same generation, including its missing
+        // readings. The next sampling cycle retries the running targets.
+        if self.epoch.load(Ordering::Acquire) == epoch
             && self.docker.daemon_generation() == generation
         {
-            state.cached = Some((
-                Instant::now(),
-                epoch,
-                self.docker.daemon_generation(),
-                sample.clone(),
-            ));
+            state.cached = Some((Instant::now(), epoch, generation, sample.clone()));
         } else {
             state.cached = None;
         }

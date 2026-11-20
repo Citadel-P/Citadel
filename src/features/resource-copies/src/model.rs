@@ -48,6 +48,17 @@ pub struct CopySource {
     pub tag_ids: Vec<Uuid>,
 }
 
+pub type RestorableVolumes = std::collections::HashSet<(Uuid, String, Option<String>)>;
+
+pub struct CopyEligibilitySource {
+    pub id: Uuid,
+    pub name: String,
+    pub platform_id: Uuid,
+    pub swarm: bool,
+    pub spec: CopySpec,
+    pub current_data_allowed: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CopySelection {

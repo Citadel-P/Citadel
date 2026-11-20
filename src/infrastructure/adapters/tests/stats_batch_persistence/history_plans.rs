@@ -173,22 +173,26 @@ async fn reclaimed_history_aggregates_once_with_fresh_custom_and_generic_plans()
     close_storage_fixture(pool, database).await;
 }
 
-fn scanned_history_rows(node: &serde_json::Value) -> f64 {
+fn scanned_history_rows(node: &serde_json::Value, tables: &[&str]) -> f64 {
     let relation = node["Relation Name"].as_str().unwrap_or_default();
-    let own =
-        if relation.starts_with("statisticssamples") || relation.starts_with("statisticsrollups") {
-            (node["Actual Rows"].as_f64().unwrap_or_default()
-                + node["Rows Removed by Filter"].as_f64().unwrap_or_default()
-                + node["Rows Removed by Index Recheck"]
-                    .as_f64()
-                    .unwrap_or_default())
-                * node["Actual Loops"].as_f64().unwrap_or_default()
-        } else {
-            0.
-        };
+    let own = if tables.iter().any(|prefix| relation.starts_with(prefix)) {
+        (node["Actual Rows"].as_f64().unwrap_or_default()
+            + node["Rows Removed by Filter"].as_f64().unwrap_or_default()
+            + node["Rows Removed by Index Recheck"]
+                .as_f64()
+                .unwrap_or_default())
+            * node["Actual Loops"].as_f64().unwrap_or_default()
+    } else {
+        0.
+    };
     own + node["Plans"]
         .as_array()
-        .map(|children| children.iter().map(scanned_history_rows).sum::<f64>())
+        .map(|children| {
+            children
+                .iter()
+                .map(|child| scanned_history_rows(child, tables))
+                .sum::<f64>()
+        })
         .unwrap_or_default()
 }
 
@@ -303,6 +307,11 @@ async fn mixed_platform_history_bounds_sort_work_for_small_installations() {
                 }
                 let work = window_rows(&plan[0]["Plan"]);
                 if coarse {
+                    assert_eq!(
+                        scanned_history_rows(&plan[0]["Plan"], &["platformiorollups"]),
+                        0.,
+                        "{mode}: visited covered fine history"
+                    );
                     assert!(
                         work < fine_work[mode_index] * 0.65,
                         "coarse work={work}, minute work={}",
@@ -496,7 +505,10 @@ async fn small_catalog_history_seeks_selected_sources_in_raw_and_rollup_partitio
             .unwrap();
             // At most two raw passes and one materialized rollup pass. The new
             // container has no rollups; unrelated partitions must remain cheap.
-            let scanned = scanned_history_rows(&plan[0]["Plan"]);
+            let scanned = scanned_history_rows(
+                &plan[0]["Plan"],
+                &["statisticssamples", "statisticsrollups"],
+            );
             assert!(
                 scanned <= [720., 21600., 22320.][case],
                 "mode={mode}, case={case}, scanned={scanned}: {plan}"

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-connection';
+import { GROUP_CAPACITY_ERROR, RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-connection';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
 
 type UseRealtimeGroupOpts = {
@@ -75,9 +75,20 @@ export const useRealtimeGroup = ({
     let listenersRemoved = false;
     let disposed = false;
 
+    const limited = new Set<string>();
+    const onCapacity = (name: string) => {
+      if (!disposed && groupNames.includes(name) && !limited.has(name)) {
+        limited.add(name);
+        setConnected(false);
+        onErrorRef.current?.(new Error(GROUP_CAPACITY_ERROR));
+      }
+    };
+    connection.on('RealtimeGroupCapacity', onCapacity);
+
     const removeListeners = () => {
       if (listenersRemoved) return;
       listenersRemoved = true;
+      connection.off('RealtimeGroupCapacity', onCapacity);
       removeEventListeners?.(connection);
     };
 
@@ -92,8 +103,13 @@ export const useRealtimeGroup = ({
         setLoading(true);
         setupEventListeners(connection);
         for (const currentGroupName of groupNames) {
-          await joinGroup(currentGroupName);
-          joined.push(currentGroupName);
+          try {
+            await joinGroup(currentGroupName);
+            joined.push(currentGroupName);
+          } catch (error) {
+            if (!(error instanceof Error) || error.message !== GROUP_CAPACITY_ERROR) throw error;
+            onCapacity(currentGroupName);
+          }
           if (disposed) break;
         }
 
@@ -103,10 +119,10 @@ export const useRealtimeGroup = ({
           return;
         }
 
-        setConnected(true);
+        setConnected(limited.size === 0);
         setLoading(false);
 
-        onJoinedRef.current?.(connection);
+        if (limited.size === 0) onJoinedRef.current?.(connection);
       } catch (err) {
         if (!disposed) onErrorRef.current?.(err);
         console.error('[Realtime] join failed', err);

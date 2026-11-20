@@ -77,6 +77,9 @@ The header reports the browser's connection to Citadel Core:
 | **Live updates unavailable** | Automatic recovery has stopped. Select the header's retry indicator after checking that Core is reachable. |
 | **You're offline** | Restore the browser's network connection. |
 
+If a resource list exceeds Core's realtime snapshot limit, only that list stops
+receiving live updates. Reopen the page to load the current list and try subscribing again.
+
 This connection is separate from a Platform's Agent connection. An interruption
 does not by itself mean that Docker workloads stopped. Once connected, check the
 workload and its operation history before repeating a command.

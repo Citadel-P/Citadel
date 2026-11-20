@@ -223,6 +223,38 @@ async fn workload_lists_preserve_actor_specific_copy_eligibility() {
         .await
         .unwrap();
     assert_eq!(count, 0, "eligibility must not create copy operations");
+    // Lock the optional binding lookup while all five authorized rows remain readable.
+    for n in 0..4 {
+        sqlx::query("INSERT INTO deployments(id,name,platformid,createdbyactorid,spec,status) SELECT gen_random_uuid(),name || $2,platformid,createdbyactorid,spec,status FROM deployments WHERE id=$1")
+            .bind(deployment).bind(n.to_string()).execute(&f.pool).await.unwrap();
+    }
+    let mut lock = f.pool.begin().await.unwrap();
+    sqlx::query("LOCK resourcebindings IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    reader.snapshot_timeout = StdDuration::from_millis(500);
+    let group = Group::parse("deployments").unwrap();
+    let snapshot = tokio::time::timeout(
+        StdDuration::from_millis(500),
+        reader.read(&f.administrator, &group, None),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(snapshot.rows[0].rows.len() >= 5);
+    assert!(
+        snapshot.rows[0]
+            .rows
+            .iter()
+            .all(|row| row["copyEligibility"]["status"] == "Unknown")
+    );
+    reader.snapshot_limit = 4;
+    assert!(matches!(
+        reader.read(&f.administrator, &group, None).await,
+        Err(RealtimeReadError::SnapshotCapacity)
+    ));
+    lock.rollback().await.unwrap();
     f.docker_server.abort();
     f.pool.close().await;
     std::fs::remove_file(&f.docker_socket).unwrap();

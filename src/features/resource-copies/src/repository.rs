@@ -39,6 +39,17 @@ pub trait CopyRepository: Send + Sync {
         kind: CopyKind,
         id: Uuid,
     ) -> BoxFuture<'_, Result<CopySource, CopyError>>;
+    fn eligibility_sources<'a>(
+        &'a self,
+        actor: ActorId,
+        kind: CopyKind,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<Vec<CopyEligibilitySource>, CopyError>>;
+    fn restorable_volumes<'a>(
+        &'a self,
+        actor: ActorId,
+        platforms: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<RestorableVolumes, CopyError>>;
     fn snapshots<'a>(
         &'a self,
         actor: ActorId,
