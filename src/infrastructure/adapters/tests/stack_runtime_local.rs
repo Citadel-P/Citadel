@@ -6,8 +6,9 @@ use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_database::MigrationRunner;
 use citadel_docker::client::DockerClient;
 use citadel_stacks::{
-    StackApplySource, StackDeletionClaim, StackOperationClaim, StackRuntime, StackSourceFile,
-    StackSpec, StackSpecCommon, StackUpdateBehavior, create_ownership_labels_override,
+    StackApplySource, StackDeletionClaim, StackOperationClaim, StackOrchestrationMode,
+    StackRuntime, StackSourceFile, StackSpec, StackSpecCommon, StackUpdateBehavior,
+    create_ownership_labels_override,
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -39,6 +40,18 @@ async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
         .collect::<Vec<_>>();
     assert_eq!(owned.len(), 1);
     let first_container = owned[0].id.clone();
+    let snapshot = fixture
+        .runtime
+        .runtime_snapshot(
+            fixture.platform_id,
+            &fixture.project_name,
+            StackOrchestrationMode::DockerCompose,
+            &fixture.cancellation,
+        )
+        .await
+        .unwrap();
+    assert_eq!(snapshot.containers.len(), 1);
+    assert_eq!(snapshot.containers[0].docker_container_id, first_container);
     let mut replacement = fixture.claim();
     replacement.spec.common_mut().destroy_before_deploy = true;
     let reapplied = fixture
@@ -86,6 +99,59 @@ async fn local_compose_stack_apply_creates_owned_runtime_and_cleans_it() {
     {
         fixture.docker.delete_network(&network.id).await.unwrap();
     }
+    fixture.dispose().await;
+}
+
+#[tokio::test]
+#[ignore = "requires the disposable workload database fixture"]
+async fn edge_compose_snapshot_requests_only_the_project_including_stopped_containers() {
+    use citadel_adapters::connectors::edge::{EdgeRegistry, EdgeTarget};
+    use citadel_contracts::citadel::{
+        containers::v1::{ListContainersRequest, ListContainersResponse},
+        edge::v1::{EdgeCommandKind, core_envelope},
+    };
+    use prost::Message;
+
+    let fixture = Fixture::new("Docker").await;
+    sqlx::query("UPDATE platforms SET connectortype='EdgeAgent' WHERE id=$1")
+        .bind(fixture.platform_id)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    let registry = EdgeRegistry::default();
+    let (session, mut outbound) = registry
+        .register(EdgeTarget::platform(fixture.platform_id), Uuid::now_v7())
+        .unwrap();
+    let router = fixture.runtime.clone().with_edge(registry);
+    let (snapshot, ()) = tokio::join!(
+        router.runtime_snapshot(
+            fixture.platform_id,
+            &fixture.project_name,
+            StackOrchestrationMode::DockerCompose,
+            &fixture.cancellation
+        ),
+        async {
+            let envelope = tokio::time::timeout(Duration::from_secs(5), outbound.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            let Some(core_envelope::Body::Command(command)) = envelope.body else {
+                panic!("expected a container list command");
+            };
+            assert_eq!(command.kind(), EdgeCommandKind::ContainerList);
+            let request = ListContainersRequest::decode(command.payload.as_slice()).unwrap();
+            let label = format!("com.docker.compose.project={}", fixture.project_name);
+            assert_eq!(request.filters.len(), 1);
+            assert_eq!(request.filters["label"].options, [(label, true)].into());
+            assert_eq!(request.all, Some(true));
+            assert_eq!(request.size, Some(false));
+            assert!(request.metadata_only && !request.observe_health);
+            let id = Uuid::parse_str(&envelope.command_id).unwrap();
+            session.output(id, ListContainersResponse::default().encode_to_vec());
+            session.complete(id, true);
+        },
+    );
+    assert!(snapshot.unwrap().containers.is_empty());
     fixture.dispose().await;
 }
 

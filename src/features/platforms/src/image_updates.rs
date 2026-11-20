@@ -7,9 +7,9 @@ use crate::{
 use chrono::{DateTime, Utc};
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
-use futures_util::{FutureExt, StreamExt, stream};
+use futures_util::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -60,6 +60,7 @@ pub trait ImageUpdateResolver: Send + Sync {
         &self,
         actor: ActorId,
         administrator: bool,
+        selected_id: Option<Uuid>,
     ) -> BoxFuture<'_, Result<Vec<ImageUpdateRegistry>, RuntimeCapabilityError>>;
     fn observe<'a>(
         &'a self,
@@ -117,17 +118,67 @@ impl ImageUpdateService {
         after: Uuid,
         cancel: &CancellationToken,
     ) -> Result<ImageUpdateBatch, RuntimeCapabilityError> {
+        if cancel.is_cancelled() {
+            return Err(failure(
+                RuntimeErrorKind::Cancelled,
+                "Image sweep cancelled.",
+            ));
+        }
         let candidates = self.store.candidates(after).await?;
         let next = candidates.last().map(|c| c.id);
+        if candidates.is_empty() {
+            return Ok(ImageUpdateBatch {
+                next,
+                checked: 0,
+                failed: 0,
+            });
+        }
         let actor = ActorId::new(Uuid::from_u128(1));
-        let registries = self.resolver.registries(actor, true).await?;
-        let tasks: Vec<_> = candidates
+        let registries = self.resolver.registries(actor, true, None).await?;
+        let registry_ids: Vec<_> = registries
             .iter()
-            .map(|candidate| self.check_candidate(candidate, &registries, cancel).boxed())
+            .map(|r| r.id)
+            .chain([Uuid::nil()])
             .collect();
+        let mut images_by_platform = BTreeMap::<_, Vec<_>>::new();
+        for candidate in &candidates {
+            images_by_platform
+                .entry(candidate.platform)
+                .or_default()
+                .push(candidate.image.clone());
+        }
+        let mut failed = 0;
+        let mut observations = BTreeMap::new();
+        for (platform, images) in images_by_platform {
+            let rows = tokio::select! {
+                biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
+                rows = self.store.load(platform, &images, &registry_ids) => rows,
+            };
+            let Ok(rows) = rows else {
+                failed += images.len();
+                continue;
+            };
+            let mut by_image = BTreeMap::<_, Vec<_>>::new();
+            for row in rows {
+                by_image.entry(row.image.clone()).or_default().push(row);
+            }
+            observations.insert(platform, by_image);
+        }
+
+        let tasks = candidates.into_iter().filter_map(|candidate| {
+            let by_image = observations.get(&candidate.platform)?;
+            let previous = by_image
+                .get(&candidate.image)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            let registries = &registries;
+            Some(async move {
+                self.check_candidate(&candidate, registries, previous, cancel)
+                    .await
+            })
+        });
         let mut pending = stream::iter(tasks).buffer_unordered(2);
         let mut checked = 0;
-        let mut failed = 0;
         while let Some(result) = tokio::select! {
             biased; () = cancel.cancelled() => return Err(failure(RuntimeErrorKind::Cancelled, "Image sweep cancelled.")),
             result = pending.next() => result,
@@ -148,21 +199,9 @@ impl ImageUpdateService {
         &self,
         candidate: &ImageUpdateCandidate,
         registries: &[ImageUpdateRegistry],
+        previous: &[StoredImageUpdate],
         cancel: &CancellationToken,
     ) -> Result<usize, RuntimeCapabilityError> {
-        let registry_ids: Vec<_> = registries
-            .iter()
-            .map(|r| r.id)
-            .chain([Uuid::nil()])
-            .collect();
-        let previous = self
-            .store
-            .load(
-                candidate.platform,
-                std::slice::from_ref(&candidate.image),
-                &registry_ids,
-            )
-            .await?;
         let mut checked = 0;
         for reference in candidate.tags.iter().filter(|tag| eligible(tag)) {
             if cancel.is_cancelled() {
@@ -172,7 +211,7 @@ impl ImageUpdateService {
                 ));
             }
             let Some(registry) =
-                scheduled_registry(candidate.registry_id, reference, registries, &previous)
+                scheduled_registry(candidate.registry_id, reference, registries, previous)
             else {
                 continue;
             };
@@ -215,7 +254,7 @@ impl ImageUpdateService {
         platform: Uuid,
         images: &[ImageDetails],
     ) -> Result<Vec<Vec<ImageTagUpdate>>, RuntimeCapabilityError> {
-        let registries = self.resolver.registries(actor, admin).await?;
+        let registries = self.resolver.registries(actor, admin, None).await?;
         let registry_ids: Vec<_> = registries
             .iter()
             .map(|r| r.id)
@@ -267,7 +306,7 @@ impl ImageUpdateService {
     ) -> Result<ImageTagUpdate, RuntimeCapabilityError> {
         let registry = self
             .resolver
-            .registries(actor, admin)
+            .registries(actor, admin, Some(registry_id))
             .await?
             .into_iter()
             .find(|r| r.id == registry_id)
@@ -299,7 +338,7 @@ impl ImageUpdateService {
         }) else {
             return Ok(());
         };
-        let registries = self.resolver.registries(actor, admin).await?;
+        let registries = self.resolver.registries(actor, admin, None).await?;
         let ids: Vec<_> = registries
             .iter()
             .map(|r| r.id)
@@ -497,7 +536,7 @@ impl ImageUpdateService {
             if !registry.id.is_nil()
                 && !self
                     .resolver
-                    .registries(actor, admin)
+                    .registries(actor, admin, Some(registry.id))
                     .await?
                     .iter()
                     .any(|r| r.id == registry.id && r.revision == registry.revision)

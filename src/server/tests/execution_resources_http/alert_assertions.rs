@@ -12,8 +12,13 @@ pub(super) async fn saved_rule(
 ) {
     let id = Uuid::parse_str(actual["id"].as_str().unwrap()).unwrap();
     assert!(!id.is_nil());
+    let resource_type = match input["type"].as_str().unwrap() {
+        "BuildRunFailed" => "Build",
+        "PlatformCpuHigh" | "PlatformUnreachable" => "Platform",
+        other => panic!("missing fixture resource type for {other}"),
+    };
     let mut expected = json!({
-        "id": id, "capabilities": null,
+        "id": id, "capabilities": null, "resourceType": resource_type,
         "name": input["name"].as_str().unwrap_or(input["type"].as_str().unwrap()),
         "description": input["description"], "type": input["type"],
         "severity": input["severity"], "cooldownSeconds": input["cooldownSeconds"],

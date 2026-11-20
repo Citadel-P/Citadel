@@ -31,12 +31,13 @@ impl ScriptRepository for PostgresScriptRepository {
         self.create_impl(actor, input)
     }
 
-    fn list(
-        &self,
+    fn list<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<Script>, ScriptError>> {
-        self.list_impl(actor, administrator)
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>> {
+        self.list_impl(actor, administrator, tags)
     }
 
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<Script, ScriptError>> {

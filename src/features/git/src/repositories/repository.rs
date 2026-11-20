@@ -70,6 +70,7 @@ pub trait GitRepositoryPersistence: Send + Sync {
         &'a self,
         actor_id: ActorId,
         administrator: bool,
+        tag_ids: &'a [Uuid],
     ) -> BoxFuture<'a, Result<Vec<GitRepository>, GitRepositoryError>>;
     fn get_git_repository<'a>(
         &'a self,

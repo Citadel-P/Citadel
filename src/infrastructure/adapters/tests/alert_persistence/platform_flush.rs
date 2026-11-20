@@ -86,6 +86,36 @@ async fn cold_metric_flush_completes_with_one_query_connection() {
     pool.close().await;
 }
 
+async fn start_blocked_flush(
+    pool: &sqlx::PgPool,
+    store: Arc<PostgresPlatformAlertBatchStore>,
+    blocker: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> tokio::task::JoinHandle<Result<usize, AlertError>> {
+    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut **blocker)
+        .await
+        .unwrap();
+    let flush = tokio::spawn(async move { store.flush_pending(500).await });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let waiting: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
+            )
+            .bind(pid)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            if waiting {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    flush
+}
+
 #[tokio::test]
 #[ignore = "requires disposable CITADEL_EXECUTION_DATABASE_URL"]
 async fn shared_parent_validation_is_transaction_local_and_preserves_incident_state() {
@@ -126,6 +156,9 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
         sqlx::query_scalar("SELECT COALESCE(sum(calls),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query='SELECT status FROM alertrules WHERE id=$1 FOR SHARE'")
             .fetch_one(pool).await.unwrap()
     }
+    async fn resolution_attempts(pool: &sqlx::PgPool) -> i64 {
+        sqlx::query_scalar("SELECT COALESCE(sum(calls),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query LIKE 'UPDATE alertevents SET resolvedat=%'").fetch_one(pool).await.unwrap()
+    }
     let notifications = Arc::new(AtomicUsize::new(0));
     let changed = notifications.clone();
     let alerts = Arc::new(
@@ -138,9 +171,13 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
         "0.1.8",
         alerts,
     ));
-    for (created, cpu, open, expected_notifications) in
-        [(1_i64, 90., 0_i64, 0), (2, 90., 32, 1), (3, 10., 0, 2)]
-    {
+    for (created, cpu, open, expected_notifications) in [
+        (1_i64, 90., 0_i64, 0),
+        (2, 90., 32, 1),
+        (3, 10., 0, 2),
+        (4, 10., 0, 2),
+        (5, 10., 0, 2),
+    ] {
         sqlx::query("INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,alertpending) SELECT gen_random_uuid(),id,$1,$2,20,0,0,true FROM platforms")
             .bind(created).bind(cpu).execute(&pool).await.unwrap();
         if created == 1 {
@@ -149,16 +186,7 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
             let mut held = pool.begin().await.unwrap();
             sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text||':'||id::text,0)) FROM platforms ORDER BY id")
                 .bind(rule.to_string()).execute(&mut *held).await.unwrap();
-            let running = store.clone();
-            let flush = tokio::spawn(async move { running.flush_pending(500).await });
-            tokio::time::timeout(std::time::Duration::from_secs(3), async {
-                loop {
-                    let locked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE relation='alertrules'::regclass AND mode='RowShareLock' AND granted)")
-                        .fetch_one(&pool).await.unwrap();
-                    if locked { break; }
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                }
-            }).await.unwrap();
+            let flush = start_blocked_flush(&pool, store.clone(), &mut held).await;
             let mut edit = pool.begin().await.unwrap();
             sqlx::query("SET LOCAL lock_timeout='100ms'")
                 .execute(&mut *edit)
@@ -179,12 +207,50 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
             assert_eq!(notifications.load(Ordering::SeqCst), 0);
         }
         let before = if measured { checks(&pool).await } else { 0 };
-        assert_eq!(store.flush_pending(500).await.unwrap(), 32);
+        let attempts = if measured {
+            resolution_attempts(&pool).await
+        } else {
+            0
+        };
+        let acknowledged = if created == 4 {
+            // One of the 32 healthy pairs becomes unsettled while the flush
+            // waits. Its fresh state must be visible after the lock is granted.
+            let mut writer = pool.begin().await.unwrap();
+            let resource: Uuid = sqlx::query_scalar("SELECT id FROM platforms ORDER BY id LIMIT 1")
+                .fetch_one(&mut *writer)
+                .await
+                .unwrap();
+            sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
+                .bind(format!("{rule}:{resource}"))
+                .execute(&mut *writer)
+                .await
+                .unwrap();
+            sqlx::query("UPDATE alertrulestates SET consecutivematches=1 WHERE alertruleid=$1 AND resourceid=$2")
+                .bind(rule).bind(resource).execute(&mut *writer).await.unwrap();
+            let flush = start_blocked_flush(&pool, store.clone(), &mut writer).await;
+            writer.commit().await.unwrap();
+            let count = flush.await.unwrap().unwrap();
+            let matches: i32 = sqlx::query_scalar("SELECT consecutivematches FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2")
+                .bind(rule).bind(resource).fetch_one(&pool).await.unwrap();
+            assert_eq!(matches, 0);
+            count
+        } else {
+            store.flush_pending(500).await.unwrap()
+        };
+        assert_eq!(acknowledged, 32);
         if measured {
             assert_eq!(
+                resolution_attempts(&pool).await - attempts,
+                match created {
+                    3 => 32,
+                    4 => 1,
+                    _ => 0,
+                }
+            );
+            assert_eq!(
                 checks(&pool).await - before,
-                1,
-                "one parent validation for 32 resources per transaction"
+                i64::from(created != 5),
+                "the per-rule evaluator only runs when a pair needs work"
             );
         }
         let active: i64 = sqlx::query_scalar(
@@ -213,11 +279,18 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
                 .await
                 .unwrap();
         }
-        sqlx::query("UPDATE platformstats SET alertpending=true,cpuusage=90")
+        if !delete {
+            sqlx::query("UPDATE alertrulestates SET consecutivematches=1 WHERE alertruleid=$1")
+                .bind(rule)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        sqlx::query("UPDATE platformstats SET alertpending=true,cpuusage=CASE WHEN platformid=(SELECT id FROM platforms ORDER BY id LIMIT 1) THEN 10 ELSE 90 END")
             .execute(&pool)
             .await
             .unwrap();
-        assert_eq!(store.flush_pending(500).await.unwrap(), 96);
+        assert_eq!(store.flush_pending(500).await.unwrap(), 160);
         let active: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM alertevents WHERE alertruleid=$1 AND resolvedat IS NULL",
         )
@@ -226,6 +299,11 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
         .await
         .unwrap();
         assert_eq!(active, 0);
+        if !delete {
+            let unchanged: i64 = sqlx::query_scalar("SELECT count(*) FROM alertrulestates WHERE alertruleid=$1 AND consecutivematches=1")
+                .bind(rule).fetch_one(&pool).await.unwrap();
+            assert_eq!(unchanged, 32);
+        }
         assert_eq!(notifications.load(Ordering::SeqCst), 2);
     }
     pool.close().await;

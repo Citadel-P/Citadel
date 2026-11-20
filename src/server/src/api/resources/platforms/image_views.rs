@@ -43,14 +43,20 @@ pub(crate) async fn image_list_view(
             view
         })
         .collect();
-    let registries = if images.iter().any(|image| image.registry_id.is_some()) {
-        registries
-            .list_registries(principal.actor_id, principal.is_administrator())
-            .await
-            .map_err(|_| registry_error())?
-    } else {
-        Vec::new()
-    };
+    let mut ids: Vec<_> = images
+        .iter()
+        .filter_map(|image| image.registry_id)
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    let registries = registries
+        .list_registries(
+            principal.actor_id,
+            principal.is_administrator(),
+            citadel_registries::RegistryListFilter::Ids(&ids),
+        )
+        .await
+        .map_err(|_| registry_error())?;
     let registries = registries
         .into_iter()
         .map(|registry| {

@@ -629,6 +629,27 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         store.restore_policy_id(restore.run.id).await.unwrap(),
         first_claim.run.backup_policy_id
     );
+    let run = Some(first_claim.run.id);
+    let policy = Some(first_claim.policy.id);
+    for (run_filter, policy_filter) in [(run, None), (None, policy), (run, policy), (None, None)] {
+        let history = store
+            .list_restores(actor, false, run_filter, policy_filter, 50)
+            .await
+            .unwrap();
+        assert!(history.iter().any(|item| item.id == restore.run.id));
+    }
+    let other_policy = policies
+        .iter()
+        .find(|p| p.id != first_claim.policy.id)
+        .unwrap()
+        .id;
+    assert!(
+        store
+            .list_restores(actor, true, run, Some(other_policy), 50)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(lease_durations(&pool, restore.run.id).await, (90.0, 90.0));
     store
         .finish_restore(

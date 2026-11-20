@@ -17,6 +17,22 @@ impl volume_service_server::VolumeService for Runtime {
             ("driver", request.driver),
             ("name", request.name),
         ]);
+        if request.names_only {
+            let names = self
+                .docker
+                .list_volume_names_filtered(filter.as_deref())
+                .await
+                .map_err(docker_error)?;
+            return Ok(Response::new(ListVolumesResponse {
+                volumes: names
+                    .into_iter()
+                    .map(|name| VolumeResponse {
+                        name,
+                        ..Default::default()
+                    })
+                    .collect(),
+            }));
+        }
         let volumes = self
             .docker
             .list_volumes_filtered(filter.as_deref())

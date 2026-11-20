@@ -10,7 +10,7 @@ const INPUT_BYTES: i64 = 32 * 1024 * 1024;
 pub(crate) async fn compact(
     pool: &PgPool,
     cursor: &AtomicI64,
-) -> Result<CompactionProgress, sqlx::Error> {
+) -> Result<Option<CompactionProgress>, sqlx::Error> {
     let now = chrono::Utc::now();
     let cutoff = now.timestamp().saturating_sub(86_400) / 60 * 60;
     let retained_from = now.timestamp() - 604_800 + i64::from(now.timestamp_subsec_nanos() > 0);
@@ -27,7 +27,7 @@ pub(crate) async fn compact(
     drop(discovery);
     let Some((source, platform, oldest, _)) = candidate else {
         tx.commit().await?;
-        return Ok(CompactionProgress::default());
+        return Ok(None);
     };
     cursor.store(source, Ordering::Relaxed);
     RuntimeWork::CompactionDiscovery.age(std::time::Duration::from_secs(
@@ -94,11 +94,11 @@ pub(crate) async fn compact(
         drop(sizing);
         if end <= from {
             tx.commit().await?;
-            return Ok(CompactionProgress {
+            return Ok(Some(CompactionProgress {
                 processed: 0,
                 stalled_source: Some(source),
                 ..Default::default()
-            });
+            }));
         }
         RuntimeWork::CompactionInput.units(observations as u64);
         RuntimeWork::CompactionInput.queued(captures as usize);
@@ -114,9 +114,9 @@ pub(crate) async fn compact(
     tx.commit().await?;
     drop(hold);
     RuntimeWork::CompactionProgress.units(progress);
-    Ok(CompactionProgress {
+    Ok(Some(CompactionProgress {
         processed: progress,
         stalled_source: None,
         ..Default::default()
-    })
+    }))
 }

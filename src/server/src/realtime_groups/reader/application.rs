@@ -1184,7 +1184,7 @@ impl ApplicationGroupReader {
                     &self.identity,
                     p,
                     self.git_repositories
-                        .list_git_repositories(actor, admin)
+                        .list_git_repositories(actor, admin, &[])
                         .await
                         .map_err(failure)?,
                 )
@@ -1234,7 +1234,10 @@ impl ApplicationGroupReader {
                 crate::api::resources::scripts::authorized::authorized_scripts(
                     self.scripts.as_ref(),
                     p,
-                    self.scripts.list(actor, admin).await.map_err(failure)?,
+                    self.scripts
+                        .list(actor, admin, &[])
+                        .await
+                        .map_err(failure)?,
                 )
                 .await
                 .map_err(failure)?,
@@ -1363,7 +1366,7 @@ impl ApplicationGroupReader {
                 crate::api::resources::builds::authorized::authorized_projects(
                     self.builds.as_ref(),
                     p,
-                    self.builds.list(actor, admin).await.map_err(failure)?,
+                    self.builds.list(actor, admin, &[]).await.map_err(failure)?,
                 )
                 .await
                 .map_err(failure)?,
@@ -1386,7 +1389,7 @@ impl ApplicationGroupReader {
                     self.builds.as_ref(),
                     p,
                     self.builds
-                        .list_pools(actor, admin)
+                        .list_pools(actor, admin, &[])
                         .await
                         .map_err(failure)?,
                 )

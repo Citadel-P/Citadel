@@ -42,14 +42,18 @@ impl ImageUsageStore for PostgresImageMutationStore {
                         .push(index);
                 }
             }
-            let rows = sqlx::query(include_str!("image_usage_summaries.sql"))
-                .bind(actor.value())
-                .bind(administrator)
-                .bind(platform)
-                .bind(&ids)
-                .fetch_all(&self.0)
-                .await
-                .map_err(storage)?;
+            let rows = sqlx::query(concat!(
+                include_str!("../enabled_actor_scope.sql"),
+                include_str!("workload_read_grants.sql"),
+                include_str!("image_usage_summaries.sql")
+            ))
+            .bind(actor.value())
+            .bind(administrator)
+            .bind(platform)
+            .bind(&ids)
+            .fetch_all(&self.0)
+            .await
+            .map_err(storage)?;
             let mut owners = vec![HashSet::new(); images.len()];
             let mut containers = vec![HashSet::new(); images.len()];
             for row in rows.into_iter().take(10000) {
@@ -173,18 +177,22 @@ impl ImageUsageStore for PostgresImageMutationStore {
                 .iter()
                 .map(|reference| canonical_reference(reference))
                 .collect();
-            let rows = sqlx::query(include_str!("image_usage.sql"))
-                .bind(actor.value())
-                .bind(administrator)
-                .bind(platform)
-                .bind(&location.docker_image_id)
-                .bind(&location.docker_node_id)
-                .bind(image.get::<Uuid, _>("id").to_string())
-                .bind(i64::from(offset))
-                .bind((SCAN_LIMIT + 1) as i64)
-                .fetch_all(&self.0)
-                .await
-                .map_err(storage)?;
+            let rows = sqlx::query(concat!(
+                include_str!("../enabled_actor_scope.sql"),
+                include_str!("workload_read_grants.sql"),
+                include_str!("image_usage.sql")
+            ))
+            .bind(actor.value())
+            .bind(administrator)
+            .bind(platform)
+            .bind(&location.docker_image_id)
+            .bind(&location.docker_node_id)
+            .bind(image.get::<Uuid, _>("id").to_string())
+            .bind(i64::from(offset))
+            .bind((SCAN_LIMIT + 1) as i64)
+            .fetch_all(&self.0)
+            .await
+            .map_err(storage)?;
             let candidate_count = rows.len();
             let mut scanned = 0;
             let mut entries = Vec::new();

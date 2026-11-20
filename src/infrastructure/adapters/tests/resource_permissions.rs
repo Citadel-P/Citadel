@@ -1,9 +1,13 @@
+#[path = "resource_permissions/team_scope.rs"]
+mod team_scope;
+
 use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
 use citadel_adapters::persistence::postgres::scripts::PostgresScriptRepository;
 use citadel_alerts::{AlertChannelConfiguration, AlertRepository};
 use citadel_database::MigrationRunner;
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use citadel_scripts::{ScriptConfiguration, ScriptRepository};
+use citadel_tags::{NewTag, TagRepository};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -17,6 +21,18 @@ async fn migrated_lists_and_capabilities_reject_invalid_permission_levels() {
     sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES($1,true,'System')")
         .bind(actor.value())
         .execute(&pool)
+        .await
+        .unwrap();
+    let tags =
+        citadel_adapters::persistence::postgres::tags::PostgresTagRepository::new(pool.clone());
+    let tag = tags
+        .create_tag(
+            actor,
+            &NewTag {
+                name: format!("ordinal-{}", actor.value()),
+                color: "#abcdef".into(),
+            },
+        )
         .await
         .unwrap();
     let alerts = PostgresAlertRepository::new(pool.clone());
@@ -48,6 +64,7 @@ async fn migrated_lists_and_capabilities_reject_invalid_permission_levels() {
         .await
         .unwrap();
     for (kind, id) in [
+        (ResourceType::Tag, tag.id),
         (ResourceType::AlertChannel, channel.id),
         (ResourceType::Script, action.id),
     ] {
@@ -81,13 +98,22 @@ async fn migrated_lists_and_capabilities_reject_invalid_permission_levels() {
         );
         assert_eq!(
             scripts
-                .list(reader, false)
+                .list(reader, false, &[])
                 .await
                 .unwrap()
                 .iter()
                 .any(|a| a.id == action.id),
             visible,
             "Script level {raw}"
+        );
+        assert_eq!(
+            tags.list_tags(reader, false)
+                .await
+                .unwrap()
+                .iter()
+                .any(|item| item.id == tag.id),
+            visible,
+            "Tag level {raw}"
         );
         let permissions = scripts.permissions(reader, &[action.id]).await;
         if matches!(raw, 3 | 7) {

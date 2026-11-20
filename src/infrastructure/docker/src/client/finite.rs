@@ -107,9 +107,17 @@ impl DockerClient {
         Ok(info)
     }
     pub async fn list_containers(&self, all: bool) -> Result<Vec<ContainerSummary>, DockerError> {
+        self.list_containers_filtered(all, None).await
+    }
+
+    pub async fn list_containers_filtered(
+        &self,
+        all: bool,
+        filters: Option<&str>,
+    ) -> Result<Vec<ContainerSummary>, DockerError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
         convert_list(
-            self.list_container_models(Some(all), None, None, None)
+            self.list_container_models(Some(all), None, None, filters)
                 .await?,
         )
     }
@@ -518,10 +526,6 @@ impl DockerClient {
             .await?,
         )
     }
-    pub(super) async fn volumes(&self) -> Result<VolumeListResponse, DockerError> {
-        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerList.start();
-        self.list_volume_models(None).await?.try_into()
-    }
     pub async fn list_volume_models(
         &self,
         filters: Option<&str>,
@@ -533,6 +537,19 @@ impl DockerClient {
                 .await,
         )
         .await
+    }
+    pub async fn list_volume_names_filtered(
+        &self,
+        filters: Option<&str>,
+    ) -> Result<Vec<String>, DockerError> {
+        Ok(self
+            .list_volume_models(filters)
+            .await?
+            .volumes
+            .unwrap_or_default()
+            .into_iter()
+            .map(|volume| volume.name)
+            .collect())
     }
     pub async fn list_volumes(&self) -> Result<Vec<DockerVolume>, DockerError> {
         self.list_volumes_filtered(None).await
@@ -981,11 +998,18 @@ impl DockerClient {
         }
     }
     pub async fn container_stats_once(&self, id: &str) -> Result<ContainerStats, DockerError> {
+        self.read_container_stats(id, false).await
+    }
+    pub(super) async fn read_container_stats(
+        &self,
+        id: &str,
+        one_shot: bool,
+    ) -> Result<ContainerStats, DockerError> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::DockerStats.start();
         validate_identifier(id)?;
         self.api_result(
             ContainerApiClient::new(self.configuration().await?)
-                .container_stats(id, Some(false), Some(false))
+                .container_stats(id, Some(false), Some(one_shot))
                 .await,
         )
         .await?

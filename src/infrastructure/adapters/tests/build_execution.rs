@@ -4,6 +4,8 @@ mod admission;
 mod attempts;
 #[path = "build_execution/completion.rs"]
 mod completion;
+#[path = "build_execution/history.rs"]
+mod history;
 #[path = "build_execution/operator_recovery.rs"]
 mod operator_recovery;
 use chrono::{Duration, Utc};
@@ -117,7 +119,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     assert!(!rolled_back);
     let queued = store.enqueue(actor, project.id, "Manual").await.unwrap();
     // Exercise every display projection; execution-only snapshots stay in claims.
-    let listed = store.list(actor, true).await.unwrap();
+    let listed = store.list(actor, true, &[]).await.unwrap();
     let latest = listed
         .into_iter()
         .find(|p| p.id == project.id)

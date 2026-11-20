@@ -57,12 +57,13 @@ impl BuildRepository for PostgresBuildRepository {
         self.create_pool_impl(actor, input)
     }
 
-    fn list_pools(
-        &self,
+    fn list_pools<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<BuildAgentPool>, BuildError>> {
-        self.list_pools_impl(actor, administrator)
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BuildAgentPool>, BuildError>> {
+        self.list_pools_impl(actor, administrator, tags)
     }
 
     fn pool_permissions<'a>(
@@ -121,12 +122,13 @@ impl BuildRepository for PostgresBuildRepository {
         self.create_impl(actor, input)
     }
 
-    fn list(
-        &self,
+    fn list<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<BuildProject>, BuildError>> {
-        self.list_impl(actor, administrator)
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BuildProject>, BuildError>> {
+        self.list_impl(actor, administrator, tags)
     }
 
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProject, BuildError>> {

@@ -24,7 +24,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     let listener = UnixListener::bind(&path).unwrap();
     let server = tokio::spawn(async move {
         let mut usage_calls = 0;
-        for _ in 0..8 {
+        for _ in 0..9 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut bytes = Vec::new();
             let mut buffer = [0; 2048];
@@ -75,6 +75,12 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     });
     let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
     let cancel = tokio_util::sync::CancellationToken::new();
+    assert_eq!(
+        citadel_platforms::VolumeInventoryPort::list_volume_names(&client, &cancel)
+            .await
+            .unwrap(),
+        ["data", "empty", "unknown"]
+    );
     let volumes = citadel_platforms::VolumeInventoryPort::list_volumes(&client, &cancel)
         .await
         .unwrap();

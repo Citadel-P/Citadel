@@ -67,7 +67,29 @@ async fn committed_mutations_invalidate_only_affected_principals_and_batch_denia
     let ids: Vec<_> = (0..64).map(|_| Uuid::now_v7()).collect();
     let mut batch = ids.clone();
     batch.extend(&ids);
+    let before_scope = queries("AuthorizationScopeQuery");
     let before = queries("AuthorizationResourceQuery");
+    let empty = store
+        .resource_permissions(alice.actor_id, kind, &batch)
+        .await
+        .unwrap();
+    assert_eq!(empty.len(), ids.len());
+    assert!(empty.values().all(Option::is_none));
+    assert_eq!(queries("AuthorizationScopeQuery") - before_scope, 1);
+    assert_eq!(queries("AuthorizationResourceQuery"), before);
+
+    // A first grant invalidates the cached absence of overrides. Other IDs
+    // must then follow the ordinary batched ACL lookup and negative-cache path.
+    let first_grant = ResourceAccessInput {
+        resource_type: kind,
+        resource_id: Uuid::now_v7(),
+        permission_level: PermissionLevel::Read,
+        specific_permissions: vec![],
+    };
+    users
+        .add_resource_access(alice.id, &first_grant, changed_by, Utc::now(), true)
+        .await
+        .unwrap();
     let denied = store
         .resource_permissions(alice.actor_id, kind, &batch)
         .await
@@ -111,6 +133,18 @@ async fn committed_mutations_invalidate_only_affected_principals_and_batch_denia
     assert_eq!(
         counter("AuthorizationResourceLookup", "units") - cached_lookups,
         ids.len() as u64
+    );
+    assert_eq!(queries("AuthorizationResourceQuery"), cached_query_count);
+    users
+        .remove_resource_access(alice.id, &first_grant, changed_by, Utc::now())
+        .await
+        .unwrap();
+    assert!(
+        store
+            .resource_permission(alice.actor_id, kind, first_grant.resource_id)
+            .await
+            .unwrap()
+            .is_none()
     );
     assert_eq!(queries("AuthorizationResourceQuery"), cached_query_count);
     println!(

@@ -137,7 +137,7 @@ impl PostgresCopyRepository {
           AND item.platformid=$5 AND item.hostpath IS NULL
           AND item.status='Succeeded' AND item.resticsnapshotid IS NOT NULL
         ORDER BY item.completedat DESC NULLS LAST,item.id DESC"#,
-            super::super::backups::AUTHORIZED_CTE
+            super::super::authorization::AUTHORIZED_BY_LEVELS_CTE
         );
         let mut tx = self.pool.begin().await.map_err(storage_error)?;
         let rows = sqlx::query(AssertSqlSafe(query.as_str()))

@@ -59,7 +59,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "volume_service.proto",
             include_str!("../proto/volume_service.proto"),
-            "270e53f225b16abacc1d63cdb5e23e1efdb1142a6b9cb9efc0d43f7a31d7a2f2",
+            "acd9d6aff11f1b7e5fde57afdd94200b2ea547d031cd858de0a89e1ca6efca83",
         ),
         (
             "swarm_service.proto",

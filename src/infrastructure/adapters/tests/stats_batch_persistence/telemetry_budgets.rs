@@ -3,6 +3,55 @@ use citadel_runtime::maintenance::MaintenanceStore;
 
 #[tokio::test]
 #[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
+async fn compaction_sweep_rechecks_coarse_blocks_when_more_minutes_are_sealed() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    let start = (chrono::Utc::now().timestamp() - 2 * 86400) / 900 * 900;
+    sqlx::query("INSERT INTO platformhistorysources(platformid,nodeid) VALUES($1,'')")
+        .bind(scope.platform_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let captures = |first: i64, last: i64| {
+        sqlx::query("INSERT INTO platformstats(id,platformid,created,cpuusage,memoryusage,rxbytes,txbytes,containerio)
+            SELECT gen_random_uuid(),$1,t,1,1,t,t,jsonb_build_array(jsonb_build_object('containerId','app','rxBytes',t,'txBytes',t))
+            FROM generate_series($2::bigint,$3::bigint,10)t")
+            .bind(scope.platform_id).bind(start + first).bind(start + last)
+    };
+    let store = citadel_adapters::persistence::postgres::maintenance::PostgresMaintenanceStore::new(
+        pool.clone(),
+    );
+    let mut sweep = Default::default();
+    captures(0, 60).execute(&pool).await.unwrap();
+    assert!(store.compact_next(&mut sweep).await.unwrap().processed > 0);
+    assert!(sweep.coarse_exhausted);
+
+    captures(70, 900).execute(&pool).await.unwrap();
+    assert!(store.compact_next(&mut sweep).await.unwrap().processed > 0);
+    let blocks: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM platformiocoarserollups WHERE created=$1")
+            .bind(start)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        blocks, 1,
+        "newly sealed minutes must be visible in the same sweep"
+    );
+    assert_eq!(store.compact_next(&mut sweep).await.unwrap().processed, 0);
+    assert!(sweep.containers_exhausted && sweep.platform_exhausted && sweep.coarse_exhausted);
+
+    captures(910, 960).execute(&pool).await.unwrap();
+    assert_eq!(store.compact_next(&mut sweep).await.unwrap().processed, 0);
+    assert!(
+        store.compact().await.unwrap().processed > 0,
+        "a fresh sweep discovers newly eligible captures"
+    );
+    close_storage_fixture(pool, database).await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
 async fn oversized_minute_stays_unsealed_and_does_not_starve_next_source() {
     let (pool, database) = storage_fixture().await;
     let dense = platform(&pool).await;
@@ -25,8 +74,14 @@ async fn oversized_minute_stays_unsealed_and_does_not_starve_next_source() {
     let store = citadel_adapters::persistence::postgres::maintenance::PostgresMaintenanceStore::new(
         pool.clone(),
     );
+    let mut sweep = Default::default();
     assert!(
-        store.compact().await.unwrap().stalled_source.is_some(),
+        store
+            .compact_next(&mut sweep)
+            .await
+            .unwrap()
+            .stalled_source
+            .is_some(),
         "oversized input is a source-local stall, not a global failure"
     );
     let sealed: i64 =
@@ -37,7 +92,7 @@ async fn oversized_minute_stays_unsealed_and_does_not_starve_next_source() {
             .unwrap();
     assert_eq!(sealed, 0, "never seal part of an oversized minute");
     assert!(
-        store.compact().await.unwrap().processed > 0,
+        store.compact_next(&mut sweep).await.unwrap().processed > 0,
         "cursor must admit another source"
     );
     let sealed: i64 =
@@ -54,7 +109,7 @@ async fn oversized_minute_stays_unsealed_and_does_not_starve_next_source() {
         .await
         .unwrap();
     assert!(
-        store.compact().await.unwrap().processed > 0,
+        store.compact_next(&mut sweep).await.unwrap().processed > 0,
         "a stalled source is retried after correction"
     );
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM platformstats WHERE platformid=$1")

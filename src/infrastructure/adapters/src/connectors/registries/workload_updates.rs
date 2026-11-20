@@ -198,6 +198,7 @@ mod tests {
             &self,
             _: citadel_primitives::ActorId,
             _: bool,
+            _: Option<Uuid>,
         ) -> BoxFuture<'_, Result<Vec<ImageUpdateRegistry>, RuntimeCapabilityError>> {
             unreachable!()
         }

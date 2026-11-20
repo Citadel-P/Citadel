@@ -20,11 +20,12 @@ pub trait ScriptRepository: Send + Sync {
         actor: ActorId,
         input: &'a ScriptConfiguration,
     ) -> BoxFuture<'a, Result<Script, ScriptError>>;
-    fn list(
-        &self,
+    fn list<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<Script>, ScriptError>>;
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>>;
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<Script, ScriptError>>;
     fn update<'a>(
         &'a self,

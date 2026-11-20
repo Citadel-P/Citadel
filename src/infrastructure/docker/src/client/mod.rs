@@ -24,6 +24,7 @@ pub use runtime::{container_observation, map_container as container_summary};
 pub mod container_health;
 
 mod local_sampler;
+mod periodic_cpu;
 pub use local_sampler::{LocalDockerSample, LocalDockerSampler};
 
 pub mod deployments;

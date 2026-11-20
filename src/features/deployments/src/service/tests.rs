@@ -353,6 +353,15 @@ struct TimeoutStore {
 }
 
 impl DeploymentRepository for TimeoutStore {
+    fn running_terminal_container(
+        &self,
+        _: ActorId,
+        _: bool,
+        _: Uuid,
+    ) -> BoxFuture<'_, Result<Option<String>, DeploymentError>> {
+        unreachable!("apply timeout fixture")
+    }
+
     fn list_authorized<'a>(
         &'a self,
         _: ActorId,

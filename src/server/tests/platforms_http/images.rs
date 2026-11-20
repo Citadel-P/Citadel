@@ -716,6 +716,75 @@ async fn image_update_checks_are_fresh_metadata_only_and_list_payload_is_authori
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn scheduled_image_checks_share_two_slots_across_platforms() {
+    use citadel_adapters::connectors::edge::EdgeOutbound;
+
+    async fn next_inspection(commands: &mut EdgeOutbound) -> Uuid {
+        let envelope = tokio::time::timeout(StdDuration::from_secs(5), commands.recv())
+            .await
+            .expect("a due image should start while the other platform is blocked")
+            .unwrap();
+        let Some(core_envelope::Body::Command(command)) = envelope.body else {
+            panic!("expected an image inspection");
+        };
+        assert_eq!(command.kind, EdgeCommandKind::ImageInspect as i32);
+        Uuid::parse_str(&command.command_id).unwrap()
+    }
+
+    let f = fixture().await;
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    for platform in [first, second] {
+        sqlx::query(r#"INSERT INTO platforms (id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount)
+            VALUES ($1,$2,'EdgeAgent',0,0,0,$2,0,'{"$type":"Docker"}','Online',0)"#)
+            .bind(platform).bind(format!("edge-{platform}")).execute(&f.pool).await.unwrap();
+    }
+    let after = Uuid::now_v7();
+    let mut last = after;
+    for (index, platform) in [first, second, second].into_iter().enumerate() {
+        last = Uuid::from_u128(last.as_u128() + 1);
+        sqlx::query("INSERT INTO images(id,dockerimageid,name,platformid,createdat,tags) VALUES($1,$2,$3,$4,now(),json_build_array($3::text))")
+            .bind(last)
+            .bind(format!("sha256:{index:064x}"))
+            .bind(format!("registry.example.test/app:{index}"))
+            .bind(platform)
+            .execute(&f.pool).await.unwrap();
+    }
+    let (a, mut a_commands) = f
+        .edge
+        .register(EdgeTarget::platform(first), Uuid::now_v7())
+        .unwrap();
+    let (b, mut b_commands) = f
+        .edge
+        .register(EdgeTarget::platform(second), Uuid::now_v7())
+        .unwrap();
+    let cancel = CancellationToken::new();
+    let service = &f.lookup_state.platforms.image_updates;
+    let (batch, ()) = tokio::join!(service.run_scheduled_batch(after, &cancel), async {
+        let blocked = next_inspection(&mut a_commands).await;
+        let other = next_inspection(&mut b_commands).await;
+        assert!(
+            tokio::time::timeout(StdDuration::from_millis(250), b_commands.recv())
+                .await
+                .is_err(),
+            "the third inspection started while both slots were occupied"
+        );
+        // An inspection error is saved as a completed check and frees its slot.
+        b.complete(other, false);
+        let third = next_inspection(&mut b_commands).await;
+        b.complete(third, false);
+        a.complete(blocked, false);
+    });
+    let batch = batch.unwrap();
+    assert_eq!(
+        (batch.next, batch.checked, batch.failed),
+        (Some(last), 3, 0)
+    );
+    f.docker_server.abort();
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn scheduled_image_checks_follow_pulled_tags_and_survive_restart() {
     use citadel_adapters::persistence::postgres::platforms::image_updates::PostgresImageUpdateStore;
     use citadel_contracts::citadel::images::v1::{

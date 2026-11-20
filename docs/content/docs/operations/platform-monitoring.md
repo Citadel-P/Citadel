@@ -12,6 +12,10 @@ for an individual workload. If the header reports interrupted live updates,
 displayed information may be outdated; follow
 [connection troubleshooting](/operations/troubleshooting#live-updates-stop).
 
+Container CPU shows average usage between successive monitoring readings. A short
+burst can appear lower when averaged over the interval. The first reading after
+discovery or a restart uses Docker’s shorter sampling window.
+
 ## Choose a time range
 
 The shared History dropdown keeps all charts on the same timeline. **1 hour** is

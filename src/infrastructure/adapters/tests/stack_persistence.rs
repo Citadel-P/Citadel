@@ -121,6 +121,8 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
             .allows(citadel_stacks::permissions::WriteStack::REQUIREMENT)
     );
 
+    verify_team_access(&pool, &store, created.id).await;
+
     let first_claim = store
         .claim_apply(actor, true, created.id, None, None)
         .await
@@ -1394,4 +1396,59 @@ async fn stack_health_resolves_only_the_pinned_manager_daemon_scope() {
             .status,
         Health::Unknown
     );
+}
+
+async fn verify_team_access(pool: &sqlx::PgPool, store: &PostgresStackRepository, stack: Uuid) {
+    let member = ActorId::new(Uuid::now_v7());
+    let team = Uuid::now_v7();
+    let team_actor = Uuid::now_v7();
+    sqlx::query("INSERT INTO actors(id,type) VALUES($1,'User'),($2,'Team')")
+        .bind(member.value())
+        .bind(team_actor)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO teams(id,actorid,name) VALUES($1,$2,$3)")
+        .bind(team)
+        .bind(team_actor)
+        .bind(format!("stack-reader-{team}"))
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO actorteammemberships(teamid,memberactorid) VALUES($1,$2)")
+        .bind(team)
+        .bind(member.value())
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES($1,$2,1,$3,$4,$5)")
+        .bind(Uuid::now_v7()).bind(team_actor).bind(stack)
+        .bind(citadel_primitives::ResourceType::Stack as i32)
+        .bind(citadel_primitives::SpecificPermission::Releases as i32)
+        .execute(pool).await.unwrap();
+
+    for (member_enabled, team_enabled) in [(true, true), (false, true), (true, false)] {
+        sqlx::query(
+            "UPDATE actors SET isenabled=CASE WHEN id=$1 THEN $3 ELSE $4 END WHERE id IN ($1,$2)",
+        )
+        .bind(member.value())
+        .bind(team_actor)
+        .bind(member_enabled)
+        .bind(team_enabled)
+        .execute(pool)
+        .await
+        .unwrap();
+        let detail = store.get_authorized(member, false, stack).await;
+        let releases = store.releases(member, false, stack).await;
+        if member_enabled && team_enabled {
+            assert_eq!(detail.unwrap().id, stack);
+            releases.unwrap();
+        } else {
+            assert!(matches!(detail, Err(citadel_stacks::StackError::NotFound)));
+            assert!(matches!(
+                releases,
+                Err(citadel_stacks::StackError::Forbidden)
+            ));
+        }
+    }
 }

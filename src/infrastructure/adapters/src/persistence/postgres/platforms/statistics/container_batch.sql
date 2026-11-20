@@ -1,8 +1,13 @@
 WITH incoming AS (
- SELECT r.*, item.ordinal FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY item(value, ordinal)
- CROSS JOIN LATERAL jsonb_to_record(item.value) r(platform_id uuid, node_id text, connector text, address text, agent_id uuid, connected_at timestamptz, "dockerContainerId" text, "memoryActive" double precision, "memoryCache" double precision, "memoryActiveCache" double precision, "cpuUsage" double precision, "memoryLimit" double precision, "rxBytes" double precision, "txBytes" double precision, "blockReadBytes" double precision, "blockWriteBytes" double precision, created bigint)
+ SELECT * FROM ROWS FROM (jsonb_to_recordset($1::jsonb) AS (
+     platform_id uuid, node_id text, connector text, address text, agent_id uuid, connected_at timestamptz,
+     "dockerContainerId" text, "memoryActive" double precision, "memoryCache" double precision,
+     "memoryActiveCache" double precision, "cpuUsage" double precision, "memoryLimit" double precision,
+     "rxBytes" double precision, "txBytes" double precision, "blockReadBytes" double precision,
+     "blockWriteBytes" double precision, created bigint
+ )) WITH ORDINALITY
 ), valid AS (
- SELECT i.platform_id,i.node_id,i.ordinal,i."dockerContainerId",i.created,
+ SELECT i.platform_id,i.node_id,i.ordinality AS ordinal,i."dockerContainerId",i.created,
  i."memoryActive",i."memoryCache",i."memoryActiveCache",i."cpuUsage",i."memoryLimit",
  i."rxBytes",i."txBytes",i."blockReadBytes",i."blockWriteBytes",
  true AS include_services, p.platformdescriptor->>'nodeID' AS manager_node_id

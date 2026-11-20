@@ -75,6 +75,21 @@ async fn metadata_mutations_are_atomic_and_credentials_are_protected() {
         .unwrap();
     assert_eq!(registry.tags.len(), 1);
     assert_eq!(registry.audit.created_by_actor_id, actor);
+    let referenced = [registry.id, registry.id, Uuid::now_v7()];
+    for (admin, expected) in [(true, vec![registry.id]), (false, vec![])] {
+        let rows = registry_store
+            .list_registries(
+                ActorId::new(Uuid::now_v7()),
+                admin,
+                citadel_registries::RegistryListFilter::Ids(&referenced),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            rows.into_iter().map(|row| row.id).collect::<Vec<_>>(),
+            expected
+        );
+    }
     let (activity_status, activity_info): (String, String) = sqlx::query_as(
         "SELECT status, info FROM activityevents WHERE resourceid=$1 AND eventtype='RegistryCreated'",
     )

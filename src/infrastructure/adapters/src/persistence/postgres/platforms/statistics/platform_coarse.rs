@@ -2,7 +2,7 @@
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicI64, Ordering};
 
-pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sqlx::Error> {
+pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<Option<u64>, sqlx::Error> {
     let now = chrono::Utc::now();
     let retained_from = now.timestamp() - 604_800 + i64::from(now.timestamp_subsec_nanos() > 0);
     let mut tx = super::maintenance::transaction(pool).await?;
@@ -17,7 +17,7 @@ pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sq
             .await?;
     let Some((source, platform, _, _)) = candidate else {
         tx.commit().await?;
-        return Ok(0);
+        return Ok(None);
     };
     cursor.store(source, Ordering::Relaxed);
     sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
@@ -46,5 +46,5 @@ pub(crate) async fn compact(pool: &PgPool, cursor: &AtomicI64) -> Result<u64, sq
         0
     };
     tx.commit().await?;
-    Ok(progress)
+    Ok(Some(progress))
 }

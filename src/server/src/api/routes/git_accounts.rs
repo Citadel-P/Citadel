@@ -83,14 +83,24 @@ async fn list(
             .map_err(account_error),
         &headers,
     )?;
-    let mut authorized = Vec::with_capacity(accounts.len());
-    for account in accounts {
-        let capabilities = permission(&state, &principal, Some(account.id), &headers).await?;
-        authorized.push(AuthorizedGitAccountView {
+    let ids = accounts
+        .iter()
+        .map(|account| account.id)
+        .collect::<Vec<_>>();
+    let grants = api_result(
+        state
+            .identity
+            .permissions_for_resources(&principal, ResourceType::GitAccount, &ids)
+            .await,
+        &headers,
+    )?;
+    let authorized = accounts
+        .into_iter()
+        .map(|account| AuthorizedGitAccountView {
+            capabilities: grants.get(&account.id).copied().flatten().into(),
             account: account.into(),
-            capabilities,
-        });
-    }
+        })
+        .collect();
     Ok(no_store(
         Json(GitAccountsResponse {
             git_accounts: authorized,
@@ -415,15 +425,7 @@ async fn permission(
         }
     };
     let permission = api_result(permission, headers)?;
-    Ok(
-        permission.map_or_else(ResourceCapabilitiesView::default, |permission| {
-            ResourceCapabilitiesView {
-                can_read: permission.level.grants(PermissionLevel::Read),
-                can_write: permission.level.grants(PermissionLevel::Write),
-                can_execute: permission.level.grants(PermissionLevel::Execute),
-            }
-        }),
-    )
+    Ok(permission.into())
 }
 
 fn account_error(error: GitAccountError) -> ApiError {

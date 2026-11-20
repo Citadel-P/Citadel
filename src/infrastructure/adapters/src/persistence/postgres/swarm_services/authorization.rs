@@ -1,4 +1,5 @@
 use super::*;
+use crate::persistence::postgres::authorization::EFFECTIVE_RESOURCE_PERMISSION;
 
 pub(super) async fn ensure_platform(
     tx: &mut Transaction<'_, Postgres>,
@@ -63,6 +64,13 @@ pub(super) async fn has_access(
     id: Uuid,
     requirement: PermissionRequirement,
 ) -> Result<bool, SwarmServiceError> {
-    let (actual_level,actual_specific)=sqlx::query_as::<_,(i32,i32)>(r#"WITH scope AS(SELECT id actorid FROM actors WHERE id=$1 AND isenabled UNION SELECT team.actorid FROM actorteammemberships m JOIN teams team ON team.id=m.teamid JOIN actors a ON a.id=team.actorid AND a.isenabled WHERE m.memberactorid=$1), grants AS(SELECT p.permissionlevel,p.specificpermissions FROM scope s JOIN actorroles ar ON ar.actorid=s.actorid JOIN permissions p ON p.roleid=ar.roleid WHERE p.resourcetype=$2 UNION ALL SELECT ra.permissionlevel,ra.specificpermissions FROM scope s JOIN resourceaccesses ra ON ra.actorid=s.actorid WHERE ra.resourcetype=$2 AND ra.resourceid=$3) SELECT COALESCE(MAX(permissionlevel),0)::integer,COALESCE(bit_or(specificpermissions),0)::integer FROM grants"#).bind(actor.value()).bind(requirement.resource_type as i32).bind(id).fetch_one(&mut **tx).await.map_err(storage)?;
+    let (actual_level, actual_specific) =
+        sqlx::query_as::<_, (i32, i32)>(EFFECTIVE_RESOURCE_PERMISSION)
+            .bind(actor.value())
+            .bind(requirement.resource_type as i32)
+            .bind(id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(storage)?;
     Ok(decode_permission(false, actual_level, actual_specific)?.allows(requirement))
 }

@@ -13,6 +13,22 @@ pub enum RegistryMutationKind {
     Metadata,
     Rename,
 }
+#[derive(Clone, Copy)]
+pub enum RegistryListFilter<'a> {
+    Catalog {
+        include_disabled: bool,
+        tag_ids: &'a [Uuid],
+    },
+    Ids(&'a [Uuid]),
+}
+
+impl RegistryListFilter<'_> {
+    pub const NON_DISABLED: Self = Self::Catalog {
+        include_disabled: false,
+        tag_ids: &[],
+    };
+}
+
 pub trait RegistryRepository: Send + Sync {
     /// Resolve only identity; callers authorize before loading credentials.
     fn find_id_by_name<'a>(
@@ -24,6 +40,7 @@ pub trait RegistryRepository: Send + Sync {
         &'a self,
         actor_id: ActorId,
         administrator: bool,
+        filter: RegistryListFilter<'a>,
     ) -> BoxFuture<'a, Result<Vec<RegistryDetails>, RegistryError>>;
 
     fn get_registry<'a>(

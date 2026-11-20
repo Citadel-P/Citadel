@@ -1,6 +1,13 @@
-//! Preserve the cluster-volume fields carried by the Agent contract in Docker shape.
+//! Volume inventory requests and Docker-shaped cluster volume mappings.
+use super::{
+    AgentClient, LIST_VOLUMES_METHOD, ListVolumesRequest, RuntimeCapabilityError,
+    RuntimeVolumeSummary, map_volume, normalize_status,
+};
 use citadel_contracts::citadel::shared_models::v1::ClusterVolumeMessage;
+use citadel_contracts::citadel::volumes::v1::ListVolumesResponse;
+use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
+use tokio_util::sync::CancellationToken;
 
 pub(super) fn cluster(v: ClusterVolumeMessage) -> Value {
     json!({
@@ -24,4 +31,59 @@ pub(super) fn cluster(v: ClusterVolumeMessage) -> Value {
             "NodeID": p.node_id, "State": p.state, "PublishContext": p.publish_context,
         })).collect::<Vec<_>>(),
     })
+}
+
+impl AgentClient {
+    async fn volume_list(
+        &self,
+        names_only: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<ListVolumesResponse, RuntimeCapabilityError> {
+        self.retry_unary(cancellation, || async {
+            let request = self.signer.sign(
+                ListVolumesRequest {
+                    names_only,
+                    ..Default::default()
+                },
+                LIST_VOLUMES_METHOD,
+                Some(self.operation_timeout),
+            )?;
+            self.volume_client()
+                .list(request)
+                .await
+                .map(|v| v.into_inner())
+                .map_err(normalize_status)
+        })
+        .await
+    }
+}
+impl citadel_platforms::VolumeInventoryPort for AgentClient {
+    fn list_volume_names<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            Ok(self
+                .volume_list(true, cancellation)
+                .await?
+                .volumes
+                .into_iter()
+                .map(|v| v.name)
+                .collect())
+        })
+    }
+    fn list_volumes<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<RuntimeVolumeSummary>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            Ok(self
+                .volume_list(false, cancellation)
+                .await?
+                .volumes
+                .into_iter()
+                .map(map_volume)
+                .collect())
+        })
+    }
 }

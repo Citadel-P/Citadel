@@ -26,6 +26,19 @@ impl NetworkInventoryPort for Runtime<'_> {
     }
 }
 impl VolumeInventoryPort for Runtime<'_> {
+    fn list_volume_names<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
+        match self {
+            Runtime::Local(runtime) => {
+                VolumeInventoryPort::list_volume_names(*runtime, cancellation)
+            }
+            Runtime::Agent(runtime) => runtime.list_volume_names(cancellation),
+            Runtime::Edge(runtime) => runtime.list_volume_names(cancellation),
+        }
+    }
+
     fn list_volumes<'a>(
         &'a self,
         cancel: &'a CancellationToken,

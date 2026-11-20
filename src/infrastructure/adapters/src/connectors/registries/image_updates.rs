@@ -2,7 +2,7 @@
 use super::digest_cache::ImageDigestCache;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, image_updates::*};
 use citadel_primitives::ActorId;
-use citadel_registries::RegistryRepository;
+use citadel_registries::{RegistryListFilter, RegistryRepository, RegistryStatus};
 use futures_util::future::BoxFuture;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -53,19 +53,24 @@ impl ImageUpdateResolver for ImageUpdateAdapter {
         &self,
         actor: ActorId,
         administrator: bool,
+        selected_id: Option<Uuid>,
     ) -> BoxFuture<'_, Result<Vec<ImageUpdateRegistry>, RuntimeCapabilityError>> {
         Box::pin(async move {
             let repository =
                 crate::persistence::postgres::registries::PostgresRegistryRepository::new(
                     self.pool.clone(),
                 );
+            let filter = match selected_id.as_ref() {
+                Some(id) => RegistryListFilter::Ids(std::slice::from_ref(id)),
+                None => RegistryListFilter::NON_DISABLED,
+            };
             let registries = repository
-                .list_registries(actor, administrator)
+                .list_registries(actor, administrator, filter)
                 .await
                 .map_err(|_| failure("Registry access could not be verified."))?;
             Ok(registries
                 .into_iter()
-                .filter(|r| r.status != citadel_registries::RegistryStatus::Disabled)
+                .filter(|r| r.status != RegistryStatus::Disabled)
                 .map(|r| ImageUpdateRegistry {
                     id: r.id,
                     host: r.registry_host.clone(),

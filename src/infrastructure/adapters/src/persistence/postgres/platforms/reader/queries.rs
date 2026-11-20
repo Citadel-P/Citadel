@@ -1,5 +1,6 @@
 use super::super::*;
 use super::{network_usage, targets};
+use crate::persistence::postgres::authorization::AUTHORIZED_CTE;
 
 #[derive(Clone)]
 pub struct PostgresPlatformReader {
@@ -96,13 +97,17 @@ impl PlatformReader for PostgresPlatformReader {
         Box::pin(async move {
             let mut names = BTreeMap::new();
             for batch in containers.chunks(500) {
-                let rows = sqlx::query(include_str!("container_owner_names.sql"))
-                    .bind(actor.value())
-                    .bind(administrator)
-                    .bind(batch)
-                    .fetch_all(&self.pool)
-                    .await
-                    .map_err(storage)?;
+                let rows = sqlx::query(concat!(
+                    include_str!("../../enabled_actor_scope.sql"),
+                    include_str!("../workload_read_grants.sql"),
+                    include_str!("container_owner_names.sql")
+                ))
+                .bind(actor.value())
+                .bind(administrator)
+                .bind(batch)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
                 for row in rows {
                     names.insert(
                         row.try_get("id").map_err(storage)?,
@@ -284,25 +289,7 @@ impl PlatformReader for PostgresPlatformReader {
         Box::pin(async move {
             let query = format!(
                 r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), global_access AS (
-    SELECT EXISTS (
-        SELECT 1 FROM actor_scope scope
-        JOIN actorroles assignment ON assignment.actorid = scope.actorid
-        JOIN permissions permission ON permission.roleid = assignment.roleid
-        WHERE permission.resourcetype = $2
-          AND (permission.permissionlevel & $3) <> 0
-    ) AS allowed
-)
+{AUTHORIZED_CTE}
 {PLATFORM_SELECT}
 WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
     SELECT 1 FROM actor_scope scope

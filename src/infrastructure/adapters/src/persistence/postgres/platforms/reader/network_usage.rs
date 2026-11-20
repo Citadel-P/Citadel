@@ -19,6 +19,8 @@ pub(super) async fn read(
         return Ok(result);
     }
     let saved = sqlx::query(concat!(
+        include_str!("../../enabled_actor_scope.sql"),
+        include_str!("../workload_read_grants.sql"),
         include_str!("network_saved_owners.sql"),
         include_str!("../../swarm_services/effective_health.sql"),
         include_str!("network_usage_owners_tail.sql"),
@@ -40,6 +42,8 @@ pub(super) async fn read(
     for (batch_index, batch) in networks.chunks(100).enumerate() {
         let bounded: Vec<_> = batch.iter().map(BoundedNetwork::from).collect();
         let rows = sqlx::query(concat!(
+            include_str!("../../enabled_actor_scope.sql"),
+            include_str!("../workload_read_grants.sql"),
             include_str!("network_usage_owners.sql"),
             include_str!("../../swarm_services/effective_health.sql"),
             include_str!("network_usage_owners_tail.sql"),
@@ -215,6 +219,8 @@ pub(super) async fn containers(
     container: Option<Uuid>,
 ) -> Result<Vec<NetworkContainer>, AuthorizedReadError> {
     sqlx::query(concat!(
+        include_str!("../../enabled_actor_scope.sql"),
+        include_str!("../workload_read_grants.sql"),
         include_str!("network_usage_owners.sql"),
         include_str!("../../swarm_services/effective_health.sql"),
         include_str!("network_usage_owners_tail.sql"),

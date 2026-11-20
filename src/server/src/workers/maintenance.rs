@@ -181,11 +181,12 @@ async fn compact_batch_observed(
     store: &dyn MaintenanceStore,
     productive_passes: &mut u64,
 ) -> Result<bool, MaintenanceError> {
+    let mut sweep = citadel_runtime::maintenance::CompactionSweep::default();
     let mut stalled = std::collections::BTreeSet::new();
     let mut progressed = false;
     let mut physical_complete = false;
     for _ in 0..COMPACTION_PASSES {
-        let pass = store.compact().await?;
+        let pass = store.compact_next(&mut sweep).await?;
         if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
             job.progress(
                 u64::from(pass.processed > 0),
@@ -254,9 +255,10 @@ mod tests {
                 Ok(0)
             })
         }
-        fn compact(
-            &self,
-        ) -> BoxFuture<'_, Result<citadel_runtime::maintenance::CompactionProgress, MaintenanceError>>
+        fn compact_next<'a>(
+            &'a self,
+            _: &'a mut citadel_runtime::maintenance::CompactionSweep,
+        ) -> BoxFuture<'a, Result<citadel_runtime::maintenance::CompactionProgress, MaintenanceError>>
         {
             Box::pin(async {
                 self.compactions.fetch_add(1, Ordering::SeqCst);

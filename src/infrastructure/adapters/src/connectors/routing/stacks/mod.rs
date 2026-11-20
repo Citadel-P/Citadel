@@ -143,10 +143,12 @@ impl StackRuntimeRouter {
         match orchestration {
             StackOrchestrationMode::DockerCompose => {
                 // Read live state: inventory may lag immediately after an apply.
+                let label = format!("com.docker.compose.project={project}");
                 let target = self.platform(platform_id).await?;
                 let containers = if target.connector == citadel_platforms::ConnectorKind::Local {
+                    let filters = serde_json::json!({ "label": [label] }).to_string();
                     self.docker
-                        .list_containers(true)
+                        .list_containers_filtered(true, Some(&filters))
                         .await
                         .map_err(runtime_io)?
                         .into_iter()
@@ -155,7 +157,7 @@ impl StackRuntimeRouter {
                 } else {
                     self.agent_for(&target, cancellation)
                         .await?
-                        .list_containers(cancellation)
+                        .list_containers_by_label(&label, cancellation)
                         .await
                         .map_err(agent_error)?
                 };

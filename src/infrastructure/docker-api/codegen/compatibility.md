@@ -78,6 +78,9 @@ operations needed by current callers.
 | SecretList, SecretInspect, SecretCreate, SecretUpdate, SecretDelete | Generated |
 | ConfigList, ConfigInspect, ConfigCreate, ConfigUpdate, ConfigDelete | Generated |
 
+Platform telemetry uses bounded projections of ImageList, NetworkList, VolumeList and
+SystemDataUsage to decode counts and byte totals. Inventory callers use the generated models.
+
 Container/image raw inspect stays separate because the UI promises the complete
 original document, including unknown fields and exact absent/null representations.
 The generated models' open-field map protects mutations but does not promise a

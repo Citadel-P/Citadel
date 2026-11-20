@@ -95,6 +95,19 @@ impl citadel_platforms::NetworkObservationPort for DockerClient {
 }
 
 impl citadel_platforms::VolumeInventoryPort for DockerClient {
+    fn list_volume_names<'a>(
+        &'a self,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            tokio::select! {
+                biased;
+                () = cancellation.cancelled() => Err(cancelled_error()),
+                result = self.list_volume_names_filtered(None) => result.map_err(normalize_docker_error),
+            }
+        })
+    }
+
     fn list_volumes<'a>(
         &'a self,
         cancellation: &'a CancellationToken,
@@ -233,10 +246,20 @@ impl DockerClient {
         id: &str,
         cancellation: &CancellationToken,
     ) -> Result<RuntimeContainerStat, RuntimeCapabilityError> {
-        let value = tokio::select! {
+        let value = self.read_sample(id, false, cancellation).await?;
+        Ok(map_container_stat(id, value))
+    }
+
+    pub(super) async fn read_sample(
+        &self,
+        id: &str,
+        one_shot: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<ContainerStats, RuntimeCapabilityError> {
+        tokio::select! {
             biased;
             () = cancellation.cancelled() => return Err(cancelled_error()),
-            result = self.container_stats_once(id) => result,
+            result = self.read_container_stats(id, one_shot) => result,
         }
         .map_err(|error| {
             let error = normalize_docker_error(error);
@@ -253,8 +276,7 @@ impl DockerClient {
                     retryable = error.retryable, %error, "Container statistics sample failed");
             }
             error
-        })?;
-        Ok(map_container_stat(id, value))
+        })
     }
 }
 
@@ -268,7 +290,7 @@ impl ContainerStatsPort for DockerClient {
     }
 }
 
-fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
+pub(super) fn map_container_stat(id: &str, value: ContainerStats) -> RuntimeContainerStat {
     let usage = value
         .memory_stats
         .usage

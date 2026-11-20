@@ -122,35 +122,30 @@ impl PostgresBuildRepository {
 }
 
 impl PostgresBuildRepository {
-    pub(super) fn list_impl(
-        &self,
+    pub(super) fn list_impl<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<BuildProject>, BuildError>> {
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BuildProject>, BuildError>> {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_CTE}
-SELECT project.* FROM buildprojects project
-WHERE project.archivedat IS NULL
-  AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
-      SELECT 1 FROM actor_scope scope
-      JOIN resourceaccesses access ON access.actorid=scope.actorid
-      WHERE access.resourcetype=$2 AND access.resourceid=project.id
-        AND access.permissionlevel = ANY($3)
-  ))
-ORDER BY project.name,project.id"#
-            );
-            let values = sqlx::query(AssertSqlSafe(query.as_str()))
-                .bind(actor.value())
-                .bind(ResourceType::Build as i32)
-                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
-                .bind(administrator)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?
-                .into_iter()
-                .map(map_project)
-                .collect::<Result<Vec<_>, _>>()?;
+            let values = crate::persistence::postgres::authorization::tagged_workload_rows(
+                &self.pool,
+                actor,
+                administrator,
+                ResourceType::Build,
+                "Build",
+                "buildprojects resource WHERE resource.archivedat IS NULL",
+                tags,
+            )
+            .await
+            .map_err(storage)?
+            .into_iter()
+            .map(map_project)
+            .collect::<Result<Vec<_>, _>>()?;
+            if values.is_empty() {
+                return Ok(values);
+            }
             enrich_projects(&mut *self.pool.acquire().await.map_err(storage)?, values).await
         })
     }

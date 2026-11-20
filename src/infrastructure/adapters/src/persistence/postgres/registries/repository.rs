@@ -27,15 +27,39 @@ impl RegistryRepository for PostgresRegistryRepository {
         &'a self,
         actor_id: ActorId,
         administrator: bool,
+        filter: RegistryListFilter<'a>,
     ) -> BoxFuture<'a, Result<Vec<RegistryDetails>, RegistryError>> {
         Box::pin(async move {
-            let query = authorized_catalog_query("registries", "registry", ResourceType::Registry);
-            sqlx::query(AssertSqlSafe(query.as_str()))
+            let (predicate, ids) = match filter {
+                RegistryListFilter::Ids([]) => return Ok(Vec::new()),
+                RegistryListFilter::Ids(ids) => {
+                    ("AND resource.id=ANY($6::uuid[])".to_owned(), Some(ids))
+                }
+                RegistryListFilter::Catalog {
+                    include_disabled,
+                    tag_ids,
+                } => {
+                    let mut predicate = String::new();
+                    if !include_disabled {
+                        predicate.push_str("AND resource.status <> 'Disabled'");
+                    }
+                    if !tag_ids.is_empty() {
+                        predicate.push_str(ALL_REQUESTED_TAGS);
+                    }
+                    (predicate, (!tag_ids.is_empty()).then_some(tag_ids))
+                }
+            };
+            let query = authorized_catalog_query("registries", "", &predicate);
+            let mut query = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor_id.value())
                 .bind(ResourceType::Registry as i32)
-                .bind(READ_MASK)
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
-                .bind(TaggableResourceType::Registry.as_database_str())
+                .bind(TaggableResourceType::Registry.as_database_str());
+            if let Some(ids) = ids {
+                query = query.bind(ids);
+            }
+            query
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

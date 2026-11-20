@@ -211,12 +211,14 @@ pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
             &std::sync::atomic::AtomicI64::new(0),
         )
         .await?
+        .unwrap_or_default()
         .processed
         + super::platforms::statistics::platform_coarse::compact(
             pool,
             &std::sync::atomic::AtomicI64::new(0),
         )
-        .await?)
+        .await?
+        .unwrap_or_default())
 }
 
 /// Refresh tokens have a separate expiry cadence. Backup leases are ownership
@@ -293,39 +295,57 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })
     }
-    fn compact(
-        &self,
+    fn compact_next<'a>(
+        &'a self,
+        sweep: &'a mut citadel_runtime::maintenance::CompactionSweep,
     ) -> futures_util::future::BoxFuture<
-        '_,
+        'a,
         Result<
             citadel_runtime::maintenance::CompactionProgress,
             citadel_runtime::maintenance::MaintenanceError,
         >,
     > {
+        use super::platforms::statistics::{maintenance, platform_coarse, platform_maintenance};
+        use citadel_runtime::maintenance::{CompactionProgress, MaintenanceError};
+
         Box::pin(async move {
-            let (physical, scan_pending) = super::platforms::statistics::maintenance::compact_page(
-                &self.pool,
-                &self.physical_discovery,
-            )
-            .await
-            .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
-            let platform = super::platforms::statistics::platform_maintenance::compact(
-                &self.pool,
-                &self.platform_cursor,
-            )
-            .await
-            .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
-            let coarse = super::platforms::statistics::platform_coarse::compact(
-                &self.pool,
-                &self.coarse_cursor,
-            )
-            .await
-            .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))?;
-            Ok(citadel_runtime::maintenance::CompactionProgress {
-                processed: physical + platform.processed + coarse,
-                stalled_source: platform.stalled_source,
-                scan_pending,
-            })
+            let storage_error = |e: sqlx::Error| MaintenanceError(e.to_string());
+            let mut result = CompactionProgress::default();
+            if !sweep.containers_exhausted {
+                let (count, pending) =
+                    maintenance::compact_page(&self.pool, &self.physical_discovery)
+                        .await
+                        .map_err(storage_error)?;
+                result.processed = count;
+                result.scan_pending = pending;
+                sweep.containers_exhausted = count == 0 && !pending;
+            }
+            if !sweep.platform_exhausted {
+                match platform_maintenance::compact(&self.pool, &self.platform_cursor)
+                    .await
+                    .map_err(storage_error)?
+                {
+                    None => sweep.platform_exhausted = true,
+                    Some(platform) => {
+                        result.processed += platform.processed;
+                        result.stalled_source = platform.stalled_source;
+                        // Sealing minutes can make another fifteen-minute block eligible.
+                        if platform.processed > 0 {
+                            sweep.coarse_exhausted = false;
+                        }
+                    }
+                }
+            }
+            if !sweep.coarse_exhausted {
+                match platform_coarse::compact(&self.pool, &self.coarse_cursor)
+                    .await
+                    .map_err(storage_error)?
+                {
+                    None => sweep.coarse_exhausted = true,
+                    Some(count) => result.processed += count,
+                }
+            }
+            Ok(result)
         })
     }
     fn cleanup(

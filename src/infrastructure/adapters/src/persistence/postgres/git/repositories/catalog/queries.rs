@@ -1,35 +1,15 @@
 use super::SYNC_STATUS;
+use crate::persistence::postgres::authorization::{ALL_REQUESTED_TAGS, authorized_catalog_query};
+use uuid::Uuid;
 
-const AUTHORIZED_CTE: &str = r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), global_access AS (
-    SELECT EXISTS (
-        SELECT 1 FROM actor_scope scope
-        JOIN actorroles assignment ON assignment.actorid = scope.actorid
-        JOIN permissions permission ON permission.roleid = assignment.roleid
-        WHERE permission.resourcetype = $2
-          AND permission.permissionlevel = ANY($3)
-    ) AS allowed
-)
-"#;
-pub(super) fn authorized_list() -> String {
-    format!(
-        r#"{AUTHORIZED_CTE}
-SELECT resource.*, {SYNC_STATUS}, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',tag.id,'name',tag.name,'color',tag.color) ORDER BY tag.name,tag.id)
- FROM resourcetags link JOIN tags tag ON tag.id=link.tagid WHERE link.resourcetype=$5 AND link.resourceid=resource.id),'[]'::jsonb) AS tags,
- NULL::jsonb AS latest_activity
-FROM gitrepositories resource WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
- SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
- WHERE access.resourcetype=$2 AND access.resourceid=resource.id AND access.permissionlevel = ANY($3)))
-ORDER BY resource.name,resource.id"#
+pub(super) fn authorized_list(tag_ids: &[Uuid]) -> String {
+    authorized_catalog_query(
+        "gitrepositories",
+        &format!(", {SYNC_STATUS}, NULL::jsonb AS latest_activity"),
+        if tag_ids.is_empty() {
+            ""
+        } else {
+            ALL_REQUESTED_TAGS
+        },
     )
 }

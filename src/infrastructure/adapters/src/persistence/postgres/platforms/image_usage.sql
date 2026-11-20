@@ -1,21 +1,11 @@
-WITH actor_scope AS (
-    SELECT id actorid FROM actors WHERE id=$1 AND isenabled
-    UNION SELECT team.actorid FROM actorteammemberships membership
-    JOIN teams team ON team.id=membership.teamid
-    JOIN actors a ON a.id=team.actorid AND a.isenabled WHERE membership.memberactorid=$1
-), grants AS (
-    SELECT p.resourcetype kind,NULL::uuid resourceid,p.permissionlevel
-    FROM actor_scope scope JOIN actorroles ar ON ar.actorid=scope.actorid
-    JOIN permissions p ON p.roleid=ar.roleid
-    UNION ALL SELECT a.resourcetype,a.resourceid,a.permissionlevel
-    FROM actor_scope scope JOIN resourceaccesses a ON a.actorid=scope.actorid
-), workloads AS (
+workloads AS (
     SELECT 1 kind,id,name,status FROM deployments WHERE platformid=$3
     UNION ALL SELECT 2,s.id,s.name,r.status FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$3
     UNION ALL SELECT 20,id,name,health FROM swarmservices WHERE platformid=$3
 ), authorized AS (
-    SELECT * FROM workloads w WHERE $2 OR EXISTS(SELECT 1 FROM grants g
-        WHERE g.kind=w.kind AND (g.resourceid IS NULL OR g.resourceid=w.id) AND g.permissionlevel IN (1,2,4))
+    SELECT * FROM workloads w WHERE $2
+       OR w.kind IN (SELECT kind FROM readable_types)
+       OR (w.kind, w.id) IN (SELECT kind, resourceid FROM readable_resources)
 ), actual AS (
     SELECT DISTINCT c.dockercontainerid,c.name,c.state,c.projectionobservedat,c.projectionstalesince,
         COALESCE(c.deploymentid,c.stackid,service.id,stack.id) ownerid,

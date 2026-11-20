@@ -338,8 +338,24 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
             .contains(pool_tag["id"].as_str().unwrap())
     );
     for (filter, expected) in [
-        (pool_tag["name"].as_str().unwrap().to_owned(), true),
+        (
+            pool_tag["name"].as_str().unwrap().to_ascii_uppercase(),
+            true,
+        ),
+        (
+            format!(
+                "{}&tags={}",
+                pool_tag["id"].as_str().unwrap(),
+                pool_tag["name"].as_str().unwrap()
+            ),
+            true,
+        ),
+        (
+            format!("{}&tags=absent-{suffix}", pool_tag["id"].as_str().unwrap()),
+            false,
+        ),
         (format!("absent-{suffix}"), false),
+        ("%00".to_owned(), false),
     ] {
         let response = request(
             &app,

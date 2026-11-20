@@ -9,13 +9,12 @@ use crate::connectors::edge::EdgeSession;
 use citadel_contracts::citadel::{
     containers::v1::{
         ContainerIds, CreateContainerRequest, CreateContainerResponse, DeleteContainerRequest,
-        ExecBinaryRequest, ExecServerMessage, exec_server_message,
+        ExecBinaryRequest, ExecServerMessage, ListContainersRequest, OptionChain,
+        exec_server_message,
     },
     edge::v1::EdgeCommandKind,
 };
-use citadel_platforms::{
-    ContainerInventoryPort, ImageInventoryPort, NetworkInventoryPort, NetworkMutationPort,
-};
+use citadel_platforms::{ImageInventoryPort, NetworkInventoryPort, NetworkMutationPort};
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
 use prost::Message;
 use std::{sync::Arc, time::Duration};
@@ -243,13 +242,40 @@ impl AgentExecutionClient {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<Vec<citadel_platforms::RuntimeContainerSummary>, RuntimeCapabilityError> {
+        self.list_container_metadata(
+            super::client::container_metadata_request(false),
+            cancellation,
+        )
+        .await
+    }
+
+    pub async fn list_containers_by_label(
+        &self,
+        label: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<citadel_platforms::RuntimeContainerSummary>, RuntimeCapabilityError> {
+        let mut request = super::client::container_metadata_request(false);
+        request.filters.insert(
+            "label".into(),
+            OptionChain {
+                options: [(label.to_owned(), true)].into(),
+            },
+        );
+        self.list_container_metadata(request, cancellation).await
+    }
+
+    async fn list_container_metadata(
+        &self,
+        request: ListContainersRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<citadel_platforms::RuntimeContainerSummary>, RuntimeCapabilityError> {
         match self {
-            Self::Direct(client) => client.list_containers(cancellation).await,
+            Self::Direct(client) => client.list_container_metadata(request, cancellation).await,
             Self::Edge(session) => {
                 crate::connectors::edge::EdgeRuntime {
                     session: session.clone(),
                 }
-                .list_containers(cancellation)
+                .list_container_metadata(request, cancellation)
                 .await
             }
         }

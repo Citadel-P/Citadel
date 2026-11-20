@@ -2875,6 +2875,46 @@ async fn semantic_container_replays_advance_fences_without_revisions_or_notifica
             .is_err(),
         "no repeated drift/prune notification"
     );
+    let mut health = citadel_docker::client::container_health::observation(
+        &json!({"Config":{"Healthcheck":{"Test":["CMD","probe"]}},"State":{"Health":{"Status":"healthy"}}}),
+    );
+    let now = Utc::now();
+    let mut persist_health = |offset: i64, failing_streak: i64| {
+        let mut sample = container.clone();
+        health.observed_at = (now.timestamp() + offset) * 1000;
+        health.last_check_at = Some((now + chrono::Duration::seconds(offset)).to_rfc3339());
+        health.failing_streak = Some(failing_streak);
+        sample.health = Some(health.clone());
+        ResourceSnapshot {
+            platform_id: platform,
+            observed_at: now + chrono::Duration::seconds(60 + offset),
+            inventory: ResourceInventory::Containers(vec![sample]),
+        }
+    };
+    for (offset, streak, expected_version) in [
+        (0, 0, after.0 + 1),
+        (1, 0, after.0 + 1),
+        (2, 1, after.0 + 2),
+    ] {
+        let replay = persist_health(offset, streak);
+        assert_eq!(
+            store
+                .persist_resource_committed(&replay, None)
+                .await
+                .unwrap(),
+            ProjectionChange::Changed
+        );
+        let (revision, stored_time, last_check, fence): (i64, i64, String, i64) = sqlx::query_as(
+            "SELECT rowversion,(health->>'observedAt')::bigint,health->>'lastCheckAt',projectionobservedat FROM containers WHERE platformid=$1 AND dockercontainerid=$2"
+        ).bind(platform).bind(&container.id).fetch_one(&pool).await.unwrap();
+        assert_eq!(revision, expected_version);
+        assert_eq!(stored_time, (now.timestamp() + offset) * 1000);
+        assert_eq!(
+            last_check,
+            (now + chrono::Duration::seconds(offset)).to_rfc3339()
+        );
+        assert_eq!(fence, replay.observed_at.timestamp());
+    }
     assert_eq!(
         store
             .persist_resource_committed(

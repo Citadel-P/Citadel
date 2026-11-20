@@ -21,7 +21,7 @@ docker version >/dev/null
 docker compose version >/dev/null
 
 cargo test --locked -p citadel-adapters --test stack_runtime_local \
-  local_compose_stack_apply_creates_owned_runtime_and_cleans_it \
+  compose_ \
   -- --ignored --test-threads=1
 
 if [ "${CITADEL_RUN_SWARM_LIFECYCLE:-false}" = "true" ]; then

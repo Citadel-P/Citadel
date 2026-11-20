@@ -494,23 +494,18 @@ async fn list_git_repositories(
         &headers,
     )
     .await?;
-    let records = api_result(
+    let repositories = api_result(
         state
             .git_repositories
-            .list_git_repositories(principal.actor_id, principal.is_administrator())
+            .list_git_repositories(
+                principal.actor_id,
+                principal.is_administrator(),
+                &filters.tags,
+            )
             .await
             .map_err(metadata_error),
         &headers,
     )?;
-    let repositories = records
-        .into_iter()
-        .filter(|repository| {
-            filters
-                .tags
-                .iter()
-                .all(|id| repository.tags.iter().any(|tag| tag.id == *id))
-        })
-        .collect();
     let git_repositories = api_result(
         authorized_repositories(&state.identity, &principal, repositories).await,
         &headers,

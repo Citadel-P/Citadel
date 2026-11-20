@@ -3,6 +3,16 @@ use citadel_contracts::citadel::{
     containers::v1::InspectContainerRequest, shared_models::v1::InspectContainerResponse,
 };
 
+pub(crate) fn container_metadata_request(observe_health: bool) -> ListContainersRequest {
+    ListContainersRequest {
+        all: Some(true),
+        size: Some(false),
+        metadata_only: true,
+        observe_health,
+        ..Default::default()
+    }
+}
+
 impl AgentClient {
     pub async fn container_processes(
         &self,

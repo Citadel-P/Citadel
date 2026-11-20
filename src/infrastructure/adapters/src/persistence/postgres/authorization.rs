@@ -1,44 +1,134 @@
-pub(crate) const READ_MASK: i32 = 1 | 2 | 4;
-
-pub(crate) const AUTHORIZED_CTE: &str = r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), global_access AS (
-    SELECT EXISTS (
-        SELECT 1 FROM actor_scope scope
-        JOIN actorroles assignment ON assignment.actorid = scope.actorid
-        JOIN permissions permission ON permission.roleid = assignment.roleid
-        WHERE permission.resourcetype = $2
-          AND (permission.permissionlevel & $3) <> 0
-    ) AS allowed
+pub(super) const EFFECTIVE_RESOURCE_PERMISSION: &str = concat!(
+    include_str!("enabled_actor_scope.sql"),
+    r#", grants AS (
+    SELECT p.permissionlevel, p.specificpermissions FROM actor_scope s
+    JOIN actorroles ar ON ar.actorid=s.actorid JOIN permissions p ON p.roleid=ar.roleid
+    WHERE p.resourcetype=$2
+    UNION ALL
+    SELECT a.permissionlevel, a.specificpermissions FROM actor_scope s
+    JOIN resourceaccesses a ON a.actorid=s.actorid
+    WHERE a.resourcetype=$2 AND a.resourceid=$3
 )
-"#;
+SELECT COALESCE(MAX(permissionlevel),0)::integer, COALESCE(bit_or(specificpermissions),0)::integer
+FROM grants"#
+);
 
-pub(crate) fn authorized_catalog_query(
-    table: &str,
-    alias: &str,
-    resource_type: citadel_primitives::ResourceType,
-) -> String {
-    let extra_columns = if resource_type == citadel_primitives::ResourceType::GitRepository {
-        ", NULL::jsonb AS latest_activity"
-    } else {
-        ""
-    };
+pub(crate) const AUTHORIZED_CTE: &str = concat!(
+    include_str!("enabled_actor_scope.sql"),
+    include_str!("catalog_role_levels.sql"),
+    ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE (permissionlevel & $3) <> 0) AS allowed)\n"
+);
+
+pub(crate) const AUTHORIZED_BY_LEVELS_CTE: &str = concat!(
+    include_str!("enabled_actor_scope.sql"),
+    include_str!("catalog_role_levels.sql"),
+    ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE permissionlevel = ANY($3)) AS allowed)\n"
+);
+
+/// The resource tag key is unique per (type, resource, tag). Count requested
+/// IDs once so duplicate filters have the same meaning as a single tag.
+pub(super) const ALL_REQUESTED_TAGS: &str = r#"
+ AND resource.id IN (
+     SELECT link.resourceid FROM resourcetags link
+     WHERE link.resourcetype=$5 AND link.tagid=ANY($6)
+     GROUP BY link.resourceid
+     HAVING count(*)=(SELECT count(DISTINCT id) FROM unnest($6::uuid[]) AS requested(id))
+ )"#;
+
+pub(super) fn authorized_catalog_query(table: &str, extra_columns: &str, filter: &str) -> String {
     format!(
-        r#"{AUTHORIZED_CTE}
+        r#"{AUTHORIZED_BY_LEVELS_CTE}
 SELECT resource.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',tag.id,'name',tag.name,'color',tag.color) ORDER BY tag.name,tag.id)
  FROM resourcetags link JOIN tags tag ON tag.id=link.tagid WHERE link.resourcetype=$5 AND link.resourceid=resource.id),'[]'::jsonb) AS tags{extra_columns}
 FROM {table} resource WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
  SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
- WHERE access.resourcetype=$2 AND access.resourceid=resource.id AND (access.permissionlevel & $3)<>0))
-ORDER BY resource.name,resource.id -- {alias}"#
+ WHERE access.resourcetype=$2 AND access.resourceid=resource.id AND access.permissionlevel=ANY($3)))
+{filter}
+ORDER BY resource.name,resource.id"#
     )
+}
+
+/// Build projects, pools and scripts accept both tag names and UUIDs. Resolve
+/// each filter independently, including names that also parse as UUIDs.
+pub(super) async fn tagged_workload_rows(
+    pool: &sqlx::PgPool,
+    actor: citadel_primitives::ActorId,
+    administrator: bool,
+    kind: citadel_primitives::ResourceType,
+    tag_type: &'static str,
+    source: &'static str,
+    tags: &[String],
+) -> Result<Vec<sqlx::postgres::PgRow>, sqlx::Error> {
+    // PostgreSQL text cannot contain NUL, so no stored tag can match it.
+    if tags.iter().any(|tag| tag.contains('\0')) {
+        return Ok(Vec::new());
+    }
+    let filter = if tags.is_empty() {
+        ""
+    } else {
+        r#"
+ AND resource.id IN (
+     SELECT link.resourceid
+     FROM unnest($5::text[], $6::uuid[]) WITH ORDINALITY AS requested(name,id,n)
+     JOIN tags tag ON tag.id=requested.id OR lower(tag.name COLLATE "C")=lower(requested.name COLLATE "C")
+     JOIN resourcetags link ON link.tagid=tag.id AND link.resourcetype=$7
+     GROUP BY link.resourceid HAVING count(DISTINCT requested.n)=cardinality($5)
+ )"#
+    };
+    let sql = format!(
+        r#"{AUTHORIZED_BY_LEVELS_CTE}
+SELECT resource.* FROM {source}
+ AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
+     SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
+     WHERE access.resourcetype=$2 AND access.resourceid=resource.id AND access.permissionlevel=ANY($3)))
+{filter} ORDER BY resource.name,resource.id"#
+    );
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(actor.value())
+        .bind(kind as i32)
+        .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
+        .bind(administrator);
+    if !tags.is_empty() {
+        let ids: Vec<_> = tags
+            .iter()
+            .map(|tag| uuid::Uuid::parse_str(tag).ok())
+            .collect();
+        query = query.bind(tags).bind(ids).bind(tag_type);
+    }
+    query.fetch_all(pool).await
+}
+
+/// Build and backup history inherit access from the project or policy that owns the run.
+pub(super) fn authorized_run_history_query(
+    table: &'static str,
+    parent_column: &'static str,
+    columns: &'static str,
+    single_parent: bool,
+) -> String {
+    let parent = format!("run.{parent_column}");
+    let access_target = if single_parent { "$4" } else { &parent };
+    let can_read = format!(
+        r#"$5 OR (SELECT allowed FROM global_access) OR EXISTS (
+    SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
+    WHERE access.resourcetype=$2 AND access.resourceid={access_target}
+      AND access.permissionlevel=ANY($3)
+)"#
+    );
+    if single_parent {
+        // An empty or singleton index key lets a generic prepared plan skip
+        // denied history and read allowed runs in parent-index order.
+        format!(
+            r#"{AUTHORIZED_BY_LEVELS_CTE}
+SELECT {columns} FROM {table} run
+WHERE {parent}=ANY(ARRAY(SELECT $4::uuid WHERE {can_read}))
+ORDER BY {parent},run.queuedat DESC,run.id DESC LIMIT $6"#
+        )
+    } else {
+        format!(
+            r#"{AUTHORIZED_BY_LEVELS_CTE}
+SELECT {columns} FROM {table} run
+WHERE $4::uuid IS NULL AND ({can_read})
+ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
+        )
+    }
 }

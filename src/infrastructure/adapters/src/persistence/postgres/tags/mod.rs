@@ -1,5 +1,4 @@
-use crate::persistence::postgres::authorization::AUTHORIZED_CTE;
-use crate::persistence::postgres::authorization::READ_MASK;
+use crate::persistence::postgres::authorization::AUTHORIZED_BY_LEVELS_CTE;
 use chrono::Utc;
 use citadel_primitives::{ActorId, ResourceType};
 use citadel_tags::{

@@ -209,27 +209,12 @@ impl ApplicationGroupReader {
                 p, id,
             )
             .await?;
-            let deployment = self
+            reference = self
                 .deployments
-                .get_authorized(p.actor_id, p.is_administrator(), id)
+                .running_terminal_container(p.actor_id, p.is_administrator(), id)
                 .await
-                .map_err(failure)?;
-            let containers = self
-                .platforms
-                .list_containers(deployment.platform_id)
-                .await
-                .map(|value| {
-                    value
-                        .into_iter()
-                        .map(crate::api::resources::platforms::views::ContainerView::from)
-                        .collect::<Vec<_>>()
-                })
-                .map_err(failure)?;
-            reference = containers
-                .into_iter()
-                .find(|c| c.deployment_id == Some(id) && c.state.eq_ignore_ascii_case("running"))
-                .ok_or(RealtimeReadError::Authorization)?
-                .container_id;
+                .map_err(failure)?
+                .ok_or(RealtimeReadError::Authorization)?;
         } else if owner == Owner::Stack {
             let id = Uuid::parse_str(&reference).map_err(failure)?;
             self.permission(

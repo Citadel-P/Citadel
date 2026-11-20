@@ -1,5 +1,6 @@
 use super::activity::record_run_activity;
 use super::*;
+use crate::persistence::postgres::authorization::authorized_run_history_query;
 
 impl PostgresBackupPersistence {
     pub(super) fn enqueue_run<'a>(
@@ -489,17 +490,11 @@ impl PostgresBackupPersistence {
         limit: usize,
     ) -> BoxFuture<'_, Result<Vec<BackupRun>, BackupError>> {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_CTE}
-SELECT run.* FROM backupruns run
-WHERE ($4::uuid IS NULL OR run.backuppolicyid=$4)
-  AND ($5 OR (SELECT allowed FROM global_access) OR EXISTS (
-      SELECT 1 FROM actor_scope scope
-      JOIN resourceaccesses access ON access.actorid=scope.actorid
-      WHERE access.resourcetype=$2 AND access.resourceid=run.backuppolicyid
-        AND access.permissionlevel = ANY($3)
-  ))
-ORDER BY run.queuedat DESC,run.id DESC LIMIT $6"#
+            let query = authorized_run_history_query(
+                "backupruns",
+                "backuppolicyid",
+                "run.*",
+                policy_id.is_some(),
             );
             let mut runs = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor.value())
