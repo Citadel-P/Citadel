@@ -117,18 +117,9 @@ ORDER BY d.createdat DESC, d.name, d.id"#
         })
     }
 }
-pub(super) const AUTHORIZED_CTES: &str = r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), global_permission AS (
+pub(super) const AUTHORIZED_CTES: &str = concat!(
+    include_str!("../enabled_actor_scope.sql"),
+    r#", global_permission AS (
     SELECT COALESCE(MAX(permission.permissionlevel), 0)::integer AS level_mask,
            COALESCE(bit_or(permission.specificpermissions), 0)::integer AS specific_mask
     FROM actor_scope scope
@@ -144,7 +135,8 @@ WITH actor_scope AS (
     WHERE access.resourcetype = 1
     GROUP BY access.resourceid
 )
-"#;
+"#
+);
 
 pub(super) const PROJECTION: &str = r#"
 SELECT d.id, d.name, d.description, d.platformid, d.createdat, d.createdbyactorid,

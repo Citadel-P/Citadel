@@ -31,6 +31,7 @@ impl RegistryRepository for Repository {
         &'a self,
         _: ActorId,
         _: bool,
+        _: RegistryListFilter<'a>,
     ) -> BoxFuture<'a, Result<Vec<RegistryDetails>, RegistryError>> {
         unimplemented!()
     }

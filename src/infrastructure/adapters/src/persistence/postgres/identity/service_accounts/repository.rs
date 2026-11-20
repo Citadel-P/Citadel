@@ -67,16 +67,7 @@ impl ServiceAccountRepository for PostgresServiceAccountRepository {
     ) -> BoxFuture<'a, Result<StoredPage<ServiceAccountDetails>, IdentityError>> {
         Box::pin(async move {
             let rows = sqlx::query(
-                r#"
-WITH actor_scope AS (
-    SELECT $1::uuid AS actorid
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), global_read AS (
+                concat!(include_str!("../../enabled_actor_scope.sql"), r#", global_read AS (
     SELECT EXISTS (
         SELECT 1
         FROM actor_scope scope
@@ -118,7 +109,7 @@ WHERE ($2 OR account.archivedatutc IS NULL)
         AND access.permissionlevel >= 1))
 ORDER BY account.name, account.id
 LIMIT $5 OFFSET $6
-"#,
+"#),
             )
             .bind(actor_id.value())
             .bind(include_archived)

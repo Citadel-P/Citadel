@@ -2,7 +2,6 @@ pub use repository::PostgresScriptRepository;
 pub(crate) mod executors;
 mod repository;
 mod rows;
-use crate::persistence::postgres::authorization::AUTHORIZED_BY_LEVELS_CTE as AUTHORIZED_CTE;
 use rows::*;
 mod recovery;
 pub(crate) use recovery::{recover_interrupted, recover_interrupted_with_mode};

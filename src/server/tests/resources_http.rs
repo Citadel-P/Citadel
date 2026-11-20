@@ -967,6 +967,11 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             Uuid::parse_str(git_account_id).unwrap(),
             PermissionLevel::Read,
         ),
+        (
+            ResourceType::GitAccount,
+            Uuid::parse_str(basic_git_account_id).unwrap(),
+            PermissionLevel::Write,
+        ),
     ] {
         sqlx::query(
             "INSERT INTO resourceaccesses (id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)",
@@ -1089,6 +1094,33 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         listed_registries["registries"][0]["capabilities"]["canExecute"],
         true
     );
+    for (collection, id) in [
+        ("registries", registry_id),
+        ("gitRepositories", repository_id),
+    ] {
+        for (second_tag, expected) in [
+            (tag_id, true),
+            (action_tags[0]["id"].as_str().unwrap(), false),
+        ] {
+            let response = request(
+                &app,
+                Method::GET,
+                &format!("/api/v1/{collection}?tags={tag_id}&tags={second_tag}"),
+                Some(resource_actor.clone()),
+                None,
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = response_json(response).await;
+            let rows = body[collection].as_array().unwrap();
+            assert_eq!(rows.len(), usize::from(expected), "{collection} filter");
+            if expected {
+                assert_eq!(rows[0]["id"], id);
+                assert_eq!(rows[0]["tags"][0]["id"], tag_id);
+            }
+        }
+    }
+    let cold_queries = resource_permission_queries();
     let listed_git_accounts = response_json(
         request(
             &app,
@@ -1101,9 +1133,17 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
     )
     .await;
     let visible_git_accounts = listed_git_accounts["gitAccounts"].as_array().unwrap();
-    assert_eq!(visible_git_accounts.len(), 1);
-    assert_eq!(visible_git_accounts[0]["id"], git_account_id);
-    assert_eq!(visible_git_accounts[0]["capabilities"]["canRead"], true);
+    assert_eq!(resource_permission_queries() - cold_queries, 1);
+    assert_eq!(visible_git_accounts.len(), 2);
+    for (id, can_write) in [(git_account_id, false), (basic_git_account_id, true)] {
+        let account = visible_git_accounts
+            .iter()
+            .find(|row| row["id"] == id)
+            .unwrap();
+        assert_eq!(account["capabilities"]["canRead"], true);
+        assert_eq!(account["capabilities"]["canWrite"], can_write);
+        assert!(account.get("configuration").is_none());
+    }
     let reader_config = response_json(
         request(
             &app,
@@ -1441,6 +1481,21 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         StatusCode::NO_CONTENT
     );
     let _ = tokio::fs::remove_dir_all(git_cache).await;
+}
+
+fn resource_permission_queries() -> u64 {
+    let mut metrics = String::new();
+    citadel_runtime::runtime_metrics::render_runtime_metrics(&mut metrics);
+    metrics
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix(
+                r#"citadel_runtime_iterations_total{family="AuthorizationResourceQuery"} "#,
+            )
+        })
+        .unwrap()
+        .parse()
+        .unwrap()
 }
 
 async fn request_raw(

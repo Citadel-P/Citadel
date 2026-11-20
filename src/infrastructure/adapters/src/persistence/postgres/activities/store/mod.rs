@@ -18,18 +18,9 @@ const MAXIMUM_ACTIVITY_INFO_BYTES: usize = 256 * 1024;
 mod volumes;
 mod webhooks;
 
-const AUTHORIZED_ACTIVITY_CTES: &str = r#"
-WITH actor_scope AS (
-    SELECT actor.id AS actorid
-    FROM actors actor
-    WHERE actor.id = $1 AND actor.isenabled
-    UNION
-    SELECT team.actorid
-    FROM actorteammemberships membership
-    JOIN teams team ON team.id = membership.teamid
-    JOIN actors team_actor ON team_actor.id = team.actorid AND team_actor.isenabled
-    WHERE membership.memberactorid = $1
-), authorized_resources AS (
+const AUTHORIZED_ACTIVITY_CTES: &str = concat!(
+    include_str!("../../enabled_actor_scope.sql"),
+    r#", authorized_resources AS (
     SELECT DISTINCT permission.resourcetype, NULL::uuid AS resourceid
     FROM actorroles actor_role
     JOIN permissions permission ON permission.roleid = actor_role.roleid
@@ -72,7 +63,8 @@ WITH actor_scope AS (
           )
       )
 )
-"#;
+"#
+);
 
 const ACTIVITY_PROJECTION: &str = r#"
 SELECT activity.id,

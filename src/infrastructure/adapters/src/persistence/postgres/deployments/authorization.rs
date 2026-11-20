@@ -1,4 +1,5 @@
 use super::*;
+use crate::persistence::postgres::authorization::EFFECTIVE_RESOURCE_PERMISSION;
 pub(super) async fn ensure_access(
     tx: &mut Transaction<'_, Postgres>,
     actor_id: ActorId,
@@ -89,34 +90,13 @@ pub(super) async fn effective_permission(
     resource_type: i32,
     resource_id: Option<Uuid>,
 ) -> Result<EffectivePermission, DeploymentError> {
-    let (level, specifics) = sqlx::query_as::<_, (i32, i32)>(
-        r#"WITH actor_scope AS (
-               SELECT id actorid FROM actors WHERE id=$1 AND isenabled
-               UNION
-               SELECT team.actorid FROM actorteammemberships membership
-               JOIN teams team ON team.id=membership.teamid
-               JOIN actors actor ON actor.id=team.actorid AND actor.isenabled
-               WHERE membership.memberactorid=$1), effective AS (
-               SELECT permission.permissionlevel, permission.specificpermissions
-               FROM actor_scope scope
-               JOIN actorroles assignment ON assignment.actorid=scope.actorid
-               JOIN permissions permission ON permission.roleid=assignment.roleid
-               WHERE permission.resourcetype=$2
-               UNION ALL
-               SELECT access.permissionlevel, access.specificpermissions
-               FROM actor_scope scope
-               JOIN resourceaccesses access ON access.actorid=scope.actorid
-               WHERE $3::uuid IS NOT NULL AND access.resourcetype=$2 AND access.resourceid=$3)
-           SELECT COALESCE(MAX(permissionlevel),0)::integer,
-                  COALESCE(bit_or(specificpermissions),0)::integer
-           FROM effective"#,
-    )
-    .bind(actor_id.value())
-    .bind(resource_type)
-    .bind(resource_id)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(storage)?;
+    let (level, specifics) = sqlx::query_as::<_, (i32, i32)>(EFFECTIVE_RESOURCE_PERMISSION)
+        .bind(actor_id.value())
+        .bind(resource_type)
+        .bind(resource_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(storage)?;
     decode_permission(false, level, specifics)
 }
 
@@ -128,14 +108,8 @@ pub(super) async fn has_resource_access(
     required: PermissionLevel,
 ) -> Result<bool, DeploymentError> {
     sqlx::query_scalar::<_, bool>(
-        r#"WITH actor_scope AS (
-               SELECT id actorid FROM actors WHERE id=$1 AND isenabled
-               UNION
-               SELECT team.actorid FROM actorteammemberships membership
-               JOIN teams team ON team.id=membership.teamid
-               JOIN actors actor ON actor.id=team.actorid AND actor.isenabled
-               WHERE membership.memberactorid=$1)
-           SELECT EXISTS(
+        concat!(include_str!("../enabled_actor_scope.sql"), r#"
+SELECT EXISTS(
                SELECT 1 FROM actor_scope scope
                JOIN actorroles assignment ON assignment.actorid=scope.actorid
                JOIN permissions permission ON permission.roleid=assignment.roleid
@@ -143,7 +117,7 @@ pub(super) async fn has_resource_access(
                UNION ALL
                SELECT 1 FROM actor_scope scope
                JOIN resourceaccesses access ON access.actorid=scope.actorid
-               WHERE access.resourcetype=$2 AND access.resourceid=$3 AND access.permissionlevel = ANY($4))"#,
+               WHERE access.resourcetype=$2 AND access.resourceid=$3 AND access.permissionlevel = ANY($4))"#),
     )
     .bind(actor_id.value())
     .bind(resource_type)

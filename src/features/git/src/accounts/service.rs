@@ -19,10 +19,7 @@ impl GitAccountService {
         actor_id: ActorId,
         administrator: bool,
     ) -> Result<Vec<GitAccount>, GitAccountError> {
-        self.store
-            .list(actor_id, administrator)
-            .await
-            .map(|accounts| accounts.iter().map(GitAccount::from).collect())
+        self.store.list(actor_id, administrator).await
     }
 
     pub async fn get(&self, id: Uuid) -> Result<GitAccount, GitAccountError> {
@@ -155,8 +152,16 @@ mod tests {
             &'a self,
             _actor_id: ActorId,
             _administrator: bool,
-        ) -> BoxFuture<'a, Result<Vec<StoredGitAccount>, GitAccountError>> {
-            Box::pin(async { Ok(self.accounts.lock().unwrap().clone()) })
+        ) -> BoxFuture<'a, Result<Vec<GitAccount>, GitAccountError>> {
+            Box::pin(async {
+                Ok(self
+                    .accounts
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .map(GitAccount::from)
+                    .collect())
+            })
         }
 
         fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<StoredGitAccount, GitAccountError>> {

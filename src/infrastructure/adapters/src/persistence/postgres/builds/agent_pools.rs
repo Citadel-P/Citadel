@@ -118,35 +118,30 @@ impl PostgresBuildRepository {
 }
 
 impl PostgresBuildRepository {
-    pub(super) fn list_pools_impl(
-        &self,
+    pub(super) fn list_pools_impl<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<BuildAgentPool>, BuildError>> {
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BuildAgentPool>, BuildError>> {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_CTE}
-SELECT pool.* FROM buildagentpools pool
-WHERE pool.archivedat IS NULL
-  AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
-      SELECT 1 FROM actor_scope scope
-      JOIN resourceaccesses access ON access.actorid=scope.actorid
-      WHERE access.resourcetype=$2 AND access.resourceid=pool.id
-        AND access.permissionlevel = ANY($3)
-  ))
-ORDER BY pool.name,pool.id"#
-            );
-            let mut values = sqlx::query(AssertSqlSafe(query.as_str()))
-                .bind(actor.value())
-                .bind(ResourceType::BuildAgentPool as i32)
-                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
-                .bind(administrator)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?
-                .into_iter()
-                .map(map_pool)
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut values = crate::persistence::postgres::authorization::tagged_workload_rows(
+                &self.pool,
+                actor,
+                administrator,
+                ResourceType::BuildAgentPool,
+                "BuildAgentPool",
+                "buildagentpools resource WHERE resource.archivedat IS NULL",
+                tags,
+            )
+            .await
+            .map_err(storage)?
+            .into_iter()
+            .map(map_pool)
+            .collect::<Result<Vec<_>, _>>()?;
+            if values.is_empty() {
+                return Ok(values);
+            }
             enrich_pools(
                 &mut *self.pool.acquire().await.map_err(storage)?,
                 &mut values,

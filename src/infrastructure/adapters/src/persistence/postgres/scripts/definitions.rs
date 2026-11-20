@@ -96,34 +96,30 @@ impl PostgresScriptRepository {
 }
 
 impl PostgresScriptRepository {
-    pub(super) fn list_impl(
-        &self,
+    pub(super) fn list_impl<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<Script>, ScriptError>> {
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>> {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_CTE}
-SELECT script.* FROM scripts script
-WHERE $4 OR (SELECT allowed FROM global_access) OR EXISTS (
-    SELECT 1 FROM actor_scope scope
-    JOIN resourceaccesses access ON access.actorid=scope.actorid
-    WHERE access.resourcetype=$2 AND access.resourceid=script.id
-      AND access.permissionlevel = ANY($3)
-)
-ORDER BY script.name,script.id"#
-            );
-            let mut scripts = sqlx::query(AssertSqlSafe(query.as_str()))
-                .bind(actor.value())
-                .bind(ResourceType::Script as i32)
-                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
-                .bind(administrator)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?
-                .into_iter()
-                .map(map_action)
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut scripts = crate::persistence::postgres::authorization::tagged_workload_rows(
+                &self.pool,
+                actor,
+                administrator,
+                ResourceType::Script,
+                "Script",
+                "scripts resource WHERE TRUE",
+                tags,
+            )
+            .await
+            .map_err(storage)?
+            .into_iter()
+            .map(map_action)
+            .collect::<Result<Vec<_>, _>>()?;
+            if scripts.is_empty() {
+                return Ok(scripts);
+            }
             enrich_actions(
                 &mut *self.pool.acquire().await.map_err(storage)?,
                 &mut scripts,

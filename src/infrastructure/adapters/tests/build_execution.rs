@@ -119,7 +119,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
     assert!(!rolled_back);
     let queued = store.enqueue(actor, project.id, "Manual").await.unwrap();
     // Exercise every display projection; execution-only snapshots stay in claims.
-    let listed = store.list(actor, true).await.unwrap();
+    let listed = store.list(actor, true, &[]).await.unwrap();
     let latest = listed
         .into_iter()
         .find(|p| p.id == project.id)

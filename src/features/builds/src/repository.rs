@@ -27,11 +27,12 @@ pub trait BuildRepository: Send + Sync {
         actor: ActorId,
         input: &'a BuildAgentPoolConfiguration,
     ) -> BoxFuture<'a, Result<BuildAgentPool, BuildError>>;
-    fn list_pools(
-        &self,
+    fn list_pools<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<BuildAgentPool>, BuildError>>;
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BuildAgentPool>, BuildError>>;
     fn get_pool<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildAgentPool, BuildError>>;
     fn pool_permissions<'a>(
         &'a self,
@@ -67,11 +68,12 @@ pub trait BuildRepository: Send + Sync {
         actor: ActorId,
         input: &'a BuildProjectConfiguration,
     ) -> BoxFuture<'a, Result<BuildProject, BuildError>>;
-    fn list(
-        &self,
+    fn list<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'_, Result<Vec<BuildProject>, BuildError>>;
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BuildProject>, BuildError>>;
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProject, BuildError>>;
     fn update<'a>(
         &'a self,

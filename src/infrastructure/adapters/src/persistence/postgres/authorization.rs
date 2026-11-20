@@ -1,34 +1,101 @@
-pub(crate) const READ_MASK: i32 = 1 | 2 | 4;
+pub(super) const EFFECTIVE_RESOURCE_PERMISSION: &str = concat!(
+    include_str!("enabled_actor_scope.sql"),
+    r#", grants AS (
+    SELECT p.permissionlevel, p.specificpermissions FROM actor_scope s
+    JOIN actorroles ar ON ar.actorid=s.actorid JOIN permissions p ON p.roleid=ar.roleid
+    WHERE p.resourcetype=$2
+    UNION ALL
+    SELECT a.permissionlevel, a.specificpermissions FROM actor_scope s
+    JOIN resourceaccesses a ON a.actorid=s.actorid
+    WHERE a.resourcetype=$2 AND a.resourceid=$3
+)
+SELECT COALESCE(MAX(permissionlevel),0)::integer, COALESCE(bit_or(specificpermissions),0)::integer
+FROM grants"#
+);
 
 pub(crate) const AUTHORIZED_CTE: &str = concat!(
+    include_str!("enabled_actor_scope.sql"),
     include_str!("catalog_role_levels.sql"),
     ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE (permissionlevel & $3) <> 0) AS allowed)\n"
 );
 
 pub(crate) const AUTHORIZED_BY_LEVELS_CTE: &str = concat!(
+    include_str!("enabled_actor_scope.sql"),
     include_str!("catalog_role_levels.sql"),
     ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE permissionlevel = ANY($3)) AS allowed)\n"
 );
 
-pub(crate) fn authorized_catalog_query(
-    table: &str,
-    alias: &str,
-    resource_type: citadel_primitives::ResourceType,
-) -> String {
-    let extra_columns = if resource_type == citadel_primitives::ResourceType::GitRepository {
-        ", NULL::jsonb AS latest_activity"
-    } else {
-        ""
-    };
+/// The resource tag key is unique per (type, resource, tag). Count requested
+/// IDs once so duplicate filters have the same meaning as a single tag.
+pub(super) const ALL_REQUESTED_TAGS: &str = r#"
+ AND resource.id IN (
+     SELECT link.resourceid FROM resourcetags link
+     WHERE link.resourcetype=$5 AND link.tagid=ANY($6)
+     GROUP BY link.resourceid
+     HAVING count(*)=(SELECT count(DISTINCT id) FROM unnest($6::uuid[]) AS requested(id))
+ )"#;
+
+pub(super) fn authorized_catalog_query(table: &str, extra_columns: &str, filter: &str) -> String {
     format!(
-        r#"{AUTHORIZED_CTE}
+        r#"{AUTHORIZED_BY_LEVELS_CTE}
 SELECT resource.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',tag.id,'name',tag.name,'color',tag.color) ORDER BY tag.name,tag.id)
  FROM resourcetags link JOIN tags tag ON tag.id=link.tagid WHERE link.resourcetype=$5 AND link.resourceid=resource.id),'[]'::jsonb) AS tags{extra_columns}
 FROM {table} resource WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
  SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
- WHERE access.resourcetype=$2 AND access.resourceid=resource.id AND (access.permissionlevel & $3)<>0))
-ORDER BY resource.name,resource.id -- {alias}"#
+ WHERE access.resourcetype=$2 AND access.resourceid=resource.id AND access.permissionlevel=ANY($3)))
+{filter}
+ORDER BY resource.name,resource.id"#
     )
+}
+
+/// Build projects, pools and scripts accept both tag names and UUIDs. Resolve
+/// each filter independently, including names that also parse as UUIDs.
+pub(super) async fn tagged_workload_rows(
+    pool: &sqlx::PgPool,
+    actor: citadel_primitives::ActorId,
+    administrator: bool,
+    kind: citadel_primitives::ResourceType,
+    tag_type: &'static str,
+    source: &'static str,
+    tags: &[String],
+) -> Result<Vec<sqlx::postgres::PgRow>, sqlx::Error> {
+    // PostgreSQL text cannot contain NUL, so no stored tag can match it.
+    if tags.iter().any(|tag| tag.contains('\0')) {
+        return Ok(Vec::new());
+    }
+    let filter = if tags.is_empty() {
+        ""
+    } else {
+        r#"
+ AND resource.id IN (
+     SELECT link.resourceid
+     FROM unnest($5::text[], $6::uuid[]) WITH ORDINALITY AS requested(name,id,n)
+     JOIN tags tag ON tag.id=requested.id OR lower(tag.name COLLATE "C")=lower(requested.name COLLATE "C")
+     JOIN resourcetags link ON link.tagid=tag.id AND link.resourcetype=$7
+     GROUP BY link.resourceid HAVING count(DISTINCT requested.n)=cardinality($5)
+ )"#
+    };
+    let sql = format!(
+        r#"{AUTHORIZED_BY_LEVELS_CTE}
+SELECT resource.* FROM {source}
+ AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
+     SELECT 1 FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
+     WHERE access.resourcetype=$2 AND access.resourceid=resource.id AND access.permissionlevel=ANY($3)))
+{filter} ORDER BY resource.name,resource.id"#
+    );
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(actor.value())
+        .bind(kind as i32)
+        .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
+        .bind(administrator);
+    if !tags.is_empty() {
+        let ids: Vec<_> = tags
+            .iter()
+            .map(|tag| uuid::Uuid::parse_str(tag).ok())
+            .collect();
+        query = query.bind(tags).bind(ids).bind(tag_type);
+    }
+    query.fetch_all(pool).await
 }
 
 /// Build and backup history inherit access from the project or policy that owns the run.

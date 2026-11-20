@@ -283,16 +283,15 @@ async fn list_pools(
         crate::api::routes::tags::parse_filters(query.as_deref()),
         &headers,
     )?;
-    let mut build_agent_pools = api_result(
+    let build_agent_pools = api_result(
         state
             .builds
             .store()
-            .list_pools(principal.actor_id, principal.is_administrator())
+            .list_pools(principal.actor_id, principal.is_administrator(), &tags)
             .await
             .map_err(map_error),
         &headers,
     )?;
-    build_agent_pools.retain(|pool| crate::api::routes::tags::matches_filters(&pool.tags, &tags));
     let pools = api_result(
         authorized_pools(state.builds.store().as_ref(), &principal, build_agent_pools)
             .await
@@ -854,16 +853,15 @@ async fn list_projects(
         crate::api::routes::tags::parse_filters(query.as_deref()),
         &headers,
     )?;
-    let mut projects = api_result(
+    let projects = api_result(
         state
             .builds
             .store()
-            .list(principal.actor_id, principal.is_administrator())
+            .list(principal.actor_id, principal.is_administrator(), &tags)
             .await
             .map_err(map_error),
         &headers,
     )?;
-    projects.retain(|project| crate::api::routes::tags::matches_filters(&project.tags, &tags));
     let projects = api_result(
         authorized_projects(state.builds.store().as_ref(), &principal, projects)
             .await

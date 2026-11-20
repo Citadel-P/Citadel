@@ -1,6 +1,5 @@
 mod repository;
 mod rows;
-use crate::persistence::postgres::authorization::AUTHORIZED_BY_LEVELS_CTE as AUTHORIZED_CTE;
 use rows::*;
 mod recovery;
 pub(crate) use recovery::{recover, recover_with_mode};

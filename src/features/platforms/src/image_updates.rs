@@ -60,6 +60,7 @@ pub trait ImageUpdateResolver: Send + Sync {
         &self,
         actor: ActorId,
         administrator: bool,
+        selected_id: Option<Uuid>,
     ) -> BoxFuture<'_, Result<Vec<ImageUpdateRegistry>, RuntimeCapabilityError>>;
     fn observe<'a>(
         &'a self,
@@ -133,7 +134,7 @@ impl ImageUpdateService {
             });
         }
         let actor = ActorId::new(Uuid::from_u128(1));
-        let registries = self.resolver.registries(actor, true).await?;
+        let registries = self.resolver.registries(actor, true, None).await?;
         let registry_ids: Vec<_> = registries
             .iter()
             .map(|r| r.id)
@@ -253,7 +254,7 @@ impl ImageUpdateService {
         platform: Uuid,
         images: &[ImageDetails],
     ) -> Result<Vec<Vec<ImageTagUpdate>>, RuntimeCapabilityError> {
-        let registries = self.resolver.registries(actor, admin).await?;
+        let registries = self.resolver.registries(actor, admin, None).await?;
         let registry_ids: Vec<_> = registries
             .iter()
             .map(|r| r.id)
@@ -305,7 +306,7 @@ impl ImageUpdateService {
     ) -> Result<ImageTagUpdate, RuntimeCapabilityError> {
         let registry = self
             .resolver
-            .registries(actor, admin)
+            .registries(actor, admin, Some(registry_id))
             .await?
             .into_iter()
             .find(|r| r.id == registry_id)
@@ -337,7 +338,7 @@ impl ImageUpdateService {
         }) else {
             return Ok(());
         };
-        let registries = self.resolver.registries(actor, admin).await?;
+        let registries = self.resolver.registries(actor, admin, None).await?;
         let ids: Vec<_> = registries
             .iter()
             .map(|r| r.id)
@@ -535,7 +536,7 @@ impl ImageUpdateService {
             if !registry.id.is_nil()
                 && !self
                     .resolver
-                    .registries(actor, admin)
+                    .registries(actor, admin, Some(registry.id))
                     .await?
                     .iter()
                     .any(|r| r.id == registry.id && r.revision == registry.revision)

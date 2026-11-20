@@ -659,6 +659,7 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         &catalog,
         ActorId::new(actor),
         true,
+        &[],
     )
     .await
     .unwrap()

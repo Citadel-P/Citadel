@@ -147,6 +147,79 @@ async fn postgres_authorization_matches_the_shared_dotnet_matrix() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
+async fn batched_permissions_cover_every_resource_kind() {
+    let url = std::env::var("CITADEL_IDENTITY_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPool::connect(&url).await.unwrap();
+    let store = PostgresIdentityStore::new(pool.clone());
+    let member = Uuid::now_v7();
+    let disabled = Uuid::now_v7();
+    let team = Uuid::now_v7();
+    let team_actor = Uuid::now_v7();
+    let kinds = ResourceType::ALL.map(|kind| kind as i32);
+    let direct_ids = ResourceType::ALL.map(|_| Uuid::now_v7());
+    let team_ids = ResourceType::ALL.map(|_| Uuid::now_v7());
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("INSERT INTO actors(id,isenabled,type) VALUES ($1,true,'User'),($2,false,'User'),($3,true,'Team')")
+        .bind(member).bind(disabled).bind(team_actor).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO teams(id,actorid,name) VALUES ($1,$2,$3)")
+        .bind(team)
+        .bind(team_actor)
+        .bind(format!("batch-{team}"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO actorteammemberships(memberactorid,teamid) VALUES ($1,$3),($2,$3)")
+        .bind(member)
+        .bind(disabled)
+        .bind(team)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    for (owner, ids) in [
+        (member, &direct_ids),
+        (disabled, &direct_ids),
+        (team_actor, &team_ids),
+    ] {
+        sqlx::query(
+            "INSERT INTO resourceaccesses(id,actorid,permissionlevel,resourceid,resourcetype,specificpermissions)
+             SELECT gen_random_uuid(),$1,$2,id,kind,0 FROM unnest($3::uuid[],$4::int[]) AS grants(id,kind)"
+        )
+        .bind(owner)
+        .bind(PermissionLevel::Read as i32)
+        .bind(ids.as_slice())
+        .bind(kinds.as_slice())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    }
+    tx.commit().await.unwrap();
+    for (index, kind) in ResourceType::ALL.into_iter().enumerate() {
+        let direct = direct_ids[index];
+        let inherited = team_ids[index];
+        let ungranted = direct_ids[(index + 1) % kinds.len()];
+        for (actor, expected) in [(member, Some(PermissionLevel::Read)), (disabled, None)] {
+            let grants = store
+                .resource_permissions(ActorId::new(actor), kind, &[direct, inherited, ungranted])
+                .await
+                .unwrap();
+            assert_eq!(
+                grants[&direct].map(|g| g.level),
+                expected,
+                "{kind:?} direct"
+            );
+            assert_eq!(
+                grants[&inherited].map(|g| g.level),
+                expected,
+                "{kind:?} team"
+            );
+            assert_eq!(grants[&ungranted], None, "{kind:?} unrelated");
+        }
+    }
+}
+
 async fn verify_case(pool: &PgPool, store: &PostgresIdentityStore, case: AuthorizationCase) {
     let actor_id = Uuid::now_v7();
     let subject_id = Uuid::now_v7();

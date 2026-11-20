@@ -43,6 +43,7 @@ impl ImageUsageStore for PostgresImageMutationStore {
                 }
             }
             let rows = sqlx::query(concat!(
+                include_str!("../enabled_actor_scope.sql"),
                 include_str!("workload_read_grants.sql"),
                 include_str!("image_usage_summaries.sql")
             ))
@@ -177,6 +178,7 @@ impl ImageUsageStore for PostgresImageMutationStore {
                 .map(|reference| canonical_reference(reference))
                 .collect();
             let rows = sqlx::query(concat!(
+                include_str!("../enabled_actor_scope.sql"),
                 include_str!("workload_read_grants.sql"),
                 include_str!("image_usage.sql")
             ))

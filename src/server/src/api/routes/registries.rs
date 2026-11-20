@@ -112,7 +112,14 @@ async fn list_registries(
     let authorized_registries = api_result(
         state
             .registries
-            .list_registries(principal.actor_id, principal.is_administrator())
+            .list_registries(
+                principal.actor_id,
+                principal.is_administrator(),
+                citadel_registries::RegistryListFilter::Catalog {
+                    include_disabled: filters.include_disabled,
+                    tag_ids: &filters.tags,
+                },
+            )
             .await
             .map_err(metadata_error),
         &headers,
@@ -131,11 +138,7 @@ async fn list_registries(
         &headers,
     )?;
     let mut registries = Vec::with_capacity(authorized_registries.len());
-    for registry in authorized_registries.into_iter().filter(|registry| {
-        (filters.include_disabled
-            || registry.status != citadel_registries::RegistryStatus::Disabled)
-            && has_all_tags(&registry.tags, &filters.tags)
-    }) {
+    for registry in authorized_registries {
         let row_capabilities = crate::api::resource_access::capabilities_from_permission(
             row_permissions.get(&registry.id).copied().flatten(),
         );
@@ -582,10 +585,4 @@ fn prevent_default_registry(id: Uuid, headers: &HeaderMap) -> HttpResult<()> {
         ));
     }
     Ok(())
-}
-
-fn has_all_tags(tags: &[citadel_tags::TagSummary], required: &[Uuid]) -> bool {
-    required
-        .iter()
-        .all(|required| tags.iter().any(|tag| tag.id == *required))
 }

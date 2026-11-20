@@ -1,6 +1,6 @@
 use crate::persistence::postgres::authorization::AUTHORIZED_BY_LEVELS_CTE as AUTHORIZED_CTE;
 use citadel_git::{
-    GitAccountError, GitAccountRepository, GitAuthType, GitTransport, StoredGitAccount,
+    GitAccount, GitAccountError, GitAccountRepository, GitAuthType, GitTransport, StoredGitAccount,
 };
 use citadel_primitives::{ActorId, ResourceType};
 use futures_util::future::BoxFuture;
@@ -24,11 +24,11 @@ impl GitAccountRepository for PostgresGitAccountRepository {
         &'a self,
         actor_id: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'a, Result<Vec<StoredGitAccount>, GitAccountError>> {
+    ) -> BoxFuture<'a, Result<Vec<GitAccount>, GitAccountError>> {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTE}
-SELECT account.*
+SELECT account.id,account.name,account.domain,account.transport,account.authtype,account.createdat,account.createdbyactorid
 FROM gitaccounts account
 WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
     SELECT 1 FROM actor_scope scope
@@ -47,7 +47,7 @@ ORDER BY account.createdat DESC, account.id"#
                 .await
                 .map_err(storage)?
                 .into_iter()
-                .map(map_account)
+                .map(|row| map_summary(&row))
                 .collect()
         })
     }
@@ -143,7 +143,20 @@ WHERE id=$1"#,
 }
 
 fn map_account(row: sqlx::postgres::PgRow) -> Result<StoredGitAccount, GitAccountError> {
+    let account = map_summary(&row)?;
     Ok(StoredGitAccount {
+        id: account.id,
+        audit: account.audit,
+        name: account.name,
+        domain: account.domain,
+        transport: account.transport,
+        auth_type: account.auth_type,
+        protected_configuration: row.try_get("configuration").map_err(storage)?,
+    })
+}
+
+fn map_summary(row: &sqlx::postgres::PgRow) -> Result<GitAccount, GitAccountError> {
+    Ok(GitAccount {
         id: row.try_get("id").map_err(storage)?,
         audit: citadel_primitives::AuditMetadata {
             created_by_actor_id: citadel_primitives::ActorId::new(
@@ -155,7 +168,6 @@ fn map_account(row: sqlx::postgres::PgRow) -> Result<StoredGitAccount, GitAccoun
         domain: row.try_get("domain").map_err(storage)?,
         transport: parse_transport(row.try_get("transport").map_err(storage)?)?,
         auth_type: parse_auth_type(row.try_get("authtype").map_err(storage)?)?,
-        protected_configuration: row.try_get("configuration").map_err(storage)?,
     })
 }
 

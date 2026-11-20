@@ -794,12 +794,3 @@ pub(crate) fn parse_filters(
     }
     Ok(tags)
 }
-
-pub(crate) fn matches_filters(tags: &[citadel_tags::TagSummary], filters: &[String]) -> bool {
-    filters.iter().all(|filter| {
-        tags.iter().any(|tag| {
-            tag.name.eq_ignore_ascii_case(filter)
-                || Uuid::parse_str(filter).is_ok_and(|id| id == tag.id)
-        })
-    })
-}

@@ -245,13 +245,25 @@ impl PostgresBackupPersistence {
         limit: usize,
     ) -> BoxFuture<'_, Result<Vec<BackupRestoreRun>, BackupError>> {
         Box::pin(async move {
+            // Parameter presence is known here. A concrete run key lets a
+            // prepared plan use the restore-by-backup index on every call.
+            let run_filter = if backup_run_id.is_some() {
+                "restore.backuprunid=$4"
+            } else {
+                // Keep the general feed plan for cross-run histories.
+                "($4::uuid IS NULL OR restore.backuprunid=$4)"
+            };
+            let (policy_filter, permission_target) = if policy_id.is_some() {
+                ("backup.backuppolicyid=$5", "$5")
+            } else {
+                ("$5::uuid IS NULL", "backup.backuppolicyid")
+            };
             let query = format!(
                 r#"{AUTHORIZED_CTE}
 SELECT restore.* FROM backuprestoreruns restore
 JOIN backupruns backup ON backup.id=restore.backuprunid
-WHERE ($4::uuid IS NULL OR restore.backuprunid=$4)
-  AND ($5::uuid IS NULL OR backup.backuppolicyid=$5)
-  AND ($6 OR (SELECT allowed FROM global_access) OR backup.backuppolicyid IN (
+WHERE {run_filter} AND {policy_filter}
+  AND ($6 OR (SELECT allowed FROM global_access) OR {permission_target} IN (
       SELECT access.resourceid FROM actor_scope scope
       JOIN resourceaccesses access ON access.actorid=scope.actorid
       WHERE access.resourcetype=$2 AND access.permissionlevel = ANY($3)

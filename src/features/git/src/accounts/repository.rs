@@ -5,7 +5,7 @@ pub trait GitAccountRepository: Send + Sync {
         &'a self,
         actor_id: ActorId,
         administrator: bool,
-    ) -> BoxFuture<'a, Result<Vec<StoredGitAccount>, GitAccountError>>;
+    ) -> BoxFuture<'a, Result<Vec<GitAccount>, GitAccountError>>;
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<StoredGitAccount, GitAccountError>>;
     fn create<'a>(
         &'a self,

@@ -128,7 +128,11 @@ pub(super) async fn pull(
         let registries = api_result(
             state
                 .registries
-                .list_registries(principal.actor_id, principal.is_administrator())
+                .list_registries(
+                    principal.actor_id,
+                    principal.is_administrator(),
+                    citadel_registries::RegistryListFilter::NON_DISABLED,
+                )
                 .await
                 .map_err(ApiError::internal),
             &headers,
@@ -148,10 +152,7 @@ pub(super) async fn pull(
         input.registry_id = match citadel_platforms::image_pull::select_pull_registry(
             &input.image_tag,
             preferred,
-            registries
-                .iter()
-                .filter(|r| r.status != citadel_registries::RegistryStatus::Disabled)
-                .map(|r| (r.id, r.registry_host.as_str())),
+            registries.iter().map(|r| (r.id, r.registry_host.as_str())),
         ) {
             Ok(registry) => registry,
             Err(error) => return Ok(runtime_error_response(error, &headers)),
@@ -610,12 +611,16 @@ pub(super) async fn inspect_image(
             let registries = api_result(
                 state
                     .registries
-                    .list_registries(principal.actor_id, principal.is_administrator())
+                    .list_registries(
+                        principal.actor_id,
+                        principal.is_administrator(),
+                        citadel_registries::RegistryListFilter::Ids(&[id]),
+                    )
                     .await
                     .map_err(ApiError::internal),
                 &headers,
             )?;
-            if let Some(registry) = registries.into_iter().find(|registry| registry.id == id) {
+            if let Some(registry) = registries.into_iter().next() {
                 image.registry = Some(api_result(
                     serde_json::to_value(registry).map_err(ApiError::internal),
                     &headers,

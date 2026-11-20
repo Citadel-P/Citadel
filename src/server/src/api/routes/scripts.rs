@@ -183,16 +183,15 @@ async fn list(
         crate::api::routes::tags::parse_filters(query.as_deref()),
         &headers,
     )?;
-    let mut scripts = api_result(
+    let scripts = api_result(
         state
             .scripts
             .store()
-            .list(principal.actor_id, principal.is_administrator())
+            .list(principal.actor_id, principal.is_administrator(), &tags)
             .await
             .map_err(map_error),
         &headers,
     )?;
-    scripts.retain(|script| crate::api::routes::tags::matches_filters(&script.tags, &tags));
     let scripts = api_result(
         authorized_scripts(state.scripts.store().as_ref(), &principal, scripts).await,
         &headers,

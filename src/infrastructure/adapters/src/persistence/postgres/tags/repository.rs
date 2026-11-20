@@ -17,7 +17,7 @@ impl TagRepository for PostgresTagRepository {
     ) -> BoxFuture<'a, Result<Vec<Tag>, TagError>> {
         Box::pin(async move {
             let query = format!(
-                r#"{AUTHORIZED_CTE}
+                r#"{AUTHORIZED_BY_LEVELS_CTE}
 SELECT tag.*,
        (SELECT COUNT(*)::integer FROM resourcetags link WHERE link.tagid = tag.id) AS usage_count
 FROM tags tag
@@ -25,14 +25,14 @@ WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
     SELECT 1 FROM actor_scope scope
     JOIN resourceaccesses access ON access.actorid = scope.actorid
     WHERE access.resourcetype = $2 AND access.resourceid = tag.id
-      AND (access.permissionlevel & $3) <> 0
+      AND access.permissionlevel = ANY($3)
 ))
 ORDER BY tag.name, tag.id"#
             );
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor_id.value())
                 .bind(ResourceType::Tag as i32)
-                .bind(READ_MASK)
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .fetch_all(&self.pool)
                 .await
