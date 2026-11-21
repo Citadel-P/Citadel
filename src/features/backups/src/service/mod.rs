@@ -13,6 +13,7 @@ mod tests;
 pub struct BackupService {
     tracking: Arc<tokio::sync::Semaphore>,
     progress: tokio::sync::broadcast::Sender<Arc<progress::BackupProgressItem>>,
+    on_repository_change: Option<Arc<dyn Fn(Uuid) + Send + Sync>>,
     on_change: Option<Arc<dyn Fn() + Send + Sync>>,
     store: Arc<dyn BackupPersistence>,
     executor: Arc<dyn BackupExecutor>,
@@ -127,6 +128,7 @@ impl BackupService {
             progress: tokio::sync::broadcast::channel(256).0,
             store,
             on_change: None,
+            on_repository_change: None,
             executor,
             planner,
             active_backups: Mutex::new(HashMap::new()),

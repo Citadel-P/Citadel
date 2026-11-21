@@ -4,6 +4,7 @@ use crate::connectors::routing::containers::ContainerRuntimeRouter;
 use crate::connectors::routing::containers::Runtime;
 use citadel_deployments::adoption::*;
 use citadel_identity::SecretProtector;
+use citadel_platforms::image_reference::repository;
 use citadel_platforms::{PlatformReader, containers::ContainerTarget};
 use citadel_primitives::AuthorizedResource;
 use hmac::{Hmac, KeyInit, Mac};
@@ -323,10 +324,10 @@ impl ContainerAdoptionPort for PostgresContainerAdoption {
                     .await
                     .map_err(storage)?
                     .ok_or(DeploymentError::NotFound)?;
-                    let reference =
-                        crate::connectors::routing::deployments::qualify_image_reference(
-                            &host, image_tag,
-                        )?;
+                    let reference = citadel_platforms::image_reference::qualify_image_reference(
+                        &host, image_tag,
+                    )
+                    .map_err(|message| DeploymentError::Validation(message.into()))?;
                     if !same_repository(&context, &[reference]) {
                         return Err(DeploymentError::Validation("Select an external image from the container's original image repository.".into()));
                     }
@@ -586,33 +587,6 @@ fn runtime_error(_: citadel_platforms::RuntimeCapabilityError) -> DeploymentErro
     DeploymentError::Runtime(
         "Container adoption inspection failed. Check Platform connectivity.".into(),
     )
-}
-fn repository(reference: &str) -> Option<String> {
-    let mut value = reference
-        .trim()
-        .trim_start_matches('/')
-        .to_ascii_lowercase();
-    if value.is_empty() || value.starts_with("sha256:") || value.contains("<none>") {
-        return None;
-    }
-    if let Some(index) = value.rfind('@') {
-        value.truncate(index);
-    }
-    if let Some(index) = value.rfind(':')
-        && value.rfind('/').is_none_or(|slash| index > slash)
-    {
-        value.truncate(index);
-    }
-    if let Some((host, _)) = value.split_once('/') {
-        if host == "index.docker.io" {
-            value = value.replacen("index.docker.io", "docker.io", 1);
-        } else if !host.contains(['.', ':']) && host != "localhost" {
-            value = format!("docker.io/{value}");
-        }
-    } else {
-        value = format!("docker.io/library/{value}");
-    }
-    Some(value)
 }
 fn same_repository(context: &Context, references: &[String]) -> bool {
     let originals: Vec<_> = strings(&context.image_tags)

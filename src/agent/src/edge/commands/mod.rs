@@ -291,6 +291,22 @@ impl Output {
             Err(error) => AgentBody::CommandFailed(CommandFailed {
                 code: match error.code() {
                     tonic::Code::Cancelled => "cancelled",
+                    tonic::Code::DeadlineExceeded
+                        if error
+                            .metadata()
+                            .get(citadel_contracts::RUNTIME_RETRYABLE)
+                            .is_some_and(|v| v == "true") =>
+                    {
+                        "docker_timeout"
+                    }
+                    tonic::Code::Unavailable
+                        if error
+                            .metadata()
+                            .get(citadel_contracts::RUNTIME_RETRYABLE)
+                            .is_some_and(|v| v == "false") =>
+                    {
+                        "permanent_unavailable"
+                    }
                     tonic::Code::DeadlineExceeded => "deadline_exceeded",
                     tonic::Code::ResourceExhausted => "resource_exhausted",
                     tonic::Code::InvalidArgument => "invalid_argument",

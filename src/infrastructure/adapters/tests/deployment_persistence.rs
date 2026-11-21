@@ -97,21 +97,20 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
     .await
     .unwrap();
 
-    let created = store
-        .create(
-            actor,
-            true,
-            &CreateDeployment {
-                name: format!("deployment-{suffix}"),
-                platform_id,
-                description: Some("created".to_owned()),
-                spec: local_spec(Some("/srv/data:/data")),
-                tag_ids: vec![tag_id],
-                duplicate_source: None,
-            },
-        )
-        .await
-        .unwrap();
+    let mut command = CreateDeployment {
+        name: format!("deployment-{suffix}"),
+        platform_id,
+        description: Some("created".to_owned()),
+        spec: local_spec(Some("/srv/data:/data")),
+        tag_ids: vec![tag_id, Uuid::now_v7()],
+        duplicate_source: None,
+    };
+    assert!(matches!(
+        store.create(actor, true, &command).await,
+        Err(DeploymentError::Validation(_))
+    ));
+    command.tag_ids = vec![tag_id, tag_id];
+    let created = store.create(actor, true, &command).await.unwrap();
     assert_eq!(
         created.status,
         citadel_deployments::DeploymentStatus::Created

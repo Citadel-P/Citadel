@@ -764,53 +764,27 @@ impl StackRuntimeRouter {
             ));
         }
         let configuration = registry.configuration;
-        let Some((username, password)) = registry_user_password(&configuration)? else {
+        let Some((username, password)) = registry_user_password(registry_id, &configuration)?
+        else {
             return Ok(None);
         };
         Ok(Some(AgentStackRegistry {
             name: registry.name,
             host: registry.host,
             auth: zeroize::Zeroizing::new(
-                base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}")),
+                base64::engine::general_purpose::STANDARD
+                    .encode(zeroize::Zeroizing::new(format!("{username}:{password}")).as_bytes()),
             ),
         }))
     }
 }
 
-fn registry_user_password(configuration: &Value) -> Result<Option<(String, String)>, StackError> {
-    let kind = configuration
-        .get("$type")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let string = |names: &[&str]| {
-        names
-            .iter()
-            .find_map(|name| configuration.get(*name).and_then(Value::as_str))
-    };
-    let boolean = |names: &[&str]| {
-        names
-            .iter()
-            .find_map(|name| configuration.get(*name).and_then(Value::as_bool))
-    };
-    let values = match kind {
-        "DockerHub" => string(&["UserName", "userName", "username"]).zip(string(&["PAT", "pat"])),
-        "GitHub" if boolean(&["GhcrAuthEnabled", "ghcrAuthEnabled"]) == Some(true) => {
-            string(&["NameSpace", "nameSpace"]).zip(string(&["PAT", "pat"]))
-        }
-        "Custom" if boolean(&["AuthEnabled", "authEnabled"]) == Some(true) => {
-            string(&["UserName", "userName", "username"]).zip(string(&["Password", "password"]))
-        }
-        "GitHub" | "Custom" | "" => None,
-        _ => {
-            return Err(StackError::Validation(
-                "This Registry type is not available for Stack Apply in the Rust server yet."
-                    .to_owned(),
-            ));
-        }
-    };
-    Ok(values
-        .filter(|(username, password)| !username.is_empty() && !password.is_empty())
-        .map(|(username, password)| (username.to_owned(), password.to_owned())))
+fn registry_user_password(
+    id: Uuid,
+    configuration: &Value,
+) -> Result<Option<(&str, &str)>, StackError> {
+    crate::connectors::registries::credentials::pull_credentials(id, configuration)
+        .map_err(|message| StackError::Validation(message.into()))
 }
 
 fn validate_stack_execution(claim: &StackOperationClaim) -> Result<(), StackError> {
@@ -1032,21 +1006,25 @@ mod tests {
 
     #[test]
     fn stack_registry_credentials_follow_the_existing_registry_contract() {
-        let credentials = registry_user_password(&serde_json::json!({
+        let configuration = serde_json::json!({
             "$type": "DockerHub",
             "UserName": "citadel",
             "PAT": "secret"
-        }))
-        .unwrap()
-        .unwrap();
-        assert_eq!(credentials, ("citadel".to_owned(), "secret".to_owned()));
+        });
+        let credentials = registry_user_password(Uuid::nil(), &configuration)
+            .unwrap()
+            .unwrap();
+        assert_eq!(credentials, ("citadel", "secret"));
         assert_eq!(
-            registry_user_password(&serde_json::json!({
-                "$type": "Custom",
-                "AuthEnabled": false,
-                "UserName": "ignored",
-                "Password": "ignored"
-            }))
+            registry_user_password(
+                Uuid::nil(),
+                &serde_json::json!({
+                    "$type": "Custom",
+                    "AuthEnabled": false,
+                    "UserName": "ignored",
+                    "Password": "ignored"
+                })
+            )
             .unwrap(),
             None
         );

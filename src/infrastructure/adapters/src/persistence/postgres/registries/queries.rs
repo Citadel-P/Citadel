@@ -1,5 +1,5 @@
 use super::*;
-pub(super) const DEFAULT_REGISTRY_ID: Uuid = Uuid::from_u128(0x100);
+pub(super) use citadel_registries::DEFAULT_DOCKER_HUB_ID as DEFAULT_REGISTRY_ID;
 
 pub(super) async fn get_registry(
     pool: &PgPool,

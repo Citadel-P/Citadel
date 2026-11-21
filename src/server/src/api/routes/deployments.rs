@@ -217,25 +217,21 @@ async fn list_deployments(
         .list(principal.actor_id, principal.is_administrator(), &filter)
         .await
         .map_err(deployment_error);
-    let mut views = api_result(result, &headers)?
+    let views = api_result(result, &headers)?
         .into_iter()
         .map(DeploymentView::try_from)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
             crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
         })?;
-    if let Some(service) = &state.backup_coverage {
-        views = service.enrich_deployments(&principal, views).await;
-    }
-    if let Some(service) = &state.copy_eligibility {
-        crate::api::resources::resource_copies::enrich_deployments(
-            service,
-            principal.actor_id,
-            &mut views,
-            None,
-        )
-        .await;
-    }
+    let views = crate::api::resources::deployments::views::decorate_list(
+        &principal,
+        views,
+        state.backup_coverage.as_deref(),
+        state.copy_eligibility.as_deref(),
+        None,
+    )
+    .await;
     Ok(no_store(
         Json(DeploymentsView {
             deployments: views,
@@ -282,35 +278,18 @@ async fn get_deployment(
             .map_err(deployment_error),
         &headers,
     )?;
-    let mut view = api_result(
+    let view = api_result(
         DeploymentView::try_from(deployment).map_err(ApiError::internal),
         &headers,
     )?;
-    if let Some(service) = &state.backup_coverage {
-        let platform = view.platform_id;
-        view.backup_coverage = Some(
-            service
-                .workload(
-                    &principal,
-                    citadel_backups::policies::read_models::BackupPreviewKind::Deployment,
-                    id,
-                    platform,
-                )
-                .await,
-        );
-    }
-    if let Some(service) = &state.copy_eligibility {
-        view.copy_eligibility = Some(
-            crate::api::resources::resource_copies::eligibility(
-                service,
-                principal.actor_id,
-                citadel_resource_copies::CopyKind::Deployment,
-                id,
-                None,
-            )
-            .await,
-        );
-    }
+    let view = crate::api::resources::deployments::views::decorate_detail(
+        &principal,
+        view,
+        state.backup_coverage.as_deref(),
+        state.copy_eligibility.as_deref(),
+        None,
+    )
+    .await;
     Ok(no_store(Json(view).into_response()))
 }
 

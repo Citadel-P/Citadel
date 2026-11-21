@@ -2700,6 +2700,13 @@ pub(crate) fn normalize_status(status: Status) -> RuntimeCapabilityError {
     let (kind, retryable) = match status.code() {
         // Local cancellation is handled by the biased CancellationToken branch. Tonic
         // reports an expired client-side grpc-timeout as Cancelled on this transport.
+        Code::Cancelled
+            if status
+                .metadata()
+                .contains_key(citadel_contracts::RUNTIME_RETRYABLE) =>
+        {
+            (RuntimeErrorKind::Cancelled, false)
+        }
         Code::Cancelled | Code::DeadlineExceeded => (RuntimeErrorKind::Timeout, false),
         Code::Unavailable => (RuntimeErrorKind::Unavailable, true),
         Code::Unauthenticated => (RuntimeErrorKind::Authentication, false),
@@ -2711,6 +2718,22 @@ pub(crate) fn normalize_status(status: Status) -> RuntimeCapabilityError {
         Code::AlreadyExists | Code::Aborted => (RuntimeErrorKind::Conflict, false),
         Code::ResourceExhausted => (RuntimeErrorKind::ResourceExhausted, false),
         _ => (RuntimeErrorKind::Remote, false),
+    };
+    let retryable = match status
+        .metadata()
+        .get(citadel_contracts::RUNTIME_RETRYABLE)
+        .map(|v| v.as_bytes())
+    {
+        Some(b"false") => false,
+        Some(b"true")
+            if matches!(
+                kind,
+                RuntimeErrorKind::Unavailable | RuntimeErrorKind::Timeout
+            ) =>
+        {
+            true
+        }
+        _ => retryable,
     };
     RuntimeCapabilityError::new(kind, status.message(), retryable)
 }
@@ -2869,6 +2892,44 @@ mod tests {
 
     #[test]
     fn normalizes_only_transient_agent_failures_as_retryable() {
+        for (code, metadata, kind, retryable) in [
+            (Code::Aborted, None, RuntimeErrorKind::Conflict, false),
+            (
+                Code::FailedPrecondition,
+                None,
+                RuntimeErrorKind::InvalidRequest,
+                false,
+            ),
+            (
+                Code::Unavailable,
+                Some("false"),
+                RuntimeErrorKind::Unavailable,
+                false,
+            ),
+            (Code::DataLoss, None, RuntimeErrorKind::Remote, false),
+            (Code::Cancelled, None, RuntimeErrorKind::Timeout, false),
+            (
+                Code::Cancelled,
+                Some("false"),
+                RuntimeErrorKind::Cancelled,
+                false,
+            ),
+            (
+                Code::DeadlineExceeded,
+                Some("true"),
+                RuntimeErrorKind::Timeout,
+                true,
+            ),
+        ] {
+            let mut status = Status::new(code, "fixture");
+            if let Some(value) = metadata {
+                status
+                    .metadata_mut()
+                    .insert(citadel_contracts::RUNTIME_RETRYABLE, value.parse().unwrap());
+            }
+            let error = normalize_status(status);
+            assert_eq!((error.kind, error.retryable), (kind, retryable));
+        }
         assert!(normalize_status(Status::unavailable("offline")).retryable);
         assert!(!normalize_status(Status::deadline_exceeded("slow")).retryable);
         assert!(!normalize_status(Status::unauthenticated("bad signature")).retryable);

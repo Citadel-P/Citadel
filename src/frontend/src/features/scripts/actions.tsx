@@ -1,22 +1,10 @@
+import { useRemoveResourceAction } from '@/components/custom/useSettledResourceAction';
 import { ScriptSummaryView, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { useSelectedResources, useTaskSheet } from '@/lib/atoms';
+import { useTaskSheet } from '@/lib/atoms';
 import { useMutate, useRead } from '@/lib/hooks';
-import { useQueryClient } from '@tanstack/react-query';
 import { Copy, Pencil, Play, Trash2 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router';
-import { toast } from 'sonner';
-
-export const invalidateScriptQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
-  await queryClient.invalidateQueries({ queryKey: ['listScripts'] });
-  if (id) {
-    await queryClient.invalidateQueries({ queryKey: ['getScript', { id }] });
-    await queryClient.invalidateQueries({ queryKey: ['listScriptRuns', { id }] });
-  } else {
-    await queryClient.invalidateQueries({ queryKey: ['getScript'] });
-    await queryClient.invalidateQueries({ queryKey: ['listScriptRuns'] });
-  }
-};
+import { useNavigate } from 'react-router';
 
 const singleSelection = (resources: ScriptSummaryView | ScriptSummaryView[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
@@ -103,33 +91,13 @@ const { dropdown, group, info } = createActionsBuilder<ScriptSummaryView>()
     requiredCapabilities: ['canWrite'],
     useHandler: ({ resources }) => {
       const selected = Array.isArray(resources) ? resources : [resources];
-      const queryClient = useQueryClient();
       const remove = useMutate('deleteScript');
-      const [, setSelectedResources] = useSelectedResources<ScriptSummaryView>('Script');
-      const location = useLocation();
-      const navigate = useNavigate();
-      const isCurrentResource = selected.some(
-        (script) => location.pathname.replace(/\/$/, '') === `/scripts/edit/${script.id}`,
-      );
-
-      return {
-        canExecute: selected.length > 0,
-        isPending: remove.isPending,
-        run: async () => {
-          if (selected.length === 0) return;
-
-          try {
-            await Promise.all(selected.map((script) => remove.mutateAsync({ id: script.id } as any)));
-            if (isCurrentResource) navigate('/scripts', { replace: true });
-            await queryClient.invalidateQueries({ queryKey: ['listScripts'] });
-            setSelectedResources([]);
-            toast.success(`${selected.length} ${selected.length === 1 ? 'script' : 'scripts'} deleted`);
-          } catch (error) {
-            toast.error(remove.validationErrors ?? 'Failed to delete selected scripts');
-            throw error;
-          }
-        },
-      };
+      return useRemoveResourceAction(selected, {
+        type: 'Script',
+        listPath: '/scripts',
+        mutate: (item) => remove.mutateAsync({ id: item.id }),
+        message: (count, total) => `${count} of ${total} ${total === 1 ? 'script' : 'scripts'} deleted`,
+      });
     },
   })
   .build();

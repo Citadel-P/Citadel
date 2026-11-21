@@ -3,9 +3,9 @@ use citadel_contracts::citadel::deployments::v1::{
     deployment_service_server::DeploymentService, *,
 };
 use citadel_deployments::{DeploymentError, RuntimeContainerState};
-use citadel_docker::client::deployments::parse_mount;
-use citadel_docker::client::deployments::parse_port;
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 use tonic::{Request, Response, Status};
 
 #[tonic::async_trait]
@@ -33,22 +33,7 @@ impl DeploymentService for Runtime {
 }
 
 fn create_body(r: &ApplyDeploymentRequest) -> Result<Value, Status> {
-    if r.image_id.trim().is_empty() {
-        return Err(Status::invalid_argument("Image is required"));
-    }
     let spec = r.spec.clone().unwrap_or_default();
-    let mut bindings = serde_json::Map::new();
-    for port in &spec.ports {
-        let (key, host) = parse_port(port).map_err(error)?;
-        if let Some(host) = host {
-            bindings.insert(key, json!([{"HostPort":host.to_string()}]));
-        }
-    }
-    let mounts = spec
-        .volumes
-        .iter()
-        .map(|v| parse_mount(v).map_err(error))
-        .collect::<Result<Vec<_>, _>>()?;
     let resource = spec.resource_spec.unwrap_or_default();
     let number = |v: Option<f32>| -> Result<Option<i64>, Status> {
         v.map(|v| {
@@ -83,14 +68,22 @@ fn create_body(r: &ApplyDeploymentRequest) -> Result<Value, Status> {
             _ => Err(Status::invalid_argument("Invalid stop signal")),
         })
         .transpose()?;
-    Ok(
-        json!({"Image":r.image_id,"Labels":spec.labels,"Cmd":(!spec.command.is_empty()).then_some(spec.command),
-            "Env":(!spec.env_vars.is_empty()).then_some(spec.env_vars),"StopSignal":signal,
-            "StopTimeout":spec.life_cycle_spec.and_then(|v|v.stop_timeout),
-            "HostConfig":{"PortBindings":bindings,"Mounts":mounts,"Memory":number(resource.memory_limit)?,"NanoCpus":number(resource.nano_cpus)?,"RestartPolicy":restart.map(|v|json!({"Name":v}))},
-            "NetworkingConfig":{"EndpointsConfig":spec.networks.iter().map(|name|(name.clone(),json!({}))).collect::<serde_json::Map<_,_>>()}
-        }),
-    )
+    citadel_docker::client::deployments::CreateConfig {
+        image: &r.image_id,
+        labels: spec.labels.into_iter().collect(),
+        command: (!spec.command.is_empty()).then_some(&spec.command),
+        environment: (!spec.env_vars.is_empty()).then_some(&spec.env_vars),
+        ports: &spec.ports,
+        volumes: &spec.volumes,
+        networks: &spec.networks,
+        memory: number(resource.memory_limit)?,
+        nano_cpus: number(resource.nano_cpus)?,
+        restart,
+        stop_signal: signal,
+        stop_timeout: spec.life_cycle_spec.and_then(|v| v.stop_timeout),
+    }
+    .body()
+    .map_err(error)
 }
 fn error(e: DeploymentError) -> Status {
     match e {
@@ -126,6 +119,8 @@ mod tests {
         };
         let v = create_body(&r).unwrap();
         assert_eq!(v["HostConfig"]["NanoCpus"], 1_000_000_000i64);
+        assert_eq!(v["ExposedPorts"]["53/udp"], json!({}));
+        assert_eq!(v["ExposedPorts"]["80/tcp"], json!({}));
         assert_eq!(v["HostConfig"]["Memory"], 0);
         assert_eq!(v["StopTimeout"], 0);
         assert_eq!(v["StopSignal"], "SIGKILL");

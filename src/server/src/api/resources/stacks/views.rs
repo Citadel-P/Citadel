@@ -396,6 +396,64 @@ impl From<citadel_stacks::ComposeProjectImportDraft> for ComposeProjectImportDra
     }
 }
 
+pub(crate) async fn decorate_list(
+    principal: &citadel_identity::ActorPrincipal,
+    mut views: Vec<StackView>,
+    coverage: Option<&crate::api::resources::backups::coverage::BackupCoverageService>,
+    copies: Option<&citadel_resource_copies::CopyService>,
+    hint_deadline: Option<tokio::time::Instant>,
+) -> Vec<StackView> {
+    if let Some(coverage) = coverage {
+        views = coverage.enrich_stacks(principal, views).await;
+    }
+    if let Some(copies) = copies {
+        crate::api::resources::resource_copies::enrich_stacks(
+            copies,
+            principal.actor_id,
+            &mut views,
+            hint_deadline,
+        )
+        .await;
+    }
+    views
+}
+
+pub(crate) async fn decorate_detail(
+    principal: &citadel_identity::ActorPrincipal,
+    mut view: StackView,
+    coverage: Option<&crate::api::resources::backups::coverage::BackupCoverageService>,
+    copies: Option<&citadel_resource_copies::CopyService>,
+    deadline: Option<tokio::time::Instant>,
+) -> StackView {
+    if let Some(service) = coverage
+        && let Some(platform) = view.platform_id
+    {
+        view.backup_coverage = Some(
+            service
+                .workload(
+                    principal,
+                    citadel_backups::policies::read_models::BackupPreviewKind::Stack,
+                    view.id,
+                    platform,
+                )
+                .await,
+        );
+    }
+    if let Some(service) = copies {
+        view.copy_eligibility = Some(
+            crate::api::resources::resource_copies::eligibility(
+                service,
+                principal.actor_id,
+                citadel_resource_copies::CopyKind::Stack,
+                view.id,
+                deadline,
+            )
+            .await,
+        );
+    }
+    view
+}
+
 #[cfg(test)]
 mod tests {
     use crate::api::resources::stacks::views::*;

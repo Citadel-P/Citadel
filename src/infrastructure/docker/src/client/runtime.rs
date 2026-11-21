@@ -284,6 +284,15 @@ pub fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
         DockerError::Api { status, .. } if *status == StatusCode::CONFLICT => {
             (RuntimeErrorKind::Conflict, false)
         }
+        DockerError::Api { status, .. } if *status == StatusCode::UNAUTHORIZED => {
+            (RuntimeErrorKind::Authentication, false)
+        }
+        DockerError::Api { status, .. } if *status == StatusCode::FORBIDDEN => {
+            (RuntimeErrorKind::PermissionDenied, false)
+        }
+        DockerError::Api { status, .. } if matches!(status.as_u16(), 413 | 429) => {
+            (RuntimeErrorKind::ResourceExhausted, false)
+        }
         DockerError::Api { status, .. } if status.is_client_error() => {
             (RuntimeErrorKind::InvalidRequest, false)
         }
@@ -296,14 +305,23 @@ pub fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
         | DockerError::IncompatibleVersion { .. }
         | DockerError::InvalidPing(_)
         | DockerError::InvalidIdentifier => (RuntimeErrorKind::InvalidRequest, false),
-        DockerError::Transport(_)
-        | DockerError::ResponseTooLarge { .. }
-        | DockerError::StreamItemTooLarge { .. }
-        | DockerError::ProtocolIo(_)
-        | DockerError::InvalidJson(_) => (RuntimeErrorKind::Remote, false),
+        DockerError::ResponseTooLarge { .. } | DockerError::StreamItemTooLarge { .. } => {
+            (RuntimeErrorKind::ResourceExhausted, false)
+        }
+        DockerError::Transport(_) | DockerError::ProtocolIo(_) | DockerError::InvalidJson(_) => {
+            (RuntimeErrorKind::Remote, false)
+        }
         DockerError::Api { .. } => (RuntimeErrorKind::Remote, false),
     };
-    RuntimeCapabilityError::new(kind, error.to_string(), retryable)
+    let message = match error {
+        DockerError::Transport(error) if error.is_timeout() => "Docker request timed out".into(),
+        DockerError::Api { message, .. } => serde_json::from_str::<serde_json::Value>(&message)
+            .ok()
+            .and_then(|v| v["message"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| "Docker rejected the operation".into()),
+        other => other.to_string(),
+    };
+    RuntimeCapabilityError::new(kind, message, retryable)
 }
 
 impl DockerClient {

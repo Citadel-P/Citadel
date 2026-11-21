@@ -29,10 +29,10 @@ pub(crate) async fn inspect(
             .ok_or("The configured Registry does not exist or is disabled.")?;
     let host = configuration.host;
     let configuration = configuration.configuration;
-    let image = crate::connectors::routing::deployments::qualify_image_reference(&host, reference)
+    let image = citadel_platforms::image_reference::qualify_image_reference(&host, reference)
         .map_err(|_| CHECK_FAILED)?;
     let auth =
-        crate::connectors::routing::deployments::registry_auth(registry, &host, &configuration)
+        crate::connectors::registries::credentials::registry_auth(registry, &host, &configuration)
             .map_err(|_| CHECK_FAILED)?;
     let digest = match agent {
         None => {

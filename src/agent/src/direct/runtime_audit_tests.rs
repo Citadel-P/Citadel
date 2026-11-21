@@ -44,6 +44,7 @@ async fn fixture_with_metadata_delay(
         if req.uri().path().ends_with("/system/df") { tokio::time::sleep(metadata_delay).await; }
         if req.uri().path().ends_with("/c0/stats") && fail.load(std::sync::atomic::Ordering::SeqCst) { return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,"unavailable").into_response(); }
         if req.uri().path() == "/_ping" { return "OK".into_response(); }
+        if req.uri().path().ends_with("/networks/create") { return (axum::http::StatusCode::CONFLICT,Json(serde_json::json!({"message":"network already exists"}))).into_response(); }
         if req.method()==axum::http::Method::POST {return axum::http::StatusCode::NO_CONTENT.into_response();}
         let body=match req.uri().path() {
             "/version"=>serde_json::json!({"Version":"27","ApiVersion":"1.49","MinAPIVersion":"1.41"}),
@@ -600,4 +601,84 @@ async fn name_only_volume_list_keeps_filters_without_usage_or_protection_reads()
     }
     runtime.shutdown.cancel();
     server.await.unwrap();
+}
+
+#[test]
+fn docker_failures_retain_their_semantics_on_the_agent_wire() {
+    use tonic::Code;
+    for (http, code, retry) in [
+        (400, Code::InvalidArgument, false),
+        (401, Code::Unauthenticated, false),
+        (403, Code::PermissionDenied, false),
+        (404, Code::NotFound, false),
+        (409, Code::Aborted, false),
+        (413, Code::ResourceExhausted, false),
+        (429, Code::ResourceExhausted, false),
+        (503, Code::Unavailable, true),
+    ] {
+        let status = docker_error(DockerError::Api {
+            status: reqwest::StatusCode::from_u16(http).unwrap(),
+            message: r#"{"message":"fixture","detail":"private"}"#.into(),
+        });
+        assert_eq!(status.code(), code);
+        assert_eq!(status.message(), "fixture");
+        assert_eq!(
+            status
+                .metadata()
+                .get(citadel_contracts::RUNTIME_RETRYABLE)
+                .unwrap()
+                .as_bytes(),
+            if retry {
+                b"true".as_slice()
+            } else {
+                b"false".as_slice()
+            }
+        );
+    }
+    let invalid = docker_error(DockerError::InvalidJson(
+        serde_json::from_str::<serde_json::Value>("{").unwrap_err(),
+    ));
+    assert_eq!(invalid.code(), Code::DataLoss);
+    assert_eq!(
+        docker_error(DockerError::ResponseTooLarge { limit: 1 }).code(),
+        Code::ResourceExhausted
+    );
+}
+
+#[tokio::test]
+async fn network_create_conflicts_take_one_docker_call_on_each_path() {
+    use citadel_contracts::citadel::networks::v1::{
+        CreateNetworkRequest, network_service_server::NetworkService,
+    };
+    let (runtime, calls, server) = fixture(Default::default()).await;
+    let input=serde_json::from_value(serde_json::json!({"name":"fixture","driver":"bridge","scope":"local","options":{},"labels":{}})).unwrap();
+    let local = citadel_platforms::NetworkMutationPort::create_network(
+        &runtime.docker,
+        &input,
+        &tokio_util::sync::CancellationToken::new(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(local.kind, citadel_platforms::RuntimeErrorKind::Conflict);
+    let direct = NetworkService::create(
+        &runtime,
+        Request::new(CreateNetworkRequest {
+            name: "fixture".into(),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(direct.code(), tonic::Code::Aborted);
+    assert_eq!(direct.message(), local.message);
+    assert_eq!(
+        calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| p.ends_with("/networks/create"))
+            .count(),
+        2
+    );
+    server.abort();
 }

@@ -115,10 +115,11 @@ impl BuildService {
         } else {
             None
         };
-        let mut delay = std::time::Duration::from_millis(250);
-        loop {
-            // Keep this result in the worker slot. Only persistence is retried.
-            let completion = async {
+        let confirmed = citadel_execution::persist_completion(
+            claim.run.id,
+            shutdown,
+            |e| matches!(e, BuildError::Storage(_)),
+            || async {
                 if self
                     .store
                     .finish(&claim, &result, observation.as_ref())
@@ -137,36 +138,11 @@ impl BuildService {
                     Err(BuildError::NotFound) => Ok(false),
                     Err(error) => Err(error),
                 }
-            };
-            let outcome =
-                match tokio::time::timeout(std::time::Duration::from_secs(10), completion).await {
-                    Ok(outcome) => outcome,
-                    Err(_) if shutdown.is_cancelled() => return Ok(()),
-                    Err(_) => {
-                        tokio::select! {
-                            () = shutdown.cancelled() => return Ok(()),
-                            () = tokio::time::sleep(delay) => {},
-                        }
-                        continue;
-                    }
-                };
-            match outcome {
-                Ok(confirmed) => {
-                    if confirmed {
-                        self.changed();
-                    }
-                    break;
-                }
-                Err(BuildError::Storage(error)) => {
-                    tracing::warn!(%error, run_id=%claim.run.id, "Build completion pending");
-                }
-                Err(error) => return Err(error),
-            }
-            tokio::select! {
-                () = shutdown.cancelled() => return Ok(()),
-                () = tokio::time::sleep(delay) => {}
-            }
-            delay = (delay * 2).min(std::time::Duration::from_secs(5));
+            },
+        )
+        .await?;
+        if confirmed == Some(true) {
+            self.changed();
         }
         Ok(())
     }

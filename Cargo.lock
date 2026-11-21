@@ -607,6 +607,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "citadel-activities",
+ "citadel-execution",
  "citadel-primitives",
  "citadel-tags",
  "futures-util",
@@ -643,6 +644,7 @@ dependencies = [
  "chrono",
  "citadel-activities",
  "citadel-alerts",
+ "citadel-execution",
  "citadel-licensing",
  "citadel-primitives",
  "citadel-tags",
@@ -783,6 +785,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]

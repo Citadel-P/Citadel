@@ -51,8 +51,8 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { backupReturnPath, backupSourceFromSearch } from '../navigation';
-import { isWorkloadBackupVolume, sourceKey } from '../coverage';
-import { invalidateBackupPolicyQueries } from '../actions';
+import { invalidatePolicyCoverage, isWorkloadBackupVolume, sourceKey } from '../coverage';
+import { useBackupRepositoriesGroup } from '@/features/backup-repositories/hooks/useBackupRepositoriesGroup';
 
 type BackupPolicyFormValue = Omit<BackupPolicyInput, 'runAsActorId'> & {
   id?: string;
@@ -205,9 +205,9 @@ export function BackupPolicyForm({
   const swarmServicePreview = useRead('getSwarmServiceBackupSourcePreview', swarmServicePreviewArgs, {
     enabled: currentSourceType === 'SwarmService' && Boolean(currentSwarmServiceId),
   });
-  const backupRepositories = useRead('listBackupRepositories');
+  const backupRepositories = useBackupRepositoriesGroup();
   const currentBackupRepositoryId = update.backupRepositoryId ?? original.backupRepositoryId;
-  const repositories = backupRepositories.data?.data.repositories ?? EMPTY_BACKUP_REPOSITORIES;
+  const repositories = backupRepositories.repositories ?? EMPTY_BACKUP_REPOSITORIES;
   const selectedRepository = useMemo(
     () => repositories.find((repository) => repository.id === currentBackupRepositoryId),
     [repositories, currentBackupRepositoryId],
@@ -238,8 +238,8 @@ export function BackupPolicyForm({
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`backup-policy:${draftId}`);
-    void invalidateBackupPolicyQueries(queryClient, id);
-  }, [id, draftId, queryClient]);
+    void invalidatePolicyCoverage(queryClient);
+  }, [draftId, queryClient]);
 
   useEffect(() => {
     if (!metadataChanged) return;

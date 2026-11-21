@@ -4,10 +4,7 @@ use citadel_activities::{
     StackActivitySnapshot, StackResultActivitySnapshot,
 };
 use citadel_primitives::ActorId;
-use citadel_primitives::{
-    EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
-    SpecificPermissions,
-};
+use citadel_primitives::{EffectivePermission, PermissionPolicy, PermissionRequirement};
 use citadel_stacks::permissions as policy;
 use citadel_stacks::{
     CreateStack, ImportComposeProject, ResourceBindingSnapshot, StackDeletionClaim,

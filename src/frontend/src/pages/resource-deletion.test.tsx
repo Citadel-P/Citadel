@@ -56,7 +56,7 @@ const cases = [
   },
 ] as const;
 
-it.each(cases)('deleting from $route refreshes the list without rereading the removed resource', async (entry) => {
+it.each(cases)('deleting from $route leaves the detail without rereading the removed resource', async (entry) => {
   let deleted = false;
   const read = vi.fn(() => (deleted ? new HttpResponse(null, { status: 404 }) : HttpResponse.json(resource)));
   const list = vi.fn(() => HttpResponse.json([]));
@@ -87,7 +87,7 @@ it.each(cases)('deleting from $route refreshes the list without rereading the re
   await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
   await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(entry.route));
-  await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(entry.list === 'listBuildAgentPools' ? 2 : 1));
   expect(deleted).toBe(true);
   expect(read).toHaveBeenCalledOnce();
 });

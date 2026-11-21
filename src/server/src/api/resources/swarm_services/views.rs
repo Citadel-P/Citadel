@@ -306,3 +306,59 @@ impl SwarmServiceDuplicateDraftView {
         })
     }
 }
+
+pub(crate) async fn decorate_list(
+    principal: &citadel_identity::ActorPrincipal,
+    mut views: Vec<ManagedSwarmServiceView>,
+    coverage: Option<&crate::api::resources::backups::coverage::BackupCoverageService>,
+    copies: Option<&citadel_resource_copies::CopyService>,
+    hint_deadline: Option<tokio::time::Instant>,
+) -> Vec<ManagedSwarmServiceView> {
+    if let Some(coverage) = coverage {
+        views = coverage.enrich_services(principal, views).await;
+    }
+    if let Some(copies) = copies {
+        crate::api::resources::resource_copies::enrich_swarm_services(
+            copies,
+            principal.actor_id,
+            &mut views,
+            hint_deadline,
+        )
+        .await;
+    }
+    views
+}
+
+pub(crate) async fn decorate_detail(
+    principal: &citadel_identity::ActorPrincipal,
+    mut view: ManagedSwarmServiceView,
+    coverage: Option<&crate::api::resources::backups::coverage::BackupCoverageService>,
+    copies: Option<&citadel_resource_copies::CopyService>,
+    deadline: Option<tokio::time::Instant>,
+) -> ManagedSwarmServiceView {
+    if let Some(service) = coverage {
+        view.backup_coverage = Some(
+            service
+                .workload(
+                    principal,
+                    citadel_backups::policies::read_models::BackupPreviewKind::SwarmService,
+                    view.id,
+                    view.platform_id,
+                )
+                .await,
+        );
+    }
+    if let Some(service) = copies {
+        view.copy_eligibility = Some(
+            crate::api::resources::resource_copies::eligibility(
+                service,
+                principal.actor_id,
+                citadel_resource_copies::CopyKind::SwarmService,
+                view.id,
+                deadline,
+            )
+            .await,
+        );
+    }
+    view
+}

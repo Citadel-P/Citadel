@@ -76,56 +76,14 @@ impl BuildRegistryCredentialResolver for PostgresBuildRegistryCredentialResolver
             .await
             .map_err(build_storage)?
             .ok_or_else(|| BuildError::Validation("Build Registry was not found.".to_owned()))?;
-            if json_bool(
-                &configuration,
-                &[
-                    "authEnabled",
-                    "AuthEnabled",
-                    "ghcrAuthEnabled",
-                    "GhcrAuthEnabled",
-                ],
-            ) == Some(false)
-            {
-                return Ok(None);
-            }
-            let username = json_string(
-                &configuration,
-                &[
-                    "userName",
-                    "UserName",
-                    "username",
-                    "Username",
-                    "nameSpace",
-                    "NameSpace",
-                ],
-            );
-            let password = json_string(
-                &configuration,
-                &["password", "Password", "pat", "PAT", "token", "Token"],
-            );
-            match (username, password) {
-                (Some(username), Some(password))
-                    if !username.is_empty() && !password.is_empty() =>
-                {
-                    Ok(Some(BuildRegistryCredentials {
-                        username: username.to_owned(),
-                        password: Zeroizing::new(password.to_owned()),
-                    }))
-                }
-                _ => Ok(None),
-            }
+            Ok(citadel_registries::RegistryConfiguration(&configuration)
+                .user_password()
+                .map(|(username, password)| BuildRegistryCredentials {
+                    username: username.into(),
+                    password: Zeroizing::new(password.into()),
+                }))
         })
     }
-}
-
-fn json_string<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a str> {
-    keys.iter()
-        .find_map(|key| value.get(*key).and_then(Value::as_str))
-}
-
-fn json_bool(value: &Value, keys: &[&str]) -> Option<bool> {
-    keys.iter()
-        .find_map(|key| value.get(*key).and_then(Value::as_bool))
 }
 
 fn build_storage(error: impl std::fmt::Display) -> BuildError {

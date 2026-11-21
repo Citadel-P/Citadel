@@ -38,6 +38,10 @@ version is **2**. Command number 0 and unknown command numbers are rejected.
 The Agent runs without PostgreSQL. It maps requests onto shared Docker and
 external-tool implementations; Core owns persisted resource and user state.
 
+Docker network creation preserves conflicts across Local, Direct and Edge. Direct
+uses gRPC `Aborted` for a conflict. Agent runtime errors carry retryability on
+Direct and Edge so Core can retry eligible reads. Network creation stays single-shot.
+
 Container log streaming reports a deleted, dead, or removing container as
 `NotFound` over both Direct and Edge. Core uses that typed result to retire a
 replaced Stack member's log stream while retaining the Stack subscription.

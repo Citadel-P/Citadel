@@ -6,7 +6,6 @@ use citadel_primitives::AutoUpdateState;
 use citadel_primitives::{ActorId, ResourceType};
 use citadel_primitives::{
     EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
-    SpecificPermissions,
 };
 use citadel_swarm_services::permissions as policy;
 use citadel_swarm_services::{

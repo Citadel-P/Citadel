@@ -88,6 +88,9 @@ pub(super) fn build(
         ))
         .with_entitlements(entitlements.clone())
         .with_scheduling_enabled(config.backup_workers.enabled)
+        .with_repository_change_notifier(citadel_server::realtime::backup_repository_callback(
+            realtime_hub.clone(),
+        ))
         .with_change_notifier(citadel_server::realtime::change_callback(
             realtime_hub.clone(),
             "BackupPolicy",

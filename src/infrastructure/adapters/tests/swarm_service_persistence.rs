@@ -767,6 +767,15 @@ async fn service_health_joins_exact_node_and_excludes_superseded_tasks() {
         },
     )
     .await;
+    workload_health_fixture::check_swarm_member_scope(&pool, platform, || async {
+        store
+            .get_authorized(actor, true, service.id)
+            .await
+            .unwrap()
+            .resource
+            .probe_health
+    })
+    .await;
     let read = store.get_authorized(actor, true, service.id).await.unwrap();
     assert_eq!(read.probe_health.status, Health::Healthy);
     assert_eq!(read.probe_health.observed, 1);

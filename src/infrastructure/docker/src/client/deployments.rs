@@ -5,6 +5,57 @@ use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 const CONTAINER_START_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Inputs are already in Docker units. The boundaries retain field presence
+/// and resolve deployment ownership before constructing this configuration.
+pub struct CreateConfig<'a> {
+    pub image: &'a str,
+    pub labels: std::collections::BTreeMap<String, String>,
+    pub command: Option<&'a [String]>,
+    pub environment: Option<&'a [String]>,
+    pub ports: &'a [String],
+    pub volumes: &'a [String],
+    pub networks: &'a [String],
+    pub memory: Option<i64>,
+    pub nano_cpus: Option<i64>,
+    pub restart: Option<&'a str>,
+    pub stop_signal: Option<&'a str>,
+    pub stop_timeout: Option<i32>,
+}
+impl CreateConfig<'_> {
+    pub fn body(self) -> Result<serde_json::Value, DeploymentError> {
+        use serde_json::{Map, json};
+        if self.image.trim().is_empty() {
+            return Err(DeploymentError::Validation("Image is required".into()));
+        }
+        let mut exposed = Map::new();
+        let mut bindings = Map::new();
+        for port in self.ports {
+            let (key, host) = parse_port(port)?;
+            exposed.insert(key.clone(), json!({}));
+            if let Some(host) = host {
+                bindings.insert(key, json!([{"HostPort":host.to_string()}]));
+            }
+        }
+        let mounts = self
+            .volumes
+            .iter()
+            .map(|v| parse_mount(v))
+            .collect::<Result<Vec<_>, _>>()?;
+        let endpoints = self
+            .networks
+            .iter()
+            .map(|name| (name.clone(), json!({})))
+            .collect::<Map<_, _>>();
+        Ok(
+            json!({"Image":self.image,"Labels":self.labels,"Cmd":self.command,"Env":self.environment,
+            "StopSignal":self.stop_signal,"StopTimeout":self.stop_timeout,"ExposedPorts":exposed,
+            "HostConfig":{"PortBindings":bindings,"Mounts":mounts,"Memory":self.memory,
+                "NanoCpus":self.nano_cpus,"RestartPolicy":self.restart.map(|v|json!({"Name":v}))},
+            "NetworkingConfig":{"EndpointsConfig":endpoints}}),
+        )
+    }
+}
+
 impl DockerClient {
     pub async fn apply_container_config<T: serde::Serialize + ?Sized>(
         &self,

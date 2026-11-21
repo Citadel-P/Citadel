@@ -215,7 +215,7 @@ pub async fn prepare(
             None => format!("{host}/{reference}"),
         };
     }
-    let auth = crate::connectors::routing::deployments::registry_auth(id, &host, &cfg)
+    let auth = crate::connectors::registries::credentials::registry_auth(id, &host, &cfg)
         .map_err(|_| failure("Registry configuration is invalid."))?;
     Ok((reference, auth))
 }
@@ -223,7 +223,7 @@ pub async fn prepare(
 fn normalize_reference(reference: &str) -> Result<String, RuntimeCapabilityError> {
     // Tags are case-sensitive. Preserve the requested reference; Docker validates
     // repository syntax instead of silently pulling a different tag.
-    let mut reference = reference.trim().to_owned();
+    let reference = reference.trim().to_owned();
     if reference.is_empty()
         || reference.len() > 2048
         || reference.chars().any(char::is_whitespace)
@@ -234,16 +234,9 @@ fn normalize_reference(reference: &str) -> Result<String, RuntimeCapabilityError
             "A valid image reference is required.",
         ));
     }
-    if !reference.contains('@')
-        && !reference
-            .rsplit('/')
-            .next()
-            .unwrap_or_default()
-            .contains(':')
-    {
-        reference.push_str(":latest");
-    }
-    Ok(reference)
+    Ok(citadel_platforms::image_reference::with_default_tag(
+        reference,
+    ))
 }
 
 pub async fn persist(

@@ -70,7 +70,7 @@ Create replacement secret entries instead of overwriting shared secret values.
 Other repositories may still use those entries. Revoke old provider credentials
 after the update and a successful backup from the intended execution location.
 
-Expand **Maintenance** to validate, check, or prune a ready repository. Save pending
+Repository maintenance requires **Execute** permission. Expand **Maintenance** to validate, check, or prune a ready repository. Save pending
 edits before running maintenance. Initialize is available for repositories that are
 not yet ready.
 

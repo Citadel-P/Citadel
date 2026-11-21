@@ -162,43 +162,17 @@ ORDER BY tag.name, tag.id
         tag_ids: &'a [Uuid],
     ) -> BoxFuture<'a, Result<Vec<TagSummary>, TagError>> {
         Box::pin(async move {
-            let tag_ids = unique_ids(tag_ids);
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             ensure_resource_exists_tx(&mut transaction, resource_type, resource_id).await?;
-            let count = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM tags WHERE id = ANY($1::uuid[])",
+            validate_tag_ids(&mut transaction, tag_ids).await?;
+            replace_resource_tags_tx(
+                &mut transaction,
+                actor_id,
+                resource_type,
+                resource_id,
+                tag_ids,
             )
-            .bind(&tag_ids)
-            .fetch_one(&mut *transaction)
-            .await
-            .map_err(storage)?;
-            if count != tag_ids.len() as i64 {
-                return Err(TagError::Validation(
-                    "One or more Tags do not exist.".to_owned(),
-                ));
-            }
-            sqlx::query("DELETE FROM resourcetags WHERE resourcetype = $1 AND resourceid = $2")
-                .bind(resource_type.as_database_str())
-                .bind(resource_id)
-                .execute(&mut *transaction)
-                .await
-                .map_err(storage)?;
-            if !tag_ids.is_empty() {
-                sqlx::query(
-                    r#"
-INSERT INTO resourcetags (resourcetype, resourceid, tagid, createdbyactorid, createdat)
-SELECT $1, $2, tagid, $4, $5 FROM unnest($3::uuid[]) AS tagid
-"#,
-                )
-                .bind(resource_type.as_database_str())
-                .bind(resource_id)
-                .bind(&tag_ids)
-                .bind(actor_id.value())
-                .bind(Utc::now())
-                .execute(&mut *transaction)
-                .await
-                .map_err(database_error)?;
-            }
+            .await?;
             let tags = load_resource_tags(&mut transaction, resource_type, resource_id).await?;
             transaction.commit().await.map_err(storage)?;
             Ok(tags)

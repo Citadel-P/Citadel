@@ -35,7 +35,7 @@ impl RegistryBrowser {
         kind: RegistryBrowseKind,
         name: Option<&str>,
     ) -> Result<Value, RegistryError> {
-        let cfg_type = field(configuration, &["$type"]).unwrap_or_default();
+        let cfg_type = citadel_registries::RegistryConfiguration(configuration).kind();
         match (cfg_type, kind) {
             (
                 "DockerHub",
@@ -55,7 +55,9 @@ impl RegistryBrowser {
         kind: RegistryBrowseKind,
         name: Option<&str>,
     ) -> Result<Value, RegistryError> {
-        let username = field(cfg, &["UserName", "userName", "username"]).unwrap_or_default();
+        let username = citadel_registries::RegistryConfiguration(cfg)
+            .string("userName")
+            .unwrap_or_default();
         let token = self.docker_token(cfg).await?;
         let namespace = urlencoding::encode(username);
         let path = if kind == RegistryBrowseKind::DockerHubTags {
@@ -107,8 +109,9 @@ impl RegistryBrowser {
         Ok(Value::Array(result))
     }
     async fn docker_token(&self, cfg: &Value) -> Result<String, RegistryError> {
-        let username = field(cfg, &["UserName", "userName", "username"]).unwrap_or_default();
-        let secret = field(cfg, &["PAT", "pat"]).unwrap_or_default();
+        let (username, secret) = citadel_registries::RegistryConfiguration(cfg)
+            .user_password()
+            .ok_or_else(failure)?;
         let response = self
             .client
             .post(format!("{}/v2/auth/token", self.docker_hub))
@@ -135,11 +138,17 @@ impl RegistryBrowser {
         kind: RegistryBrowseKind,
         name: Option<&str>,
     ) -> Result<Value, RegistryError> {
-        let namespace = field(cfg, &["NameSpace", "nameSpace"]).unwrap_or_default();
-        let token = field(cfg, &["PAT", "pat"]).unwrap_or_default();
+        let config = citadel_registries::RegistryConfiguration(cfg);
+        let namespace = config.string("nameSpace").unwrap_or_default();
+        let credentials = config.user_password();
         let path = if kind == RegistryBrowseKind::GithubVersions {
+            let account = if credentials.is_some() {
+                "user".into()
+            } else {
+                format!("users/{}", urlencoding::encode(namespace))
+            };
             format!(
-                "/user/packages/container/{}/versions?page=1&per_page=100",
+                "/{account}/packages/container/{}/versions?page=1&per_page=100",
                 urlencoding::encode(name.unwrap_or_default())
             )
         } else {
@@ -148,17 +157,15 @@ impl RegistryBrowser {
                 urlencoding::encode(namespace)
             )
         };
-        let response = body(
-            self.client
-                .get(format!("{}{path}", self.github))
-                .header("Accept", "application/vnd.github+json")
-                .header("X-GitHub-Api-Version", "2022-11-28")
-                .bearer_auth(token)
-                .send()
-                .await
-                .map_err(|_| failure())?,
-        )
-        .await?;
+        let mut request = self
+            .client
+            .get(format!("{}{path}", self.github))
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some((_, token)) = credentials {
+            request = request.bearer_auth(token);
+        }
+        let response = body(request.send().await.map_err(|_| failure())?).await?;
         let values = response.as_array().ok_or_else(failure)?;
         if values.len() > 100 {
             return Err(failure());
@@ -194,15 +201,8 @@ impl citadel_registries::RegistryConnectionChecker for RegistryBrowser {
         configuration: &'a Value,
     ) -> futures_util::future::BoxFuture<'a, Result<(), RegistryError>> {
         Box::pin(async move {
-            let github_auth_enabled = configuration
-                .as_object()
-                .and_then(|fields| {
-                    fields.iter().find_map(|(key, value)| {
-                        key.eq_ignore_ascii_case("ghcrAuthEnabled").then_some(value)
-                    })
-                })
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
+            let github_auth_enabled =
+                citadel_registries::RegistryConfiguration(configuration).auth_enabled();
             match citadel_registries::registry_type(configuration)?.as_str() {
                 "DockerHub" => self.docker_token(configuration).await.map(|_| ()),
                 "GitHub" if github_auth_enabled => {
@@ -217,15 +217,6 @@ impl citadel_registries::RegistryConnectionChecker for RegistryBrowser {
     }
 }
 
-fn field<'a>(value: &'a Value, names: &[&str]) -> Option<&'a str> {
-    value.as_object()?.iter().find_map(|(key, value)| {
-        names
-            .iter()
-            .any(|name| key.eq_ignore_ascii_case(name))
-            .then(|| value.as_str())
-            .flatten()
-    })
-}
 fn failure() -> RegistryError {
     RegistryError::Validation(
         "Registry request failed. Check registry connectivity and credentials.".into(),

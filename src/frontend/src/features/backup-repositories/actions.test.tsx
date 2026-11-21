@@ -1,4 +1,5 @@
-import { BackupRepositoryStatus, type BackupRepositoryView } from '@/api/generated/api.types';
+import { canOperateRepository } from './operations';
+import { ResourceControlState, BackupRepositoryStatus, type BackupRepositoryView } from '@/api/generated/api.types';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen, waitFor } from '@testing-library/react';
@@ -52,4 +53,26 @@ describe('Backup repository initialization', () => {
     await user.click(screen.getByRole('button', { name: 'Initialize' }));
     await waitFor(() => expect(initialize).toHaveBeenCalledOnce());
   });
+});
+
+it('requires Execute and a compatible repository state for each maintenance action', () => {
+  for (const access of ['Read', 'Write', 'Execute']) {
+    for (const ready of [true, false]) {
+      for (const processing of [true, false]) {
+        const repository = {
+          status: ready ? BackupRepositoryStatus.Ready : BackupRepositoryStatus.Unknown,
+          controlState: processing ? ResourceControlState.Processing : undefined,
+          capabilities: { canRead: true, canWrite: access !== 'Read', canExecute: access === 'Execute' },
+        } as BackupRepositoryView;
+        for (const operation of ['validate', 'initialize', 'check', 'prune'] as const) {
+          expect(canOperateRepository(repository, operation)).toBe(
+            access === 'Execute' &&
+              !processing &&
+              (operation === 'validate' || (operation === 'initialize' ? !ready : ready)),
+          );
+          expect(canOperateRepository(repository, operation, true)).toBe(false);
+        }
+      }
+    }
+  }
 });

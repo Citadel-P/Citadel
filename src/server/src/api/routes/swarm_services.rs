@@ -752,25 +752,21 @@ async fn list(
             .map_err(service_error),
         &headers,
     )?;
-    let mut views = value
+    let views = value
         .into_iter()
         .map(ManagedSwarmServiceView::try_from)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
             crate::api::error::HttpError::from_parts(ApiError::internal(error), &headers)
         })?;
-    if let Some(service) = &state.backup_coverage {
-        views = service.enrich_services(&principal, views).await;
-    }
-    if let Some(service) = &state.copy_eligibility {
-        crate::api::resources::resource_copies::enrich_swarm_services(
-            service,
-            principal.actor_id,
-            &mut views,
-            None,
-        )
-        .await;
-    }
+    let views = crate::api::resources::swarm_services::views::decorate_list(
+        &principal,
+        views,
+        state.backup_coverage.as_deref(),
+        state.copy_eligibility.as_deref(),
+        None,
+    )
+    .await;
     Ok(no_store(
         Json(ManagedSwarmServicesView {
             swarm_services: views,
@@ -811,33 +807,17 @@ async fn get(
             .map_err(service_error),
         &headers,
     )?;
-    let mut view = api_result(
+    let view = api_result(
         ManagedSwarmServiceView::try_from(value).map_err(ApiError::internal),
         &headers,
     )?;
-    if let Some(service) = &state.backup_coverage {
-        view.backup_coverage = Some(
-            service
-                .workload(
-                    &principal,
-                    citadel_backups::policies::read_models::BackupPreviewKind::SwarmService,
-                    id,
-                    view.platform_id,
-                )
-                .await,
-        );
-    }
-    if let Some(service) = &state.copy_eligibility {
-        view.copy_eligibility = Some(
-            crate::api::resources::resource_copies::eligibility(
-                service,
-                principal.actor_id,
-                citadel_resource_copies::CopyKind::SwarmService,
-                id,
-                None,
-            )
-            .await,
-        );
-    }
+    let view = crate::api::resources::swarm_services::views::decorate_detail(
+        &principal,
+        view,
+        state.backup_coverage.as_deref(),
+        state.copy_eligibility.as_deref(),
+        None,
+    )
+    .await;
     Ok(no_store(Json(view).into_response()))
 }

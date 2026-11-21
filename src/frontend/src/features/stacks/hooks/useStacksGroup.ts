@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { useCallback, useMemo } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { StackView, ResourceCapabilitiesView } from '@/api/generated/api.types';
+import { StackView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -16,21 +17,7 @@ export const useStacksGroup = () => {
     return Object.keys(query).length > 0 ? { query } : undefined;
   }, [selectedPlatformId, selectedTagNames]);
   const { data, isLoading, error, refetch, isFetching } = useRead('listStacks', readArgs);
-  const [stacks, setStacks] = useState<StackView[] | undefined>();
-  const [capabilities, setcapabilities] = useState<ResourceCapabilitiesView | undefined>();
-  const lastFetchedRef = useRef<StackView[]>([]);
-  const deletedStackIdsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!data) return;
-    const newBase = data.data.stacks;
-    if (newBase !== lastFetchedRef.current) {
-      lastFetchedRef.current = newBase;
-      setStacks(newBase.filter((stack) => !deletedStackIdsRef.current.has(stack.id)));
-      setcapabilities(data.data.capabilities);
-    }
-  }, [data]);
-
+  const capabilities = data?.data.capabilities;
   const matchesActiveFilters = useCallback(
     (stack: StackView) => {
       if (selectedPlatformId && stack.platformId !== selectedPlatformId) return false;
@@ -42,46 +29,15 @@ export const useStacksGroup = () => {
     [selectedPlatformId, selectedTagNames],
   );
 
-  const handleStackInfoUpdated = useCallback(
-    (stack: StackView, action: string) => {
-      setStacks((prev) => {
-        if (!prev) return prev;
-        if (action === 'create') {
-          deletedStackIdsRef.current.delete(stack.id);
-          const index = prev.findIndex((current) => current.id === stack.id);
-          if (!matchesActiveFilters(stack)) {
-            return index === -1 ? prev : prev.filter((current) => current.id !== stack.id);
-          }
-          if (index === -1) {
-            return [...prev, stack];
-          }
-
-          const updated = [...prev];
-          updated[index] = stack;
-          return updated;
-        }
-        if (action === 'delete') {
-          deletedStackIdsRef.current.add(stack.id);
-          return prev.filter((d) => d.id !== stack.id);
-        }
-        if (deletedStackIdsRef.current.has(stack.id)) {
-          return prev;
-        }
-
-        const index = prev.findIndex((d) => d.id === stack.id);
-        if (!matchesActiveFilters(stack)) {
-          return index === -1 ? prev : prev.filter((d) => d.id !== stack.id);
-        }
-
-        if (index !== -1) {
-          const updated = [...prev];
-          updated[index] = stack;
-          return updated;
-        }
-        return [...prev, stack];
-      });
-    },
-    [matchesActiveFilters],
+  const reload = useCallback(async () => {
+    const result = await refetch();
+    return result.isSuccess ? result.data.data.stacks : undefined;
+  }, [refetch]);
+  const [stacks, handleStackInfoUpdated, onJoinedGroup] = useCollectionRows(
+    data?.data.stacks,
+    JSON.stringify(readArgs ?? {}),
+    matchesActiveFilters,
+    reload,
   );
 
   const setupEventListeners = useCallback(
@@ -100,6 +56,7 @@ export const useStacksGroup = () => {
 
   useRealtimeGroup({
     groupName: 'stacks',
+    onJoinedGroup,
     setupEventListeners,
     removeEventListeners,
   });

@@ -1,7 +1,8 @@
-import { ScriptSummaryView, ResourceCapabilitiesView } from '@/api/generated/api.types';
+import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { ScriptSummaryView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 
@@ -12,21 +13,7 @@ export const useScriptsGroup = () => {
     [selectedTagNames],
   );
   const { data, isLoading, error, refetch, isFetching } = useRead('listScripts', readArgs);
-  const [scripts, setScripts] = useState<ScriptSummaryView[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
-  const lastFetchedRef = useRef<ScriptSummaryView[]>([]);
-
-  useEffect(() => {
-    if (!data) return;
-
-    const newBase = data.data.scripts;
-    if (newBase !== lastFetchedRef.current) {
-      lastFetchedRef.current = newBase;
-      setScripts(newBase);
-      setCapabilities(data.data.capabilities);
-    }
-  }, [data]);
-
+  const capabilities = data?.data.capabilities;
   const matchesActiveFilters = useCallback(
     (script: ScriptSummaryView) => {
       if (selectedTagNames.length === 0) return true;
@@ -37,30 +24,15 @@ export const useScriptsGroup = () => {
     [selectedTagNames],
   );
 
-  const handleScriptInfoUpdated = useCallback(
-    (script: ScriptSummaryView, scriptName: string) => {
-      setScripts((prev) => {
-        if (!prev) return prev;
-        if (scriptName === 'create') {
-          return matchesActiveFilters(script) ? [...prev, script] : prev;
-        }
-        if (scriptName === 'delete') {
-          return prev.filter((item) => item.id !== script.id);
-        }
-
-        const index = prev.findIndex((item) => item.id === script.id);
-        if (!matchesActiveFilters(script)) {
-          return index === -1 ? prev : prev.filter((item) => item.id !== script.id);
-        }
-
-        if (index === -1) return [...prev, script];
-
-        const updated = [...prev];
-        updated[index] = script;
-        return updated;
-      });
-    },
-    [matchesActiveFilters],
+  const reload = useCallback(async () => {
+    const result = await refetch();
+    return result.isSuccess ? result.data.data.scripts : undefined;
+  }, [refetch]);
+  const [scripts, handleScriptInfoUpdated, onJoinedGroup] = useCollectionRows(
+    data?.data.scripts,
+    JSON.stringify(readArgs ?? {}),
+    matchesActiveFilters,
+    reload,
   );
 
   const setupEventListeners = useCallback(
@@ -79,6 +51,7 @@ export const useScriptsGroup = () => {
 
   useRealtimeGroup({
     groupName: 'scripts',
+    onJoinedGroup,
     setupEventListeners,
     removeEventListeners,
   });

@@ -1,3 +1,43 @@
+/// The caller supplies the persisted workload type as a compile-time SQL literal.
+macro_rules! workload_grants {
+    ($kind:ident, $value:literal) => {{
+        const _: () = assert!(citadel_primitives::ResourceType::$kind as i32 == $value);
+        concat!(
+            include_str!("../enabled_actor_scope.sql"),
+            r#", global_permission AS (
+            SELECT COALESCE(MAX(p.permissionlevel),0)::integer AS level_mask,
+                   COALESCE(bit_or(p.specificpermissions),0)::integer AS specific_mask
+            FROM actor_scope scope JOIN actorroles assignment ON assignment.actorid=scope.actorid
+            JOIN permissions p ON p.roleid=assignment.roleid WHERE p.resourcetype="#,
+            stringify!($value),
+            r#"), resource_permissions AS (
+            SELECT a.resourceid, COALESCE(MAX(a.permissionlevel),0)::integer AS level_mask,
+                   COALESCE(bit_or(a.specificpermissions),0)::integer AS specific_mask
+            FROM actor_scope scope JOIN resourceaccesses a ON a.actorid=scope.actorid
+            WHERE a.resourcetype="#,
+            stringify!($value),
+            " GROUP BY a.resourceid)\n"
+        )
+    }};
+}
+pub(super) use workload_grants;
+
+pub(super) fn workload_permission(
+    administrator: bool,
+    level: i32,
+    specific: i32,
+) -> Result<citadel_primitives::EffectivePermission, String> {
+    use citadel_primitives::{EffectivePermission, PermissionLevel, SpecificPermissions};
+    if administrator {
+        return Ok(EffectivePermission::Administrator);
+    }
+    Ok(EffectivePermission::Granted {
+        level: PermissionLevel::from_i32(level)
+            .ok_or_else(|| format!("unknown persisted PermissionLevel value {level}"))?,
+        specifics: SpecificPermissions::from_bits_retain(specific as u32),
+    })
+}
+
 pub(super) const EFFECTIVE_RESOURCE_PERMISSION: &str = concat!(
     include_str!("enabled_actor_scope.sql"),
     r#", grants AS (

@@ -1195,7 +1195,7 @@ async fn list(
             .map_err(stack_error),
         &headers,
     )?;
-    let mut views = api_result(
+    let views = api_result(
         value
             .into_iter()
             .map(StackView::try_from)
@@ -1203,18 +1203,14 @@ async fn list(
             .map_err(ApiError::internal),
         &headers,
     )?;
-    if let Some(service) = &state.backup_coverage {
-        views = service.enrich_stacks(&principal, views).await;
-    }
-    if let Some(service) = &state.copy_eligibility {
-        crate::api::resources::resource_copies::enrich_stacks(
-            service,
-            principal.actor_id,
-            &mut views,
-            None,
-        )
-        .await;
-    }
+    let views = crate::api::resources::stacks::views::decorate_list(
+        &principal,
+        views,
+        state.backup_coverage.as_deref(),
+        state.copy_eligibility.as_deref(),
+        None,
+    )
+    .await;
     Ok(no_store(
         Json(StacksView {
             stacks: views,
@@ -1254,36 +1250,18 @@ async fn get(
             .map_err(stack_error),
         &headers,
     )?;
-    let mut view = api_result(
+    let view = api_result(
         StackView::try_from(value).map_err(ApiError::internal),
         &headers,
     )?;
-    if let Some(service) = &state.backup_coverage
-        && let Some(platform) = view.platform_id
-    {
-        view.backup_coverage = Some(
-            service
-                .workload(
-                    &principal,
-                    citadel_backups::policies::read_models::BackupPreviewKind::Stack,
-                    id,
-                    platform,
-                )
-                .await,
-        );
-    }
-    if let Some(service) = &state.copy_eligibility {
-        view.copy_eligibility = Some(
-            crate::api::resources::resource_copies::eligibility(
-                service,
-                principal.actor_id,
-                citadel_resource_copies::CopyKind::Stack,
-                id,
-                None,
-            )
-            .await,
-        );
-    }
+    let view = crate::api::resources::stacks::views::decorate_detail(
+        &principal,
+        view,
+        state.backup_coverage.as_deref(),
+        state.copy_eligibility.as_deref(),
+        None,
+    )
+    .await;
     Ok(no_store(Json(view).into_response()))
 }
 

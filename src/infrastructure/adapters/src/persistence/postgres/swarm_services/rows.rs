@@ -237,15 +237,8 @@ pub(super) fn decode_permission(
     level: i32,
     specific: i32,
 ) -> Result<EffectivePermission, SwarmServiceError> {
-    if administrator {
-        return Ok(EffectivePermission::Administrator);
-    }
-    Ok(EffectivePermission::Granted {
-        level: PermissionLevel::from_i32(level).ok_or_else(|| {
-            SwarmServiceError::Storage(format!("unknown persisted PermissionLevel value {level}"))
-        })?,
-        specifics: SpecificPermissions::from_bits_retain(specific as u32),
-    })
+    super::super::authorization::workload_permission(administrator, level, specific)
+        .map_err(SwarmServiceError::Storage)
 }
 fn decode_tags(value: Value) -> Result<Vec<TagSummary>, SwarmServiceError> {
     serde_json::from_value(value).map_err(storage)

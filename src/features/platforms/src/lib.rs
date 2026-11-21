@@ -87,5 +87,6 @@ pub mod image_mutations;
 
 pub mod runtime_provider;
 
+pub mod image_reference;
 pub mod image_update_store;
 pub mod image_updates;

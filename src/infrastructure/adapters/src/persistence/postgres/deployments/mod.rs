@@ -15,7 +15,6 @@ use citadel_deployments::{
 use citadel_primitives::AutoUpdateState;
 use citadel_primitives::{
     ActorId, EffectivePermission, PermissionLevel, PermissionPolicy, PermissionRequirement,
-    SpecificPermissions,
 };
 use citadel_tags::TagSummary;
 use futures_util::future::BoxFuture;

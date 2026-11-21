@@ -25,7 +25,10 @@ pub mod topic;
 
 pub use authorization::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort};
 use connection::handle_connection;
-pub use hub::{PublishedRuntimeEvent, RealtimeHub, build_log_callback, change_callback};
+pub use hub::{
+    PublishedRuntimeEvent, RealtimeHub, backup_repository_callback, build_log_callback,
+    change_callback,
+};
 
 pub const REALTIME_PROTOCOL_VERSION: u16 = 1;
 const PAYLOAD_SCHEMA_VERSION: u16 = 1;

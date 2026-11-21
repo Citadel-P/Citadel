@@ -3,6 +3,9 @@
 // Protocol version shared by Core and Agents.
 pub const EDGE_AGENT_PROTOCOL_VERSION: i32 = 2;
 
+/// Agent-authored retry classification on runtime gRPC failures.
+pub const RUNTIME_RETRYABLE: &str = "citadel-runtime-retryable";
+
 pub mod citadel {
     pub mod scripts {
         pub mod v1 {

@@ -20,6 +20,14 @@ pub fn change_callback(
     })
 }
 
+pub fn backup_repository_callback(hub: Option<RealtimeHub>) -> Arc<dyn Fn(Uuid) + Send + Sync> {
+    Arc::new(move |id| {
+        if let Some(hub) = &hub {
+            hub.publish_resource_change("BackupRepository", id, "resourceChanged");
+        }
+    })
+}
+
 pub fn build_log_callback(hub: Option<RealtimeHub>) -> citadel_builds::BuildLogNotifier {
     Arc::new(move |run_id, entry| {
         if let Some(hub) = &hub {

@@ -1377,6 +1377,15 @@ async fn stack_health_resolves_only_the_pinned_manager_daemon_scope() {
     );
     sqlx::query("UPDATE platforms SET platformdescriptor=(platformdescriptor::jsonb || '{\"nodeID\":\"manager\"}'::jsonb)::json WHERE id=$1")
         .bind(platform).execute(&pool).await.unwrap();
+    workload_health_fixture::check_swarm_member_scope(&pool, platform, || async {
+        store
+            .get_authorized(actor, true, stack.id)
+            .await
+            .unwrap()
+            .resource
+            .probe_health
+    })
+    .await;
     let read = store.get_authorized(actor, true, stack.id).await.unwrap();
     assert_eq!(read.probe_health.status, Health::Healthy);
     assert_eq!(read.probe_health.members[0].container_id, Some(container));

@@ -1,5 +1,7 @@
 use super::*;
 
+pub const DEFAULT_DOCKER_HUB_ID: Uuid = Uuid::from_u128(0x100);
+
 citadel_primitives::status_enum! {
     pub enum RegistryStatus { Active, Disabled, Deprecated }
 }

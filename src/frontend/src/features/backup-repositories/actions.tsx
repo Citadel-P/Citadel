@@ -1,12 +1,10 @@
-import { BackupRepositoryStatus, BackupRepositoryView } from '@/api/generated/api.types';
+import { useRemoveResourceAction } from '@/components/custom/useSettledResourceAction';
+import { BackupRepositoryView } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { useSelectedResources } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
-import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, DatabaseZap, Eye, RefreshCw, Scissors, Trash2 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router';
-import { toast } from 'sonner';
-import { getRepositoryOperationContext } from './form/form';
+import { useNavigate } from 'react-router';
+import { useRepositoryOperations, type RepositoryOperation } from './operations';
 
 const singleSelection = (resources: BackupRepositoryView | BackupRepositoryView[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
@@ -14,43 +12,16 @@ const singleSelection = (resources: BackupRepositoryView | BackupRepositoryView[
   return { selected, multiSelect };
 };
 
-const invalidateBackupRepositoryQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
-  await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
-  if (id) {
-    await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id }] });
-  } else {
-    await queryClient.invalidateQueries({ queryKey: ['getBackupRepository'] });
-  }
-};
-
 const useRepositoryOperation = (
   resources: BackupRepositoryView | BackupRepositoryView[],
-  mutationKey:
-    'validateBackupRepository' | 'initializeBackupRepository' | 'checkBackupRepository' | 'pruneBackupRepository',
-  successMessage: string,
+  operation: RepositoryOperation,
 ) => {
   const { selected, multiSelect } = singleSelection(resources);
-  const queryClient = useQueryClient();
-  const mutation = useMutate(mutationKey);
-  const canExecute =
-    !!selected &&
-    !multiSelect &&
-    !(mutationKey === 'initializeBackupRepository' && selected.status === BackupRepositoryStatus.Ready);
-
+  const { canRun, run, pending } = useRepositoryOperations(selected);
   return {
-    canExecute,
-    isPending: mutation.isPending,
-    run: async () => {
-      if (!canExecute) return;
-
-      try {
-        await mutation.mutateAsync({ id: selected.id, data: getRepositoryOperationContext(selected) } as any);
-        await invalidateBackupRepositoryQueries(queryClient, selected.id);
-        toast.success(successMessage);
-      } catch {
-        /** Nope */
-      }
-    },
+    canExecute: canRun(operation, multiSelect),
+    isPending: pending === operation,
+    run: () => run(operation, multiSelect),
   };
 };
 
@@ -78,30 +49,28 @@ const { dropdown, group, info } = createActionsBuilder<BackupRepositoryView>()
     type: 'command',
     icon: CheckCircle2,
     requiredCapabilities: ['canExecute'],
-    useHandler: ({ resources }) =>
-      useRepositoryOperation(resources, 'validateBackupRepository', 'Repository validated'),
+    useHandler: ({ resources }) => useRepositoryOperation(resources, 'validate'),
   })
   .addAction({
     key: 'initialize',
     type: 'command',
     icon: DatabaseZap,
     requiredCapabilities: ['canExecute'],
-    useHandler: ({ resources }) =>
-      useRepositoryOperation(resources, 'initializeBackupRepository', 'Repository initialized'),
+    useHandler: ({ resources }) => useRepositoryOperation(resources, 'initialize'),
   })
   .addAction({
     key: 'check',
     type: 'command',
     icon: RefreshCw,
     requiredCapabilities: ['canExecute'],
-    useHandler: ({ resources }) => useRepositoryOperation(resources, 'checkBackupRepository', 'Repository checked'),
+    useHandler: ({ resources }) => useRepositoryOperation(resources, 'check'),
   })
   .addAction({
     key: 'prune',
     type: 'command',
     icon: Scissors,
     requiredCapabilities: ['canExecute'],
-    useHandler: ({ resources }) => useRepositoryOperation(resources, 'pruneBackupRepository', 'Repository pruned'),
+    useHandler: ({ resources }) => useRepositoryOperation(resources, 'prune'),
   })
   .addAction({
     key: 'delete',
@@ -114,33 +83,13 @@ const { dropdown, group, info } = createActionsBuilder<BackupRepositoryView>()
     requiredCapabilities: ['canWrite'],
     useHandler: ({ resources }) => {
       const selected = Array.isArray(resources) ? resources : [resources];
-      const queryClient = useQueryClient();
       const archive = useMutate('archiveBackupRepository');
-      const [, setSelectedResources] = useSelectedResources<BackupRepositoryView>('BackupRepository');
-      const location = useLocation();
-      const navigate = useNavigate();
-      const isCurrentResource = selected.some(
-        (repository) => location.pathname.replace(/\/$/, '') === `/backup-repositories/edit/${repository.id}`,
-      );
-
-      return {
-        canExecute: selected.length > 0,
-        isPending: archive.isPending,
-        run: async () => {
-          if (selected.length === 0) return;
-
-          try {
-            await Promise.all(selected.map((repository) => archive.mutateAsync({ id: repository.id } as any)));
-            if (isCurrentResource) navigate('/backup-repositories', { replace: true });
-            await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
-            setSelectedResources([]);
-            toast.success(`${selected.length} ${selected.length === 1 ? 'repository' : 'repositories'} archived`);
-          } catch {
-            // toast.error(archive.validationErrors ?? 'Failed to archive selected repositories');
-            // throw error;
-          }
-        },
-      };
+      return useRemoveResourceAction(selected, {
+        type: 'BackupRepository',
+        listPath: '/backup-repositories',
+        mutate: (item) => archive.mutateAsync({ id: item.id }),
+        message: (count, total) => `${count} of ${total} ${total === 1 ? 'repository' : 'repositories'} archived`,
+      });
     },
   })
   .build();

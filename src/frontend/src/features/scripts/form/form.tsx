@@ -27,7 +27,6 @@ import { ResourceTagSelector } from '@/features/tags/components';
 import { configureScriptEditor, MonacoEditor } from '@/lib/monaco';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useTaskSheet } from '@/lib/atoms';
-import { useQueryClient } from '@tanstack/react-query';
 import { TestTube2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
@@ -98,7 +97,6 @@ export function ScriptForm({
     { enabled: !!duplicateFrom },
   );
   const duplicate = duplicateData?.data;
-  const queryClient = useQueryClient();
   const { open: openSheet } = useTaskSheet('Script');
   const createScript = useMutate('createScript');
   const updateScript = useMutate('updateScript');
@@ -145,10 +143,7 @@ export function ScriptForm({
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`script:${id ?? 'new'}`);
-    queryClient.invalidateQueries({ queryKey: ['listScripts'] });
-    queryClient.invalidateQueries({ queryKey: ['getScript', { id }] });
-    queryClient.invalidateQueries({ queryKey: ['listScriptRuns', { id }] });
-  }, [id, queryClient]);
+  }, [id]);
 
   const { save: handleSave, isPending } = useSaveResource<ScriptFormValue, any>({
     mode,

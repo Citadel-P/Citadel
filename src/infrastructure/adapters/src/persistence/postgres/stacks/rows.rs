@@ -187,15 +187,8 @@ pub(super) fn decode_permission(
     level: i32,
     specific: i32,
 ) -> Result<EffectivePermission, StackError> {
-    if administrator {
-        return Ok(EffectivePermission::Administrator);
-    }
-    Ok(EffectivePermission::Granted {
-        level: PermissionLevel::from_i32(level).ok_or_else(|| {
-            StackError::Storage(format!("unknown persisted PermissionLevel value {level}"))
-        })?,
-        specifics: SpecificPermissions::from_bits_retain(specific as u32),
-    })
+    super::super::authorization::workload_permission(administrator, level, specific)
+        .map_err(StackError::Storage)
 }
 fn decode_tags(value: Value) -> Result<Vec<TagSummary>, StackError> {
     serde_json::from_value(value).map_err(storage)
@@ -217,12 +210,12 @@ mod permission_tests {
         let known = decode_permission(false, 4, 1 << 30).unwrap();
         assert!(known.allows(PermissionRequirement {
             resource_type: citadel_primitives::ResourceType::Stack,
-            level: PermissionLevel::Write,
+            level: citadel_primitives::PermissionLevel::Write,
             specific: None
         }));
         assert!(!known.allows(PermissionRequirement {
             resource_type: citadel_primitives::ResourceType::Stack,
-            level: PermissionLevel::Read,
+            level: citadel_primitives::PermissionLevel::Read,
             specific: Some(citadel_primitives::SpecificPermission::Apply)
         }));
     }

@@ -155,36 +155,9 @@ pub(crate) fn router(runtime: Runtime, key: VerifyingKey, audience: &str) -> Rou
 }
 
 fn docker_error(error: DockerError) -> Status {
-    match error {
-        DockerError::InvalidIdentifier | DockerError::InvalidEndpoint(_) => {
-            Status::invalid_argument(error.to_string())
-        }
-        DockerError::Api { status, message } => {
-            let detail = serde_json::from_str::<serde_json::Value>(&message)
-                .ok()
-                .and_then(|v| v["message"].as_str().map(str::to_owned))
-                .unwrap_or_else(|| "Docker rejected the operation".into());
-            match status.as_u16() {
-                400 | 422 => Status::invalid_argument(detail),
-                401 => Status::unauthenticated(detail),
-                403 => Status::permission_denied(detail),
-                404 => Status::not_found(detail),
-                409 => Status::failed_precondition(detail),
-                429 => Status::resource_exhausted(detail),
-                _ => Status::unavailable(detail),
-            }
-        }
-        DockerError::Transport(ref error) if error.is_timeout() => {
-            Status::deadline_exceeded("Docker request timed out")
-        }
-        DockerError::ResponseTooLarge { .. } | DockerError::StreamItemTooLarge { .. } => {
-            Status::resource_exhausted(error.to_string())
-        }
-        DockerError::InvalidJson(_) | DockerError::ProtocolIo(_) => {
-            Status::data_loss(error.to_string())
-        }
-        _ => Status::unavailable(error.to_string()),
-    }
+    runtime_error(citadel_docker::client::runtime::normalize_docker_error(
+        error,
+    ))
 }
 
 fn filters<const N: usize>(values: [(&str, Option<String>); N]) -> Option<String> {
@@ -224,11 +197,19 @@ fn runtime_error(error: citadel_platforms::RuntimeCapabilityError) -> Status {
         PermissionDenied => tonic::Code::PermissionDenied,
         InvalidRequest => tonic::Code::InvalidArgument,
         NotFound => tonic::Code::NotFound,
-        Conflict => tonic::Code::FailedPrecondition,
+        Conflict => tonic::Code::Aborted,
         ResourceExhausted => tonic::Code::ResourceExhausted,
-        Unavailable | Remote => tonic::Code::Unavailable,
+        Unavailable => tonic::Code::Unavailable,
+        Remote => tonic::Code::DataLoss,
     };
-    Status::new(code, error.message)
+    let mut status = Status::new(code, error.message);
+    status.metadata_mut().insert(
+        citadel_contracts::RUNTIME_RETRYABLE,
+        if error.retryable { "true" } else { "false" }
+            .parse()
+            .unwrap(),
+    );
+    status
 }
 fn interval(milliseconds: i32) -> std::time::Duration {
     std::time::Duration::from_millis(if milliseconds <= 0 {

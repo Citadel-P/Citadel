@@ -123,15 +123,12 @@ fn pinned_reference(
     reference: &str,
     value: &str,
 ) -> Result<String, RuntimeCapabilityError> {
-    let reference =
-        crate::connectors::routing::deployments::qualify_image_reference(host, reference)
-            .map_err(|_| unavailable("The image reference is unavailable."))?;
-    let repository = reference.split('@').next().unwrap_or(&reference);
-    let repository = repository
-        .rsplit_once(':')
-        .filter(|(_, tag)| !tag.contains('/'))
-        .map_or(repository, |(repo, _)| repo);
-    Ok(format!("{repository}@{}", digest(value)?))
+    let reference = citadel_platforms::image_reference::qualify_image_reference(host, reference)
+        .map_err(|_| unavailable("The image reference is unavailable."))?;
+    Ok(citadel_platforms::image_reference::pin_to_digest(
+        &reference,
+        Some(digest(value)?),
+    ))
 }
 
 pub(crate) fn swarm_targets(

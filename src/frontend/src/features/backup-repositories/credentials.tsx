@@ -3,11 +3,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useMutate } from '@/lib/hooks';
 import { notifyRequestError, requestErrorMessage } from '@/lib/request-error';
-import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ChevronDown, KeyRound, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { getRepositoryOperationContext, SecretSelector } from './form/form';
+import { SecretSelector } from './form/form';
+import { getRepositoryOperationContext } from './input';
 
 type Credentials = {
   accessKey: string;
@@ -26,7 +26,6 @@ export function RepositoryCredentials({
   onUpdated?: (repository: BackupRepositoryView) => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
   const mutation = useMutate('updateBackupRepositoryCredentials');
   // Untouched selections come directly from the latest repository. Keep a snapshot
   // only while editing so a refresh cannot silently overwrite another rotation.
@@ -75,10 +74,6 @@ export function RepositoryCredentials({
         },
       });
       onUpdated?.(response.data);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] }),
-        queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: repository.id }] }),
-      ]);
       toast.success('S3 credentials validated and updated');
       reset();
       setOpen(false);

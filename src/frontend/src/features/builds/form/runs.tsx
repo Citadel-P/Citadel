@@ -207,14 +207,12 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
     async (run: BuildRunView) => {
       try {
         await cancelRun.mutateAsync({ id: run.id } as any);
-        await queryClient.invalidateQueries({ queryKey: ['listBuildRuns'] });
-        await queryClient.invalidateQueries({ queryKey: ['getBuildProject', { id: resource.id }] });
         toast.success('Build cancellation requested');
       } catch {
         /**Nope */
       }
     },
-    [cancelRun, queryClient, resource.id],
+    [cancelRun],
   );
 
   const columns = useMemo(

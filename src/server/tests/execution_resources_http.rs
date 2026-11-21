@@ -182,6 +182,9 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
             Duration::minutes(5),
             Arc::new(AllowBackupExecution),
         )
+        .with_repository_change_notifier(citadel_server::realtime::backup_repository_callback(
+            Some(hub.clone()),
+        ))
         .with_change_notifier(change_callback(Some(hub.clone()), "BackupPolicy"))
         .with_entitlements(backup_entitlement.clone()),
     );
@@ -776,6 +779,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         StatusCode::NO_CONTENT
     );
 
+    let mut repository_changes = hub.subscribe();
     let repository = response_json(
         request(
             &app,
@@ -792,7 +796,12 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     let repository_id = repository["id"].as_str().unwrap();
+    assert_eq!(
+        drain_resource_changes(&mut repository_changes, "BackupRepository"),
+        1
+    );
     backup_repository_patch::before_ready(&app, &pool, &principal, &repository).await;
+    let mut validation_changes = hub.subscribe();
     let validation = response_json(
         request(
             &app,
@@ -805,6 +814,10 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     assert_eq!(validation["status"], "Ready");
+    assert_eq!(
+        drain_resource_changes(&mut validation_changes, "BackupRepository"),
+        1
+    );
     backup_repository_patch::after_ready(&app, &pool, &principal, &repository).await;
     backup_repository_credentials::verify(&app, &pool, &principal, fixture.secret, &backups).await;
     let persisted_validation: i64 = sqlx::query_scalar(

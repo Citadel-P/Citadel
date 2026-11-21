@@ -953,7 +953,7 @@ impl ApplicationGroupReader {
             Topic::Deployments => {
                 let selection = WorkloadSelection::new(e, "deploymentIds");
                 let style = selection.style();
-                let mut views = self
+                let views = self
                     .deployments
                     .list_authorized(
                         actor,
@@ -974,18 +974,14 @@ impl ApplicationGroupReader {
                 if views.len() > self.snapshot_limit {
                     return Err(RealtimeReadError::SnapshotCapacity);
                 }
-                if let Some(service) = &self.backup_coverage {
-                    views = service.enrich_deployments(p, views).await;
-                }
-                if let Some(service) = &self.copy_eligibility {
-                    crate::api::resources::resource_copies::enrich_deployments(
-                        service,
-                        actor,
-                        &mut views,
-                        Some(hint_deadline),
-                    )
-                    .await;
-                }
+                let views = crate::api::resources::deployments::views::decorate_list(
+                    p,
+                    views,
+                    self.backup_coverage.as_deref(),
+                    self.copy_eligibility.as_deref(),
+                    Some(hint_deadline),
+                )
+                .await;
                 rows("DeploymentInfoUpdated", views, style)
             }
             Topic::Deployment(..) => {
@@ -1002,31 +998,23 @@ impl ApplicationGroupReader {
                 ) {
                     return Ok(GroupSnapshot::default());
                 }
-                let mut view =
+                let view =
                     crate::api::resources::deployments::views::DeploymentView::try_from(resource)
                         .map_err(failure)?;
-                if let Some(service) = &self.backup_coverage {
-                    let platform = view.platform_id;
-                    view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::Deployment, id.unwrap(), platform).await);
-                }
-                if let Some(service) = &self.copy_eligibility {
-                    view.copy_eligibility = Some(
-                        crate::api::resources::resource_copies::eligibility(
-                            service,
-                            actor,
-                            citadel_resource_copies::CopyKind::Deployment,
-                            id.unwrap(),
-                            Some(hint_deadline),
-                        )
-                        .await,
-                    );
-                }
+                let view = crate::api::resources::deployments::views::decorate_detail(
+                    p,
+                    view,
+                    self.backup_coverage.as_deref(),
+                    self.copy_eligibility.as_deref(),
+                    Some(hint_deadline),
+                )
+                .await;
                 rows("DeploymentInfoUpdated", vec![view], selection.style())
             }
             Topic::Stacks => {
                 let selection = WorkloadSelection::new(e, "stackIds");
                 let style = selection.style();
-                let mut views = self
+                let views = self
                     .stacks
                     .list_authorized(
                         actor,
@@ -1047,18 +1035,14 @@ impl ApplicationGroupReader {
                 if views.len() > self.snapshot_limit {
                     return Err(RealtimeReadError::SnapshotCapacity);
                 }
-                if let Some(service) = &self.backup_coverage {
-                    views = service.enrich_stacks(p, views).await;
-                }
-                if let Some(service) = &self.copy_eligibility {
-                    crate::api::resources::resource_copies::enrich_stacks(
-                        service,
-                        actor,
-                        &mut views,
-                        Some(hint_deadline),
-                    )
-                    .await;
-                }
+                let views = crate::api::resources::stacks::views::decorate_list(
+                    p,
+                    views,
+                    self.backup_coverage.as_deref(),
+                    self.copy_eligibility.as_deref(),
+                    Some(hint_deadline),
+                )
+                .await;
                 rows("StackInfoUpdated", views, style)
             }
             Topic::Stack(..) => {
@@ -1071,34 +1055,16 @@ impl ApplicationGroupReader {
                 if !selection.includes(resource.id, resource.platform_id, &resource.probe_health) {
                     return Ok(GroupSnapshot::default());
                 }
-                let mut view = crate::api::resources::stacks::views::StackView::try_from(resource)
+                let view = crate::api::resources::stacks::views::StackView::try_from(resource)
                     .map_err(failure)?;
-                if let Some(service) = &self.backup_coverage
-                    && let Some(platform) = view.platform_id
-                {
-                    view.backup_coverage = Some(
-                        service
-                            .workload(
-                                p,
-                                citadel_backups::policies::read_models::BackupPreviewKind::Stack,
-                                id.unwrap(),
-                                platform,
-                            )
-                            .await,
-                    );
-                }
-                if let Some(service) = &self.copy_eligibility {
-                    view.copy_eligibility = Some(
-                        crate::api::resources::resource_copies::eligibility(
-                            service,
-                            actor,
-                            citadel_resource_copies::CopyKind::Stack,
-                            id.unwrap(),
-                            Some(hint_deadline),
-                        )
-                        .await,
-                    );
-                }
+                let view = crate::api::resources::stacks::views::decorate_detail(
+                    p,
+                    view,
+                    self.backup_coverage.as_deref(),
+                    self.copy_eligibility.as_deref(),
+                    Some(hint_deadline),
+                )
+                .await;
                 rows("StackInfoUpdated", vec![view], selection.style())
             }
             Topic::StackInfo(..) => {
@@ -1169,29 +1135,21 @@ impl ApplicationGroupReader {
                 ) {
                     return Ok(GroupSnapshot::default());
                 }
-                let mut view = crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from(resource).map_err(failure)?;
-                if let Some(service) = &self.backup_coverage {
-                    let platform = view.platform_id;
-                    view.backup_coverage = Some(service.workload(p, citadel_backups::policies::read_models::BackupPreviewKind::SwarmService, id.unwrap(), platform).await);
-                }
-                if let Some(service) = &self.copy_eligibility {
-                    view.copy_eligibility = Some(
-                        crate::api::resources::resource_copies::eligibility(
-                            service,
-                            actor,
-                            citadel_resource_copies::CopyKind::SwarmService,
-                            id.unwrap(),
-                            Some(hint_deadline),
-                        )
-                        .await,
-                    );
-                }
+                let view = crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from(resource).map_err(failure)?;
+                let view = crate::api::resources::swarm_services::views::decorate_detail(
+                    p,
+                    view,
+                    self.backup_coverage.as_deref(),
+                    self.copy_eligibility.as_deref(),
+                    Some(hint_deadline),
+                )
+                .await;
                 rows("SwarmServiceInfoUpdated", vec![view], selection.style())
             }
             Topic::SwarmServices(..) => {
                 let selection = WorkloadSelection::new(e, "serviceIds");
                 let style = selection.style();
-                let mut views = self.services
+                let views = self.services
                     .list_authorized(
                         actor,
                         admin,
@@ -1212,18 +1170,14 @@ impl ApplicationGroupReader {
                 if views.len() > self.snapshot_limit {
                     return Err(RealtimeReadError::SnapshotCapacity);
                 }
-                if let Some(service) = &self.backup_coverage {
-                    views = service.enrich_services(p, views).await;
-                }
-                if let Some(service) = &self.copy_eligibility {
-                    crate::api::resources::resource_copies::enrich_swarm_services(
-                        service,
-                        actor,
-                        &mut views,
-                        Some(hint_deadline),
-                    )
-                    .await;
-                }
+                let views = crate::api::resources::swarm_services::views::decorate_list(
+                    p,
+                    views,
+                    self.backup_coverage.as_deref(),
+                    self.copy_eligibility.as_deref(),
+                    Some(hint_deadline),
+                )
+                .await;
                 rows("SwarmServiceInfoUpdated", views, style)
             }
             Topic::GitRepositories => rows(

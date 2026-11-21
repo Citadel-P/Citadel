@@ -69,18 +69,14 @@ pub(crate) async fn validate_tag_ids(
     tx: &mut Transaction<'_, Postgres>,
     ids: &[Uuid],
 ) -> Result<(), TagError> {
-    let ids = unique_ids(ids);
-    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tags WHERE id=ANY($1::uuid[])")
-        .bind(&ids)
-        .fetch_one(&mut **tx)
+    super::links::validate(tx, ids)
         .await
-        .map_err(storage)?;
-    if count != ids.len() as i64 {
-        return Err(TagError::Validation(
-            "One or more Tags do not exist.".into(),
-        ));
-    }
-    Ok(())
+        .map_err(|error| match error {
+            super::links::ResourceTagError::Missing => {
+                TagError::Validation("One or more Tags do not exist.".into())
+            }
+            super::links::ResourceTagError::Database(db) => storage(db),
+        })
 }
 
 pub(crate) async fn insert_resource_tags(
@@ -90,13 +86,9 @@ pub(crate) async fn insert_resource_tags(
     id: Uuid,
     ids: &[Uuid],
 ) -> Result<(), TagError> {
-    let ids = unique_ids(ids);
-    if ids.is_empty() {
-        return Ok(());
-    }
-    sqlx::query("INSERT INTO resourcetags (resourcetype,resourceid,tagid,createdbyactorid,createdat) SELECT $1,$2,tagid,$4,$5 FROM unnest($3::uuid[]) tagid")
-    .bind(t.as_database_str()).bind(id).bind(ids).bind(actor.value()).bind(Utc::now()).execute(&mut **tx).await.map_err(storage)?;
-    Ok(())
+    super::links::insert_validated(tx, t.as_database_str(), id, ids, actor.value())
+        .await
+        .map_err(database_error)
 }
 
 pub(crate) async fn replace_resource_tags_tx(

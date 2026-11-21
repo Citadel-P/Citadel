@@ -27,6 +27,7 @@ type EventStream =
 
 #[derive(Clone, Copy)]
 enum HandshakeBehavior {
+    Permanent,
     FailOnce,
     Delay,
 }
@@ -84,6 +85,9 @@ impl PlatformService for FixtureService {
         match self.behavior {
             HandshakeBehavior::FailOnce if attempt == 0 => {
                 return Err(Status::unavailable("temporary"));
+            }
+            HandshakeBehavior::Permanent => {
+                return Err(Status::data_loss("Malformed Docker response"));
             }
             HandshakeBehavior::Delay => tokio::time::sleep(Duration::from_millis(100)).await,
             HandshakeBehavior::FailOnce => {}
@@ -268,6 +272,27 @@ async fn retries_unavailable_with_a_fresh_signed_nonce() {
     assert_eq!(nonces.len(), 2);
     assert_ne!(nonces[0], nonces[1]);
     server_cancellation.cancel();
+}
+
+#[tokio::test]
+async fn permanent_platform_info_failure_is_single_attempt() {
+    let (address, attempts, _, stop) = start_fixture(HandshakeBehavior::Permanent).await;
+    let client = AgentClient::connect(
+        &address,
+        AgentRequestSigner::from_bytes(&[5; 32]),
+        Duration::from_secs(1),
+        true,
+    )
+    .await
+    .unwrap();
+    let error = client
+        .get_info(&CancellationToken::new())
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind, RuntimeErrorKind::Remote);
+    assert!(!error.retryable);
+    assert_eq!(attempts.load(Ordering::Relaxed), 1);
+    stop.cancel();
 }
 
 #[tokio::test]

@@ -1,7 +1,6 @@
 import {
   BackupExecutionLocation,
   BackupRepositorySpec,
-  BackupRepositoryStatus,
   BackupRepositoryType,
   BackupRepositoryView,
   ResourceControlState,
@@ -10,21 +9,18 @@ import { IntegrationCard } from '@/components/custom/common';
 import { DropdownActionButton, RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { hasCapability } from '@/lib/resource-capabilities';
-import { useMutate } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { ActionData } from '@/pages/types';
-import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Cloud, DatabaseBackup, Eye, FolderLock, LoaderCircle, RefreshCw, Scissors } from 'lucide-react';
-import { type FC, type ReactNode, useState } from 'react';
+import { type FC, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { toast } from 'sonner';
-import { getRepositoryOperationContext } from './form/form';
+
+import { useRepositoryOperations, type RepositoryOperation } from './operations';
 
 type BackupRepositoryActions = Record<
   string,
   FC<{ resource: BackupRepositoryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
 >;
-type RepositoryOperation = 'validate' | 'initialize' | 'check' | 'prune';
 
 export function BackupRepositoriesTable({
   items,
@@ -54,21 +50,17 @@ export function BackupRepositoriesTable({
   );
 }
 
-function RepositoryCard({
+export function RepositoryCard({
   repository,
   actions,
+  onEdit,
 }: {
+  onEdit?: () => void;
   repository: BackupRepositoryView;
   actions: BackupRepositoryActions;
 }) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const validate = useMutate('validateBackupRepository');
-  const initialize = useMutate('initializeBackupRepository');
-  const check = useMutate('checkBackupRepository');
-  const prune = useMutate('pruneBackupRepository');
-  const [pendingOperation, setPendingOperation] = useState<RepositoryOperation | null>(null);
-
+  const { canRun, run, pending: pendingOperation } = useRepositoryOperations(repository);
   const Icon = repository.type === BackupRepositoryType.S3Compatible ? Cloud : FolderLock;
   const label = repository.type === BackupRepositoryType.S3Compatible ? 'S3-compatible' : 'Filesystem';
   const {
@@ -80,99 +72,32 @@ function RepositoryCard({
     ...repositoryActions
   } = actions;
   const canRead = hasCapability(repository, 'canRead');
-  const canExecute = hasCapability(repository, 'canExecute');
   const isResourceProcessing = repository.controlState === ResourceControlState.Processing;
-  const operating = pendingOperation !== null || isResourceProcessing;
 
   const openEdit = () => {
-    if (canRead) navigate(`/backup-repositories/edit/${repository.id}`);
+    if (!canRead) return;
+    if (onEdit) onEdit();
+    else navigate(`/backup-repositories/edit/${repository.id}`);
   };
 
-  const runOperation = async (
-    operation: RepositoryOperation,
-    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
-    successMessage: string,
-    _failureMessage: string,
-  ) => {
-    if (operating) return;
-
-    setPendingOperation(operation);
-    try {
-      await mutation.mutateAsync({ id: repository.id, data: getRepositoryOperationContext(repository) } as any);
-      await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
-      await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: repository.id }] });
-      toast.success(successMessage);
-    } catch {
-      //toast.error(mutation.validationErrors ?? _failureMessage);
-    } finally {
-      setPendingOperation(null);
-    }
-  };
-
-  const operationAction = (
-    operation: RepositoryOperation,
-    title: string,
-    icon: ReactNode,
-    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
-    successMessage: string,
-    failureMessage: string,
-    readyOnly = false,
-  ) => {
-    const loading = pendingOperation === operation;
-    const disabled = !canExecute || operating || (readyOnly && repository.status !== BackupRepositoryStatus.Ready);
-    return (
-      <DropdownActionButton
-        title={title}
-        icon={icon}
-        loading={loading}
-        disabled={disabled}
-        onClick={() => runOperation(operation, mutation, successMessage, failureMessage)}
-      />
-    );
-  };
+  const operationAction = (operation: RepositoryOperation, title: string, icon: ReactNode) => (
+    <DropdownActionButton
+      title={title}
+      icon={icon}
+      loading={pendingOperation === operation}
+      disabled={!canRun(operation)}
+      onClick={() => run(operation)}
+    />
+  );
 
   const cardActions = {
     edit: () => (
       <DropdownActionButton title="Edit" icon={<Eye className="h-4 w-4" />} disabled={!canRead} onClick={openEdit} />
     ),
-    validate: () =>
-      operationAction(
-        'validate',
-        'Validate',
-        <CheckCircle2 className="h-4 w-4" />,
-        validate,
-        'Repository validated',
-        'Failed to validate repository.',
-      ),
-    initialize: () =>
-      operationAction(
-        'initialize',
-        'Initialize',
-        <DatabaseBackup className="h-4 w-4" />,
-        initialize,
-        'Repository initialized',
-        'Failed to initialize repository.',
-      ),
-    check: () =>
-      operationAction(
-        'check',
-        'Check',
-        <RefreshCw className="h-4 w-4" />,
-        check,
-        'Repository checked',
-        'Failed to check repository.',
-        true,
-      ),
-    prune: () =>
-      operationAction(
-        'prune',
-        'Prune',
-        <Scissors className="h-4 w-4" />,
-        prune,
-        'Repository pruned',
-        'Failed to prune repository.',
-        true,
-      ),
+    validate: () => operationAction('validate', 'Validate', <CheckCircle2 className="h-4 w-4" />),
+    initialize: () => operationAction('initialize', 'Initialize', <DatabaseBackup className="h-4 w-4" />),
+    check: () => operationAction('check', 'Check', <RefreshCw className="h-4 w-4" />),
+    prune: () => operationAction('prune', 'Prune', <Scissors className="h-4 w-4" />),
     ...repositoryActions,
   };
   const progressLabel = pendingOperation

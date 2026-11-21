@@ -1,26 +1,12 @@
+import { invalidatePolicyCoverage } from './coverage';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRemoveResourceAction } from '@/components/custom/useSettledResourceAction';
 import { BackupPolicyView, BackupQueueTrigger, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { useSelectedResources, useTaskSheet } from '@/lib/atoms';
+import { useTaskSheet } from '@/lib/atoms';
 import { useMutate } from '@/lib/hooks';
-import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Play, Trash2 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router';
-import { toast } from 'sonner';
-
-export const invalidateBackupPolicyQueries = async (queryClient: ReturnType<typeof useQueryClient>, id?: string) => {
-  await queryClient.invalidateQueries({ queryKey: ['listBackupPolicies'] });
-  await queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
-  await queryClient.invalidateQueries({ queryKey: ['getPlatformBackupSummaries'] });
-  await queryClient.invalidateQueries({ queryKey: ['listVolumes'] });
-  await queryClient.invalidateQueries({ queryKey: ['getStackBackupSourcePreview'] });
-  await queryClient.invalidateQueries({ queryKey: ['getDeploymentBackupSourcePreview'] });
-  await queryClient.invalidateQueries({ queryKey: ['getSwarmServiceBackupSourcePreview'] });
-
-  if (id) {
-    await queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id }] });
-    await queryClient.invalidateQueries({ queryKey: ['listBackupRuns', { query: { policyId: id, limit: 50 } }] });
-  }
-};
+import { useNavigate } from 'react-router';
 
 const singleSelection = (resources: BackupPolicyView | BackupPolicyView[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
@@ -84,32 +70,15 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
     requiredCapabilities: ['canWrite'],
     useHandler: ({ resources }) => {
       const selected = Array.isArray(resources) ? resources : [resources];
-      const queryClient = useQueryClient();
+      const client = useQueryClient();
       const archive = useMutate('archiveBackupPolicy');
-      const [, setSelectedResources] = useSelectedResources<BackupPolicyView>('BackupPolicy');
-      const location = useLocation();
-      const navigate = useNavigate();
-      const isCurrentResource = selected.some(
-        (policy) => location.pathname.replace(/\/$/, '') === `/backup-policies/edit/${policy.id}`,
-      );
-
-      return {
-        canExecute: selected.length > 0,
-        isPending: archive.isPending,
-        run: async () => {
-          if (selected.length === 0) return;
-
-          try {
-            await Promise.all(selected.map((policy) => archive.mutateAsync({ id: policy.id } as any)));
-            if (isCurrentResource) navigate('/backup-policies', { replace: true });
-            await invalidateBackupPolicyQueries(queryClient);
-            setSelectedResources([]);
-            toast.success(`${selected.length} ${selected.length === 1 ? 'policy' : 'policies'} archived`);
-          } catch (_error) {
-            toast.error(archive.validationErrors ?? 'Failed to archive selected policies');
-          }
-        },
-      };
+      return useRemoveResourceAction(selected, {
+        type: 'BackupPolicy',
+        listPath: '/backup-policies',
+        mutate: (item) => archive.mutateAsync({ id: item.id }),
+        onRemoved: () => invalidatePolicyCoverage(client),
+        message: (count, total) => `${count} of ${total} ${total === 1 ? 'policy' : 'policies'} archived`,
+      });
     },
   })
   .build();
