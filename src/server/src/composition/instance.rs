@@ -13,6 +13,9 @@ pub(super) fn build(
         Arc::new(PostgresInstanceRepository::new(pool.clone())),
         Arc::new(SystemClock),
     )
+    .with_schedules(Arc::new(
+        citadel_adapters::persistence::postgres::instance::PostgresSchedules(pool.clone()),
+    ))
     .with_job_history(Arc::new(
         citadel_adapters::persistence::postgres::instance::PostgresJobHistory(pool.clone()),
     ))

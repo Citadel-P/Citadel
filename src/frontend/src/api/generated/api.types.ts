@@ -7194,6 +7194,30 @@ export interface ScaleSwarmServiceInput {
   replicas: number;
 }
 
+export interface SchedulePage {
+  items: ScheduleView[];
+  nextCursor?: string | null;
+}
+
+export interface ScheduleView {
+  cron?: string | null;
+  dockerImageId?: string | null;
+  enabled: boolean;
+  /** @format int64 */
+  intervalSeconds?: number | null;
+  name: string;
+  /** @format date-time */
+  nextAt?: string | null;
+  /** @format uuid */
+  ownerId: string;
+  /** @format uuid */
+  platformId?: string | null;
+  purpose: string;
+  reason?: string | null;
+  systemManaged: boolean;
+  timeZone?: string | null;
+}
+
 export interface ScriptActivitySnapshot {
   alertOnFailure: boolean;
   code: string;
@@ -14805,6 +14829,38 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetInstanceSchedules
+     * @summary List resource schedules (administrator)
+     * @request GET:/api/v1/instance/schedules
+     * @secure
+     * @response `200` `SchedulePage` One page of schedule definitions
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceSchedules: (
+      query?: {
+        purpose?: string | null;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SchedulePage, ProblemDetails>({
+        path: `/api/v1/instance/schedules`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
         ...params,
       }),
 

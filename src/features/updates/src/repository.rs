@@ -102,7 +102,7 @@ pub trait UpdateRepository: ReleaseCheckRepository {
 }
 
 pub trait AgentUpdateRepository: Send + Sync {
-    fn pending_work(&self) -> BoxFuture<'_, Result<crate::AgentUpdateWork, UpdateError>>;
+    fn pending_work(&self) -> BoxFuture<'_, Result<bool, UpdateError>>;
 
     fn observe_agent_availability<'a>(
         &'a self,

@@ -145,3 +145,32 @@ async fn history_requires_administrator_before_storage_and_validates_ranges() {
         Err(InstanceError::Validation(_))
     ));
 }
+
+#[tokio::test]
+async fn schedule_catalog_and_subscription_require_a_human_administrator() {
+    let (service, _, mut principal) = fixture();
+    assert!(service.schedule_changes(&principal).is_ok());
+    assert!(matches!(
+        service.schedules(&principal, None, None).await,
+        Err(InstanceError::Conflict(_))
+    ));
+    for kind in [
+        citadel_identity::AuthenticatedPrincipalType::User,
+        citadel_identity::AuthenticatedPrincipalType::ServiceAccount,
+    ] {
+        principal.principal_type = kind;
+        principal.roles = if matches!(kind, citadel_identity::AuthenticatedPrincipalType::User) {
+            vec![]
+        } else {
+            vec!["Admin".into()]
+        };
+        assert!(matches!(
+            service.schedules(&principal, None, None).await,
+            Err(InstanceError::Forbidden)
+        ));
+        assert!(matches!(
+            service.schedule_changes(&principal),
+            Err(InstanceError::Forbidden)
+        ));
+    }
+}

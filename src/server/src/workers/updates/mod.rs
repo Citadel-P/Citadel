@@ -1,7 +1,6 @@
 //! Supervised release checking and installation execution.
-mod checker;
+pub(crate) mod checker;
 mod installation;
-pub use checker::run;
 pub use installation::run_installation;
 
 mod agents;

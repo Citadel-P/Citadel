@@ -72,6 +72,7 @@ modules for required fixtures and explicit opt-ins.
 | Deployments, Stacks and Swarm | Adapters: `deployment_persistence`, `deployment_apply_persistence`, `stack_persistence`, `swarm_service_persistence`; Server: `deployments_http`, `stacks_http`, `swarm_services_http` |
 | Builds, Backups, Restores and Scripts | Adapters: `build_execution`, `backup_execution`, `script_execution`, `git_repository_execution`; Server: `execution_resources_http`, `script_http_execution` |
 | Runtime and transport | `citadel-docker`: `docker_transport`; Adapters: `agent_transport`, `edge_transport`, `daemon_event_compatibility`, `swarm_inventory_transport` |
+| Resource schedules | Server coordinator tests in `workers::schedules`, PostgreSQL admission tests in `resource_schedules`, and the Instance `schedules.test.tsx` suite |
 | Updates and recovery | `citadel-updates` unit tests; Adapters: `instance_update_journal`, `instance_updates`, `update_preflight`, `agent_updates`; Server: `update_release_cli`, `bootstrap_process` |
 | Schema and migration parity | `citadel-database`: `migrations`; [parity cases](../src/infrastructure/database/tests/parity/) |
 | Frontend | Tests beside the affected feature/shared component; [architecture test](../src/frontend/src/test/architecture.test.ts) |

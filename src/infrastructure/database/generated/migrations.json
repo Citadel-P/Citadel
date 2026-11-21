@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 11,
+  "schemaVersion": 12,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "d9ca3144519f858d3a736cdea4fad4d4cfbc00a2613e2f93a96200d3139724bc"
+    "sha256": "20b879d43cf239f981054e432087e915ca71cbe552ece23eeea8eca972637375"
   },
   "migrations": [
     {
@@ -90,6 +90,14 @@
       "name": "build_spec_references",
       "file": "0011_build_spec_references.sql",
       "sha256": "dca6a2aa89f2ad7be884a4f4569a28203bae829b26b2e13ea9b9e9172b578443",
+      "transactional": true,
+      "generatedBy": "citadel-xtask-v1"
+    },
+    {
+      "id": "0012",
+      "name": "resource_schedules",
+      "file": "0012_resource_schedules.sql",
+      "sha256": "1bd73fc866d53b47a57aa169edd643919ac960749fd62dceaa7e3845409bcc97",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

@@ -1,6 +1,6 @@
 use super::AgentUpdateService;
 use crate::*;
-use chrono::{Timelike, Utc};
+use chrono::Utc;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -19,44 +19,44 @@ impl AgentUpdateService {
         self
     }
 
+    pub async fn accept_occurrence(
+        &self,
+        minute: chrono::DateTime<Utc>,
+    ) -> Result<bool, UpdateError> {
+        if !self.updates_allowed || !self.entitlements.automated_operations().await? {
+            return Ok(false);
+        }
+        let state = self.repository.state().await?;
+        if !state.schedule.enabled
+            || !citadel_primitives::schedule::schedule_is_due(
+                Some(&state.schedule.cron),
+                &state.schedule.time_zone,
+                minute,
+            )
+        {
+            return Ok(false);
+        }
+        let run = self
+            .repository
+            .reserve_schedule(&state.schedule, minute)
+            .await?;
+        if run.is_some() {
+            self.work_changed.send_replace(());
+            self.notifier.changed();
+        }
+        Ok(run.is_some())
+    }
+
     pub(super) async fn tick_schedule(
         &self,
         state: AgentUpdateState,
         cancellation: &CancellationToken,
     ) -> Result<(), UpdateError> {
-        let mut run = if let Some(run) = state
+        let Some(mut run) = state
             .run
             .filter(|r| r.phase != UpdateSchedulePhase::Finished)
-        {
-            run
-        } else {
-            if cancellation.is_cancelled()
-                || !self.updates_allowed
-                || !state.schedule.enabled
-                || !self.entitlements.automated_operations().await?
-            {
-                return Ok(());
-            }
-            let minute = Utc::now()
-                .with_second(0)
-                .and_then(|t| t.with_nanosecond(0))
-                .ok_or_else(|| UpdateError::Storage("Invalid scheduler clock.".into()))?;
-            if !citadel_primitives::schedule::schedule_is_due(
-                Some(&state.schedule.cron),
-                &state.schedule.time_zone,
-                minute,
-            ) {
-                return Ok(());
-            }
-            let Some(run) = self
-                .repository
-                .reserve_schedule(&state.schedule, minute)
-                .await?
-            else {
-                return Ok(());
-            };
-            self.notifier.changed();
-            run
+        else {
+            return Ok(());
         };
         let result = self.continue_schedule(&mut run, cancellation).await;
         if let Err(error) = &result {

@@ -7,32 +7,6 @@ use tokio_util::sync::CancellationToken;
 const STALE_AFTER: Duration = Duration::from_secs(11 * 60);
 const MAXIMUM_BATCH: i64 = 10;
 
-pub(crate) async fn image_updates(
-    admission: citadel_runtime::admission::AdmissionGate,
-    cancellation: CancellationToken,
-    deployments: Arc<DeploymentService>,
-) -> Result<(), std::convert::Infallible> {
-    let mut ticker =
-        super::schedule::interval("deployment-image-updates", Duration::from_secs(2 * 60 * 60));
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    loop {
-        tokio::select! { biased; () = cancellation.cancelled() => return Ok(()), _ = ticker.tick() => {} }
-        let Some(_admission) = admission
-            .enter("Workload image updates", &cancellation)
-            .await
-        else {
-            return Ok(());
-        };
-        if let Err(error) = citadel_runtime::jobs::observe(
-            deployments.run_scheduled_update_checks(&cancellation, report_update_problem),
-        )
-        .await
-        {
-            tracing::warn!(%error, "Deployment image update sweep failed");
-        }
-    }
-}
-
 pub(super) fn report_update_problem(id: uuid::Uuid) {
     if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
         job.report_problem(

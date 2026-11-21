@@ -42,6 +42,7 @@ fn settings_routes() -> utoipa_axum::router::OpenApiRouter<InstanceHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(get_installation_settings))
         .normalized_routes(utoipa_axum::routes!(get_database_connections))
+        .normalized_routes(utoipa_axum::routes!(get_schedules))
         .normalized_routes(utoipa_axum::routes!(get_jobs))
         .normalized_routes(utoipa_axum::routes!(get_job_history))
         .normalized_routes(utoipa_axum::routes!(patch_installation_settings))
@@ -272,5 +273,32 @@ async fn get_job_history(
                 .into_response(),
         ),
         Err(error) => error_response(error, &headers),
+    }
+}
+
+use crate::api::resources::instance::schedules::{SchedulePage, ScheduleQuery};
+#[utoipa::path(get, path = "/api/v1/instance/schedules", operation_id = "getInstanceSchedules", tag = "Instance",
+    params(ScheduleQuery), summary = "List resource schedules (administrator)",
+    responses((status = 200, description = "One page of schedule definitions", body = SchedulePage), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false))))]
+async fn get_schedules(
+    State(state): State<InstanceHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    axum::extract::Query(query): axum::extract::Query<ScheduleQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    let result = async {
+        state
+            .instance
+            .schedules(&principal, query.purpose()?, query.cursor()?)
+            .await
+    }
+    .await;
+    match result {
+        Ok(rows) => no_store(Json(SchedulePage::from(rows)).into_response()),
+        Err(e) => error_response(e, &headers),
     }
 }

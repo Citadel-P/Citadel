@@ -58,12 +58,3 @@ pub enum DatabaseInstallation {
     External,
     Unknown,
 }
-
-/// Minimal worker projection; release descriptors and completed operation JSON stay off the idle path.
-pub struct AgentUpdateWork {
-    pub active: bool,
-    pub schedule_enabled: bool,
-    pub cron: String,
-    pub time_zone: String,
-    pub last_scheduled_minute: Option<chrono::DateTime<chrono::Utc>>,
-}

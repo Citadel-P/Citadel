@@ -221,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 441);
+        assert_eq!(operations(&full), 442);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -245,6 +245,12 @@ mod tests {
         assert_eq!(operation["operationId"], "getDatabaseConnections");
         assert_eq!(operation["security"], json!([{"Bearer": []}]));
         assert_eq!(operation["x-citadel-principal"], "human");
+        let schedules_path = "/api/v1/instance/schedules";
+        assert!(public["paths"].get(schedules_path).is_none());
+        let schedules = &full["paths"][schedules_path]["get"];
+        assert_eq!(schedules["operationId"], "getInstanceSchedules");
+        assert_eq!(schedules["security"], json!([{"Bearer": []}]));
+        assert_eq!(schedules["x-citadel-principal"], "human");
         let jobs_path = "/api/v1/instance/jobs";
         assert!(public["paths"].get(jobs_path).is_none());
         let operation = &full["paths"][jobs_path]["get"];

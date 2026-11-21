@@ -8,36 +8,6 @@ use tokio_util::sync::CancellationToken;
 const OBSERVABLE_AFTER: Duration = Duration::from_secs(11 * 60);
 const MAXIMUM_BATCH: i64 = 25;
 
-pub(crate) async fn swarm_service_image_updates(
-    admission: citadel_runtime::admission::AdmissionGate,
-    cancellation: CancellationToken,
-    services: Arc<SwarmServiceService>,
-) -> Result<(), std::convert::Infallible> {
-    // Matches DeploymentAutoUpdateJob's two-hour Service check cadence. Keep it
-    // separate from active rollout observation.
-    let mut ticker =
-        super::schedule::interval("service-image-updates", Duration::from_secs(2 * 60 * 60));
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    loop {
-        tokio::select! { biased; () = cancellation.cancelled() => return Ok(()), _ = ticker.tick() => {} }
-        let Some(_admission) = admission
-            .enter("Workload image updates", &cancellation)
-            .await
-        else {
-            return Ok(());
-        };
-        if let Err(error) =
-            citadel_runtime::jobs::observe(services.run_scheduled_update_checks(&cancellation))
-                .await
-        {
-            if cancellation.is_cancelled() {
-                return Ok(());
-            }
-            tracing::warn!(%error, "Service image update sweep failed");
-        }
-    }
-}
-
 pub(crate) async fn swarm_service_operation_reconciliation(
     cancellation: CancellationToken,
     services: Arc<SwarmServiceService>,

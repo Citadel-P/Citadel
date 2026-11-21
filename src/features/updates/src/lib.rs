@@ -14,8 +14,8 @@ pub use model::{
     UPDATE_PROTOCOL, UpdateJournal, UpdateOperation, UpdatePhase, UpdatePlan,
 };
 pub use read_models::{
-    AgentUpdateWork, CheckState, DatabaseInstallation, InspectedRelease, ReleaseCheckStatus,
-    UpdateDatabaseState, UpdateDrainBlocker, UpdateDrainOutcome,
+    CheckState, DatabaseInstallation, InspectedRelease, ReleaseCheckStatus, UpdateDatabaseState,
+    UpdateDrainBlocker, UpdateDrainOutcome,
 };
 pub use release::{
     CORE_IMAGE, INSTALLER_FORMAT, OFFICIAL_REPOSITORY, PublicationIdentity,

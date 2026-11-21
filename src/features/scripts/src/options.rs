@@ -10,7 +10,6 @@ pub struct ScriptOptions {
     pub default_timeout_seconds: i32,
     pub max_timeout_seconds: i32,
     pub poll_interval: Duration,
-    pub schedule_poll_interval: Duration,
 }
 
 impl Default for ScriptOptions {
@@ -22,7 +21,6 @@ impl Default for ScriptOptions {
             default_timeout_seconds: 300,
             max_timeout_seconds: 1800,
             poll_interval: Duration::from_secs(2),
-            schedule_poll_interval: Duration::from_secs(30),
         }
     }
 }
@@ -34,9 +32,8 @@ impl ScriptOptions {
             || !(1..=86_400).contains(&self.max_timeout_seconds)
             || !(1..=self.max_timeout_seconds).contains(&self.default_timeout_seconds)
             || self.poll_interval < Duration::from_secs(1)
-            || self.schedule_poll_interval < Duration::from_secs(5)
         {
-            return Err(ScriptError::Validation("Invalid Script execution limits: local parallel runs must be 1–64, remote tracked runs 1–256, timeout defaults must fit the 1–86400 second maximum, polling at least 1 second and schedule polling at least 5 seconds.".into()));
+            return Err(ScriptError::Validation("Invalid Script execution limits: local parallel runs must be 1–64, remote tracked runs 1–256, timeout defaults must fit the 1–86400 second maximum, polling at least 1 second.".into()));
         }
         Ok(())
     }

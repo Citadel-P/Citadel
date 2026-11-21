@@ -6,7 +6,6 @@ use tokio_util::sync::CancellationToken;
 
 const IDLE_DELAY: Duration = Duration::from_secs(30);
 const FAILURE_DELAY: Duration = Duration::from_secs(5);
-const SCHEDULE_INTERVAL: Duration = Duration::from_secs(60);
 
 pub(crate) async fn git_repository_sync(
     admission: citadel_runtime::admission::AdmissionGate,
@@ -14,8 +13,6 @@ pub(crate) async fn git_repository_sync(
     service: Arc<GitRepositoryExecutionService>,
     mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), String> {
-    let mut schedule = super::super::schedule::interval("git-sync", SCHEDULE_INTERVAL);
-    schedule.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         if cancellation.is_cancelled() {
             return Ok(());
@@ -31,32 +28,13 @@ pub(crate) async fn git_repository_sync(
             citadel_runtime::jobs::observe_work(service.process_one(&cancellation), |worked| {
                 Some((u64::from(*worked), "operations"))
             });
-        tokio::pin!(execution);
-        let result = loop {
-            tokio::select! {
-                result = &mut execution => break result,
-                _ = schedule.tick(), if !cancellation.is_cancelled() => {
-                    if let Some(_schedule) = admission.try_enter("Git schedules")
-                        && let Err(error) = citadel_runtime::jobs::observe(service.enqueue_due(100)).await {
-                        tracing::warn!(%error, "failed to enqueue due Git repository synchronizations");
-                    }
-                }
-            }
-        };
+        let result = execution.await;
         drop(iteration);
         drop(permit);
         match result {
             Ok(true) => {}
             Ok(false) => {
-                tokio::select! {
-                    () = super::super::notifications::wait(&mut wake, &cancellation, IDLE_DELAY) => {},
-                    _ = schedule.tick() => {
-                        if let Some(_schedule) = admission.try_enter("Git schedules")
-                        && let Err(error) = citadel_runtime::jobs::observe(service.enqueue_due(100)).await {
-                            tracing::warn!(%error, "failed to enqueue due Git repository synchronizations");
-                        }
-                    }
-                }
+                super::super::notifications::wait(&mut wake, &cancellation, IDLE_DELAY).await;
             }
             Err(error) => {
                 tracing::error!(%error, "Git repository synchronization worker failed");

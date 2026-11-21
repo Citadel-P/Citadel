@@ -15,6 +15,7 @@ use citadel_deployments::{DeploymentEntitlementPort, DeploymentError};
 use citadel_identity::{EntitlementService, SYSTEM_ACTOR_ID};
 use citadel_licensing::{LicenseChange, LicenseError};
 mod activity;
+mod automation;
 mod source;
 
 pub(crate) use source::get_or_create_identity;
@@ -194,6 +195,7 @@ pub struct PostgresLicenseEntitlementService {
     store: Arc<PostgresLicenseStore>,
     verifier: Arc<Ed25519LicenseVerifier>,
     cached: RwLock<Option<CachedVerification>>,
+    automation: automation::AdmissionChecks,
 }
 
 impl PostgresLicenseEntitlementService {
@@ -211,6 +213,7 @@ impl PostgresLicenseEntitlementService {
             store,
             verifier,
             cached: RwLock::new(None),
+            automation: Default::default(),
         }
     }
 
@@ -324,9 +327,10 @@ impl citadel_swarm_services::ServiceAutomationEntitlements for PostgresLicenseEn
 impl citadel_scripts::ScriptEntitlements for PostgresLicenseEntitlementService {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, citadel_scripts::ScriptError>> {
         Box::pin(async move {
-            self.enabled(LicenseCapability::AutomatedOperations)
+            self.automation
+                .check(self)
                 .await
-                .map_err(|error| citadel_scripts::ScriptError::Storage(error.to_string()))
+                .map_err(citadel_scripts::ScriptError::Storage)
         })
     }
 }
@@ -334,9 +338,10 @@ impl citadel_scripts::ScriptEntitlements for PostgresLicenseEntitlementService {
 impl citadel_backups::BackupEntitlements for PostgresLicenseEntitlementService {
     fn automated_operations(&self) -> BoxFuture<'_, Result<bool, citadel_backups::BackupError>> {
         Box::pin(async move {
-            self.enabled(LicenseCapability::AutomatedOperations)
+            self.automation
+                .check(self)
                 .await
-                .map_err(|error| citadel_backups::BackupError::Storage(error.to_string()))
+                .map_err(citadel_backups::BackupError::Storage)
         })
     }
 }

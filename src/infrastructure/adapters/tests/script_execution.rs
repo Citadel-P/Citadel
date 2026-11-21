@@ -223,9 +223,29 @@ async fn script_claim_is_exclusive_and_interrupted_runs_recover() {
         .unwrap()
         .with_nanosecond(0)
         .unwrap();
+    // A schedule changed while ready cannot enqueue using the stale expression.
+    let different = format!("{} * * * *", (scheduled_minute.minute() + 1) % 60);
+    sqlx::query("UPDATE scripts SET schedulecron=$2 WHERE id=$1")
+        .bind(action.id)
+        .bind(different)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .enqueue_scheduled(action.id, scheduled_minute, 1800)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    sqlx::query("UPDATE scripts SET schedulecron='* * * * *' WHERE id=$1")
+        .bind(action.id)
+        .execute(&pool)
+        .await
+        .unwrap();
     let (first, second) = tokio::join!(
-        store.enqueue_scheduled(action.id, scheduled_minute),
-        store.enqueue_scheduled(action.id, scheduled_minute)
+        store.enqueue_scheduled(action.id, scheduled_minute, 1800),
+        store.enqueue_scheduled(action.id, scheduled_minute, 1800)
     );
     assert_eq!(
         usize::from(first.unwrap().is_some()) + usize::from(second.unwrap().is_some()),
@@ -305,14 +325,20 @@ async fn script_claim_is_exclusive_and_interrupted_runs_recover() {
     let mut seen = std::collections::BTreeSet::new();
     let mut after = None;
     loop {
-        let page = store.list_scheduled(after, 64).await.unwrap();
+        use citadel_instance::{SchedulePurpose, ScheduleReader};
+        let kind = SchedulePurpose::Script;
+        let page =
+            citadel_adapters::persistence::postgres::instance::PostgresSchedules(pool.clone())
+                .page(Some(kind), after.map(|id| (kind, id)), 64)
+                .await
+                .unwrap();
         assert!(page.len() <= 64);
         if page.is_empty() {
             break;
         }
         for candidate in page {
-            assert!(seen.insert(candidate.id));
-            after = Some(candidate.id);
+            assert!(seen.insert(candidate.owner));
+            after = Some(candidate.owner);
         }
     }
     assert!(copies.iter().all(|id| seen.contains(id)));
@@ -323,12 +349,11 @@ async fn script_claim_is_exclusive_and_interrupted_runs_recover() {
         .await
         .unwrap();
     let before = store.list_runs(action.id, 100).await.unwrap().len();
-    assert_eq!(
-        scheduler(pool.clone())
-            .queue_due_scheduled(now)
+    assert!(
+        !scheduler(pool.clone())
+            .accept_occurrence(action.id, now)
             .await
-            .unwrap(),
-        0
+            .unwrap()
     );
     let last: Option<chrono::DateTime<Utc>> =
         sqlx::query_scalar("SELECT lastscheduledrunat FROM scripts WHERE id=$1")
@@ -343,19 +368,17 @@ async fn script_claim_is_exclusive_and_interrupted_runs_recover() {
         .execute(&pool)
         .await
         .unwrap();
-    assert_eq!(
-        scheduler(pool.clone())
-            .queue_due_scheduled(now - Duration::minutes(1))
+    assert!(
+        !scheduler(pool.clone())
+            .accept_occurrence(action.id, now - Duration::minutes(1))
             .await
-            .unwrap(),
-        0
+            .unwrap()
     );
-    assert_eq!(
+    assert!(
         scheduler(pool.clone())
-            .queue_due_scheduled(now)
+            .accept_occurrence(action.id, now)
             .await
-            .unwrap(),
-        1
+            .unwrap()
     );
     let run = store.get(action.id).await.unwrap().current_run_id.unwrap();
     assert_eq!(
@@ -363,12 +386,11 @@ async fn script_claim_is_exclusive_and_interrupted_runs_recover() {
         "Schedule"
     );
     store.cancel(action.id, run).await.unwrap();
-    assert_eq!(
-        scheduler(pool.clone())
-            .queue_due_scheduled(now)
+    assert!(
+        !scheduler(pool.clone())
+            .accept_occurrence(action.id, now)
             .await
-            .unwrap(),
-        0
+            .unwrap()
     );
     let last: Option<chrono::DateTime<Utc>> =
         sqlx::query_scalar("SELECT lastscheduledrunat FROM scripts WHERE id=$1")

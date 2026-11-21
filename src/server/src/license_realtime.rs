@@ -44,6 +44,7 @@ struct LicenseStateChanged {
 #[derive(Clone)]
 pub struct LicenseRealtimeHub {
     revision: Arc<AtomicU64>,
+    changes: tokio::sync::watch::Sender<()>,
     sender: broadcast::Sender<LicenseStateChanged>,
     realtime: Option<RealtimeHub>,
 }
@@ -53,6 +54,7 @@ impl Default for LicenseRealtimeHub {
         let (sender, receiver) = broadcast::channel(EVENT_CAPACITY);
         drop(receiver);
         Self {
+            changes: tokio::sync::watch::channel(()).0,
             revision: Arc::new(AtomicU64::new(0)),
             sender,
             realtime: None,
@@ -67,8 +69,13 @@ impl LicenseRealtimeHub {
         self
     }
 
+    pub fn changes(&self) -> tokio::sync::watch::Receiver<()> {
+        self.changes.subscribe()
+    }
+
     pub fn publish(&self, instance_id: Uuid) -> u64 {
         let revision = self.revision.fetch_add(1, Ordering::AcqRel) + 1;
+        self.changes.send_replace(());
         let _ = self.sender.send(LicenseStateChanged {
             instance_id,
             revision,

@@ -14,6 +14,16 @@ impl CronSchedule {
     /// a DST fold are candidates; nonexistent local times are skipped.
     pub fn next_after(&self, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
         use chrono::TimeZone;
+        let next_minute = DateTime::from_timestamp(
+            now.timestamp()
+                .div_euclid(60)
+                .checked_add(1)?
+                .checked_mul(60)?,
+            0,
+        )?;
+        if self.is_due(next_minute) {
+            return Some(next_minute);
+        }
         let mut date = now.with_timezone(&self.zone).date_naive();
         for _ in 0..(366 * 8) {
             let matches = |i: usize, value: u32| self.fields[i] & (1 << value) != 0;

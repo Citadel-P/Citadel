@@ -196,3 +196,14 @@ The page uses realtime updates without browser polling. Disconnections retain th
 last known state; reconnect restores synchronization. **Copy diagnostics** copies
 selected status, timing, counter and session fields with generic safe error text;
 it excludes credentials, arguments and raw resource payloads.
+
+## Resource schedules
+
+Open **Instance → Schedules** to see when Citadel next plans to run a script,
+back up a resource, check for updates or synchronize a repository. Filter by
+purpose and select a resource name to open its settings. Calendar schedules use
+the saved time zone. System-managed checks use Citadel’s built-in cadence.
+
+The next scheduled time is when work becomes eligible. A busy resource or an
+execution limit can delay its start. Check the resource’s run or update history
+for the result.

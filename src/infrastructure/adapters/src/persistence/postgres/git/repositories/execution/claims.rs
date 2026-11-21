@@ -33,27 +33,10 @@ impl PostgresGitRepositoryExecutionPersistence {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let rows = sqlx::query(
                 r#"
-SELECT repository.id, branches.branch, repository.createdbyactorid
-FROM gitrepositories repository
-CROSS JOIN LATERAL (
-    SELECT repository.defaultbranch AS branch
-    UNION
-    SELECT COALESCE(NULLIF(release.spec->>'Branch',''),repository.defaultbranch)
-    FROM stacks stack JOIN stackreleases release ON release.id=stack.currentstackreleaseid
-    WHERE stack.stacksource='Git' AND release.spec->>'GitRepoId'=repository.id::text
-      AND COALESCE(release.spec->>'CommitSha','')=''
-) branches
-LEFT JOIN gitrepositoryrefs reference
-  ON reference.gitrepositoryid=repository.id
- AND reference.branch=branches.branch
-WHERE branches.branch<>'' AND repository.syncmode='PullInterval'
-  AND repository.controlstate='Idle'
-  AND NOT (COALESCE(reference.status='Degraded',false) AND (COALESCE(jsonb_array_length(repository.onclone::jsonb->'commands'),0)>0 OR COALESCE(jsonb_array_length(repository.onpull::jsonb->'commands'),0)>0))
-  AND (
-    reference.id IS NULL OR
-    reference.lastsyncedat <= CURRENT_TIMESTAMP - make_interval(mins => COALESCE(repository.syncintervalminutes,5))
-  )
-ORDER BY COALESCE(reference.lastsyncedat, repository.createdat), repository.id
+SELECT repository.id, branch.branch, repository.createdbyactorid
+FROM git_schedule_branches branch JOIN gitrepositories repository ON repository.id=branch.id
+WHERE branch.due <= CURRENT_TIMESTAMP AND repository.controlstate='Idle' AND repository.syncmode='PullInterval'
+ORDER BY branch.priority,repository.id,branch.branch
 FOR NO KEY UPDATE OF repository SKIP LOCKED
 LIMIT $1
 "#,

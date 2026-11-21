@@ -140,7 +140,6 @@ async fn dispatcher_bounds_claims_and_drains_controllers_on_shutdown() {
             enabled: false,
             tracking_slots: 2,
             poll_interval: Duration::from_millis(1),
-            schedule_interval: Duration::from_secs(30),
         },
         receiver,
     ));
@@ -172,7 +171,6 @@ async fn dispatcher_bounds_claims_and_drains_controllers_on_shutdown() {
             enabled: true,
             tracking_slots: 2,
             poll_interval: Duration::from_secs(30),
-            schedule_interval: Duration::from_secs(30),
         },
         tokio::sync::watch::channel(()).1,
     ));

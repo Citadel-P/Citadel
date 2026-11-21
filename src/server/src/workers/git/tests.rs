@@ -149,8 +149,8 @@ async fn schedule_ticks_do_not_drop_an_in_flight_execution() {
     assert_eq!(store.completed.load(Ordering::SeqCst), 1);
     assert_eq!(
         store.schedules.load(Ordering::SeqCst),
-        1,
-        "the initial background schedule is delayed past one full interval"
+        0,
+        "the execution worker must never act as a second scheduler"
     );
     cancellation.cancel();
     worker.await.unwrap().unwrap();

@@ -6,17 +6,9 @@ use citadel_updates::{
 };
 
 impl AgentUpdateRepository for PostgresUpdateRepository {
-    fn pending_work(&self) -> BoxFuture<'_, Result<citadel_updates::AgentUpdateWork, UpdateError>> {
+    fn pending_work(&self) -> BoxFuture<'_, Result<bool, UpdateError>> {
         Box::pin(async {
-            let row = sqlx::query("SELECT (EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM updatescheduleruns WHERE NOT finished)) AS active, COALESCE((schedule->>'enabled')::boolean,false) AS enabled, schedule->>'cron' AS cron, schedule->>'timeZone' AS timezone, lastscheduledminute AS lastminute FROM agentupdatesettings WHERE id=1")
-                .fetch_one(&self.pool).await.map_err(storage)?;
-            Ok(citadel_updates::AgentUpdateWork {
-                active: row.try_get("active").map_err(storage)?,
-                schedule_enabled: row.try_get("enabled").map_err(storage)?,
-                cron: row.try_get("cron").map_err(storage)?,
-                time_zone: row.try_get("timezone").map_err(storage)?,
-                last_scheduled_minute: row.try_get("lastminute").map_err(storage)?,
-            })
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM agentupdateoperations WHERE NOT finished) OR EXISTS(SELECT 1 FROM updatescheduleruns WHERE NOT finished)").fetch_one(&self.pool).await.map_err(storage)
         })
     }
 

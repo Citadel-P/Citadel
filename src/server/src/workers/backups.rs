@@ -24,52 +24,6 @@ pub async fn restore_runs(
     dispatch_runs(admission, cancellation, service, true, options, wake).await
 }
 
-pub async fn policy_scheduler(
-    admission: citadel_runtime::admission::AdmissionGate,
-    cancellation: CancellationToken,
-    service: Arc<BackupService>,
-    options: crate::config::BackupWorkerConfig,
-) -> Result<(), BackupError> {
-    while !cancellation.is_cancelled() {
-        {
-            let Some(_admission) = admission.enter("Backup schedules", &cancellation).await else {
-                return Ok(());
-            };
-            if options.enabled
-                && let Err(error) = citadel_runtime::jobs::observe_work(
-                    service.queue_due_scheduled(chrono::Utc::now()),
-                    |count| Some((*count as u64, "queued operations")),
-                )
-                .await
-            {
-                tracing::error!(%error, "Backup Policy scheduler iteration failed");
-            }
-        }
-        if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
-            job.policy(
-                format!(
-                    "{} seconds after completion",
-                    options.schedule_interval.as_secs_f64()
-                ),
-                None,
-            );
-            if options.enabled {
-                job.waiting(
-                    "Next backup schedule check",
-                    Some(tokio::time::Instant::now() + options.schedule_interval),
-                );
-            } else {
-                job.disabled("Backup scheduling disabled in Core configuration");
-            }
-        }
-        tokio::select! {
-            () = cancellation.cancelled() => break,
-            () = tokio::time::sleep(options.schedule_interval) => {}
-        }
-    }
-    Ok(())
-}
-
 async fn dispatch_runs(
     admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,

@@ -1,6 +1,9 @@
 mod runtime;
 
-pub use runtime::run;
+pub(crate) use runtime::{check, deadline};
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod scheduler_fixture;

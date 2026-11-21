@@ -1,5 +1,4 @@
 use super::*;
-use chrono::Timelike;
 
 impl BackupService {
     pub async fn queue_webhook(
@@ -13,37 +12,18 @@ impl BackupService {
         Ok(())
     }
 
-    pub async fn queue_due_scheduled(&self, now: DateTime<Utc>) -> Result<usize, BackupError> {
+    pub async fn accept_occurrence(
+        &self,
+        id: Uuid,
+        minute: DateTime<Utc>,
+    ) -> Result<bool, BackupError> {
         if !self.scheduling_available().await? {
-            return Ok(0);
+            return Ok(false);
         }
-        let minute = now
-            .with_second(0)
-            .and_then(|value| value.with_nanosecond(0))
-            .ok_or_else(|| BackupError::Storage("Could not normalize scheduler time.".into()))?;
-        let mut queued = 0;
-        let mut after = None;
-        loop {
-            let policies = self.store.list_scheduled_policies(after, 64).await?;
-            if policies.is_empty() {
-                break;
-            }
-            for policy in policies {
-                after = Some(policy.id);
-                if schedule_is_due(
-                    policy.cron.as_deref(),
-                    policy.time_zone.as_deref().unwrap_or("UTC"),
-                    minute,
-                ) && self
-                    .store
-                    .enqueue_scheduled_backup(policy.id, minute)
-                    .await?
-                {
-                    queued += 1;
-                    self.changed();
-                }
-            }
+        let accepted = self.store.enqueue_scheduled_backup(id, minute).await?;
+        if accepted {
+            self.changed();
         }
-        Ok(queued)
+        Ok(accepted)
     }
 }

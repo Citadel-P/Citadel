@@ -241,11 +241,11 @@ generates replacement keys.
 | `CITADEL_SCRIPTS_WORK_DIR` | `<data root>/scripts/runs`; each private run directory also holds its Deno cache. Source and cache are removed together after execution. |
 | `CITADEL_SCRIPTS_ALLOW_NET` | Optional Deno network allowlist; existing comma-separated format |
 | `CITADEL_SCRIPTS_MAX_LOG_BYTES` | `1048576` bytes, clamped to 1024–16777216 |
-| `CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS` / `CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
+| `CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS` | `2` seconds |
 | `CITADEL_BUILDS_PREPARATION_SLOTS` / `CITADEL_BUILDS_TRACKING_SLOTS` | `2` / `16`; [build concurrency](#concurrency-limits) |
 | <code id="citadel-builds-run-cleanup-enabled" className="scroll-mt-24">CITADEL_BUILDS_RUN_CLEANUP_ENABLED</code> / <code id="citadel-builds-run-retention-days" className="scroll-mt-24">CITADEL_BUILDS_RUN_RETENTION_DAYS</code> | `true` / `90` days; disabling cleanup disables retention |
 | <code id="citadel-backups-enabled" className="scroll-mt-24">CITADEL_BACKUPS_ENABLED</code> / `CITADEL_BACKUPS_TRACKING_SLOTS` | `true` / `16`; backup, restore, and repository operation tracking combined, see [concurrency limits](#concurrency-limits) |
-| `CITADEL_BACKUPS_POLL_INTERVAL_SECONDS` / `CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS` | `2` / `30` seconds |
+| `CITADEL_BACKUPS_POLL_INTERVAL_SECONDS` | `2` seconds |
 | `CITADEL_BACKUPS_WORKING_DIRECTORY` / `CITADEL_BACKUPS_CORE_DATA_PATH` | `<data root>/backups/work` / `<data root>` |
 | `CITADEL_BACKUPS_ALLOWED_CORE_PATH_<n>` | `<data root>/backups/repositories`; indices 0–127, numeric order, sparse indices allowed; paths retain spaces and commas |
 | <code id="citadel-backups-default-timeout-seconds" className="scroll-mt-24">CITADEL_BACKUPS_DEFAULT_TIMEOUT_SECONDS</code> | `120` seconds |
