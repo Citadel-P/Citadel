@@ -231,6 +231,7 @@ async fn list_deployments(
             service,
             principal.actor_id,
             &mut views,
+            None,
         )
         .await;
     }
@@ -304,6 +305,7 @@ async fn get_deployment(
                 principal.actor_id,
                 citadel_resource_copies::CopyKind::Deployment,
                 id,
+                None,
             )
             .await,
         );

@@ -16,6 +16,7 @@ mod access;
 pub mod changes;
 mod current;
 mod destinations;
+mod eligibility;
 mod finalize;
 mod operations;
 mod sources;
@@ -114,6 +115,21 @@ impl CopyRepository for PostgresCopyRepository {
             let mut tx = self.pool.begin().await.map_err(storage_error)?;
             self.load_source(&mut tx, &access, kind, id).await
         })
+    }
+    fn eligibility_sources<'a>(
+        &'a self,
+        actor: ActorId,
+        kind: CopyKind,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<Vec<CopyEligibilitySource>, CopyError>> {
+        Box::pin(self.read_eligibility_sources(actor, kind, ids))
+    }
+    fn restorable_volumes<'a>(
+        &'a self,
+        actor: ActorId,
+        platforms: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<RestorableVolumes, CopyError>> {
+        Box::pin(self.read_restorable_volumes(actor, platforms))
     }
     fn snapshots<'a>(
         &'a self,

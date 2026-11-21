@@ -515,6 +515,37 @@ describe('RealtimeProvider', () => {
     consoleError.mockRestore();
   });
 
+  it.each(['initial', 'rejoin'])('keeps a capacity rejection scoped without retrying the %s join', async (when) => {
+    const fake = new FakeRealtimeConnection();
+    const failed = () => fake.invoke.mockRejectedValueOnce(new Error('Realtime snapshot limit exceeded'));
+    if (when === 'initial') failed();
+    render(
+      <RealtimeTestRoot fake={fake}>
+        <GroupSubscriber name="platforms" />
+      </RealtimeTestRoot>,
+    );
+    await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', 'platforms'));
+    if (when === 'rejoin') await screen.findByText('connected');
+    vi.useFakeTimers();
+    try {
+      if (when === 'rejoin') {
+        failed();
+        await act(async () => {
+          fake.reconnecting();
+          fake.reconnected();
+        });
+      }
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20000);
+      });
+      const joins = fake.invoke.mock.calls.filter(([method]) => method === 'JoinGroup');
+      expect(joins).toHaveLength(when === 'initial' ? 1 : 2);
+      expect(fake.stop).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('refreshes an active live-backed query once after reconnecting', async () => {
     const fake = new FakeRealtimeConnection();
     const queryClient = new QueryClient({

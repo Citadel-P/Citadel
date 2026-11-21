@@ -36,13 +36,13 @@ async fn fixture_with_metadata_delay(
             .parse()
             .unwrap(),
         Duration::from_secs(3),
-        "/host",
+        std::env::temp_dir(),
     )
     .unwrap();
     let router=Router::new().fallback({ let calls=calls.clone(); move |req:axum::extract::Request| { let calls=calls.clone(); let fail=fail.clone(); async move {
         calls.lock().unwrap().push(req.uri().to_string());
         if req.uri().path().ends_with("/system/df") { tokio::time::sleep(metadata_delay).await; }
-        if req.uri().path().ends_with("/stats") && fail.load(std::sync::atomic::Ordering::SeqCst) { return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,"unavailable").into_response(); }
+        if req.uri().path().ends_with("/c0/stats") && fail.load(std::sync::atomic::Ordering::SeqCst) { return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,"unavailable").into_response(); }
         if req.uri().path() == "/_ping" { return "OK".into_response(); }
         if req.method()==axum::http::Method::POST {return axum::http::StatusCode::NO_CONTENT.into_response();}
         let body=match req.uri().path() {
@@ -130,7 +130,42 @@ async fn both_stats_rpcs_share_one_six_container_cycle_and_cancel_independently(
         .sample(std::time::Duration::from_secs(6), &runtime.shutdown)
         .await
         .unwrap();
-    assert_eq!(failed.containers.failed_samples, 6);
+    assert_eq!(failed.containers.failed_samples, 1);
+    assert_eq!(failed.containers.stats.len(), 5);
+    let shared = runtime
+        .samples
+        .sample(Duration::from_secs(6), &runtime.shutdown)
+        .await
+        .unwrap();
+    assert_eq!(shared.captured_at, failed.captured_at);
+    assert_eq!(shared.containers.failed_samples, 1);
+    assert!(
+        shared
+            .containers
+            .stats
+            .iter()
+            .all(|s| s.docker_container_id != "c0")
+    );
+    assert_eq!(count("/stats?"), 24);
+    let inventory = runtime
+        .list(Request::new(
+            citadel_contracts::citadel::containers::v1::ListContainersRequest {
+                all: Some(true),
+                ..Default::default()
+            },
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(inventory.containers["c0"].container_stat_message.is_none());
+    assert_eq!(
+        count("/stats?"),
+        25,
+        "only the failed identity needs a live list read"
+    );
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(7)).await;
+    tokio::time::resume();
     fail.store(false, std::sync::atomic::Ordering::SeqCst);
     assert_eq!(
         runtime
@@ -145,8 +180,8 @@ async fn both_stats_rpcs_share_one_six_container_cycle_and_cancel_independently(
     );
     assert_eq!(
         count("/containers/json"),
-        5,
-        "failed samples must not be cached as zeroes"
+        6,
+        "fresh generation recovers the missing measurement"
     );
     tokio::time::pause();
     tokio::time::advance(Duration::from_secs(7)).await;
@@ -156,11 +191,57 @@ async fn both_stats_rpcs_share_one_six_container_cycle_and_cancel_independently(
         .sample(std::time::Duration::from_secs(6), &runtime.shutdown)
         .await
         .unwrap();
-    assert_eq!(count("/containers/json"), 6);
+    assert_eq!(count("/containers/json"), 7);
     drop(platform);
     runtime.shutdown.cancel();
     server.await.unwrap();
 }
+#[tokio::test]
+async fn persistent_container_failure_keeps_platform_metadata_and_successful_readings_flowing() {
+    let fail = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let (runtime, _, server) = fixture(fail.clone()).await;
+    let mut containers = runtime
+        .stream_containers_stats(Request::new(StreamContainersStatsRequest {
+            fetch_interval_ms: 200,
+        }))
+        .await
+        .unwrap()
+        .into_inner();
+    let mut platform = runtime
+        .stream_platform_stats(Request::new(PlatformStatsRequest {
+            fetch_interval_ms: 200,
+        }))
+        .await
+        .unwrap()
+        .into_inner();
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        for _ in 0..6 {
+            let (batch, metadata) = tokio::join!(containers.next(), platform.next());
+            let batch = batch.unwrap().unwrap();
+            assert_eq!(batch.containers.len(), 5);
+            assert!(!batch.containers.contains_key("c0"));
+            let metadata = metadata.unwrap().unwrap();
+            assert_eq!(metadata.containers_running, 6);
+            assert_eq!(metadata.image_used_bytes, Some(0));
+            assert_eq!(metadata.volume_used_bytes, Some(0));
+            let stat = metadata.stat.unwrap();
+            assert_eq!(stat.container_count, 6);
+            #[cfg(target_os = "linux")]
+            assert!(stat.disk_usage.is_some() && stat.disk_total_bytes.unwrap() > 0);
+        }
+        fail.store(false, std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(
+            containers.next().await.unwrap().unwrap().containers.len(),
+            6
+        );
+    })
+    .await
+    .expect("both streams must continue during partial collection");
+    runtime.shutdown.cancel();
+    server.await.unwrap();
+}
+
 #[tokio::test]
 async fn metadata_reads_info_once_and_single_stats_does_not_request_sizes() {
     let fail = Arc::new(std::sync::atomic::AtomicBool::new(false));

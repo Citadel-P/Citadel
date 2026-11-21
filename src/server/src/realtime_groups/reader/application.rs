@@ -18,6 +18,8 @@ use std::sync::Arc;
 // during delivery of one invalidation, after each reader checks authorization.
 #[derive(Clone)]
 pub struct ApplicationGroupReader {
+    pub snapshot_limit: usize,
+    pub snapshot_timeout: std::time::Duration,
     pub instance: Option<Arc<citadel_instance::InstanceService>>,
     pub admission: citadel_runtime::admission::AdmissionGate,
     pub image_store: Arc<dyn citadel_platforms::image_mutations::ImageMutationStore>,
@@ -420,6 +422,9 @@ impl ApplicationGroupReader {
         e: Option<&PublishedRuntimeEvent>,
         lease: Option<&crate::realtime::AuthorizationLease>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
+        // Leave time for mapping and delivering the authoritative rows even when
+        // the base read has already used the optional hints' share of the deadline.
+        let hint_deadline = tokio::time::Instant::now() + self.snapshot_timeout.mul_f32(0.8);
         if matches!(g.topic(), Topic::InstanceJobs) {
             self.jobs_service(p)?;
             return Ok(GroupSnapshot::default());
@@ -976,12 +981,18 @@ impl ApplicationGroupReader {
                     .map(crate::api::resources::deployments::views::DeploymentView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
+                if views.len() > self.snapshot_limit {
+                    return Err(RealtimeReadError::SnapshotCapacity);
+                }
                 if let Some(service) = &self.backup_coverage {
                     views = service.enrich_deployments(p, views).await;
                 }
                 if let Some(service) = &self.copy_eligibility {
                     crate::api::resources::resource_copies::enrich_deployments(
-                        service, actor, &mut views,
+                        service,
+                        actor,
+                        &mut views,
+                        Some(hint_deadline),
                     )
                     .await;
                 }
@@ -1006,6 +1017,7 @@ impl ApplicationGroupReader {
                             actor,
                             citadel_resource_copies::CopyKind::Deployment,
                             id.unwrap(),
+                            Some(hint_deadline),
                         )
                         .await,
                     );
@@ -1033,12 +1045,18 @@ impl ApplicationGroupReader {
                     .map(crate::api::resources::stacks::views::StackView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
+                if views.len() > self.snapshot_limit {
+                    return Err(RealtimeReadError::SnapshotCapacity);
+                }
                 if let Some(service) = &self.backup_coverage {
                     views = service.enrich_stacks(p, views).await;
                 }
                 if let Some(service) = &self.copy_eligibility {
                     crate::api::resources::resource_copies::enrich_stacks(
-                        service, actor, &mut views,
+                        service,
+                        actor,
+                        &mut views,
+                        Some(hint_deadline),
                     )
                     .await;
                 }
@@ -1073,6 +1091,7 @@ impl ApplicationGroupReader {
                             actor,
                             citadel_resource_copies::CopyKind::Stack,
                             id.unwrap(),
+                            Some(hint_deadline),
                         )
                         .await,
                     );
@@ -1144,6 +1163,7 @@ impl ApplicationGroupReader {
                             actor,
                             citadel_resource_copies::CopyKind::SwarmService,
                             id.unwrap(),
+                            Some(hint_deadline),
                         )
                         .await,
                     );
@@ -1167,12 +1187,18 @@ impl ApplicationGroupReader {
                         crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from,
                     )
                     .collect::<Result<Vec<_>, _>>().map_err(failure)?;
+                if views.len() > self.snapshot_limit {
+                    return Err(RealtimeReadError::SnapshotCapacity);
+                }
                 if let Some(service) = &self.backup_coverage {
                     views = service.enrich_services(p, views).await;
                 }
                 if let Some(service) = &self.copy_eligibility {
                     crate::api::resources::resource_copies::enrich_swarm_services(
-                        service, actor, &mut views,
+                        service,
+                        actor,
+                        &mut views,
+                        Some(hint_deadline),
                     )
                     .await;
                 }

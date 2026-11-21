@@ -43,7 +43,7 @@ pub fn plan(
 ) -> Result<CopyPlan, CopyError> {
     let mut spec = source.spec.clone();
     let mut blockers = Vec::new();
-    let volumes = match storage(&source, &mut spec) {
+    let volumes = match storage(source.id, &source.name, source.swarm, &mut spec) {
         Ok(volumes) => volumes,
         Err(CopyError::Validation(message)) => {
             blockers.push(message);
@@ -156,10 +156,11 @@ fn deployment_mount(mount: &str) -> Result<(&str, &str), CopyError> {
 /// Fail closed on syntax whose effective storage cannot be proven. In particular,
 /// do not rewrite YAML with regexes or resolve secret-bearing environment values.
 fn compose(
-    source: &CopySource,
+    swarm: bool,
+    project: &str,
     file: &str,
 ) -> Result<(Value, BTreeMap<String, String>), CopyError> {
-    if source.swarm {
+    if swarm {
         return Err(unsupported(
             "Swarm Stack data copying is unavailable: per-service node placement must be reviewed. Configuration only remains available.",
         ));
@@ -182,14 +183,6 @@ fn compose(
         .and_then(Value::as_mapping)
         .ok_or_else(|| unsupported("Compose services are required."))?;
     let definitions = root.get("volumes").and_then(Value::as_mapping);
-    let project = match &source.spec {
-        CopySpec::Stack(spec) => spec
-            .common()
-            .project_name
-            .clone()
-            .unwrap_or_else(|| citadel_stacks::normalize_project_name(&source.name, source.id)),
-        _ => unreachable!(),
-    };
     let mut names = BTreeMap::new();
     for (_, service) in services {
         let service = service
@@ -284,7 +277,9 @@ fn compose(
 }
 
 pub(crate) fn storage(
-    source: &CopySource,
+    id: Uuid,
+    name: &str,
+    swarm: bool,
     spec: &mut CopySpec,
 ) -> Result<BTreeMap<String, Option<String>>, CopyError> {
     match spec {
@@ -298,13 +293,18 @@ pub(crate) fn storage(
                 .collect()
         }
         CopySpec::Stack(spec) => {
+            let project = spec
+                .common()
+                .project_name
+                .clone()
+                .unwrap_or_else(|| citadel_stacks::normalize_project_name(name, id));
             **spec = spec.clone().for_duplicate();
             let citadel_stacks::StackSpec::WebEditor { compose_file, .. } = spec.as_ref() else {
                 return Err(unsupported(
                     "Git Stack data copying requires persistent storage mappings across Git updates and is not available yet. Use Configuration only.",
                 ));
             };
-            let (_, names) = compose(source, compose_file)?;
+            let (_, names) = compose(swarm, &project, compose_file)?;
             Ok(names.into_values().map(|n| (n, None)).collect())
         }
         CopySpec::SwarmService(spec) => {
@@ -364,7 +364,14 @@ fn rewrite(
             let citadel_stacks::StackSpec::WebEditor { compose_file, .. } = spec.as_mut() else {
                 unreachable!()
             };
-            let (mut document, names) = compose(source, compose_file)?;
+            let CopySpec::Stack(original) = &source.spec else {
+                unreachable!()
+            };
+            let project =
+                original.common().project_name.clone().unwrap_or_else(|| {
+                    citadel_stacks::normalize_project_name(&source.name, source.id)
+                });
+            let (mut document, names) = compose(source.swarm, &project, compose_file)?;
             for (logical, physical) in names {
                 // External names reference only the newly restored volume. Preserve
                 // mount-level options; never preserve external source identities.

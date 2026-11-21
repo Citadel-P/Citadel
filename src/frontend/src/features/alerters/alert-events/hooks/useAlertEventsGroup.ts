@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { AlertEventStatus, AlertEventView, Count } from '@/api/generated/api.types';
+import { AlertEventStatus, AlertEventView, Count, type ServerAlertsHttpEvents } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { RealtimeConnection } from '@/lib/realtime-connection';
@@ -12,8 +12,12 @@ export function useAlertEventsGroup() {
   });
 
   const [liveUnresolvedAlertCount, setLiveUnresolvedAlertCount] = useState<number | null>(null);
-  const [liveAlertEvents, setLiveAlertEvents] = useState<Record<string, AlertEventView>>({});
-  const [receivedAlertEventIds, setReceivedAlertEventIds] = useState<string[]>([]);
+  // The server sends its latest 100 events. Five older unresolved events can
+  // additionally come from the notification query; paginated history stays in React Query.
+  const [recent, setRecent] = useState<{ items: AlertEventView[] | null; received: string[] }>({
+    items: null,
+    received: [],
+  });
 
   const unresolvedAlertCount = useMemo(() => {
     if (liveUnresolvedAlertCount !== null) return liveUnresolvedAlertCount;
@@ -26,29 +30,57 @@ export function useAlertEventsGroup() {
     const seededEvents = unresolvedEventsData?.data?.pagedResult.items ?? [];
     const next: Record<string, AlertEventView> = {};
 
-    seededEvents.forEach((alertEvent) => {
+    if (recent.items?.length === 0) return next;
+    seededEvents.slice(0, 5).forEach((alertEvent) => {
       next[alertEvent.id] = alertEvent;
     });
 
-    return { ...next, ...liveAlertEvents };
-  }, [unresolvedEventsData, liveAlertEvents]);
+    for (const item of recent.items ?? []) next[item.id] = item;
+    return next;
+  }, [unresolvedEventsData, recent.items]);
 
   const handleAlertEventReceived = useCallback((alertEvent: AlertEventView) => {
-    setLiveAlertEvents((prev) => ({ ...prev, [alertEvent.id]: alertEvent }));
-    setReceivedAlertEventIds((prev) => [alertEvent.id, ...prev.filter((id) => id !== alertEvent.id)].slice(0, 200));
+    setRecent((prev) => {
+      const items = [alertEvent, ...(prev.items ?? []).filter((item) => item.id !== alertEvent.id)].slice(0, 100);
+      const ids = new Set(items.map((item) => item.id));
+      return { items, received: [alertEvent.id, ...prev.received.filter((id) => id !== alertEvent.id && ids.has(id))] };
+    });
   }, []);
 
   const handleAlertEventsUpdated = useCallback(
     (alertEvents: AlertEventView[]) => {
-      if (!alertEvents.length) return;
-
-      setLiveAlertEvents((prev) => {
-        const next = { ...prev };
-        alertEvents.forEach((alertEvent) => {
-          next[alertEvent.id] = alertEvent;
+      const items = alertEvents.slice(0, 100);
+      const ids = new Set(items.map((event) => event.id));
+      setRecent((prev) => ({ items, received: prev.received.filter((id) => ids.has(id)) }));
+      const byId = new Map(items.map((event) => [event.id, event]));
+      // Pages (including the notification seed) outlive the bounded live window.
+      // Replace only existing rows so pagination and filter membership stay intact.
+      for (const list of queryClient.getQueryCache().findAll({ queryKey: ['listAlertEvents'] })) {
+        const cached = queryClient.getQueryData<{ data: ServerAlertsHttpEvents }>(list.queryKey);
+        const page = cached?.data?.pagedResult;
+        if (!cached || !page?.items.some((row) => byId.has(row.id))) continue;
+        if (list.state.fetchStatus === 'fetching') {
+          void queryClient.cancelQueries({ queryKey: list.queryKey, exact: true }, { revert: false });
+        }
+        queryClient.setQueryData(list.queryKey, {
+          ...cached,
+          data: { ...cached.data, pagedResult: { ...page, items: page.items.map((row) => byId.get(row.id) ?? row) } },
         });
-        return next;
-      });
+      }
+      const details = queryClient.getQueryCache().findAll({ queryKey: ['getAlertEvent'], type: 'active' });
+      for (const detail of details) {
+        const id = (detail.queryKey[1] as { id: string }).id;
+        const event = byId.get(id);
+        if (event) {
+          queryClient.setQueryData<{ data: AlertEventView }>(
+            detail.queryKey,
+            (cached) => cached && { ...cached, data: event },
+          );
+        } else {
+          // An older open detail can change outside the latest-event window.
+          void queryClient.invalidateQueries({ queryKey: detail.queryKey, exact: true });
+        }
+      }
 
       if (alertEvents.some((alertEvent) => alertEvent.status === AlertEventStatus.Resolved)) {
         void queryClient.invalidateQueries({ queryKey: ['listAlertEvents'] });
@@ -89,8 +121,8 @@ export function useAlertEventsGroup() {
     () => ({
       unresolvedAlertCount,
       liveAlertEvents: alertEvents,
-      receivedAlertEventIds,
+      receivedAlertEventIds: recent.received,
     }),
-    [unresolvedAlertCount, alertEvents, receivedAlertEventIds],
+    [unresolvedAlertCount, alertEvents, recent.received],
   );
 }

@@ -1458,3 +1458,112 @@ async fn instance_settings_and_release_changes_only_notify_administrator_users()
         server.await.unwrap().unwrap();
     }
 }
+
+#[tokio::test]
+async fn oversized_catalog_is_scoped_for_initial_join_rejoin_and_growth() {
+    use citadel_server::realtime_groups::{
+        Group, GroupReadPort, GroupRows, GroupSnapshot, RowStyle,
+    };
+    use std::sync::atomic::AtomicUsize;
+    struct Catalog(AtomicUsize);
+    impl GroupReadPort for Catalog {
+        fn read<'a>(
+            &'a self,
+            _: &'a ActorPrincipal,
+            group: &'a Group,
+            event: Option<&'a citadel_server::realtime::PublishedRuntimeEvent>,
+        ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
+            Box::pin(async move {
+                if group.name != "platforms" {
+                    return Ok(GroupSnapshot {
+                        events: event
+                            .map(|_| {
+                                citadel_server::realtime_groups::ClientEvent::new(
+                                    "OtherGroupUpdated",
+                                    vec![],
+                                )
+                            })
+                            .into_iter()
+                            .collect(),
+                        ..Default::default()
+                    });
+                }
+                Ok(GroupSnapshot {
+                    rows: vec![GroupRows {
+                        target: "FixtureRow",
+                        style: RowStyle::Notification,
+                        rows: (0..self.0.load(Ordering::Acquire))
+                            .map(|i| json!({"id":i.to_string()}))
+                            .collect(),
+                    }],
+                    ..Default::default()
+                })
+            })
+        }
+    }
+    let platform_id = Uuid::now_v7();
+    let shutdown = CancellationToken::new();
+    let _guard = shutdown.clone().drop_guard();
+    let reader = Arc::new(Catalog(AtomicUsize::new(1025)));
+    let mut settings = config();
+    settings.snapshot_limit = 1024;
+    let service = RealtimeService::new(
+        &settings,
+        Arc::new(FakeReader {
+            platform: platform(platform_id),
+            allowed: Arc::new(AtomicBool::new(true)),
+        }),
+        Arc::new(Metrics::default()),
+        shutdown.clone(),
+    )
+    .with_groups(reader.clone());
+    let hub = service.hub();
+    let (addr, server) = start_server(service, shutdown.clone()).await;
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/api/v1/realtime"))
+        .await
+        .unwrap();
+    socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":TOKEN}).to_string().into())).await.unwrap();
+    assert_eq!(receive_json(&mut socket).await["kind"], "subscribed");
+    async fn join(
+        socket: &mut tokio_tungstenite::WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
+        name: &str,
+    ) -> Value {
+        socket.send(Message::Text(json!({"protocolVersion":1,"kind":"invoke","invocationId":"join","target":"JoinGroup","arguments":[name]}).to_string().into())).await.unwrap();
+        let reply = receive_json(socket).await;
+        assert_eq!(reply["kind"], "completion");
+        if reply["error"] == "Realtime snapshot limit exceeded" {
+            let event = receive_json(socket).await;
+            assert_eq!(event["target"], "RealtimeGroupCapacity");
+            assert_eq!(event["arguments"], json!([name]));
+        }
+        reply["error"].clone()
+    }
+    assert!(join(&mut socket, "alert-events").await.is_null());
+    assert_eq!(
+        join(&mut socket, "platforms").await,
+        "Realtime snapshot limit exceeded"
+    );
+    reader.0.store(1024, Ordering::Release);
+    assert!(join(&mut socket, "platforms").await.is_null());
+    reader.0.store(1025, Ordering::Release);
+    assert_eq!(
+        join(&mut socket, "platforms").await,
+        "Realtime snapshot limit exceeded"
+    );
+    reader.0.store(1024, Ordering::Release);
+    assert!(join(&mut socket, "platforms").await.is_null());
+    reader.0.store(1025, Ordering::Release);
+    hub.publish_runtime_change(platform_id, "container", "update", "fixture");
+    let capacity = receive_json(&mut socket).await;
+    assert_eq!(capacity["target"], "RealtimeGroupCapacity");
+    assert_eq!(capacity["arguments"], json!(["platforms"]));
+    hub.publish_runtime_change(platform_id, "container", "update", "fixture");
+    assert!(join(&mut socket, "alert-events").await.is_null());
+    hub.publish_resource_changes("Alert", &[Uuid::now_v7()]);
+    assert_eq!(
+        receive_json(&mut socket).await["target"],
+        "OtherGroupUpdated"
+    );
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
+}

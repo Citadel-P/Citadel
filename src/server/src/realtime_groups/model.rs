@@ -426,9 +426,7 @@ impl GroupSubscription {
         let mut events = snapshot.events;
         for batch in snapshot.rows {
             if batch.rows.len() > limit {
-                return Err(RealtimeReadError::Storage(
-                    "Realtime snapshot limit exceeded".into(),
-                ));
+                return Err(RealtimeReadError::SnapshotCapacity);
             }
             if let RowStyle::PlatformPatch(id) = batch.style {
                 let known = self.known.entry(batch.target).or_default();
@@ -439,9 +437,7 @@ impl GroupSubscription {
                 } else {
                     known.insert(id.to_string());
                     if known.len() > limit {
-                        return Err(RealtimeReadError::Storage(
-                            "Realtime snapshot limit exceeded".into(),
-                        ));
+                        return Err(RealtimeReadError::SnapshotCapacity);
                     }
                     for row in batch.rows {
                         events.push(ClientEvent::new(batch.target, vec![row]));
@@ -462,9 +458,7 @@ impl GroupSubscription {
                     for row in batch.rows {
                         known.insert(reference.clone());
                         if known.len() > limit {
-                            return Err(RealtimeReadError::Storage(
-                                "Realtime snapshot limit exceeded".into(),
-                            ));
+                            return Err(RealtimeReadError::SnapshotCapacity);
                         }
                         events.push(ClientEvent::new(
                             batch.target,
@@ -506,9 +500,7 @@ impl GroupSubscription {
                         "update"
                     };
                     if known.len() > limit {
-                        return Err(RealtimeReadError::Storage(
-                            "Realtime snapshot limit exceeded".into(),
-                        ));
+                        return Err(RealtimeReadError::SnapshotCapacity);
                     }
                     saved.insert(id.to_owned(), docker_tombstone(&row));
                     events.push(ClientEvent::new(batch.target, vec![row, json!(action)]));
@@ -520,9 +512,7 @@ impl GroupSubscription {
                 for row in batch.rows {
                     if let Some(id) = row["id"].as_str() {
                         if !known.contains(id) && known.len() >= limit {
-                            return Err(RealtimeReadError::Storage(
-                                "Realtime snapshot limit exceeded".into(),
-                            ));
+                            return Err(RealtimeReadError::SnapshotCapacity);
                         }
                         known.insert(id.to_owned());
                         events.push(ClientEvent::new(batch.target, vec![row, json!("update")]));

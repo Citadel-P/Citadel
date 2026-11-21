@@ -103,15 +103,14 @@ impl container_service_server::ContainerService for Runtime {
                 c.container_stat_message = None;
             }
             if c.state == 2 && !metadata_only {
-                c.container_stat_message = Some(match cached.get(&c.id).cloned() {
-                    Some(value) => stat(value),
+                c.container_stat_message = match cached.get(&c.id).cloned() {
+                    Some(value) => Some(stat(value)),
                     None => self
                         .docker
                         .sample_container_stats(&c.id, &self.shutdown)
                         .await
-                        .map(stat)
-                        .unwrap_or_default(),
-                });
+                        .ok().map(stat),
+                };
             }
             Ok::<_, Status>((c.id.clone(), c))
         }))

@@ -867,6 +867,9 @@ async fn scheduled_image_checks_follow_pulled_tags_and_survive_restart() {
                 .unwrap();
         }
         if attempt == 2 {
+            // Age the scheduled deadline along with its persisted observation.
+            sqlx::query("UPDATE images SET nextupdatecheck=now()-interval '1 hour' WHERE platformid=$1 AND dockerimageid=$2")
+                .bind(f.platform_id).bind(&latest).execute(&f.pool).await.unwrap();
             sqlx::query("UPDATE imageupdateobservations SET attemptedat=now()-interval '3 hours', result=jsonb_set(result,'{lastAttemptAt}',to_jsonb(now()-interval '3 hours')) WHERE imageid IN (SELECT id FROM images WHERE platformid=$1 AND dockerimageid=$2)")
                 .bind(f.platform_id).bind(&latest).execute(&f.pool).await.unwrap();
         }
@@ -1258,4 +1261,65 @@ async fn containerd_image_checks_compare_platform_content_and_fence_missing_iden
         }
         assert!(commands.try_recv().is_err());
     }
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn image_due_index_fences_inflight_checks_and_registry_changes() {
+    use citadel_adapters::persistence::postgres::platforms::image_updates::PostgresImageUpdateStore;
+    use citadel_platforms::image_update_store::ImageUpdateStore;
+    let f = fixture().await;
+    let store = PostgresImageUpdateStore(f.pool.clone());
+    sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"Docker\"}',status='Online' WHERE id=$1")
+        .bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let id = Uuid::now_v7();
+    sqlx::query("INSERT INTO images(id,platformid,dockerimageid,name,tags,createdat) VALUES($1,$2,'sample','sample','[\"nginx:1\"]',now())")
+        .bind(id).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let candidates = || store.candidates(Uuid::nil());
+    let old = candidates()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|c| c.id == id)
+        .unwrap();
+    let future = Utc::now() + Duration::hours(2);
+    store
+        .schedule(id, old.registry_generation, old.check_revision, future)
+        .await
+        .unwrap();
+    assert!(candidates().await.unwrap().iter().all(|c| c.id != id));
+    sqlx::query("UPDATE images SET tags='[\"nginx:2\"]' WHERE id=$1")
+        .bind(id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    store
+        .schedule(id, old.registry_generation, old.check_revision, future)
+        .await
+        .unwrap();
+    let current = candidates()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|c| c.id == id)
+        .unwrap();
+    assert_ne!(old.check_revision, current.check_revision);
+    sqlx::query("UPDATE registries SET registryhost='new.example.invalid' WHERE id='00000000-0000-0000-0000-000000000100'").execute(&f.pool).await.unwrap();
+    store
+        .schedule(
+            id,
+            current.registry_generation,
+            current.check_revision,
+            future,
+        )
+        .await
+        .unwrap();
+    let due = candidates()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|c| c.id == id)
+        .unwrap();
+    assert!(due.registry_generation > current.registry_generation);
+    f.docker_server.abort();
 }

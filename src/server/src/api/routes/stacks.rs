@@ -1210,6 +1210,7 @@ async fn list(
             service,
             principal.actor_id,
             &mut views,
+            None,
         )
         .await;
     }
@@ -1277,6 +1278,7 @@ async fn get(
                 principal.actor_id,
                 citadel_resource_copies::CopyKind::Stack,
                 id,
+                None,
             )
             .await,
         );

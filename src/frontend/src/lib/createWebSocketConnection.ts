@@ -19,6 +19,7 @@ export function createWebSocketConnection(
   let state: RealtimeConnectionState = RealtimeConnectionState.Disconnected;
   let stopped = false;
   let nextId = 0;
+  let reconnectAttempt = 0;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let rejectStart: ((error: Error) => void) | undefined;
   const failPending = () => {
@@ -38,6 +39,7 @@ export function createWebSocketConnection(
     socket = current;
     return new Promise((resolve, reject) => {
       let connected = false;
+      let subscribedAt = 0;
       const deadline = setTimeout(() => {
         reject(new Error('Realtime subscription timed out'));
         current.close();
@@ -67,7 +69,9 @@ export function createWebSocketConnection(
         }
         if (value.protocolVersion !== 1) return;
         if (value.kind === 'subscribed') {
+          if (connected) return;
           connected = true;
+          subscribedAt = Date.now();
           clearTimeout(deadline);
           rejectStart = undefined;
           state = RealtimeConnectionState.Connected;
@@ -97,20 +101,23 @@ export function createWebSocketConnection(
         if (stopped) return;
         state = RealtimeConnectionState.Reconnecting;
         emit(reconnecting);
-        let attempt = 0;
+        if (Date.now() - subscribedAt >= 30_000) reconnectAttempt = 0;
         const retry = () => {
           if (stopped) return;
-          retryTimer = setTimeout(() => {
-            if (stopped) return;
-            start()
-              .then(() => emit(reconnected))
-              .catch(() => {
-                if (stopped) return;
-                state = RealtimeConnectionState.Reconnecting;
-                attempt++;
-                retry();
-              });
-          }, [0, 2_000, 5_000, 10_000, 30_000][Math.min(attempt, 4)]);
+          const base = [0, 2000, 5000, 10000, 30000][Math.min(reconnectAttempt++, 4)];
+          retryTimer = setTimeout(
+            () => {
+              if (stopped) return;
+              start()
+                .then(() => emit(reconnected))
+                .catch(() => {
+                  if (stopped) return;
+                  state = RealtimeConnectionState.Reconnecting;
+                  retry();
+                });
+            },
+            base * (0.75 + Math.random() * 0.25),
+          );
         };
         retry();
       });
@@ -123,6 +130,7 @@ export function createWebSocketConnection(
     start,
     async stop() {
       stopped = true;
+      reconnectAttempt = 0;
       clearTimeout(retryTimer);
       rejectStart?.(new Error('Realtime connection stopped'));
       rejectStart = undefined;

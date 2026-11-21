@@ -35,6 +35,8 @@ days, and 15-minute buckets for longer ranges. These averages can smooth brief
 spikes; narrow the range for finer detail.
 
 Current usage values are instantaneous; history charts show averages.
+If Docker misses a container reading, Platform CPU and memory totals can read low.
+The Agent continues reporting available disk usage and resource counts independently.
 
 ## Container network and disk I/O
 

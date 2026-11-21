@@ -24,6 +24,8 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
     ApplicationGroupReader {
+        snapshot_limit: 1000,
+            snapshot_timeout: std::time::Duration::from_secs(5),
         instance: None,
         admission: citadel_runtime::admission::AdmissionGate::default(),
         image_store: f.lookup_state.platforms.image_store.clone(),

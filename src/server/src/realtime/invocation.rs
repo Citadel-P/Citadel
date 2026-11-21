@@ -1,6 +1,6 @@
 use super::{
     RealtimeError, RealtimeService,
-    authorization::{Subscription, map_realtime_read_error},
+    authorization::Subscription,
     connection::ConnectionIo,
     groups::{GroupConnection, send_group_message},
 };
@@ -51,10 +51,7 @@ impl GroupConnection {
                 // This coordinator is the sole enqueue producer. Removing the sources
                 // before enqueueing completion creates a FIFO unsubscribe barrier: older
                 // messages may precede completion, but none can follow it for this group.
-                groups.remove(name);
-                streams.remove(name);
-                stream_guards.remove(name);
-                terminal_inputs.remove(name);
+                self.remove_group(name);
                 tracing::debug!(connection_id = %socket.id, topic = name, "realtime group left");
                 None
             }
@@ -73,23 +70,31 @@ impl GroupConnection {
                     )
                     .await
                     {
-                        Ok(Ok(snapshot)) => {
-                            if groups.contains_key(name) {
-                                // Revalidate access even on an idempotent join.
-                                send_group_message(socket,service,&json!({"protocolVersion":1,"kind":"completion","invocationId":invocation,"error":null})).await?;
-                                return Ok(());
-                            }
+                        Ok(result) => {
                             let mut joined = GroupSubscription::new(group);
-                            updates = joined
-                                .apply(snapshot, service.inner.snapshot_limit)
-                                .map_err(map_realtime_read_error)?;
-                            groups.insert(name.into(), joined);
-                            tracing::debug!(connection_id = %socket.id, topic = name, "realtime group joined");
-                            None
+                            match result.and_then(|snapshot| {
+                                joined.apply(snapshot, service.inner.snapshot_limit)
+                            }) {
+                                Ok(initial) => {
+                                    if !groups.contains_key(name) {
+                                        updates = initial;
+                                        groups.insert(name.into(), joined);
+                                    }
+                                    None
+                                }
+                                Err(super::RealtimeReadError::SnapshotCapacity) => {
+                                    self.remove_group(name);
+                                    updates.push(crate::realtime_groups::ClientEvent::new(
+                                        "RealtimeGroupCapacity",
+                                        vec![json!(name)],
+                                    ));
+                                    Some("Realtime snapshot limit exceeded")
+                                }
+                                Err(_) => Some(
+                                    "Not authorized to join this group, or the resource is unavailable.",
+                                ),
+                            }
                         }
-                        Ok(Err(_)) => Some(
-                            "Not authorized to join this group, or the resource is unavailable.",
-                        ),
                         Err(_) => Some("Realtime group initialization timed out"),
                     }
                 } else {

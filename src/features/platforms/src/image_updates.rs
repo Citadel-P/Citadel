@@ -203,6 +203,8 @@ impl ImageUpdateService {
         cancel: &CancellationToken,
     ) -> Result<usize, RuntimeCapabilityError> {
         let mut checked = 0;
+        let cadence = chrono::Duration::hours(2);
+        let mut next_due = Utc::now() + cadence;
         for reference in candidate.tags.iter().filter(|tag| eligible(tag)) {
             if cancel.is_cancelled() {
                 return Err(failure(
@@ -215,35 +217,50 @@ impl ImageUpdateService {
             else {
                 continue;
             };
-            let recent = previous.iter().any(|v| {
-                v.registry == registry.id
-                    && v.revision == registry.revision
-                    && v.update.reference == *reference
-                    && v.update
-                        .last_attempt_at
-                        .is_some_and(|at| Utc::now() - at < chrono::Duration::hours(2))
-            });
-            if recent {
+            if let Some(expires) = previous
+                .iter()
+                .find(|v| {
+                    v.registry == registry.id
+                        && v.revision == registry.revision
+                        && v.update.reference == *reference
+                })
+                .and_then(|v| v.update.last_attempt_at)
+                .map(|at| at + cadence)
+                .filter(|expires| *expires > Utc::now())
+            {
+                next_due = next_due.min(expires);
                 continue;
             }
-            self.check_resolved(
-                ActorId::new(Uuid::from_u128(1)),
-                true,
-                ImageUpdateTarget {
-                    platform: candidate.platform,
-                    location: &ImageLocation {
-                        docker_image_id: candidate.image.clone(),
-                        docker_node_id: None,
+            let result = self
+                .check_resolved(
+                    ActorId::new(Uuid::from_u128(1)),
+                    true,
+                    ImageUpdateTarget {
+                        platform: candidate.platform,
+                        location: &ImageLocation {
+                            docker_image_id: candidate.image.clone(),
+                            docker_node_id: None,
+                        },
+                        reference,
                     },
-                    reference,
-                },
-                &registry,
-                false,
-                cancel,
-            )
-            .await?;
+                    &registry,
+                    false,
+                    cancel,
+                )
+                .await?;
+            if let Some(at) = result.last_attempt_at {
+                next_due = next_due.min(at + cadence);
+            }
             checked += 1;
         }
+        self.store
+            .schedule(
+                candidate.id,
+                candidate.registry_generation,
+                candidate.check_revision,
+                next_due,
+            )
+            .await?;
         Ok(checked)
     }
 

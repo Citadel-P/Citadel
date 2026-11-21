@@ -67,6 +67,76 @@ async fn ingress_preserves_capture_timestamps_and_host_totals_without_database_w
 }
 
 #[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn partial_agent_readings_preserve_disk_history_and_cross_the_alert_threshold() {
+    use crate::workers::{disk::LatestPlatformStats, test_support};
+    use std::time::Duration;
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&url)
+        .await
+        .unwrap();
+    let pool = sqlx::PgPool::connect(&url).await.unwrap();
+    let mut scope = scope(None);
+    scope.connector = "Agent".into();
+    scope.address = Some(scope.platform_id.to_string());
+    sqlx::query(r#"INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount)
+        VALUES($1,$2,$2,'Agent',2,0,1000,0,'{"$type":"Docker"}','Online',0)"#)
+        .bind(scope.platform_id).bind(&scope.address).execute(&pool).await.unwrap();
+    let (containers, _cq) = writer::channel(40, RuntimeWork::ContainerStatsIngress);
+    let (platforms, mut pq) = writer::channel(1, RuntimeWork::PlatformStatsIngress);
+    let ingress = StatsIngress {
+        containers,
+        platforms,
+        realtime: None,
+        budget: Default::default(),
+    };
+    let (_, store) = test_support::stats(&pool);
+    let alerts = test_support::metrics(&pool);
+    let interval = Duration::from_secs(10);
+    let mut latest = LatestPlatformStats::new(interval);
+    let cancel = CancellationToken::new();
+    let start = chrono::Utc::now().timestamp() - 70;
+    for (cycle, used) in [50, 50, 50, 50, 95, 95, 95].into_iter().enumerate() {
+        let created = start + cycle as i64 * 10;
+        tokio::time::pause();
+        tokio::time::advance(interval).await;
+        tokio::time::resume();
+        latest.record(Some(RuntimePlatformStats {
+            container_count: 6,
+            containers_running: 6,
+            mem_total: 1000,
+            disk_used_bytes: Some(used),
+            disk_total_bytes: Some(100),
+            disk_usage: Some(used as f64),
+            ..Default::default()
+        }));
+        let readings = (1..6).map(|n| sample(&format!("c{n}"), created)).collect();
+        assert!(
+            ingress
+                .submit(scope.clone(), readings, latest.get().cloned(), &cancel)
+                .await
+        );
+        let capture = pq.try_recv().unwrap().value;
+        assert_eq!(capture.container_io.len(), 5);
+        assert_eq!(store.persist_batch(&[capture]).await.unwrap().persisted, 1);
+        let row: (Option<f64>, f64, f64) = sqlx::query_as(
+            "SELECT diskusage,cpuusage,memoryusage FROM platformstats WHERE platformid=$1 AND created=$2")
+            .bind(scope.platform_id).bind(created).fetch_one(&pool).await.unwrap();
+        // CPU and RAM are best-effort totals from the five reported containers.
+        assert_eq!(row, (Some(used as f64), 5.0, 50.0));
+        alerts.flush_pending(1000).await.unwrap();
+        let open: i64 = sqlx::query_scalar("SELECT count(*) FROM alertevents WHERE resourceid=$1 AND type='PlatformDiskHigh' AND resolvedat IS NULL")
+            .bind(scope.platform_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(
+            open,
+            i64::from(cycle == 6),
+            "three high readings open one incident"
+        );
+    }
+    pool.close().await;
+}
+
+#[tokio::test]
 async fn nodes_keep_scoped_captures_and_empty_hosts_still_emit_platform_samples() {
     let (containers, mut cq) = writer::channel(8, RuntimeWork::ContainerStatsIngress);
     let (platforms, mut pq) = writer::channel(8, RuntimeWork::PlatformStatsIngress);

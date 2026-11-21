@@ -100,7 +100,8 @@ pub(super) async fn run_group_connection(
                 if let Some(target) = administrator_event.filter(|_| subscription.principal.is_administrator()) {
                     send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new(target,vec![])).await?;
                 }
-                for joined in state.groups.values_mut().filter(|g|g.group.affected_by(&event)) {
+                let mut oversized = Vec::new();
+                for (name,joined) in state.groups.iter_mut().filter(|(_,g)|g.group.affected_by(&event)) {
                     // Inventory I/O must not pause this connection's active streams.
                     let snapshot={
                         let read=tokio::time::timeout(service.inner.subscribe_timeout,reader.read_with_lease(&subscription.principal,&joined.group,Some(&event),&subscription.lease));
@@ -109,7 +110,7 @@ pub(super) async fn run_group_connection(
                             tokio::select! {
                                 ()=cancellation.cancelled()=>return Ok(()),
                                 result=&mut read=>break match result {
-                                    Ok(result) => result.map_err(map_realtime_read_error)?,
+                                    Ok(result) => result,
                                     Err(_) => {
                                         // Process snapshots are best-effort live reads. Dropping
                                         // this timed-out future cancels runtime I/O; clear only
@@ -118,13 +119,13 @@ pub(super) async fn run_group_connection(
                                         let super::topic::Topic::ContainerProcesses(id) = joined.group.topic() else {
                                             return Err(RealtimeError::SubscribeTimeout);
                                         };
-                                        crate::realtime_groups::GroupSnapshot {
+                                        Ok(crate::realtime_groups::GroupSnapshot {
                                             events: vec![crate::realtime_groups::ClientEvent::new(
                                                 "ContainerProcessesUpdated",
                                                 vec![json!({"resourceId": id, "data": null})],
                                             )],
                                             ..Default::default()
-                                        }
+                                        })
                                     }
                                 },
                                 Some((_,item))=state.streams.next(),if !state.streams.is_empty()=>{
@@ -133,9 +134,20 @@ pub(super) async fn run_group_connection(
                             }
                         }
                     };
-                    for update in joined.apply(snapshot,service.inner.snapshot_limit).map_err(map_realtime_read_error)? {
+                    let updates = match snapshot.and_then(|s| joined.apply(s,service.inner.snapshot_limit)) {
+                        Err(super::RealtimeReadError::SnapshotCapacity) => {
+                            oversized.push(name.clone());
+                            send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new("RealtimeGroupCapacity",vec![json!(name)])).await?;
+                            continue;
+                        }
+                        result => result.map_err(map_realtime_read_error)?,
+                    };
+                    for update in updates {
                         send_group_message(socket,service,&update).await?;
                     }
+                }
+                for name in oversized {
+                    state.remove_group(&name);
                 }
             }
         }
@@ -165,4 +177,13 @@ pub(super) struct GroupConnection {
     pub(super) stream_guards: std::collections::BTreeMap<String, tokio_util::sync::DropGuard>,
     pub(super) terminal_inputs:
         std::collections::BTreeMap<String, citadel_platforms::terminal::TerminalInputSender>,
+}
+
+impl GroupConnection {
+    pub(super) fn remove_group(&mut self, name: &str) {
+        self.groups.remove(name);
+        self.streams.remove(name);
+        self.stream_guards.remove(name);
+        self.terminal_inputs.remove(name);
+    }
 }

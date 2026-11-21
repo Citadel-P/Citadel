@@ -1,3 +1,5 @@
+export const GROUP_CAPACITY_ERROR = 'Realtime snapshot limit exceeded';
+
 export const RealtimeConnectionState = {
   Disconnected: 'Disconnected',
   Connecting: 'Connecting',
